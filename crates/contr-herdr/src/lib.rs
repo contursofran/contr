@@ -2,4 +2,7 @@
 //! binary endpoint socket (`endpoint`).
 
 pub mod endpoint;
+mod model;
 pub mod wire;
+
+pub use model::*;
