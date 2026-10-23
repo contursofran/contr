@@ -172,6 +172,44 @@ pub fn agent_meta(board: &BoardSnapshot) -> BTreeMap<String, AgentMeta> {
     map
 }
 
+/// #6: what the board says about one worker pane, for its worktree row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PaneMark {
+    /// The work row's label, such as `#640`.
+    pub label: String,
+    /// The work row's `who`.
+    pub who: Who,
+    /// The work row's `item`, when that item is in `items` and open.
+    pub open_item: Option<String>,
+    /// A stage of the work row is `Stage::Block`.
+    pub blocked: bool,
+}
+
+/// The mark of each worker pane that a work row holds. A row counts when it is not `finished` and
+/// has no `joined`; the first such row in slot order wins a pane, as in `agent_meta`. A row without
+/// a `pane_id` gives no mark.
+pub fn pane_marks(board: &BoardSnapshot) -> BTreeMap<String, PaneMark> {
+    let mut map: BTreeMap<String, PaneMark> = BTreeMap::new();
+    for row in &board.rows {
+        if row.finished || row.joined.is_some() {
+            continue;
+        }
+        let Some(pane_id) = &row.pane_id else {
+            continue;
+        };
+        map.entry(pane_id.clone()).or_insert_with(|| PaneMark {
+            label: row.label.clone(),
+            who: row.who.clone(),
+            open_item: row
+                .item
+                .clone()
+                .filter(|key| board.items.iter().any(|it| it.key == *key && it.open)),
+            blocked: row.stages.contains(&Stage::Block),
+        });
+    }
+    map
+}
+
 /// Context use of the coordinator. The panel does not draw it in #9.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub struct ContextUse {
@@ -891,6 +929,82 @@ mod tests {
                 ..Default::default()
             })
         );
+    }
+
+    #[test]
+    fn pane_marks_takes_the_first_live_row_per_pane() {
+        let board = parse_board(
+            br##"{"version": 1, "session": "s", "rev": 1, "rows": [
+                {"key": "a", "label": "#1", "pane_id": "w1:p4", "finished": true},
+                {"key": "b", "label": "#2", "pane_id": "w1:p4", "who": {"text": "b-1151 5m", "kind": "you"}},
+                {"key": "c", "label": "#3", "pane_id": "w1:p4"}
+            ]}"##,
+        )
+        .unwrap();
+        let marks = pane_marks(&board);
+        assert_eq!(marks.len(), 1);
+        let mark = marks.get("w1:p4").unwrap();
+        assert_eq!(mark.label, "#2");
+        assert_eq!(
+            mark.who,
+            Who {
+                text: "b-1151 5m".into(),
+                kind: WhoKind::You,
+            }
+        );
+    }
+
+    #[test]
+    fn pane_marks_skips_joined_rows_and_rows_without_a_pane() {
+        let board = parse_board(
+            br##"{"version": 1, "session": "s", "rev": 1, "rows": [
+                {"key": "a", "label": "#1", "pane_id": "p1", "joined": "#9"},
+                {"key": "b", "label": "#2"},
+                {"key": "c", "label": "#3", "pane_id": null},
+                {"key": "d", "label": "#4", "pane_id": "p1"},
+                {"key": "e", "label": "#5", "pane_id": "p2", "joined": "#8"}
+            ]}"##,
+        )
+        .unwrap();
+        let marks = pane_marks(&board);
+        // Only the live row with a pane gives a mark: `#4` on `p1`.
+        assert_eq!(marks.len(), 1);
+        assert_eq!(marks.get("p1").unwrap().label, "#4");
+    }
+
+    #[test]
+    fn pane_marks_keeps_only_an_open_item() {
+        let board = parse_board(
+            br##"{"version": 1, "session": "s", "rev": 1,
+                "items": [
+                    {"key": "D7", "kind": "ask", "open": true},
+                    {"key": "D8", "kind": "ask", "open": false}
+                ],
+                "rows": [
+                    {"key": "a", "label": "#1", "pane_id": "p1", "item": "D7"},
+                    {"key": "b", "label": "#2", "pane_id": "p2", "item": "D8"},
+                    {"key": "c", "label": "#3", "pane_id": "p3", "item": "T9"}
+                ]}"##,
+        )
+        .unwrap();
+        let marks = pane_marks(&board);
+        assert_eq!(marks.get("p1").unwrap().open_item.as_deref(), Some("D7"));
+        assert_eq!(marks.get("p2").unwrap().open_item, None, "resolved");
+        assert_eq!(marks.get("p3").unwrap().open_item, None, "no such item");
+    }
+
+    #[test]
+    fn pane_marks_sees_a_blocked_stage() {
+        let board = parse_board(
+            br##"{"version": 1, "session": "s", "rev": 1, "rows": [
+                {"key": "a", "label": "#6", "pane_id": "p1", "stages": ["done", "block", "none", "none", "none"]},
+                {"key": "b", "label": "#7", "pane_id": "p2", "stages": ["done", "run", "none", "none", "none"]}
+            ]}"##,
+        )
+        .unwrap();
+        let marks = pane_marks(&board);
+        assert!(marks.get("p1").unwrap().blocked);
+        assert!(!marks.get("p2").unwrap().blocked);
     }
 
     #[test]

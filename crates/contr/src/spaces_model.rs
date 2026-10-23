@@ -1,10 +1,11 @@
 //! The spaces model: the repo groups and worktree rows the sidebar shows, built from the herdr tree
 //! and the git scan. Pure: no file reads and no GPUI, so the rules are tested with literal values.
 
+use crate::board_model::{PaneMark, WhoKind};
 use crate::git::{Checkout, RepoInfo, Scan, WorktreeEntry};
 use crate::status_icon::Status;
 use contr_herdr::{AgentState, HerdrTree, Pane, Tab};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
 
 /// A tab that holds a worktree. Its state is the best of its panes in that worktree.
@@ -38,7 +39,9 @@ pub struct WorktreeRow {
     pub focus_pane: Option<String>,
     /// The second line: the top holder's tab and state. `None` without a holder.
     pub hold: Option<String>,
-    /// `None` until the board bridge supplies one.
+    /// The second line is the owner's turn: drawn in the you style.
+    pub hold_you: bool,
+    /// From the board bridge; `None` without it.
     pub badge: Option<Badge>,
 }
 
@@ -76,6 +79,23 @@ pub fn build(tree: &HerdrTree, scan: &Scan) -> Vec<RepoGroup> {
         .iter()
         .filter_map(|common_dir| repo_group(scan.repos.get(common_dir)?, &holders))
         .collect()
+}
+
+/// Applies the board's marks (from `pane_marks`) to the rows. A row takes the mark of its holder's
+/// pane: the top holder first, then the other holders in tree order. Its second line becomes the
+/// mark's `who` with ` +N` (D49), unless the `who` text is blank; the row keeps the herdr line then.
+/// A row without a mark keeps what `build` made of it.
+pub fn apply_marks(groups: &mut [RepoGroup], marks: &BTreeMap<String, PaneMark>) {
+    for row in groups.iter_mut().flat_map(|group| group.rows.iter_mut()) {
+        let Some(mark) = mark_for(row, marks) else {
+            continue;
+        };
+        if !mark.who.text.trim().is_empty() {
+            row.hold = Some(with_more(&mark.who.text, row.holders.len()));
+            row.hold_you = mark.who.kind == WhoKind::You;
+        }
+        row.badge = badge_of(mark);
+    }
 }
 
 /// The cwd of every pane in the tree, in tree order, each once. Panes without a cwd are skipped.
@@ -175,6 +195,7 @@ fn worktree_row(entry: &WorktreeEntry, held: &[Holder]) -> WorktreeRow {
         status: top.map_or(Status::Idle, |holder| Status::from(holder.status)),
         focus_pane: top.map(|holder| holder.pane_id.clone()),
         hold: top.map(|holder| hold_text(holder, held.len())),
+        hold_you: false,
         badge: None,
     }
 }
@@ -188,17 +209,50 @@ fn top_holder(holders: &[Holder]) -> Option<&Holder> {
 /// Settled (D49): the second line is the herdr fallback, `{tab label} {state}`, plus ` +N` for
 /// the N other tabs that hold the worktree (for example "b-3s2 working +1").
 fn hold_text(top: &Holder, holder_count: usize) -> String {
-    let line = format!("{} {}", top.tab_label, top.status.label());
+    with_more(
+        &format!("{} {}", top.tab_label, top.status.label()),
+        holder_count,
+    )
+}
+
+/// The line with ` +N` added when `holder_count` tabs hold the worktree, N being the others (D49).
+fn with_more(line: &str, holder_count: usize) -> String {
     match holder_count.saturating_sub(1) {
-        0 => line,
+        0 => line.to_string(),
         more => format!("{line} +{more}"),
     }
+}
+
+/// The mark of the row's holder: the top holder's pane first, then the other holders in tree order.
+/// The first pane that has a mark gives it.
+fn mark_for<'a>(row: &WorktreeRow, marks: &'a BTreeMap<String, PaneMark>) -> Option<&'a PaneMark> {
+    row.focus_pane
+        .iter()
+        .chain(row.holders.iter().map(|holder| &holder.pane_id))
+        .find_map(|pane_id| marks.get(pane_id))
+}
+
+/// The row's badge for a mark, in this order: the open needs-you item's key (`T12`, `D8`), then
+/// `blocked`, then the work row's `#<n>` label (dim). Any other label gives no badge.
+fn badge_of(mark: &PaneMark) -> Option<Badge> {
+    if let Some(key) = &mark.open_item {
+        return Some(Badge::You(key.clone()));
+    }
+    if mark.blocked {
+        return Some(Badge::You("blocked".into()));
+    }
+    let digits = mark.label.strip_prefix('#')?;
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse::<u32>().ok().map(Badge::Pr)
 }
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
-    use super::{RepoGroup, WorktreeRow, build, pane_cwds, rank};
+    use super::{Badge, RepoGroup, WorktreeRow, apply_marks, badge_of, build, pane_cwds, rank};
+    use crate::board_model::{PaneMark, Who, WhoKind};
     use crate::git::{Checkout, RepoInfo, Scan, WorktreeEntry};
     use crate::status_icon::Status;
     use contr_herdr::AgentState::{Blocked, Done, Idle, Unknown, Working};
@@ -515,5 +569,130 @@ mod tests {
         ]));
         assert_eq!(cwds, [W1, MAIN]);
         assert!(pane_cwds(&tree(Vec::new())).is_empty());
+    }
+
+    /// A mark with the given label and who, no open item and not blocked.
+    fn mark(label: &str, text: &str, kind: WhoKind) -> PaneMark {
+        PaneMark {
+            label: label.into(),
+            who: Who {
+                text: text.into(),
+                kind,
+            },
+            open_item: None,
+            blocked: false,
+        }
+    }
+
+    /// The marks with one mark on `pane`.
+    fn marks_on(pane: &str, mark: PaneMark) -> BTreeMap<String, PaneMark> {
+        BTreeMap::from([(pane.to_string(), mark)])
+    }
+
+    #[test]
+    fn no_mark_keeps_the_herdr_fallback() {
+        let mut groups = built(vec![tab(
+            "t1",
+            "b-3s2",
+            vec![pane("w1:p2", W1, Some(Working))],
+        )]);
+        apply_marks(&mut groups, &BTreeMap::new());
+        let w1 = row(&groups, "w1");
+        assert_eq!(w1.hold.as_deref(), Some("b-3s2 working"));
+        assert_eq!(w1.badge, None);
+        assert!(!w1.hold_you);
+    }
+
+    #[test]
+    fn a_mark_replaces_the_second_line_and_keeps_plus_n() {
+        let mut groups = built(vec![
+            tab("t1", "p-6", vec![pane("w1:p1", W1, Some(Done))]),
+            tab("t2", "b-3s2", vec![pane("w1:p2", W1, Some(Working))]),
+        ]);
+        let marks = marks_on("w1:p2", mark("#640", "b-1151 5m", WhoKind::Text));
+        apply_marks(&mut groups, &marks);
+        let w1 = row(&groups, "w1");
+        assert_eq!(w1.hold.as_deref(), Some("b-1151 5m +1"));
+        assert!(!w1.hold_you);
+        assert_eq!(w1.badge, Some(Badge::Pr(640)));
+    }
+
+    #[test]
+    fn a_you_who_sets_hold_you() {
+        let mut groups = built(vec![tab(
+            "t1",
+            "b-3s2",
+            vec![pane("w1:p2", W1, Some(Working))],
+        )]);
+        let marks = marks_on("w1:p2", mark("#640", "your test", WhoKind::You));
+        apply_marks(&mut groups, &marks);
+        let w1 = row(&groups, "w1");
+        assert_eq!(w1.hold.as_deref(), Some("your test"));
+        assert!(w1.hold_you);
+    }
+
+    #[test]
+    fn a_blank_who_keeps_the_fallback_line() {
+        for text in ["", "   "] {
+            let mut groups = built(vec![tab(
+                "t1",
+                "b-3s2",
+                vec![pane("w1:p2", W1, Some(Working))],
+            )]);
+            let marks = marks_on("w1:p2", mark("#640", text, WhoKind::You));
+            apply_marks(&mut groups, &marks);
+            let w1 = row(&groups, "w1");
+            assert_eq!(w1.hold.as_deref(), Some("b-3s2 working"), "who {text:?}");
+            assert!(!w1.hold_you, "who {text:?}");
+            assert_eq!(w1.badge, Some(Badge::Pr(640)), "who {text:?}");
+        }
+    }
+
+    #[test]
+    fn badge_order_item_then_blocked_then_pr() {
+        let with = |item: Option<&str>, blocked: bool, label: &str| PaneMark {
+            label: label.into(),
+            who: Who::default(),
+            open_item: item.map(Into::into),
+            blocked,
+        };
+        assert_eq!(
+            badge_of(&with(Some("D7"), true, "#640")),
+            Some(Badge::You("D7".into()))
+        );
+        assert_eq!(
+            badge_of(&with(None, true, "#640")),
+            Some(Badge::You("blocked".into()))
+        );
+        assert_eq!(badge_of(&with(None, false, "#640")), Some(Badge::Pr(640)));
+        for label in ["fix", "#", "#12a", "#+5", "640", "#99999999999"] {
+            assert_eq!(badge_of(&with(None, false, label)), None, "label {label}");
+        }
+    }
+
+    #[test]
+    fn a_mark_on_a_lower_holder_is_used_when_the_top_has_none() {
+        let mut groups = built(vec![
+            tab("t1", "p-6", vec![pane("w1:p1", W1, Some(Done))]),
+            tab("t2", "b-3s2", vec![pane("w1:p2", W1, Some(Working))]),
+        ]);
+        // The top holder is `w1:p2`, which has no mark. The mark is on the other holder, `w1:p1`.
+        let marks = marks_on("w1:p1", mark("#641", "r-1152 2m", WhoKind::Text));
+        apply_marks(&mut groups, &marks);
+        let w1 = row(&groups, "w1");
+        assert_eq!(w1.focus_pane.as_deref(), Some("w1:p2"));
+        assert_eq!(w1.hold.as_deref(), Some("r-1152 2m +1"));
+        assert_eq!(w1.badge, Some(Badge::Pr(641)));
+    }
+
+    #[test]
+    fn an_unheld_row_gets_no_mark() {
+        let mut groups = built(vec![tab("t1", "a", vec![pane("w1:p1", W1, Some(Working))])]);
+        let marks = marks_on("w1:p1", mark("#640", "b-1151 5m", WhoKind::You));
+        apply_marks(&mut groups, &marks);
+        let w2 = row(&groups, "w2");
+        assert_eq!(w2.hold, None);
+        assert_eq!(w2.badge, None);
+        assert!(!w2.hold_you);
     }
 }
