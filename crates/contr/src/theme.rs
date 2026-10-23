@@ -44,6 +44,18 @@ pub const TITLE_BAR_HEIGHT: f32 = 40.;
 pub const PANEL_WIDTH: f32 = 440.;
 pub const STATUS_BAR_HEIGHT: f32 = 26.;
 
+// Sidebar spaces (planner defaults; docs/DESIGN.md has no sizes for these)
+pub const SIDEBAR_PAD_X: f32 = 12.; // left/right padding of sidebar content
+pub const TRAFFIC_LIGHT_INSET: f32 = 78.; // room for the native window buttons (x 14, 3×12 + 2×8 gaps, + 12)
+pub const SPACES_ROW_HEIGHT: f32 = 26.; // one-line row: section header, repo, collapsed host
+pub const WORKTREE_ROW_HEIGHT: f32 = 42.; // two-line worktree row (18 + 18 + 6)
+pub const ROW_INDENT: f32 = 14.; // worktree rows under their repo
+pub const CARD_INSET_X: f32 = 4.; // selected-card margin (same 4 px as the agent rows)
+pub const BADGE_PAD_X: f32 = 5.;
+pub const BADGE_RADIUS: f32 = 4.;
+pub const MEM_BAR_WIDTH: f32 = 60.;
+pub const MEM_BAR_HEIGHT: f32 = 4.;
+
 #[cfg(test)]
 mod tests {
     use super::*;
