@@ -24,6 +24,12 @@ pub const MAX_BOARD_BYTES: u64 = 1 << 20;
 pub const NO_BOARD_DIR: &str = "no board dir";
 /// The problem line when a board file names another session than the bridge token.
 pub const OTHER_SESSION: &str = "board file is for another session";
+/// The problem line when the board file is missing. The coordinator may still be writing it.
+pub const NO_BOARD_FILE: &str = "no board file yet";
+/// The problem line when the file exists but cannot be read. The OS error text is not shown.
+pub const BOARD_UNREADABLE: &str = "board file unreadable";
+/// The problem line when the board file is larger than `MAX_BOARD_BYTES`.
+pub const BOARD_TOO_LARGE: &str = "board file too large";
 
 /// The pane that carries a valid bridge token, and what the token names.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -84,15 +90,25 @@ fn read_board(path: &Path) -> Result<BoardSnapshot, String> {
 
 /// Reads at most `cap` bytes. A file longer than `cap` is an error, never a truncated read.
 fn read_capped(path: &Path, cap: u64) -> Result<Vec<u8>, String> {
-    let file = std::fs::File::open(path).map_err(|error| error.to_string())?;
+    let file = std::fs::File::open(path).map_err(|error| io_problem(&error))?;
     let mut bytes = Vec::new();
     file.take(cap.saturating_add(1))
         .read_to_end(&mut bytes)
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| io_problem(&error))?;
     if bytes.len() as u64 > cap {
-        return Err(format!("board file is larger than {cap} bytes"));
+        return Err(BOARD_TOO_LARGE.to_owned());
     }
     Ok(bytes)
+}
+
+/// The panel's line for an I/O failure. The OS text is not shown.
+fn io_problem(error: &std::io::Error) -> String {
+    if error.kind() == std::io::ErrorKind::NotFound {
+        NO_BOARD_FILE
+    } else {
+        BOARD_UNREADABLE
+    }
+    .to_owned()
 }
 
 /// The coordinator's board for the bridge pane in the herdr tree.
@@ -254,6 +270,29 @@ impl Board {
             self.problem.clone(),
         )
     }
+
+    /// Sets what the views read, as a change from herdr or a read would. For view tests.
+    #[cfg(test)]
+    pub(crate) fn set(
+        &mut self,
+        snapshot: Option<BoardSnapshot>,
+        problem: Option<String>,
+        bridge: Option<BridgePane>,
+        cx: &mut Context<Self>,
+    ) {
+        self.snapshot = snapshot.map(Arc::new);
+        self.problem = problem;
+        self.bridge = bridge;
+        cx.notify();
+    }
+}
+
+/// Registers a board that reads no files, for tests that build a frame or a panel. Needs
+/// `GlobalHerdr` first.
+#[cfg(test)]
+pub(crate) fn init_detached(cx: &mut App) {
+    let board = cx.new(|cx| Board::new(None, cx));
+    cx.set_global(GlobalBoard(board));
 }
 
 #[cfg(test)]
@@ -459,18 +498,26 @@ mod tests {
     fn read_capped_refuses_a_file_over_the_cap() {
         let dir = board_dir_with(b"0123456789");
         let path = board_path(dir.path(), SESSION);
-        assert!(
-            read_capped(&path, 9)
-                .unwrap_err()
-                .contains("larger than 9 bytes")
-        );
+        assert_eq!(read_capped(&path, 9).unwrap_err(), BOARD_TOO_LARGE);
         assert_eq!(read_capped(&path, 10).unwrap(), b"0123456789");
     }
 
     #[test]
-    fn read_capped_reports_a_missing_file() {
+    fn read_capped_reports_a_missing_file_calmly() {
         let dir = tempfile::tempdir().unwrap();
-        assert!(read_capped(&board_path(dir.path(), SESSION), 10).is_err());
+        assert_eq!(
+            read_capped(&board_path(dir.path(), SESSION), 10).unwrap_err(),
+            NO_BOARD_FILE
+        );
+    }
+
+    #[test]
+    fn read_capped_reports_an_unreadable_file_without_the_os_text() {
+        // A directory opens, but reading it fails: an error that is not "not found".
+        let dir = tempfile::tempdir().unwrap();
+        let path = board_path(dir.path(), SESSION);
+        std::fs::create_dir(&path).unwrap();
+        assert_eq!(read_capped(&path, 10).unwrap_err(), BOARD_UNREADABLE);
     }
 
     #[gpui::test]
@@ -633,7 +680,19 @@ mod tests {
         });
         assert_eq!(reads, 1);
         assert_eq!(snapshot, None);
-        assert!(problem.is_some());
+        assert_eq!(problem.as_deref(), Some(NO_BOARD_FILE));
+    }
+
+    #[gpui::test]
+    fn an_unreadable_file_is_a_calm_problem(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(board_path(dir.path(), SESSION)).unwrap();
+        let (herdr, board) = setup(cx, Some(dir.path().to_path_buf()));
+        push(cx, &herdr, coordinator(&token(1)));
+
+        let (snapshot, problem) = read(cx, &board, |b| (b.snapshot.clone(), b.problem.clone()));
+        assert_eq!(snapshot, None);
+        assert_eq!(problem.as_deref(), Some(BOARD_UNREADABLE));
     }
 
     #[gpui::test]
@@ -681,11 +740,15 @@ mod tests {
     }
 
     #[gpui::test]
-    fn the_first_board_notifies_once_it_is_read(cx: &mut TestAppContext) {
+    fn the_first_token_notifies_for_the_bridge_and_again_for_the_read(cx: &mut TestAppContext) {
         let dir = board_dir_with(FIXTURE.as_bytes());
         let (herdr, board) = setup(cx, Some(dir.path().to_path_buf()));
         let (count, _sub) = count_notifications(cx, &board);
         push(cx, &herdr, coordinator(&token(42)));
-        assert!(count.get() >= 1);
+        assert_eq!(
+            count.get(),
+            2,
+            "one notify for the bridge, one for the snapshot"
+        );
     }
 }
