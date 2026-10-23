@@ -751,6 +751,8 @@ mod tests {
                 tree: None,
             },
         );
+        cx.update(crate::visibility::Visibility::init);
+        cx.update(Selection::init);
         cx.update(|app| init_detached(app, None));
         cx.update(crate::board::init_detached);
         let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
@@ -779,6 +781,8 @@ mod tests {
                 ("b", Some(AgentState::Idle)),
             ])),
         );
+        cx.update(crate::visibility::Visibility::init);
+        cx.update(Selection::init);
         cx.update(|app| init_detached(app, None));
         cx.update(crate::board::init_detached);
         let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
@@ -805,6 +809,8 @@ mod tests {
             .map(|(label, state)| (label.as_str(), *state))
             .collect();
         herdr_in(cx, connected(tree(&labels)));
+        cx.update(crate::visibility::Visibility::init);
+        cx.update(Selection::init);
         cx.update(|app| init_detached(app, None));
         cx.update(crate::board::init_detached);
         let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));

@@ -222,6 +222,7 @@ mod tests {
     use crate::board;
     use crate::selection::Selection;
     use crate::title_bar::tests::{connected_with, herdr_in, sample_tree};
+    use crate::visibility::Visibility;
     use contr_herdr::{ConnState, HerdrUpdate, LiveHerdr};
     use gpui::{Modifiers, TestAppContext, VisualTestContext, px, size};
 
@@ -245,6 +246,7 @@ mod tests {
 
     #[gpui::test]
     fn frame_matches_design_sizes(cx: &mut TestAppContext) {
+        cx.update(Visibility::init);
         cx.update(Selection::init);
         herdr_in(cx, connected());
         cx.update(board::init_detached);
@@ -272,6 +274,7 @@ mod tests {
 
     #[gpui::test]
     fn toggle_sits_right_of_the_window_buttons(cx: &mut TestAppContext) {
+        cx.update(Visibility::init);
         cx.update(Selection::init);
         herdr_in(cx, connected());
         cx.update(board::init_detached);
@@ -286,6 +289,7 @@ mod tests {
 
     #[gpui::test]
     fn toggle_hides_and_reopens_the_sidebar(cx: &mut TestAppContext) {
+        cx.update(Visibility::init);
         cx.update(Selection::init);
         herdr_in(cx, connected());
         cx.update(board::init_detached);
@@ -313,6 +317,7 @@ mod tests {
 
     #[gpui::test]
     fn herdr_line_is_centred_in_the_terminal_while_not_running(cx: &mut TestAppContext) {
+        cx.update(Visibility::init);
         cx.update(Selection::init);
         cx.update(|app| crate::status_bar::init_detached(app, None));
         herdr_in(cx, not_running());
@@ -337,6 +342,7 @@ mod tests {
 
     #[gpui::test]
     fn herdr_line_follows_the_connection(cx: &mut TestAppContext) {
+        cx.update(Visibility::init);
         cx.update(Selection::init);
         cx.update(|app| crate::status_bar::init_detached(app, None));
         let herdr = herdr_in(cx, connected());
@@ -364,6 +370,7 @@ mod tests {
 
     #[gpui::test]
     fn panel_toggle_hides_and_shows_the_panel(cx: &mut TestAppContext) {
+        cx.update(Visibility::init);
         cx.update(Selection::init);
         herdr_in(cx, connected());
         cx.update(board::init_detached);
@@ -390,6 +397,7 @@ mod tests {
 
     #[gpui::test]
     fn title_bar_clicks_reach_the_command_handler_in_order(cx: &mut TestAppContext) {
+        cx.update(Visibility::init);
         cx.update(Selection::init);
         cx.update(|app| crate::status_bar::init_detached(app, None));
         herdr_in(cx, connected_with(sample_tree()));
@@ -414,6 +422,7 @@ mod tests {
 
     #[gpui::test]
     fn the_panel_toggle_sends_no_herdr_command(cx: &mut TestAppContext) {
+        cx.update(Visibility::init);
         cx.update(Selection::init);
         herdr_in(cx, connected_with(sample_tree()));
         cx.update(board::init_detached);
