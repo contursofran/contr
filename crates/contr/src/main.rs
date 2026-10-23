@@ -1,6 +1,6 @@
 //! contr: a native herdr client. Opens the empty v0.1 frame, or the status icon legend with `--icons`.
 
-use contr::{frame, legend, theme};
+use contr::{frame, legend, selection::Selection, theme};
 use gpui::{
     App, Bounds, TitlebarOptions, WindowBounds, WindowOptions, point, prelude::*, px, size,
 };
@@ -28,6 +28,7 @@ fn main() -> std::process::ExitCode {
             }
         })
         .detach();
+        Selection::init(cx);
         let show_icons = wants_icons(std::env::args());
         let (width, height) = if show_icons {
             (LEGEND_WIDTH, LEGEND_HEIGHT)
@@ -46,7 +47,7 @@ fn main() -> std::process::ExitCode {
             cx.open_window(options, |_, cx| cx.new(legend::Legend::new))
                 .map(|_| ())
         } else {
-            cx.open_window(options, |_, cx| cx.new(|_| frame::Frame::new()))
+            cx.open_window(options, |_, cx| cx.new(frame::Frame::new))
                 .map(|_| ())
         };
         if let Err(error) = result {
