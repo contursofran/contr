@@ -61,6 +61,28 @@ pub const SIDEBAR_TOGGLE_HEIGHT: f32 = 12.;
 pub const SIDEBAR_TOGGLE_RADIUS: f32 = 2.;
 pub const SIDEBAR_TOGGLE_FILL: f32 = 4.; // filled left part of the outline
 
+// Status bar (planner defaults; docs/DESIGN.md has no sizes for these)
+pub const STATUS_PAD_X: f32 = 12.; // left and right padding
+pub const STATUS_GAP: f32 = 8.; // between label, bar and percent, and around the "·" separators
+pub const USAGE_BAR_WIDTH: f32 = 36.; // plan usage track
+pub const USAGE_BAR_HEIGHT: f32 = 4.;
+pub const USAGE_BAR_RADIUS: f32 = 2.;
+pub const USAGE_LOW_LEFT: f32 = 20.; // under this % left the bar fill is white (owner acts)
+
+// Title bar tabs and buttons (planner defaults; docs/DESIGN.md has no sizes for these)
+pub const TAB_PADDING_X: f32 = 12.;
+pub const TAB_GAP: f32 = 6.; // icon to label
+pub const TAB_MAX_WIDTH: f32 = 180.;
+/// Overflow policy (D62, owner question open; recommended option built): when the tabs do not fit,
+/// each tab shrinks to this width and its label ends in an ellipsis, then the tabs row clips the
+/// rest. A scroll strip is a change to this constant and to `title_bar::tabs_row` only.
+pub const TAB_MIN_WIDTH: f32 = 72.;
+pub const TAB_UNDERLINE: f32 = 2.; // active tab, bottom edge
+pub const TITLE_BUTTON_SIZE: f32 = 28.; // "+", split, panel toggle: square hit areas
+pub const TITLE_GLYPH_WIDTH: f32 = 14.; // split and panel glyphs, border included
+pub const TITLE_GLYPH_HEIGHT: f32 = 12.;
+pub const TITLE_GLYPH_FILL: f32 = 4.; // panel glyph: filled right part when the panel is open
+
 #[cfg(test)]
 mod tests {
     use super::*;
