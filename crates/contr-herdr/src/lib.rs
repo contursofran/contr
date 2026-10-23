@@ -5,6 +5,8 @@
 pub mod command;
 pub mod endpoint;
 mod model;
+mod tabs;
 pub mod wire;
 
 pub use model::*;
+pub use tabs::*;
