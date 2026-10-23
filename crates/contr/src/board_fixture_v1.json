@@ -89,5 +89,9 @@
       "open": false,
       "answer": "keep the old colours (owner)"
     }
+  ],
+  "agents": [
+    { "pane_id": "w1:p4", "name": "b-1151", "model": "haiku 5.5", "role": "builder" },
+    { "pane_id": "w1:p2", "name": "r-1152", "role": "reviewer" }
   ]
 }
