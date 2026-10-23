@@ -1,0 +1,8 @@
+# Working on contr
+
+- Rust 2024, GPUI. `cargo fmt`, `cargo clippy --all-targets -- -D warnings` and `cargo test` must pass before a PR.
+- No `unwrap`/`expect` in non-test code; no `unsafe`.
+- Never block the UI thread: herdr I/O and file reads run on background tasks and reach views as events.
+- Small PRs: one issue, one PR, ideally under ~400 changed lines. Split anything bigger.
+- UI follows docs/DESIGN.md exactly: mono font, greyscale, white only for what needs the owner.
+- Code borrowed from herdr-gpui keeps its Apache-2.0 header and is listed in NOTICE.
