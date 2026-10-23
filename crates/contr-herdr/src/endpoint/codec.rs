@@ -23,6 +23,9 @@ pub enum CodecError {
     TooLong(u64),
     /// An enum or option tag this codec does not know.
     BadTag { what: &'static str, tag: u32 },
+    /// Every field parsed, but the values break a rule of the layout (for
+    /// example a surface whose cell count is not its size).
+    Invalid(&'static str),
 }
 
 impl fmt::Display for CodecError {
@@ -34,6 +37,7 @@ impl fmt::Display for CodecError {
             Self::BadUtf8 => write!(f, "endpoint string is not UTF-8"),
             Self::TooLong(len) => write!(f, "endpoint length or value {len} does not fit"),
             Self::BadTag { what, tag } => write!(f, "unknown {what} tag {tag}"),
+            Self::Invalid(rule) => write!(f, "endpoint payload is invalid: {rule}"),
         }
     }
 }
@@ -354,6 +358,14 @@ mod tests {
             Dec::new(&[3, b'a']).str(),
             Err(CodecError::TooLong(3))
         ));
+    }
+
+    #[test]
+    fn invalid_names_the_broken_rule() {
+        assert_eq!(
+            CodecError::Invalid("frame size").to_string(),
+            "endpoint payload is invalid: frame size"
+        );
     }
 
     #[test]
