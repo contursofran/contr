@@ -81,7 +81,7 @@ pub const USAGE_LOW_LEFT: f32 = 20.; // under this % left the bar fill is white 
 pub const TAB_PADDING_X: f32 = 12.;
 pub const TAB_GAP: f32 = 6.; // icon to label
 pub const TAB_MAX_WIDTH: f32 = 180.;
-/// Overflow policy (D62, owner question open; recommended option built): when the tabs do not fit,
+/// Overflow policy (D62, settled): when the tabs do not fit,
 /// each tab shrinks to this width and its label ends in an ellipsis, then the tabs row clips the
 /// rest. A scroll strip is a change to this constant and to `title_bar::tabs_row` only.
 pub const TAB_MIN_WIDTH: f32 = 72.;
