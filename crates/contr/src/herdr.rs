@@ -60,6 +60,8 @@ impl Herdr {
             }
         });
         let visible = visibility.read(cx).visible;
+        // The reader starts with the window shown and gets this value only after spawn.
+        // Harmless: connect always takes snapshots.
         if let Some(reader) = &reader {
             reader.set_visible(visible);
         }

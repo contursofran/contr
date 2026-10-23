@@ -385,6 +385,7 @@ impl Reader {
             if !quiet && pending.is_none() {
                 pending = Some(Instant::now());
             }
+            // A hide and a show inside one read timeout (POLL) take no snapshot. Harmless.
             let now_visible = self.visible.load(Ordering::Acquire);
             let shown_again = now_visible && !visible;
             visible = now_visible;
@@ -1024,7 +1025,7 @@ mod tests {
     }
 
     #[test]
-    fn the_timer_refresh_pauses_while_hidden_and_runs_once_when_shown() {
+    fn the_timer_refresh_pauses_while_hidden() {
         let dir = tempdir();
         let snapshots = Arc::new(AtomicUsize::new(0));
         let counted = Arc::clone(&snapshots);
@@ -1061,9 +1062,43 @@ mod tests {
             connected,
             "the timer takes no snapshot while the window is hidden"
         );
+        reader.join_for_test();
+    }
 
+    #[test]
+    fn the_window_shown_again_takes_one_snapshot() {
+        let dir = tempdir();
+        let snapshots = Arc::new(AtomicUsize::new(0));
+        let counted = Arc::clone(&snapshots);
+        let path = fake_herdr(dir.path(), move |method, _| match method {
+            "ping" => answer(PONG),
+            "session.snapshot" => {
+                counted.fetch_add(1, Ordering::SeqCst);
+                answer(&snapshot_reply(&snapshot("idle")))
+            }
+            _ => held_ack(),
+        });
+        let (tx, rx) = async_channel::bounded(16);
+        // The timer is due only every 30 s, so only the show can take a snapshot here.
+        let reader =
+            spawn_with_refresh(Target::Socket(path), tx, Duration::from_secs(30)).expect("spawn");
+        assert!(matches!(
+            next(&rx),
+            HerdrUpdate::State(ConnState::Connecting)
+        ));
+        assert!(matches!(
+            next(&rx),
+            HerdrUpdate::State(ConnState::Connected { .. })
+        ));
+        tree_of(next(&rx));
+        // The first session takes two snapshots (see `connect`). Count from here.
+        let connected = snapshots.load(Ordering::SeqCst);
+
+        reader.set_visible(false);
+        // Longer than one read, so the reader sees the window hidden before it is shown.
+        thread::sleep(Duration::from_millis(400));
         reader.set_visible(true);
-        // The snapshot comes at once. The timer would wait another second.
+        // The snapshot comes at once. The timer is not due for 30 s.
         let deadline = Instant::now() + Duration::from_millis(900);
         while snapshots.load(Ordering::SeqCst) == connected {
             assert!(
