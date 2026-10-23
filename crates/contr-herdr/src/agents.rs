@@ -107,6 +107,7 @@ fn present(text: Option<String>) -> Option<String> {
 mod tests {
     use super::*;
     use crate::model::Workspace;
+    use std::collections::BTreeMap;
 
     /// A pane: `(id, label, agent)`, where the agent is `(name, state)`.
     type PaneSpec<'a> = (&'a str, Option<&'a str>, Option<(&'a str, AgentState)>);
@@ -146,6 +147,7 @@ mod tests {
                                         name: name.into(),
                                         status,
                                     }),
+                                    tokens: BTreeMap::new(),
                                 })
                                 .collect(),
                         })
