@@ -11,7 +11,7 @@ workspace = true
 
 [dependencies]
 gpui.workspace = true
-gpui_platform  = { workspace = true, features = ["font-kit", "runtime_shaders"] }
+gpui_platform  = { workspace = true, features = ["font-kit", "runtime_shaders", "wayland", "x11"] }
 
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }
