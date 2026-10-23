@@ -23,9 +23,9 @@ use contr_herdr::endpoint::messages::{CellPx, GridSize, InputEvent};
 use contr_herdr::endpoint::surface::Surface;
 use gpui::{
     App, Bounds, ClipboardItem, Context, ElementInputHandler, EntityInputHandler, FocusHandle,
-    InputHandler, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, ParentElement, Pixels,
-    Point, Render, Styled, Subscription, Task, TextInputConfiguration, UTF16Selection, Window,
-    canvas, div, font, point, prelude::*, px, rgb, size,
+    InputHandler, IntoElement, KeyDownEvent, Modifiers, MouseButton, MouseDownEvent, ParentElement,
+    Pixels, Point, Render, Styled, Subscription, Task, TextInputConfiguration, UTF16Selection,
+    Window, canvas, div, font, point, prelude::*, px, rgb, size,
 };
 use tracing::debug;
 
@@ -252,9 +252,10 @@ impl TerminalView {
         cx.notify();
     }
 
-    /// Sets the link state. A state that changes notifies once. A lost link drops the surface. A
-    /// live one gets the focus state and the wanted size again: the hello may have carried an older
-    /// size, and herdr may not know the window is active.
+    /// Sets the link state. A state that changes notifies once. A lost link drops the surface, and
+    /// a link that is not running also forgets the shell's pane. A live one gets the focus state
+    /// and the wanted size again: the hello may have carried an older size, and herdr may not know
+    /// the window is active.
     fn set_state(&mut self, state: LinkState, cx: &mut Context<Self>) {
         if self.state == state {
             return;
@@ -266,6 +267,9 @@ impl TerminalView {
         ) {
             self.surface = None;
             self.rows_cache.borrow_mut().clear();
+        }
+        if matches!(self.state, LinkState::NotRunning(_)) {
+            self.shell_pane = None;
         }
         if matches!(self.state, LinkState::Live { .. }) {
             self.send_focus();
@@ -302,12 +306,12 @@ impl TerminalView {
         self.ensure_link(cx);
     }
 
-    /// A key the terminal takes is sent to the focused pane, and the event stops there. Cmd-V pastes
-    /// the clipboard's text. Other keys reach the app.
+    /// A key the terminal takes is sent to the focused pane, and the event stops there. Cmd-V alone
+    /// pastes the clipboard's text. Other keys reach the app.
     fn key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         self.ensure_link(cx);
         let keystroke = &event.keystroke;
-        let taken = if keystroke.modifiers.platform && keystroke.key == "v" {
+        let taken = if keystroke.key == "v" && keystroke.modifiers == Modifiers::command() {
             if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
                 self.send(&[InputEvent::Paste(text)], Instant::now());
             }
@@ -334,10 +338,19 @@ impl TerminalView {
         let Some((_, handle)) = &self.link else {
             return;
         };
-        if let Err(e) = handle.send_input(&pane, events) {
-            debug!("terminal input not queued: {e:?}");
+        match handle.send_input(&pane, events) {
+            // D12: the size is re-asserted only when the input was queued.
+            Ok(()) => self.reassert_size(now),
+            Err(e) => debug!("terminal input not queued: {e:?}"),
         }
-        self.reassert_size(now);
+    }
+
+    /// Sends committed IME text as text. An empty commit sends nothing.
+    fn commit(&mut self, text: &str, cx: &mut Context<Self>) {
+        self.ensure_link(cx);
+        if !text.is_empty() {
+            self.send(&[InputEvent::Text(text.to_owned())], Instant::now());
+        }
     }
 
     /// The pane keys go to: the surface's focused pane (D13), else the pane the shell reported.
@@ -418,7 +431,12 @@ impl EntityInputHandler for TerminalView {
     }
 
     fn unmark_text(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.set_marked(None, cx);
+        // The system ends a composition by committing it, for example when focus moves away. The
+        // composed text is what it commits, so it is sent as a commit is.
+        if let Some(text) = self.marked.take() {
+            cx.notify();
+            self.commit(&text, cx);
+        }
     }
 
     fn replace_text_in_range(
@@ -430,10 +448,7 @@ impl EntityInputHandler for TerminalView {
     ) {
         // A commit ends the composition. Text is sent as text, so the shell gets what the IME made.
         self.set_marked(None, cx);
-        self.ensure_link(cx);
-        if !text.is_empty() {
-            self.send(&[InputEvent::Text(text.to_owned())], Instant::now());
-        }
+        self.commit(text, cx);
     }
 
     fn replace_and_mark_text_in_range(
@@ -866,6 +881,22 @@ mod tests {
         Err(io::Error::other("no thread"))
     }
 
+    thread_local! {
+        /// How many times `counting_failing_start` ran. Only one test uses that starter.
+        static STARTS: Counter<u32> = const { Counter::new(0) };
+    }
+
+    /// `failing_start`, which also counts its calls, so a test can see how often a start ran.
+    fn counting_failing_start(
+        _: LinkTarget,
+        _: GridSize,
+        _: CellPx,
+        _: Sender<LinkUpdate>,
+    ) -> io::Result<(SurfaceLink, LinkHandle)> {
+        STARTS.with(|n| n.set(n.get() + 1));
+        Err(io::Error::other("no thread"))
+    }
+
     /// A start that gives a link with no socket behind it.
     fn working_start(
         _: LinkTarget,
@@ -1210,6 +1241,25 @@ mod tests {
     }
 
     #[gpui::test]
+    fn cmd_shift_v_and_cmd_alt_v_are_not_a_paste(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        let frames = attach(cx, &view);
+        cx.write_to_clipboard(ClipboardItem::new_string("one".to_owned()));
+
+        cx.simulate_keystrokes("cmd-shift-v");
+        cx.simulate_keystrokes("cmd-alt-v");
+        assert!(queued(&frames).is_empty(), "only Cmd-V pastes");
+
+        // Cmd-V still pastes: the two chords above were not sent by accident.
+        cx.simulate_keystrokes("cmd-v");
+        assert_eq!(
+            queued(&frames),
+            vec![input(PANE, &[InputEvent::Paste("one".to_owned())])]
+        );
+    }
+
+    #[gpui::test]
     fn composed_text_is_painted_and_sent_once_when_committed(cx: &mut TestAppContext) {
         let (view, cx) = cx.add_window_view(TerminalView::new);
         settle(cx, 800., 600.);
@@ -1237,7 +1287,7 @@ mod tests {
     }
 
     #[gpui::test]
-    fn unmarking_drops_the_composition_without_sending(cx: &mut TestAppContext) {
+    fn an_unmarked_composition_is_sent_as_text_once(cx: &mut TestAppContext) {
         let (view, cx) = cx.add_window_view(TerminalView::new);
         settle(cx, 800., 600.);
         let frames = attach(cx, &view);
@@ -1247,8 +1297,13 @@ mod tests {
                 view.replace_and_mark_text_in_range(None, "ni", None, window, cx)
             })
         });
+        // The system commits the composition by unmarking it: the composed text is sent.
         cx.update(|window, app| view.update(app, |view, cx| view.unmark_text(window, cx)));
         view.read_with(cx, |view, _| assert!(view.marked.is_none()));
+        assert_eq!(queued(&frames), vec![input(PANE, &[text("ni")])]);
+
+        // With no composition left, another unmark sends nothing.
+        cx.update(|window, app| view.update(app, |view, cx| view.unmark_text(window, cx)));
         assert!(queued(&frames).is_empty());
     }
 
@@ -1336,6 +1391,60 @@ mod tests {
     }
 
     #[gpui::test]
+    fn input_that_is_not_queued_does_not_re_send_the_size(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        let (size, cell) = sent_size(cx, &view);
+        let resize = ClientMsg::Resize { size, cell }.encode();
+
+        // The link's frames have no receiver left, so each queue fails with NotConnected.
+        let (link, handle, frames) = test_link();
+        drop(frames);
+        let other = GridSize { cols: 3, rows: 2 };
+        view.update(cx, |view, cx| {
+            view.link = Some((link, handle));
+            // herdr shows another size: a re-send would be due if the input were queued.
+            view.accept_surface(shown(1, other, Some(PANE)), cx);
+        });
+        cx.run_until_parked();
+        let t0 = Instant::now();
+        view.update(cx, |view, _| view.send(&[text("a")], t0));
+        view.read_with(cx, |view, _| {
+            assert!(view.reasserted_at.is_none(), "nothing was queued");
+        });
+
+        // The link works now. The size was not re-sent by the failed input, so the next one is.
+        let (link, handle, frames) = test_link();
+        view.update(cx, |view, _| view.link = Some((link, handle)));
+        view.update(cx, |view, _| view.send(&[text("b")], t0));
+        assert_eq!(queued(&frames), vec![input(PANE, &[text("b")]), resize]);
+    }
+
+    #[gpui::test]
+    fn a_lost_link_forgets_the_shell_pane(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        let snapshot = ShellSnapshot {
+            focused_pane_id: Some("p9".to_owned()),
+            ..Default::default()
+        };
+        view.update(cx, |view, cx| {
+            view.on_update(LinkUpdate::Snapshot(Arc::new(snapshot)), cx)
+        });
+        view.read_with(cx, |view, _| {
+            assert_eq!(view.shell_pane.as_deref(), Some("p9"));
+        });
+
+        view.update(cx, |view, cx| {
+            view.on_update(
+                LinkUpdate::State(LinkState::NotRunning(NOT_RUNNING.to_owned())),
+                cx,
+            )
+        });
+        view.read_with(cx, |view, _| assert!(view.shell_pane.is_none()));
+    }
+
+    #[gpui::test]
     fn the_window_focus_state_goes_to_herdr(cx: &mut TestAppContext) {
         let (view, cx) = cx.add_window_view(TerminalView::new);
         settle(cx, 800., 600.);
@@ -1405,12 +1514,18 @@ mod tests {
         let (view, cx) = cx.add_window_view(TerminalView::new);
         view.update(cx, |view, _| {
             view.enabled = true;
-            view.start = failing_start;
+            view.start = counting_failing_start;
         });
         settle(cx, 800., 600.);
+        assert_eq!(
+            STARTS.with(Counter::get),
+            1,
+            "the layout starts the link once"
+        );
         // Time passes with no user event: the start is not tried again.
         cx.executor().advance_clock(Duration::from_secs(10));
         cx.run_until_parked();
+        assert_eq!(STARTS.with(Counter::get), 1, "no timer starts it again");
         assert!(view.read_with(cx, |view, _| view.link.is_none()));
     }
 }
