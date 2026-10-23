@@ -85,6 +85,25 @@ pub struct BoardSnapshot {
     /// Needs-you items in the mod's slot order. contr never reorders them.
     #[serde(default)]
     pub items: Vec<NeedItem>,
+    /// #10: `1` means the mod takes actions-file v1. Absent or `0`: contr's action buttons stay inert.
+    #[serde(default)]
+    pub actions: u32,
+    /// #10: the highest action `seq` the mod has taken, whether it worked or failed.
+    #[serde(default)]
+    pub acted: u64,
+    /// #10: the last failed actions, ascending by `seq`. contr shows each new one once.
+    #[serde(default)]
+    pub failed: Vec<ActionFailure>,
+}
+
+/// One action that the mod could not take. `key` is the item it named, if any.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct ActionFailure {
+    pub seq: u64,
+    #[serde(default)]
+    pub key: Option<String>,
+    #[serde(default)]
+    pub text: String,
 }
 
 /// Context use of the coordinator. The panel does not draw it in #9.
@@ -589,5 +608,55 @@ mod tests {
         let resolved = item(r#"{"key":"D6","kind":"ask","open":false,"answer":"keep it"}"#);
         assert_eq!(item_status(&resolved), Status::Done);
         assert_eq!(item_kind_label(&resolved), "done");
+    }
+
+    #[test]
+    fn fixture_declares_the_action_fields() {
+        let board = fixture();
+        assert_eq!(board.actions, 1);
+        assert_eq!(board.acted, 0);
+        assert!(board.failed.is_empty());
+    }
+
+    #[test]
+    fn old_board_without_action_fields_reads_them_as_defaults() {
+        let board = parse_board(br#"{"version": 1, "session": "s1", "rev": 7}"#).unwrap();
+        assert_eq!(board.actions, 0);
+        assert_eq!(board.acted, 0);
+        assert!(board.failed.is_empty());
+    }
+
+    #[test]
+    fn failed_entries_read_their_seq_key_and_text() {
+        let bytes = br#"{
+            "version": 1, "session": "s1", "rev": 7, "acted": 16,
+            "failed": [
+                {"seq": 15, "key": "D5", "text": "D5 is not open"},
+                {"seq": 16}
+            ]
+        }"#;
+        let board = parse_board(bytes).unwrap();
+        assert_eq!(board.acted, 16);
+        assert_eq!(
+            board.failed,
+            [
+                ActionFailure {
+                    seq: 15,
+                    key: Some("D5".to_owned()),
+                    text: "D5 is not open".to_owned(),
+                },
+                ActionFailure {
+                    seq: 16,
+                    key: None,
+                    text: String::new(),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn failed_entry_without_seq_is_a_json_error() {
+        let bytes = br#"{"version": 1, "session": "s1", "rev": 7, "failed": [{"key": "D5"}]}"#;
+        assert!(matches!(parse_board(bytes), Err(BoardError::Json(_))));
     }
 }
