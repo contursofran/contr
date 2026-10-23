@@ -13,6 +13,12 @@ impl Frame {
     }
 }
 
+impl Default for Frame {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Render for Frame {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         div()
