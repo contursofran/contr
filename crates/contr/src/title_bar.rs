@@ -321,6 +321,7 @@ pub(crate) mod tests {
     };
     use gpui::{Entity, Modifiers, TestAppContext, VisualTestContext, size};
     use std::cell::{Cell, RefCell};
+    use std::collections::BTreeMap;
     use std::rc::Rc;
     use std::sync::Arc;
 
@@ -401,6 +402,7 @@ pub(crate) mod tests {
             cwd: None,
             focused,
             agent: None,
+            tokens: BTreeMap::new(),
         }
     }
 
