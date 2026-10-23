@@ -56,15 +56,14 @@ fn main() -> std::process::ExitCode {
     }
 }
 
-// Adapted from herdr-gpui (https://github.com/penso/herdr-gpui),
-// crates/herdr-gpui/src/titlebar.rs at 1ad3319e12c202e52dc3341e3dc1c9f49a064eb8.
-// Copyright 2026 Fabien Penso. Licensed under the Apache License, Version 2.0.
-/// Transparent title bar; the traffic lights sit centred in the 40px bar.
+/// On macOS the title bar is transparent and the traffic lights are moved
+/// inside the 40px title bar. Other platforms keep their system title bar.
 fn titlebar_options() -> TitlebarOptions {
+    let macos = cfg!(target_os = "macos");
     TitlebarOptions {
         title: Some("contr".into()),
-        appears_transparent: cfg!(target_os = "macos"),
-        traffic_light_position: cfg!(target_os = "macos").then(|| point(px(14.), px(13.))),
+        appears_transparent: macos,
+        traffic_light_position: macos.then(|| point(px(14.), px(13.))),
     }
 }
 
