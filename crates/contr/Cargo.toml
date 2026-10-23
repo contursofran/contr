@@ -15,3 +15,4 @@ gpui_platform  = { workspace = true, features = ["font-kit", "runtime_shaders", 
 
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }
+tempfile.workspace = true
