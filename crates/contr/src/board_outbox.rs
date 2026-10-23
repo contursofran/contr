@@ -28,12 +28,15 @@ pub struct BoardOutbox {
     writing: Option<Task<()>>,
     /// Wakes when the earliest held action is due. `None` while nothing is held.
     timer: Option<Task<()>>,
-    /// The read of the existing actions file of a new session.
-    loading: Option<Task<()>>,
+    /// The read of the existing actions file, and the session it is for. It ends in `adopt`.
+    loading: Option<(String, Task<()>)>,
     _observe: Subscription,
     /// Writes started. Tests count them.
     #[cfg(test)]
     pub writes: usize,
+    /// Reads of an existing actions file started. Tests count them.
+    #[cfg(test)]
+    pub reads: usize,
 }
 
 /// The app-wide handle to the queue, created by `BoardOutbox::init`.
@@ -73,6 +76,8 @@ impl BoardOutbox {
             _observe: observe,
             #[cfg(test)]
             writes: 0,
+            #[cfg(test)]
+            reads: 0,
         };
         this.observe_board(board, cx);
         this
@@ -141,12 +146,22 @@ impl BoardOutbox {
         } else {
             self.live = false;
             self.drop_outbox(cx);
-            self.loading = None;
-            if takes {
+            if !takes {
+                self.loading = None;
+            } else if !self.reading(&snapshot.session) {
                 self.load(snapshot, cx);
             }
         }
         cx.notify();
+    }
+
+    /// `true` while the read of `session`'s actions file is in flight. The read is not started again.
+    fn reading(&self, session: &str) -> bool {
+        self.outbox.is_none()
+            && self
+                .loading
+                .as_ref()
+                .is_some_and(|(loading, _)| loading == session)
     }
 
     /// Ends the queue of another session. Its held actions are written first, so none is lost.
@@ -163,14 +178,20 @@ impl BoardOutbox {
         let Some(dir) = self.dir.clone() else {
             return;
         };
+        #[cfg(test)]
+        {
+            self.reads += 1;
+        }
         let path = actions_path(&dir, &snapshot.session);
-        self.loading = Some(cx.spawn(async move |this, cx| {
+        let session = snapshot.session.clone();
+        let read = cx.spawn(async move |this, cx| {
             let existing = cx
                 .background_executor()
                 .spawn(async move { read_existing(&path) })
                 .await;
             let _ = this.update(cx, |this, cx| this.adopt(snapshot, existing, cx));
-        }));
+        });
+        self.loading = Some((session, read));
     }
 
     /// Creates the queue from the file that was read, then applies the snapshot's report.
@@ -180,6 +201,8 @@ impl BoardOutbox {
         existing: Option<ActionsFile>,
         cx: &mut Context<Self>,
     ) {
+        // The read is finished, so its handle goes.
+        self.loading = None;
         self.outbox = Some(Outbox::new(
             snapshot.session.clone(),
             snapshot.acted,
@@ -240,6 +263,8 @@ impl BoardOutbox {
     fn arm_timer(&mut self, now: u64, cx: &mut Context<Self>) {
         let due = self.outbox.as_ref().and_then(Outbox::next_release);
         self.timer = due.map(|due| {
+            // The due time is wall-clock, so the wait is the wall-clock gap. The executor timer counts
+            // that gap from now. A jump of the wall clock changes the wait of this one action only.
             let wait = Duration::from_millis(due.saturating_sub(now));
             cx.spawn(async move |this, cx| {
                 cx.background_executor().timer(wait).await;
@@ -272,7 +297,7 @@ impl BoardOutbox {
 }
 
 /// The current wall-clock time in milliseconds since the Unix epoch. `0` before the epoch.
-fn now_ms() -> u64 {
+pub(crate) fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |elapsed| {
@@ -322,8 +347,12 @@ fn write_file(path: &Path, file: &ActionsFile) -> std::io::Result<()> {
     let mut tmp = path.as_os_str().to_owned();
     tmp.push(".tmp");
     let tmp = PathBuf::from(tmp);
-    std::fs::write(&tmp, &bytes)?;
-    std::fs::rename(&tmp, path)
+    let result = std::fs::write(&tmp, &bytes).and_then(|()| std::fs::rename(&tmp, path));
+    if result.is_err() {
+        // A failed write or rename leaves no `.tmp` behind. The next write would replace it anyway.
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result
 }
 
 #[cfg(test)]
@@ -402,6 +431,10 @@ mod tests {
 
     fn writes(cx: &TestAppContext, outbox: &Entity<BoardOutbox>) -> usize {
         read(cx, outbox, |o| o.writes)
+    }
+
+    fn reads(cx: &TestAppContext, outbox: &Entity<BoardOutbox>) -> usize {
+        read(cx, outbox, |o| o.reads)
     }
 
     fn timer_is_set(cx: &TestAppContext, outbox: &Entity<BoardOutbox>) -> bool {
@@ -751,6 +784,59 @@ mod tests {
         let line = status(cx).unwrap();
         assert!(line.starts_with("actions not saved: "), "{line}");
         assert!(line.chars().count() <= MAX_ERROR_CHARS);
+    }
+
+    #[gpui::test]
+    fn a_failed_rename_leaves_no_tmp_file(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        // The actions file is a directory, so the rename of the `.tmp` file onto it fails.
+        std::fs::create_dir(actions_path(dir.path(), SESSION)).unwrap();
+        let (board, outbox) = setup(cx, Some(dir.path().to_path_buf()));
+        show(cx, &board, Some(snapshot(SESSION, 1, 0)));
+
+        assert!(send(cx, &outbox, wrap_up(true)));
+        cx.run_until_parked();
+        let line = status(cx).unwrap();
+        assert!(line.starts_with("actions not saved: "), "{line}");
+        let mut tmp = actions_path(dir.path(), SESSION).into_os_string();
+        tmp.push(".tmp");
+        assert!(!PathBuf::from(tmp).exists(), "the .tmp file is removed");
+    }
+
+    #[gpui::test]
+    fn a_snapshot_of_the_same_session_during_a_read_does_not_read_again(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let (board, outbox) = setup(cx, Some(dir.path().to_path_buf()));
+        // Two snapshots of one session before the read of its file finishes.
+        for _ in 0..2 {
+            cx.update(|app| {
+                board.update(app, |b, cx| {
+                    b.set(Some(snapshot(SESSION, 1, 0)), None, None, cx)
+                })
+            });
+        }
+        cx.run_until_parked();
+
+        assert_eq!(reads(cx, &outbox), 1, "the read is not started again");
+        assert_eq!(session_of(cx, &outbox), Some(SESSION.to_owned()));
+        assert!(read(cx, &outbox, |o| o.can_act()));
+    }
+
+    #[gpui::test]
+    fn a_session_that_returns_after_its_queue_was_dropped_is_read_again(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let (board, outbox) = setup(cx, Some(dir.path().to_path_buf()));
+        show(cx, &board, Some(snapshot(SESSION, 1, 0)));
+        show(cx, &board, Some(snapshot(OTHER, 1, 0)));
+        show(cx, &board, Some(snapshot(SESSION, 1, 0)));
+
+        assert_eq!(
+            reads(cx, &outbox),
+            3,
+            "each change of session reads its file"
+        );
+        assert_eq!(session_of(cx, &outbox), Some(SESSION.to_owned()));
+        assert!(read(cx, &outbox, |o| o.can_act()));
     }
 
     #[gpui::test]

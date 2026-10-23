@@ -2,17 +2,26 @@
 //! then one row per item in the coordinator's order. The rows are plain elements. Their icons
 //! are static, so the section needs no cached views. Read-only in #9: rows never move on their own.
 
+use crate::board_card::selected_card;
 use crate::board_model::{ItemKind, NeedItem, item_kind_label, item_status};
 use crate::board_panel::{ActionClick, clear_done};
 use crate::status_icon::StatusIcon;
 use crate::theme::*;
-use gpui::{FontWeight, Role, div, prelude::*, px, rgb};
+use gpui::{App, ClickEvent, FontWeight, Role, Window, div, prelude::*, px, rgb};
+use std::rc::Rc;
+
+/// Picks the needs-you item with the given key. A row click calls it with the row's key.
+pub type PickFn = Rc<dyn Fn(String, &mut App)>;
 
 /// The needs-you section. It takes the rest of the panel's height, and its rows scroll inside it.
+/// `picked` is the key of the picked item, if the pick is an item. A click on a row calls `on_pick`.
+/// `on_clear` is the `clear done` control of the head, or `None` when the board takes no actions.
 pub fn needs_section(
     items: &[NeedItem],
     need_count: u32,
     clear_items: bool,
+    picked: Option<&str>,
+    on_pick: PickFn,
     on_clear: Option<ActionClick>,
 ) -> impl IntoElement {
     let rows = div()
@@ -27,12 +36,10 @@ pub fn needs_section(
     let rows = if items.is_empty() {
         rows.child(empty_line())
     } else {
-        rows.children(
-            items
-                .iter()
-                .enumerate()
-                .map(|(index, item)| need_row(index, item)),
-        )
+        rows.children(items.iter().enumerate().map(|(index, item)| {
+            let is_picked = picked == Some(item.key.as_str());
+            need_row(index, item, is_picked, on_pick.clone())
+        }))
     };
     div()
         .debug_selector(|| "needs-section".into())
@@ -81,9 +88,10 @@ fn empty_line() -> impl IntoElement {
 }
 
 /// One item: the status icon, the key, the title and the kind word on the right. A resolved item
-/// has its title struck through.
-fn need_row(index: usize, item: &NeedItem) -> impl IntoElement {
+/// has its title struck through. A picked item draws as a selected card, and a click picks it.
+fn need_row(index: usize, item: &NeedItem, picked: bool, on_pick: PickFn) -> impl IntoElement {
     let text = need_text(item);
+    let key = item.key.clone();
     let title = div()
         .min_w_0()
         .flex_1()
@@ -108,6 +116,13 @@ fn need_row(index: usize, item: &NeedItem) -> impl IntoElement {
         .items_center()
         .gap(px(NEED_GAP))
         .px(px(PANEL_PAD_X))
+        .on_click(move |_: &ClickEvent, _: &mut Window, cx: &mut App| {
+            on_pick(key.clone(), cx);
+        })
+        // The selected card is the first child, so it is drawn behind the row's content.
+        .when(picked, |row| {
+            row.child(selected_card(format!("need-row-{index}-picked")))
+        })
         .child(StatusIcon::new(("need-icon", index), item_status(item)).size(px(ICON_SIZE_SMALL)))
         .child(
             div()
@@ -145,8 +160,10 @@ mod tests {
     use super::*;
     use crate::board_model::parse_board;
     use gpui::{
-        Bounds, Context, Pixels, Render, TestAppContext, VisualTestContext, Window, px, size,
+        Bounds, Context, Modifiers, Pixels, Render, TestAppContext, VisualTestContext, Window, px,
+        size,
     };
+    use std::cell::RefCell;
 
     const FIXTURE: &str = include_str!("board_fixture_v1.json");
 
@@ -158,11 +175,18 @@ mod tests {
         serde_json::from_str(json).unwrap()
     }
 
+    /// A pick callback that does nothing.
+    fn ignore() -> PickFn {
+        Rc::new(|_, _| {})
+    }
+
     /// The section in a panel-sized column, as `BoardPanel` draws it.
     struct Host {
         items: Vec<NeedItem>,
         need_count: u32,
         clear_items: bool,
+        picked: Option<String>,
+        on_pick: PickFn,
     }
 
     impl Render for Host {
@@ -176,22 +200,38 @@ mod tests {
                     &self.items,
                     self.need_count,
                     self.clear_items,
+                    self.picked.as_deref(),
+                    self.on_pick.clone(),
                     None,
                 ))
         }
     }
 
-    /// A window of the panel's size with the section in it.
+    /// A window of the panel's size with the section in it, with nothing picked.
     fn host(
         cx: &mut TestAppContext,
         items: Vec<NeedItem>,
         need_count: u32,
         clear_items: bool,
     ) -> &mut VisualTestContext {
+        host_with(cx, items, need_count, clear_items, None, ignore())
+    }
+
+    /// `host`, with the picked key and the pick callback given.
+    fn host_with(
+        cx: &mut TestAppContext,
+        items: Vec<NeedItem>,
+        need_count: u32,
+        clear_items: bool,
+        picked: Option<String>,
+        on_pick: PickFn,
+    ) -> &mut VisualTestContext {
         let (_view, cx) = cx.add_window_view(move |_, _| Host {
             items,
             need_count,
             clear_items,
+            picked,
+            on_pick,
         });
         cx.simulate_resize(size(px(440.), px(900.)));
         cx.run_until_parked();
@@ -200,6 +240,13 @@ mod tests {
 
     fn bounds(cx: &mut VisualTestContext, selector: &'static str) -> Option<Bounds<Pixels>> {
         cx.debug_bounds(selector)
+    }
+
+    /// Clicks the centre of the element with the given selector, as the mouse would.
+    fn click(cx: &mut VisualTestContext, selector: &'static str) {
+        let bounds = cx.debug_bounds(selector).unwrap();
+        cx.simulate_click(bounds.center(), Modifiers::none());
+        cx.run_until_parked();
     }
 
     /// Whether `inner` lies inside `outer`, top and bottom.
@@ -302,6 +349,31 @@ mod tests {
         let cx = host(cx, Vec::new(), 0, false);
         assert!(bounds(cx, "needs-empty").is_some());
         assert!(bounds(cx, "need-row-0").is_none());
+    }
+
+    #[gpui::test]
+    fn the_picked_item_draws_as_the_selected_card(cx: &mut TestAppContext) {
+        let cx = host_with(
+            cx,
+            fixture_items(),
+            3,
+            true,
+            Some("D7".to_owned()),
+            ignore(),
+        );
+        assert!(bounds(cx, "need-row-1-picked").is_some(), "D7 is picked");
+        assert!(bounds(cx, "need-row-0").is_some(), "T12 is not picked");
+        assert!(bounds(cx, "need-row-0-picked").is_none());
+    }
+
+    #[gpui::test]
+    fn a_click_on_a_row_picks_its_key(cx: &mut TestAppContext) {
+        let picks = Rc::new(RefCell::new(Vec::new()));
+        let log = picks.clone();
+        let on_pick: PickFn = Rc::new(move |key, _| log.borrow_mut().push(key));
+        let cx = host_with(cx, fixture_items(), 3, true, None, on_pick);
+        click(cx, "need-row-2");
+        assert_eq!(*picks.borrow(), vec!["N4".to_owned()]);
     }
 
     #[gpui::test]
