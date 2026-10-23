@@ -13,6 +13,7 @@
 # Errors go to stderr as "bundle.sh: <message>" with exit 1.
 
 set -euo pipefail
+unset CDPATH # with CDPATH set, cd prints the directory and breaks $(cd ... && pwd)
 
 usage() {
     echo "usage: $0 [--bin PATH] [--out DIR] [--zip]" >&2
@@ -36,17 +37,19 @@ cleanup() {
     if [ -n "$icon_dir" ]; then rm -rf "$icon_dir"; fi
 }
 trap cleanup EXIT
-trap 'echo "bundle.sh: a command failed at line $LINENO" >&2' ERR
+trap 'echo "bundle.sh: a command failed at line $LINENO" >&2; exit 1' ERR
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --bin)
             [ $# -ge 2 ] || die "--bin needs a path"
+            case "$2" in -*) die "--bin needs a path, not a flag: $2" ;; esac
             bin="$2"
             shift 2
             ;;
         --out)
             [ $# -ge 2 ] || die "--out needs a dir"
+            case "$2" in -*) die "--out needs a dir, not a flag: $2" ;; esac
             out="$2"
             shift 2
             ;;
