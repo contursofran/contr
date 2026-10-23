@@ -10,8 +10,11 @@ version.workspace      = true
 workspace = true
 
 [dependencies]
+async-channel.workspace = true
 gpui.workspace = true
 gpui_platform  = { workspace = true, features = ["font-kit", "runtime_shaders", "wayland", "x11"] }
+sysinfo        = { version = "0.31", default-features = false, features = ["system"] }
 
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }
+tempfile.workspace = true

@@ -1,11 +1,12 @@
 //! Messages of herdr's endpoint socket, generation 1: the ones contr sends
 //! (hello, resize, input, focus, detach) and the server ones it reads. Surface
-//! frames come with the surface slice. Written from herdr's wire layout; see
-//! NOTICE.
+//! frames and patches are decoded in `surface`. Written from herdr's wire
+//! layout; see NOTICE.
 
 use serde::{Deserialize, Serialize};
 
 use super::codec::{CodecError, Dec, Enc};
+use super::surface::{self, SurfaceFrame, SurfacePatch};
 
 pub const ENDPOINT_GENERATION: u32 = 1;
 pub const HELLO_KIND: &str = "endpoint.hello.v1";
@@ -32,6 +33,8 @@ pub(crate) const S_WELCOME_LEGACY: u32 = 0;
 pub(crate) const S_SHUTDOWN: u32 = 3;
 pub(crate) const S_SHELL_ERROR: u32 = 15;
 pub(crate) const S_CONTROL: u32 = 20;
+pub(crate) const S_SURFACE: u32 = 13;
+pub(crate) const S_PATCH: u32 = 19;
 
 /// Grid size in cells.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -321,7 +324,7 @@ pub fn check_welcome(w: &Welcome) -> Result<VersionCheck, String> {
     }
 }
 
-/// A server message that S1 decodes. Other tags come back as `Other(tag)`
+/// A server message contr decodes. Other tags come back as `Other(tag)`
 /// without their body being read.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ServerMsg {
@@ -336,6 +339,10 @@ pub enum ServerMsg {
     LegacyWelcome {
         error: Option<String>,
     },
+    /// The full surface of the focused tab (`PaneSurface`).
+    Surface(SurfaceFrame),
+    /// Row spans that change the last surface (`PaneSurfacePatch`).
+    Patch(SurfacePatch),
     Other(u32),
 }
 
@@ -366,6 +373,8 @@ pub fn decode_server(payload: &[u8]) -> Result<ServerMsg, CodecError> {
             kind: d.str()?,
             data: d.str()?,
         },
+        S_SURFACE => ServerMsg::Surface(surface::decode_frame(&mut d)?),
+        S_PATCH => ServerMsg::Patch(surface::decode_patch(&mut d)?),
         other => ServerMsg::Other(other),
     })
 }

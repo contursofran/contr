@@ -933,8 +933,11 @@ dependencies = [
 name = "contr"
 version = "0.1.0"
 dependencies = [
+ "async-channel",
  "gpui-pre",
  "gpui-pre-platform",
+ "sysinfo",
+ "tempfile",
 ]
 
 [[package]]
