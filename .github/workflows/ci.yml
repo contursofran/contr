@@ -15,8 +15,8 @@ env:
 
 jobs:
   checks:
-    name: Format, lint, and test (macOS)
-    runs-on: macos-15
+    name: Format, lint, and test (Linux)
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
       contents: read
@@ -24,6 +24,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Dev packages for the -sys crates GPUI pulls in on Linux (checked with
+      # cargo tree --target x86_64-unknown-linux-gnu): fontconfig and freetype
+      # (fonts), wayland-client and wayland-cursor (Wayland, needs
+      # libwayland-dev), xkbcommon and xcb (X11). Based on herdr-gpui's
+      # scripts/install-linux-deps.sh.
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential pkg-config libfontconfig1-dev libfreetype6-dev \
+            libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb1-dev
       - name: Install pinned Rust toolchain
         run: rustup show
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
