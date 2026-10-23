@@ -311,7 +311,6 @@ impl Render for AgentRowView {
             .debug_selector(move || format!("agent-row-{index}"))
             .role(Role::Button)
             .aria_label(row_label(row, self.selected))
-            .aria_selected(self.selected)
             .relative()
             .w_full()
             .h(px(AGENT_ROW_HEIGHT))
