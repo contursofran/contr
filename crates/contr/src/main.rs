@@ -64,6 +64,8 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Command {
         match arg.as_str() {
             "--icons" => icons = true,
             "--help" | "-h" => return Command::Help,
+            // macOS adds a process serial number when an app starts from Finder or the Dock.
+            serial if serial.starts_with("-psn_") => {}
             _ => return Command::Unknown(arg),
         }
     }
@@ -266,6 +268,22 @@ mod tests {
             parse(&["contr", "--icons", "statusline"]),
             Command::Unknown("statusline".into())
         );
+    }
+
+    #[test]
+    fn finder_process_serial_number_is_ignored() {
+        // macOS passes `-psn_<n>_<n>` when an app starts from Finder or the Dock.
+        assert_eq!(
+            parse(&["contr", "-psn_0_12345"]),
+            Command::Window { icons: false }
+        );
+        assert_eq!(
+            parse(&["contr", "-psn_0_12345", "--icons"]),
+            Command::Window { icons: true }
+        );
+        assert_eq!(parse(&["contr", "-psn_0_12345", "--help"]), Command::Help);
+        // Only the `-psn_` prefix is ignored. Other dash arguments stay unknown.
+        assert_eq!(parse(&["contr", "-psn"]), Command::Unknown("-psn".into()));
     }
 
     #[test]
