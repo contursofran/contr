@@ -10,6 +10,14 @@ licensed under the Apache License, Version 2.0
   crates/herdr-gpui/src/titlebar.rs `options` (title-bar position changed).
 - Cargo.toml workspace lint set, from herdr-gpui's Cargo.toml.
 
+contr depends on the herdr-client crate of herdr-gpui and on its
+herdr-protocol crate (https://github.com/penso/herdr-gpui), Copyright 2026
+Fabien Penso, licensed under the Apache License, Version 2.0, revision
+1ad3319e12c202e52dc3341e3dc1c9f49a064eb8, as an unmodified git dependency.
+herdr-protocol contains portions adapted from Herdr
+(https://github.com/herdrdev/herdr), licensed under the Apache License,
+Version 2.0.
+
 Bundled fonts: JetBrains Mono v2.304
 (https://github.com/JetBrains/JetBrainsMono), Copyright 2020 The JetBrains
 Mono Project Authors, licensed under the SIL Open Font License 1.1; the full
