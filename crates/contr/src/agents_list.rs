@@ -562,7 +562,7 @@ mod tests {
             },
         );
         cx.update(|app| init_detached(app, None));
-        let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
+        let (_view, cx) = cx.add_window_view(Frame::new);
         cx.simulate_resize(size(px(1440.), px(900.)));
         cx.run_until_parked();
 
@@ -589,7 +589,7 @@ mod tests {
             ])),
         );
         cx.update(|app| init_detached(app, None));
-        let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
+        let (_view, cx) = cx.add_window_view(Frame::new);
         cx.simulate_resize(size(px(1440.), px(900.)));
         cx.run_until_parked();
 
@@ -614,7 +614,7 @@ mod tests {
             .collect();
         herdr_in(cx, connected(tree(&labels)));
         cx.update(|app| init_detached(app, None));
-        let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
+        let (_view, cx) = cx.add_window_view(Frame::new);
         cx.simulate_resize(size(px(1440.), px(900.)));
         cx.run_until_parked();
 

@@ -6,13 +6,14 @@ use crate::spaces::{Spaces, SpacesEvent, toggle_box};
 use crate::status_bar::StatusBar;
 #[cfg(not(test))]
 use crate::tab_commands;
+use crate::terminal::TerminalView;
 use crate::theme::*;
 #[cfg(test)]
 use crate::title_bar::TabCommand;
 use crate::title_bar::{TitleBar, TitleBarEvent};
 use gpui::{
-    Context, Entity, IntoElement, ParentElement, Render, StyleRefinement, Styled, Subscription,
-    Window, div, prelude::*, px, rgb,
+    AnyElement, Context, Entity, IntoElement, ParentElement, Render, StyleRefinement, Styled,
+    Subscription, Window, div, prelude::*, px, rgb,
 };
 
 pub struct Frame {
@@ -21,6 +22,7 @@ pub struct Frame {
     herdr: Entity<Herdr>,
     status_bar: Entity<StatusBar>,
     title_bar: Entity<TitleBar>,
+    terminal: Entity<TerminalView>,
     sidebar_open: bool,
     panel_open: bool,
     /// The herdr commands the title bar asked for, in order. Tests read them instead of sending.
@@ -33,12 +35,13 @@ pub struct Frame {
 
 impl Frame {
     /// Needs `Host::init`, `StatusMessage::init` and `Herdr::init` first: the status bar reads
-    /// the first two, and the terminal area shows the connection's line.
-    pub fn new(cx: &mut Context<Self>) -> Self {
+    /// the first two, and the terminal area shows the connection's line or the terminal view.
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let spaces = cx.new(Spaces::new);
         let agents = cx.new(AgentsList::new);
         let herdr = cx.global::<GlobalHerdr>().0.clone();
         let status_bar = cx.new(StatusBar::new);
+        let terminal = cx.new(|cx| TerminalView::new(window, cx));
         let toggle = cx.subscribe(&spaces, |this, _, event: &SpacesEvent, cx| {
             match event {
                 SpacesEvent::ToggleSidebar => this.sidebar_open = !this.sidebar_open,
@@ -71,6 +74,7 @@ impl Frame {
             herdr,
             status_bar,
             title_bar,
+            terminal,
             sidebar_open: true,
             panel_open: true,
             #[cfg(test)]
@@ -84,6 +88,11 @@ impl Frame {
 
 impl Render for Frame {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // herdr's own line while herdr is not connected; the terminal view otherwise.
+        let terminal_area: AnyElement = match self.herdr.read(cx).live.state.line() {
+            Some(line) => herdr_state(line).into_any_element(),
+            None => self.terminal.clone().into_any_element(),
+        };
         div()
             .size_full()
             .flex()
@@ -149,10 +158,7 @@ impl Render for Frame {
                                             .items_center()
                                             .justify_center()
                                             .bg(rgb(BG_TERMINAL))
-                                            .when_some(
-                                                self.herdr.read(cx).live.state.line(),
-                                                |terminal, line| terminal.child(herdr_state(line)),
-                                            ),
+                                            .child(terminal_area),
                                     )
                                     .when(self.panel_open, |row| {
                                         row.child(
@@ -239,7 +245,7 @@ mod tests {
         cx.update(Selection::init);
         herdr_in(cx, connected());
         cx.update(|app| crate::status_bar::init_detached(app, None));
-        let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
+        let (_view, cx) = cx.add_window_view(Frame::new);
         cx.simulate_resize(size(px(1440.), px(900.)));
         cx.run_until_parked();
         let sidebar = cx.debug_bounds("sidebar").unwrap();
@@ -265,7 +271,7 @@ mod tests {
         cx.update(Selection::init);
         herdr_in(cx, connected());
         cx.update(|app| crate::status_bar::init_detached(app, None));
-        let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
+        let (_view, cx) = cx.add_window_view(Frame::new);
         cx.simulate_resize(size(px(1440.), px(900.)));
         cx.run_until_parked();
         let button = cx.debug_bounds("sidebar-toggle").unwrap();
@@ -278,7 +284,7 @@ mod tests {
         cx.update(Selection::init);
         herdr_in(cx, connected());
         cx.update(|app| crate::status_bar::init_detached(app, None));
-        let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
+        let (_view, cx) = cx.add_window_view(Frame::new);
         cx.simulate_resize(size(px(1440.), px(900.)));
         cx.run_until_parked();
 
@@ -304,7 +310,7 @@ mod tests {
         cx.update(Selection::init);
         cx.update(|app| crate::status_bar::init_detached(app, None));
         herdr_in(cx, not_running());
-        let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
+        let (_view, cx) = cx.add_window_view(Frame::new);
         cx.simulate_resize(size(px(1440.), px(900.)));
         cx.run_until_parked();
 
@@ -327,25 +333,29 @@ mod tests {
         cx.update(Selection::init);
         cx.update(|app| crate::status_bar::init_detached(app, None));
         let herdr = herdr_in(cx, connected());
-        let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
+        let (_view, cx) = cx.add_window_view(Frame::new);
         cx.simulate_resize(size(px(1440.), px(900.)));
         cx.run_until_parked();
         assert!(cx.debug_bounds("herdr-state").is_none());
+        assert!(cx.debug_bounds("terminal-grid").is_some());
 
         let lost = HerdrUpdate::State(not_running().state);
         cx.update(|_, app| herdr.update(app, |herdr, cx| herdr.apply(lost, cx)));
         cx.run_until_parked();
         assert!(cx.debug_bounds("herdr-state").is_some());
+        assert!(cx.debug_bounds("terminal-grid").is_none());
 
         let connecting = HerdrUpdate::State(ConnState::Connecting);
         cx.update(|_, app| herdr.update(app, |herdr, cx| herdr.apply(connecting, cx)));
         cx.run_until_parked();
         assert!(cx.debug_bounds("herdr-state").is_some());
+        assert!(cx.debug_bounds("terminal-grid").is_none());
 
         let back = HerdrUpdate::State(connected().state);
         cx.update(|_, app| herdr.update(app, |herdr, cx| herdr.apply(back, cx)));
         cx.run_until_parked();
         assert!(cx.debug_bounds("herdr-state").is_none());
+        assert!(cx.debug_bounds("terminal-grid").is_some());
     }
 
     #[gpui::test]
@@ -353,7 +363,7 @@ mod tests {
         cx.update(Selection::init);
         herdr_in(cx, connected());
         cx.update(|app| crate::status_bar::init_detached(app, None));
-        let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
+        let (_view, cx) = cx.add_window_view(Frame::new);
         cx.simulate_resize(size(px(1440.), px(900.)));
         cx.run_until_parked();
         assert!(cx.debug_bounds("panel-toggle-open").is_some());
@@ -378,7 +388,7 @@ mod tests {
         cx.update(Selection::init);
         cx.update(|app| crate::status_bar::init_detached(app, None));
         herdr_in(cx, connected_with(sample_tree()));
-        let (frame, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
+        let (frame, cx) = cx.add_window_view(Frame::new);
         cx.simulate_resize(size(px(1440.), px(900.)));
         cx.run_until_parked();
 
@@ -401,7 +411,7 @@ mod tests {
         cx.update(Selection::init);
         herdr_in(cx, connected_with(sample_tree()));
         cx.update(|app| crate::status_bar::init_detached(app, None));
-        let (frame, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
+        let (frame, cx) = cx.add_window_view(Frame::new);
         cx.simulate_resize(size(px(1440.), px(900.)));
         cx.run_until_parked();
 

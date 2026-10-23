@@ -68,7 +68,7 @@ fn main() -> std::process::ExitCode {
             StatusMessage::init(cx);
             cx.open_window(options, |window, cx| {
                 Visibility::watch(window, cx);
-                cx.new(frame::Frame::new)
+                cx.new(|cx| frame::Frame::new(window, cx))
             })
             .map(|_| ())
         };
