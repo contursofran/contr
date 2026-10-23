@@ -195,6 +195,7 @@ mod tests {
     use crate::host::HostStats;
     use crate::selection::Selection;
     use crate::status_message::{GlobalStatusMessage, MESSAGE_TTL, StatusMessage};
+    use crate::visibility::Visibility;
     use contr_herdr::{ConnState, LiveHerdr};
     use gpui::{AppContext, Entity, TestAppContext, px, size};
     use std::time::Duration;
@@ -214,6 +215,7 @@ mod tests {
         host: Option<HostStats>,
         width: f32,
     ) -> &mut gpui::VisualTestContext {
+        cx.update(Visibility::init);
         cx.update(Selection::init);
         cx.update(|app| init_detached(app, host));
         cx.update(|app| {

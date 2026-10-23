@@ -4,7 +4,7 @@
 use crate::git::{Checkout, RepoInfo, Scan, WorktreeEntry};
 use crate::status_icon::Status;
 use contr_herdr::{AgentState, HerdrTree, Pane, Tab};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 /// A tab that holds a worktree. Its state is the best of its panes in that worktree.
@@ -78,6 +78,16 @@ pub fn build(tree: &HerdrTree, scan: &Scan) -> Vec<RepoGroup> {
         .collect()
 }
 
+/// The cwd of every pane in the tree, in tree order, each once. Panes without a cwd are skipped.
+/// These are the directories the git scan looks at.
+pub fn pane_cwds(tree: &HerdrTree) -> Vec<String> {
+    let mut seen = HashSet::new();
+    panes_in_tree_order(tree)
+        .filter_map(|(_, pane)| pane.cwd.clone())
+        .filter(|cwd| seen.insert(cwd.clone()))
+        .collect()
+}
+
 /// The order of agent states for choosing a row's top holder: blocked first, unknown last.
 pub fn rank(state: AgentState) -> u8 {
     match state {
@@ -103,7 +113,8 @@ fn checkout_of<'a>(pane: &Pane, scan: &'a Scan) -> Option<&'a Checkout> {
 }
 
 /// Records the pane for its tab in this checkout. A pane without an agent counts as `Unknown`.
-/// A tab keeps its highest-ranked pane; on a tie the first pane stays.
+/// A tab keeps its highest-ranked pane. On a tie the first pane in tree order stays: only a
+/// strictly higher rank replaces it.
 fn add_holder(holders: &mut Vec<Holder>, tab: &Tab, pane: &Pane) {
     let status = pane
         .agent
@@ -147,9 +158,8 @@ fn shows_row(entry: &WorktreeEntry, held: &[Holder]) -> bool {
     !held.is_empty() || show_unheld(entry)
 }
 
-/// Open owner question: should unheld worktrees show? Recommended: unheld linked worktrees show as
-/// dim idle rows. The main checkout shows only when a tab holds it, because the repo row already
-/// names it. To hide every unheld worktree, return `false`.
+/// Settled (D48): every non-prunable linked worktree shows, dimmed and idle when no tab holds it.
+/// The main checkout shows only when a tab holds it, because the repo row already names it.
 fn show_unheld(entry: &WorktreeEntry) -> bool {
     !entry.is_main
 }
@@ -175,8 +185,8 @@ fn top_holder(holders: &[Holder]) -> Option<&Holder> {
     holders.iter().max_by_key(|holder| rank(holder.status))
 }
 
-/// Open owner question: what the second line says. Recommended: `{tab label} {state}`, plus ` +N`
-/// for the N other tabs that hold the worktree. To show other text, change this function only.
+/// Settled (D49): the second line is the herdr fallback, `{tab label} {state}`, plus ` +N` for
+/// the N other tabs that hold the worktree (for example "b-3s2 working +1").
 fn hold_text(top: &Holder, holder_count: usize) -> String {
     let line = format!("{} {}", top.tab_label, top.status.label());
     match holder_count.saturating_sub(1) {
@@ -188,7 +198,7 @@ fn hold_text(top: &Holder, holder_count: usize) -> String {
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
-    use super::{RepoGroup, WorktreeRow, build, rank};
+    use super::{RepoGroup, WorktreeRow, build, pane_cwds, rank};
     use crate::git::{Checkout, RepoInfo, Scan, WorktreeEntry};
     use crate::status_icon::Status;
     use contr_herdr::AgentState::{Blocked, Done, Idle, Unknown, Working};
@@ -487,5 +497,21 @@ mod tests {
     fn row_id_is_its_root_path() {
         let groups = built(vec![tab("t1", "a", vec![pane("w1:p1", W1, Some(Idle))])]);
         assert_eq!(row(&groups, "w1").id(), W1);
+    }
+
+    #[test]
+    fn pane_cwds_are_listed_once_in_tree_order_and_skip_missing_cwds() {
+        let mut no_cwd = pane("w1:p4", W2, Some(Idle));
+        no_cwd.cwd = None;
+        let cwds = pane_cwds(&tree(vec![
+            tab(
+                "t1",
+                "a",
+                vec![pane("w1:p1", W1, None), pane("w1:p2", MAIN, None)],
+            ),
+            tab("t2", "b", vec![pane("w1:p3", W1, None), no_cwd]),
+        ]));
+        assert_eq!(cwds, [W1, MAIN]);
+        assert!(pane_cwds(&tree(Vec::new())).is_empty());
     }
 }
