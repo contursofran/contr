@@ -89,13 +89,16 @@ pub struct Conn {
 }
 
 impl Conn {
-    /// Connects, sends the hello and reads the welcome. `timeout` bounds the
-    /// whole handshake. No surface is requested yet. Both socket timeouts are
-    /// set to `timeout` before the hello is sent, and the handshake makes no
-    /// socket timeout call after that. The read timeout is therefore `timeout`
-    /// after `open`. Call [`Conn::set_read_timeout`] before `recv` to change it.
-    /// On macOS a timeout set on a socket whose peer already closed fails with
-    /// `EINVAL`, so `open` never sets one after the hello.
+    /// Connects, sends the hello and reads the welcome. No surface is requested
+    /// yet. `timeout` is the socket's read and write timeout: one wait for bytes
+    /// lasts at most `timeout`. The deadline is checked only after such a wait,
+    /// so the handshake can take up to about twice `timeout`. A welcome that
+    /// arrives in pieces, each within `timeout`, can take longer. Both socket
+    /// timeouts are set to `timeout` before the hello is sent, and the handshake
+    /// makes no socket timeout call after that. The read timeout is therefore
+    /// `timeout` after `open`. Call [`Conn::set_read_timeout`] before `recv` to
+    /// change it. On macOS a timeout set on a socket whose peer already closed
+    /// fails with `EINVAL`, so `open` never sets one after the hello.
     pub fn open(
         path: &Path,
         size: GridSize,

@@ -18,6 +18,11 @@ pub const INPUT_CODEC: &str = "shell.input.semantic.v1";
 pub const BLOB_CODEC: &str = "shell.blob.v1";
 /// Largest frame either side accepts (herdr allows 32 MiB with graphics).
 pub const MAX_FRAME: usize = 32 * 1024 * 1024;
+/// Limits herdr puts on a resize: columns and rows each in 1..=`MAX_GRID_SIDE`, their product at
+/// most `MAX_GRID_CELLS`, and a cell side at most `MAX_CELL_PX` device pixels.
+pub const MAX_GRID_SIDE: u16 = 4096;
+pub const MAX_GRID_CELLS: u32 = 1_000_000;
+pub const MAX_CELL_PX: u32 = 4096;
 /// herdr versions whose wire layout was checked against source (v0.9.3 live, v0.9.4/v0.9.5 by source diff).
 pub const TESTED_HERDR_VERSIONS: &[&str] = &["0.9.3", "0.9.4", "0.9.5"];
 
