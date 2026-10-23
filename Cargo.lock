@@ -934,6 +934,7 @@ name = "contr"
 version = "0.1.0"
 dependencies = [
  "async-channel",
+ "contr-herdr",
  "gpui-pre",
  "gpui-pre-platform",
  "sysinfo",
@@ -944,6 +945,7 @@ dependencies = [
 name = "contr-herdr"
 version = "0.1.0"
 dependencies = [
+ "async-channel",
  "serde",
  "serde_json",
  "tempfile",
