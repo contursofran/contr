@@ -856,13 +856,52 @@ mod tests {
 
     #[gpui::test]
     fn a_stale_read_is_dropped_when_the_target_changes(cx: &mut TestAppContext) {
-        let (_dir, raw) = result_file(REPORT.as_bytes());
+        let (_dir_a, first) = result_file(REPORT.as_bytes());
+        let (_dir_b, second) = result_file(b"# Second\n");
         let (view, _opened, cx) = report_view(cx);
-        show_target(cx, &view, ReportTarget::Row(source(Some(raw), None)), 42);
+
+        // The target goes to no row before the read lands, so the read's task is dropped. The
+        // late results below are passed to `loaded` by hand, as a task that was not dropped would.
+        show_target(
+            cx,
+            &view,
+            ReportTarget::Row(source(Some(first.clone()), None)),
+            42,
+        );
         show_target(cx, &view, ReportTarget::None, 42);
         cx.run_until_parked();
         assert_eq!(body_of(cx, &view), ReportBody::Empty(NO_ROW));
         assert_eq!(reads_of(cx, &view), 1, "the read started, then was dropped");
+
+        // A late result of the first read reaches `loaded`. Its key no longer matches, so it is
+        // dropped and the pick line stays.
+        let late = (PathBuf::from(&first), 42);
+        let result = read_report(&late.0);
+        cx.update(|_, app| view.update(app, |view, cx| view.loaded(late, result, cx)));
+        cx.run_until_parked();
+        assert_eq!(body_of(cx, &view), ReportBody::Empty(NO_ROW));
+
+        // The same holds when the path changes: a late result for the old path is dropped while
+        // the new path's read is still current.
+        show_target(
+            cx,
+            &view,
+            ReportTarget::Row(source(Some(second.clone()), None)),
+            42,
+        );
+        let late = (PathBuf::from(&first), 42);
+        let result = read_report(&late.0);
+        cx.update(|_, app| view.update(app, |view, cx| view.loaded(late, result, cx)));
+        assert_eq!(body_of(cx, &view), ReportBody::Loading);
+        cx.run_until_parked();
+        let lines = text_lines(&body_of(cx, &view));
+        assert_eq!(
+            lines[0],
+            ReportLine::Heading {
+                level: 1,
+                text: "Second".to_owned()
+            }
+        );
     }
 
     #[gpui::test]
