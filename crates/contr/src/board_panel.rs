@@ -5,14 +5,16 @@
 //! Report tab is shown.
 
 use crate::board::{Board, GlobalBoard};
+use crate::board_actions::Action;
 use crate::board_model::{BoardSnapshot, WorkRow};
 use crate::board_needs::needs_section;
+use crate::board_outbox::{BoardOutbox, GlobalBoardOutbox, show_status};
 use crate::board_report::{ReportEvent, ReportSource, ReportTarget, ReportView};
 use crate::board_work::{WorkRowView, work_section};
 use crate::theme::*;
 use gpui::{
-    App, ClickEvent, Context, Entity, IntoElement, ParentElement, Render, Styled, Subscription,
-    Window, div, prelude::*, px, rgb, transparent_black,
+    App, ClickEvent, Context, Div, Entity, IntoElement, ParentElement, Render, Role, Stateful,
+    Styled, Subscription, Window, div, prelude::*, px, rgb, transparent_black,
 };
 
 /// The two tabs of the panel. `Report` shows the report of the row in `report_row`.
@@ -23,13 +25,24 @@ pub enum PanelTab {
     Report,
 }
 
+/// A click on a board control that sends an action. Built by `sends`.
+pub(crate) type ActionClick = Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
+
+/// The status line after `clear done` is sent.
+const CLEAR_SENT: &str = "clear done sent";
+
 /// The board panel view.
 pub struct BoardPanel {
     board: Entity<Board>,
+    /// The queue that sends actions to the coordinator mod. `None` when the app has none, and then
+    /// no control sends anything.
+    outbox: Option<Entity<BoardOutbox>>,
     tab: PanelTab,
     /// One view per work row, in the coordinator's order.
     work: Vec<Entity<WorkRowView>>,
     _observe: Subscription,
+    /// Redraws the panel when the queue changes, such as when it loads and can act.
+    _outbox_observe: Option<Subscription>,
     /// The Report tab's view. It is drawn only on the Report tab.
     report: Entity<ReportView>,
     /// The key of the work row that the Report tab follows. It stays when the tab is left.
@@ -39,7 +52,7 @@ pub struct BoardPanel {
 
 impl BoardPanel {
     /// Needs `Board::init` first. Redraws when the board notifies. On the Report tab, a board
-    /// revision also syncs the report.
+    /// revision also syncs the report. Uses the queue from `BoardOutbox::init`, when there is one.
     pub fn new(cx: &mut Context<Self>) -> Self {
         let board = cx.global::<GlobalBoard>().0.clone();
         let observe = cx.observe(&board, |this, _, cx| {
@@ -48,21 +61,48 @@ impl BoardPanel {
                 this.sync_report(cx);
             }
         });
+        let outbox = cx
+            .try_global::<GlobalBoardOutbox>()
+            .map(|global| global.0.clone());
+        let outbox_observe = outbox
+            .as_ref()
+            .map(|outbox| cx.observe(outbox, |_, _, cx| cx.notify()));
         let report = cx.new(ReportView::new);
         let report_events = cx.subscribe(&report, |this, _, event: &ReportEvent, cx| match event {
             ReportEvent::Back => this.open_board_tab(cx),
         });
         let mut panel = Self {
             board,
+            outbox,
             tab: PanelTab::default(),
             work: Vec::new(),
             _observe: observe,
+            _outbox_observe: outbox_observe,
             report,
             report_row: None,
             _report_events: report_events,
         };
         panel.sync_work(cx);
         panel
+    }
+
+    /// Sends `action` through the queue. A sent action shows `feedback` in the status bar. Returns
+    /// `false`, and shows nothing, when the queue sends nothing: no queue, or a board that takes no
+    /// actions.
+    fn send_action(
+        &mut self,
+        action: Action,
+        feedback: &'static str,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(outbox) = self.outbox.clone() else {
+            return false;
+        };
+        let sent = outbox.update(cx, |outbox, cx| outbox.send(action, cx));
+        if sent {
+            show_status(feedback.to_owned(), cx);
+        }
+        sent
     }
 
     /// Shows the Report tab for the work row `row_key`.
@@ -139,16 +179,21 @@ impl Render for BoardPanel {
         let bridge = board.bridge.is_some();
         let problem = board.problem.clone();
         let snapshot = board.snapshot.clone();
+        let can_act = self
+            .outbox
+            .as_ref()
+            .is_some_and(|outbox| outbox.read(cx).can_act());
+        let wrap_up = snapshot.as_ref().map(|shown| shown.wrap_up);
+        let on_wrap = wrap_up.filter(|_| can_act).map(|wrap_up| {
+            let (action, feedback) = wrap_flip(wrap_up);
+            sends(action, feedback, cx)
+        });
         let root = div()
             .debug_selector(|| "board-panel".into())
             .size_full()
             .flex()
             .flex_col()
-            .child(header(
-                self.tab,
-                snapshot.as_ref().map(|shown| shown.wrap_up),
-                cx,
-            ));
+            .child(header(self.tab, wrap_up, on_wrap, cx));
         match (snapshot, self.tab) {
             (None, _) => root.child(text_line(
                 "board-empty",
@@ -156,20 +201,66 @@ impl Render for BoardPanel {
                 TEXT_DIM,
             )),
             (Some(_), PanelTab::Report) => root.child(report_area(self.report.clone())),
-            (Some(snapshot), PanelTab::Board) => root
-                .child(summary(&snapshot, problem.as_deref()))
-                .child(work_section(&self.work, snapshot.clear_rows))
-                .child(needs_section(
-                    &snapshot.items,
-                    snapshot.need_count,
-                    snapshot.clear_items,
-                )),
+            (Some(snapshot), PanelTab::Board) => {
+                let on_clear_rows = can_act.then(|| sends(Action::ClearRows, CLEAR_SENT, cx));
+                let on_clear_items = can_act.then(|| sends(Action::ClearItems, CLEAR_SENT, cx));
+                root.child(summary(&snapshot, problem.as_deref()))
+                    .child(work_section(&self.work, snapshot.clear_rows, on_clear_rows))
+                    .child(needs_section(
+                        &snapshot.items,
+                        snapshot.need_count,
+                        snapshot.clear_items,
+                        on_clear_items,
+                    ))
+            }
         }
     }
 }
 
+/// The click handler that calls `send_action` with `action` and `feedback`.
+fn sends(action: Action, feedback: &'static str, cx: &Context<BoardPanel>) -> ActionClick {
+    Box::new(cx.listener(move |this, _: &ClickEvent, _, cx| {
+        this.send_action(action.clone(), feedback, cx);
+    }))
+}
+
+/// The action that flips the wrap state, and its status line. From wrap up, the action is
+/// `keep going`; from keep going, it is `wrap up`.
+fn wrap_flip(wrap_up: bool) -> (Action, &'static str) {
+    if wrap_up {
+        (Action::WrapUp { on: false }, "keep going sent")
+    } else {
+        (Action::WrapUp { on: true }, "wrap up sent")
+    }
+}
+
+/// The `clear done` control of a section head. Lit and clickable when `on_click` is set. Dim and
+/// inert when it is `None`, as the board takes no actions.
+pub(crate) fn clear_done(selector: &'static str, on_click: Option<ActionClick>) -> Stateful<Div> {
+    let control = div()
+        .id(selector)
+        .debug_selector(move || selector.to_owned())
+        .child("clear done");
+    match on_click {
+        Some(on_click) => control
+            .role(Role::Button)
+            .aria_label("clear done")
+            .text_color(rgb(TEXT_2))
+            .hover(|style| style.text_color(rgb(TEXT)))
+            .cursor_pointer()
+            .on_click(on_click),
+        None => control.text_color(rgb(TEXT_DIM_2)),
+    }
+}
+
 /// The header row. `wrap_up` is `None` while there is no snapshot: the wrap label is then hidden.
-fn header(tab: PanelTab, wrap_up: Option<bool>, cx: &mut Context<BoardPanel>) -> impl IntoElement {
+/// `on_wrap` makes the label a button.
+fn header(
+    tab: PanelTab,
+    wrap_up: Option<bool>,
+    on_wrap: Option<ActionClick>,
+    cx: &mut Context<BoardPanel>,
+) -> impl IntoElement {
     div()
         .debug_selector(|| "board-header".into())
         .h(px(PANEL_HEADER_HEIGHT))
@@ -196,7 +287,9 @@ fn header(tab: PanelTab, wrap_up: Option<bool>, cx: &mut Context<BoardPanel>) ->
                     cx.listener(|this, _: &ClickEvent, _, cx| this.open_report_tab(cx)),
                 )),
         )
-        .when_some(wrap_up, |row, wrap_up| row.child(wrap_label(wrap_up)))
+        .when_some(wrap_up, |row, wrap_up| {
+            row.child(wrap_label(wrap_up, on_wrap))
+        })
 }
 
 /// One segment of the switch. The selected one is a card with a 1 px border. The border is always
@@ -249,21 +342,32 @@ fn report_target(snapshot: &BoardSnapshot, key: Option<&str>) -> ReportTarget {
     }
 }
 
-/// The inert wrap label on the right of the header.
-fn wrap_label(wrap_up: bool) -> impl IntoElement {
+/// The wrap label on the right of the header. It is a button when `on_click` is set, and dim and
+/// inert when it is `None`, as the board takes no actions.
+fn wrap_label(wrap_up: bool, on_click: Option<ActionClick>) -> impl IntoElement {
     let selector = if wrap_up {
         "board-wrap-keep"
     } else {
         "board-wrap-up"
     };
-    div()
+    let label = div()
+        .id("board-wrap")
         .debug_selector(|| "board-wrap".into())
-        .text_color(rgb(TEXT_DIM))
         .child(
             div()
                 .debug_selector(move || selector.to_owned())
                 .child(wrap_text(wrap_up)),
-        )
+        );
+    match on_click {
+        Some(on_click) => label
+            .role(Role::Button)
+            .aria_label(wrap_text(wrap_up))
+            .text_color(rgb(TEXT_2))
+            .hover(|style| style.text_color(rgb(TEXT)))
+            .cursor_pointer()
+            .on_click(on_click),
+        None => label.text_color(rgb(TEXT_DIM)),
+    }
 }
 
 /// The summary line. A problem with a snapshot is shown after it, in the dim colour.
@@ -329,6 +433,7 @@ pub(crate) mod test_support {
     use crate::board::{BridgePane, init_detached};
     use crate::board_model::{BridgeRef, parse_board};
     use crate::herdr::{GlobalHerdr, Herdr};
+    use crate::status_message::StatusMessage;
     use contr_herdr::LiveHerdr;
     use gpui::{Bounds, Pixels, TestAppContext, VisualTestContext, size};
 
@@ -384,6 +489,32 @@ pub(crate) mod test_support {
         cx.update(|app| {
             board.update(app, |board, cx| board.set(snapshot, problem, bridge, cx));
         });
+        open_in_window(cx)
+    }
+
+    /// A panel over a board that reads and writes its files in `dir` and shows `snapshot` on the
+    /// bridge pane. The queue is set up as `BoardOutbox::init` does it, so the panel can send.
+    pub(crate) fn panel_with_queue<'a>(
+        cx: &'a mut TestAppContext,
+        dir: &std::path::Path,
+        snapshot: BoardSnapshot,
+    ) -> (Entity<BoardPanel>, &'a mut VisualTestContext) {
+        cx.update(|app| {
+            let herdr = app.new(|cx| Herdr::detached(LiveHerdr::default(), cx));
+            app.set_global(GlobalHerdr(herdr));
+            StatusMessage::init(app);
+            let board = app.new(|cx| Board::new(Some(dir.to_path_buf()), cx));
+            app.set_global(GlobalBoard(board.clone()));
+            BoardOutbox::init(app);
+            board.update(app, |board, cx| {
+                board.set(Some(snapshot), None, Some(bridge()), cx)
+            });
+        });
+        open_in_window(cx)
+    }
+
+    /// Opens the panel in a window of the reference size and lets it settle.
+    fn open_in_window(cx: &mut TestAppContext) -> (Entity<BoardPanel>, &mut VisualTestContext) {
         let (host, cx) = cx.add_window_view(|_, cx| InFrame {
             panel: cx.new(BoardPanel::new),
         });
@@ -404,9 +535,11 @@ pub(crate) mod test_support {
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
-    use super::test_support::{bounds, bridge, fixture, panel};
+    use super::test_support::{bounds, bridge, fixture, panel, panel_with_queue};
     use super::*;
     use crate::board::NO_BOARD_FILE;
+    use crate::board_actions::{actions_path, parse_actions};
+    use crate::status_message::GlobalStatusMessage;
     use gpui::{Modifiers, TestAppContext, VisualTestContext};
 
     /// A RESULT.md with the S1 fixture, in a new temp dir. The dir is returned so it lives as long as
@@ -715,5 +848,151 @@ mod tests {
         assert!(bounds(cx, "board-empty").is_some());
         assert!(bounds(cx, "report").is_none());
         assert_eq!(reads(cx, &view), 0);
+    }
+
+    /// The queued actions of the fixture's session in `dir`, as `(seq, action)`. `None` when no
+    /// actions file was written.
+    fn queued(dir: &std::path::Path) -> Option<Vec<(u64, Action)>> {
+        let session = fixture().session;
+        let file = parse_actions(&std::fs::read(actions_path(dir, &session)).ok()?)?;
+        Some(
+            file.actions
+                .into_iter()
+                .map(|envelope| (envelope.seq, envelope.action))
+                .collect(),
+        )
+    }
+
+    /// The status line in the status bar, if one is shown.
+    fn status(cx: &VisualTestContext) -> Option<String> {
+        cx.read(|app| {
+            app.global::<GlobalStatusMessage>()
+                .0
+                .read(app)
+                .text
+                .as_ref()
+                .map(|text| text.to_string())
+        })
+    }
+
+    /// Sets the board to `snapshot` on the bridge pane, as a read would, and lets the panel react.
+    fn set_board(cx: &mut VisualTestContext, snapshot: BoardSnapshot) {
+        let board = cx.read(|app| app.global::<GlobalBoard>().0.clone());
+        cx.update(|_, app| {
+            board.update(app, |board, cx| {
+                board.set(Some(snapshot), None, Some(bridge()), cx)
+            })
+        });
+        cx.run_until_parked();
+    }
+
+    #[test]
+    fn wrap_flip_sends_the_other_state_with_its_status() {
+        assert_eq!(
+            wrap_flip(false),
+            (Action::WrapUp { on: true }, "wrap up sent")
+        );
+        assert_eq!(
+            wrap_flip(true),
+            (Action::WrapUp { on: false }, "keep going sent")
+        );
+    }
+
+    #[gpui::test]
+    fn wrap_up_click_queues_wrap_up_and_shows_the_status(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let (_view, cx) = panel_with_queue(cx, dir.path(), fixture());
+        click(cx, "board-wrap");
+        assert_eq!(
+            queued(dir.path()),
+            Some(vec![(1, Action::WrapUp { on: true })])
+        );
+        assert_eq!(status(cx).as_deref(), Some("wrap up sent"));
+    }
+
+    #[gpui::test]
+    fn keep_going_click_queues_wrap_up_off(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let mut snapshot = fixture();
+        snapshot.wrap_up = true;
+        let (_view, cx) = panel_with_queue(cx, dir.path(), snapshot);
+        assert!(bounds(cx, "board-wrap-keep").is_some());
+        click(cx, "board-wrap");
+        assert_eq!(
+            queued(dir.path()),
+            Some(vec![(1, Action::WrapUp { on: false })])
+        );
+        assert_eq!(status(cx).as_deref(), Some("keep going sent"));
+    }
+
+    #[gpui::test]
+    fn clear_done_on_the_work_section_queues_clear_rows(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let (_view, cx) = panel_with_queue(cx, dir.path(), fixture());
+        click(cx, "work-clear");
+        assert_eq!(queued(dir.path()), Some(vec![(1, Action::ClearRows)]));
+        assert_eq!(status(cx).as_deref(), Some("clear done sent"));
+    }
+
+    #[gpui::test]
+    fn clear_done_on_the_needs_section_queues_clear_items(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let (_view, cx) = panel_with_queue(cx, dir.path(), fixture());
+        click(cx, "needs-clear");
+        assert_eq!(queued(dir.path()), Some(vec![(1, Action::ClearItems)]));
+        assert_eq!(status(cx).as_deref(), Some("clear done sent"));
+    }
+
+    #[gpui::test]
+    fn a_board_that_takes_no_actions_queues_nothing(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let mut snapshot = fixture();
+        snapshot.actions = 0;
+        let (_view, cx) = panel_with_queue(cx, dir.path(), snapshot);
+        click(cx, "board-wrap");
+        click(cx, "work-clear");
+        click(cx, "needs-clear");
+        assert_eq!(queued(dir.path()), None, "no actions file is written");
+        assert_eq!(status(cx), None, "no status line is shown");
+        assert!(bounds(cx, "board-wrap").is_some(), "the label stays");
+        assert!(bounds(cx, "work-clear").is_some(), "clear done stays");
+        assert!(bounds(cx, "needs-clear").is_some(), "clear done stays");
+    }
+
+    #[gpui::test]
+    fn the_wrap_label_follows_the_next_snapshot(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let (_view, cx) = panel_with_queue(cx, dir.path(), fixture());
+        click(cx, "board-wrap");
+        assert_eq!(
+            queued(dir.path()),
+            Some(vec![(1, Action::WrapUp { on: true })])
+        );
+
+        // The mod takes seq 1 and shows wrap up on.
+        let mut next = fixture();
+        next.wrap_up = true;
+        next.acted = 1;
+        next.rev = 43;
+        set_board(cx, next);
+        assert_eq!(queued(dir.path()), Some(vec![]), "the taken action leaves");
+        assert!(bounds(cx, "board-wrap-keep").is_some());
+
+        click(cx, "board-wrap");
+        assert_eq!(
+            queued(dir.path()),
+            Some(vec![(2, Action::WrapUp { on: false })])
+        );
+    }
+
+    #[gpui::test]
+    fn a_panel_without_a_queue_sends_nothing(cx: &mut TestAppContext) {
+        let (view, cx) = panel(cx, Some(fixture()), None, Some(bridge()));
+        let sent = cx.update(|_, app| {
+            view.update(app, |panel, cx| {
+                panel.send_action(Action::ClearRows, CLEAR_SENT, cx)
+            })
+        });
+        assert!(!sent, "no queue, nothing is sent");
     }
 }

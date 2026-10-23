@@ -297,7 +297,7 @@ fn save_error_line(error: &std::io::Error) -> String {
 }
 
 /// Shows `text` in the status bar. Does nothing when the status message is not registered.
-fn show_status(text: String, cx: &mut App) {
+pub(crate) fn show_status(text: String, cx: &mut App) {
     if let Some(message) = cx
         .try_global::<GlobalStatusMessage>()
         .map(|global| global.0.clone())
