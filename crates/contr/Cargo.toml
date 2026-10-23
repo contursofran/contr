@@ -20,4 +20,5 @@ sysinfo        = { version = "0.31", default-features = false, features = ["syst
 
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }
+serde_json.workspace = true
 tempfile.workspace = true

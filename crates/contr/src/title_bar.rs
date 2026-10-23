@@ -1,7 +1,9 @@
 //! The title bar: the agent tabs of herdr's current workspace, "+", the split button and the panel
 //! toggle. The whole bar is one view, so a spinning `Working` tab icon redraws only this view
-//! (the frame embeds it cached). It shows the `TabStrip` it is given; herdr wiring comes later.
+//! (the frame embeds it cached). Its strip follows herdr's tree; a click becomes a `TabCommand`
+//! for the frame to send.
 
+use crate::herdr::GlobalHerdr;
 use crate::status_icon::{Status, StatusIcon};
 use crate::theme::{
     BG_TERMINAL, ICON_SIZE_SMALL, SIDEBAR_TOGGLE_RADIUS, TAB_GAP, TAB_MAX_WIDTH, TAB_MIN_WIDTH,
@@ -10,8 +12,8 @@ use crate::theme::{
 };
 use contr_herdr::{TabItem, TabStrip};
 use gpui::{
-    Context, Div, EventEmitter, IntoElement, ParentElement, Render, Role, Stateful, Styled, Window,
-    div, prelude::*, px, rgb,
+    Context, Div, EventEmitter, IntoElement, ParentElement, Render, Role, Stateful, Styled,
+    Subscription, Window, div, prelude::*, px, rgb,
 };
 
 /// What a click asks herdr to do. The ids are herdr's: a tab, a workspace, a pane.
@@ -29,20 +31,35 @@ pub enum TitleBarEvent {
     Command(TabCommand),
 }
 
-/// The title bar's state: the strip it shows and whether the panel is open.
+/// The title bar's state: the strip it shows and whether the panel is open. The strip follows
+/// the herdr connection through `_observe`.
 pub struct TitleBar {
     strip: TabStrip,
     panel_open: bool,
+    /// Counts the renders, so a test can see whether a herdr change redrew the bar.
+    #[cfg(test)]
+    renders: usize,
+    _observe: Subscription,
 }
 
 impl EventEmitter<TitleBarEvent> for TitleBar {}
 
 impl TitleBar {
-    /// An empty strip: no tabs, no "+", no split. The panel toggle draws `panel_open`.
-    pub fn new(panel_open: bool, _cx: &mut Context<Self>) -> Self {
+    /// The strip starts from herdr's current tree and follows it. A tree change redraws the bar
+    /// only when this workspace's strip changes. Needs `Herdr::init` first.
+    pub fn new(panel_open: bool, cx: &mut Context<Self>) -> Self {
+        let herdr = cx.global::<GlobalHerdr>().0.clone();
+        let strip = TabStrip::from_tree(herdr.read(cx).live.tree.as_deref());
+        let observe = cx.observe(&herdr, |this, herdr, cx| {
+            let strip = TabStrip::from_tree(herdr.read(cx).live.tree.as_deref());
+            this.set_strip(strip, cx);
+        });
         Self {
-            strip: TabStrip::default(),
+            strip,
             panel_open,
+            #[cfg(test)]
+            renders: 0,
+            _observe: observe,
         }
     }
 
@@ -65,6 +82,10 @@ impl TitleBar {
 
 impl Render for TitleBar {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        #[cfg(test)]
+        {
+            self.renders += 1;
+        }
         let strip = &self.strip;
         div()
             .debug_selector(|| "title-strip".into())
@@ -75,14 +96,7 @@ impl Render for TitleBar {
             .when_some(strip.workspace_id.clone(), |bar, workspace| {
                 bar.child(new_tab_button(workspace, cx))
             })
-            .child(
-                div()
-                    .id("title-drag")
-                    .debug_selector(|| "title-drag".into())
-                    .flex_1()
-                    .min_w_0()
-                    .h_full(),
-            )
+            .child(title_drag())
             .child(right_group(
                 strip.split_pane_id.clone(),
                 self.panel_open,
@@ -93,9 +107,8 @@ impl Render for TitleBar {
 
 /// The tabs of the current workspace, in herdr's order.
 ///
-/// Overflow (D62, owner question open; the recommended option is built): each tab shrinks to
-/// `TAB_MIN_WIDTH` (set in `tab`) and its label ends in an ellipsis; this row clips what does not
-/// fit. A different answer changes `TAB_MIN_WIDTH` in `theme.rs` and this function.
+/// Overflow (D62, settled): each tab shrinks to `TAB_MIN_WIDTH` (set in `tab`) and its label ends
+/// in an ellipsis; this row clips what does not fit.
 fn tabs_row(tabs: &[TabItem], cx: &mut Context<TitleBar>) -> Div {
     div()
         .debug_selector(|| "tabs".into())
@@ -121,7 +134,6 @@ fn tab(i: usize, item: &TabItem, cx: &mut Context<TitleBar>) -> Stateful<Div> {
         .min_w(px(TAB_MIN_WIDTH))
         .max_w(px(TAB_MAX_WIDTH))
         .flex_shrink_1()
-        .cursor_pointer()
         .role(Role::Tab)
         .aria_label(format!("{}, {}", item.label, status.label()))
         .child(
@@ -152,6 +164,7 @@ fn tab(i: usize, item: &TabItem, cx: &mut Context<TitleBar>) -> Stateful<Div> {
     } else {
         let id = item.id.clone();
         element = element
+            .cursor_pointer()
             .text_color(rgb(TEXT_2))
             .hover(|style| style.text_color(rgb(TEXT)))
             .on_click(cx.listener(move |_, _, _, cx| {
@@ -181,6 +194,37 @@ fn new_tab_button(workspace: String, cx: &mut Context<TitleBar>) -> Stateful<Div
             )))
         }))
         .child("+")
+}
+
+/// The empty stretch between the tabs and the buttons. The bar is transparent on macOS, so this is
+/// what drags the window there.
+fn title_drag() -> Stateful<Div> {
+    drag_on_press(
+        div()
+            .id("title-drag")
+            .debug_selector(|| "title-drag".into())
+            .flex_1()
+            .min_w_0()
+            .h_full(),
+    )
+}
+
+/// A press starts a window move; a double click zooms the window, as a native title bar does.
+#[cfg(target_os = "macos")]
+fn drag_on_press(region: Stateful<Div>) -> Stateful<Div> {
+    region.on_mouse_down(gpui::MouseButton::Left, |event, window, _| {
+        if event.click_count == 2 {
+            window.titlebar_double_click();
+        } else {
+            window.start_window_move();
+        }
+    })
+}
+
+/// Other platforms keep their own title bar, so the region does nothing.
+#[cfg(not(target_os = "macos"))]
+fn drag_on_press(region: Stateful<Div>) -> Stateful<Div> {
+    region
 }
 
 /// The split button (when there is a pane to split) and the panel toggle, at the right edge.
@@ -269,12 +313,16 @@ fn glyph_outline(group: &'static str) -> Div {
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
-    use contr_herdr::AgentState;
+    use crate::herdr::Herdr;
+    use contr_herdr::{
+        AgentState, ConnState, HerdrTree, HerdrUpdate, LiveHerdr, Pane, Tab, Workspace,
+    };
     use gpui::{Entity, Modifiers, TestAppContext, VisualTestContext, size};
     use std::cell::{Cell, RefCell};
     use std::rc::Rc;
+    use std::sync::Arc;
 
     /// The selectors of the 16 tabs in `many_tabs_shrink_to_the_minimum_then_clip`.
     const TAB_SELECTORS: [&str; 16] = [
@@ -304,17 +352,123 @@ mod tests {
         }
     }
 
-    /// A bare title bar in a 1160×40 window, showing `strip`.
+    /// Registers a herdr connection holding `live` as the global, as `Herdr::init` does, without
+    /// a reader.
+    pub(crate) fn herdr_in(cx: &mut TestAppContext, live: LiveHerdr) -> Entity<Herdr> {
+        cx.update(|app| {
+            let herdr = app.new(|cx| Herdr::detached(live, cx));
+            app.set_global(GlobalHerdr(herdr.clone()));
+            herdr
+        })
+    }
+
+    /// A bare title bar in a 1160×40 window, showing `strip` (set by the test, not by herdr).
     fn window_with(
         cx: &mut TestAppContext,
         strip: TabStrip,
         panel_open: bool,
     ) -> (Entity<TitleBar>, &mut VisualTestContext) {
+        herdr_in(cx, LiveHerdr::default());
         let (bar, cx) = cx.add_window_view(|_, cx| TitleBar::new(panel_open, cx));
         cx.simulate_resize(size(px(1160.), px(40.)));
         bar.update(cx, |bar, cx| bar.set_strip(strip, cx));
         cx.run_until_parked();
         (bar, cx)
+    }
+
+    /// A bare title bar in a 1160×40 window that follows a herdr connection holding `live`.
+    fn window_on_herdr(
+        cx: &mut TestAppContext,
+        live: LiveHerdr,
+    ) -> (Entity<Herdr>, Entity<TitleBar>, &mut VisualTestContext) {
+        let herdr = herdr_in(cx, live);
+        let (bar, cx) = cx.add_window_view(|_, cx| TitleBar::new(true, cx));
+        cx.simulate_resize(size(px(1160.), px(40.)));
+        cx.run_until_parked();
+        (herdr, bar, cx)
+    }
+
+    /// Applies `update` to the connection, as the reader's drain task does, then runs the UI.
+    fn push(cx: &mut VisualTestContext, herdr: &Entity<Herdr>, update: HerdrUpdate) {
+        cx.update(|_, app| herdr.update(app, |herdr, cx| herdr.apply(update, cx)));
+        cx.run_until_parked();
+    }
+
+    fn pane(id: &str, focused: bool) -> Pane {
+        Pane {
+            id: id.into(),
+            label: None,
+            cwd: None,
+            focused,
+            agent: None,
+        }
+    }
+
+    fn herdr_tab(id: &str, label: &str, status: AgentState, focused: bool, pane: Pane) -> Tab {
+        Tab {
+            id: id.into(),
+            label: label.into(),
+            status,
+            focused,
+            panes: vec![pane],
+        }
+    }
+
+    /// The herdr tree the herdr tests start from. w1 is the focused workspace: "api" (t1, working,
+    /// focused, pane w1:p1) and "docs" (t2, blocked, pane w1:p2). w2 has "other" (t3, idle).
+    /// herdr's focused pane is w1:p1. Tests change a copy of it.
+    pub(crate) fn sample_tree() -> HerdrTree {
+        HerdrTree {
+            version: "0.9.3".into(),
+            focused_pane_id: Some("w1:p1".into()),
+            workspaces: vec![
+                Workspace {
+                    id: "w1".into(),
+                    label: "w1".into(),
+                    status: AgentState::Working,
+                    focused: true,
+                    tabs: vec![
+                        herdr_tab(
+                            "w1:t1",
+                            "api",
+                            AgentState::Working,
+                            true,
+                            pane("w1:p1", true),
+                        ),
+                        herdr_tab(
+                            "w1:t2",
+                            "docs",
+                            AgentState::Blocked,
+                            false,
+                            pane("w1:p2", false),
+                        ),
+                    ],
+                },
+                Workspace {
+                    id: "w2".into(),
+                    label: "w2".into(),
+                    status: AgentState::Idle,
+                    focused: false,
+                    tabs: vec![herdr_tab(
+                        "w2:t3",
+                        "other",
+                        AgentState::Idle,
+                        true,
+                        pane("w2:p3", true),
+                    )],
+                },
+            ],
+        }
+    }
+
+    /// The connection state of a herdr that is up and holds `tree`.
+    pub(crate) fn connected_with(tree: HerdrTree) -> LiveHerdr {
+        LiveHerdr {
+            state: ConnState::Connected {
+                server_version: "0.9.3".into(),
+            },
+            tree: Some(Arc::new(tree)),
+        }
     }
 
     /// Records every event the title bar emits.
@@ -488,7 +642,7 @@ mod tests {
     #[gpui::test]
     fn many_tabs_shrink_to_the_minimum_then_clip(cx: &mut TestAppContext) {
         // 16 tabs at the minimum (16 × 72 = 1152) do not fit the 1068 px left after "+" and the
-        // buttons, so the row clips. 12 would fit; the clip is what this test exercises.
+        // buttons, so the row clips. 14 would fit; the clip is what this test exercises.
         let tabs = (0..16)
             .map(|n| {
                 item(
@@ -523,5 +677,76 @@ mod tests {
         let toggle = cx.debug_bounds("panel-toggle").unwrap();
         assert_eq!(toggle.right(), px(1160. - 8.));
         assert_eq!(toggle.size.width, px(TITLE_BUTTON_SIZE));
+    }
+
+    #[gpui::test]
+    fn the_strip_starts_from_the_herdr_tree(cx: &mut TestAppContext) {
+        let (_herdr, _bar, cx) = window_on_herdr(cx, connected_with(sample_tree()));
+        assert!(cx.debug_bounds("tab-0").is_some());
+        assert!(cx.debug_bounds("tab-1").is_some());
+        assert!(
+            cx.debug_bounds("tab-2").is_none(),
+            "w2 is not the current workspace"
+        );
+        assert!(cx.debug_bounds("tab-0-icon-working").is_some());
+        assert!(cx.debug_bounds("tab-1-icon-blocked").is_some());
+        assert!(cx.debug_bounds("tab-0-underline").is_some());
+        assert!(cx.debug_bounds("tab-1-underline").is_none());
+        assert!(cx.debug_bounds("tab-new").is_some());
+        assert!(cx.debug_bounds("split").is_some());
+    }
+
+    #[gpui::test]
+    fn a_status_change_from_herdr_redraws_the_icon(cx: &mut TestAppContext) {
+        let (herdr, _bar, cx) = window_on_herdr(cx, connected_with(sample_tree()));
+        let mut tree = sample_tree();
+        tree.workspaces[0].tabs[0].status = AgentState::Idle;
+        push(cx, &herdr, HerdrUpdate::Tree(Arc::new(tree)));
+        assert!(cx.debug_bounds("tab-0-icon-idle").is_some());
+        assert!(cx.debug_bounds("tab-0-icon-working").is_none());
+    }
+
+    #[gpui::test]
+    fn a_focus_change_from_herdr_moves_the_underline(cx: &mut TestAppContext) {
+        let (herdr, _bar, cx) = window_on_herdr(cx, connected_with(sample_tree()));
+        let mut tree = sample_tree();
+        tree.workspaces[0].tabs[0].focused = false;
+        tree.workspaces[0].tabs[1].focused = true;
+        tree.focused_pane_id = Some("w1:p2".into());
+        push(cx, &herdr, HerdrUpdate::Tree(Arc::new(tree)));
+        assert!(cx.debug_bounds("tab-1-underline").is_some());
+        assert!(cx.debug_bounds("tab-0-underline").is_none());
+    }
+
+    #[gpui::test]
+    fn a_change_in_another_workspace_does_not_redraw(cx: &mut TestAppContext) {
+        let (herdr, bar, cx) = window_on_herdr(cx, connected_with(sample_tree()));
+        let before = bar.read_with(cx, |bar, _| bar.renders);
+
+        let mut other = sample_tree();
+        other.workspaces[1].tabs[0].status = AgentState::Working;
+        push(cx, &herdr, HerdrUpdate::Tree(Arc::new(other)));
+        assert_eq!(bar.read_with(cx, |bar, _| bar.renders), before);
+
+        // The same check the other way round: a change in this workspace does redraw.
+        let mut own = sample_tree();
+        own.workspaces[0].tabs[1].status = AgentState::Done;
+        push(cx, &herdr, HerdrUpdate::Tree(Arc::new(own)));
+        assert_eq!(bar.read_with(cx, |bar, _| bar.renders), before + 1);
+    }
+
+    #[gpui::test]
+    fn losing_herdr_removes_the_tabs(cx: &mut TestAppContext) {
+        let (herdr, _bar, cx) = window_on_herdr(cx, connected_with(sample_tree()));
+        assert!(cx.debug_bounds("tab-0").is_some());
+
+        let lost = HerdrUpdate::State(ConnState::NotRunning {
+            reason: "no socket".into(),
+        });
+        push(cx, &herdr, lost);
+        assert!(cx.debug_bounds("tab-0").is_none());
+        assert!(cx.debug_bounds("tab-new").is_none());
+        assert!(cx.debug_bounds("split").is_none());
+        assert!(cx.debug_bounds("panel-toggle").is_some());
     }
 }

@@ -3,7 +3,11 @@
 use crate::herdr::{GlobalHerdr, Herdr};
 use crate::spaces::{Spaces, SpacesEvent, toggle_box};
 use crate::status_bar::StatusBar;
+#[cfg(not(test))]
+use crate::tab_commands;
 use crate::theme::*;
+#[cfg(test)]
+use crate::title_bar::TabCommand;
 use crate::title_bar::{TitleBar, TitleBarEvent};
 use gpui::{
     Context, Entity, IntoElement, ParentElement, Render, StyleRefinement, Styled, Subscription,
@@ -17,6 +21,9 @@ pub struct Frame {
     title_bar: Entity<TitleBar>,
     sidebar_open: bool,
     panel_open: bool,
+    /// The herdr commands the title bar asked for, in order. Tests read them instead of sending.
+    #[cfg(test)]
+    sent: Vec<TabCommand>,
     _toggle: Subscription,
     _herdr: Subscription,
     _title_events: Subscription,
@@ -37,17 +44,24 @@ impl Frame {
         });
         let herdr_sub = cx.observe(&herdr, |_, _, cx| cx.notify());
         let title_bar = cx.new(|cx| TitleBar::new(true, cx));
-        let title_events = cx.subscribe(&title_bar, |this, bar, event: &TitleBarEvent, cx| {
-            match event {
-                TitleBarEvent::TogglePanel => {
-                    this.panel_open = !this.panel_open;
-                    let open = this.panel_open;
-                    bar.update(cx, |bar, cx| bar.set_panel_open(open, cx));
-                    cx.notify();
-                }
-                TitleBarEvent::Command(_) => {} // S4 sends these to herdr
-            }
-        });
+        let title_events =
+            cx.subscribe(
+                &title_bar,
+                |this, bar, event: &TitleBarEvent, cx| match event {
+                    TitleBarEvent::TogglePanel => {
+                        this.panel_open = !this.panel_open;
+                        let open = this.panel_open;
+                        bar.update(cx, |bar, cx| bar.set_panel_open(open, cx));
+                        cx.notify();
+                    }
+                    TitleBarEvent::Command(cmd) => {
+                        #[cfg(test)]
+                        this.sent.push(cmd.clone());
+                        #[cfg(not(test))]
+                        tab_commands::send(cmd.clone(), cx);
+                    }
+                },
+            );
         Self {
             spaces,
             herdr,
@@ -55,6 +69,8 @@ impl Frame {
             title_bar,
             sidebar_open: true,
             panel_open: true,
+            #[cfg(test)]
+            sent: Vec::new(),
             _toggle: toggle,
             _herdr: herdr_sub,
             _title_events: title_events,
@@ -191,8 +207,9 @@ fn reopen_sidebar(cx: &mut Context<Frame>) -> impl IntoElement {
 mod tests {
     use super::*;
     use crate::selection::Selection;
+    use crate::title_bar::tests::{connected_with, herdr_in, sample_tree};
     use contr_herdr::{ConnState, HerdrUpdate, LiveHerdr};
-    use gpui::{AppContext, Entity, Modifiers, TestAppContext, px, size};
+    use gpui::{Modifiers, TestAppContext, VisualTestContext, px, size};
 
     fn connected() -> LiveHerdr {
         LiveHerdr {
@@ -210,15 +227,6 @@ mod tests {
             },
             tree: None,
         }
-    }
-
-    /// Registers a connection in `live` as `Herdr::init` would, without a reader.
-    fn herdr_in(cx: &mut TestAppContext, live: LiveHerdr) -> Entity<Herdr> {
-        cx.update(|app| {
-            let herdr = app.new(|cx| Herdr::detached(live, cx));
-            app.set_global(GlobalHerdr(herdr.clone()));
-            herdr
-        })
     }
 
     #[gpui::test]
@@ -358,5 +366,49 @@ mod tests {
         assert_eq!(cx.debug_bounds("panel").unwrap().size.width, px(440.));
         assert!(cx.debug_bounds("panel-toggle-open").is_some());
         assert_eq!(cx.debug_bounds("terminal").unwrap().size.width, px(720.));
+    }
+
+    #[gpui::test]
+    fn title_bar_clicks_reach_the_command_handler_in_order(cx: &mut TestAppContext) {
+        cx.update(Selection::init);
+        cx.update(|app| crate::status_bar::init_detached(app, None));
+        herdr_in(cx, connected_with(sample_tree()));
+        let (frame, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
+        cx.simulate_resize(size(px(1440.), px(900.)));
+        cx.run_until_parked();
+
+        for selector in ["tab-1", "tab-new", "split"] {
+            click(cx, selector);
+        }
+        let sent = frame.read_with(cx, |frame, _| frame.sent.clone());
+        assert_eq!(
+            sent,
+            vec![
+                TabCommand::Focus("w1:t2".into()),
+                TabCommand::Create("w1".into()),
+                TabCommand::SplitRight("w1:p1".into()),
+            ]
+        );
+    }
+
+    #[gpui::test]
+    fn the_panel_toggle_sends_no_herdr_command(cx: &mut TestAppContext) {
+        cx.update(Selection::init);
+        herdr_in(cx, connected_with(sample_tree()));
+        cx.update(|app| crate::status_bar::init_detached(app, None));
+        let (frame, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
+        cx.simulate_resize(size(px(1440.), px(900.)));
+        cx.run_until_parked();
+
+        click(cx, "panel-toggle");
+        let sent = frame.read_with(cx, |frame, _| frame.sent.clone());
+        assert!(sent.is_empty());
+    }
+
+    /// Clicks the element with `selector` at its centre, then lets the UI settle.
+    fn click(cx: &mut VisualTestContext, selector: &'static str) {
+        let target = cx.debug_bounds(selector).unwrap();
+        cx.simulate_click(target.center(), Modifiers::none());
+        cx.run_until_parked();
     }
 }

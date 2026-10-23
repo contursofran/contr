@@ -11,6 +11,7 @@ pub mod spaces_model;
 pub mod status_bar;
 pub mod status_icon;
 pub mod status_message;
+pub mod tab_commands;
 pub mod theme;
 pub mod title_bar;
 pub mod visibility;
