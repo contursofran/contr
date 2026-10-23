@@ -12,6 +12,7 @@ workspace = true
 [dependencies]
 async-channel.workspace = true
 contr-herdr.workspace = true
+contr-usage.workspace = true
 gpui.workspace = true
 gpui_platform  = { workspace = true, features = ["font-kit", "runtime_shaders", "wayland", "x11"] }
 sysinfo        = { version = "0.31", default-features = false, features = ["system"] }

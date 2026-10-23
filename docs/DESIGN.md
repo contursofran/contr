@@ -16,10 +16,11 @@ Source of truth: the "herdr sidebar mockup" design canvas, artboards **G · cont
 │ linux-pc     │ [ prompt ]                           │  rows                 │
 │ Agents N run │                                      │  [answer card 168]    │
 │  ○ principal │                                      │                       │
-├──────────────┴ status bar 26: claude ▬ 38% · opencode go ▬ 61% · codex ▬ 12% · CPU MEM ┤
+├──────────────┴ status bar 26: claude ▬ 38% · codex ▬ 12% · CPU MEM                     ┤
 ```
 
 - Sidebar spans the full height, title-bar area included. Panel toggles from the title bar; hidden, the terminal takes the width.
+- v0.1 status bar usage shows only claude and codex. There is no OpenCode Go segment.
 - Selecting a worktree or agent in the sidebar highlights it as a rounded card and focuses that agent's tab; the terminal shows only that agent.
 
 ## Tokens

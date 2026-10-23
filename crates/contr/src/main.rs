@@ -17,6 +17,9 @@ static REGULAR: &[u8] = include_bytes!("../assets/fonts/JetBrainsMono-Regular.tt
 static BOLD: &[u8] = include_bytes!("../assets/fonts/JetBrainsMono-Bold.ttf");
 
 fn main() -> std::process::ExitCode {
+    if is_statusline(std::env::args()) {
+        return statusline(std::env::args());
+    }
     // herdr connection logs (`contr_herdr`); RUST_LOG overrides the default.
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -88,6 +91,34 @@ fn wants_icons(args: impl IntoIterator<Item = String>) -> bool {
     args.into_iter().skip(1).any(|arg| arg == "--icons")
 }
 
+/// True when the first argument after the program name is `statusline`.
+fn is_statusline(args: impl IntoIterator<Item = String>) -> bool {
+    args.into_iter().nth(1).as_deref() == Some("statusline")
+}
+
+/// `contr statusline [-- <command> [args…]]`, the Claude Code status line. It
+/// runs without GPUI and always exits 0, so the status line never breaks.
+fn statusline(args: impl IntoIterator<Item = String>) -> std::process::ExitCode {
+    let then = statusline_command(args);
+    if let Err(error) = contr_usage::claude::run_statusline(
+        std::io::stdin().lock(),
+        std::io::stdout().lock(),
+        &then,
+    ) {
+        eprintln!("contr statusline: {error}");
+    }
+    std::process::ExitCode::SUCCESS
+}
+
+/// The command to chain: the words after `--`. Without the separator, nothing.
+fn statusline_command(args: impl IntoIterator<Item = String>) -> Vec<String> {
+    let mut args = args.into_iter().skip(2);
+    match args.next().as_deref() {
+        Some("--") => args.collect(),
+        _ => Vec::new(),
+    }
+}
+
 /// On macOS the title bar is transparent and the traffic lights are moved
 /// inside the 40px title bar. Other platforms keep their system title bar.
 fn titlebar_options() -> TitlebarOptions {
@@ -116,6 +147,31 @@ mod tests {
         assert!(!wants_icons(["contr", "--icon"].map(String::from)));
         // The program name is never a flag, even if it looks like one.
         assert!(!wants_icons(["--icons"].map(String::from)));
+    }
+
+    #[test]
+    fn statusline_argument_selects_the_status_line() {
+        assert!(is_statusline(["contr", "statusline"].map(String::from)));
+        assert!(is_statusline(
+            ["contr", "statusline", "--", "cat"].map(String::from)
+        ));
+        assert!(!is_statusline(["contr", "--icons"].map(String::from)));
+        // The program name is never the subcommand.
+        assert!(!is_statusline(["statusline"].map(String::from)));
+    }
+
+    #[test]
+    fn statusline_runs_the_words_after_the_separator() {
+        assert_eq!(
+            statusline_command(["contr", "statusline", "--", "cat", "-n"].map(String::from)),
+            ["cat", "-n"].map(String::from)
+        );
+    }
+
+    #[test]
+    fn statusline_without_a_separator_chains_nothing() {
+        assert!(statusline_command(["contr", "statusline"].map(String::from)).is_empty());
+        assert!(statusline_command(["contr", "statusline", "cat"].map(String::from)).is_empty());
     }
 
     #[test]
