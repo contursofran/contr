@@ -334,6 +334,7 @@ mod tests {
     use crate::selection::Selection;
     use crate::status_message::{GlobalStatusMessage, MESSAGE_TTL, StatusMessage};
     use crate::usage::{Plans, fixture};
+    use crate::visibility::Visibility;
     use contr_herdr::{HerdrTree, HerdrUpdate, LiveHerdr};
     use gpui::{AppContext, Entity, Subscription, TestAppContext, px, size};
     use std::cell::Cell;
@@ -375,6 +376,7 @@ mod tests {
         width: f32,
         state: ConnState,
     ) -> &mut gpui::VisualTestContext {
+        cx.update(Visibility::init);
         cx.update(Selection::init);
         cx.update(|app| init_detached(app, host));
         cx.update(|app| {
