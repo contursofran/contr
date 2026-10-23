@@ -937,6 +937,8 @@ dependencies = [
  "contr-herdr",
  "gpui-pre",
  "gpui-pre-platform",
+ "serde",
+ "serde_json",
  "sysinfo",
  "tempfile",
  "tracing",
