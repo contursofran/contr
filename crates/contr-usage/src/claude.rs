@@ -9,7 +9,8 @@ use serde_json::Value;
 use std::fs;
 use std::io::{self, Read, Write};
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -17,12 +18,16 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 pub const CLAUDE_FILE: &str = "usage/claude.json";
 /// Schema of `CLAUDE_FILE`. Other values are ignored.
 const SCHEMA: u32 = 1;
-/// Largest status line input read. The real input is a few KB.
+/// Largest status line input used. The real input is a few KB. A longer input
+/// is skipped whole: nothing is saved and the chained command does not run.
 const MAX_INPUT: u64 = 1024 * 1024;
 /// Time the chained command gets before it is killed.
 const CHAIN_TIMEOUT: Duration = Duration::from_secs(2);
 /// How often the chained command is checked while it runs.
 const POLL: Duration = Duration::from_millis(10);
+/// How long the output of a killed command is still collected. Output the
+/// command wrote before the kill is already in the pipe.
+const DRAIN: Duration = Duration::from_millis(100);
 
 /// What `CLAUDE_FILE` holds.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -144,11 +149,12 @@ fn read_snapshot(path: &Path) -> Option<ClaudeSnapshot> {
     }
 }
 
-/// `contr statusline`. Reads Claude Code's status line JSON from `stdin` (at
-/// most 1 MiB), keeps the windows in the state dir, then copies to `stdout`
-/// what `then` prints for the same input (nothing when `then` is empty).
-/// Bad input and failed saves are logged, not returned, so the status line
-/// keeps working. Returns an error only when `stdin` or `stdout` fails.
+/// `contr statusline`. Reads Claude Code's status line JSON from `stdin`, keeps
+/// the windows in the state dir, then copies to `stdout` what `then` prints for
+/// the same input (nothing when `then` is empty). Input over 1 MiB is skipped:
+/// nothing is saved and `then` does not run, so no part of it is used. Bad
+/// input and failed saves are logged, not returned, so the status line keeps
+/// working. Returns an error only when `stdin` or `stdout` fails.
 pub fn run_statusline(stdin: impl Read, stdout: impl Write, then: &[String]) -> io::Result<()> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -166,7 +172,12 @@ fn run_with(
     timeout: Duration,
 ) -> io::Result<()> {
     let mut input = Vec::new();
-    stdin.take(MAX_INPUT).read_to_end(&mut input)?;
+    // One byte past the cap tells an over-long input from one of exactly the cap.
+    stdin.take(MAX_INPUT + 1).read_to_end(&mut input)?;
+    if input.len() as u64 > MAX_INPUT {
+        tracing::warn!("status line input is over 1 MiB; skipped");
+        return Ok(());
+    }
     if let Some(snap) = std::str::from_utf8(&input)
         .ok()
         .and_then(|text| parse_statusline(text, now))
@@ -187,59 +198,135 @@ fn run_with(
 }
 
 /// Runs `program args…` with `input` on its stdin and returns its stdout,
-/// whatever its exit status. A command that runs past `timeout` is killed, and
-/// returns what it wrote so far. A command that cannot start returns nothing.
+/// whatever its exit status. A command that runs past `timeout` is killed with
+/// the processes it forked, and returns what it wrote so far. A command that
+/// cannot start, or whose pipes cannot be served, returns nothing.
 fn run_capped(program: &str, args: &[String], input: &[u8], timeout: Duration) -> Vec<u8> {
-    let mut child = match Command::new(program)
+    let mut command = Command::new(program);
+    command
         .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-    {
+        .stderr(Stdio::null());
+    isolate(&mut command);
+    let mut child = match command.spawn() {
         Ok(child) => child,
         Err(error) => {
             tracing::warn!(%error, program, "status line command did not start");
             return Vec::new();
         }
     };
-    // Both pipes run on their own threads, so a command that ignores its
-    // input cannot block this one.
-    if let Some(mut pipe) = child.stdin.take() {
-        let input = input.to_vec();
-        thread::spawn(move || {
-            let _ = pipe.write_all(&input);
-        });
-    }
-    let reader = child.stdout.take().map(|mut pipe| {
-        thread::spawn(move || {
-            let mut out = Vec::new();
-            let _ = pipe.read_to_end(&mut out);
-            out
-        })
-    });
+    let Some(output) = serve_pipes(&mut child, input) else {
+        tracing::warn!(
+            program,
+            "unable to serve the status line command's pipes; killed"
+        );
+        stop(&mut child);
+        return Vec::new();
+    };
     let deadline = Instant::now() + timeout;
-    loop {
+    let exited = loop {
         match child.try_wait() {
             Ok(None) if Instant::now() < deadline => thread::sleep(POLL),
             Ok(None) => {
                 tracing::warn!(program, "status line command ran past its limit; killed");
-                let _ = child.kill();
-                let _ = child.wait();
-                break;
+                break false;
             }
-            Ok(Some(_)) => break,
+            Ok(Some(_)) => break true,
             Err(error) => {
                 tracing::warn!(%error, program, "unable to wait for the status line command");
-                let _ = child.kill();
-                break;
+                break false;
             }
         }
+    };
+    if !exited {
+        stop(&mut child);
     }
-    reader
-        .and_then(|handle| handle.join().ok())
-        .unwrap_or_default()
+    collect(&output)
 }
+
+/// Feeds `input` to the child's stdin, and sends what the child writes to its
+/// stdout over the returned channel. Each pipe has its own thread, so neither
+/// can block the caller. `None` when a thread cannot start.
+fn serve_pipes(child: &mut Child, input: &[u8]) -> Option<Receiver<Vec<u8>>> {
+    if let Some(mut pipe) = child.stdin.take() {
+        let input = input.to_vec();
+        thread::Builder::new()
+            .spawn(move || {
+                let _ = pipe.write_all(&input);
+            })
+            .ok()?;
+    }
+    let mut pipe = child.stdout.take()?;
+    let (sender, receiver) = mpsc::channel();
+    thread::Builder::new()
+        .spawn(move || {
+            let mut chunk = [0; 8192];
+            loop {
+                match pipe.read(&mut chunk) {
+                    Ok(0) => break,
+                    Ok(read) => {
+                        // The receiver is gone once the caller stopped waiting.
+                        if sender.send(chunk[..read].to_vec()).is_err() {
+                            break;
+                        }
+                    }
+                    Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
+                    Err(_) => break,
+                }
+            }
+        })
+        .ok()?;
+    Some(receiver)
+}
+
+/// The output sent so far. Waits for the pipe to close, but no longer than
+/// `DRAIN`: a process that escaped the kill may hold the pipe open.
+fn collect(output: &Receiver<Vec<u8>>) -> Vec<u8> {
+    let deadline = Instant::now() + DRAIN;
+    let mut bytes = Vec::new();
+    loop {
+        match output.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+            Ok(chunk) => bytes.extend_from_slice(&chunk),
+            Err(RecvTimeoutError::Timeout | RecvTimeoutError::Disconnected) => return bytes,
+        }
+    }
+}
+
+/// Kills the command and the processes it forked, then reaps it, so no zombie
+/// is left.
+fn stop(child: &mut Child) {
+    kill_group(child.id());
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+/// Makes the command the leader of its own process group, so `kill_group`
+/// reaches the processes it forks.
+#[cfg(unix)]
+fn isolate(command: &mut Command) {
+    use std::os::unix::process::CommandExt;
+    command.process_group(0);
+}
+
+#[cfg(not(unix))]
+fn isolate(_: &mut Command) {}
+
+/// Sends SIGKILL to every process in group `id`. A failure is ignored: `stop`
+/// still kills the command itself.
+#[cfg(unix)]
+fn kill_group(id: u32) {
+    let _ = Command::new("kill")
+        .args(["-KILL", "--"])
+        .arg(format!("-{id}"))
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+}
+
+#[cfg(not(unix))]
+fn kill_group(_: u32) {}
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
@@ -279,6 +366,20 @@ mod tests {
     impl Read for Broken {
         fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
             Err(io::Error::other("stdin broke"))
+        }
+    }
+
+    /// A reader that counts the bytes it gives out.
+    struct Counting<R> {
+        inner: R,
+        read: u64,
+    }
+
+    impl<R: Read> Read for Counting<R> {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            let n = self.inner.read(buf)?;
+            self.read += n as u64;
+            Ok(n)
         }
     }
 
@@ -523,6 +624,83 @@ mod tests {
         .expect("run");
         assert!(out.is_empty());
         assert!(started.elapsed() < Duration::from_secs(4));
+    }
+
+    #[test]
+    fn a_forking_command_returns_within_the_cap() {
+        let started = Instant::now();
+        let mut out = Vec::new();
+        run_with(
+            DOC.as_bytes(),
+            &mut out,
+            &strings(&["sh", "-c", "echo early; sleep 5; echo late"]),
+            None,
+            NOW,
+            CHAIN_TIMEOUT,
+        )
+        .expect("run");
+        assert_eq!(out, b"early\n");
+        assert!(started.elapsed() < Duration::from_secs(3));
+    }
+
+    #[test]
+    fn a_forking_command_is_killed_at_a_short_limit() {
+        let started = Instant::now();
+        let mut out = Vec::new();
+        run_with(
+            DOC.as_bytes(),
+            &mut out,
+            &strings(&["sh", "-c", "sleep 5; echo x"]),
+            None,
+            NOW,
+            Duration::from_millis(200),
+        )
+        .expect("run");
+        assert!(out.is_empty());
+        assert!(started.elapsed() < Duration::from_secs(2));
+    }
+
+    #[test]
+    fn an_input_over_the_cap_is_skipped_whole() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        // A valid document followed by spaces, past the cap. Without the cap
+        // it would be saved and passed on.
+        let mut input = Counting {
+            inner: DOC.as_bytes().chain(io::repeat(b' ').take(MAX_INPUT)),
+            read: 0,
+        };
+        let mut out = Vec::new();
+        run_with(
+            &mut input,
+            &mut out,
+            &strings(&["cat"]),
+            Some(dir.path()),
+            NOW,
+            CHAIN_TIMEOUT,
+        )
+        .expect("run");
+        assert_eq!(input.read, MAX_INPUT + 1);
+        assert!(out.is_empty());
+        assert!(!dir.path().join(CLAUDE_FILE).exists());
+    }
+
+    #[test]
+    fn an_input_of_exactly_the_cap_is_used() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut input = DOC.as_bytes().to_vec();
+        input.resize(MAX_INPUT as usize, b' ');
+        let mut out = Vec::new();
+        run_with(
+            input.as_slice(),
+            &mut out,
+            &strings(&["cat"]),
+            Some(dir.path()),
+            NOW,
+            CHAIN_TIMEOUT,
+        )
+        .expect("run");
+        assert_eq!(out, input);
+        assert!(read_claude(dir.path()).is_some());
     }
 
     #[test]
