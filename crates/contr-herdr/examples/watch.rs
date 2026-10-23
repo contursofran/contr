@@ -1,5 +1,5 @@
 //! Prints the herdr tree, then one line per agent status change, until killed.
-//! Read-only: it connects the way contr does and never sends anything to herdr.
+//! Read-only: it connects the way contr does and sends herdr read requests only.
 //! `HERDR_SOCKET_PATH` picks the server to follow, as it does for contr.
 //!
 //! `cargo run -p contr-herdr --example watch`

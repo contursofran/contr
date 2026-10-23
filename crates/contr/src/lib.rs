@@ -3,6 +3,7 @@
 pub mod agents_list;
 pub mod board;
 pub mod board_model;
+pub mod board_panel;
 pub mod frame;
 pub mod git;
 pub mod herdr;
@@ -18,4 +19,5 @@ pub mod tab_commands;
 pub mod terminal;
 pub mod theme;
 pub mod title_bar;
+pub mod usage;
 pub mod visibility;
