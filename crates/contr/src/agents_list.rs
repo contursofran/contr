@@ -155,7 +155,7 @@ impl AgentsList {
 }
 
 /// Focuses a pane through herdr's API socket. The call runs on the background executor, so the UI
-/// thread never waits for the socket. With no socket path, or when the call fails, it only logs.
+/// thread never waits for the socket. With no socket path nothing is sent; a failed call is logged.
 pub fn focus_in_background(pane_id: String, cx: &mut App) {
     cx.background_spawn(async move {
         let Some(path) = wire::api_socket_path() else {
