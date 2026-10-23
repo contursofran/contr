@@ -1,0 +1,19 @@
+contr
+Copyright 2026 Franco Conturso
+
+Portions of this software are adapted from herdr-gpui
+(https://github.com/penso/herdr-gpui), Copyright 2026 Fabien Penso,
+licensed under the Apache License, Version 2.0
+(https://www.apache.org/licenses/LICENSE-2.0), revision
+1ad3319e12c202e52dc3341e3dc1c9f49a064eb8:
+- crates/contr/src/main.rs `titlebar_options`, from
+  crates/herdr-gpui/src/titlebar.rs `options` (title-bar position changed).
+- Cargo.toml workspace lint set, from herdr-gpui's Cargo.toml.
+
+Bundled fonts: JetBrains Mono v2.304
+(https://github.com/JetBrains/JetBrainsMono), Copyright 2020 The JetBrains
+Mono Project Authors, licensed under the SIL Open Font License 1.1; the full
+text is in crates/contr/assets/fonts/OFL.txt.
+
+GPUI (crates gpui-pre, gpui-pre-platform) from Zed Industries is used as a
+dependency under the Apache License, Version 2.0.
