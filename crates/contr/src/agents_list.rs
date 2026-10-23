@@ -754,6 +754,7 @@ mod tests {
         cx.update(crate::visibility::Visibility::init);
         cx.update(Selection::init);
         cx.update(|app| init_detached(app, None));
+        cx.update(crate::board::init_detached);
         let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
         cx.simulate_resize(size(px(1440.), px(900.)));
         cx.run_until_parked();
@@ -783,6 +784,7 @@ mod tests {
         cx.update(crate::visibility::Visibility::init);
         cx.update(Selection::init);
         cx.update(|app| init_detached(app, None));
+        cx.update(crate::board::init_detached);
         let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
         cx.simulate_resize(size(px(1440.), px(900.)));
         cx.run_until_parked();
@@ -810,6 +812,7 @@ mod tests {
         cx.update(crate::visibility::Visibility::init);
         cx.update(Selection::init);
         cx.update(|app| init_detached(app, None));
+        cx.update(crate::board::init_detached);
         let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
         cx.simulate_resize(size(px(1440.), px(900.)));
         cx.run_until_parked();

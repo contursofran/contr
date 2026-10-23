@@ -91,6 +91,18 @@ pub const TITLE_GLYPH_WIDTH: f32 = 14.; // split and panel glyphs, border includ
 pub const TITLE_GLYPH_HEIGHT: f32 = 12.;
 pub const TITLE_GLYPH_FILL: f32 = 4.; // panel glyph: filled right part when the panel is open
 
+// Board panel (planner defaults; docs/DESIGN.md has no sizes for these). The "you" chip reuses
+// BADGE_PAD_X and BADGE_RADIUS.
+pub const PANEL_PAD_X: f32 = 12.;
+pub const PANEL_HEADER_HEIGHT: f32 = 36.; // Board | Report switch and the wrap label
+pub const BOARD_LINE_HEIGHT: f32 = 28.; // summary, section heads, needs-you rows
+pub const WORK_ROW_HEIGHT: f32 = 42.; // two text lines (18 + 18) + 6
+pub const STAGE_COL_WIDTH: f32 = 44.; // DESIGN.md: five 44 px stage columns
+pub const WORK_LABEL_WIDTH: f32 = 52.; // "#123456"
+pub const SEGMENT_PAD_X: f32 = 8.; // Board | Report segment
+pub const SEGMENT_PAD_Y: f32 = 4.;
+pub const SEGMENT_RADIUS: f32 = 5.;
+
 #[cfg(test)]
 mod tests {
     use super::*;
