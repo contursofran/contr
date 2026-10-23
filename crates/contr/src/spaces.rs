@@ -83,12 +83,13 @@ impl Spaces {
         spaces
     }
 
-    /// herdr's state changed. Rescans when a pane sits in another directory or the last scan is
-    /// older than `RESCAN_EVERY`, then rebuilds the groups from the tree and the scan we have.
+    /// herdr's state changed. Rescans when a pane sits in another directory, or when the last scan
+    /// is older than `RESCAN_EVERY` and the window is shown. Then rebuilds the groups from the tree
+    /// and the scan we have.
     fn on_herdr_changed(&mut self, cx: &mut Context<Self>) {
         let cwds = self.tree_cwds(cx);
         let stale = self.last_scan.is_none_or(|at| at.elapsed() >= RESCAN_EVERY);
-        if cwds != self.scanned_cwds || stale {
+        if cwds != self.scanned_cwds || (stale && shown(cx)) {
             self.start_scan(cwds, cx);
         }
         self.rebuild(cx);
@@ -171,6 +172,11 @@ impl Spaces {
             cx.notify();
         });
     }
+}
+
+/// Whether the window is shown. A scan that is due only by age waits while it is hidden.
+fn shown(cx: &App) -> bool {
+    cx.global::<GlobalVisibility>().0.read(cx).visible
 }
 
 /// The rescan timer. Shown: one rescan every `RESCAN_EVERY`. Hidden: it waits for the next
@@ -364,6 +370,7 @@ mod tests {
                 name: "claude".into(),
                 status,
             }),
+            tokens: Default::default(),
         }
     }
 
@@ -697,6 +704,37 @@ mod tests {
         );
         advance(cx, RESCAN_EVERY);
         assert_eq!(scans_of(cx, &spaces), 2);
+    }
+
+    #[gpui::test]
+    fn an_old_scan_is_not_refreshed_by_herdr_while_hidden(cx: &mut TestAppContext) {
+        let (_guard, base) = temp_dir();
+        let (wt, _admin) = repo_with_worktree(&base);
+        let cwd = text(&wt);
+        let herdr = register(cx, Some(tree(vec![pane("w1:p1", &cwd, None)])));
+        let spaces = make_spaces(cx);
+        cx.run_until_parked();
+        // The last scan now looks old, as it would after a long wait.
+        spaces.update(cx, |spaces, _| spaces.last_scan = None);
+        set_visible(cx, false);
+        cx.run_until_parked();
+
+        send_tree(
+            cx,
+            &herdr,
+            tree(vec![pane("w1:p1", &cwd, Some(AgentState::Working))]),
+        );
+        cx.run_until_parked();
+        assert_eq!(scans_of(cx, &spaces), 1, "hidden: herdr starts no rescan");
+        assert_eq!(
+            groups_of(cx, &spaces)[0].rows[0].status,
+            Status::Working,
+            "the rows still follow herdr"
+        );
+
+        set_visible(cx, true);
+        advance(cx, RESCAN_EVERY);
+        assert_eq!(scans_of(cx, &spaces), 2, "shown: the timer rescans");
     }
 
     #[gpui::test]
