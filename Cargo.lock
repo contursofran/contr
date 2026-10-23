@@ -938,6 +938,7 @@ dependencies = [
  "contr-usage",
  "gpui-pre",
  "gpui-pre-platform",
+ "serde",
  "serde_json",
  "sysinfo",
  "tempfile",
