@@ -96,7 +96,12 @@ impl Render for Frame {
         // herdr's own line while herdr is not connected; the terminal view otherwise.
         let terminal_area: AnyElement = match self.herdr.read(cx).live.state.line() {
             Some(line) => herdr_state(line).into_any_element(),
-            None => self.terminal.clone().into_any_element(),
+            // Cached: a redraw of the frame (herdr or board) does not paint the grid again.
+            None => self
+                .terminal
+                .clone()
+                .cached(StyleRefinement::default().size_full())
+                .into_any_element(),
         };
         div()
             .size_full()
@@ -451,5 +456,35 @@ mod tests {
         let target = cx.debug_bounds(selector).unwrap();
         cx.simulate_click(target.center(), Modifiers::none());
         cx.run_until_parked();
+    }
+
+    #[gpui::test]
+    fn a_frame_redraw_does_not_render_the_terminal_again(cx: &mut TestAppContext) {
+        cx.update(Visibility::init);
+        cx.update(Selection::init);
+        herdr_in(cx, connected());
+        cx.update(board::init_detached);
+        cx.update(|app| crate::status_bar::init_detached(app, None));
+        let (frame, cx) = cx.add_window_view(Frame::new);
+        cx.simulate_resize(size(px(1440.), px(900.)));
+        cx.run_until_parked();
+        let terminal = frame.read_with(cx, |frame, _| frame.terminal.clone());
+        let rendered = terminal.read_with(cx, |terminal, _| terminal.renders);
+
+        // The frame redraws, but the terminal's bounds and content are unchanged: it is reused.
+        frame.update(cx, |_, cx| cx.notify());
+        cx.run_until_parked();
+        assert_eq!(
+            terminal.read_with(cx, |terminal, _| terminal.renders),
+            rendered
+        );
+
+        // Control: a change in the terminal itself renders it again.
+        terminal.update(cx, |_, cx| cx.notify());
+        cx.run_until_parked();
+        assert_eq!(
+            terminal.read_with(cx, |terminal, _| terminal.renders),
+            rendered + 1
+        );
     }
 }
