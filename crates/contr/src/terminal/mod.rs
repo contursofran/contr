@@ -1,6 +1,7 @@
 //! The terminal view: the focused herdr tab, painted from the surface link. The link starts only
 //! with `CONTR_SURFACE=1` (D38). Without it the view shows a line and connects to nothing.
 
+mod boxdraw;
 pub mod colors;
 pub mod grid;
 mod paint;
@@ -406,6 +407,18 @@ mod tests {
         let grid = cx.debug_bounds("terminal-grid").unwrap();
         assert_eq!(grid.size, size(px(800.), px(600.)));
         assert!(cx.debug_bounds("surface-state").is_none());
+    }
+
+    #[gpui::test]
+    fn a_surface_with_box_glyphs_renders(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        cx.simulate_resize(size(px(800.), px(600.)));
+        // The first cell is a box glyph, so the quad pass runs for it on the frame.
+        view.update(cx, |view, cx| view.accept_surface(surface(1, "│"), cx));
+        cx.run_until_parked();
+        assert!(cx.debug_bounds("terminal-grid").is_some());
+        // The grid is set only when the layout had metrics, and the paint needs them too.
+        view.read_with(cx, |view, _| assert!(view.grid.is_some()));
     }
 
     #[gpui::test]
