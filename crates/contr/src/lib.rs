@@ -2,8 +2,10 @@
 
 pub mod frame;
 pub mod git;
+pub mod host;
 pub mod legend;
 pub mod selection;
 pub mod spaces;
 pub mod status_icon;
 pub mod theme;
+pub mod visibility;

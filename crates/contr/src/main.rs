@@ -1,6 +1,6 @@
 //! contr: a native herdr client. Opens the empty v0.1 frame, or the status icon legend with `--icons`.
 
-use contr::{frame, legend, selection::Selection, theme};
+use contr::{frame, host::Host, legend, selection::Selection, theme, visibility::Visibility};
 use gpui::{
     App, Bounds, TitlebarOptions, WindowBounds, WindowOptions, point, prelude::*, px, size,
 };
@@ -47,8 +47,14 @@ fn main() -> std::process::ExitCode {
             cx.open_window(options, |_, cx| cx.new(legend::Legend::new))
                 .map(|_| ())
         } else {
-            cx.open_window(options, |_, cx| cx.new(frame::Frame::new))
-                .map(|_| ())
+            // The legend shows no host stats, so only the frame samples the host.
+            Visibility::init(cx);
+            Host::init(cx);
+            cx.open_window(options, |window, cx| {
+                Visibility::watch(window, cx);
+                cx.new(frame::Frame::new)
+            })
+            .map(|_| ())
         };
         if let Err(error) = result {
             eprintln!("contr: unable to open the window: {error}");
