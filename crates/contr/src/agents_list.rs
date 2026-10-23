@@ -752,7 +752,7 @@ mod tests {
             },
         );
         cx.update(crate::visibility::Visibility::init);
-        cx.update(crate::selection::Selection::init);
+        cx.update(Selection::init);
         cx.update(|app| init_detached(app, None));
         let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
         cx.simulate_resize(size(px(1440.), px(900.)));
@@ -781,7 +781,7 @@ mod tests {
             ])),
         );
         cx.update(crate::visibility::Visibility::init);
-        cx.update(crate::selection::Selection::init);
+        cx.update(Selection::init);
         cx.update(|app| init_detached(app, None));
         let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
         cx.simulate_resize(size(px(1440.), px(900.)));
@@ -808,7 +808,7 @@ mod tests {
             .collect();
         herdr_in(cx, connected(tree(&labels)));
         cx.update(crate::visibility::Visibility::init);
-        cx.update(crate::selection::Selection::init);
+        cx.update(Selection::init);
         cx.update(|app| init_detached(app, None));
         let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
         cx.simulate_resize(size(px(1440.), px(900.)));
