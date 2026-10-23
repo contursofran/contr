@@ -2,6 +2,7 @@
 
 use crate::herdr::{GlobalHerdr, Herdr};
 use crate::spaces::{Spaces, SpacesEvent, toggle_box};
+use crate::status_bar::StatusBar;
 use crate::theme::*;
 use crate::title_bar::{TitleBar, TitleBarEvent};
 use gpui::{
@@ -12,6 +13,7 @@ use gpui::{
 pub struct Frame {
     spaces: Entity<Spaces>,
     herdr: Entity<Herdr>,
+    status_bar: Entity<StatusBar>,
     title_bar: Entity<TitleBar>,
     sidebar_open: bool,
     panel_open: bool,
@@ -21,10 +23,12 @@ pub struct Frame {
 }
 
 impl Frame {
-    /// Needs `Herdr::init` first: the terminal area shows the connection's line.
+    /// Needs `Host::init`, `StatusMessage::init` and `Herdr::init` first: the status bar reads
+    /// the first two, and the terminal area shows the connection's line.
     pub fn new(cx: &mut Context<Self>) -> Self {
         let spaces = cx.new(Spaces::new);
         let herdr = cx.global::<GlobalHerdr>().0.clone();
+        let status_bar = cx.new(StatusBar::new);
         let toggle = cx.subscribe(&spaces, |this, _, event: &SpacesEvent, cx| {
             match event {
                 SpacesEvent::ToggleSidebar => this.sidebar_open = !this.sidebar_open,
@@ -47,6 +51,7 @@ impl Frame {
         Self {
             spaces,
             herdr,
+            status_bar,
             title_bar,
             sidebar_open: true,
             panel_open: true,
@@ -143,13 +148,13 @@ impl Render for Frame {
                     ),
             )
             .child(
-                div()
-                    .debug_selector(|| "status-bar".into())
-                    .h(px(STATUS_BAR_HEIGHT))
-                    .flex_none()
-                    .bg(rgb(BG_BARS))
-                    .border_t_1()
-                    .border_color(rgb(LINE)),
+                self.status_bar.clone().cached(
+                    // A cached view needs a definite size: full width, one bar high.
+                    StyleRefinement::default()
+                        .w_full()
+                        .h(px(STATUS_BAR_HEIGHT))
+                        .flex_none(),
+                ),
             )
     }
 }
@@ -220,6 +225,7 @@ mod tests {
     fn frame_matches_design_sizes(cx: &mut TestAppContext) {
         cx.update(Selection::init);
         herdr_in(cx, connected());
+        cx.update(|app| crate::status_bar::init_detached(app, None));
         let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
         cx.simulate_resize(size(px(1440.), px(900.)));
         cx.run_until_parked();
@@ -245,6 +251,7 @@ mod tests {
     fn toggle_sits_right_of_the_window_buttons(cx: &mut TestAppContext) {
         cx.update(Selection::init);
         herdr_in(cx, connected());
+        cx.update(|app| crate::status_bar::init_detached(app, None));
         let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
         cx.simulate_resize(size(px(1440.), px(900.)));
         cx.run_until_parked();
@@ -257,6 +264,7 @@ mod tests {
     fn toggle_hides_and_reopens_the_sidebar(cx: &mut TestAppContext) {
         cx.update(Selection::init);
         herdr_in(cx, connected());
+        cx.update(|app| crate::status_bar::init_detached(app, None));
         let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
         cx.simulate_resize(size(px(1440.), px(900.)));
         cx.run_until_parked();
@@ -281,6 +289,7 @@ mod tests {
     #[gpui::test]
     fn herdr_line_is_centred_in_the_terminal_while_not_running(cx: &mut TestAppContext) {
         cx.update(Selection::init);
+        cx.update(|app| crate::status_bar::init_detached(app, None));
         herdr_in(cx, not_running());
         let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
         cx.simulate_resize(size(px(1440.), px(900.)));
@@ -303,6 +312,7 @@ mod tests {
     #[gpui::test]
     fn herdr_line_follows_the_connection(cx: &mut TestAppContext) {
         cx.update(Selection::init);
+        cx.update(|app| crate::status_bar::init_detached(app, None));
         let herdr = herdr_in(cx, connected());
         let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
         cx.simulate_resize(size(px(1440.), px(900.)));
@@ -329,6 +339,7 @@ mod tests {
     fn panel_toggle_hides_and_shows_the_panel(cx: &mut TestAppContext) {
         cx.update(Selection::init);
         herdr_in(cx, connected());
+        cx.update(|app| crate::status_bar::init_detached(app, None));
         let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
         cx.simulate_resize(size(px(1440.), px(900.)));
         cx.run_until_parked();
