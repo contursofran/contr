@@ -35,6 +35,13 @@ impl Selection {
         self.current = Some(selected);
         cx.notify();
     }
+
+    /// Clears the selection. Observers are notified only when there was one.
+    pub fn clear(&mut self, cx: &mut Context<Self>) {
+        if self.current.take().is_some() {
+            cx.notify();
+        }
+    }
 }
 
 #[cfg(test)]
@@ -81,5 +88,22 @@ mod tests {
         assert_eq!(notified.get(), 2);
         let current = selection.read_with(cx, |s, _| s.current.clone());
         assert_eq!(current, Some(Selected::Agent("w1:p1".into())));
+    }
+
+    #[gpui::test]
+    fn clearing_notifies_only_when_something_was_selected(cx: &mut TestAppContext) {
+        let selection = cx.new(|_| Selection::default());
+        let notified = count_notifications(cx, &selection);
+        selection.update(cx, |s, cx| s.clear(cx));
+        cx.run_until_parked();
+        assert_eq!(notified.get(), 0);
+
+        selection.update(cx, |s, cx| s.select(Selected::Worktree("a".into()), cx));
+        selection.update(cx, |s, cx| s.clear(cx));
+        selection.update(cx, |s, cx| s.clear(cx));
+        cx.run_until_parked();
+        assert_eq!(notified.get(), 2);
+        let current = selection.read_with(cx, |s, _| s.current.clone());
+        assert_eq!(current, None);
     }
 }

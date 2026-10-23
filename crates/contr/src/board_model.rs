@@ -3,7 +3,9 @@
 //! Pure: no file reads and no GPUI, so the rules are tested with literal values and a fixture.
 
 use crate::status_icon::Status;
-use serde::Deserialize;
+use contr_herdr::AgentMeta;
+use serde::{Deserialize, Deserializer};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 /// The schema version this contr reads. A file or token of another version is not read.
@@ -85,6 +87,68 @@ pub struct BoardSnapshot {
     /// Needs-you items in the mod's slot order. contr never reorders them.
     #[serde(default)]
     pub items: Vec<NeedItem>,
+    /// #54: what the coordinator mod knows about each worker pane. Missing, null or not a list is
+    /// empty. A bad entry is dropped; the rest of the board still reads.
+    #[serde(default, deserialize_with = "lenient_agents")]
+    pub agents: Vec<BoardAgent>,
+}
+
+/// Reads `agents` leniently. A list keeps each entry that reads as a `BoardAgent` and drops the
+/// others. Any other value (a string, a number, null) reads as no entries.
+fn lenient_agents<'de, D>(deserializer: D) -> Result<Vec<BoardAgent>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    let serde_json::Value::Array(entries) = value else {
+        return Ok(Vec::new());
+    };
+    Ok(entries
+        .into_iter()
+        .filter_map(|entry| serde_json::from_value::<BoardAgent>(entry).ok())
+        .collect())
+}
+
+/// #54: one worker as the coordinator mod knows it. Blank or missing `name`, `model` and `role`
+/// mean not known; the agents list then shows the herdr tab label and the agent kind.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct BoardAgent {
+    /// The herdr pane id of the worker.
+    pub pane_id: String,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub role: Option<String>,
+}
+
+/// The agents list's data per pane id. `name`, `model` and `role` come from `agents` (the first
+/// entry for a pane wins). `link` is the `label` of the first work row in slot order with that
+/// `pane_id` that is not `finished` and has no `joined`. A pane in neither gets no entry.
+pub fn agent_meta(board: &BoardSnapshot) -> BTreeMap<String, AgentMeta> {
+    let mut map: BTreeMap<String, AgentMeta> = BTreeMap::new();
+    for agent in &board.agents {
+        map.entry(agent.pane_id.clone()).or_insert(AgentMeta {
+            name: agent.name.clone(),
+            model: agent.model.clone(),
+            role: agent.role.clone(),
+            link: None,
+        });
+    }
+    for row in &board.rows {
+        if row.finished || row.joined.is_some() {
+            continue;
+        }
+        let Some(pane_id) = &row.pane_id else {
+            continue;
+        };
+        let meta = map.entry(pane_id.clone()).or_default();
+        if meta.link.is_none() {
+            meta.link = Some(row.label.clone());
+        }
+    }
+    map
 }
 
 /// Context use of the coordinator. The panel does not draw it in #9.
@@ -589,5 +653,222 @@ mod tests {
         let resolved = item(r#"{"key":"D6","kind":"ask","open":false,"answer":"keep it"}"#);
         assert_eq!(item_status(&resolved), Status::Done);
         assert_eq!(item_kind_label(&resolved), "done");
+    }
+
+    #[test]
+    fn fixture_reads_its_agents() {
+        let board = fixture();
+        assert_eq!(board.agents.len(), 2);
+        assert_eq!(board.agents[0].pane_id, "w1:p4");
+        assert_eq!(board.agents[1].model, None);
+    }
+
+    #[test]
+    fn a_board_without_agents_reads_none() {
+        let board = parse_board(br#"{"version": 1, "session": "s", "rev": 1}"#).unwrap();
+        assert!(board.agents.is_empty());
+        assert!(agent_meta(&board).is_empty());
+    }
+
+    #[test]
+    fn an_agent_without_a_pane_id_is_dropped_and_the_others_stay() {
+        let board = parse_board(
+            br#"{"version": 1, "session": "s", "rev": 1, "agents": [
+                {"name": "b-1"},
+                {"pane_id": "p1", "name": "kept"}
+            ]}"#,
+        )
+        .unwrap();
+        assert_eq!(board.agents.len(), 1);
+        assert_eq!(board.agents[0].pane_id, "p1");
+        assert_eq!(board.agents[0].name.as_deref(), Some("kept"));
+    }
+
+    #[test]
+    fn an_agent_with_a_null_pane_id_is_dropped() {
+        let board = parse_board(
+            br#"{"version": 1, "session": "s", "rev": 1, "agents": [
+                {"pane_id": null, "name": "b-1"},
+                {"pane_id": "p1"}
+            ]}"#,
+        )
+        .unwrap();
+        assert_eq!(board.agents.len(), 1);
+        assert_eq!(board.agents[0].pane_id, "p1");
+    }
+
+    #[test]
+    fn wrong_typed_agent_entries_are_dropped() {
+        let board = parse_board(
+            br#"{"version": 1, "session": "s", "rev": 1, "agents": [
+                {"pane_id": "p0", "name": 5},
+                {"pane_id": "p1", "model": ["haiku"]},
+                "not an object",
+                {"pane_id": "p2", "role": "builder"}
+            ]}"#,
+        )
+        .unwrap();
+        assert_eq!(board.agents.len(), 1);
+        assert_eq!(board.agents[0].pane_id, "p2");
+        assert_eq!(board.agents[0].role.as_deref(), Some("builder"));
+    }
+
+    #[test]
+    fn rows_and_items_still_read_when_an_agent_is_bad() {
+        let board = parse_board(
+            br##"{"version": 1, "session": "s", "rev": 1, "summary": "2 open", "need_count": 1,
+                "rows": [{"key": "k", "label": "#7", "pane_id": "w1:p9"}],
+                "items": [{"key": "D1", "kind": "ask", "open": true, "title": "Pick one"}],
+                "agents": [{"name": "b-1"}, {"pane_id": 3}]}"##,
+        )
+        .unwrap();
+        assert!(board.agents.is_empty());
+        assert_eq!(board.summary, "2 open");
+        assert_eq!(board.need_count, 1);
+        assert_eq!(board.rows.len(), 1);
+        assert_eq!(board.rows[0].label, "#7");
+        assert_eq!(board.items.len(), 1);
+        assert_eq!(board.items[0].title, "Pick one");
+        // The row still links its pane, with no agent entry.
+        assert_eq!(
+            agent_meta(&board).get("w1:p9"),
+            Some(&AgentMeta {
+                link: Some("#7".into()),
+                ..Default::default()
+            })
+        );
+    }
+
+    #[test]
+    fn agents_as_a_string_reads_as_an_empty_list() {
+        let board = parse_board(
+            br##"{"version": 1, "session": "s", "rev": 1, "summary": "ok", "agents": "x",
+                "rows": [{"key": "k", "label": "#7"}]}"##,
+        )
+        .unwrap();
+        assert!(board.agents.is_empty());
+        assert_eq!(board.summary, "ok");
+        assert_eq!(board.rows.len(), 1);
+    }
+
+    #[test]
+    fn agents_as_null_reads_as_an_empty_list() {
+        let board = parse_board(
+            br##"{"version": 1, "session": "s", "rev": 1, "summary": "ok", "agents": null,
+                "rows": [{"key": "k", "label": "#7"}]}"##,
+        )
+        .unwrap();
+        assert!(board.agents.is_empty());
+        assert_eq!(board.summary, "ok");
+        assert_eq!(board.rows.len(), 1);
+    }
+
+    #[test]
+    fn null_agent_fields_read_as_not_known() {
+        let board = parse_board(
+            br#"{"version": 1, "session": "s", "rev": 1, "agents": [
+                {"pane_id": "p1", "name": null, "model": "  ", "role": null}
+            ]}"#,
+        )
+        .unwrap();
+        let meta = agent_meta(&board);
+        // A blank string is kept as given; the agents list treats it as missing.
+        assert_eq!(
+            meta.get("p1"),
+            Some(&AgentMeta {
+                name: None,
+                model: Some("  ".into()),
+                role: None,
+                link: None,
+            })
+        );
+    }
+
+    #[test]
+    fn agent_meta_takes_name_model_and_role_from_agents() {
+        let meta = agent_meta(&fixture());
+        assert_eq!(meta.len(), 2);
+        assert_eq!(
+            meta.get("w1:p4"),
+            Some(&AgentMeta {
+                name: Some("b-1151".into()),
+                model: Some("haiku 5.5".into()),
+                role: Some("builder".into()),
+                link: Some("#640".into()),
+            })
+        );
+        assert_eq!(
+            meta.get("w1:p2"),
+            Some(&AgentMeta {
+                name: Some("r-1152".into()),
+                model: None,
+                role: Some("reviewer".into()),
+                link: Some("#641".into()),
+            })
+        );
+    }
+
+    #[test]
+    fn agent_meta_links_the_open_row_of_the_pane() {
+        let board = parse_board(
+            br##"{"version": 1, "session": "s", "rev": 1, "rows": [
+                {"key": "k", "label": "#7", "pane_id": "w1:p9"},
+                {"key": "j", "label": "#8"}
+            ]}"##,
+        )
+        .unwrap();
+        let meta = agent_meta(&board);
+        assert_eq!(
+            meta.get("w1:p9"),
+            Some(&AgentMeta {
+                link: Some("#7".into()),
+                ..Default::default()
+            })
+        );
+        // A row without a pane id gives no entry.
+        assert_eq!(meta.len(), 1);
+    }
+
+    #[test]
+    fn agent_meta_skips_finished_and_joined_rows() {
+        let board = parse_board(
+            br##"{"version": 1, "session": "s", "rev": 1, "rows": [
+                {"key": "a", "label": "#1", "pane_id": "p1", "finished": true},
+                {"key": "b", "label": "#2", "pane_id": "p1", "joined": "#9"},
+                {"key": "c", "label": "#3", "pane_id": "p1"},
+                {"key": "d", "label": "#5", "pane_id": "p1"},
+                {"key": "e", "label": "#4", "pane_id": "p2", "finished": true}
+            ]}"##,
+        )
+        .unwrap();
+        let meta = agent_meta(&board);
+        // The first open row in slot order wins the link.
+        assert_eq!(
+            meta.get("p1"),
+            Some(&AgentMeta {
+                link: Some("#3".into()),
+                ..Default::default()
+            })
+        );
+        assert_eq!(meta.get("p2"), None);
+    }
+
+    #[test]
+    fn agent_meta_first_entry_for_a_pane_wins() {
+        let board = parse_board(
+            br#"{"version": 1, "session": "s", "rev": 1, "agents": [
+                {"pane_id": "p1", "name": "first"},
+                {"pane_id": "p1", "name": "second", "role": "planner"}
+            ]}"#,
+        )
+        .unwrap();
+        let meta = agent_meta(&board);
+        assert_eq!(
+            meta.get("p1"),
+            Some(&AgentMeta {
+                name: Some("first".into()),
+                ..Default::default()
+            })
+        );
     }
 }

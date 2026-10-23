@@ -2,6 +2,8 @@
 //! one row per agent in herdr's order. A click selects the row and focuses its pane in herdr. Each
 //! row is its own cached view, so a spinning `working` icon redraws only its row.
 
+use crate::board::{Board, GlobalBoard};
+use crate::board_model::agent_meta;
 use crate::herdr::{GlobalHerdr, Herdr};
 use crate::selection::{GlobalSelection, Selected, Selection};
 use crate::status_icon::{Status, StatusIcon};
@@ -30,17 +32,21 @@ const FOCUS_TIMEOUT: Duration = Duration::from_secs(2);
 pub struct AgentsList {
     herdr: Entity<Herdr>,
     selection: Entity<Selection>,
+    /// The coordinator's board, when `Board::init` ran. `None` in views built without it.
+    board: Option<Entity<Board>>,
     focus: FocusFn,
     rows: Vec<Entity<AgentRowView>>,
     _observe: Subscription,
     _observe_selection: Subscription,
+    _observe_board: Option<Subscription>,
     /// One click listener per row view; replaced when the rows are rebuilt.
     _row_clicks: Vec<Subscription>,
 }
 
 impl AgentsList {
-    /// Needs `Herdr::init` and `Selection::init` first. Shows the agents of the current tree,
-    /// follows the connection, and a click focuses the agent's pane in herdr.
+    /// Needs `Herdr::init` and `Selection::init` first. Uses `Board::init` when it ran. Shows the
+    /// agents of the current tree, follows the connection, and a click focuses the agent's pane in
+    /// herdr.
     pub fn new(cx: &mut Context<Self>) -> Self {
         Self::with_focus(Rc::new(focus_in_background), cx)
     }
@@ -49,29 +55,43 @@ impl AgentsList {
     fn with_focus(focus: FocusFn, cx: &mut Context<Self>) -> Self {
         let herdr = cx.global::<GlobalHerdr>().0.clone();
         let selection = cx.global::<GlobalSelection>().0.clone();
+        let board = cx
+            .try_global::<GlobalBoard>()
+            .map(|global| global.0.clone());
         let observe = cx.observe(&herdr, |list, _, cx| list.sync(cx));
         let observe_selection = cx.observe(&selection, |list, _, cx| list.sync_selected(cx));
+        let observe_board = board
+            .as_ref()
+            .map(|board| cx.observe(board, |list, _, cx| list.sync(cx)));
         let mut list = Self {
             herdr,
             selection,
+            board,
             focus,
             rows: Vec::new(),
             _observe: observe,
             _observe_selection: observe_selection,
+            _observe_board: observe_board,
             _row_clicks: Vec::new(),
         };
         list.sync(cx);
         list
     }
 
-    /// Brings the rows up to the tree. When the panes changed, the row views are rebuilt, each with
-    /// its selected mark from the selection, and the list redraws. Otherwise each row view takes
-    /// its new row and redraws only if it changed.
+    /// Brings the rows up to the tree and the board. When the panes changed, the row views are
+    /// rebuilt, each with its selected mark from the selection, and the list redraws. Otherwise
+    /// each row view takes its new row and redraws only if it changed.
     fn sync(&mut self, cx: &mut Context<Self>) {
         let tree = self.herdr.read(cx).live.tree.clone();
         let rows = match tree {
             Some(tree) => {
-                let rows = agent_rows(&tree, |_| None); // the board bridge is not wired yet
+                let meta = self
+                    .board
+                    .as_ref()
+                    .and_then(|board| board.read(cx).snapshot.clone())
+                    .map(|snapshot| agent_meta(&snapshot))
+                    .unwrap_or_default();
+                let rows = agent_rows(&tree, |pane_id| meta.get(pane_id).cloned());
                 self.drop_missing_selection(&rows, cx);
                 rows
             }
@@ -138,10 +158,8 @@ impl AgentsList {
         if rows.iter().any(|row| row.pane_id == pane_id) {
             return;
         }
-        self.selection.update(cx, |selection, cx| {
-            selection.current = None;
-            cx.notify();
-        });
+        self.selection
+            .update(cx, |selection, cx| selection.clear(cx));
     }
 
     /// A row was clicked: it becomes the selection, and herdr focuses its pane. A second click on
@@ -260,6 +278,25 @@ impl AgentRowView {
     }
 }
 
+/// The row's accessible label: "{name}, {status}, {detail}", then ", {link}" when there is one,
+/// then ", selected" on the selected row.
+fn row_label(row: &AgentRow, selected: bool) -> String {
+    let mut label = format!(
+        "{}, {}, {}",
+        row.name,
+        Status::from(row.status).label(),
+        row.detail
+    );
+    if let Some(link) = &row.link {
+        label.push_str(", ");
+        label.push_str(link);
+    }
+    if selected {
+        label.push_str(", selected");
+    }
+    label
+}
+
 impl Render for AgentRowView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         #[cfg(test)]
@@ -269,16 +306,11 @@ impl Render for AgentRowView {
         let index = self.index;
         let row = &self.row;
         let status = Status::from(row.status);
-        let mut label = format!("{}, {}, {}", row.name, status.label(), row.detail);
-        if let Some(link) = &row.link {
-            label.push_str(", ");
-            label.push_str(link);
-        }
         div()
             .id(("agent-row", index))
             .debug_selector(move || format!("agent-row-{index}"))
             .role(Role::Button)
-            .aria_label(label)
+            .aria_label(row_label(row, self.selected))
             .relative()
             .w_full()
             .h(px(AGENT_ROW_HEIGHT))
@@ -341,6 +373,7 @@ impl Render for AgentRowView {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+    use crate::board_model::parse_board;
     use crate::frame::Frame;
     use crate::status_bar::init_detached;
     use crate::theme::SIDEBAR_WIDTH;
@@ -463,6 +496,44 @@ mod tests {
 
     fn tree_update(tabs: &[(&str, Option<AgentState>)]) -> HerdrUpdate {
         HerdrUpdate::Tree(Arc::new(tree(tabs)))
+    }
+
+    /// Registers a board as `Board::init` would, with no board dir, and returns it.
+    fn board_in(cx: &mut TestAppContext) -> Entity<Board> {
+        cx.update(|app| {
+            let board = app.new(|cx| Board::new(None, cx));
+            app.set_global(GlobalBoard(board.clone()));
+            board
+        })
+    }
+
+    /// Puts `json` (a v1 board) in the board as a finished read would, and notifies.
+    fn put_board(cx: &mut VisualTestContext, board: &Entity<Board>, json: &str) {
+        let snapshot = parse_board(json.as_bytes()).unwrap();
+        board.update(cx, |board, cx| {
+            board.snapshot = Some(Arc::new(snapshot));
+            cx.notify();
+        });
+        cx.run_until_parked();
+    }
+
+    /// A v1 board with the given `agents` and `rows` JSON arrays.
+    fn board_json(agents: &str, rows: &str) -> String {
+        format!(r#"{{"version": 1, "session": "s", "rev": 1, "agents": {agents}, "rows": {rows}}}"#)
+    }
+
+    /// A row for the label tests: an idle agent `b-1151` on `p0`, with the given link.
+    fn sample_row(link: Option<&str>) -> AgentRow {
+        AgentRow {
+            pane_id: "p0".into(),
+            tab_id: "t0".into(),
+            workspace_id: "w1".into(),
+            name: "b-1151".into(),
+            detail: "haiku 5.5 · builder".into(),
+            link: link.map(Into::into),
+            status: AgentState::Idle,
+            focused: false,
+        }
     }
 
     fn row_views(
@@ -1070,5 +1141,94 @@ mod tests {
 
         assert!(cx.debug_bounds("agent-row-1-selected").is_some());
         assert!(cx.debug_bounds("agent-row-0-selected").is_none());
+    }
+
+    #[gpui::test]
+    fn without_a_board_rows_use_the_tab_name(cx: &mut TestAppContext) {
+        herdr_in(cx, connected(tree(&[("b-1", Some(AgentState::Working))])));
+        let (list, cx) = show(cx);
+
+        let row = row_views(&list, cx)[0].read_with(cx, |row, _| row.row.clone());
+        assert_eq!(row.name, "b-1");
+        assert_eq!(row.detail, "claude");
+        assert!(cx.debug_bounds("agent-row-0-link").is_none());
+    }
+
+    #[gpui::test]
+    fn bridge_names_roles_and_models_replace_the_fallback(cx: &mut TestAppContext) {
+        herdr_in(
+            cx,
+            connected(tree(&[
+                ("tab-a", Some(AgentState::Idle)),
+                ("tab-b", Some(AgentState::Idle)),
+            ])),
+        );
+        let board = board_in(cx);
+        let (list, cx) = show(cx);
+        let agents =
+            r#"[{"pane_id": "p0", "name": "b-1151", "model": "haiku 5.5", "role": "builder"}]"#;
+        let rows = r##"[{"key": "k", "label": "#640", "pane_id": "p0"}]"##;
+        put_board(cx, &board, &board_json(agents, rows));
+
+        let views = row_views(&list, cx);
+        let first = views[0].read_with(cx, |row, _| row.row.clone());
+        assert_eq!(first.name, "b-1151");
+        assert_eq!(first.detail, "haiku 5.5 · builder");
+        assert_eq!(first.link.as_deref(), Some("#640"));
+        assert!(cx.debug_bounds("agent-row-0-link").is_some());
+        let second = views[1].read_with(cx, |row, _| row.row.clone());
+        assert_eq!(second.name, "tab-b");
+        assert_eq!(second.detail, "claude");
+    }
+
+    #[gpui::test]
+    fn a_new_board_redraws_only_the_changed_row(cx: &mut TestAppContext) {
+        herdr_in(
+            cx,
+            connected(tree(&[
+                ("tab-a", Some(AgentState::Idle)),
+                ("tab-b", Some(AgentState::Idle)),
+            ])),
+        );
+        let board = board_in(cx);
+        let (list, cx) = show(cx);
+        let first = board_json(r#"[{"pane_id": "p0", "name": "b-1151"}]"#, "[]");
+        put_board(cx, &board, &first);
+        let rows = row_views(&list, cx);
+        let before = renders(&rows, cx);
+
+        let second = board_json(
+            r#"[{"pane_id": "p0", "name": "b-1151"}, {"pane_id": "p1", "role": "reviewer"}]"#,
+            "[]",
+        );
+        put_board(cx, &board, &second);
+        let after = renders(&rows, cx);
+        assert_eq!(after[0], before[0], "row a redrew");
+        assert_eq!(after[1], before[1] + 1, "row b did not redraw");
+
+        put_board(cx, &board, &second);
+        assert_eq!(renders(&rows, cx), after, "an unchanged board redrew a row");
+    }
+
+    #[test]
+    fn a_row_label_has_its_link() {
+        assert_eq!(
+            row_label(&sample_row(Some("#640")), false),
+            "b-1151, idle, haiku 5.5 · builder, #640"
+        );
+        assert_eq!(
+            row_label(&sample_row(None), false),
+            "b-1151, idle, haiku 5.5 · builder"
+        );
+    }
+
+    #[test]
+    fn the_selected_row_says_so_in_its_label() {
+        let row = sample_row(Some("#640"));
+        assert_eq!(
+            row_label(&row, true),
+            "b-1151, idle, haiku 5.5 · builder, #640, selected"
+        );
+        assert!(!row_label(&row, false).contains("selected"));
     }
 }
