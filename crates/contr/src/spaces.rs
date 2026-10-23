@@ -1,6 +1,7 @@
 //! The sidebar's spaces column: the header (window-button inset, toggle, wordmark) and the body
-//! that scrolls. The state keeps the repo groups in step with herdr and git; rows fill the body in
-//! a later slice.
+//! that scrolls. The body shows the `Spaces` label, the `Local` host card, then one repo line and
+//! one row per worktree. Each worktree row is its own cached view, so a spinning `working` icon
+//! redraws only its row. A click selects the row and focuses its top holder's pane.
 
 use crate::agents_list::{FocusFn, focus_in_background};
 use crate::git::{self, Scan};
@@ -20,8 +21,8 @@ use async_channel::Receiver;
 use contr_herdr::ConnState;
 use gpui::{
     App, AsyncApp, Context, Div, Entity, EventEmitter, FontWeight, IntoElement, MouseButton,
-    ParentElement, Render, Stateful, Styled, Subscription, Task, WeakEntity, Window, div,
-    prelude::*, px, rgb,
+    ParentElement, Render, Stateful, StyleRefinement, Styled, Subscription, Task, WeakEntity,
+    Window, div, prelude::*, px, rgb,
 };
 use std::rc::Rc;
 use std::time::{Duration, Instant};
@@ -42,6 +43,8 @@ pub struct Spaces {
     focus: FocusFn,
     /// The repo groups the body shows. Empty while herdr has no tree.
     pub groups: Vec<RepoGroup>,
+    /// One view per worktree row, in the shape of `groups`: `rows[g][r]` shows `groups[g].rows[r]`.
+    rows: Vec<Vec<Entity<WorktreeRowView>>>,
     /// herdr's connection is up. The host card's dot shows it.
     online: bool,
     /// The checkouts found by the last finished scan.
@@ -56,6 +59,8 @@ pub struct Spaces {
     #[cfg(test)]
     scans: usize,
     _subs: Vec<Subscription>,
+    /// Click listeners, one per row view. They are replaced when the row views are made anew.
+    _row_clicks: Vec<Subscription>,
     /// The rescan timer. It waits while the window is hidden.
     _tick: Task<()>,
 }
@@ -75,8 +80,8 @@ impl Spaces {
         let selection = cx.global::<GlobalSelection>().0.clone();
         let visibility = cx.global::<GlobalVisibility>().0.clone();
         let herdr_sub = cx.observe(&herdr, |this, _, cx| this.on_herdr_changed(cx));
-        // The rows draw the selection, so a change to it repaints the sidebar.
-        let selection_sub = cx.observe(&selection, |_, _, cx| cx.notify());
+        // The rows draw the selection: a change moves the mark, and only the rows it moves redraw.
+        let selection_sub = cx.observe(&selection, |this, _, cx| this.sync_selected(cx));
         // Every visibility change is sent; the timer loop keeps the last one.
         let (changes_tx, changes_rx) = async_channel::unbounded::<bool>();
         let visibility_sub = cx.observe(&visibility, move |_, visibility, cx| {
@@ -89,6 +94,7 @@ impl Spaces {
             selection,
             focus,
             groups: Vec::new(),
+            rows: Vec::new(),
             online: false,
             scan: Scan::default(),
             scanned_cwds: Vec::new(),
@@ -97,6 +103,7 @@ impl Spaces {
             #[cfg(test)]
             scans: 0,
             _subs: vec![herdr_sub, visibility_sub, selection_sub],
+            _row_clicks: Vec::new(),
             _tick: tick,
         };
         spaces.on_herdr_changed(cx);
@@ -191,7 +198,8 @@ impl Spaces {
     }
 
     /// Rebuilds `groups` from the herdr tree and the scan, and the connection flag. Notifies only
-    /// when one of them changed. Then clears a selected worktree that no row has any more.
+    /// when one of them changed, and then brings the row views up to the groups. Then clears a
+    /// selected worktree that no row has any more.
     fn rebuild(&mut self, cx: &mut Context<Self>) {
         let live = &self.herdr.read(cx).live;
         let groups = live
@@ -203,9 +211,82 @@ impl Spaces {
         if groups != self.groups || online != self.online {
             self.groups = groups;
             self.online = online;
+            self.sync_rows(cx);
             cx.notify();
         }
         self.clear_gone_selection(cx);
+    }
+
+    /// Brings the row views up to `groups`. When the shape is the same (the same groups, each with
+    /// as many views as rows), each view takes its new row and redraws only if the row changed.
+    /// Otherwise the views are made anew, each with its mark. Then the marks follow the selection.
+    fn sync_rows(&mut self, cx: &mut Context<Self>) {
+        if self.same_shape() {
+            for (views, group) in self.rows.iter().zip(&self.groups) {
+                for (view, row) in views.iter().zip(&group.rows) {
+                    view.update(cx, |view, cx| view.set_row(row.clone(), cx));
+                }
+            }
+        } else {
+            let selected = self.selected_worktree(cx);
+            let rows: Vec<Vec<Entity<WorktreeRowView>>> = self
+                .groups
+                .iter()
+                .enumerate()
+                .map(|(g, group)| {
+                    group
+                        .rows
+                        .iter()
+                        .enumerate()
+                        .map(|(r, row)| {
+                            let is_selected = selected.as_deref() == Some(row.id().as_str());
+                            cx.new(|_| WorktreeRowView::new(g, r, row.clone(), is_selected))
+                        })
+                        .collect()
+                })
+                .collect();
+            self._row_clicks = rows
+                .iter()
+                .flatten()
+                .map(|view| {
+                    cx.subscribe(view, |spaces, _, click: &WorktreeRowClicked, cx| {
+                        spaces.activate(click.row_id.clone(), click.focus_pane.clone(), cx)
+                    })
+                })
+                .collect();
+            self.rows = rows;
+        }
+        self.sync_selected(cx);
+    }
+
+    /// Whether the row views match `groups`: as many groups, each with as many views as rows.
+    fn same_shape(&self) -> bool {
+        self.rows.len() == self.groups.len()
+            && self
+                .rows
+                .iter()
+                .zip(&self.groups)
+                .all(|(views, group)| views.len() == group.rows.len())
+    }
+
+    /// Marks the selected row and clears the mark from the others. Only the rows whose mark
+    /// changed redraw.
+    fn sync_selected(&mut self, cx: &mut Context<Self>) {
+        let selected = self.selected_worktree(cx);
+        for (views, group) in self.rows.iter().zip(&self.groups) {
+            for (view, row) in views.iter().zip(&group.rows) {
+                let is_selected = selected.as_deref() == Some(row.id().as_str());
+                view.update(cx, |view, cx| view.set_selected(is_selected, cx));
+            }
+        }
+    }
+
+    /// The id of the selected worktree row, if a worktree is selected.
+    fn selected_worktree(&self, cx: &App) -> Option<String> {
+        match &self.selection.read(cx).current {
+            Some(Selected::Worktree(id)) => Some(id.clone()),
+            _ => None,
+        }
     }
 
     /// A worktree row was clicked: it becomes the selection, and its top holder's pane is focused
@@ -271,8 +352,9 @@ async fn tick(
             return; // the sidebar was dropped
         };
         cx.background_executor().timer(wait).await;
-        // Visibility changes that arrived during the wait; the last one wins. A change to shown
-        // starts the interval again.
+        // Visibility changes that arrived during the wait; the last one wins. A show during the
+        // wait sets `shown_at`, so the next wait counts from that moment. The wake-up itself stays
+        // put, and a scan that is due by age still runs below.
         while let Ok(now_visible) = changes.try_recv() {
             if now_visible && !visible {
                 shown_at = cx.background_executor().now();
@@ -291,21 +373,21 @@ async fn tick(
 
 impl Render for Spaces {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let selected = self.selection.read(cx).current.clone();
         let groups: Vec<Div> = self
             .groups
             .iter()
+            .zip(&self.rows)
             .enumerate()
-            .map(|(g, group)| {
-                let rows: Vec<Stateful<Div>> = group
-                    .rows
-                    .iter()
-                    .enumerate()
-                    .map(|(r, row)| {
-                        let is_selected = selected.as_ref() == Some(&Selected::Worktree(row.id()));
-                        worktree_row(g, r, row, is_selected, cx)
-                    })
-                    .collect();
+            .map(|(g, (group, views))| {
+                // Each row is a small cached view at a fixed size, so a spinning icon in one row
+                // does not redraw the others.
+                let rows = views.iter().map(|view| {
+                    view.clone().cached(
+                        StyleRefinement::default()
+                            .w_full()
+                            .h(px(WORKTREE_ROW_HEIGHT)),
+                    )
+                });
                 div().child(repo_line(g, group)).children(rows)
             })
             .collect();
@@ -415,18 +497,78 @@ fn name_colour(held: bool) -> u32 {
     if held { TEXT } else { TEXT_DIM }
 }
 
+/// A worktree row was clicked. `row_id` is the row's worktree, and `focus_pane` its top holder's
+/// pane.
+struct WorktreeRowClicked {
+    row_id: String,
+    focus_pane: Option<String>,
+}
+
+/// One worktree row as its own view. Its props are the row and whether it is the selected one. It
+/// redraws only when a prop changes, and a spinning status icon redraws only this view.
+struct WorktreeRowView {
+    /// The row's place: its repo group, and its index in the group. Fixed for the view's life.
+    g: usize,
+    r: usize,
+    row: WorktreeRow,
+    /// The selected row: it shows the card.
+    selected: bool,
+    /// Renders so far. The tests count them to see which rows redraw.
+    #[cfg(test)]
+    renders: usize,
+}
+
+impl EventEmitter<WorktreeRowClicked> for WorktreeRowView {}
+
+impl WorktreeRowView {
+    fn new(g: usize, r: usize, row: WorktreeRow, selected: bool) -> Self {
+        Self {
+            g,
+            r,
+            row,
+            selected,
+            #[cfg(test)]
+            renders: 0,
+        }
+    }
+
+    /// Takes the new row. Redraws only when it differs from the row shown.
+    fn set_row(&mut self, row: WorktreeRow, cx: &mut Context<Self>) {
+        if self.row != row {
+            self.row = row;
+            cx.notify();
+        }
+    }
+
+    /// Shows or hides the card. Redraws only when the mark changes.
+    fn set_selected(&mut self, selected: bool, cx: &mut Context<Self>) {
+        if self.selected != selected {
+            self.selected = selected;
+            cx.notify();
+        }
+    }
+}
+
+impl Render for WorktreeRowView {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        #[cfg(test)]
+        {
+            self.renders += 1;
+        }
+        worktree_row(self.g, self.r, &self.row, self.selected, cx)
+    }
+}
+
 /// One worktree row, two lines: the name with the status icon, and the hold line. The selected row
-/// draws its card behind the content. A click selects the row and focuses its top holder's pane.
+/// draws its card behind the content. A click emits the row's id and its top holder's pane.
 fn worktree_row(
     g: usize,
     r: usize,
     row: &WorktreeRow,
     selected: bool,
-    cx: &mut Context<Spaces>,
+    cx: &mut Context<WorktreeRowView>,
 ) -> Stateful<Div> {
     let index = g * 1000 + r;
-    let row_id = row.id();
-    let focus_pane = row.focus_pane.clone();
     let held = !row.holders.is_empty();
     div()
         .id(("wt-row", index))
@@ -440,8 +582,11 @@ fn worktree_row(
         .pl(px(SIDEBAR_PAD_X + ROW_INDENT))
         .pr(px(SIDEBAR_PAD_X))
         .cursor_pointer()
-        .on_click(cx.listener(move |spaces, _, _, cx| {
-            spaces.activate(row_id.clone(), focus_pane.clone(), cx)
+        .on_click(cx.listener(|view, _, _, cx| {
+            cx.emit(WorktreeRowClicked {
+                row_id: view.row.id(),
+                focus_pane: view.row.focus_pane.clone(),
+            })
         }))
         .when(selected, |line| line.child(selected_card(g, r)))
         .child(StatusIcon::new(("wt", index), row.status).size(px(ICON_SIZE_SMALL)))
@@ -767,6 +912,30 @@ mod tests {
     /// The selection as the sidebar sees it.
     fn selected_in_view(cx: &mut VisualTestContext) -> Option<Selected> {
         cx.update(|_, app| app.global::<GlobalSelection>().0.read(app).current.clone())
+    }
+
+    /// Sends the herdr connection a new tree, from a test whose sidebar is in a window.
+    fn send_tree_in_view(cx: &mut VisualTestContext, tree: HerdrTree) {
+        let herdr = cx.update(|_, app| app.global::<GlobalHerdr>().0.clone());
+        let update = HerdrUpdate::Tree(Arc::new(tree));
+        cx.update(|_, app| herdr.update(app, |herdr, cx| herdr.apply(update, cx)));
+    }
+
+    /// The row views of `spaces`, in group order.
+    fn row_views(
+        spaces: &Entity<Spaces>,
+        cx: &mut VisualTestContext,
+    ) -> Vec<Entity<WorktreeRowView>> {
+        spaces.read_with(cx, |spaces, _| {
+            spaces.rows.iter().flatten().cloned().collect()
+        })
+    }
+
+    /// How many times each of the row views has rendered.
+    fn renders(rows: &[Entity<WorktreeRowView>], cx: &mut VisualTestContext) -> Vec<usize> {
+        rows.iter()
+            .map(|row| row.read_with(cx, |row, _| row.renders))
+            .collect()
     }
 
     /// Sets the selection from outside the sidebar, as another view would.
@@ -1328,10 +1497,153 @@ mod tests {
         spaces.update(cx, |spaces, cx| {
             spaces.groups[0].rows[0].badge = Some(Badge::Pr(640));
             spaces.groups[0].rows[1].badge = Some(Badge::You("T12".into()));
-            cx.notify();
+            spaces.sync_rows(cx);
         });
         cx.run_until_parked();
         assert!(cx.debug_bounds("wt-0-0-badge").is_some());
         assert!(cx.debug_bounds("wt-0-1-badge").is_some());
+    }
+
+    #[gpui::test]
+    fn a_spinning_worktree_row_redraws_only_itself(cx: &mut TestAppContext) {
+        let (_guard, base) = temp_dir();
+        let (wt1, _wt2) = repo_with_two_worktrees(&base);
+        register(
+            cx,
+            Some(tree(vec![pane(
+                "w1:p2",
+                &text(&wt1),
+                Some(AgentState::Working),
+            )])),
+        );
+        let (spaces, _focused, cx) = show_spaces(cx);
+        assert!(cx.debug_bounds("wt-0-0-hold").is_some(), "row 0 is held");
+        let rows = row_views(&spaces, cx);
+        let before = renders(&rows, cx);
+        for _ in 0..3 {
+            cx.update(|w, cx| w.simulate_next_frame(cx));
+            cx.run_until_parked();
+        }
+
+        let after = renders(&rows, cx);
+        assert!(after[0] > before[0], "working row did not redraw");
+        assert_eq!(after[1], before[1], "unheld row re-rendered");
+    }
+
+    #[gpui::test]
+    fn a_change_to_one_row_redraws_only_that_row(cx: &mut TestAppContext) {
+        let (_guard, base) = temp_dir();
+        let (wt1, _wt2) = repo_with_two_worktrees(&base);
+        register(
+            cx,
+            Some(tree(vec![pane(
+                "w1:p2",
+                &text(&wt1),
+                Some(AgentState::Idle),
+            )])),
+        );
+        let (spaces, _focused, cx) = show_spaces(cx);
+        let rows = row_views(&spaces, cx);
+        let before = renders(&rows, cx);
+
+        send_tree_in_view(
+            cx,
+            tree(vec![pane("w1:p2", &text(&wt1), Some(AgentState::Blocked))]),
+        );
+        cx.run_until_parked();
+
+        let after = renders(&rows, cx);
+        assert_eq!(after[0], before[0] + 1, "the held row took its new state");
+        assert_eq!(after[1], before[1], "the unheld row redrew");
+    }
+
+    #[gpui::test]
+    fn a_selection_redraws_only_the_rows_whose_mark_changed(cx: &mut TestAppContext) {
+        let (_guard, base) = temp_dir();
+        let (wt1, wt2) = repo_with_two_worktrees(&base);
+        register(
+            cx,
+            Some(tree(vec![pane(
+                "w1:p2",
+                &text(&wt1),
+                Some(AgentState::Done),
+            )])),
+        );
+        let (spaces, _focused, cx) = show_spaces(cx);
+        let rows = row_views(&spaces, cx);
+        let notified = Rc::new(Cell::new(0));
+        let counter = notified.clone();
+        let _sub =
+            cx.update(|_, app| app.observe(&spaces, move |_, _| counter.set(counter.get() + 1)));
+        let before = renders(&rows, cx);
+
+        select_in_view(cx, Selected::Worktree(text(&wt1)));
+        let first = renders(&rows, cx);
+        assert_eq!(
+            first[0],
+            before[0] + 1,
+            "the row that gained the mark redrew"
+        );
+        assert_eq!(first[1], before[1], "the row without a mark redrew");
+
+        select_in_view(cx, Selected::Worktree(text(&wt2)));
+        let second = renders(&rows, cx);
+        assert_eq!(
+            second[0],
+            first[0] + 1,
+            "the row that lost the mark did not redraw"
+        );
+        assert_eq!(
+            second[1],
+            first[1] + 1,
+            "the row that gained the mark did not redraw"
+        );
+
+        assert_eq!(notified.get(), 0, "the sidebar itself did not redraw");
+    }
+
+    #[gpui::test]
+    fn a_selected_row_keeps_its_card_when_the_rows_are_rebuilt(cx: &mut TestAppContext) {
+        let (_guard, base) = temp_dir();
+        let (wt1, wt2) = repo_with_two_worktrees(&base);
+        register(
+            cx,
+            Some(tree(vec![pane(
+                "w1:p2",
+                &text(&wt1),
+                Some(AgentState::Done),
+            )])),
+        );
+        let (spaces, _focused, cx) = show_spaces(cx);
+        click_row(cx, "wt-0-0");
+        assert!(cx.debug_bounds("wt-0-0-selected").is_some());
+
+        // The main checkout gains a pane: its group gets a row, so the row views are made anew.
+        // Git lists the main checkout first, so the worktrees are rows 1 and 2.
+        let main_cwd = text(&base.join("repo"));
+        send_tree_in_view(
+            cx,
+            tree(vec![
+                pane("w1:p1", &main_cwd, None),
+                pane("w1:p2", &text(&wt1), Some(AgentState::Done)),
+            ]),
+        );
+        cx.run_until_parked();
+        let order = spaces.read_with(cx, |spaces, _| {
+            spaces.groups[0]
+                .rows
+                .iter()
+                .map(|row| row.root.clone())
+                .collect::<Vec<_>>()
+        });
+        assert_eq!(order, [base.join("repo"), wt1.clone(), wt2.clone()]);
+        assert!(cx.debug_bounds("wt-0-1-selected").is_some());
+        assert!(cx.debug_bounds("wt-0-2-selected").is_none());
+
+        // The new row views still take clicks.
+        click_row(cx, "wt-0-2");
+        assert_eq!(selected_in_view(cx), Some(Selected::Worktree(text(&wt2))));
+        assert!(cx.debug_bounds("wt-0-2-selected").is_some());
+        assert!(cx.debug_bounds("wt-0-1-selected").is_none());
     }
 }
