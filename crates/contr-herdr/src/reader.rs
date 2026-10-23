@@ -22,12 +22,18 @@ pub const NOT_RUNNING_LINE: &str = "herdr is not running · start it with `herdr
 const LOG: &str = "contr_herdr";
 /// Longest wait for one reply: ping, snapshot and the subscription ack.
 const CALL_TIMEOUT: Duration = Duration::from_secs(2);
-/// Longest wait for one event; the stop flag is checked after each quiet wait.
+/// Longest wait for one event. A stream that stays quiet this long takes a
+/// snapshot, so a lone status change shows after this long.
 const POLL: Duration = Duration::from_millis(250);
-/// Events that arrive within this window share one snapshot.
+/// After the first event not yet in a snapshot, wait this long for the burst to
+/// end, then snapshot.
 const COALESCE: Duration = Duration::from_millis(50);
+/// Least time between two snapshots while events keep arriving: a busy stream
+/// gets at most four snapshots per second.
+const SNAPSHOT_GAP: Duration = Duration::from_millis(250);
 /// Snapshot interval. herdr sends no event for a pane label or cwd change, so
-/// without this those fields would go stale.
+/// without this those fields would go stale. Checked after each read, so a
+/// snapshot can be up to POLL late.
 const REFRESH: Duration = Duration::from_secs(10);
 /// Longest sleep between two stop checks while waiting.
 const WAIT_STEP: Duration = Duration::from_millis(100);
@@ -121,25 +127,48 @@ pub struct HerdrReader {
 impl Drop for HerdrReader {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::Release);
-        // The thread exits within one wait step; dropping the handle detaches it.
+        // The thread checks the flag before every read and between waits, so it
+        // stops within one read (POLL) or one wait step; a snapshot in flight
+        // ends within CALL_TIMEOUT. Dropping the handle detaches it.
         self.thread.take();
     }
 }
 
 #[cfg(test)]
 impl HerdrReader {
-    /// Stops the thread and waits for it. `Err` when the thread panicked.
-    fn join_for_test(mut self) -> thread::Result<()> {
+    /// Stops the thread and waits up to 1 s for it to end. Panics when it is
+    /// still running then, or when it panicked.
+    fn join_for_test(mut self) {
         self.stop.store(true, Ordering::Release);
-        self.thread.take().map_or(Ok(()), JoinHandle::join)
+        let Some(thread) = self.thread.take() else {
+            return;
+        };
+        let deadline = Instant::now() + Duration::from_secs(1);
+        while !thread.is_finished() {
+            assert!(
+                Instant::now() < deadline,
+                "reader thread still running 1 s after stop"
+            );
+            thread::sleep(Duration::from_millis(10));
+        }
+        assert!(thread.join().is_ok(), "reader thread panicked");
     }
 }
 
 /// Starts the reader thread and returns at once. The thread sends `Connecting`,
 /// then each change of state and tree, until the reader or the receiver is dropped.
 pub fn spawn_reader(target: Target, tx: Sender<HerdrUpdate>) -> std::io::Result<HerdrReader> {
+    spawn_with_refresh(target, tx, REFRESH)
+}
+
+/// [`spawn_reader`] with the snapshot interval given, so a test can use a short one.
+fn spawn_with_refresh(
+    target: Target,
+    tx: Sender<HerdrUpdate>,
+    refresh_every: Duration,
+) -> std::io::Result<HerdrReader> {
     let stop = Arc::new(AtomicBool::new(false));
-    let mut reader = Reader::new(tx, Arc::clone(&stop));
+    let mut reader = Reader::new(tx, Arc::clone(&stop), refresh_every);
     let thread = thread::Builder::new()
         .name("contr-herdr".into())
         .spawn(move || reader.run(&target))?;
@@ -179,6 +208,8 @@ enum Ended {
 struct Reader {
     tx: Sender<HerdrUpdate>,
     stop: Arc<AtomicBool>,
+    /// Snapshot interval with no event: [`REFRESH`], or a shorter one in tests.
+    refresh_every: Duration,
     state: Option<ConnState>,
     tree: Option<Arc<HerdrTree>>,
     server_version: Option<String>,
@@ -186,10 +217,11 @@ struct Reader {
 }
 
 impl Reader {
-    fn new(tx: Sender<HerdrUpdate>, stop: Arc<AtomicBool>) -> Self {
+    fn new(tx: Sender<HerdrUpdate>, stop: Arc<AtomicBool>, refresh_every: Duration) -> Self {
         Self {
             tx,
             stop,
+            refresh_every,
             state: None,
             tree: None,
             server_version: None,
@@ -245,31 +277,45 @@ impl Reader {
             server_version: pong.version,
         })?;
         let mut panes = Vec::new();
-        let mut fell_back = false;
+        let mut refused = None;
         loop {
             // Subscribe before the snapshot, so no change falls between the two.
-            let mut sub = self.open(path, &mut panes, &mut fell_back)?;
+            let mut sub = self.open(path, &mut panes, &mut refused)?;
             if self.refresh(path, &mut panes)? {
                 self.watch(path, &mut sub, &mut panes)?;
             }
         }
     }
 
-    /// Subscribes to `panes`. If one closed since the last snapshot, subscribes
-    /// to none, once per connection; the next snapshot brings the current list.
+    /// Subscribes to `panes`. A `pane_not_found` means a pane closed after the
+    /// last snapshot: this open subscribes to none, and the next snapshot brings
+    /// the panes that are left. Each open falls back at most once. Herdr refusing
+    /// the same set twice in a row is not a race, so the second refusal ends the
+    /// session. `refused` is the set of the last refusal; a subscription with
+    /// panes that succeeds clears it.
     fn open(
         &self,
         path: &Path,
         panes: &mut Vec<String>,
-        fell_back: &mut bool,
+        refused: &mut Option<Vec<String>>,
     ) -> Result<Subscription, Ended> {
         match Subscription::open(path, panes, CALL_TIMEOUT, POLL) {
-            Err(WireError::Server { ref code, .. }) if code == "pane_not_found" && !*fell_back => {
-                *fell_back = true;
+            Ok(sub) => {
+                if !panes.is_empty() {
+                    *refused = None;
+                }
+                Ok(sub)
+            }
+            Err(WireError::Server { ref code, .. })
+                if code == "pane_not_found"
+                    && !panes.is_empty()
+                    && refused.as_deref() != Some(panes.as_slice()) =>
+            {
+                *refused = Some(panes.clone());
                 panes.clear();
                 Subscription::open(path, panes, CALL_TIMEOUT, POLL).map_err(|e| self.failed(e))
             }
-            other => other.map_err(|e| self.failed(e)),
+            Err(err) => Err(self.failed(err)),
         }
     }
 
@@ -287,8 +333,10 @@ impl Reader {
     }
 
     /// Reads events until the stream fails (`Err`) or the pane ids change (`Ok`).
-    /// Events that arrive close together share one snapshot; a snapshot also
-    /// runs every [`REFRESH`].
+    /// The stop flag is checked before every read, however busy the stream is.
+    /// A snapshot runs when the stream goes quiet, or [`COALESCE`] after the
+    /// first event not yet in a snapshot, but never less than [`SNAPSHOT_GAP`]
+    /// after the last one. It also runs every `refresh_every`.
     fn watch(
         &mut self,
         path: &Path,
@@ -298,19 +346,20 @@ impl Reader {
         let mut pending: Option<Instant> = None; // first event not yet in a snapshot
         let mut refreshed = Instant::now();
         loop {
+            if self.stopped() {
+                return Err(Ended::Stop);
+            }
             let quiet = match sub.next_event() {
                 Ok(true) => false,
                 Ok(false) => true,
                 Err(err) => return Err(self.failed(err)),
             };
-            if quiet && self.stopped() {
-                return Err(Ended::Stop);
-            }
             if !quiet && pending.is_none() {
                 pending = Some(Instant::now());
             }
-            let due = pending.is_some_and(|since| quiet || since.elapsed() >= COALESCE)
-                || refreshed.elapsed() >= REFRESH;
+            let due = pending.is_some_and(|since| {
+                quiet || (since.elapsed() >= COALESCE && refreshed.elapsed() >= SNAPSHOT_GAP)
+            }) || refreshed.elapsed() >= self.refresh_every;
             if due {
                 if !self.refresh(path, panes)? {
                     return Ok(());
@@ -430,11 +479,16 @@ mod tests {
         r#"{"id":"contr-sub","error":{"code":"pane_not_found","message":"pane w1:p1 not found"}}"#;
     const EVENT: &str = r#"{"event":"pane.agent_status_changed","data":{"type":"pane.agent_status_changed","agent":"claude","agent_status":"working","pane_id":"w1:p1","workspace_id":"w1"}}"#;
 
-    /// A `session.snapshot` object with one workspace, tab and pane (`w1:p1`, claude).
-    fn snapshot(status: &str) -> String {
+    /// A `session.snapshot` object with one workspace, tab and pane `pane`, running claude.
+    fn snapshot_of(pane: &str, status: &str) -> String {
         format!(
-            r#"{{"version":"0.9.3","protocol":22,"workspaces":[{{"workspace_id":"w1","label":"contr","agent_status":"{status}"}}],"tabs":[{{"tab_id":"w1:t1","workspace_id":"w1","label":"planner","agent_status":"{status}"}}],"panes":[{{"pane_id":"w1:p1","tab_id":"w1:t1","workspace_id":"w1","agent":"claude","agent_status":"{status}"}}]}}"#
+            r#"{{"version":"0.9.3","protocol":22,"workspaces":[{{"workspace_id":"w1","label":"contr","agent_status":"{status}"}}],"tabs":[{{"tab_id":"w1:t1","workspace_id":"w1","label":"planner","agent_status":"{status}"}}],"panes":[{{"pane_id":"{pane}","tab_id":"w1:t1","workspace_id":"w1","agent":"claude","agent_status":"{status}"}}]}}"#
         )
+    }
+
+    /// [`snapshot_of`] for the pane `w1:p1`.
+    fn snapshot(status: &str) -> String {
+        snapshot_of("w1:p1", status)
     }
 
     const EMPTY_SNAPSHOT: &str =
@@ -447,16 +501,29 @@ mod tests {
         )
     }
 
-    /// What the fake herdr sends on one connection: lines, then the hold before close.
+    /// What the fake herdr sends on one connection: `lines`, then the `hold` before
+    /// close. With `stream`, it then writes that line once per interval until the
+    /// client disconnects, so the stream never goes quiet.
     struct Answer {
         lines: Vec<String>,
         hold: Duration,
+        stream: Option<(String, Duration)>,
     }
 
     fn answer(line: &str) -> Answer {
         Answer {
             lines: vec![line.to_owned()],
             hold: Duration::ZERO,
+            stream: None,
+        }
+    }
+
+    /// A subscription that is acked, then sends `EVENT` every `every`.
+    fn event_stream(every: Duration) -> Answer {
+        Answer {
+            lines: vec![ACK.into()],
+            hold: Duration::ZERO,
+            stream: Some((EVENT.into(), every)),
         }
     }
 
@@ -484,10 +551,45 @@ mod tests {
                         writer.write_all(format!("{line}\n").as_bytes()).ok();
                     }
                     thread::sleep(reply.hold);
+                    if let Some((line, every)) = reply.stream {
+                        while writer.write_all(format!("{line}\n").as_bytes()).is_ok() {
+                            thread::sleep(every);
+                        }
+                    }
                 });
             }
         });
         path
+    }
+
+    /// True when an `events.subscribe` request names panes, not only the global events.
+    fn names_panes(request: &Value) -> bool {
+        request["params"]["subscriptions"]
+            .as_array()
+            .is_some_and(|subs| subs.len() > wire::GLOBAL_EVENTS.len())
+    }
+
+    /// True when an `events.subscribe` request names pane `pane`.
+    fn subscribes_to(request: &Value, pane: &str) -> bool {
+        request["params"]["subscriptions"]
+            .as_array()
+            .is_some_and(|subs| subs.iter().any(|sub| sub["pane_id"] == pane))
+    }
+
+    /// The first `count` updates, applied in order.
+    fn live_after(rx: &Receiver<HerdrUpdate>, count: usize) -> LiveHerdr {
+        let mut live = LiveHerdr::default();
+        for _ in 0..count {
+            live.apply(next(rx));
+        }
+        live
+    }
+
+    fn first_pane_status(tree: &HerdrTree) -> Option<AgentState> {
+        tree.workspaces[0].tabs[0].panes[0]
+            .agent
+            .as_ref()
+            .map(|a| a.status)
     }
 
     fn tempdir() -> tempfile::TempDir {
@@ -613,7 +715,7 @@ mod tests {
             next(&rx),
             HerdrUpdate::State(ConnState::NotRunning { .. })
         ));
-        reader.join_for_test().expect("reader thread ends");
+        reader.join_for_test();
     }
 
     #[test]
@@ -634,6 +736,7 @@ mod tests {
             _ => Answer {
                 lines: vec![ACK.into(), EVENT.into()],
                 hold: Duration::from_millis(600),
+                stream: None,
             },
         });
         let (tx, rx) = async_channel::bounded(16);
@@ -649,15 +752,9 @@ mod tests {
         ));
         let idle = tree_of(next(&rx));
         let working = tree_of(next(&rx));
-        let status = |tree: &HerdrTree| {
-            tree.workspaces[0].tabs[0].panes[0]
-                .agent
-                .as_ref()
-                .map(|a| a.status)
-        };
-        assert_eq!(status(&idle), Some(AgentState::Idle));
-        assert_eq!(status(&working), Some(AgentState::Working));
-        reader.join_for_test().expect("reader thread ends");
+        assert_eq!(first_pane_status(&idle), Some(AgentState::Idle));
+        assert_eq!(first_pane_status(&working), Some(AgentState::Working));
+        reader.join_for_test();
     }
 
     #[test]
@@ -682,7 +779,7 @@ mod tests {
                 message: "herdr replied in an unexpected form · update contr".into(),
             }
         );
-        reader.join_for_test().expect("reader thread ends");
+        reader.join_for_test();
     }
 
     #[test]
@@ -699,16 +796,11 @@ mod tests {
                     EMPTY_SNAPSHOT.into()
                 }))
             }
-            // Global events plus one per pane: a list longer than the globals names a pane.
-            _ if request["params"]["subscriptions"]
-                .as_array()
-                .is_some_and(|subs| subs.len() > wire::GLOBAL_EVENTS.len()) =>
-            {
-                answer(PANE_NOT_FOUND)
-            }
+            _ if names_panes(request) => answer(PANE_NOT_FOUND),
             _ => Answer {
                 lines: vec![ACK.into()],
                 hold: Duration::from_millis(600),
+                stream: None,
             },
         });
         let (tx, rx) = async_channel::bounded(16);
@@ -723,13 +815,13 @@ mod tests {
             HerdrUpdate::State(ConnState::Connected { .. })
         ));
         assert!(tree_of(next(&rx)).pane_ids().is_empty());
-        reader.join_for_test().expect("reader thread ends");
+        reader.join_for_test();
     }
 
     #[test]
     fn a_state_or_tree_equal_to_the_last_one_is_not_sent_again() {
         let (tx, rx) = async_channel::bounded(16);
-        let mut reader = Reader::new(tx, Arc::new(AtomicBool::new(false)));
+        let mut reader = Reader::new(tx, Arc::new(AtomicBool::new(false)), REFRESH);
         let idle = tree_from(&snapshot("idle"));
 
         reader.report(ConnState::Connecting).expect("open");
@@ -762,7 +854,7 @@ mod tests {
             next(&rx),
             HerdrUpdate::State(ConnState::Connected { ref server_version }) if server_version == "0.9.9"
         ));
-        reader.join_for_test().expect("reader thread ends");
+        reader.join_for_test();
     }
 
     #[test]
@@ -780,5 +872,208 @@ mod tests {
         // Its next send fails, or its next wait sees the closed channel: no retry follows.
         thread::sleep(Duration::from_millis(700));
         assert!(reader.thread.as_ref().is_some_and(JoinHandle::is_finished));
+    }
+
+    /// The subscription ack, then a connection that stays open for 5 s.
+    fn held_ack() -> Answer {
+        Answer {
+            lines: vec![ACK.into()],
+            hold: Duration::from_secs(5),
+            stream: None,
+        }
+    }
+
+    #[test]
+    fn a_stop_ends_the_reader_while_events_keep_coming() {
+        let dir = tempdir();
+        let path = fake_herdr(dir.path(), |method, _| match method {
+            "ping" => answer(PONG),
+            "session.snapshot" => answer(&snapshot_reply(&snapshot("idle"))),
+            _ => event_stream(Duration::from_millis(10)),
+        });
+        let (tx, rx) = async_channel::bounded(16);
+        let reader = spawn_reader(Target::Socket(path), tx).expect("spawn");
+
+        // Once the first tree is out, the reader is in its event loop.
+        assert!(matches!(
+            next(&rx),
+            HerdrUpdate::State(ConnState::Connecting)
+        ));
+        assert!(matches!(
+            next(&rx),
+            HerdrUpdate::State(ConnState::Connected { .. })
+        ));
+        assert_eq!(
+            first_pane_status(&tree_of(next(&rx))),
+            Some(AgentState::Idle)
+        );
+        // Events 10 ms apart never leave the stream quiet, so only a check on every read stops it.
+        reader.join_for_test();
+    }
+
+    #[test]
+    fn a_busy_stream_snapshots_at_most_once_per_snapshot_gap() {
+        let dir = tempdir();
+        let snapshots = Arc::new(AtomicUsize::new(0));
+        let counted = Arc::clone(&snapshots);
+        let path = fake_herdr(dir.path(), move |method, _| match method {
+            "ping" => answer(PONG),
+            "session.snapshot" => {
+                counted.fetch_add(1, Ordering::SeqCst);
+                answer(&snapshot_reply(&snapshot("idle")))
+            }
+            _ => event_stream(Duration::from_millis(10)),
+        });
+        let (tx, rx) = async_channel::bounded(16);
+        let reader = spawn_reader(Target::Socket(path), tx).expect("spawn");
+        assert!(matches!(
+            next(&rx),
+            HerdrUpdate::State(ConnState::Connecting)
+        ));
+        assert!(matches!(
+            next(&rx),
+            HerdrUpdate::State(ConnState::Connected { .. })
+        ));
+        tree_of(next(&rx));
+
+        let before = snapshots.load(Ordering::SeqCst);
+        let window = Instant::now();
+        thread::sleep(Duration::from_secs(1));
+        let taken = snapshots.load(Ordering::SeqCst) - before;
+        // One snapshot per SNAPSHOT_GAP at most, plus two for the edges of the window.
+        let allowed = window.elapsed().as_millis() / SNAPSHOT_GAP.as_millis() + 2;
+        assert!(
+            taken as u128 <= allowed,
+            "{taken} snapshots in {:?}",
+            window.elapsed()
+        );
+        reader.join_for_test();
+    }
+
+    #[test]
+    fn the_tree_is_refreshed_on_the_timer_when_no_event_comes() {
+        let dir = tempdir();
+        let snapshots = AtomicUsize::new(0);
+        let path = fake_herdr(dir.path(), move |method, _| match method {
+            "ping" => answer(PONG),
+            "session.snapshot" => {
+                // Idle for the first two snapshots, working after that. No event is sent.
+                let n = snapshots.fetch_add(1, Ordering::SeqCst);
+                answer(&snapshot_reply(&snapshot(if n < 2 {
+                    "idle"
+                } else {
+                    "working"
+                })))
+            }
+            _ => held_ack(),
+        });
+        let (tx, rx) = async_channel::bounded(16);
+        let reader = spawn_with_refresh(Target::Socket(path), tx, Duration::from_millis(100))
+            .expect("spawn");
+
+        assert!(matches!(
+            next(&rx),
+            HerdrUpdate::State(ConnState::Connecting)
+        ));
+        assert!(matches!(
+            next(&rx),
+            HerdrUpdate::State(ConnState::Connected { .. })
+        ));
+        assert_eq!(
+            first_pane_status(&tree_of(next(&rx))),
+            Some(AgentState::Idle)
+        );
+        assert_eq!(
+            first_pane_status(&tree_of(next(&rx))),
+            Some(AgentState::Working)
+        );
+        reader.join_for_test();
+    }
+
+    #[test]
+    fn two_pane_closes_in_one_session_keep_the_connection() {
+        let dir = tempdir();
+        let snapshots = AtomicUsize::new(0);
+        let refusals = AtomicUsize::new(0);
+        let path = fake_herdr(dir.path(), move |method, request| match method {
+            "ping" => answer(PONG),
+            // w1:p1 closes, then w1:p2 closes too; after that w1:p2 stays.
+            "session.snapshot" => {
+                let n = snapshots.fetch_add(1, Ordering::SeqCst);
+                let pane = if n == 0 { "w1:p1" } else { "w1:p2" };
+                answer(&snapshot_reply(&snapshot_of(pane, "idle")))
+            }
+            // The first two subscriptions that name a pane find it closed.
+            _ if names_panes(request) && refusals.fetch_add(1, Ordering::SeqCst) < 2 => {
+                answer(PANE_NOT_FOUND)
+            }
+            _ => held_ack(),
+        });
+        let (tx, rx) = async_channel::bounded(16);
+        let reader = spawn_reader(Target::Socket(path), tx).expect("spawn");
+
+        let live = live_after(&rx, 3); // Connecting, Connected, then the tree
+        assert_eq!(
+            live.state,
+            ConnState::Connected {
+                server_version: "0.9.3".into()
+            }
+        );
+        assert_eq!(live.tree.expect("tree").pane_ids(), ["w1:p2"]);
+        reader.join_for_test();
+    }
+
+    #[test]
+    fn a_pane_refused_again_for_the_same_set_ends_the_session() {
+        let dir = tempdir();
+        let path = fake_herdr(dir.path(), |method, request| match method {
+            "ping" => answer(PONG),
+            "session.snapshot" => answer(&snapshot_reply(&snapshot("idle"))),
+            _ if names_panes(request) => answer(PANE_NOT_FOUND),
+            _ => held_ack(),
+        });
+        let (tx, rx) = async_channel::bounded(16);
+        let reader = spawn_reader(Target::Socket(path), tx).expect("spawn");
+
+        // The snapshot still lists w1:p1 after the fallback, so the refusal repeats.
+        let live = live_after(&rx, 3); // Connecting, Connected, then Incompatible
+        assert_eq!(
+            live.state,
+            ConnState::Incompatible {
+                message: "herdr 0.9.3 replied in an unexpected form · update contr".into(),
+            }
+        );
+        assert_eq!(live.tree, None);
+        reader.join_for_test();
+    }
+
+    #[test]
+    fn a_refusal_after_an_accepted_subscription_is_a_new_race() {
+        let dir = tempdir();
+        let snapshots = AtomicUsize::new(0);
+        let path = fake_herdr(dir.path(), move |method, request| match method {
+            "ping" => answer(PONG),
+            // Snapshots name w1:p1, w1:p2, w1:p1, then w1:p2 for good.
+            "session.snapshot" => {
+                let n = snapshots.fetch_add(1, Ordering::SeqCst);
+                let pane = if n == 0 || n == 2 { "w1:p1" } else { "w1:p2" };
+                answer(&snapshot_reply(&snapshot_of(pane, "idle")))
+            }
+            _ if subscribes_to(request, "w1:p1") => answer(PANE_NOT_FOUND),
+            _ => held_ack(),
+        });
+        let (tx, rx) = async_channel::bounded(16);
+        let reader = spawn_reader(Target::Socket(path), tx).expect("spawn");
+
+        // The subscription to w1:p2 is accepted between the two refusals of w1:p1.
+        let live = live_after(&rx, 3); // Connecting, Connected, then the tree
+        assert_eq!(
+            live.state,
+            ConnState::Connected {
+                server_version: "0.9.3".into()
+            }
+        );
+        assert_eq!(live.tree.expect("tree").pane_ids(), ["w1:p2"]);
+        reader.join_for_test();
     }
 }
