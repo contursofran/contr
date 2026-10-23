@@ -2,6 +2,7 @@
 # Test of scripts/bundle.sh with dummy binaries. It runs no cargo build, so it takes seconds.
 # Every path it writes is under a mktemp -d dir.
 set -euo pipefail
+unset CDPATH # with CDPATH set, cd prints the directory and breaks $(cd ... && pwd)
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 bundle="$repo/scripts/bundle.sh"
@@ -96,7 +97,9 @@ case "$min" in
     [0-9]*.[0-9]*) ;;
     *) fail "LSMinimumSystemVersion is '$min', expected a version" ;;
 esac
-[ -n "$(plist_value ContrCommit "$plist")" ] || fail "ContrCommit is empty"
+# ContrCommit is the short HEAD hash, or "unknown" outside git (same as bundle.sh).
+expected_commit="$(git -C "$repo" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+expect_plist ContrCommit "$expected_commit"
 if grep -q '@' "$plist"; then
     fail "Info.plist still has a placeholder: $(grep '@' "$plist")"
 fi
@@ -146,6 +149,18 @@ case "$(cat "$tmp/run.out")" in
 esac
 [ -d "$tmp/target/bundle/contr.app" ] || fail "no bundle under CARGO_TARGET_DIR"
 
+# CDPATH set and a relative --out: stdout must still be the one app path. The run starts in
+# $tmp/cdpath, so the out dir exists under a CDPATH entry and a bare cd would print it.
+mkdir -p "$tmp/cdpath"
+(cd "$tmp/cdpath" && CDPATH="$tmp/cdpath" "$bundle" --bin "$tmp/contr" --out cdp-out) \
+    >"$tmp/run.out" 2>"$tmp/run.err" ||
+    {
+        cat "$tmp/run.err" >&2
+        fail "bundle.sh failed with CDPATH set"
+    }
+[ "$(cat "$tmp/run.out")" = "$tmp/cdpath/cdp-out/contr.app" ] ||
+    fail "with CDPATH set, stdout should be only the app path, got: $(cat "$tmp/run.out")"
+
 # Error paths. Each one fails with "bundle.sh: <message>" and writes no bundle.
 expect_failure "binary not found" --bin "$tmp/missing" --out "$tmp/err-out"
 expect_failure "not a Mach-O binary" --bin "$tmp/text" --out "$tmp/err-out"
@@ -153,6 +168,34 @@ expect_failure "expected an arm64 binary" --bin "$tmp/contr-x86" --out "$tmp/err
 expect_failure "unknown argument" --nope
 expect_failure "needs a dir" --out
 expect_failure "needs a path" --bin
+expect_failure "needs a dir, not a flag" --out --zip
+expect_failure "needs a path, not a flag" --bin --zip
+
+# --out must not reach a protected dir: the rm -rf removes <out>/contr.app. The physical path is
+# checked, so a symlink to one is refused too. Each run fails before anything is removed.
+ln -s /Applications "$tmp/apps-link"
+ln -s "$HOME" "$tmp/home-link"
+expect_failure "needs a dir, not an empty value" --bin "$tmp/contr" --out ""
+expect_failure "a protected dir" --bin "$tmp/contr" --out /
+expect_failure "a protected dir" --bin "$tmp/contr" --out /Applications
+expect_failure "a protected dir" --bin "$tmp/contr" --out /applications
+expect_failure "a protected dir" --bin "$tmp/contr" --out "$HOME"
+expect_failure "a protected dir" --bin "$tmp/contr" --out "$HOME/"
+expect_failure "a protected dir" --bin "$tmp/contr" --out "$tmp/apps-link"
+expect_failure "a protected dir" --bin "$tmp/contr" --out "$tmp/home-link"
+
+# A command that is not guarded and fails (here a cp that exits 2) must end bundle.sh with
+# exit 1, print the ERR trap message, and leave no staging dir.
+mkdir -p "$tmp/fakebin"
+printf '#!/bin/sh\nexit 2\n' >"$tmp/fakebin/cp"
+chmod +x "$tmp/fakebin/cp"
+rc=0
+(PATH="$tmp/fakebin:$PATH" "$bundle" --bin "$tmp/contr" --out "$tmp/cp-out") \
+    >"$tmp/run.out" 2>"$tmp/run.err" || rc=$?
+[ "$rc" = 1 ] || fail "a failed cp should make bundle.sh exit 1, got $rc"
+grep -q "^bundle.sh: a command failed at line" "$tmp/run.err" ||
+    fail "a failed cp should print 'bundle.sh: a command failed at line', got: $(cat "$tmp/run.err")"
+[ ! -e "$tmp/cp-out/contr.app.tmp" ] || fail "a failed cp left contr.app.tmp behind"
 
 if ! "$bundle" --help >/dev/null 2>&1; then
     fail "--help should exit 0"

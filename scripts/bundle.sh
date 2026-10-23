@@ -5,7 +5,8 @@
 #
 #   --bin PATH  use this binary instead of building (tests use a dummy); default:
 #               cargo build --release --locked -p contr, then <target>/release/contr
-#   --out DIR   output dir (default: <target>/bundle); contr.app inside is replaced
+#   --out DIR   output dir (default: <target>/bundle); contr.app inside is replaced.
+#               Refuses /, /Applications and $HOME.
 #   --zip       also write contr-<version>-macos-arm64.zip next to the .app
 #
 # <target> is cargo's target directory (CARGO_TARGET_DIR or the cargo config).
@@ -13,6 +14,7 @@
 # Errors go to stderr as "bundle.sh: <message>" with exit 1.
 
 set -euo pipefail
+unset CDPATH # with CDPATH set, cd prints the directory and breaks $(cd ... && pwd)
 
 usage() {
     echo "usage: $0 [--bin PATH] [--out DIR] [--zip]" >&2
@@ -36,17 +38,20 @@ cleanup() {
     if [ -n "$icon_dir" ]; then rm -rf "$icon_dir"; fi
 }
 trap cleanup EXIT
-trap 'echo "bundle.sh: a command failed at line $LINENO" >&2' ERR
+trap 'echo "bundle.sh: a command failed at line $LINENO" >&2; exit 1' ERR
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --bin)
             [ $# -ge 2 ] || die "--bin needs a path"
+            case "$2" in -*) die "--bin needs a path, not a flag: $2" ;; esac
             bin="$2"
             shift 2
             ;;
         --out)
             [ $# -ge 2 ] || die "--out needs a dir"
+            case "$2" in -*) die "--out needs a dir, not a flag: $2" ;; esac
+            [ -n "$2" ] || die "--out needs a dir, not an empty value"
             out="$2"
             shift 2
             ;;
@@ -67,6 +72,8 @@ done
 
 # cargo's target directory for this workspace. cargo honours CARGO_TARGET_DIR,
 # so this is not always ./target. Read once, only when a path needs it.
+# The value is read with sed, not a JSON parser: a path with a '"' or a '\' in it is read wrong.
+# That does not happen in this repo.
 need_target() {
     if [ -z "$td" ]; then
         td="$(cd "$repo" && cargo metadata --format-version 1 --no-deps 2>/dev/null |
@@ -74,6 +81,22 @@ need_target() {
             die "cannot read cargo's target directory"
         [ -n "$td" ] || die "cannot read cargo's target directory"
     fi
+}
+
+# Refuses an --out dir that the rm -rf below must not reach: it removes <out>/contr.app, so
+# /, /Applications and $HOME are refused. The physical path is compared (symlinks resolved), in
+# lower case, because APFS is case-insensitive.
+check_out() {
+    local phys home lower_phys lower_home name
+    phys="$(cd -- "$1" && pwd -P)" || die "cannot resolve --out: $1"
+    home="$(cd -- "${HOME:-}" 2>/dev/null && pwd -P)" || home=""
+    lower_phys="$(printf '%s' "$phys" | tr '[:upper:]' '[:lower:]')"
+    lower_home="$(printf '%s' "$home" | tr '[:upper:]' '[:lower:]')"
+    for name in / /applications "$lower_home"; do
+        if [ -n "$name" ] && [ "$lower_phys" = "$name" ]; then
+            die "refusing --out $1: it is a protected dir (/, /Applications or \$HOME)"
+        fi
+    done
 }
 
 if [ -z "$bin" ]; then
@@ -117,6 +140,7 @@ if [ -z "$out" ]; then
 fi
 mkdir -p "$out"
 out="$(cd "$out" && pwd)"
+check_out "$out"
 app="$out/contr.app"
 app_tmp="$out/contr.app.tmp"
 zip_path="$out/contr-$version-macos-$arch.zip"
@@ -156,6 +180,10 @@ codesign --force --sign - --timestamp=none "$app_tmp" ||
 codesign --verify --strict "$app_tmp" ||
     die "the signature does not verify"
 
+case "$app" in
+    *.app) ;;
+    *) die "refusing to remove $app: not a .app bundle" ;;
+esac
 rm -rf "$app"
 mv "$app_tmp" "$app"
 
