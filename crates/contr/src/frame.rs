@@ -235,6 +235,7 @@ mod tests {
     #[gpui::test]
     fn panel_toggle_hides_and_shows_the_panel(cx: &mut TestAppContext) {
         cx.update(Selection::init);
+        cx.update(|app| crate::status_bar::init_detached(app, None));
         let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
         cx.simulate_resize(size(px(1440.), px(900.)));
         cx.run_until_parked();
