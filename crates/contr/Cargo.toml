@@ -16,6 +16,7 @@ gpui_platform  = { workspace = true, features = ["font-kit", "runtime_shaders", 
 contr-herdr.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+contr-usage.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 sysinfo        = { version = "0.31", default-features = false, features = ["system"] }

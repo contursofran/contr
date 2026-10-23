@@ -105,6 +105,7 @@ fn tab_holds(tab: &Tab, pane_id: &str) -> bool {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
 
     fn pane(id: &str, focused: bool) -> Pane {
         Pane {
@@ -113,6 +114,7 @@ mod tests {
             cwd: None,
             focused,
             agent: None,
+            tokens: BTreeMap::new(),
         }
     }
 
