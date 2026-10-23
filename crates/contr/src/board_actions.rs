@@ -105,24 +105,33 @@ pub fn parse_actions(bytes: &[u8]) -> Option<ActionsFile> {
     (file.version == ACTIONS_VERSION).then_some(file)
 }
 
-/// What contr has queued for one session. A held action can still be undone. A written action
-/// stays in the file until the mod takes it, which the board file reports as `acted`.
+/// What contr has queued for one session. A held action can still be undone. A held action has no
+/// `seq` yet: it gets one when it is written, so the `seq` order is the write order. A written
+/// action stays in the file until the mod takes it, which the board file reports as `acted`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Outbox {
     session: String,
     next_seq: u64,
-    /// Held actions, each with the time (ms) at which it is written.
-    held: Vec<(Envelope, u64)>,
-    /// Written actions, ascending by `seq`.
+    /// Held actions in push order, each with its click time (ms) and the time (ms) at which it is
+    /// written.
+    held: Vec<(Action, u64, u64)>,
+    /// Written actions, ascending by `seq`. A new write gets a `seq` above all of them, so it goes
+    /// at the end.
     written: Vec<Envelope>,
-    /// The highest failure `seq` that was already reported.
+    /// Failures with a `seq` up to this one are not shown. It starts at `acted`.
     seen_failed: u64,
+}
+
+/// `true` for an answer, done or dismiss for `key`.
+fn is_answer_for(action: &Action, key: &str) -> bool {
+    action.key() == Some(key) && action.answer_text().is_some()
 }
 
 impl Outbox {
     /// A queue for `session`, after the mod took actions up to `acted`. The entries of `existing`
-    /// with a `seq` above `acted` are kept as written. An existing file of another session is ignored.
-    /// The next `seq` follows the highest `seq` that is known. Failures up to `acted` count as seen.
+    /// with a `seq` above `acted` are kept as written. An existing file of another session is
+    /// ignored. The next `seq` follows the highest `seq` that is known. Failures up to `acted` are
+    /// not shown.
     pub fn new(session: String, acted: u64, existing: Option<ActionsFile>) -> Self {
         let mut highest = acted;
         let mut written = Vec::new();
@@ -148,51 +157,52 @@ impl Outbox {
         self.session.as_str()
     }
 
-    /// Queues `action` at `now_ms` and returns its `seq`. An answer, done or dismiss is held until
-    /// `now_ms + UNDO_MS`. Any other action is written at once.
-    pub fn push(&mut self, action: Action, now_ms: u64) -> u64 {
-        let seq = self.next_seq;
-        self.next_seq = seq.saturating_add(1);
-        let holds = action.holds();
-        let env = Envelope {
+    /// Queues `action` at `now_ms`. An answer, done or dismiss is held until `now_ms + UNDO_MS`
+    /// and returns `None`: it gets its `seq` when it is written. Any other action is written at
+    /// once and returns its `seq`.
+    pub fn push(&mut self, action: Action, now_ms: u64) -> Option<u64> {
+        if action.holds() {
+            let release_at = now_ms.saturating_add(UNDO_MS);
+            self.held.push((action, now_ms, release_at));
+            return None;
+        }
+        let seq = self.take_seq();
+        self.written.push(Envelope {
             seq,
             at: now_ms,
             action,
-        };
-        if holds {
-            self.held.push((env, now_ms.saturating_add(UNDO_MS)));
-        } else {
-            self.written.push(env);
-        }
-        seq
+        });
+        Some(seq)
     }
 
     /// Removes the held answer, done or dismiss for `key`, if it is the latest one for `key`. `true`
     /// if one was removed. An action that was already written can not be undone.
     pub fn undo(&mut self, key: &str) -> bool {
-        match self.latest_answer(key).map(|(env, held)| (env.seq, held)) {
-            Some((seq, true)) => {
-                self.held.retain(|(env, _)| env.seq != seq);
-                true
-            }
-            _ => false,
-        }
+        let Some(pos) = self
+            .held
+            .iter()
+            .rposition(|(action, _, _)| is_answer_for(action, key))
+        else {
+            return false;
+        };
+        self.held.remove(pos);
+        true
     }
 
-    /// Writes the held actions whose time has come (`release_at <= now_ms`), in `seq` order. `true`
-    /// if the written list changed.
+    /// Writes the held actions whose time has come (`release_at <= now_ms`), in push order. Each
+    /// one gets the next `seq` now. `true` if any was written.
     pub fn release(&mut self, now_ms: u64) -> bool {
         let (due, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut self.held)
             .into_iter()
-            .partition(|(_, at)| *at <= now_ms);
+            .partition(|(_, _, release_at)| *release_at <= now_ms);
         self.held = kept;
-        self.write_all(due)
+        self.write_held(due)
     }
 
-    /// Writes every held action at once, for quit. `true` if the written list changed.
+    /// Writes every held action at once, in push order, for quit. `true` if any was written.
     pub fn release_all(&mut self) -> bool {
         let all = std::mem::take(&mut self.held);
-        self.write_all(all)
+        self.write_held(all)
     }
 
     /// Drops the written actions that the mod has taken, which are those with `seq <= acted`. `true`
@@ -226,33 +236,50 @@ impl Outbox {
     /// The answer text for `key` and whether it can still be undone. This is the latest answer,
     /// done or dismiss for `key`, held or written. A chat does not hide it.
     pub fn pending_answer(&self, key: &str) -> Option<(String, bool)> {
-        let (env, held) = self.latest_answer(key)?;
-        Some((env.action.answer_text()?, held))
+        let (action, held) = self.latest_answer(key)?;
+        Some((action.answer_text()?, held))
     }
 
     /// The earliest time (ms) at which a held action is written, or `None` when nothing is held.
     pub fn next_release(&self) -> Option<u64> {
-        self.held.iter().map(|(_, at)| *at).min()
+        self.held.iter().map(|(_, _, release_at)| *release_at).min()
     }
 
-    /// The latest answer, done or dismiss, for `key`, with `true` when it is still held.
-    fn latest_answer(&self, key: &str) -> Option<(&Envelope, bool)> {
+    /// The latest answer, done or dismiss, for `key`, with `true` when it is still held. A held
+    /// answer is newer than a written one: a written action was pushed before every held action,
+    /// because a later push is due later.
+    fn latest_answer(&self, key: &str) -> Option<(&Action, bool)> {
         self.held
             .iter()
-            .map(|(env, _)| (env, true))
-            .chain(self.written.iter().map(|env| (env, false)))
-            .filter(|(env, _)| env.action.key() == Some(key) && env.action.answer_text().is_some())
-            .max_by_key(|(env, _)| env.seq)
+            .rev()
+            .map(|(action, _, _)| action)
+            .find(|action| is_answer_for(action, key))
+            .map(|action| (action, true))
+            .or_else(|| {
+                self.written
+                    .iter()
+                    .filter(|env| is_answer_for(&env.action, key))
+                    .max_by_key(|env| env.seq)
+                    .map(|env| (&env.action, false))
+            })
     }
 
-    /// Adds `due` to the written list, keeping `seq` order. `true` if `due` was not empty.
-    fn write_all(&mut self, due: Vec<(Envelope, u64)>) -> bool {
-        if due.is_empty() {
-            return false;
+    /// The next `seq`. Each call gives a larger `seq` than the one before.
+    fn take_seq(&mut self) -> u64 {
+        let seq = self.next_seq;
+        self.next_seq = seq.saturating_add(1);
+        seq
+    }
+
+    /// Writes the due held actions in the order given. Each one gets the next `seq`. `true` if
+    /// `due` was not empty.
+    fn write_held(&mut self, due: Vec<(Action, u64, u64)>) -> bool {
+        let any = !due.is_empty();
+        for (action, at, _) in due {
+            let seq = self.take_seq();
+            self.written.push(Envelope { seq, at, action });
         }
-        self.written.extend(due.into_iter().map(|(env, _)| env));
-        self.written.sort_by_key(|env| env.seq);
-        true
+        any
     }
 }
 
@@ -476,15 +503,23 @@ mod tests {
     }
 
     #[test]
-    fn push_holds_an_answer_and_writes_a_wrap_up_at_once() {
+    fn push_holds_an_answer_without_a_seq_and_writes_a_wrap_up_at_once() {
         let mut q = outbox(0, None);
-        assert_eq!(q.push(answer("D7", 1, "two lines"), 1_000), 1);
-        assert_eq!(q.push(Action::WrapUp { on: true }, 1_000), 2);
+        assert_eq!(q.push(answer("D7", 1, "two lines"), 1_000), None);
+        assert_eq!(q.push(Action::WrapUp { on: true }, 1_000), Some(1));
         assert_eq!(
             q.file().actions,
-            [env(2, 1_000, Action::WrapUp { on: true })]
+            [env(1, 1_000, Action::WrapUp { on: true })]
         );
         assert_eq!(q.next_release(), Some(1_000 + UNDO_MS));
+    }
+
+    #[test]
+    fn an_undone_answer_takes_no_seq() {
+        let mut q = outbox(0, None);
+        assert_eq!(q.push(answer("D7", 1, "two lines"), 0), None);
+        assert!(q.undo("D7"));
+        assert_eq!(q.push(Action::ClearRows, 0), Some(1));
     }
 
     #[test]
@@ -503,12 +538,75 @@ mod tests {
     }
 
     #[test]
-    fn release_keeps_seq_order_when_a_held_action_lands_after_a_written_one() {
+    fn a_held_action_gets_its_seq_after_the_written_ones() {
         let mut q = outbox(0, None);
-        q.push(done("T12"), 0);
-        q.push(Action::ClearRows, 0);
+        assert_eq!(q.push(done("T12"), 0), None);
+        assert_eq!(q.push(Action::ClearRows, 0), Some(1));
         assert!(q.release(UNDO_MS));
-        assert_eq!(seqs(&q.file()), [1, 2]);
+        assert_eq!(
+            q.file().actions,
+            [env(1, 0, Action::ClearRows), env(2, 0, done("T12"))]
+        );
+    }
+
+    #[test]
+    fn released_actions_get_their_seqs_in_push_order() {
+        let mut q = outbox(0, None);
+        assert_eq!(q.push(done("T12"), 0), None);
+        assert_eq!(q.push(Action::ClearRows, 0), Some(1));
+        assert_eq!(q.push(answer("D7", 1, "two lines"), 10), None);
+        assert!(q.release(UNDO_MS + 10));
+        assert_eq!(
+            q.file().actions,
+            [
+                env(1, 0, Action::ClearRows),
+                env(2, 0, done("T12")),
+                env(3, 10, answer("D7", 1, "two lines")),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_held_answer_gets_a_seq_above_the_action_the_mod_took_meanwhile() {
+        let mut q = outbox(0, None);
+        assert_eq!(q.push(answer("D7", 1, "two lines"), 0), None);
+        assert_eq!(q.push(Action::WrapUp { on: true }, 1_000), Some(1));
+        // The mod takes the wrap up and reports `acted` = 1 before the answer is written.
+        assert!(q.ack(1));
+        assert_eq!(q.pending_answer("D7"), Some(("two lines".to_owned(), true)));
+        assert!(q.release(UNDO_MS));
+        let file = q.file();
+        assert_eq!(file.actions, [env(2, 0, answer("D7", 1, "two lines"))]);
+        assert!(file.actions[0].seq > 1);
+        assert_eq!(
+            q.pending_answer("D7"),
+            Some(("two lines".to_owned(), false))
+        );
+    }
+
+    #[test]
+    fn undo_removes_the_latest_held_answer_for_the_key() {
+        let mut q = outbox(0, None);
+        q.push(answer("D7", 1, "two lines"), 0);
+        q.push(done("D7"), 0);
+        assert!(q.undo("D7"));
+        assert_eq!(q.pending_answer("D7"), Some(("two lines".to_owned(), true)));
+        assert!(q.release(UNDO_MS));
+        assert_eq!(seqs(&q.file()), [1]);
+    }
+
+    #[test]
+    fn undo_of_a_newer_held_answer_leaves_the_written_one_pending() {
+        let mut q = outbox(0, None);
+        q.push(answer("D7", 1, "two lines"), 0);
+        assert!(q.release(UNDO_MS));
+        assert_eq!(q.push(done("D7"), UNDO_MS), None);
+        assert_eq!(q.pending_answer("D7"), Some(("done".to_owned(), true)));
+        assert!(q.undo("D7"));
+        assert_eq!(
+            q.pending_answer("D7"),
+            Some(("two lines".to_owned(), false))
+        );
     }
 
     #[test]
@@ -561,20 +659,20 @@ mod tests {
         assert_eq!(q.session(), "s1");
         assert_eq!(q.file().version, ACTIONS_VERSION);
         assert_eq!(seqs(&q.file()), [18]);
-        assert_eq!(q.push(Action::ClearItems, 0), 19);
+        assert_eq!(q.push(Action::ClearItems, 0), Some(19));
     }
 
     #[test]
     fn new_continues_after_the_highest_existing_seq() {
         let existing = file_of("s1", vec![env(40, 1, Action::ClearRows)]);
         let mut q = outbox(17, Some(existing));
-        assert_eq!(q.push(Action::ClearItems, 0), 41);
+        assert_eq!(q.push(Action::ClearItems, 0), Some(41));
     }
 
     #[test]
     fn new_without_a_file_starts_after_acted() {
         let mut q = outbox(17, None);
-        assert_eq!(q.push(Action::WrapUp { on: false }, 0), 18);
+        assert_eq!(q.push(Action::WrapUp { on: false }, 0), Some(18));
     }
 
     #[test]
@@ -582,7 +680,7 @@ mod tests {
         let existing = file_of("other", vec![env(30, 1, Action::ClearRows)]);
         let mut q = outbox(17, Some(existing));
         assert!(q.file().actions.is_empty());
-        assert_eq!(q.push(Action::ClearItems, 0), 18);
+        assert_eq!(q.push(Action::ClearItems, 0), Some(18));
     }
 
     #[test]

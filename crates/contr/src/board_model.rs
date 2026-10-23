@@ -89,7 +89,7 @@ pub struct BoardSnapshot {
     pub items: Vec<NeedItem>,
     /// #54: what the coordinator mod knows about each worker pane. Missing, null or not a list is
     /// empty. A bad entry is dropped; the rest of the board still reads.
-    #[serde(default, deserialize_with = "lenient_agents")]
+    #[serde(default, deserialize_with = "lenient_list")]
     pub agents: Vec<BoardAgent>,
     /// #10: `1` means the mod takes actions-file v1. Absent or `0`: contr's action buttons stay inert.
     #[serde(default)]
@@ -97,8 +97,9 @@ pub struct BoardSnapshot {
     /// #10: the highest action `seq` the mod has taken, whether it worked or failed.
     #[serde(default)]
     pub acted: u64,
-    /// #10: the last failed actions, ascending by `seq`. contr shows each new one once.
-    #[serde(default)]
+    /// #10: the last failed actions, ascending by `seq`. contr shows each new one once. A bad entry
+    /// is dropped; the rest of the board still reads.
+    #[serde(default, deserialize_with = "lenient_list")]
     pub failed: Vec<ActionFailure>,
 }
 
@@ -112,11 +113,12 @@ pub struct ActionFailure {
     pub text: String,
 }
 
-/// Reads `agents` leniently. A list keeps each entry that reads as a `BoardAgent` and drops the
-/// others. Any other value (a string, a number, null) reads as no entries.
-fn lenient_agents<'de, D>(deserializer: D) -> Result<Vec<BoardAgent>, D::Error>
+/// Reads a list leniently, for `agents` and `failed`. A list keeps each entry that reads as a `T`
+/// and drops the others. Any other value (a string, a number, null) reads as no entries.
+fn lenient_list<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
 where
     D: Deserializer<'de>,
+    T: serde::de::DeserializeOwned,
 {
     let value = serde_json::Value::deserialize(deserializer)?;
     let serde_json::Value::Array(entries) = value else {
@@ -124,7 +126,7 @@ where
     };
     Ok(entries
         .into_iter()
-        .filter_map(|entry| serde_json::from_value::<BoardAgent>(entry).ok())
+        .filter_map(|entry| serde_json::from_value::<T>(entry).ok())
         .collect())
 }
 
@@ -936,8 +938,64 @@ mod tests {
     }
 
     #[test]
-    fn failed_entry_without_seq_is_a_json_error() {
-        let bytes = br#"{"version": 1, "session": "s1", "rev": 7, "failed": [{"key": "D5"}]}"#;
-        assert!(matches!(parse_board(bytes), Err(BoardError::Json(_))));
+    fn failed_entry_without_seq_is_dropped_and_the_others_stay() {
+        let board = parse_board(
+            br#"{"version": 1, "session": "s1", "rev": 7, "acted": 16, "failed": [
+                {"key": "D5"},
+                {"seq": 16, "key": "D7", "text": "D7 is not open"}
+            ]}"#,
+        )
+        .unwrap();
+        assert_eq!(board.acted, 16);
+        assert_eq!(
+            board.failed,
+            [ActionFailure {
+                seq: 16,
+                key: Some("D7".to_owned()),
+                text: "D7 is not open".to_owned(),
+            }]
+        );
+    }
+
+    #[test]
+    fn wrong_typed_failed_entries_are_dropped_and_the_board_still_reads() {
+        let board = parse_board(
+            br##"{"version": 1, "session": "s1", "rev": 7, "summary": "2 open",
+                "rows": [{"key": "k", "label": "#7"}],
+                "failed": [
+                    {"seq": "15"},
+                    {"seq": 16, "key": 5},
+                    "not an object",
+                    {"seq": 17, "text": "kept"}
+                ]}"##,
+        )
+        .unwrap();
+        assert_eq!(board.summary, "2 open");
+        assert_eq!(board.rows.len(), 1);
+        assert_eq!(
+            board.failed,
+            [ActionFailure {
+                seq: 17,
+                key: None,
+                text: "kept".to_owned(),
+            }]
+        );
+    }
+
+    #[test]
+    fn failed_as_a_string_or_null_reads_as_an_empty_list() {
+        for value in [r#""x""#, "null"] {
+            let json = format!(r#"{{"version": 1, "session": "s1", "rev": 7, "failed": {value}}}"#);
+            let board = parse_board(json.as_bytes()).unwrap();
+            assert!(board.failed.is_empty(), "failed as {value}");
+        }
+    }
+
+    #[test]
+    fn a_wrong_acted_or_actions_value_still_fails_the_board() {
+        let acted = br#"{"version": 1, "session": "s1", "rev": 7, "acted": "16"}"#;
+        assert!(matches!(parse_board(acted), Err(BoardError::Json(_))));
+        let actions = br#"{"version": 1, "session": "s1", "rev": 7, "actions": "1"}"#;
+        assert!(matches!(parse_board(actions), Err(BoardError::Json(_))));
     }
 }
