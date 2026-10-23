@@ -1,14 +1,15 @@
 //! Starts an isolated `herdr server` in a temporary directory and checks the
-//! reader against it: the connection, the first tree, then the agent status of
-//! a reported agent. It never touches your own herdr: the server gets its own
-//! HOME, config and sockets, and its process is killed when the test ends.
+//! reader against it: the connection, the first tree, the agent status of a
+//! reported agent, then the reconnect after the server restarts. It never
+//! touches your own herdr: the server gets its own HOME, config and sockets,
+//! and its process is killed when the test ends.
 //!
 //! `CONTR_HERDR_BIN=$(which herdr) cargo test -p contr-herdr --test live -- --ignored --nocapture`
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::ffi::OsStr;
-use std::fs::File;
+use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::path::Path;
@@ -51,29 +52,20 @@ impl Server {
             std::fs::create_dir_all(home.join(sub)).expect("create an XDG directory");
         }
         std::fs::write(home.join("config.toml"), "").expect("write the empty herdr config");
-        let log = File::create(home.join("herdr.log")).expect("create the server log");
-        let child = Command::new(bin)
-            .arg("server")
-            .env_clear()
-            .env("HOME", home)
-            .env("XDG_CONFIG_HOME", home.join("config"))
-            .env("XDG_STATE_HOME", home.join("state"))
-            .env("XDG_DATA_HOME", home.join("data"))
-            .env("XDG_CACHE_HOME", home.join("cache"))
-            .env("XDG_RUNTIME_DIR", home)
-            .env("TMPDIR", home)
-            .env("HERDR_CONFIG_PATH", home.join("config.toml"))
-            .env("HERDR_SOCKET_PATH", home.join("a.sock"))
-            .env("HERDR_CLIENT_SOCKET_PATH", home.join("a-client.sock"))
-            .env("SHELL", "/bin/sh")
-            .env("TERM", "xterm-256color")
-            .env("PATH", "/usr/bin:/bin:/usr/sbin:/sbin")
-            .stdin(Stdio::null())
-            .stdout(Stdio::from(log.try_clone().expect("clone the server log")))
-            .stderr(Stdio::from(log))
-            .spawn()
-            .expect("start the isolated herdr server");
+        let child = spawn_child(bin, home);
         Self { child, dir }
+    }
+
+    /// Kills the server and waits for it to exit. Its directory and sockets stay.
+    fn stop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+
+    /// Starts a new server on the same paths, so the reader's socket path is unchanged.
+    fn restart(&mut self, bin: &OsStr) {
+        self.stop();
+        self.child = spawn_child(bin, self.dir.path());
     }
 
     /// Waits until the server answers `ping` on `sock`. Fails after ten seconds,
@@ -96,6 +88,37 @@ impl Server {
             thread::sleep(Duration::from_millis(20));
         }
     }
+}
+
+/// Starts `bin server` with its paths inside `home`, which must hold the empty config. Its output
+/// is appended to `herdr.log` there, so a restart keeps the log of the earlier server.
+fn spawn_child(bin: &OsStr, home: &Path) -> Child {
+    let log = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(home.join("herdr.log"))
+        .expect("open the server log");
+    Command::new(bin)
+        .arg("server")
+        .env_clear()
+        .env("HOME", home)
+        .env("XDG_CONFIG_HOME", home.join("config"))
+        .env("XDG_STATE_HOME", home.join("state"))
+        .env("XDG_DATA_HOME", home.join("data"))
+        .env("XDG_CACHE_HOME", home.join("cache"))
+        .env("XDG_RUNTIME_DIR", home)
+        .env("TMPDIR", home)
+        .env("HERDR_CONFIG_PATH", home.join("config.toml"))
+        .env("HERDR_SOCKET_PATH", home.join("a.sock"))
+        .env("HERDR_CLIENT_SOCKET_PATH", home.join("a-client.sock"))
+        .env("SHELL", "/bin/sh")
+        .env("TERM", "xterm-256color")
+        .env("PATH", "/usr/bin:/bin:/usr/sbin:/sbin")
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(log.try_clone().expect("clone the server log")))
+        .stderr(Stdio::from(log))
+        .spawn()
+        .expect("start the isolated herdr server")
 }
 
 /// One request on a fresh connection to `sock`. Returns the reply's `result`, or
@@ -162,7 +185,7 @@ fn first_agent(tree: &HerdrTree) -> Option<&AgentInfo> {
 
 #[test]
 #[ignore = "needs CONTR_HERDR_BIN; starts an isolated herdr"]
-fn isolated_server_reports_tree_and_agent_status() {
+fn isolated_server_reports_tree_agent_status_and_reconnects() {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::new("contr_herdr=info"))
         .with_test_writer()
@@ -238,5 +261,38 @@ fn isolated_server_reports_tree_and_agent_status() {
             },
         );
     }
+
+    // The server stops and the reader reports it. A new server on the same
+    // paths brings the connection back.
+    server.stop();
+    wait_for(
+        &rx,
+        Duration::from_secs(10),
+        "NotRunning after the server stopped",
+        |update| match update {
+            HerdrUpdate::State(ConnState::NotRunning { .. }) => Some(()),
+            _ => None,
+        },
+    );
+    server.restart(&bin);
+    server.wait_until_answering(&sock);
+    wait_for(
+        &rx,
+        Duration::from_secs(15),
+        "Connected after the restart",
+        |update| match update {
+            HerdrUpdate::State(ConnState::Connected { .. }) => Some(()),
+            _ => None,
+        },
+    );
+    wait_for(
+        &rx,
+        Duration::from_secs(10),
+        "a tree after the restart",
+        |update| match update {
+            HerdrUpdate::Tree(_) => Some(()),
+            HerdrUpdate::State(_) => None,
+        },
+    );
     drop(reader);
 }

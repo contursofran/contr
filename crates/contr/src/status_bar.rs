@@ -258,6 +258,7 @@ mod tests {
             let herdr = app.new(|cx| Herdr::detached(live, cx));
             app.set_global(GlobalHerdr(herdr));
         });
+        cx.update(crate::board::init_detached);
         let (_view, cx) = cx.add_window_view(Frame::new);
         cx.simulate_resize(size(px(width), px(900.)));
         cx.run_until_parked();

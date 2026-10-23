@@ -1,6 +1,7 @@
 //! The empty three-column frame: sidebar, title bar, terminal, board panel, status bar.
 
 use crate::agents_list::AgentsList;
+use crate::board_panel::BoardPanel;
 use crate::herdr::{GlobalHerdr, Herdr};
 use crate::spaces::{Spaces, SpacesEvent, toggle_box};
 use crate::status_bar::StatusBar;
@@ -22,6 +23,7 @@ pub struct Frame {
     herdr: Entity<Herdr>,
     status_bar: Entity<StatusBar>,
     title_bar: Entity<TitleBar>,
+    board_panel: Entity<BoardPanel>,
     terminal: Entity<TerminalView>,
     sidebar_open: bool,
     panel_open: bool,
@@ -34,13 +36,15 @@ pub struct Frame {
 }
 
 impl Frame {
-    /// Needs `Host::init`, `StatusMessage::init` and `Herdr::init` first: the status bar reads
-    /// the first two, and the terminal area shows the connection's line or the terminal view.
+    /// Needs `Host::init`, `StatusMessage::init`, `Herdr::init` and `Board::init` first: the status
+    /// bar reads the first two, the terminal area shows the connection's line or the terminal view,
+    /// and the panel reads the board.
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let spaces = cx.new(Spaces::new);
         let agents = cx.new(AgentsList::new);
         let herdr = cx.global::<GlobalHerdr>().0.clone();
         let status_bar = cx.new(StatusBar::new);
+        let board_panel = cx.new(BoardPanel::new);
         let terminal = cx.new(|cx| TerminalView::new(window, cx));
         let toggle = cx.subscribe(&spaces, |this, _, event: &SpacesEvent, cx| {
             match event {
@@ -74,6 +78,7 @@ impl Frame {
             herdr,
             status_bar,
             title_bar,
+            board_panel,
             terminal,
             sidebar_open: true,
             panel_open: true,
@@ -166,9 +171,12 @@ impl Render for Frame {
                                                 .debug_selector(|| "panel".into())
                                                 .w(px(PANEL_WIDTH))
                                                 .flex_none()
+                                                .flex()
+                                                .flex_col()
                                                 .bg(rgb(BG_WINDOW))
                                                 .border_l_1()
-                                                .border_color(rgb(LINE)),
+                                                .border_color(rgb(LINE))
+                                                .child(self.board_panel.clone()),
                                         )
                                     }),
                             ),
@@ -217,6 +225,7 @@ fn reopen_sidebar(cx: &mut Context<Frame>) -> impl IntoElement {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+    use crate::board;
     use crate::selection::Selection;
     use crate::title_bar::tests::{connected_with, herdr_in, sample_tree};
     use crate::visibility::Visibility;
@@ -246,6 +255,7 @@ mod tests {
         cx.update(Visibility::init);
         cx.update(Selection::init);
         herdr_in(cx, connected());
+        cx.update(board::init_detached);
         cx.update(|app| crate::status_bar::init_detached(app, None));
         let (_view, cx) = cx.add_window_view(Frame::new);
         cx.simulate_resize(size(px(1440.), px(900.)));
@@ -273,6 +283,7 @@ mod tests {
         cx.update(Visibility::init);
         cx.update(Selection::init);
         herdr_in(cx, connected());
+        cx.update(board::init_detached);
         cx.update(|app| crate::status_bar::init_detached(app, None));
         let (_view, cx) = cx.add_window_view(Frame::new);
         cx.simulate_resize(size(px(1440.), px(900.)));
@@ -287,6 +298,7 @@ mod tests {
         cx.update(Visibility::init);
         cx.update(Selection::init);
         herdr_in(cx, connected());
+        cx.update(board::init_detached);
         cx.update(|app| crate::status_bar::init_detached(app, None));
         let (_view, cx) = cx.add_window_view(Frame::new);
         cx.simulate_resize(size(px(1440.), px(900.)));
@@ -315,6 +327,7 @@ mod tests {
         cx.update(Selection::init);
         cx.update(|app| crate::status_bar::init_detached(app, None));
         herdr_in(cx, not_running());
+        cx.update(board::init_detached);
         let (_view, cx) = cx.add_window_view(Frame::new);
         cx.simulate_resize(size(px(1440.), px(900.)));
         cx.run_until_parked();
@@ -339,6 +352,7 @@ mod tests {
         cx.update(Selection::init);
         cx.update(|app| crate::status_bar::init_detached(app, None));
         let herdr = herdr_in(cx, connected());
+        cx.update(board::init_detached);
         let (_view, cx) = cx.add_window_view(Frame::new);
         cx.simulate_resize(size(px(1440.), px(900.)));
         cx.run_until_parked();
@@ -369,6 +383,7 @@ mod tests {
         cx.update(Visibility::init);
         cx.update(Selection::init);
         herdr_in(cx, connected());
+        cx.update(board::init_detached);
         cx.update(|app| crate::status_bar::init_detached(app, None));
         let (_view, cx) = cx.add_window_view(Frame::new);
         cx.simulate_resize(size(px(1440.), px(900.)));
@@ -396,6 +411,7 @@ mod tests {
         cx.update(Selection::init);
         cx.update(|app| crate::status_bar::init_detached(app, None));
         herdr_in(cx, connected_with(sample_tree()));
+        cx.update(board::init_detached);
         let (frame, cx) = cx.add_window_view(Frame::new);
         cx.simulate_resize(size(px(1440.), px(900.)));
         cx.run_until_parked();
@@ -419,6 +435,7 @@ mod tests {
         cx.update(Visibility::init);
         cx.update(Selection::init);
         herdr_in(cx, connected_with(sample_tree()));
+        cx.update(board::init_detached);
         cx.update(|app| crate::status_bar::init_detached(app, None));
         let (frame, cx) = cx.add_window_view(Frame::new);
         cx.simulate_resize(size(px(1440.), px(900.)));
