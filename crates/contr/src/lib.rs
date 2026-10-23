@@ -6,6 +6,7 @@ pub mod host;
 pub mod legend;
 pub mod selection;
 pub mod spaces;
+pub mod spaces_model;
 pub mod status_bar;
 pub mod status_icon;
 pub mod status_message;
