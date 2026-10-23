@@ -5,6 +5,7 @@ pub mod board;
 pub mod board_model;
 pub mod board_needs;
 pub mod board_panel;
+pub mod board_report;
 pub mod board_work;
 pub mod frame;
 pub mod git;
