@@ -1,5 +1,6 @@
 //! Wire format of herdr's JSON API: request lines, replies, the snapshot
-//! shape and the event subscription. Every call here is a read.
+//! shape and the event subscription. Every call here is a read; the commands
+//! that change herdr's state live in `command`.
 
 use std::error::Error;
 use std::fmt;
@@ -209,7 +210,7 @@ fn connect(path: &Path, read: Duration, write: Duration) -> Result<UnixStream, W
 }
 
 /// One request on a fresh connection; returns the `result` of the reply.
-fn exchange(
+pub(crate) fn exchange(
     path: &Path,
     timeout: Duration,
     id: &str,
@@ -226,7 +227,7 @@ fn exchange(
     parse_reply(&line)
 }
 
-fn expect_type(result: &Value, kind: &str) -> Result<(), WireError> {
+pub(crate) fn expect_type(result: &Value, kind: &str) -> Result<(), WireError> {
     let found = result.get("type").and_then(Value::as_str).unwrap_or("none");
     if found == kind {
         Ok(())
@@ -423,10 +424,9 @@ impl Subscription {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use std::collections::{HashMap, VecDeque};
-    use std::io::{BufRead, BufReader};
     use std::os::unix::net::UnixListener;
-    use std::thread::{self, JoinHandle};
 
+    use super::fake::{serve, tempdir};
     use super::*;
 
     const T: Duration = Duration::from_secs(2);
@@ -471,36 +471,6 @@ mod tests {
             .map(|&(k, v)| (k.to_owned(), v.to_owned()))
             .collect();
         move |key| vars.get(key).cloned()
-    }
-
-    fn tempdir() -> tempfile::TempDir {
-        tempfile::Builder::new()
-            .prefix("ch")
-            .tempdir_in("/tmp")
-            .expect("temp dir")
-    }
-
-    /// Fake herdr: binds `herdr.sock` in `dir`, accepts one client, reads its request
-    /// line, writes `replies` (one line each), waits `hold`, then closes.
-    /// The thread returns the request line.
-    fn serve(dir: &Path, replies: &[&str], hold: Duration) -> (PathBuf, JoinHandle<String>) {
-        let path = dir.join("herdr.sock");
-        let listener = UnixListener::bind(&path).expect("bind fake herdr");
-        let replies: Vec<String> = replies.iter().map(|line| format!("{line}\n")).collect();
-        let handle = thread::spawn(move || {
-            let (stream, _) = listener.accept().expect("accept");
-            let mut request = String::new();
-            BufReader::new(&stream)
-                .read_line(&mut request)
-                .expect("read request");
-            let mut writer = &stream;
-            for reply in &replies {
-                writer.write_all(reply.as_bytes()).expect("write reply");
-            }
-            thread::sleep(hold);
-            request.trim_end().to_owned()
-        });
-        (path, handle)
     }
 
     fn request_json(request: &str) -> Value {
@@ -935,5 +905,50 @@ mod tests {
         let err = Subscription::open(&path, &[], SHORT, POLL).expect_err("no ack");
         assert!(matches!(err, WireError::Io(ref e) if e.kind() == io::ErrorKind::TimedOut));
         server.join().expect("server");
+    }
+}
+
+/// Test helpers shared by the test modules of this crate: a temp dir and a fake herdr socket.
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+pub(crate) mod fake {
+    use std::io::{BufRead, BufReader, Write};
+    use std::os::unix::net::UnixListener;
+    use std::path::{Path, PathBuf};
+    use std::thread::{self, JoinHandle};
+    use std::time::Duration;
+
+    pub(crate) fn tempdir() -> tempfile::TempDir {
+        tempfile::Builder::new()
+            .prefix("ch")
+            .tempdir_in("/tmp")
+            .expect("temp dir")
+    }
+
+    /// Fake herdr: binds `herdr.sock` in `dir`, accepts one client, reads its request
+    /// line, writes `replies` (one line each), waits `hold`, then closes.
+    /// The thread returns the request line.
+    pub(crate) fn serve(
+        dir: &Path,
+        replies: &[&str],
+        hold: Duration,
+    ) -> (PathBuf, JoinHandle<String>) {
+        let path = dir.join("herdr.sock");
+        let listener = UnixListener::bind(&path).expect("bind fake herdr");
+        let replies: Vec<String> = replies.iter().map(|line| format!("{line}\n")).collect();
+        let handle = thread::spawn(move || {
+            let (stream, _) = listener.accept().expect("accept");
+            let mut request = String::new();
+            BufReader::new(&stream)
+                .read_line(&mut request)
+                .expect("read request");
+            let mut writer = &stream;
+            for reply in &replies {
+                writer.write_all(reply.as_bytes()).expect("write reply");
+            }
+            thread::sleep(hold);
+            request.trim_end().to_owned()
+        });
+        (path, handle)
     }
 }
