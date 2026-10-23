@@ -1,12 +1,13 @@
-//! contr: a native herdr client. Opens the empty v0.1 frame.
+//! contr: a native herdr client. Opens the empty v0.1 frame, or the status icon legend with `--icons`.
 
-mod frame;
-mod theme;
-
+use contr::{frame, legend, theme};
 use gpui::{
     App, Bounds, TitlebarOptions, WindowBounds, WindowOptions, point, prelude::*, px, size,
 };
 use std::borrow::Cow;
+
+const LEGEND_WIDTH: f32 = 480.;
+const LEGEND_HEIGHT: f32 = 420.;
 
 static REGULAR: &[u8] = include_bytes!("../assets/fonts/JetBrainsMono-Regular.ttf");
 static BOLD: &[u8] = include_bytes!("../assets/fonts/JetBrainsMono-Bold.ttf");
@@ -27,21 +28,27 @@ fn main() -> std::process::ExitCode {
             }
         })
         .detach();
-        let bounds = Bounds::centered(
-            None,
-            size(px(theme::WINDOW_WIDTH), px(theme::WINDOW_HEIGHT)),
-            cx,
-        );
-        let result = cx.open_window(
-            WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
-                window_min_size: Some(size(px(960.), px(600.))),
-                titlebar: Some(titlebar_options()),
-                app_id: Some("dev.contr".into()),
-                ..Default::default()
-            },
-            |_, cx| cx.new(|_| frame::Frame::new()),
-        );
+        let show_icons = wants_icons(std::env::args());
+        let (width, height) = if show_icons {
+            (LEGEND_WIDTH, LEGEND_HEIGHT)
+        } else {
+            (theme::WINDOW_WIDTH, theme::WINDOW_HEIGHT)
+        };
+        let bounds = Bounds::centered(None, size(px(width), px(height)), cx);
+        let options = WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(bounds)),
+            window_min_size: (!show_icons).then(|| size(px(960.), px(600.))),
+            titlebar: Some(titlebar_options()),
+            app_id: Some("dev.contr".into()),
+            ..Default::default()
+        };
+        let result = if show_icons {
+            cx.open_window(options, |_, cx| cx.new(legend::Legend::new))
+                .map(|_| ())
+        } else {
+            cx.open_window(options, |_, cx| cx.new(|_| frame::Frame::new()))
+                .map(|_| ())
+        };
         if let Err(error) = result {
             eprintln!("contr: unable to open the window: {error}");
             open_failed.set(true);
@@ -54,6 +61,11 @@ fn main() -> std::process::ExitCode {
     } else {
         std::process::ExitCode::SUCCESS
     }
+}
+
+/// True when `--icons` is among the arguments (the program name, first, is skipped).
+fn wants_icons(args: impl IntoIterator<Item = String>) -> bool {
+    args.into_iter().skip(1).any(|arg| arg == "--icons")
 }
 
 /// On macOS the title bar is transparent and the traffic lights are moved
@@ -71,6 +83,20 @@ fn titlebar_options() -> TitlebarOptions {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn icons_flag_opens_the_legend() {
+        assert!(wants_icons(["contr", "--icons"].map(String::from)));
+        assert!(wants_icons(["contr", "--x", "--icons"].map(String::from)));
+    }
+
+    #[test]
+    fn without_the_flag_the_frame_opens() {
+        assert!(!wants_icons(["contr"].map(String::from)));
+        assert!(!wants_icons(["contr", "--icon"].map(String::from)));
+        // The program name is never a flag, even if it looks like one.
+        assert!(!wants_icons(["--icons"].map(String::from)));
+    }
 
     #[test]
     fn fonts_are_truetype() {
