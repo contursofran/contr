@@ -11,10 +11,12 @@ pub const MAX_REPORT_BYTES: u64 = 256 * 1024;
 pub const MAX_REPORT_LINES: usize = 2000;
 /// The problem line for a path that is not an absolute `.md` file path.
 pub const BAD_REPORT_PATH: &str = "report path is not an absolute .md file";
+/// The problem line for a report file that does not exist.
+pub const NO_REPORT_FILE: &str = "no report file";
+/// The problem line for a report that exists but cannot be read. The OS error text is not shown.
+pub const REPORT_UNREADABLE: &str = "report unreadable";
 /// The problem line for a path that names something other than a file.
-const NOT_A_FILE: &str = "report is not a file";
-/// The most characters of an error text that are shown.
-const ERROR_CHARS: usize = 60;
+pub const NOT_A_FILE: &str = "report is not a file";
 
 /// One drawn line of a report. Block-level markdown only; inline text stays as written.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,12 +60,15 @@ struct Drawn {
 
 impl Drawn {
     /// Adds a line. Returns `false` when the line does not fit; the report is then cut.
-    /// A blank line that would start the list or follow another blank line is dropped, not counted.
+    /// A blank line is dropped, not counted, when it would start the list, follow another blank
+    /// line, or when the list is full. A dropped blank never cuts: a blank at the end is removed
+    /// anyway, and a line after it that does not fit still cuts.
     fn push(&mut self, line: ReportLine) -> bool {
-        if matches!(line, ReportLine::Blank)
-            && matches!(self.lines.last(), None | Some(ReportLine::Blank))
-        {
-            return true;
+        if matches!(line, ReportLine::Blank) {
+            let full = self.lines.len() >= MAX_REPORT_LINES;
+            if full || matches!(self.lines.last(), None | Some(ReportLine::Blank)) {
+                return true;
+            }
         }
         if self.lines.len() >= MAX_REPORT_LINES {
             self.full = true;
@@ -75,7 +80,8 @@ impl Drawn {
 }
 
 /// Parses markdown text into lines. Rules, in order, per line:
-/// 1. Inside a fence: a closing fence (same char, ≥ 3) ends it (not drawn); else `Code`.
+/// 1. Inside a fence: a closing fence (same char, at least as long as the opening fence, nothing
+///    after it) ends it (not drawn); else `Code`.
 /// 2. An opening fence (```` ``` ```` or `~~~`, info string ignored) starts one (not drawn).
 /// 3. An HTML comment: a line that starts with `<!--` is hidden up to and including the line
 ///    that contains `-->` (same line allowed).
@@ -99,6 +105,8 @@ pub fn parse_report(text: &str) -> ReportText {
                 Some(ReportLine::Code(line.to_owned()))
             }
         } else if in_comment {
+            // Checked before the opening fence on purpose: rule 3 hides a fence-like line inside a
+            // comment. The Contract lists the fence first; this order is the intended one.
             in_comment = !line.contains("-->");
             None
         } else if let Some(opened) = opens_fence(trimmed) {
@@ -235,9 +243,9 @@ pub fn report_path(raw: &str) -> Option<PathBuf> {
 }
 
 /// Reads at most MAX_REPORT_BYTES of `path` and parses it. Blocking: call it on the background
-/// executor only. Errors are the panel's line: a non-file is "report is not a file"; an io error is
-/// "report unreadable: {error}" cut to 60 chars. Invalid UTF-8 is replaced (lossy), never an error.
-/// A cut in the middle of a UTF-8 char drops the partial char.
+/// executor only. Errors are the panel's fixed lines, never OS text: a non-file is `NOT_A_FILE`; a
+/// missing file is `NO_REPORT_FILE`; any other io error is `REPORT_UNREADABLE`. Invalid UTF-8 is
+/// replaced (lossy), never an error. A cut in the middle of a UTF-8 char drops the partial char.
 pub fn read_report(path: &Path) -> Result<ReportText, String> {
     let metadata = std::fs::metadata(path).map_err(|error| unreadable(&error))?;
     if !metadata.is_file() {
@@ -259,17 +267,15 @@ pub fn read_report(path: &Path) -> Result<ReportText, String> {
     Ok(report)
 }
 
-/// The panel's line for an io error: the error text, cut to `ERROR_CHARS` characters.
+/// The panel's line for an io error. A missing file has its own line; the other errors share one.
+/// The OS text is not shown (D75, as board.rs does).
 fn unreadable(error: &io::Error) -> String {
-    format!(
-        "report unreadable: {}",
-        cut_line(&error.to_string(), ERROR_CHARS)
-    )
-}
-
-/// The first `max` characters of `text`.
-fn cut_line(text: &str, max: usize) -> String {
-    text.chars().take(max).collect()
+    if error.kind() == io::ErrorKind::NotFound {
+        NO_REPORT_FILE
+    } else {
+        REPORT_UNREADABLE
+    }
+    .to_owned()
 }
 
 /// Drops the bytes of a UTF-8 char that the cut split: the lead byte and the continuation bytes
@@ -517,6 +523,21 @@ mod tests {
     }
 
     #[test]
+    fn a_trailing_blank_after_a_full_list_is_not_a_cut() {
+        // Exactly MAX lines, then one blank line and nothing more: the blank is removed, not cut.
+        let full = format!("{}\n", "a\n".repeat(MAX_REPORT_LINES));
+        let report = parse_report(&full);
+        assert_eq!(report.lines.len(), MAX_REPORT_LINES);
+        assert!(!report.cut);
+
+        // The same list, then a blank and a line: that line does not fit, so the report is cut.
+        let more = format!("{}\nb", "a\n".repeat(MAX_REPORT_LINES));
+        let report = parse_report(&more);
+        assert_eq!(report.lines.len(), MAX_REPORT_LINES);
+        assert!(report.cut);
+    }
+
+    #[test]
     fn report_path_needs_an_absolute_md_path() {
         assert_eq!(
             report_path("/example/b-1151/RESULT.md"),
@@ -578,10 +599,18 @@ mod tests {
     #[test]
     fn read_report_reports_a_missing_file() {
         let dir = tempfile::tempdir().unwrap();
-        let error = read_report(&dir.path().join("missing.md")).unwrap_err();
-        let detail = error.strip_prefix("report unreadable: ");
-        assert!(detail.is_some(), "unexpected line: {error}");
-        assert!(detail.unwrap_or_default().chars().count() <= ERROR_CHARS);
+        assert_eq!(
+            read_report(&dir.path().join("missing.md")),
+            Err(NO_REPORT_FILE.to_owned())
+        );
+    }
+
+    #[test]
+    fn read_report_reports_another_io_error_without_the_os_text() {
+        // A path through a regular file fails with "not a directory", which is not "not found".
+        let (_dir, file) = scratch_file("RESULT.txt", b"x");
+        let through = file.join("RESULT.md");
+        assert_eq!(read_report(&through), Err(REPORT_UNREADABLE.to_owned()));
     }
 
     #[test]
@@ -648,12 +677,5 @@ mod tests {
         let mut bytes = "é".as_bytes()[..1].to_vec();
         drop_partial_char(&mut bytes);
         assert!(bytes.is_empty());
-    }
-
-    #[test]
-    fn error_text_is_cut_by_chars() {
-        let text = "é".repeat(70);
-        assert_eq!(cut_line(&text, ERROR_CHARS).chars().count(), ERROR_CHARS);
-        assert_eq!(cut_line("short", ERROR_CHARS), "short");
     }
 }
