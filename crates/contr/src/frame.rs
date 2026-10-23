@@ -3,18 +3,21 @@
 use crate::herdr::{GlobalHerdr, Herdr};
 use crate::spaces::{Spaces, SpacesEvent, toggle_box};
 use crate::theme::*;
+use crate::title_bar::{TitleBar, TitleBarEvent};
 use gpui::{
-    Context, Entity, IntoElement, ParentElement, Render, Styled, Subscription, Window, div,
-    prelude::*, px, rgb,
+    Context, Entity, IntoElement, ParentElement, Render, StyleRefinement, Styled, Subscription,
+    Window, div, prelude::*, px, rgb,
 };
 
 pub struct Frame {
     spaces: Entity<Spaces>,
     herdr: Entity<Herdr>,
+    title_bar: Entity<TitleBar>,
     sidebar_open: bool,
     panel_open: bool,
     _toggle: Subscription,
     _herdr: Subscription,
+    _title_events: Subscription,
 }
 
 impl Frame {
@@ -29,13 +32,27 @@ impl Frame {
             cx.notify();
         });
         let herdr_sub = cx.observe(&herdr, |_, _, cx| cx.notify());
+        let title_bar = cx.new(|cx| TitleBar::new(true, cx));
+        let title_events = cx.subscribe(&title_bar, |this, bar, event: &TitleBarEvent, cx| {
+            match event {
+                TitleBarEvent::TogglePanel => {
+                    this.panel_open = !this.panel_open;
+                    let open = this.panel_open;
+                    bar.update(cx, |bar, cx| bar.set_panel_open(open, cx));
+                    cx.notify();
+                }
+                TitleBarEvent::Command(_) => {} // S4 sends these to herdr
+            }
+        });
         Self {
             spaces,
             herdr,
+            title_bar,
             sidebar_open: true,
             panel_open: true,
             _toggle: toggle,
             _herdr: herdr_sub,
+            _title_events: title_events,
         }
     }
 }
@@ -87,7 +104,10 @@ impl Render for Frame {
                                     .bg(rgb(BG_BARS))
                                     .border_b_1()
                                     .border_color(rgb(LINE))
-                                    .when(!self.sidebar_open, |bar| bar.child(reopen_sidebar(cx))),
+                                    .when(!self.sidebar_open, |bar| bar.child(reopen_sidebar(cx)))
+                                    .child(self.title_bar.clone().cached(
+                                        StyleRefinement::default().flex_1().min_w_0().h_full(),
+                                    )),
                             )
                             .child(
                                 div()
@@ -303,5 +323,29 @@ mod tests {
         cx.update(|_, app| herdr.update(app, |herdr, cx| herdr.apply(back, cx)));
         cx.run_until_parked();
         assert!(cx.debug_bounds("herdr-state").is_none());
+    }
+
+    #[gpui::test]
+    fn panel_toggle_hides_and_shows_the_panel(cx: &mut TestAppContext) {
+        cx.update(Selection::init);
+        herdr_in(cx, connected());
+        let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
+        cx.simulate_resize(size(px(1440.), px(900.)));
+        cx.run_until_parked();
+        assert!(cx.debug_bounds("panel-toggle-open").is_some());
+
+        let button = cx.debug_bounds("panel-toggle").unwrap();
+        cx.simulate_click(button.center(), Modifiers::none());
+        cx.run_until_parked();
+        assert!(cx.debug_bounds("panel").is_none());
+        assert!(cx.debug_bounds("panel-toggle-closed").is_some());
+        assert_eq!(cx.debug_bounds("terminal").unwrap().size.width, px(1160.));
+
+        let button = cx.debug_bounds("panel-toggle").unwrap();
+        cx.simulate_click(button.center(), Modifiers::none());
+        cx.run_until_parked();
+        assert_eq!(cx.debug_bounds("panel").unwrap().size.width, px(440.));
+        assert!(cx.debug_bounds("panel-toggle-open").is_some());
+        assert_eq!(cx.debug_bounds("terminal").unwrap().size.width, px(720.));
     }
 }
