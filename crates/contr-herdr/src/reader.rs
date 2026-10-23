@@ -121,7 +121,23 @@ pub enum Target {
 /// wait for it, so dropping on the UI thread never blocks.
 pub struct HerdrReader {
     stop: Arc<AtomicBool>,
+    visible: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
+}
+
+impl HerdrReader {
+    /// Tells the thread whether the window is shown. While it is hidden, the
+    /// thread keeps its connection and applies events, but takes no snapshot on
+    /// the refresh timer. When the window is shown again, the thread takes one
+    /// snapshot. This never blocks.
+    pub fn set_visible(&self, visible: bool) {
+        self.visible.store(visible, Ordering::Release);
+    }
+
+    /// The value last given to [`HerdrReader::set_visible`]. `true` at start.
+    pub fn is_visible(&self) -> bool {
+        self.visible.load(Ordering::Acquire)
+    }
 }
 
 impl Drop for HerdrReader {
@@ -168,12 +184,14 @@ fn spawn_with_refresh(
     refresh_every: Duration,
 ) -> std::io::Result<HerdrReader> {
     let stop = Arc::new(AtomicBool::new(false));
-    let mut reader = Reader::new(tx, Arc::clone(&stop), refresh_every);
+    let visible = Arc::new(AtomicBool::new(true));
+    let mut reader = Reader::new(tx, Arc::clone(&stop), Arc::clone(&visible), refresh_every);
     let thread = thread::Builder::new()
         .name("contr-herdr".into())
         .spawn(move || reader.run(&target))?;
     Ok(HerdrReader {
         stop,
+        visible,
         thread: Some(thread),
     })
 }
@@ -208,6 +226,8 @@ enum Ended {
 struct Reader {
     tx: Sender<HerdrUpdate>,
     stop: Arc<AtomicBool>,
+    /// Whether the window is shown. Set by [`HerdrReader::set_visible`].
+    visible: Arc<AtomicBool>,
     /// Snapshot interval with no event: [`REFRESH`], or a shorter one in tests.
     refresh_every: Duration,
     state: Option<ConnState>,
@@ -217,10 +237,16 @@ struct Reader {
 }
 
 impl Reader {
-    fn new(tx: Sender<HerdrUpdate>, stop: Arc<AtomicBool>, refresh_every: Duration) -> Self {
+    fn new(
+        tx: Sender<HerdrUpdate>,
+        stop: Arc<AtomicBool>,
+        visible: Arc<AtomicBool>,
+        refresh_every: Duration,
+    ) -> Self {
         Self {
             tx,
             stop,
+            visible,
             refresh_every,
             state: None,
             tree: None,
@@ -336,7 +362,8 @@ impl Reader {
     /// The stop flag is checked before every read, however busy the stream is.
     /// A snapshot runs when the stream goes quiet, or [`COALESCE`] after the
     /// first event not yet in a snapshot, but never less than [`SNAPSHOT_GAP`]
-    /// after the last one. It also runs every `refresh_every`.
+    /// after the last one. While the window is shown, it also runs every
+    /// `refresh_every`. When the window is shown again, it runs once.
     fn watch(
         &mut self,
         path: &Path,
@@ -345,6 +372,7 @@ impl Reader {
     ) -> Result<(), Ended> {
         let mut pending: Option<Instant> = None; // first event not yet in a snapshot
         let mut refreshed = Instant::now();
+        let mut visible = self.visible.load(Ordering::Acquire);
         loop {
             if self.stopped() {
                 return Err(Ended::Stop);
@@ -357,9 +385,13 @@ impl Reader {
             if !quiet && pending.is_none() {
                 pending = Some(Instant::now());
             }
+            let now_visible = self.visible.load(Ordering::Acquire);
+            let shown_again = now_visible && !visible;
+            visible = now_visible;
             let due = pending.is_some_and(|since| {
                 quiet || (since.elapsed() >= COALESCE && refreshed.elapsed() >= SNAPSHOT_GAP)
-            }) || refreshed.elapsed() >= self.refresh_every;
+            }) || shown_again
+                || (visible && refreshed.elapsed() >= self.refresh_every);
             if due {
                 if !self.refresh(path, panes)? {
                     return Ok(());
@@ -821,7 +853,8 @@ mod tests {
     #[test]
     fn a_state_or_tree_equal_to_the_last_one_is_not_sent_again() {
         let (tx, rx) = async_channel::bounded(16);
-        let mut reader = Reader::new(tx, Arc::new(AtomicBool::new(false)), REFRESH);
+        let visible = Arc::new(AtomicBool::new(true));
+        let mut reader = Reader::new(tx, Arc::new(AtomicBool::new(false)), visible, REFRESH);
         let idle = tree_from(&snapshot("idle"));
 
         reader.report(ConnState::Connecting).expect("open");
@@ -987,6 +1020,112 @@ mod tests {
             first_pane_status(&tree_of(next(&rx))),
             Some(AgentState::Working)
         );
+        reader.join_for_test();
+    }
+
+    #[test]
+    fn the_timer_refresh_pauses_while_hidden_and_runs_once_when_shown() {
+        let dir = tempdir();
+        let snapshots = Arc::new(AtomicUsize::new(0));
+        let counted = Arc::clone(&snapshots);
+        let path = fake_herdr(dir.path(), move |method, _| match method {
+            "ping" => answer(PONG),
+            "session.snapshot" => {
+                counted.fetch_add(1, Ordering::SeqCst);
+                answer(&snapshot_reply(&snapshot("idle")))
+            }
+            _ => held_ack(),
+        });
+        let (tx, rx) = async_channel::bounded(16);
+        // One second between timer snapshots: the hidden phase below spans more than one.
+        let reader =
+            spawn_with_refresh(Target::Socket(path), tx, Duration::from_secs(1)).expect("spawn");
+        assert!(matches!(
+            next(&rx),
+            HerdrUpdate::State(ConnState::Connecting)
+        ));
+        assert!(matches!(
+            next(&rx),
+            HerdrUpdate::State(ConnState::Connected { .. })
+        ));
+        tree_of(next(&rx));
+        // The first session takes two snapshots (see `connect`). Count from here.
+        let connected = snapshots.load(Ordering::SeqCst);
+        assert!(reader.is_visible(), "a reader starts with the window shown");
+
+        reader.set_visible(false);
+        assert!(!reader.is_visible());
+        thread::sleep(Duration::from_millis(1500));
+        assert_eq!(
+            snapshots.load(Ordering::SeqCst),
+            connected,
+            "the timer takes no snapshot while the window is hidden"
+        );
+
+        reader.set_visible(true);
+        // The snapshot comes at once. The timer would wait another second.
+        let deadline = Instant::now() + Duration::from_millis(900);
+        while snapshots.load(Ordering::SeqCst) == connected {
+            assert!(
+                Instant::now() < deadline,
+                "no snapshot after the window was shown"
+            );
+            thread::sleep(Duration::from_millis(10));
+        }
+        thread::sleep(Duration::from_millis(300));
+        assert_eq!(
+            snapshots.load(Ordering::SeqCst),
+            connected + 1,
+            "one snapshot when shown, then no more until the timer is due"
+        );
+        reader.join_for_test();
+    }
+
+    #[test]
+    fn a_refresh_that_fails_when_the_window_is_shown_ends_the_session() {
+        let dir = tempdir();
+        let snapshots = Arc::new(AtomicUsize::new(0));
+        let counted = Arc::clone(&snapshots);
+        let path = fake_herdr(dir.path(), move |method, _| match method {
+            "ping" => answer(PONG),
+            // The two snapshots of the connect succeed. The third, taken on show, fails.
+            "session.snapshot" => {
+                if counted.fetch_add(1, Ordering::SeqCst) < 2 {
+                    answer(&snapshot_reply(&snapshot("idle")))
+                } else {
+                    answer(
+                        r#"{"id":"contr-snapshot","error":{"code":"internal","message":"boom"}}"#,
+                    )
+                }
+            }
+            _ => held_ack(),
+        });
+        let (tx, rx) = async_channel::bounded(16);
+        let reader =
+            spawn_with_refresh(Target::Socket(path), tx, Duration::from_secs(1)).expect("spawn");
+        assert!(matches!(
+            next(&rx),
+            HerdrUpdate::State(ConnState::Connecting)
+        ));
+        assert!(matches!(
+            next(&rx),
+            HerdrUpdate::State(ConnState::Connected { .. })
+        ));
+        tree_of(next(&rx));
+
+        reader.set_visible(false);
+        // Longer than one read, so the reader sees the window hidden before it is shown.
+        thread::sleep(Duration::from_millis(400));
+        reader.set_visible(true);
+        match next(&rx) {
+            HerdrUpdate::State(ConnState::Incompatible { message }) => {
+                assert_eq!(
+                    message,
+                    "herdr 0.9.3 replied in an unexpected form · update contr"
+                );
+            }
+            other => panic!("expected Incompatible after the failed refresh, got {other:?}"),
+        }
         reader.join_for_test();
     }
 

@@ -19,7 +19,8 @@ pub struct Herdr {
     visible: bool,
     /// `live` changed while the window was hidden, and observers have not been told yet.
     stale: bool,
-    _reader: Option<HerdrReader>,
+    /// The reader thread. It is told when the window is hidden or shown again.
+    reader: Option<HerdrReader>,
     _drain: Task<()>,
     _visibility: Subscription,
 }
@@ -59,8 +60,14 @@ impl Herdr {
             }
         });
         let visible = visibility.read(cx).visible;
+        if let Some(reader) = &reader {
+            reader.set_visible(visible);
+        }
         let visibility_sub = cx.observe(visibility, |herdr, visibility, cx| {
             herdr.visible = visibility.read(cx).visible;
+            if let Some(reader) = &herdr.reader {
+                reader.set_visible(herdr.visible);
+            }
             if herdr.visible && herdr.stale {
                 herdr.stale = false;
                 cx.notify();
@@ -70,7 +77,7 @@ impl Herdr {
             live,
             visible,
             stale: false,
-            _reader: reader,
+            reader,
             _drain: drain,
             _visibility: visibility_sub,
         }
@@ -254,6 +261,37 @@ mod tests {
         set_visible(cx, &visibility, false);
         set_visible(cx, &visibility, true);
         assert_eq!(count.get(), 0);
+    }
+
+    #[gpui::test]
+    fn the_reader_follows_the_window(cx: &mut TestAppContext) {
+        let visibility = visibility(cx);
+        set_visible(cx, &visibility, false);
+        // A socket that does not exist: the reader retries in the background until dropped.
+        let dir = tempfile::tempdir().unwrap();
+        let (tx, rx) = async_channel::bounded(1);
+        let reader = spawn_reader(Target::Socket(dir.path().join("missing.sock")), tx).unwrap();
+        let herdr = cx.update(|app| {
+            app.new(|cx| Herdr::new(LiveHerdr::default(), Some(reader), rx, &visibility, cx))
+        });
+        let reader_visible = |cx: &TestAppContext| {
+            cx.read(|app| {
+                herdr
+                    .read(app)
+                    .reader
+                    .as_ref()
+                    .is_some_and(HerdrReader::is_visible)
+            })
+        };
+        assert!(
+            !reader_visible(cx),
+            "a reader made while the window is hidden starts hidden"
+        );
+
+        set_visible(cx, &visibility, true);
+        assert!(reader_visible(cx));
+        set_visible(cx, &visibility, false);
+        assert!(!reader_visible(cx));
     }
 
     #[gpui::test]
