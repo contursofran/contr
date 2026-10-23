@@ -5,10 +5,7 @@
 use crate::board_model::{ItemKind, NeedItem, item_kind_label, item_status};
 use crate::status_icon::StatusIcon;
 use crate::theme::*;
-use gpui::{
-    FontWeight, IntoElement, ParentElement, Role, StatefulInteractiveElement, Styled, div,
-    prelude::*, px, rgb,
-};
+use gpui::{FontWeight, Role, div, prelude::*, px, rgb};
 
 /// The needs-you section. It takes the rest of the panel's height, and its rows scroll inside it.
 pub fn needs_section(items: &[NeedItem], need_count: u32, clear_items: bool) -> impl IntoElement {
@@ -270,7 +267,7 @@ mod tests {
     }
 
     #[gpui::test]
-    fn clear_done_follows_clear_items(cx: &mut TestAppContext) {
+    fn clear_done_shows_with_clear_items(cx: &mut TestAppContext) {
         let shown = host(cx, fixture_items(), 3, true);
         assert!(bounds(shown, "needs-clear").is_some());
     }
