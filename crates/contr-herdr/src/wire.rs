@@ -221,6 +221,8 @@ pub(crate) fn exchange(
     stream
         .write_all(request_line(id, method, params).as_bytes())
         .map_err(WireError::Io)?;
+    // The reply id is not compared with `id`: one request per connection, so the
+    // first line on it is the reply to that request.
     let line = LineReader::new(stream).next_line()?.ok_or_else(timed_out)?;
     parse_reply(&line)
 }
@@ -247,6 +249,8 @@ struct SnapshotResult {
 }
 
 /// Asks herdr for its version and protocol (`ping`). One connection per call.
+/// `timeout` bounds each read and each write, not the whole call: a peer that
+/// sends one byte at a time can keep the call going longer than `timeout`.
 pub fn ping(path: &Path, timeout: Duration) -> Result<Pong, WireError> {
     let result = exchange(path, timeout, "contr-ping", "ping", json!({}))?;
     expect_type(&result, "pong")?;
@@ -254,6 +258,7 @@ pub fn ping(path: &Path, timeout: Duration) -> Result<Pong, WireError> {
 }
 
 /// Reads the whole session (`session.snapshot`). One connection per call.
+/// `timeout` bounds each read and each write, not the whole call (see [`ping`]).
 pub fn snapshot(path: &Path, timeout: Duration) -> Result<WireSnapshot, WireError> {
     let result = exchange(
         path,
@@ -363,6 +368,10 @@ impl Subscription {
     /// Connects and subscribes to [`GLOBAL_EVENTS`] plus one `pane.agent_status_changed`
     /// per pane id. Waits up to `timeout` for `subscription_started`; a server error
     /// (for example `pane_not_found`) fails. Then reads wait up to `poll` per call.
+    /// `timeout` bounds the write and the ack wait; the ack wait is checked after
+    /// each `poll`-long read, so it can overrun `timeout` by up to one `poll`.
+    /// A zero `poll` fails with `Io(InvalidInput)`: the socket rejects a zero read
+    /// timeout.
     pub fn open(
         path: &Path,
         pane_ids: &[String],
@@ -399,6 +408,7 @@ impl Subscription {
                 return Err(timed_out());
             }
         };
+        // The ack id is not compared with `contr-sub`: one subscription per connection.
         expect_type(&parse_reply(&ack)?, "subscription_started")?;
         Ok(Self { reader })
     }
