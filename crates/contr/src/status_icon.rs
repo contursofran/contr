@@ -1,6 +1,7 @@
 //! The ten status icons from docs/DESIGN.md, one set for sidebar, tabs, board stages and needs-you rows.
 
 use crate::theme::{ICON_FAINT, ICON_GREY, ICON_SIZE, ICON_YOU, SPIN_PERIOD_MS};
+use contr_herdr::AgentState;
 use gpui::{
     Animation, AnimationExt, App, ElementId, IntoElement, ParentElement, Pixels, RenderOnce, Role,
     StatefulInteractiveElement, Styled, Transformation, Window, div, percentage, prelude::*, px,
@@ -98,6 +99,18 @@ impl Status {
     }
 }
 
+/// The icon for an agent's state. `Unknown` shows as idle.
+impl From<AgentState> for Status {
+    fn from(state: AgentState) -> Self {
+        match state {
+            AgentState::Idle | AgentState::Unknown => Status::Idle,
+            AgentState::Working => Status::Working,
+            AgentState::Blocked => Status::Blocked,
+            AgentState::Done => Status::Done,
+        }
+    }
+}
+
 /// One status icon. `id` must be unique among its siblings (GPUI composes it with ancestor ids).
 ///
 /// A visible `Working` icon re-renders the view that contains it every frame; put it in a small
@@ -171,6 +184,7 @@ mod tests {
         WORKING_ARC, WORKING_RING,
     };
     use crate::theme::ICON_SIZE;
+    use contr_herdr::AgentState;
     use gpui::{
         Context, DevicePixels, IntoElement, ParentElement, Render, Styled, SvgSize, TestAppContext,
         Window, div, px, size,
@@ -198,6 +212,15 @@ mod tests {
         fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
             div().flex().child(StatusIcon::new("i", self.0))
         }
+    }
+
+    #[test]
+    fn agent_states_map_to_their_icons() {
+        assert_eq!(Status::from(AgentState::Idle), Status::Idle);
+        assert_eq!(Status::from(AgentState::Working), Status::Working);
+        assert_eq!(Status::from(AgentState::Blocked), Status::Blocked);
+        assert_eq!(Status::from(AgentState::Done), Status::Done);
+        assert_eq!(Status::from(AgentState::Unknown), Status::Idle);
     }
 
     #[test]

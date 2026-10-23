@@ -934,6 +934,7 @@ name = "contr"
 version = "0.1.0"
 dependencies = [
  "async-channel",
+ "contr-herdr",
  "gpui-pre",
  "gpui-pre-platform",
  "sysinfo",
