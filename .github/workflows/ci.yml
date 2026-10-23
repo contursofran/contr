@@ -44,3 +44,5 @@ jobs:
         run: cargo test --locked --workspace
       - name: Bundle script
         run: scripts/test-bundle.sh
+      - name: Install script
+        run: scripts/test-install.sh
