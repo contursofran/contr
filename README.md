@@ -57,3 +57,14 @@ An app that starts from Finder or the Dock gets the environment of the login ses
 rm -rf /Applications/contr.app
 rm -f ~/.local/bin/contr
 ```
+
+## Command line
+
+| Command | Result |
+|---|---|
+| `contr` | Opens the window. |
+| `contr --icons` | Opens the window with the status icon legend. |
+| `contr statusline [-- <command> [args…]]` | Prints the Claude Code status line. The words after `--` run as a command with the same input, and its output is printed. |
+| `contr --help`, `contr -h` | Prints the usage. Exits with status 0. |
+
+An unknown argument prints `contr: unknown argument <arg>` and the usage to standard error. It exits with status 2. Only `contr` and `contr --icons` open the window.
