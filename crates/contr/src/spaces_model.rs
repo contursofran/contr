@@ -203,6 +203,7 @@ mod tests {
     use crate::status_icon::Status;
     use contr_herdr::AgentState::{Blocked, Done, Idle, Unknown, Working};
     use contr_herdr::{AgentInfo, AgentState, HerdrTree, Pane, Tab, Workspace};
+    use std::collections::BTreeMap;
     use std::path::PathBuf;
 
     const COMMON: &str = "/work/app/.git";
@@ -221,6 +222,7 @@ mod tests {
                 name: "claude".into(),
                 status,
             }),
+            tokens: BTreeMap::new(),
         }
     }
 
