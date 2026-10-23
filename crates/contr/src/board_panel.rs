@@ -1,19 +1,21 @@
-//! The board panel: the header with the `Board | Report` switch and the wrap label, then the summary
-//! line, the work section and the needs-you section. Read-only: the switch and
-//! the wrap label are inert in #9. The panel reads the `Board` entity and redraws only when that
-//! entity notifies.
+//! The board panel: the header with the `Board | Report` switch and the wrap label, then the body of
+//! the shown tab. The Board tab draws the summary line, the work section and the needs-you section.
+//! The Report tab draws the report of the row it follows (`ReportView`) and nothing else. The panel
+//! reads the `Board` entity and redraws when that entity notifies. A report is read only while the
+//! Report tab is shown.
 
 use crate::board::{Board, GlobalBoard};
 use crate::board_model::{BoardSnapshot, WorkRow};
 use crate::board_needs::needs_section;
+use crate::board_report::{ReportEvent, ReportSource, ReportTarget, ReportView};
 use crate::board_work::{WorkRowView, work_section};
 use crate::theme::*;
 use gpui::{
-    Context, Entity, IntoElement, ParentElement, Render, Styled, Subscription, Window, div,
-    prelude::*, px, rgb, transparent_black,
+    App, ClickEvent, Context, Entity, IntoElement, ParentElement, Render, Styled, Subscription,
+    Window, div, prelude::*, px, rgb, transparent_black,
 };
 
-/// The two tabs of the panel. `Report` shows in the switch but is inert until #11.
+/// The two tabs of the panel. `Report` shows the report of the row in `report_row`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PanelTab {
     #[default]
@@ -28,21 +30,71 @@ pub struct BoardPanel {
     /// One view per work row, in the coordinator's order.
     work: Vec<Entity<WorkRowView>>,
     _observe: Subscription,
+    /// The Report tab's view. It is drawn only on the Report tab.
+    report: Entity<ReportView>,
+    /// The key of the work row that the Report tab follows. It stays when the tab is left.
+    report_row: Option<String>,
+    _report_events: Subscription,
 }
 
 impl BoardPanel {
-    /// Needs `Board::init` first. Redraws when the board notifies.
+    /// Needs `Board::init` first. Redraws when the board notifies. On the Report tab, a board
+    /// revision also syncs the report.
     pub fn new(cx: &mut Context<Self>) -> Self {
         let board = cx.global::<GlobalBoard>().0.clone();
-        let observe = cx.observe(&board, |this, _, cx| this.sync_work(cx));
+        let observe = cx.observe(&board, |this, _, cx| {
+            this.sync_work(cx);
+            if this.tab == PanelTab::Report {
+                this.sync_report(cx);
+            }
+        });
+        let report = cx.new(ReportView::new);
+        let report_events = cx.subscribe(&report, |this, _, event: &ReportEvent, cx| match event {
+            ReportEvent::Back => this.open_board_tab(cx),
+        });
         let mut panel = Self {
             board,
             tab: PanelTab::default(),
             work: Vec::new(),
             _observe: observe,
+            report,
+            report_row: None,
+            _report_events: report_events,
         };
         panel.sync_work(cx);
         panel
+    }
+
+    /// Shows the Report tab for the work row `row_key`.
+    pub fn show_report(&mut self, row_key: String, cx: &mut Context<Self>) {
+        self.report_row = Some(row_key);
+        self.open_report_tab(cx);
+    }
+
+    /// The Report tab's click. The tab keeps the row it followed before, if any.
+    fn open_report_tab(&mut self, cx: &mut Context<Self>) {
+        self.tab = PanelTab::Report;
+        self.sync_report(cx);
+        cx.notify();
+    }
+
+    /// The Board tab's click, and `back` in the report. The report row stays.
+    fn open_board_tab(&mut self, cx: &mut Context<Self>) {
+        self.tab = PanelTab::Board;
+        cx.notify();
+    }
+
+    /// Gives the report view the row it follows, as the board is now. The view reads the file only
+    /// when its path or the board revision is new. With no snapshot there is no report to show, so
+    /// nothing is set.
+    fn sync_report(&mut self, cx: &mut Context<Self>) {
+        let Some(snapshot) = self.board.read(cx).snapshot.clone() else {
+            return;
+        };
+        let target = report_target(&snapshot, self.report_row.as_deref());
+        let rev = snapshot.rev;
+        self.report
+            .update(cx, |report, cx| report.show(target, rev, cx));
     }
 
     /// Brings the work rows in line with the board. When the keys match in order, only the rows that
@@ -95,9 +147,16 @@ impl Render for BoardPanel {
             .child(header(
                 self.tab,
                 snapshot.as_ref().map(|shown| shown.wrap_up),
+                cx,
             ));
-        match snapshot {
-            Some(snapshot) => root
+        match (snapshot, self.tab) {
+            (None, _) => root.child(text_line(
+                "board-empty",
+                empty_text(bridge, problem.as_deref()),
+                TEXT_DIM,
+            )),
+            (Some(_), PanelTab::Report) => root.child(report_area(self.report.clone())),
+            (Some(snapshot), PanelTab::Board) => root
                 .child(summary(&snapshot, problem.as_deref()))
                 .child(work_section(&self.work, snapshot.clear_rows))
                 .child(needs_section(
@@ -105,17 +164,12 @@ impl Render for BoardPanel {
                     snapshot.need_count,
                     snapshot.clear_items,
                 )),
-            None => root.child(text_line(
-                "board-empty",
-                empty_text(bridge, problem.as_deref()),
-                TEXT_DIM,
-            )),
         }
     }
 }
 
 /// The header row. `wrap_up` is `None` while there is no snapshot: the wrap label is then hidden.
-fn header(tab: PanelTab, wrap_up: Option<bool>) -> impl IntoElement {
+fn header(tab: PanelTab, wrap_up: Option<bool>, cx: &mut Context<BoardPanel>) -> impl IntoElement {
     div()
         .debug_selector(|| "board-header".into())
         .h(px(PANEL_HEADER_HEIGHT))
@@ -129,21 +183,40 @@ fn header(tab: PanelTab, wrap_up: Option<bool>) -> impl IntoElement {
                 .debug_selector(|| "board-switch".into())
                 .flex()
                 .items_center()
-                .child(segment("board-tab-board", "Board", tab == PanelTab::Board))
+                .child(segment(
+                    "board-tab-board",
+                    "Board",
+                    tab == PanelTab::Board,
+                    cx.listener(|this, _: &ClickEvent, _, cx| this.open_board_tab(cx)),
+                ))
                 .child(segment(
                     "board-tab-report",
                     "Report",
                     tab == PanelTab::Report,
+                    cx.listener(|this, _: &ClickEvent, _, cx| this.open_report_tab(cx)),
                 )),
         )
         .when_some(wrap_up, |row, wrap_up| row.child(wrap_label(wrap_up)))
 }
 
 /// One segment of the switch. The selected one is a card with a 1 px border. The border is always
-/// there (transparent when not selected), so the labels do not move when the selection does.
-fn segment(selector: &'static str, label: &'static str, selected: bool) -> impl IntoElement {
+/// there (transparent when not selected), so the labels do not move when the selection does. The
+/// selected segment's selector ends in `-on`, so a test can read which tab is shown.
+fn segment(
+    selector: &'static str,
+    label: &'static str,
+    selected: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    let shown = if selected {
+        format!("{selector}-on")
+    } else {
+        selector.to_owned()
+    };
     div()
-        .debug_selector(move || selector.to_owned())
+        .id(selector)
+        .debug_selector(move || shown)
+        .cursor_pointer()
         .px(px(SEGMENT_PAD_X))
         .py(px(SEGMENT_PAD_Y))
         .rounded(px(SEGMENT_RADIUS))
@@ -155,7 +228,25 @@ fn segment(selector: &'static str, label: &'static str, selected: bool) -> impl 
         })
         .when(selected, |tab| tab.bg(rgb(BG_CARD)).text_color(rgb(TEXT)))
         .when(!selected, |tab| tab.text_color(rgb(TEXT_DIM)))
+        .on_click(on_click)
         .child(label)
+}
+
+/// The Report tab's body: the report view under the header, filling the rest of the panel.
+fn report_area(report: Entity<ReportView>) -> impl IntoElement {
+    div().flex_1().min_h_0().flex().flex_col().child(report)
+}
+
+/// What the Report tab shows for the row `key` on `snapshot`: nothing without a key, the row's
+/// fields while the row is on the board, else `Gone`.
+fn report_target(snapshot: &BoardSnapshot, key: Option<&str>) -> ReportTarget {
+    let Some(key) = key else {
+        return ReportTarget::None;
+    };
+    match snapshot.rows.iter().find(|row| row.key == key) {
+        Some(row) => ReportTarget::Row(ReportSource::from_row(row)),
+        None => ReportTarget::Gone,
+    }
 }
 
 /// The inert wrap label on the right of the header.
@@ -316,11 +407,74 @@ mod tests {
     use super::test_support::{bounds, bridge, fixture, panel};
     use super::*;
     use crate::board::NO_BOARD_FILE;
-    use gpui::TestAppContext;
+    use gpui::{Modifiers, TestAppContext, VisualTestContext};
+
+    /// A RESULT.md with the S1 fixture, in a new temp dir. The dir is returned so it lives as long as
+    /// the test. The path is absolute and ends in `.md`.
+    fn report_file() -> (tempfile::TempDir, String) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("RESULT.md");
+        std::fs::write(&path, include_str!("report_fixture.md")).unwrap();
+        (dir, path.to_str().unwrap().to_owned())
+    }
+
+    /// The fixture, with row 0's report set to `raw`. The shared fixture file keeps its own path.
+    fn snapshot_with_report(raw: &str) -> BoardSnapshot {
+        let mut snapshot = fixture();
+        snapshot.rows[0].report = Some(raw.to_owned());
+        snapshot
+    }
+
+    /// Sets the board to the fixture with row 0 reporting `raw`, at revision `rev`, as a read would.
+    fn set_rev(cx: &mut VisualTestContext, raw: &str, rev: u64) {
+        let mut next = snapshot_with_report(raw);
+        next.rev = rev;
+        let board = cx.read(|app| app.global::<GlobalBoard>().0.clone());
+        cx.update(|_, app| {
+            board.update(app, |board, cx| {
+                board.set(Some(next), None, Some(bridge()), cx)
+            })
+        });
+        cx.run_until_parked();
+    }
+
+    /// Reads started by the panel's report view.
+    fn reads(cx: &mut VisualTestContext, panel: &Entity<BoardPanel>) -> usize {
+        cx.update(|_, app| panel.read(app).report.read(app).reads)
+    }
+
+    /// Calls `show_report` on the panel for the row `key`, as a click on a work row does.
+    fn show_report_for(cx: &mut VisualTestContext, view: &Entity<BoardPanel>, key: &str) {
+        cx.update(|_, app| {
+            view.update(app, |panel, cx| panel.show_report(key.to_owned(), cx));
+        });
+        cx.run_until_parked();
+    }
+
+    /// Clicks the centre of the element with the given selector, as the mouse would.
+    fn click(cx: &mut VisualTestContext, selector: &'static str) {
+        let bounds = cx.debug_bounds(selector).unwrap();
+        cx.simulate_click(bounds.center(), Modifiers::none());
+        cx.run_until_parked();
+    }
 
     #[test]
     fn the_panel_opens_on_the_board_tab() {
         assert_eq!(PanelTab::default(), PanelTab::Board);
+    }
+
+    #[test]
+    fn report_target_follows_the_row_key() {
+        let snapshot = fixture();
+        assert_eq!(report_target(&snapshot, None), ReportTarget::None);
+        assert_eq!(
+            report_target(&snapshot, Some("owner/name#999")),
+            ReportTarget::Gone
+        );
+        assert_eq!(
+            report_target(&snapshot, Some("owner/name#640")),
+            ReportTarget::Row(ReportSource::from_row(&snapshot.rows[0]))
+        );
     }
 
     #[test]
@@ -383,7 +537,7 @@ mod tests {
         assert_eq!(header.size.height, px(PANEL_HEADER_HEIGHT));
         assert_eq!(header.origin.y, panel.origin.y, "the header is at the top");
 
-        let board_tab = bounds(cx, "board-tab-board").unwrap();
+        let board_tab = bounds(cx, "board-tab-board-on").unwrap();
         let report_tab = bounds(cx, "board-tab-report").unwrap();
         assert!(
             board_tab.origin.x < report_tab.origin.x,
@@ -425,5 +579,141 @@ mod tests {
         let panel = bounds(cx, "board-panel").unwrap();
         let section = bounds(cx, "needs-section").unwrap();
         assert_eq!(section.bottom(), panel.bottom());
+    }
+
+    #[gpui::test]
+    fn the_report_tab_is_clickable_and_selected_when_open(cx: &mut TestAppContext) {
+        let (_view, cx) = panel(cx, Some(fixture()), None, Some(bridge()));
+        assert!(bounds(cx, "board-tab-board-on").is_some());
+        assert!(bounds(cx, "board-tab-report-on").is_none());
+
+        click(cx, "board-tab-report");
+        assert!(bounds(cx, "board-tab-report-on").is_some());
+        assert!(bounds(cx, "board-tab-board-on").is_none());
+        assert!(
+            bounds(cx, "board-tab-board").is_some(),
+            "the Board tab is now the unselected one"
+        );
+    }
+
+    #[gpui::test]
+    fn the_report_tab_without_a_row_shows_the_pick_line(cx: &mut TestAppContext) {
+        let (view, cx) = panel(cx, Some(fixture()), None, Some(bridge()));
+        click(cx, "board-tab-report");
+        assert!(bounds(cx, "report").is_some());
+        assert!(
+            bounds(cx, "report-empty").is_some(),
+            "the pick line is drawn"
+        );
+        assert!(bounds(cx, "report-title").is_none());
+        assert_eq!(reads(cx, &view), 0, "no row, no read");
+    }
+
+    #[gpui::test]
+    fn board_tab_and_back_return_to_the_board(cx: &mut TestAppContext) {
+        let (_view, cx) = panel(cx, Some(fixture()), None, Some(bridge()));
+        click(cx, "board-tab-report");
+        assert!(bounds(cx, "report").is_some());
+
+        click(cx, "board-tab-board");
+        assert!(bounds(cx, "report").is_none());
+        assert!(bounds(cx, "work-section").is_some());
+        assert!(bounds(cx, "board-tab-board-on").is_some());
+
+        click(cx, "board-tab-report");
+        click(cx, "report-back");
+        assert!(bounds(cx, "report").is_none());
+        assert!(bounds(cx, "needs-section").is_some());
+        assert!(bounds(cx, "board-tab-board-on").is_some());
+    }
+
+    #[gpui::test]
+    fn show_report_opens_the_rows_report(cx: &mut TestAppContext) {
+        let (_dir, raw) = report_file();
+        let (view, cx) = panel(cx, Some(snapshot_with_report(&raw)), None, Some(bridge()));
+        show_report_for(cx, &view, "owner/name#640");
+
+        assert!(bounds(cx, "board-tab-report-on").is_some());
+        assert!(bounds(cx, "report-title").is_some());
+        assert!(bounds(cx, "report-heading-0").is_some());
+        assert_eq!(reads(cx, &view), 1);
+    }
+
+    #[gpui::test]
+    fn a_new_board_rev_rereads_the_shown_report(cx: &mut TestAppContext) {
+        let (_dir, raw) = report_file();
+        let (view, cx) = panel(cx, Some(snapshot_with_report(&raw)), None, Some(bridge()));
+        show_report_for(cx, &view, "owner/name#640");
+        assert_eq!(reads(cx, &view), 1);
+
+        set_rev(cx, &raw, 43);
+        assert_eq!(reads(cx, &view), 2, "a new revision reads the report again");
+    }
+
+    #[gpui::test]
+    fn the_board_tab_reads_no_report(cx: &mut TestAppContext) {
+        let (_dir, raw) = report_file();
+        let (view, cx) = panel(cx, Some(snapshot_with_report(&raw)), None, Some(bridge()));
+        set_rev(cx, &raw, 43);
+        assert_eq!(reads(cx, &view), 0, "the Board tab reads no report");
+
+        show_report_for(cx, &view, "owner/name#640");
+        click(cx, "board-tab-board");
+        set_rev(cx, &raw, 44);
+        assert_eq!(
+            reads(cx, &view),
+            1,
+            "after the Board tab, new revisions read nothing"
+        );
+    }
+
+    #[gpui::test]
+    fn a_row_that_leaves_the_board_shows_the_gone_line(cx: &mut TestAppContext) {
+        let (_dir, raw) = report_file();
+        let (view, cx) = panel(cx, Some(snapshot_with_report(&raw)), None, Some(bridge()));
+        show_report_for(cx, &view, "owner/name#640");
+
+        let mut gone = snapshot_with_report(&raw);
+        gone.rows.clear();
+        gone.rev = 43;
+        let board = cx.read(|app| app.global::<GlobalBoard>().0.clone());
+        cx.update(|_, app| {
+            board.update(app, |board, cx| {
+                board.set(Some(gone), None, Some(bridge()), cx)
+            })
+        });
+        cx.run_until_parked();
+
+        assert!(bounds(cx, "report-empty").is_some(), "the gone line");
+        assert!(bounds(cx, "report-title").is_none());
+        assert_eq!(reads(cx, &view), 1, "a gone row reads nothing");
+    }
+
+    #[gpui::test]
+    fn the_report_tab_hides_summary_and_sections(cx: &mut TestAppContext) {
+        let (_view, cx) = panel(cx, Some(fixture()), None, Some(bridge()));
+        click(cx, "board-tab-report");
+        assert!(bounds(cx, "board-summary").is_none());
+        assert!(bounds(cx, "work-section").is_none());
+        assert!(bounds(cx, "needs-section").is_none());
+        assert!(bounds(cx, "board-header").is_some(), "the header stays");
+
+        let board_panel = bounds(cx, "board-panel").unwrap();
+        let report = bounds(cx, "report").unwrap();
+        assert_eq!(
+            report.bottom(),
+            board_panel.bottom(),
+            "the report fills the rest of the panel"
+        );
+    }
+
+    #[gpui::test]
+    fn no_snapshot_shows_board_empty_on_the_report_tab(cx: &mut TestAppContext) {
+        let (view, cx) = panel(cx, None, None, None);
+        click(cx, "board-tab-report");
+        assert!(bounds(cx, "board-tab-report-on").is_some());
+        assert!(bounds(cx, "board-empty").is_some());
+        assert!(bounds(cx, "report").is_none());
+        assert_eq!(reads(cx, &view), 0);
     }
 }
