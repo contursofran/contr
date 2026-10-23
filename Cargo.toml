@@ -1,5 +1,5 @@
 [workspace]
-members  = ["crates/contr", "crates/contr-herdr"]
+members  = ["crates/contr", "crates/contr-herdr", "crates/contr-usage"]
 resolver = "3"
 
 [workspace.package]
@@ -27,3 +27,4 @@ tracing            = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 tempfile           = "3"
 contr-herdr        = { path = "crates/contr-herdr" }
+contr-usage        = { path = "crates/contr-usage" }
