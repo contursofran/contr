@@ -40,6 +40,7 @@ Source of truth: the "herdr sidebar mockup" design canvas, artboards **G · cont
 | you | #EDEDED bg + #111111 bold text | anything waiting on the owner (badges, "your test") |
 
 No hue anywhere: white means the owner acts, greys mean everything else.
+The terminal shows program colours as they are; greyscale applies to contr's own UI only.
 
 ## Status icons (16px viewBox, drawn at 12–14px)
 
