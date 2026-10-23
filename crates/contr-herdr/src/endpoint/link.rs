@@ -199,7 +199,8 @@ struct Runner {
     tx: Sender<LinkUpdate>,
     /// The last state sent. A state is sent only when it changes.
     state: Option<LinkState>,
-    /// Failed attempts in a row. A connection that passes the welcome resets it.
+    /// Failed attempts in a row. The first surface of a connection resets it. A
+    /// connection that closes before that is a failure.
     failures: u32,
 }
 
@@ -233,10 +234,7 @@ impl Runner {
         };
         let (size, cell) = *lock(&self.shared.size);
         match Conn::open(&path, size, cell, HANDSHAKE) {
-            Ok(conn) => {
-                self.failures = 0;
-                self.serve(conn)
-            }
+            Ok(conn) => self.serve(conn),
             Err(ConnError::NotRunning(why)) => {
                 self.set_state(LinkState::NotRunning(why));
                 self.retry()
@@ -259,13 +257,16 @@ impl Runner {
         };
         match self.session(&mut conn, live, &version) {
             Ended::Stopped => false,
+            // Both wait with the backoff: a connection that ends before its first
+            // surface counts as a failure, so a herdr that accepts and closes at
+            // once is not retried every `BASE_RETRY`.
             Ended::OutOfSync => {
                 self.set_state(LinkState::Connecting);
-                self.pause(BASE_RETRY)
+                self.retry()
             }
             Ended::Gone(reason) => {
                 self.set_state(LinkState::NotRunning(reason));
-                self.pause(BASE_RETRY)
+                self.retry()
             }
             Ended::Unreadable(message) => self.refuse(message),
         }
@@ -325,6 +326,8 @@ impl Runner {
                     }
                 }
                 ServerMsg::Surface(frame) => {
+                    // The connection works: the next failure starts the backoff again.
+                    self.failures = 0;
                     let surface = held.insert(frame.0);
                     self.publish(surface);
                 }
@@ -877,6 +880,24 @@ mod tests {
             next_state(&rx),
             LinkState::NotRunning("herdr closed the endpoint".to_owned())
         );
+    }
+
+    #[test]
+    fn a_herdr_that_accepts_and_closes_at_once_is_retried_with_backoff() {
+        let accepts = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counted = Arc::clone(&accepts);
+        let (_dir, path) = serve_each(8, move |mut stream, _| {
+            counted.fetch_add(1, Ordering::SeqCst);
+            read_hello(&mut stream);
+            put(&mut stream, &welcome("0.9.3"));
+            // The stream is dropped here: herdr closed the connection at once.
+        });
+        let (_link, _handle, _rx) = start(LinkTarget::Socket(path));
+        thread::sleep(Duration::from_millis(1200));
+        // Attempts at about 0 s, 0.5 s and 1.5 s (waits of 500 ms, then 1 s). A
+        // fixed 500 ms wait would make three attempts by 1.2 s.
+        let attempts = accepts.load(Ordering::SeqCst);
+        assert!((1..=2).contains(&attempts), "{attempts} attempts in 1.2 s");
     }
 
     #[test]

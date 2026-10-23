@@ -9,6 +9,7 @@ pub mod git;
 pub mod herdr;
 pub mod host;
 pub mod legend;
+pub mod report;
 pub mod selection;
 pub mod spaces;
 pub mod spaces_model;
