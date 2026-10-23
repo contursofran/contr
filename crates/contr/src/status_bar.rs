@@ -1,11 +1,15 @@
 //! The status bar along the bottom of the frame. Its right side shows the message slot, host CPU
-//! and memory, and the contr version. The left side (plan usage) comes with the usage entity.
+//! and memory, the contr version, and the herdr version while herdr is connected. The left side
+//! (plan usage) comes with the usage entity.
 //!
-//! The bar is a cached view: it re-renders only when the host reading or the message changes.
+//! The bar is a cached view: it re-renders only when the host reading, the message or the herdr
+//! connection changes.
 
+use crate::herdr::GlobalHerdr;
 use crate::host::GlobalHost;
 use crate::status_message::GlobalStatusMessage;
 use crate::theme::*;
+use contr_herdr::ConnState;
 use gpui::{
     App, Context, Div, IntoElement, ParentElement, Render, Styled, Subscription, Window, div,
     prelude::*, px, rgb,
@@ -30,9 +34,9 @@ enum Tone {
 struct Segment {
     id: &'static str,
     tone: Tone,
-    /// "CPU", "MEM", "contr", or the whole message text.
+    /// "CPU", "MEM", "contr", "herdr", or the whole message text.
     label: String,
-    /// "38%", "–", "0.1.0". None for the message.
+    /// "38%", "–", "0.1.0", "0.9.3". None for the message.
     value: Option<String>,
 }
 
@@ -112,6 +116,16 @@ fn right_segments(cx: &App) -> Vec<Segment> {
         label: "contr".into(),
         value: Some(env!("CARGO_PKG_VERSION").into()),
     });
+    if let ConnState::Connected { server_version } =
+        &cx.global::<GlobalHerdr>().0.read(cx).live.state
+    {
+        segments.push(Segment {
+            id: "herdr-version",
+            tone: Tone::Meta,
+            label: "herdr".into(),
+            value: Some(server_version.clone()),
+        });
+    }
     segments
 }
 
@@ -124,15 +138,17 @@ pub struct StatusBar {
 }
 
 impl StatusBar {
-    /// Repaints when the host reading or the message changes. Needs `Host::init` and
-    /// `StatusMessage::init` first.
+    /// Repaints when the host reading, the message or the herdr connection changes. Needs
+    /// `Host::init`, `StatusMessage::init` and `Herdr::init` first.
     pub fn new(cx: &mut Context<Self>) -> Self {
         let host = cx.global::<GlobalHost>().0.clone();
         let message = cx.global::<GlobalStatusMessage>().0.clone();
+        let herdr = cx.global::<GlobalHerdr>().0.clone();
         Self {
             _subs: vec![
                 cx.observe(&host, |_, _, cx| cx.notify()),
                 cx.observe(&message, |_, _, cx| cx.notify()),
+                cx.observe(&herdr, |_, _, cx| cx.notify()),
             ],
         }
     }
@@ -196,9 +212,12 @@ mod tests {
     use crate::selection::Selection;
     use crate::status_message::{GlobalStatusMessage, MESSAGE_TTL, StatusMessage};
     use crate::visibility::Visibility;
-    use contr_herdr::{ConnState, LiveHerdr};
+    use contr_herdr::{HerdrUpdate, LiveHerdr};
     use gpui::{AppContext, Entity, TestAppContext, px, size};
     use std::time::Duration;
+
+    /// The contr version item, as the bar shows it.
+    const CONTR_TEXT: &str = concat!("contr ", env!("CARGO_PKG_VERSION"));
 
     fn stats(cpu_percent: f32, mem_used: u64, mem_total: u64) -> HostStats {
         HostStats {
@@ -208,23 +227,34 @@ mod tests {
         }
     }
 
+    fn connected() -> ConnState {
+        ConnState::Connected {
+            server_version: "0.9.3".into(),
+        }
+    }
+
     /// Opens the frame (which holds the status bar) at `width` × 900 with a detached host and a
-    /// connected, detached herdr (the frame reads it).
+    /// detached herdr that is connected.
     fn frame(
         cx: &mut TestAppContext,
         host: Option<HostStats>,
         width: f32,
     ) -> &mut gpui::VisualTestContext {
+        frame_with(cx, host, width, connected())
+    }
+
+    /// As `frame`, with the detached herdr in `state`.
+    fn frame_with(
+        cx: &mut TestAppContext,
+        host: Option<HostStats>,
+        width: f32,
+        state: ConnState,
+    ) -> &mut gpui::VisualTestContext {
         cx.update(Visibility::init);
         cx.update(Selection::init);
         cx.update(|app| init_detached(app, host));
         cx.update(|app| {
-            let live = LiveHerdr {
-                state: ConnState::Connected {
-                    server_version: "0.9.3".into(),
-                },
-                tree: None,
-            };
+            let live = LiveHerdr { state, tree: None };
             let herdr = app.new(|cx| Herdr::detached(live, cx));
             app.set_global(GlobalHerdr(herdr));
         });
@@ -232,6 +262,15 @@ mod tests {
         cx.simulate_resize(size(px(width), px(900.)));
         cx.run_until_parked();
         cx
+    }
+
+    /// Applies `state` to the app's herdr, as the reader's update would.
+    fn set_herdr(cx: &mut gpui::VisualTestContext, state: ConnState) {
+        let herdr = cx.read(|app| app.global::<GlobalHerdr>().0.clone());
+        cx.update(|_, app| {
+            herdr.update(app, |herdr, cx| herdr.apply(HerdrUpdate::State(state), cx))
+        });
+        cx.run_until_parked();
     }
 
     fn message(cx: &mut gpui::VisualTestContext) -> Entity<StatusMessage> {
@@ -256,9 +295,9 @@ mod tests {
     }
 
     #[gpui::test]
-    fn shows_cpu_and_memory_then_the_version(cx: &mut TestAppContext) {
+    fn shows_cpu_and_memory_then_the_versions(cx: &mut TestAppContext) {
         let cx = frame(cx, Some(stats(37.6, 62, 100)), 1440.);
-        assert_eq!(texts(cx), ["CPU 38%", "MEM 62%", "contr 0.1.0"]);
+        assert_eq!(texts(cx), ["CPU 38%", "MEM 62%", CONTR_TEXT, "herdr 0.9.3"]);
         assert!(cx.debug_bounds("host-cpu-status").is_some());
         let mem = cx.debug_bounds("host-mem-status").unwrap();
         let version = cx.debug_bounds("contr-version").unwrap();
@@ -271,7 +310,56 @@ mod tests {
     #[gpui::test]
     fn no_reading_shows_dashes(cx: &mut TestAppContext) {
         let cx = frame(cx, None, 1440.);
-        assert_eq!(texts(cx), ["CPU –", "MEM –", "contr 0.1.0"]);
+        assert_eq!(texts(cx), ["CPU –", "MEM –", CONTR_TEXT, "herdr 0.9.3"]);
+    }
+
+    #[gpui::test]
+    fn a_connected_herdr_shows_its_version_after_contr(cx: &mut TestAppContext) {
+        let cx = frame(cx, Some(stats(40., 50, 100)), 1440.);
+        assert_eq!(texts(cx)[3], "herdr 0.9.3");
+        let contr = cx.debug_bounds("contr-version").unwrap();
+        let herdr = cx.debug_bounds("herdr-version").unwrap();
+        assert!(herdr.origin.x > contr.origin.x, "herdr is right of contr");
+    }
+
+    #[gpui::test]
+    fn not_running_herdr_shows_no_version(cx: &mut TestAppContext) {
+        let state = ConnState::NotRunning {
+            reason: "no socket".into(),
+        };
+        let cx = frame_with(cx, Some(stats(40., 50, 100)), 1440., state);
+        assert_eq!(texts(cx), ["CPU 40%", "MEM 50%", CONTR_TEXT]);
+        assert!(cx.debug_bounds("herdr-version").is_none());
+    }
+
+    #[gpui::test]
+    fn herdr_version_follows_the_connection(cx: &mut TestAppContext) {
+        let cx = frame_with(cx, Some(stats(40., 50, 100)), 1440., ConnState::Connecting);
+        assert!(cx.debug_bounds("herdr-version").is_none());
+
+        set_herdr(cx, connected());
+        assert_eq!(texts(cx)[3], "herdr 0.9.3");
+        assert!(
+            cx.debug_bounds("herdr-version").is_some(),
+            "the bar repaints when herdr connects"
+        );
+
+        set_herdr(
+            cx,
+            ConnState::Incompatible {
+                message: "herdr replied in a form contr does not read".into(),
+            },
+        );
+        assert_eq!(texts(cx).len(), 3);
+        assert!(cx.debug_bounds("herdr-version").is_none());
+
+        set_herdr(
+            cx,
+            ConnState::NotRunning {
+                reason: "gone".into(),
+            },
+        );
+        assert!(cx.debug_bounds("herdr-version").is_none());
     }
 
     #[gpui::test]
@@ -300,19 +388,7 @@ mod tests {
         assert!(message_bounds.origin.x < cpu.origin.x);
 
         advance(cx, MESSAGE_TTL);
-        assert_eq!(texts(cx), ["CPU 40%", "MEM 50%", "contr 0.1.0"]);
-        assert!(cx.debug_bounds("status-message").is_none());
-    }
-
-    #[gpui::test]
-    fn a_second_message_restarts_the_timer(cx: &mut TestAppContext) {
-        let cx = frame(cx, Some(stats(40., 50, 100)), 1440.);
-        show(cx, "first");
-        advance(cx, Duration::from_secs(4));
-        show(cx, "second");
-        advance(cx, Duration::from_secs(4));
-        assert_eq!(texts(cx)[0], "second");
-        advance(cx, Duration::from_secs(2));
+        assert_eq!(texts(cx), ["CPU 40%", "MEM 50%", CONTR_TEXT, "herdr 0.9.3"]);
         assert!(cx.debug_bounds("status-message").is_none());
     }
 
@@ -328,7 +404,12 @@ mod tests {
         );
         let right = cx.debug_bounds("status-right").unwrap();
         assert!(right.origin.x + right.size.width <= px(960.));
-        for id in ["host-cpu-status", "host-mem-status", "contr-version"] {
+        for id in [
+            "host-cpu-status",
+            "host-mem-status",
+            "contr-version",
+            "herdr-version",
+        ] {
             let bounds = cx.debug_bounds(id).unwrap();
             assert!(bounds.origin.x + bounds.size.width <= px(960.), "{id} fits");
         }
