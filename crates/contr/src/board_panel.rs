@@ -141,35 +141,6 @@ impl BoardPanel {
         sent
     }
 
-    /// `Answer in chat`: sends `Chat` for `key`, then focuses the bridge pane, so the owner lands in the
-    /// coordinator's prompt. Nothing is focused when the send fails or the board has no bridge pane.
-    fn chat(&mut self, key: String, cx: &mut Context<Self>) {
-        if !self.send_action(Action::Chat { key }, None, cx) {
-            return;
-        }
-        let pane = self
-            .board
-            .read(cx)
-            .bridge
-            .as_ref()
-            .map(|bridge| bridge.pane_id.clone());
-        if let Some(pane) = pane {
-            (self.focus)(pane, cx);
-        }
-    }
-
-    /// Cancels the queued answer, done or dismiss for `key`, if it is still held.
-    fn undo_answer(&mut self, key: &str, cx: &mut Context<Self>) {
-        if let Some(outbox) = self.outbox.clone() {
-            outbox.update(cx, |outbox, cx| outbox.undo(key, cx));
-        }
-    }
-
-    /// The answer queued for `key`, and whether it can still be undone. `None` when nothing is queued.
-    fn queued(&self, key: &str, cx: &App) -> Option<(String, bool)> {
-        self.outbox.as_ref()?.read(cx).pending_answer(key)
-    }
-
     /// Shows the Report tab for the work row `row_key`.
     pub fn show_report(&mut self, row_key: String, cx: &mut Context<Self>) {
         self.report_row = Some(row_key);
@@ -272,6 +243,35 @@ impl BoardPanel {
         for view in &self.work {
             let picked = picked_row.as_deref() == Some(view.read(cx).key());
             view.update(cx, |view, cx| view.set_picked(picked, cx));
+        }
+    }
+
+    /// The answer queued for `key`, and whether it can still be undone. `None` when nothing is queued.
+    fn queued(&self, key: &str, cx: &App) -> Option<(String, bool)> {
+        self.outbox.as_ref()?.read(cx).pending_answer(key)
+    }
+
+    /// Cancels the queued answer, done or dismiss for `key`, if it is still held.
+    fn undo_answer(&mut self, key: &str, cx: &mut Context<Self>) {
+        if let Some(outbox) = self.outbox.clone() {
+            outbox.update(cx, |outbox, cx| outbox.undo(key, cx));
+        }
+    }
+
+    /// `Answer in chat`: sends `Chat` for `key`, then focuses the bridge pane, so the owner lands in the
+    /// coordinator's prompt. Nothing is focused when the send fails or the board has no bridge pane.
+    fn chat(&mut self, key: String, cx: &mut Context<Self>) {
+        if !self.send_action(Action::Chat { key }, None, cx) {
+            return;
+        }
+        let pane = self
+            .board
+            .read(cx)
+            .bridge
+            .as_ref()
+            .map(|bridge| bridge.pane_id.clone());
+        if let Some(pane) = pane {
+            (self.focus)(pane, cx);
         }
     }
 
