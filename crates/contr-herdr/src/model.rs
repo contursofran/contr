@@ -1,7 +1,7 @@
 //! The herdr tree the app shows, built from one `session.snapshot`, and the
 //! changes between two trees that the log reports.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use crate::wire::{WirePane, WireSnapshot, WireStatus, WireTab};
 
@@ -74,6 +74,8 @@ pub struct Pane {
     pub focused: bool,
     /// `None` when no agent runs in this pane.
     pub agent: Option<AgentInfo>,
+    /// Pane tokens as herdr sent them. Empty when the pane has none.
+    pub tokens: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -142,6 +144,7 @@ impl HerdrTree {
                                 cwd: pane.cwd.clone(),
                                 focused: pane.focused,
                                 agent: agent_info(pane),
+                                tokens: pane.tokens.clone(),
                             })
                             .collect(),
                     })
@@ -633,5 +636,47 @@ mod tests {
                 "      pane w2:p91 - -",
             ]
         );
+    }
+
+    /// Workspace `w1`, tab `t1` and one idle pane `p1` whose `tokens` is the given JSON object.
+    fn pane_with_tokens(tokens: &str) -> WireSnapshot {
+        parse(
+            r#"{"workspace_id":"w1","label":"contr","agent_status":"idle"}"#,
+            r#"{"tab_id":"t1","workspace_id":"w1","label":"main","agent_status":"idle"}"#,
+            &format!(
+                r#"{{"pane_id":"p1","tab_id":"t1","workspace_id":"w1","agent_status":"idle","tokens":{tokens}}}"#
+            ),
+        )
+    }
+
+    #[test]
+    fn from_snapshot_copies_pane_tokens_as_herdr_sent_them() {
+        let tree =
+            HerdrTree::from_snapshot(&pane_with_tokens(r#"{"contr_board":"1 s1 3","x":"y"}"#));
+
+        let tokens = &tree.workspaces[0].tabs[0].panes[0].tokens;
+        assert_eq!(tokens.len(), 2);
+        assert_eq!(tokens["contr_board"], "1 s1 3");
+        assert_eq!(tokens["x"], "y");
+    }
+
+    #[test]
+    fn a_pane_without_tokens_has_an_empty_map() {
+        let tree = HerdrTree::from_snapshot(&two_agents("idle", "working"));
+
+        assert!(tree.panes().all(|pane| pane.tokens.is_empty()));
+    }
+
+    #[test]
+    fn a_changed_or_removed_token_makes_the_trees_unequal_but_keeps_the_shape() {
+        let before = HerdrTree::from_snapshot(&pane_with_tokens(r#"{"contr_board":"1 s1 3"}"#));
+        let changed = HerdrTree::from_snapshot(&pane_with_tokens(r#"{"contr_board":"1 s1 4"}"#));
+        let removed = HerdrTree::from_snapshot(&pane_with_tokens("{}"));
+
+        for next in [&changed, &removed] {
+            assert_ne!(&before, next);
+            assert!(before.same_shape(next));
+            assert!(before.status_changes(next).is_empty());
+        }
     }
 }

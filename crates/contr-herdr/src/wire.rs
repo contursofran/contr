@@ -2,6 +2,7 @@
 //! shape and the event subscription. Every call here is a read; the commands
 //! that change herdr's state live in `command`.
 
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
 use std::io::{self, Read, Write};
@@ -109,6 +110,9 @@ pub struct WirePane {
     pub label: Option<String>,
     #[serde(default)]
     pub cwd: Option<String>,
+    /// Pane tokens as herdr reports them. A pane without `tokens` has none.
+    #[serde(default)]
+    pub tokens: BTreeMap<String, String>,
 }
 
 /// Why a request to herdr failed.
@@ -643,6 +647,34 @@ mod tests {
         assert!(snap.workspaces.is_empty());
         assert!(snap.tabs.is_empty());
         assert!(snap.panes.is_empty());
+    }
+
+    #[test]
+    fn snapshot_pane_tokens_decode_and_a_pane_without_them_has_none() {
+        let snap: WireSnapshot = serde_json::from_str(
+            r#"{"version":"0.9.3","protocol":22,"panes":[
+                {"pane_id":"w1:p1","tab_id":"w1:t1","workspace_id":"w1","agent_status":"idle","tokens":{"contr_board":"1 s1 3","x":"y"}},
+                {"pane_id":"w1:p2","tab_id":"w1:t1","workspace_id":"w1","agent_status":"idle"}
+            ]}"#,
+        )
+        .expect("snapshot with tokens");
+
+        let with = &snap.panes[0].tokens;
+        assert_eq!(with.len(), 2);
+        assert_eq!(with["contr_board"], "1 s1 3");
+        assert_eq!(with["x"], "y");
+        assert!(snap.panes[1].tokens.is_empty());
+    }
+
+    #[test]
+    fn a_pane_token_value_that_is_not_a_string_fails_the_snapshot() {
+        let bad = serde_json::from_str::<WireSnapshot>(
+            r#"{"version":"0.9.3","protocol":22,"panes":[
+                {"pane_id":"w1:p1","tab_id":"w1:t1","workspace_id":"w1","agent_status":"idle","tokens":{"contr_board":3}}
+            ]}"#,
+        );
+
+        assert!(bad.is_err());
     }
 
     #[test]
