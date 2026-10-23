@@ -75,7 +75,7 @@ pub const STATUS_GAP: f32 = 8.; // between label, bar and percent, and around th
 pub const USAGE_BAR_WIDTH: f32 = 36.; // plan usage track
 pub const USAGE_BAR_HEIGHT: f32 = 4.;
 pub const USAGE_BAR_RADIUS: f32 = 2.;
-pub const USAGE_LOW_LEFT: f32 = 20.; // under this % left the bar fill is white (owner acts)
+pub const USAGE_LOW_LEFT: f32 = 20.; // under this % left the fill and percent are white (owner acts)
 
 // Title bar tabs and buttons (planner defaults; docs/DESIGN.md has no sizes for these)
 pub const TAB_PADDING_X: f32 = 12.;

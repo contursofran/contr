@@ -21,6 +21,9 @@ pub type Plans = Vec<(PlanId, Option<PlanUsage>)>;
 /// The plan usage the status bar shows. `plans` holds the last read.
 pub struct Usage {
     pub plans: Plans,
+    /// The whole percent each plan showed at the last notify, in `PLANS` order. The low state
+    /// follows from the percent, so comparing the percent also compares the low state.
+    shown: Vec<Option<f64>>,
     /// When the last read finished, on the executor's clock.
     last_read: Option<Instant>,
     _task: Task<()>,
@@ -110,6 +113,8 @@ impl Usage {
         });
         Self {
             plans: unread(),
+            // Nothing is shown before the first read.
+            shown: vec![None; PLANS.len()],
             last_read: None,
             _task: task,
             _sub: Some(sub),
@@ -121,13 +126,15 @@ impl Usage {
         left_in(&self.plans, plan, now)
     }
 
-    /// Stores the plans. Notifies only when a shown percent changes.
-    fn record(&mut self, plans: Plans, read_at: Instant, cx: &mut Context<Self>) {
-        let now = unix_now();
-        let shown_before = shown(&self.plans, now);
+    /// Stores the plans. Notifies only when a percent differs from the one the bar last showed.
+    /// A window can reset between two reads while the source file stays the same, so the new
+    /// percents are compared with the stored ones at `now`, not with the previous plans.
+    fn record(&mut self, plans: Plans, read_at: Instant, now: u64, cx: &mut Context<Self>) {
         self.plans = plans;
         self.last_read = Some(read_at);
-        if shown(&self.plans, now) != shown_before {
+        let now_shown = shown(&self.plans, now);
+        if now_shown != self.shown {
+            self.shown = now_shown;
             cx.notify();
         }
     }
@@ -136,6 +143,7 @@ impl Usage {
     #[cfg(test)]
     pub fn detached(plans: Plans, _cx: &mut Context<Self>) -> Self {
         Self {
+            shown: shown(&plans, unix_now()),
             plans,
             last_read: None,
             _task: Task::ready(()),
@@ -146,7 +154,7 @@ impl Usage {
 
 /// Plans with Claude and Codex at the given used percents. `None` leaves a plan without data.
 #[cfg(test)]
-pub fn fixture(claude_used: Option<f64>, codex_used: Option<f64>) -> Plans {
+pub(crate) fn fixture(claude_used: Option<f64>, codex_used: Option<f64>) -> Plans {
     let window = |plan, used: Option<f64>| {
         used.map(|used| PlanUsage {
             plan,
@@ -219,7 +227,8 @@ async fn read_into(this: &WeakEntity<Usage>, cx: &mut AsyncApp, reader: &Reader)
         .spawn(async move { reader() })
         .await;
     let read_at = cx.background_executor().now();
-    this.update(cx, |usage, cx| usage.record(plans, read_at, cx))
+    let now = unix_now();
+    this.update(cx, |usage, cx| usage.record(plans, read_at, now, cx))
         .is_ok()
 }
 
@@ -450,5 +459,59 @@ mod tests {
         advance(cx, USAGE_READ_EVERY);
         assert_eq!(notified.get(), 3);
         assert_eq!(left(cx, PlanId::Claude), None);
+    }
+
+    /// Unix seconds when the Codex window of the reset test resets. It is far after the wall clock,
+    /// so the detached start counts the window as not yet reset.
+    const RESET: u64 = 4_102_444_800;
+
+    /// Plans with one Codex window at `used` percent that resets at `resets_at`. No Claude data.
+    fn codex_window(used: f64, resets_at: u64) -> Plans {
+        vec![
+            (PlanId::Claude, None),
+            (
+                PlanId::Codex,
+                Some(PlanUsage {
+                    plan: PlanId::Codex,
+                    windows: vec![UsageWindow {
+                        kind: "five_hour".into(),
+                        used_percent: used,
+                        resets_at: Some(resets_at),
+                    }],
+                    read_at: 0,
+                }),
+            ),
+        ]
+    }
+
+    #[gpui::test]
+    fn a_reset_with_an_unchanged_file_notifies_once(cx: &mut TestAppContext) {
+        let plans = codex_window(88., RESET);
+        let usage = cx.new(|cx| Usage::detached(plans.clone(), cx));
+        let notified = Rc::new(Cell::new(0));
+        let counter = notified.clone();
+        let _subscription =
+            cx.update(|app| app.observe(&usage, move |_, _| counter.set(counter.get() + 1)));
+        let read_at = cx.executor().now();
+
+        // Before the reset the bar shows 12 %, as the detached start does: nothing to repaint.
+        usage.update(cx, |usage, cx| {
+            usage.record(plans.clone(), read_at, RESET - 1_000, cx)
+        });
+        assert_eq!(notified.get(), 0);
+
+        // The window resets after the last read, and the source file does not change.
+        usage.update(cx, |usage, cx| {
+            usage.record(plans.clone(), read_at, RESET + 1, cx)
+        });
+        assert_eq!(notified.get(), 1, "the reset changes the shown percent");
+        assert_eq!(
+            cx.read(|app| usage.read(app).left(PlanId::Codex, RESET + 1)),
+            Some(100.)
+        );
+
+        // The next read sees the same reset, so there is nothing new to show.
+        usage.update(cx, |usage, cx| usage.record(plans, read_at, RESET + 60, cx));
+        assert_eq!(notified.get(), 1);
     }
 }

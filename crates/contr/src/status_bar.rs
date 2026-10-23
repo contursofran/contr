@@ -125,9 +125,23 @@ impl PlanSegment {
             .child(
                 div()
                     .debug_selector(move || format!("usage-{id}-pct"))
-                    .text_color(rgb(TEXT_2))
+                    .text_color(rgb(pct_colour(self.left)))
                     .child(left_label(self.left)),
             )
+    }
+}
+
+/// True when the owner must act on a plan: its left percent is under `USAGE_LOW_LEFT`.
+fn is_low(left: f64) -> bool {
+    left < f64::from(USAGE_LOW_LEFT)
+}
+
+/// The colour of a plan's percent text. Under `USAGE_LOW_LEFT` it is white, like the fill, so the
+/// low state shows at 0 to 2 % fill too (D74). Otherwise it is secondary text.
+fn pct_colour(left: Option<f64>) -> u32 {
+    match left {
+        Some(left) if is_low(left) => YOU_BG,
+        _ => TEXT_2,
     }
 }
 
@@ -135,8 +149,7 @@ impl PlanSegment {
 /// because the owner acts; otherwise it is dim. Its selector is `usage-{id}-low` or
 /// `usage-{id}-fill`.
 fn fill(id: &'static str, left: f64) -> Div {
-    let low = left < f64::from(USAGE_LOW_LEFT);
-    let (selector, colour) = if low {
+    let (selector, colour) = if is_low(left) {
         (format!("usage-{id}-low"), YOU_BG)
     } else {
         (format!("usage-{id}-fill"), TEXT_DIM)
@@ -636,6 +649,19 @@ mod tests {
         set_plans(cx, fixture(Some(38.4), Some(80.)));
         assert!(cx.debug_bounds("usage-codex-low").is_none());
         assert!(cx.debug_bounds("usage-codex-fill").is_some());
+    }
+
+    #[test]
+    fn a_low_plan_shows_its_percent_in_white_and_the_others_in_secondary_grey() {
+        // At 0 to 2 % the fill is under 1 px, so the percent carries the low state.
+        assert_eq!(pct_colour(Some(0.)), YOU_BG);
+        assert_eq!(pct_colour(Some(2.)), YOU_BG);
+        assert_eq!(pct_colour(Some(19.)), YOU_BG);
+        // Exactly 20 % left is not under the limit, the same as the fill.
+        assert_eq!(pct_colour(Some(20.)), TEXT_2);
+        assert_eq!(pct_colour(Some(100.)), TEXT_2);
+        // No data: no owner action, so no white.
+        assert_eq!(pct_colour(None), TEXT_2);
     }
 
     #[gpui::test]
