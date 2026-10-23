@@ -98,7 +98,8 @@ impl BoardPanel {
     }
 
     /// Brings the work rows in line with the board. When the keys match in order, only the rows that
-    /// changed are updated, and only they redraw. Otherwise the views are rebuilt.
+    /// changed are updated, and only they redraw. The panel itself always redraws, because the
+    /// summary and the needs section can change too. Otherwise the views are rebuilt.
     fn sync_work(&mut self, cx: &mut Context<Self>) {
         let snapshot = self.board.read(cx).snapshot.clone();
         let rows: &[WorkRow] = snapshot

@@ -99,6 +99,7 @@ pub fn work_section(work: &[Entity<WorkRowView>], clear_rows: bool) -> impl Into
         section.child(
             div()
                 .id("work-rows")
+                .role(Role::List)
                 .debug_selector(|| "work-rows".into())
                 .min_h_0()
                 .overflow_y_scroll()
@@ -449,6 +450,8 @@ mod tests {
         show(cx, next);
         let after = renders(&panel, cx);
 
+        // Row 0 is not checked. Its `working` icon re-renders the row every frame, so its render
+        // count rises without a change.
         assert_eq!(after[1], before[1] + 1, "the changed row redraws once");
         assert_eq!(after[2], before[2], "the joined row does not redraw");
     }
@@ -492,7 +495,13 @@ mod tests {
         let (_panel, cx) = panel(cx, Some(with_rows(rows)), None, Some(bridge()));
         let board = bounds(cx, "board-panel").unwrap();
         let section = bounds(cx, "work-section").unwrap();
-        assert!(bounds(cx, "work-rows").is_some());
+        let list = bounds(cx, "work-rows").unwrap();
         assert!(section.size.height <= board.size.height / 2.);
+        assert_eq!(list.bottom(), section.bottom(), "the rows fill the section");
+        let last = bounds(cx, "work-row-19").unwrap();
+        assert!(
+            last.origin.y > section.bottom(),
+            "the last row is laid out below the section and clipped by the rows"
+        );
     }
 }
