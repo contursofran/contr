@@ -80,9 +80,10 @@ pub(super) struct Span {
     pub style: Style,
 }
 
-/// The box or block glyph a cell paints as quads, if any. A wide tail paints nothing.
+/// The box or block glyph a cell paints as quads, if any. A wide tail or a hidden cell paints
+/// nothing.
 fn quad_glyph(cell: &Cell) -> Option<BoxGlyph> {
-    if cell.wide_tail {
+    if cell.wide_tail || cell.attrs & HIDDEN != 0 {
         return None;
     }
     let mut chars = cell.text.chars();
@@ -90,15 +91,6 @@ fn quad_glyph(cell: &Cell) -> Option<BoxGlyph> {
         (Some(c), None) => boxdraw::segments(c),
         _ => None,
     }
-}
-
-/// The box and block glyphs of a row, with their column and colour. A hidden cell paints nothing.
-fn quad_glyphs(row: &[Cell]) -> Vec<(usize, BoxGlyph, u32)> {
-    row.iter()
-        .enumerate()
-        .filter(|(_, cell)| cell.attrs & HIDDEN == 0)
-        .filter_map(|(col, cell)| quad_glyph(cell).map(|glyph| (col, glyph, cell_colors(cell).0)))
-        .collect()
 }
 
 /// The spans of a row, in column order. Wide glyph tails, hidden cells and box glyphs make no
@@ -224,27 +216,31 @@ pub(super) fn paint_surface(
     }
 }
 
-/// Paints the box and block glyphs of the surface as quads, each in its own cell. Shades are
-/// translucent. The quads paint before the text, which has no span for these cells.
+/// Paints the box and block glyphs of the surface as quads, each in its own cell. Every edge is
+/// computed from the cell's row or column index, so neighbouring cells share it exactly. Shades
+/// are translucent. The quads paint before the text, which has no span for these cells.
 fn paint_quad_glyphs(window: &mut Window, origin: Point<Pixels>, m: Metrics, surface: &Surface) {
     let scale = window.scale_factor();
+    let (left, top) = (f32::from(origin.x), f32::from(origin.y));
     for (y, row) in surface.rows.iter().enumerate() {
-        let top = f32::from(origin.y) + y as f32 * m.cell_h;
-        for (col, glyph, colour) in quad_glyphs(row) {
-            let cell = boxdraw::Rect {
-                x: f32::from(origin.x) + col as f32 * m.cell_w,
-                y: top,
-                w: m.cell_w,
-                h: m.cell_h,
+        let (y0, y1) = (top + y as f32 * m.cell_h, top + (y + 1) as f32 * m.cell_h);
+        for (col, cell) in row.iter().enumerate() {
+            let Some(glyph) = quad_glyph(cell) else {
+                continue;
             };
+            let (x0, x1) = (
+                left + col as f32 * m.cell_w,
+                left + (col + 1) as f32 * m.cell_w,
+            );
             let paint = Hsla {
                 a: glyph.alpha(),
-                ..Hsla::from(rgb(colour))
+                ..Hsla::from(rgb(cell_colors(cell).0))
             };
-            for q in boxdraw::quads(glyph, cell, scale) {
+            let edges = boxdraw::Edges { x0, y0, x1, y1 };
+            boxdraw::quads(glyph, edges, scale, |q| {
                 let at = point(px(q.x), px(q.y));
                 window.paint_quad(fill(Bounds::new(at, size(px(q.w), px(q.h))), paint));
-            }
+            });
         }
     }
 }
@@ -568,32 +564,29 @@ mod tests {
     }
 
     #[test]
-    fn box_glyphs_are_listed_with_their_column_and_colour() {
-        let row = [cell("a", 0), coloured("─", RED)];
-        let glyphs = quad_glyphs(&row);
-        assert_eq!(glyphs.len(), 1);
-        let (col, glyph, colour) = glyphs[0];
-        assert_eq!(col, 1);
-        assert_eq!(colour, 0xE06C6C);
-        assert!(matches!(glyph, BoxGlyph::Lines(_)));
+    fn a_box_glyph_cell_is_a_line_glyph_in_its_colour() {
+        let line = coloured("─", RED);
+        assert!(matches!(quad_glyph(&line), Some(BoxGlyph::Lines(_))));
+        assert_eq!(cell_colors(&line).0, 0xE06C6C);
+        assert_eq!(quad_glyph(&cell("a", 0)), None);
     }
 
     #[test]
     fn a_hidden_box_glyph_paints_nothing_and_a_wide_tail_is_not_a_glyph() {
-        let hidden = [cell("│", HIDDEN)];
-        assert!(quad_glyphs(&hidden).is_empty());
-        assert!(spans(&hidden).is_empty());
-        let wide_tail = [Cell {
+        let hidden = cell("│", HIDDEN);
+        assert_eq!(quad_glyph(&hidden), None);
+        assert!(spans(&[hidden]).is_empty());
+        let wide_tail = Cell {
             wide_tail: true,
             ..cell("│", 0)
-        }];
-        assert!(quad_glyphs(&wide_tail).is_empty());
+        };
+        assert_eq!(quad_glyph(&wide_tail), None);
     }
 
     #[test]
     fn a_text_of_more_than_one_char_is_not_a_box_glyph() {
-        let row = [cell("│a", 0)];
-        assert!(quad_glyphs(&row).is_empty());
-        assert_eq!(texts(&row), vec![(0, "│a".to_owned())]);
+        let row = cell("│a", 0);
+        assert_eq!(quad_glyph(&row), None);
+        assert_eq!(texts(&[row]), vec![(0, "│a".to_owned())]);
     }
 }
