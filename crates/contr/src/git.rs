@@ -55,7 +55,9 @@ pub struct Scan {
 
 /// The checkout that holds `path`: the nearest ancestor (or `path` itself) with
 /// a `.git` entry. `None` when `path` does not exist, lies outside git, or
-/// reaches a bare repository.
+/// reaches a bare repository. A `.git` file without `commondir` whose git dir
+/// is not `<main>/.git` (a submodule or a separate git dir) also gives `None`,
+/// so such panes are not in Spaces.
 pub fn discover(path: &Path) -> Option<Checkout> {
     let start = fs::canonicalize(path).ok()?;
     for root in start.ancestors() {

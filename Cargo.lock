@@ -933,6 +933,7 @@ dependencies = [
 name = "contr"
 version = "0.1.0"
 dependencies = [
+ "contr-herdr",
  "gpui-pre",
  "gpui-pre-platform",
  "tempfile",
