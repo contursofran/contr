@@ -300,10 +300,11 @@ impl Inbox {
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
+    use std::cell::RefCell;
     use std::collections::VecDeque;
     use std::io::Write;
     use std::os::unix::net::UnixListener;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Once;
     use std::thread;
 
     use tracing_subscriber::fmt::MakeWriter;
@@ -398,13 +399,22 @@ mod tests {
         }
     }
 
-    /// Log lines written while `f` runs, from the thread that runs `f`.
-    #[derive(Clone, Default)]
-    struct Logs(Arc<Mutex<Vec<u8>>>);
+    thread_local! {
+        /// The log buffer of a `capture` that runs on this thread.
+        static CAPTURED: RefCell<Option<Vec<u8>>> = const { RefCell::new(None) };
+    }
 
-    impl Write for Logs {
+    /// Writes a log line to the buffer of the thread that logs it. Without a
+    /// `capture` on that thread, the line is dropped.
+    struct ThreadLogs;
+
+    impl Write for ThreadLogs {
         fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            self.0.lock().unwrap().extend_from_slice(buf);
+            CAPTURED.with_borrow_mut(|logs| {
+                if let Some(logs) = logs {
+                    logs.extend_from_slice(buf);
+                }
+            });
             Ok(buf.len())
         }
 
@@ -413,24 +423,53 @@ mod tests {
         }
     }
 
-    impl<'a> MakeWriter<'a> for Logs {
-        type Writer = Logs;
+    impl<'a> MakeWriter<'a> for ThreadLogs {
+        type Writer = ThreadLogs;
 
-        fn make_writer(&'a self) -> Logs {
-            self.clone()
+        fn make_writer(&'a self) -> ThreadLogs {
+            ThreadLogs
         }
     }
 
+    /// Empties the `capture` buffer of this thread when it goes out of scope.
+    /// This also runs when the captured closure panics.
+    struct ClearCapture;
+
+    impl Drop for ClearCapture {
+        fn drop(&mut self) {
+            CAPTURED.set(None);
+        }
+    }
+
+    /// Log lines written while `f` runs, from the thread that runs `f`.
+    ///
+    /// One global subscriber, set once, collects the lines. A scoped subscriber
+    /// (`with_default`) is not safe here: when it is the only one, tracing gets
+    /// the interest of a new callsite from the default of the thread that
+    /// reaches it first. A parallel test without a capture can reach it first
+    /// and turn that log line off for all threads.
+    ///
+    /// `set_global_default` rebuilds the interest of the callsites that exist
+    /// when it runs, and it marks the global as set only at its end. A callsite
+    /// that another thread reaches in between gets "never" and keeps it. The
+    /// rebuild after `set_global_default` gives that callsite the interest of
+    /// the global subscriber.
     fn capture<T>(f: impl FnOnce() -> T) -> (T, String) {
-        let logs = Logs::default();
-        let subscriber = tracing_subscriber::fmt()
-            .with_ansi(false)
-            .without_time()
-            .with_writer(logs.clone())
-            .finish();
-        let out = tracing::subscriber::with_default(subscriber, f);
-        let text = String::from_utf8(logs.0.lock().unwrap().clone()).unwrap();
-        (out, text)
+        static GLOBAL: Once = Once::new();
+        GLOBAL.call_once(|| {
+            let subscriber = tracing_subscriber::fmt()
+                .with_ansi(false)
+                .without_time()
+                .with_writer(ThreadLogs)
+                .finish();
+            tracing::subscriber::set_global_default(subscriber).unwrap();
+            tracing::callsite::rebuild_interest_cache();
+        });
+        CAPTURED.set(Some(Vec::new()));
+        let _clear = ClearCapture;
+        let out = f();
+        let logs = CAPTURED.take().unwrap_or_default();
+        (out, String::from_utf8(logs).unwrap())
     }
 
     #[test]
@@ -450,6 +489,39 @@ mod tests {
         );
         assert!(!logs.contains("not tested"), "{logs}");
         server.join().unwrap();
+    }
+
+    #[test]
+    fn capture_sees_logs_after_another_thread_logged_first() {
+        let serve = |mut stream: UnixStream| {
+            read_hello(&mut stream);
+            put(&mut stream, &welcome("0.9.3"));
+        };
+        let (_dir, path, server) = fake_herdr(serve);
+        let (_other_dir, other_path, other_server) = fake_herdr(serve);
+        let (opened, logs) = capture(|| {
+            // This thread has no capture. If it is the first to reach the log
+            // lines in `open`, it must not turn them off for other threads.
+            thread::spawn(move || Conn::open(&other_path, SIZE, CELL, WAIT).unwrap())
+                .join()
+                .unwrap();
+            Conn::open(&path, SIZE, CELL, WAIT)
+        });
+        opened.unwrap();
+        assert_eq!(
+            logs.matches("herdr endpoint connected").count(),
+            1,
+            "{logs}"
+        );
+        server.join().unwrap();
+        other_server.join().unwrap();
+    }
+
+    #[test]
+    fn capture_clears_its_buffer_when_the_closure_panics() {
+        let panicked = std::panic::catch_unwind(|| capture(|| -> u8 { panic!("boom") }));
+        assert!(panicked.is_err());
+        assert!(CAPTURED.with_borrow(Option::is_none));
     }
 
     #[test]
