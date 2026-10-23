@@ -171,6 +171,19 @@ expect_failure "needs a path" --bin
 expect_failure "needs a dir, not a flag" --out --zip
 expect_failure "needs a path, not a flag" --bin --zip
 
+# --out must not reach a protected dir: the rm -rf removes <out>/contr.app. The physical path is
+# checked, so a symlink to one is refused too. Each run fails before anything is removed.
+ln -s /Applications "$tmp/apps-link"
+ln -s "$HOME" "$tmp/home-link"
+expect_failure "needs a dir, not an empty value" --bin "$tmp/contr" --out ""
+expect_failure "a protected dir" --bin "$tmp/contr" --out /
+expect_failure "a protected dir" --bin "$tmp/contr" --out /Applications
+expect_failure "a protected dir" --bin "$tmp/contr" --out /applications
+expect_failure "a protected dir" --bin "$tmp/contr" --out "$HOME"
+expect_failure "a protected dir" --bin "$tmp/contr" --out "$HOME/"
+expect_failure "a protected dir" --bin "$tmp/contr" --out "$tmp/apps-link"
+expect_failure "a protected dir" --bin "$tmp/contr" --out "$tmp/home-link"
+
 # A command that is not guarded and fails (here a cp that exits 2) must end bundle.sh with
 # exit 1, print the ERR trap message, and leave no staging dir.
 mkdir -p "$tmp/fakebin"

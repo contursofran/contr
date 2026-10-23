@@ -1,13 +1,15 @@
 name: Bundle
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
   pull_request:
     paths:
       - 'scripts/**'
       - 'crates/contr/assets/app/**'
+      - 'crates/**/Cargo.toml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
       - '.github/workflows/bundle.yml'
 
 permissions: {}
@@ -39,6 +41,8 @@ jobs:
           key: ${{ runner.os }}-release-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-release-
+      # On pull_request runs, ContrCommit in Info.plist is the short hash of the test-merge
+      # commit, not the PR head.
       - name: Build and bundle
         run: scripts/bundle.sh --zip
       - name: Upload bundle
