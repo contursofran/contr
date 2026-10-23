@@ -47,6 +47,7 @@ pub enum ConnError {
     /// herdr refused contr, or sent something contr cannot read. Retrying the same way will fail the same way.
     Incompatible(String),
     /// A read or write failed. A read that ends with `UnexpectedEof` means herdr closed the socket.
+    /// A frame header longer than `MAX_FRAME` is also `Io`, with kind `InvalidData`, not `Codec`.
     Io(io::Error),
     /// A frame did not decode after the handshake. The connection must be dropped.
     Codec(CodecError),
@@ -89,39 +90,44 @@ pub struct Conn {
 
 impl Conn {
     /// Connects, sends the hello and reads the welcome. `timeout` bounds the
-    /// whole handshake. No surface is requested yet. The read timeout is left
-    /// at the last value the handshake set (at most `timeout`), so call
-    /// [`Conn::set_read_timeout`] before `recv`. The handshake makes no socket
-    /// call after the welcome: on macOS, setting a timeout on a socket whose
-    /// peer already closed fails with `EINVAL`.
+    /// whole handshake. No surface is requested yet. Both socket timeouts are
+    /// set to `timeout` before the hello is sent, and the handshake makes no
+    /// socket timeout call after that. The read timeout is therefore `timeout`
+    /// after `open`. Call [`Conn::set_read_timeout`] before `recv` to change it.
+    /// On macOS a timeout set on a socket whose peer already closed fails with
+    /// `EINVAL`, so `open` never sets one after the hello.
     pub fn open(
         path: &Path,
         size: GridSize,
         cell: CellPx,
         timeout: Duration,
     ) -> Result<Conn, ConnError> {
+        let deadline = Instant::now() + timeout;
         let mut stream = UnixStream::connect(path).map_err(|e| match e.kind() {
             io::ErrorKind::NotFound | io::ErrorKind::ConnectionRefused => {
                 ConnError::NotRunning(format!("herdr is not running: {e}"))
             }
             _ => ConnError::Io(e),
         })?;
+        // Both timeouts are set before the hello. The peer cannot have closed yet:
+        // herdr answers the hello first. The write timeout stays set for the life
+        // of the socket. Clones from `try_clone_writer` share it.
         stream
             .set_write_timeout(Some(timeout))
+            .map_err(ConnError::Io)?;
+        stream
+            .set_read_timeout(Some(timeout))
             .map_err(ConnError::Io)?;
         write_frame(&mut stream, &ClientMsg::Hello { size, cell }.encode())
             .map_err(ConnError::Io)?;
 
         let mut inbox = Inbox::default();
-        let deadline = Instant::now() + timeout;
         let first = loop {
-            let left = deadline.saturating_duration_since(Instant::now());
-            if left.is_zero() {
+            if Instant::now() >= deadline {
                 return Err(ConnError::NotRunning(format!(
                     "herdr sent no welcome within {timeout:?}"
                 )));
             }
-            stream.set_read_timeout(Some(left)).map_err(ConnError::Io)?;
             match read_payload(&mut stream, &mut inbox) {
                 Ok(Some(payload)) => break payload,
                 // A read timeout: the deadline check at the top ends the wait.
@@ -183,7 +189,8 @@ impl Conn {
 
     /// The next server message. `Ok(None)` when the read timeout passed before a
     /// whole frame arrived. The bytes read so far are kept, and the next call
-    /// finishes that frame. A frame that does not decode is `Err(Codec)`.
+    /// finishes that frame. A frame that does not decode is `Err(Codec)`. A
+    /// frame header above `MAX_FRAME` is `Err(Io)` with kind `InvalidData`.
     pub fn recv(&mut self) -> Result<Option<ServerMsg>, ConnError> {
         match read_payload(&mut self.stream, &mut self.inbox)? {
             Some(payload) => Ok(Some(decode_server(&payload)?)),
@@ -191,11 +198,14 @@ impl Conn {
         }
     }
 
+    /// Sets the read timeout that `recv` waits for. Call it before `recv`:
+    /// `open` leaves the handshake's value in place.
     pub fn set_read_timeout(&self, t: Option<Duration>) -> io::Result<()> {
         self.stream.set_read_timeout(t)
     }
 
-    /// A second handle to the socket, for writes from another thread.
+    /// A second handle to the same socket, for writes from another thread. It
+    /// shares the write timeout that `open` set, and the read timeout.
     pub fn try_clone_writer(&self) -> io::Result<UnixStream> {
         self.stream.try_clone()
     }
@@ -291,14 +301,14 @@ mod tests {
     use std::io::Write;
     use std::os::unix::net::UnixListener;
     use std::sync::{Arc, Mutex};
-    use std::thread::{self, JoinHandle};
+    use std::thread;
 
     use tracing_subscriber::fmt::MakeWriter;
 
-    use super::super::codec::{Dec, Enc, read_frame};
-    use super::super::messages::{
-        BLOB_CODEC, C_CONTROL, HELLO_KIND, INPUT_CODEC, S_CONTROL, S_WELCOME_LEGACY,
-        SNAPSHOT_CODEC, SNAPSHOT_KIND, SURFACE_CODEC,
+    use super::super::codec::read_frame;
+    use super::super::messages::{SNAPSHOT_KIND, SURFACE_CODEC};
+    use super::super::testing::{
+        control, fake_herdr, legacy_welcome, put, read_hello, welcome, welcome_json,
     };
     use super::*;
 
@@ -376,72 +386,6 @@ mod tests {
     #[test]
     fn endpoint_path_is_none_without_any_setting() {
         assert_eq!(endpoint_path_from(env_of(&[])), None);
-    }
-
-    /// A fake endpoint in a short temp dir (the socket path must stay under
-    /// 104 bytes). The thread runs `script` on the first client that connects.
-    fn fake_herdr<T: Send + 'static>(
-        script: impl FnOnce(UnixStream) -> T + Send + 'static,
-    ) -> (tempfile::TempDir, PathBuf, JoinHandle<T>) {
-        let dir = tempfile::Builder::new()
-            .prefix("ce")
-            .tempdir_in("/tmp")
-            .unwrap();
-        let path = dir.path().join("herdr-client.sock");
-        let listener = UnixListener::bind(&path).unwrap();
-        let handle = thread::spawn(move || {
-            let (stream, _) = listener.accept().unwrap();
-            script(stream)
-        });
-        (dir, path, handle)
-    }
-
-    /// Reads the client's hello and checks its kind.
-    fn read_hello(stream: &mut UnixStream) {
-        let payload = read_frame(stream).unwrap().unwrap();
-        let mut d = Dec::new(&payload);
-        assert_eq!(d.vu().unwrap(), u64::from(C_CONTROL));
-        assert_eq!(d.str().unwrap(), HELLO_KIND);
-    }
-
-    fn put(stream: &mut UnixStream, payload: &[u8]) {
-        write_frame(stream, payload).unwrap();
-    }
-
-    /// A server `EndpointControl` payload.
-    fn control(kind: &str, data: &str) -> Vec<u8> {
-        let mut e = Enc::default();
-        e.vu(u64::from(S_CONTROL));
-        e.str(kind);
-        e.str(data);
-        e.buf
-    }
-
-    fn welcome_json(generation: u32, version: &str, extra: &str) -> String {
-        format!(
-            r#"{{"generation":{generation},"server_version":"{version}","snapshot_codec":"{SNAPSHOT_CODEC}","surface_codec":"{SURFACE_CODEC}","input_codec":"{INPUT_CODEC}","blob_codec":"{BLOB_CODEC}"{extra}}}"#
-        )
-    }
-
-    /// The v1 welcome as herdr sends it after a good hello.
-    fn welcome(version: &str) -> Vec<u8> {
-        control(WELCOME_KIND, &welcome_json(1, version, ""))
-    }
-
-    /// herdr's pre-generation-1 answer: a legacy `Welcome` (tag 0).
-    fn legacy_welcome(error: Option<&str>) -> Vec<u8> {
-        let mut e = Enc::default();
-        e.vu(u64::from(S_WELCOME_LEGACY));
-        e.vu(1); // version
-        e.vu(0); // render encoding
-        match error {
-            Some(text) => {
-                e.some();
-                e.str(text);
-            }
-            None => e.none(),
-        }
-        e.buf
     }
 
     fn expect_err(opened: Result<Conn, ConnError>) -> ConnError {
@@ -743,6 +687,31 @@ mod tests {
     }
 
     #[test]
+    fn a_cloned_writer_shares_the_handshake_write_timeout() {
+        let (_dir, path, server) = fake_herdr(|mut stream| {
+            read_hello(&mut stream);
+            put(&mut stream, &welcome("0.9.3"));
+            thread::sleep(Duration::from_millis(100));
+        });
+        let conn = Conn::open(&path, SIZE, CELL, WAIT).unwrap();
+        let writer = conn.try_clone_writer().unwrap();
+        assert_eq!(writer.write_timeout().unwrap(), Some(WAIT));
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn open_leaves_the_handshake_timeout_as_the_read_timeout() {
+        let (_dir, path, server) = fake_herdr(|mut stream| {
+            read_hello(&mut stream);
+            put(&mut stream, &welcome("0.9.3"));
+            thread::sleep(Duration::from_millis(100));
+        });
+        let conn = Conn::open(&path, SIZE, CELL, WAIT).unwrap();
+        assert_eq!(conn.stream.read_timeout().unwrap(), Some(WAIT));
+        server.join().unwrap();
+    }
+
+    #[test]
     fn errors_name_their_cause() {
         assert_eq!(
             ConnError::NotRunning("herdr is not running".to_owned()).to_string(),
@@ -819,6 +788,23 @@ mod tests {
             conn.recv(),
             Err(ConnError::Codec(CodecError::BadVarint(0xFF)))
         ));
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn recv_reports_an_oversized_frame_header_as_invalid_data_not_codec() {
+        let too_long = u32::try_from(MAX_FRAME + 1).unwrap();
+        let (_dir, path, server) = fake_herdr(move |mut stream| {
+            read_hello(&mut stream);
+            put(&mut stream, &welcome("0.9.3"));
+            stream.write_all(&too_long.to_le_bytes()).unwrap();
+            thread::sleep(Duration::from_millis(100));
+        });
+        let mut conn = Conn::open(&path, SIZE, CELL, WAIT).unwrap();
+        match conn.recv() {
+            Err(ConnError::Io(e)) => assert_eq!(e.kind(), io::ErrorKind::InvalidData),
+            other => panic!("{other:?}"),
+        }
         server.join().unwrap();
     }
 
