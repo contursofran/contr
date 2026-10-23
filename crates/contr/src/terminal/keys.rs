@@ -40,6 +40,17 @@ pub fn key_event(k: &Keystroke) -> Option<InputEvent> {
     if m.alt || !m.control {
         return None;
     }
+    // On a US layout Ctrl-^ and Ctrl-_ are typed as Ctrl-Shift-6 and Ctrl-Shift-minus. The key is
+    // then the unshifted `6` or `-`. The shift is in the character, so the key carries Ctrl only.
+    if m.shift
+        && let Some(punct) = shifted_control_char(c)
+    {
+        return Some(InputEvent::Key {
+            code: KeyCode::Char(punct),
+            mods: mods::CONTROL,
+            repeat: false,
+        });
+    }
     let control_code =
         c.is_ascii_alphabetic() || matches!(c, '[' | '\\' | ']' | '^' | '_' | '@' | ' ');
     control_code.then(|| InputEvent::Key {
@@ -76,6 +87,16 @@ fn named(key: &str, shift: bool) -> Option<KeyCode> {
 fn function_key(key: &str) -> Option<KeyCode> {
     let n: u8 = key.strip_prefix('f')?.parse().ok()?;
     (1..=20).contains(&n).then_some(KeyCode::F(n))
+}
+
+/// The character that Ctrl and Shift type with the unshifted key `c`: `6` gives `^` (Ctrl-^) and `-`
+/// gives `_` (Ctrl-_). Other keys give `None`.
+fn shifted_control_char(c: char) -> Option<char> {
+    match c {
+        '6' => Some('^'),
+        '-' => Some('_'),
+        _ => None,
+    }
 }
 
 /// The only character of `key`, or `None` when the name has more than one.
@@ -119,6 +140,30 @@ mod tests {
         assert_eq!(key("ctrl-["), press(KeyCode::Char('['), mods::CONTROL));
         assert_eq!(key("ctrl-@"), press(KeyCode::Char('@'), mods::CONTROL));
         assert_eq!(key("ctrl-1"), None);
+    }
+
+    #[test]
+    fn ctrl_shift_six_and_minus_send_ctrl_caret_and_underscore() {
+        // On a US layout the key is the unshifted `6` or `-`, with Shift held.
+        assert_eq!(
+            key("ctrl-shift-6"),
+            press(KeyCode::Char('^'), mods::CONTROL)
+        );
+        assert_eq!(
+            key("ctrl-shift--"),
+            press(KeyCode::Char('_'), mods::CONTROL)
+        );
+        // They send what Ctrl-^ and Ctrl-_ send, named by the character.
+        assert_eq!(key("ctrl-^"), press(KeyCode::Char('^'), mods::CONTROL));
+        assert_eq!(key("ctrl-_"), press(KeyCode::Char('_'), mods::CONTROL));
+        assert_eq!(key("ctrl-shift-6"), key("ctrl-^"));
+        assert_eq!(key("ctrl-shift--"), key("ctrl-_"));
+    }
+
+    #[test]
+    fn ctrl_six_and_minus_without_shift_are_not_keys() {
+        assert_eq!(key("ctrl-6"), None);
+        assert_eq!(key("ctrl--"), None);
     }
 
     #[test]
