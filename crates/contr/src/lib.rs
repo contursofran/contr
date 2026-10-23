@@ -17,4 +17,5 @@ pub mod tab_commands;
 pub mod terminal;
 pub mod theme;
 pub mod title_bar;
+pub mod usage;
 pub mod visibility;

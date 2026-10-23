@@ -87,11 +87,13 @@ struct RateLimits {
     secondary: Option<RawWindow>,
 }
 
+/// The reset fields are read as numbers, so a float such as `1777927196.0` parses. See
+/// [`whole_seconds`].
 #[derive(Deserialize)]
 struct RawWindow {
     used_percent: Option<f64>,
-    resets_at: Option<u64>,
-    resets_in_seconds: Option<u64>,
+    resets_at: Option<f64>,
+    resets_in_seconds: Option<f64>,
 }
 
 /// The windows of one rollout line, or `None` when the line is not usable.
@@ -117,15 +119,22 @@ fn windows_of_line(line: &str, file_mtime: u64) -> Option<Vec<UsageWindow>> {
 
 /// One window, or `None` when it has no percent.
 fn usage_window(kind: &str, raw: RawWindow, file_mtime: u64) -> Option<UsageWindow> {
-    let resets_at = raw.resets_at.or_else(|| {
-        raw.resets_in_seconds
-            .map(|seconds| file_mtime.saturating_add(seconds))
+    let resets_at = whole_seconds(raw.resets_at).or_else(|| {
+        whole_seconds(raw.resets_in_seconds).map(|seconds| file_mtime.saturating_add(seconds))
     });
     Some(UsageWindow {
         kind: kind.to_string(),
         used_percent: raw.used_percent?,
         resets_at,
     })
+}
+
+/// Whole seconds from a JSON number: the fraction is dropped. A negative or
+/// non-finite number is no time, so the window keeps no reset time.
+fn whole_seconds(value: Option<f64>) -> Option<u64> {
+    value
+        .filter(|seconds| seconds.is_finite() && *seconds >= 0.0)
+        .map(|seconds| seconds as u64)
 }
 
 /// A rollout file and the Unix seconds it was last written.
@@ -222,22 +231,33 @@ fn unix_seconds(time: SystemTime) -> Option<u64> {
         .map(|since| since.as_secs())
 }
 
-/// The last `TAIL_BYTES` of the file as text. When the read starts inside the
-/// file, the partial first line is dropped.
+/// The last `TAIL_BYTES` of the file as text. When the tail starts inside a
+/// line, that partial first line is dropped. When it starts at a line start,
+/// the first line is kept. The read begins one byte early to tell the two apart.
 fn read_tail(path: &Path) -> io::Result<String> {
     let mut file = File::open(path)?;
     let len = file.metadata()?.len();
     let start = len.saturating_sub(TAIL_BYTES);
-    file.seek(SeekFrom::Start(start))?;
-    let mut bytes = Vec::new();
-    file.by_ref().take(TAIL_BYTES).read_to_end(&mut bytes)?;
-    let text = String::from_utf8_lossy(&bytes);
     if start == 0 {
-        return Ok(text.into_owned());
+        let mut bytes = Vec::new();
+        file.take(TAIL_BYTES).read_to_end(&mut bytes)?;
+        return Ok(String::from_utf8_lossy(&bytes).into_owned());
     }
-    Ok(text
-        .find('\n')
-        .map_or_else(String::new, |at| text[at + 1..].to_string()))
+    file.seek(SeekFrom::Start(start - 1))?;
+    let mut bytes = Vec::new();
+    file.take(TAIL_BYTES + 1).read_to_end(&mut bytes)?;
+    let Some((&before, rest)) = bytes.split_first() else {
+        return Ok(String::new());
+    };
+    let whole: &[u8] = if before == b'\n' {
+        rest
+    } else {
+        match rest.iter().position(|&byte| byte == b'\n') {
+            Some(at) => rest.get(at + 1..).unwrap_or_default(),
+            None => &[],
+        }
+    };
+    Ok(String::from_utf8_lossy(whole).into_owned())
 }
 
 #[cfg(test)]
@@ -413,6 +433,30 @@ mod tests {
         );
         let windows = parse_rollout_tail(&both, MTIME).expect("windows");
         assert_eq!(windows[0].resets_at, Some(5));
+    }
+
+    #[test]
+    fn a_float_resets_at_is_read_as_whole_seconds() {
+        let float = token_line(
+            r#"{"primary":{"used_percent":4.0,"resets_at":1777927196.0,"resets_in_seconds":60}}"#,
+        );
+        let windows = parse_rollout_tail(&float, MTIME).expect("windows");
+        assert_eq!(windows[0].resets_at, Some(1_777_927_196));
+    }
+
+    #[test]
+    fn a_float_resets_in_seconds_is_read_and_its_fraction_dropped() {
+        let float = token_line(r#"{"primary":{"used_percent":4.0,"resets_in_seconds":3600.9}}"#);
+        let windows = parse_rollout_tail(&float, MTIME).expect("windows");
+        assert_eq!(windows[0].resets_at, Some(MTIME + 3600));
+    }
+
+    #[test]
+    fn a_negative_resets_at_keeps_the_window_without_a_reset_time() {
+        let negative = token_line(r#"{"primary":{"used_percent":4.0,"resets_at":-5}}"#);
+        let windows = parse_rollout_tail(&negative, MTIME).expect("windows");
+        assert_eq!(windows[0].used_percent, 4.0);
+        assert_eq!(windows[0].resets_at, None);
     }
 
     #[test]
@@ -656,5 +700,37 @@ mod tests {
     fn a_missing_rollout_is_an_error_for_the_tail_reader() {
         let dir = tempfile::tempdir().expect("tempdir");
         assert!(read_tail(&dir.path().join("rollout-gone.jsonl")).is_err());
+    }
+
+    #[test]
+    fn a_tail_that_starts_on_a_line_start_keeps_its_first_line() {
+        // A junk line, then one `token_count` line padded to exactly TAIL_BYTES
+        // with its newline. The tail starts on that line, so the line is whole.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let line = primary_only(33.0);
+        let padded = format!("{line}{}", " ".repeat(TAIL_BYTES as usize - 1 - line.len()));
+        let path = dir.path().join("rollout-aligned.jsonl");
+        fs::write(&path, format!("junk\n{padded}\n")).expect("rollout");
+        let tail = read_tail(&path).expect("tail");
+        let windows = parse_rollout_tail(&tail, MTIME).expect("windows");
+        assert_eq!(windows[0].used_percent, 33.0);
+    }
+
+    #[test]
+    fn a_tail_that_starts_inside_a_line_drops_that_partial_line() {
+        // A long run of `p` fills the file's first TAIL_BYTES, so the tail starts
+        // inside it. Only the run's partial line goes; the complete line after it stays.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("rollout-inside.jsonl");
+        let body = format!(
+            "{}\n{}\n",
+            "p".repeat(TAIL_BYTES as usize),
+            primary_only(44.0)
+        );
+        fs::write(&path, body).expect("rollout");
+        let tail = read_tail(&path).expect("tail");
+        let windows = parse_rollout_tail(&tail, MTIME).expect("windows");
+        assert_eq!(windows[0].used_percent, 44.0);
+        assert!(!tail.starts_with('p'));
     }
 }
