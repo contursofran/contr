@@ -66,7 +66,7 @@ pub const AGENTS_HEADER_HEIGHT: f32 = 28.; // "Agents" and "N running"
 pub const AGENT_ROW_HEIGHT: f32 = 28.; // D42: one line per agent
 pub const AGENT_ROW_PAD_X: f32 = 8.;
 pub const AGENT_GAP: f32 = 8.; // icon to name, name to detail, detail to link
-pub const AGENTS_MAX_HEIGHT: f32 = 0.45; // share of the sidebar height (D46)
+pub const AGENTS_MAX_SHARE: f32 = 0.45; // share of the sidebar height (D46)
 
 // Status bar (planner defaults; docs/DESIGN.md has no sizes for these)
 pub const STATUS_PAD_X: f32 = 12.; // left and right padding
