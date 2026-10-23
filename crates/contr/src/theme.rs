@@ -7,6 +7,7 @@ pub const FONT_SIZE: f32 = 12.;
 pub const LINE_HEIGHT: f32 = 18.;
 pub const TERMINAL_FONT_SIZE: f32 = 13.;
 pub const TERMINAL_LINE_HEIGHT: f32 = 20.;
+pub const TERM_PADDING: f32 = 8.; // space between the terminal view's edge and its grid
 
 // Backgrounds
 pub const BG_WINDOW: u32 = 0x141414; // window, panel
