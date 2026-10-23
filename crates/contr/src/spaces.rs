@@ -235,10 +235,8 @@ impl Spaces {
         if listed {
             return;
         }
-        self.selection.update(cx, |selection, cx| {
-            selection.current = None;
-            cx.notify();
-        });
+        self.selection
+            .update(cx, |selection, cx| selection.clear(cx));
     }
 }
 
