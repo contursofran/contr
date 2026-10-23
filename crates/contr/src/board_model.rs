@@ -482,6 +482,12 @@ mod tests {
     }
 
     #[test]
+    fn a_truncated_board_is_a_json_error() {
+        let cut = &FIXTURE.as_bytes()[..FIXTURE.len() / 2];
+        assert!(matches!(parse_board(cut), Err(BoardError::Json(_))));
+    }
+
+    #[test]
     fn non_json_is_a_json_error() {
         let err = parse_board(b"not json").unwrap_err();
         assert!(matches!(err, BoardError::Json(_)));

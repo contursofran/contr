@@ -95,8 +95,19 @@ impl Herdr {
     #[cfg(test)]
     pub fn detached(live: LiveHerdr, cx: &mut Context<Self>) -> Self {
         let visibility = cx.new(|_| Visibility { visible: true });
+        Self::detached_on(live, &visibility, cx)
+    }
+
+    /// `detached`, but gated by the caller's `visibility`, so a test can hide the window. The caller
+    /// keeps `visibility` alive.
+    #[cfg(test)]
+    pub fn detached_on(
+        live: LiveHerdr,
+        visibility: &Entity<Visibility>,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let (_tx, rx) = async_channel::bounded(1);
-        Self::new(live, None, rx, &visibility, cx)
+        Self::new(live, None, rx, visibility, cx)
     }
 }
 
