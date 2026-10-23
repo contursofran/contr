@@ -1,8 +1,8 @@
 //! contr: a native herdr client. Opens the empty v0.1 frame, or the status icon legend with `--icons`.
 
 use contr::{
-    board::Board, board_outbox::BoardOutbox, frame, herdr::Herdr, host::Host, legend,
-    selection::Selection, status_message::StatusMessage, theme, usage::Usage,
+    board::Board, board_outbox::BoardOutbox, board_panel::BoardPanel, frame, herdr::Herdr,
+    host::Host, legend, selection::Selection, status_message::StatusMessage, theme, usage::Usage,
     visibility::Visibility,
 };
 use gpui::{
@@ -68,6 +68,7 @@ fn main() -> std::process::ExitCode {
             Herdr::init(cx);
             Board::init(cx);
             BoardOutbox::init(cx);
+            BoardPanel::bind_keys(cx);
             StatusMessage::init(cx);
             Usage::init(cx);
             cx.open_window(options, |window, cx| {
