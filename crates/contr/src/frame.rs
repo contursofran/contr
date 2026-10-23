@@ -1,5 +1,6 @@
 //! The empty three-column frame: sidebar, title bar, terminal, board panel, status bar.
 
+use crate::herdr::{GlobalHerdr, Herdr};
 use crate::spaces::{Spaces, SpacesEvent, toggle_box};
 use crate::theme::*;
 use gpui::{
@@ -9,25 +10,32 @@ use gpui::{
 
 pub struct Frame {
     spaces: Entity<Spaces>,
+    herdr: Entity<Herdr>,
     sidebar_open: bool,
     panel_open: bool,
     _toggle: Subscription,
+    _herdr: Subscription,
 }
 
 impl Frame {
+    /// Needs `Herdr::init` first: the terminal area shows the connection's line.
     pub fn new(cx: &mut Context<Self>) -> Self {
         let spaces = cx.new(Spaces::new);
+        let herdr = cx.global::<GlobalHerdr>().0.clone();
         let toggle = cx.subscribe(&spaces, |this, _, event: &SpacesEvent, cx| {
             match event {
                 SpacesEvent::ToggleSidebar => this.sidebar_open = !this.sidebar_open,
             }
             cx.notify();
         });
+        let herdr_sub = cx.observe(&herdr, |_, _, cx| cx.notify());
         Self {
             spaces,
+            herdr,
             sidebar_open: true,
             panel_open: true,
             _toggle: toggle,
+            _herdr: herdr_sub,
         }
     }
 }
@@ -91,7 +99,14 @@ impl Render for Frame {
                                             .debug_selector(|| "terminal".into())
                                             .flex_1()
                                             .min_w_0()
-                                            .bg(rgb(BG_TERMINAL)),
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .bg(rgb(BG_TERMINAL))
+                                            .when_some(
+                                                self.herdr.read(cx).live.state.line(),
+                                                |terminal, line| terminal.child(herdr_state(line)),
+                                            ),
                                     )
                                     .when(self.panel_open, |row| {
                                         row.child(
@@ -119,6 +134,14 @@ impl Render for Frame {
     }
 }
 
+/// The connection line shown in the terminal area while herdr is not connected (secondary grey).
+fn herdr_state(line: String) -> impl IntoElement {
+    div()
+        .debug_selector(|| "herdr-state".into())
+        .text_color(rgb(TEXT_2))
+        .child(line)
+}
+
 /// The title bar's first child while the sidebar is closed: the window-button inset, then the
 /// toggle drawing at its right edge. Clicking anywhere on it opens the sidebar again.
 fn reopen_sidebar(cx: &mut Context<Frame>) -> impl IntoElement {
@@ -143,11 +166,40 @@ fn reopen_sidebar(cx: &mut Context<Frame>) -> impl IntoElement {
 mod tests {
     use super::*;
     use crate::selection::Selection;
-    use gpui::{Modifiers, TestAppContext, px, size};
+    use contr_herdr::{ConnState, HerdrUpdate, LiveHerdr};
+    use gpui::{AppContext, Entity, Modifiers, TestAppContext, px, size};
+
+    fn connected() -> LiveHerdr {
+        LiveHerdr {
+            state: ConnState::Connected {
+                server_version: "0.9.3".into(),
+            },
+            tree: None,
+        }
+    }
+
+    fn not_running() -> LiveHerdr {
+        LiveHerdr {
+            state: ConnState::NotRunning {
+                reason: "no socket".into(),
+            },
+            tree: None,
+        }
+    }
+
+    /// Registers a connection in `live` as `Herdr::init` would, without a reader.
+    fn herdr_in(cx: &mut TestAppContext, live: LiveHerdr) -> Entity<Herdr> {
+        cx.update(|app| {
+            let herdr = app.new(|cx| Herdr::detached(live, cx));
+            app.set_global(GlobalHerdr(herdr.clone()));
+            herdr
+        })
+    }
 
     #[gpui::test]
     fn frame_matches_design_sizes(cx: &mut TestAppContext) {
         cx.update(Selection::init);
+        herdr_in(cx, connected());
         let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
         cx.simulate_resize(size(px(1440.), px(900.)));
         cx.run_until_parked();
@@ -172,6 +224,7 @@ mod tests {
     #[gpui::test]
     fn toggle_sits_right_of_the_window_buttons(cx: &mut TestAppContext) {
         cx.update(Selection::init);
+        herdr_in(cx, connected());
         let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
         cx.simulate_resize(size(px(1440.), px(900.)));
         cx.run_until_parked();
@@ -183,6 +236,7 @@ mod tests {
     #[gpui::test]
     fn toggle_hides_and_reopens_the_sidebar(cx: &mut TestAppContext) {
         cx.update(Selection::init);
+        herdr_in(cx, connected());
         let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
         cx.simulate_resize(size(px(1440.), px(900.)));
         cx.run_until_parked();
@@ -202,5 +256,52 @@ mod tests {
         assert!(cx.debug_bounds("sidebar-reopen").is_none());
         assert_eq!(cx.debug_bounds("sidebar").unwrap().size.width, px(280.));
         assert_eq!(cx.debug_bounds("terminal").unwrap().size.width, px(720.));
+    }
+
+    #[gpui::test]
+    fn herdr_line_is_centred_in_the_terminal_while_not_running(cx: &mut TestAppContext) {
+        cx.update(Selection::init);
+        herdr_in(cx, not_running());
+        let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
+        cx.simulate_resize(size(px(1440.), px(900.)));
+        cx.run_until_parked();
+
+        let line = cx.debug_bounds("herdr-state").unwrap();
+        let terminal = cx.debug_bounds("terminal").unwrap();
+        assert!(line.origin.x > terminal.origin.x);
+        assert!(line.origin.x + line.size.width < terminal.origin.x + terminal.size.width);
+        let (dx, dy) = (
+            f32::from(line.center().x) - f32::from(terminal.center().x),
+            f32::from(line.center().y) - f32::from(terminal.center().y),
+        );
+        assert!(
+            dx.abs() < 1. && dy.abs() < 1.,
+            "line is off centre by ({dx}, {dy})"
+        );
+    }
+
+    #[gpui::test]
+    fn herdr_line_follows_the_connection(cx: &mut TestAppContext) {
+        cx.update(Selection::init);
+        let herdr = herdr_in(cx, connected());
+        let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
+        cx.simulate_resize(size(px(1440.), px(900.)));
+        cx.run_until_parked();
+        assert!(cx.debug_bounds("herdr-state").is_none());
+
+        let lost = HerdrUpdate::State(not_running().state);
+        cx.update(|_, app| herdr.update(app, |herdr, cx| herdr.apply(lost, cx)));
+        cx.run_until_parked();
+        assert!(cx.debug_bounds("herdr-state").is_some());
+
+        let connecting = HerdrUpdate::State(ConnState::Connecting);
+        cx.update(|_, app| herdr.update(app, |herdr, cx| herdr.apply(connecting, cx)));
+        cx.run_until_parked();
+        assert!(cx.debug_bounds("herdr-state").is_some());
+
+        let back = HerdrUpdate::State(connected().state);
+        cx.update(|_, app| herdr.update(app, |herdr, cx| herdr.apply(back, cx)));
+        cx.run_until_parked();
+        assert!(cx.debug_bounds("herdr-state").is_none());
     }
 }
