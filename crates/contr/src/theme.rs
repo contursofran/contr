@@ -55,6 +55,11 @@ pub const BADGE_PAD_X: f32 = 5.;
 pub const BADGE_RADIUS: f32 = 4.;
 pub const MEM_BAR_WIDTH: f32 = 60.;
 pub const MEM_BAR_HEIGHT: f32 = 4.;
+pub const SIDEBAR_TOGGLE_BOX: f32 = 16.; // clickable box around the toggle drawing
+pub const SIDEBAR_TOGGLE_WIDTH: f32 = 14.; // toggle outline, border included
+pub const SIDEBAR_TOGGLE_HEIGHT: f32 = 12.;
+pub const SIDEBAR_TOGGLE_RADIUS: f32 = 2.;
+pub const SIDEBAR_TOGGLE_FILL: f32 = 4.; // filled left part of the outline
 
 #[cfg(test)]
 mod tests {

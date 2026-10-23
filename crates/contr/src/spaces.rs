@@ -1,7 +1,10 @@
 //! The sidebar's spaces column: the header (window-button inset, toggle, wordmark) and the body
 //! that scrolls. Repos, worktrees and the host card fill the body in later slices.
 
-use crate::theme::{TEXT_2, TEXT_DIM, TITLE_BAR_HEIGHT, TRAFFIC_LIGHT_INSET};
+use crate::theme::{
+    SIDEBAR_TOGGLE_BOX, SIDEBAR_TOGGLE_FILL, SIDEBAR_TOGGLE_HEIGHT, SIDEBAR_TOGGLE_RADIUS,
+    SIDEBAR_TOGGLE_WIDTH, TEXT_2, TEXT_DIM, TITLE_BAR_HEIGHT, TRAFFIC_LIGHT_INSET,
+};
 use gpui::{
     Context, Div, EventEmitter, FontWeight, IntoElement, MouseButton, ParentElement, Render,
     Stateful, Styled, Subscription, Window, div, prelude::*, px, rgb,
@@ -83,28 +86,23 @@ fn toggle(id: &'static str) -> Stateful<Div> {
 /// 16×16 box.
 pub fn toggle_box() -> Div {
     div()
-        .size(px(TOGGLE_BOX))
+        .size(px(SIDEBAR_TOGGLE_BOX))
         .flex_none()
         .flex()
         .items_center()
         .justify_center()
         .child(
             div()
-                .w(px(TOGGLE_WIDTH))
-                .h(px(TOGGLE_HEIGHT))
-                .rounded(px(2.))
+                .w(px(SIDEBAR_TOGGLE_WIDTH))
+                .h(px(SIDEBAR_TOGGLE_HEIGHT))
+                .rounded(px(SIDEBAR_TOGGLE_RADIUS))
                 .border_1()
                 .border_color(rgb(TEXT_DIM))
                 .overflow_hidden()
                 .flex()
-                .child(div().w(px(TOGGLE_FILL)).h_full().bg(rgb(TEXT_DIM))),
+                .child(div().w(px(SIDEBAR_TOGGLE_FILL)).h_full().bg(rgb(TEXT_DIM))),
         )
 }
-
-const TOGGLE_BOX: f32 = 16.;
-const TOGGLE_WIDTH: f32 = 14.;
-const TOGGLE_HEIGHT: f32 = 12.;
-const TOGGLE_FILL: f32 = 4.;
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
