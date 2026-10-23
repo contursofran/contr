@@ -1,5 +1,6 @@
 //! contr: a native herdr client.
 
+pub mod agents_list;
 pub mod board_model;
 pub mod frame;
 pub mod git;

@@ -49,15 +49,17 @@ pub fn agent_rows(tree: &HerdrTree, meta: impl Fn(&str) -> Option<AgentMeta>) ->
             for (index, (pane, agent)) in agents.iter().copied().enumerate() {
                 let bridge = meta(&pane.id).unwrap_or_default();
                 let detail = detail_of(&bridge, &agent.name);
-                let name = present(bridge.name)
-                    .unwrap_or_else(|| fallback_name(tab, pane, index, agents.len()));
+                let name = bridge.name.as_deref().and_then(present).map_or_else(
+                    || fallback_name(tab, agent, pane, index, agents.len()),
+                    str::to_owned,
+                );
                 rows.push(AgentRow {
                     pane_id: pane.id.clone(),
                     tab_id: tab.id.clone(),
                     workspace_id: ws.id.clone(),
                     name,
                     detail,
-                    link: present(bridge.link),
+                    link: bridge.link.as_deref().and_then(present).map(str::to_owned),
                     status: agent.status,
                     focused: focused == Some(pane.id.as_str()),
                 });
@@ -72,14 +74,26 @@ pub fn running_line(n: usize) -> String {
     format!("{n} running")
 }
 
-/// The tab label. When the tab has more than one agent, the label is followed
-/// by the pane's label, or by the pane's 1-based number among the tab's agents.
-fn fallback_name(tab: &Tab, pane: &Pane, index: usize, agents_in_tab: usize) -> String {
+/// The tab label, or the agent kind when the label is blank. When the tab has more than one
+/// agent, the name is followed by the pane's label, or by the pane's 1-based number among the
+/// tab's agents.
+fn fallback_name(
+    tab: &Tab,
+    agent: &AgentInfo,
+    pane: &Pane,
+    index: usize,
+    agents_in_tab: usize,
+) -> String {
+    let base = present(&tab.label).unwrap_or(agent.name.as_str());
     if agents_in_tab < 2 {
-        return tab.label.clone();
+        return base.to_owned();
     }
-    let which = present(pane.label.clone()).unwrap_or_else(|| (index + 1).to_string());
-    format!("{} · {which}", tab.label)
+    let which = pane
+        .label
+        .as_deref()
+        .and_then(present)
+        .map_or_else(|| (index + 1).to_string(), str::to_owned);
+    format!("{base} · {which}")
 }
 
 /// `"model · role"` from the parts of `bridge` that are present. The agent kind
@@ -88,7 +102,7 @@ fn detail_of(bridge: &AgentMeta, agent: &str) -> String {
     let parts: Vec<&str> = [bridge.model.as_deref(), bridge.role.as_deref()]
         .into_iter()
         .flatten()
-        .filter(|text| !text.trim().is_empty())
+        .filter_map(present)
         .collect();
     if parts.is_empty() {
         agent.to_owned()
@@ -98,8 +112,8 @@ fn detail_of(bridge: &AgentMeta, agent: &str) -> String {
 }
 
 /// `text` when it has something besides white space, else `None`. The text is kept as given.
-fn present(text: Option<String>) -> Option<String> {
-    text.filter(|text| !text.trim().is_empty())
+fn present(text: &str) -> Option<&str> {
+    (!text.trim().is_empty()).then_some(text)
 }
 
 #[cfg(test)]
@@ -344,6 +358,50 @@ mod tests {
             .collect();
 
         assert_eq!(names, ["planner · 1", "planner · 2"]);
+    }
+
+    #[test]
+    fn a_blank_tab_label_falls_back_to_the_agent_kind() {
+        for label in ["", "   "] {
+            let t = tree(
+                None,
+                &[(
+                    "w1",
+                    &[(
+                        "t1",
+                        label,
+                        &[("p1", None, Some(("claude", AgentState::Idle)))],
+                    )],
+                )],
+            );
+
+            assert_eq!(agent_rows(&t, no_meta)[0].name, "claude", "label {label:?}");
+        }
+    }
+
+    #[test]
+    fn a_blank_tab_label_keeps_the_split_suffix_with_each_agent_kind() {
+        let t = tree(
+            None,
+            &[(
+                "w1",
+                &[(
+                    "t1",
+                    " ",
+                    &[
+                        ("p1", Some("left"), Some(("claude", AgentState::Idle))),
+                        ("p2", None, Some(("codex", AgentState::Idle))),
+                    ],
+                )],
+            )],
+        );
+
+        let names: Vec<String> = agent_rows(&t, no_meta)
+            .into_iter()
+            .map(|r| r.name)
+            .collect();
+
+        assert_eq!(names, ["claude · left", "codex · 2"]);
     }
 
     #[test]
