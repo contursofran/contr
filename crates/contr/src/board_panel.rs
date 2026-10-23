@@ -1,19 +1,29 @@
 //! The board panel: the header with the `Board | Report` switch and the wrap label, then the body of
-//! the shown tab. The Board tab draws the summary line, the work section and the needs-you section.
-//! The Report tab draws the report of the row it follows (`ReportView`) and nothing else. The panel
-//! reads the `Board` entity and redraws when that entity notifies. A report is read only while the
-//! Report tab is shown.
+//! the shown tab. The Board tab draws the summary line, the work section, the needs-you section and the
+//! answer card at the foot. The Report tab draws the report of the row it follows (`ReportView`) and
+//! nothing else. The panel reads the `Board` entity and redraws when that entity notifies. A report is
+//! read only while the Report tab is shown. The pick (a row or an item) is kept here: the card shows it,
+//! and a click on a row or an item sets it.
 
+use crate::agents_list::{FocusFn, focus_in_background};
 use crate::board::{Board, GlobalBoard};
+use crate::board_card::{
+    BoardPick, CardFace, RowFace, answer_card, click_fn, effective_pick, names_on_board,
+    tab_label_for_pane,
+};
 use crate::board_model::{BoardSnapshot, WorkRow};
-use crate::board_needs::needs_section;
+use crate::board_needs::{PickFn, needs_section};
+use crate::board_outbox::now_ms;
 use crate::board_report::{ReportEvent, ReportSource, ReportTarget, ReportView};
-use crate::board_work::{WorkRowView, work_section};
+use crate::board_work::{WorkRowEvent, WorkRowView, work_section};
+use crate::herdr::GlobalHerdr;
 use crate::theme::*;
+use contr_herdr::HerdrTree;
 use gpui::{
     App, ClickEvent, Context, Entity, IntoElement, ParentElement, Render, Styled, Subscription,
-    Window, div, prelude::*, px, rgb, transparent_black,
+    WeakEntity, Window, div, prelude::*, px, rgb, transparent_black,
 };
+use std::rc::Rc;
 
 /// The two tabs of the panel. `Report` shows the report of the row in `report_row`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -23,31 +33,51 @@ pub enum PanelTab {
     Report,
 }
 
+/// Opens a URL. The app opens it in the system browser; a test records it.
+pub type OpenFn = Rc<dyn Fn(String, &mut App)>;
+
 /// The board panel view.
 pub struct BoardPanel {
     board: Entity<Board>,
     tab: PanelTab,
     /// One view per work row, in the coordinator's order.
     work: Vec<Entity<WorkRowView>>,
+    /// The row clicks of `work`. They are replaced with the views.
+    _row_picks: Vec<Subscription>,
+    /// The picked row or item. `None` shows the first open item. A pick whose key is gone is dropped.
+    pick: Option<BoardPick>,
     _observe: Subscription,
+    /// Redraws the card's Focus label when the herdr tree changes.
+    _observe_herdr: Subscription,
     /// The Report tab's view. It is drawn only on the Report tab.
     report: Entity<ReportView>,
     /// The key of the work row that the Report tab follows. It stays when the tab is left.
     report_row: Option<String>,
     _report_events: Subscription,
+    /// Focuses a pane, for the card's `Focus` button.
+    focus: FocusFn,
+    /// Opens a URL, for the card's `Open PR` button.
+    open: OpenFn,
 }
 
 impl BoardPanel {
-    /// Needs `Board::init` first. Redraws when the board notifies. On the Report tab, a board
-    /// revision also syncs the report.
+    /// Needs `Board::init` and `Herdr::init` first. Redraws when the board or the herdr tree changes.
+    /// On the Report tab, a board revision also syncs the report. Focus and Open PR use the app's calls.
     pub fn new(cx: &mut Context<Self>) -> Self {
+        Self::with_actions(Rc::new(focus_in_background), Rc::new(open_in_browser), cx)
+    }
+
+    /// `new` with the Focus and Open PR calls given, so the tests can record them.
+    fn with_actions(focus: FocusFn, open: OpenFn, cx: &mut Context<Self>) -> Self {
         let board = cx.global::<GlobalBoard>().0.clone();
+        let herdr = cx.global::<GlobalHerdr>().0.clone();
         let observe = cx.observe(&board, |this, _, cx| {
             this.sync_work(cx);
             if this.tab == PanelTab::Report {
                 this.sync_report(cx);
             }
         });
+        let observe_herdr = cx.observe(&herdr, |_, _, cx| cx.notify());
         let report = cx.new(ReportView::new);
         let report_events = cx.subscribe(&report, |this, _, event: &ReportEvent, cx| match event {
             ReportEvent::Back => this.open_board_tab(cx),
@@ -56,10 +86,15 @@ impl BoardPanel {
             board,
             tab: PanelTab::default(),
             work: Vec::new(),
+            _row_picks: Vec::new(),
+            pick: None,
             _observe: observe,
+            _observe_herdr: observe_herdr,
             report,
             report_row: None,
             _report_events: report_events,
+            focus,
+            open,
         };
         panel.sync_work(cx);
         panel
@@ -69,6 +104,13 @@ impl BoardPanel {
     pub fn show_report(&mut self, row_key: String, cx: &mut Context<Self>) {
         self.report_row = Some(row_key);
         self.open_report_tab(cx);
+    }
+
+    /// Picks `pick`: the card shows it, and the picked work row draws as selected.
+    pub(crate) fn set_pick(&mut self, pick: BoardPick, cx: &mut Context<Self>) {
+        self.pick = Some(pick);
+        self.sync_picks(cx);
+        cx.notify();
     }
 
     /// The Report tab's click. The tab keeps the row it followed before, if any.
@@ -99,7 +141,8 @@ impl BoardPanel {
 
     /// Brings the work rows in line with the board. When the keys match in order, only the rows that
     /// changed are updated, and only they redraw. The panel itself always redraws, because the
-    /// summary and the needs section can change too. Otherwise the views are rebuilt.
+    /// summary and the needs section can change too. Otherwise the views are rebuilt. A pick whose
+    /// key is no longer on the board is dropped, so the card falls back to the first open item.
     fn sync_work(&mut self, cx: &mut Context<Self>) {
         let snapshot = self.board.read(cx).snapshot.clone();
         let rows: &[WorkRow] = snapshot
@@ -122,14 +165,117 @@ impl BoardPanel {
                 .enumerate()
                 .map(|(index, row)| cx.new(|_| WorkRowView::new(row.clone(), index)))
                 .collect();
+            self._row_picks = self
+                .work
+                .iter()
+                .map(|view| {
+                    cx.subscribe(view, |this, _, event: &WorkRowEvent, cx| match event {
+                        WorkRowEvent::Picked(key) => {
+                            this.set_pick(BoardPick::Row(key.clone()), cx);
+                        }
+                    })
+                })
+                .collect();
         }
+        let gone = match (snapshot.as_deref(), self.pick.as_ref()) {
+            (Some(shown), Some(pick)) => !names_on_board(shown, pick),
+            _ => false,
+        };
+        if gone {
+            self.pick = None;
+        }
+        self.sync_picks(cx);
         cx.notify();
+    }
+
+    /// Marks the work row that the card names as picked, and no other. The needs section draws its
+    /// own picked item, so only rows are set here.
+    fn sync_picks(&mut self, cx: &mut Context<Self>) {
+        let snapshot = self.board.read(cx).snapshot.clone();
+        let shown = snapshot
+            .as_deref()
+            .and_then(|shown| effective_pick(shown, self.pick.as_ref()));
+        let picked_row = match shown {
+            Some(BoardPick::Row(key)) => Some(key),
+            _ => None,
+        };
+        for view in &self.work {
+            let picked = picked_row.as_deref() == Some(view.read(cx).key());
+            view.update(cx, |view, cx| view.set_picked(picked, cx));
+        }
+    }
+
+    /// What the card shows for `shown`, the pick that `effective_pick` resolved on `snapshot`.
+    fn card_face(
+        &self,
+        snapshot: &BoardSnapshot,
+        shown: Option<&BoardPick>,
+        tree: Option<&HerdrTree>,
+        cx: &Context<Self>,
+    ) -> CardFace {
+        match shown {
+            Some(BoardPick::Item(key)) => snapshot
+                .items
+                .iter()
+                .find(|item| item.key == *key)
+                .map_or(CardFace::Empty, |item| CardFace::Item(item.clone())),
+            Some(BoardPick::Row(key)) => match snapshot.rows.iter().find(|row| row.key == *key) {
+                Some(row) => CardFace::Row(self.row_face(row, tree, cx)),
+                None => CardFace::Empty,
+            },
+            None => CardFace::Empty,
+        }
+    }
+
+    /// The buttons of a work row. Focus needs a pane that the tree holds in a tab, Report needs a
+    /// report, and Open PR needs a URL. Each button's click calls the panel's Focus or Open PR call,
+    /// or shows the report.
+    fn row_face(&self, row: &WorkRow, tree: Option<&HerdrTree>, cx: &Context<Self>) -> RowFace {
+        let focus = row.pane_id.as_deref().and_then(|pane| {
+            let tab = tree.and_then(|tree| tab_label_for_pane(tree, pane))?;
+            let focus = self.focus.clone();
+            let pane = pane.to_owned();
+            let on_click = click_fn(move |_: &ClickEvent, _: &mut Window, cx: &mut App| {
+                focus(pane.clone(), cx);
+            });
+            Some((tab, on_click))
+        });
+        let report = row.report.is_some().then(|| {
+            let key = row.key.clone();
+            click_fn(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                this.show_report(key.clone(), cx);
+            }))
+        });
+        let open_pr = row.url.clone().map(|url| {
+            let open = self.open.clone();
+            click_fn(move |_: &ClickEvent, _: &mut Window, cx: &mut App| {
+                open(url.clone(), cx);
+            })
+        });
+        RowFace {
+            row: row.clone(),
+            focus,
+            report,
+            open_pr,
+        }
     }
 
     /// The work row views, in order. Tests read them.
     #[cfg(test)]
     pub(crate) fn work_rows(&self) -> &[Entity<WorkRowView>] {
         &self.work
+    }
+
+    /// The pick as the panel holds it, before the fall-back. Tests read it.
+    #[cfg(test)]
+    pub(crate) fn picked(&self) -> Option<&BoardPick> {
+        self.pick.as_ref()
+    }
+
+    /// The key of the work row that the Report tab follows. Tests read it.
+    #[cfg(test)]
+    pub(crate) fn report_key(&self) -> Option<&str> {
+        self.report_row.as_deref()
     }
 }
 
@@ -139,16 +285,29 @@ impl Render for BoardPanel {
         let bridge = board.bridge.is_some();
         let problem = board.problem.clone();
         let snapshot = board.snapshot.clone();
+        let tree = cx.global::<GlobalHerdr>().0.read(cx).live.tree.clone();
+        // The card, the pick and the item's click are made before the header takes `cx`.
+        let shown = snapshot
+            .as_deref()
+            .and_then(|board| effective_pick(board, self.pick.as_ref()));
+        let face = match (snapshot.as_deref(), self.tab) {
+            (Some(board), PanelTab::Board) => {
+                self.card_face(board, shown.as_ref(), tree.as_deref(), cx)
+            }
+            _ => CardFace::Empty,
+        };
+        let picked_item = match &shown {
+            Some(BoardPick::Item(key)) => Some(key.clone()),
+            _ => None,
+        };
+        let pick_item = item_pick(cx.weak_entity());
+        let head = header(self.tab, snapshot.as_ref().map(|shown| shown.wrap_up), cx);
         let root = div()
             .debug_selector(|| "board-panel".into())
             .size_full()
             .flex()
             .flex_col()
-            .child(header(
-                self.tab,
-                snapshot.as_ref().map(|shown| shown.wrap_up),
-                cx,
-            ));
+            .child(head);
         match (snapshot, self.tab) {
             (None, _) => root.child(text_line(
                 "board-empty",
@@ -163,9 +322,24 @@ impl Render for BoardPanel {
                     &snapshot.items,
                     snapshot.need_count,
                     snapshot.clear_items,
-                )),
+                    picked_item.as_deref(),
+                    pick_item,
+                ))
+                .child(answer_card(face, now_ms())),
         }
     }
+}
+
+/// The needs-you rows' pick: a click sets the panel's pick to the item with the key it is given.
+fn item_pick(panel: WeakEntity<BoardPanel>) -> PickFn {
+    Rc::new(move |key: String, cx: &mut App| {
+        let _ = panel.update(cx, |panel, cx| panel.set_pick(BoardPick::Item(key), cx));
+    })
+}
+
+/// Opens `url` in the system browser, as `App::open_url` does.
+fn open_in_browser(url: String, cx: &mut App) {
+    cx.open_url(&url);
 }
 
 /// The header row. `wrap_up` is `None` while there is no snapshot: the wrap label is then hidden.
@@ -331,6 +505,7 @@ pub(crate) mod test_support {
     use crate::herdr::{GlobalHerdr, Herdr};
     use contr_herdr::LiveHerdr;
     use gpui::{Bounds, Pixels, TestAppContext, VisualTestContext, size};
+    use std::sync::Arc;
 
     pub(crate) const FIXTURE: &str = include_str!("board_fixture_v1.json");
 
@@ -366,16 +541,51 @@ pub(crate) mod test_support {
         }
     }
 
+    /// A Focus or Open PR call that does nothing, for panels whose tests do not record them.
+    pub(crate) fn ignored_focus() -> FocusFn {
+        Rc::new(|_: String, _: &mut App| {})
+    }
+
+    /// An Open PR call that does nothing.
+    pub(crate) fn ignored_open() -> OpenFn {
+        Rc::new(|_: String, _: &mut App| {})
+    }
+
     /// A panel over a board that shows `snapshot`, `problem` and `bridge` (set by the test, not read
-    /// from a file).
+    /// from a file). The herdr tree is empty, and Focus and Open PR do nothing.
     pub(crate) fn panel<'a>(
         cx: &'a mut TestAppContext,
         snapshot: Option<BoardSnapshot>,
         problem: Option<&str>,
         bridge: Option<BridgePane>,
     ) -> (Entity<BoardPanel>, &'a mut VisualTestContext) {
+        panel_on(
+            cx,
+            snapshot,
+            problem,
+            bridge,
+            None,
+            ignored_focus(),
+            ignored_open(),
+        )
+    }
+
+    /// `panel`, with the herdr `tree` (for the Focus labels) and the Focus and Open PR calls given.
+    pub(crate) fn panel_on<'a>(
+        cx: &'a mut TestAppContext,
+        snapshot: Option<BoardSnapshot>,
+        problem: Option<&str>,
+        bridge: Option<BridgePane>,
+        tree: Option<HerdrTree>,
+        focus: FocusFn,
+        open: OpenFn,
+    ) -> (Entity<BoardPanel>, &'a mut VisualTestContext) {
         cx.update(|app| {
-            let herdr = app.new(|cx| Herdr::detached(LiveHerdr::default(), cx));
+            let live = LiveHerdr {
+                tree: tree.map(Arc::new),
+                ..LiveHerdr::default()
+            };
+            let herdr = app.new(|cx| Herdr::detached(live, cx));
             app.set_global(GlobalHerdr(herdr));
             init_detached(app);
         });
@@ -384,8 +594,8 @@ pub(crate) mod test_support {
         cx.update(|app| {
             board.update(app, |board, cx| board.set(snapshot, problem, bridge, cx));
         });
-        let (host, cx) = cx.add_window_view(|_, cx| InFrame {
-            panel: cx.new(BoardPanel::new),
+        let (host, cx) = cx.add_window_view(move |_, cx| InFrame {
+            panel: cx.new(|cx| BoardPanel::with_actions(focus, open, cx)),
         });
         let view = host.read_with(cx, |host, _| host.panel.clone());
         cx.simulate_resize(size(px(WINDOW_WIDTH), px(WINDOW_HEIGHT)));
@@ -572,13 +782,19 @@ mod tests {
     }
 
     #[gpui::test]
-    fn the_needs_section_shows_the_snapshot_and_ends_at_the_panel_bottom(cx: &mut TestAppContext) {
+    fn the_needs_section_shows_the_snapshot_and_ends_where_the_card_begins(
+        cx: &mut TestAppContext,
+    ) {
         let (_view, cx) = panel(cx, Some(fixture()), None, Some(bridge()));
         assert!(bounds(cx, "needs-count-3").is_some());
         assert!(bounds(cx, "need-row-3-resolved").is_some());
-        let panel = bounds(cx, "board-panel").unwrap();
         let section = bounds(cx, "needs-section").unwrap();
-        assert_eq!(section.bottom(), panel.bottom());
+        let card = bounds(cx, "answer-card").unwrap();
+        assert_eq!(
+            section.bottom(),
+            card.origin.y,
+            "the card is below the section"
+        );
     }
 
     #[gpui::test]

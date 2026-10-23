@@ -108,6 +108,17 @@ pub const SEGMENT_PAD_Y: f32 = 4.;
 pub const SEGMENT_RADIUS: f32 = 5.;
 pub const BOARD_GAP: f32 = 8.; // "Work" to "clear done"
 
+// Answer card (DESIGN.md fixes the height at 168; the rest are planner defaults)
+pub const ANSWER_CARD_HEIGHT: f32 = 168.;
+pub const ANSWER_PAD: f32 = 12.; // inside the card's border
+pub const ANSWER_GAP: f32 = 8.; // between the card's head, text, actions and foot lines
+pub const ANSWER_TEXT_HEIGHT: f32 = LINE_HEIGHT * 3.; // the text takes at most three lines
+pub const ANSWER_BUTTON_HEIGHT: f32 = 24.;
+pub const ANSWER_BUTTON_PAD_X: f32 = 10.;
+pub const ANSWER_BUTTON_RADIUS: f32 = 6.;
+pub const ANSWER_BUTTON_GAP: f32 = 8.; // between two buttons
+pub const ANSWER_MARGIN: f32 = 8.; // card to panel edges
+
 // Report tab (planner defaults; docs/DESIGN.md has no sizes for these)
 pub const REPORT_GAP: f32 = 12.; // between "Open in editor" and "back"
 pub const REPORT_INDENT: f32 = 14.; // per list depth (same as ROW_INDENT)

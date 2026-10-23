@@ -2,29 +2,42 @@
 //! or pull request, in the coordinator's order. Each row is its own cached view, so a spinning
 //! `working` icon redraws only its own row.
 
+use crate::board_card::selected_card;
 use crate::board_model::{STAGE_HEADS, Stage, WhoKind, WorkRow, stage_status};
 use crate::board_panel::text_line;
 use crate::status_icon::StatusIcon;
 use crate::theme::*;
 use gpui::{
-    AnyElement, Context, Entity, FontWeight, IntoElement, ParentElement, Render, Role,
-    StyleRefinement, Styled, Window, div, prelude::*, px, relative, rgb,
+    AnyElement, ClickEvent, Context, Entity, EventEmitter, FontWeight, IntoElement, ParentElement,
+    Render, Role, StyleRefinement, Styled, Window, div, prelude::*, px, relative, rgb,
 };
+
+/// What a work row tells its panel.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WorkRowEvent {
+    /// The row was clicked. The payload is its slot key.
+    Picked(String),
+}
 
 /// One work row. `index` is its place in the section; it names the row's debug selectors.
 pub struct WorkRowView {
     row: WorkRow,
     index: usize,
+    /// The panel's pick is this row. A picked row draws as a selected card.
+    picked: bool,
     /// Renders so far. Tests count them to check that only a changed row redraws.
     #[cfg(test)]
     renders: usize,
 }
+
+impl EventEmitter<WorkRowEvent> for WorkRowView {}
 
 impl WorkRowView {
     pub fn new(row: WorkRow, index: usize) -> Self {
         Self {
             row,
             index,
+            picked: false,
             #[cfg(test)]
             renders: 0,
         }
@@ -42,15 +55,24 @@ impl WorkRowView {
             cx.notify();
         }
     }
+
+    /// Shows the row as picked, or not. Nothing happens when it is already so.
+    pub fn set_picked(&mut self, picked: bool, cx: &mut Context<Self>) {
+        if self.picked != picked {
+            self.picked = picked;
+            cx.notify();
+        }
+    }
 }
 
 impl Render for WorkRowView {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         #[cfg(test)]
         {
             self.renders += 1;
         }
         let index = self.index;
+        let picked = self.picked;
         let row = &self.row;
         div()
             .id(("work-row", index))
@@ -62,6 +84,13 @@ impl Render for WorkRowView {
             .flex()
             .items_center()
             .px(px(PANEL_PAD_X))
+            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                cx.emit(WorkRowEvent::Picked(this.row.key.clone()));
+            }))
+            // The selected card is the first child, so it is drawn behind the row's content.
+            .when(picked, |line| {
+                line.child(selected_card(format!("work-row-{index}-picked")))
+            })
             .child(
                 div()
                     .w(px(WORK_LABEL_WIDTH))
@@ -265,10 +294,11 @@ fn accessible_label(row: &WorkRow) -> String {
 mod tests {
     use super::*;
     use crate::board::GlobalBoard;
+    use crate::board_card::BoardPick;
     use crate::board_model::BoardSnapshot;
     use crate::board_panel::BoardPanel;
     use crate::board_panel::test_support::{bounds, bridge, fixture, panel};
-    use gpui::{TestAppContext, VisualTestContext};
+    use gpui::{Modifiers, TestAppContext, VisualTestContext};
 
     /// The selectors need `'static` strings, so the names are written out.
     const HEADS: [&str; 5] = [
@@ -453,6 +483,59 @@ mod tests {
         // Row 0 is not checked. Its `working` icon re-renders the row every frame, so its render
         // count rises without a change.
         assert_eq!(after[1], before[1] + 1, "the changed row redraws once");
+        assert_eq!(after[2], before[2], "the joined row does not redraw");
+    }
+
+    /// Clicks the centre of the element with the given selector, as the mouse would.
+    fn click(cx: &mut VisualTestContext, selector: &'static str) {
+        let bounds = cx.debug_bounds(selector).unwrap();
+        cx.simulate_click(bounds.center(), Modifiers::none());
+        cx.run_until_parked();
+    }
+
+    #[gpui::test]
+    fn a_click_on_a_row_picks_it_and_its_card_fills_the_row(cx: &mut TestAppContext) {
+        let (_panel, cx) = panel(cx, Some(fixture()), None, Some(bridge()));
+        assert!(
+            bounds(cx, "work-row-0-picked").is_none(),
+            "the item is picked"
+        );
+
+        click(cx, "work-row-0");
+        assert!(
+            bounds(cx, "work-row-0-picked").is_some(),
+            "the row is picked"
+        );
+        assert!(bounds(cx, "work-row-1-picked").is_none());
+        // The row keeps its own selector, so it can be clicked again.
+        let row = bounds(cx, "work-row-0").unwrap();
+        let card = bounds(cx, "work-row-0-picked").unwrap();
+        assert_eq!(card, row, "the selected card covers the row");
+        click(cx, "work-row-0");
+        assert!(
+            bounds(cx, "work-row-0-picked").is_some(),
+            "a second click keeps it"
+        );
+    }
+
+    #[gpui::test]
+    fn a_new_pick_redraws_only_the_rows_that_change(cx: &mut TestAppContext) {
+        let (panel, cx) = panel(cx, Some(fixture()), None, Some(bridge()));
+        let before = renders(&panel, cx);
+
+        let key = fixture().rows[0].key.clone();
+        cx.update(|_, app| {
+            panel.update(app, |panel, cx| panel.set_pick(BoardPick::Row(key), cx));
+        });
+        cx.run_until_parked();
+        let after = renders(&panel, cx);
+
+        assert!(
+            bounds(cx, "work-row-0-picked").is_some(),
+            "the row is picked"
+        );
+        // Row 0 is not checked. Its `working` icon re-renders the row every frame.
+        assert_eq!(after[1], before[1], "row 1 does not redraw");
         assert_eq!(after[2], before[2], "the joined row does not redraw");
     }
 
