@@ -7,12 +7,13 @@
 
 use crate::agents_list::{FocusFn, focus_in_background};
 use crate::board::{Board, GlobalBoard};
-use crate::board_actions::Action;
+use crate::board_actions::{Action, card_options, next_open};
 use crate::board_card::{
-    BoardPick, CardFace, RowFace, answer_card, click_fn, effective_pick, names_on_board,
+    BoardPick, CardFace, ClickFn, ItemActions, ItemFace, OptionFace, RowFace, answer_card,
+    click_fn, effective_pick, link_url, names_on_board, resolved_answer, shown_item,
     tab_label_for_pane,
 };
-use crate::board_model::{BoardSnapshot, WorkRow};
+use crate::board_model::{BoardSnapshot, ItemKind, NeedItem, WorkRow};
 use crate::board_needs::{PickFn, needs_section};
 use crate::board_outbox::{BoardOutbox, GlobalBoardOutbox, now_ms, show_status};
 use crate::board_report::{ReportEvent, ReportSource, ReportTarget, ReportView};
@@ -121,23 +122,52 @@ impl BoardPanel {
         panel
     }
 
-    /// Sends `action` through the queue. A sent action shows `feedback` in the status bar. Returns
-    /// `false`, and shows nothing, when the queue sends nothing: no queue, or a board that takes no
-    /// actions.
+    /// Sends `action` through the queue. A sent action shows `feedback`, when there is one, in the
+    /// status bar. Returns `false`, and shows nothing, when the queue sends nothing: no queue, or a
+    /// board that takes no actions.
     fn send_action(
         &mut self,
         action: Action,
-        feedback: &'static str,
+        feedback: Option<&'static str>,
         cx: &mut Context<Self>,
     ) -> bool {
         let Some(outbox) = self.outbox.clone() else {
             return false;
         };
         let sent = outbox.update(cx, |outbox, cx| outbox.send(action, cx));
-        if sent {
+        if let (true, Some(feedback)) = (sent, feedback) {
             show_status(feedback.to_owned(), cx);
         }
         sent
+    }
+
+    /// `Answer in chat`: sends `Chat` for `key`, then focuses the bridge pane, so the owner lands in the
+    /// coordinator's prompt. Nothing is focused when the send fails or the board has no bridge pane.
+    fn chat(&mut self, key: String, cx: &mut Context<Self>) {
+        if !self.send_action(Action::Chat { key }, None, cx) {
+            return;
+        }
+        let pane = self
+            .board
+            .read(cx)
+            .bridge
+            .as_ref()
+            .map(|bridge| bridge.pane_id.clone());
+        if let Some(pane) = pane {
+            (self.focus)(pane, cx);
+        }
+    }
+
+    /// Cancels the queued answer, done or dismiss for `key`, if it is still held.
+    fn undo_answer(&mut self, key: &str, cx: &mut Context<Self>) {
+        if let Some(outbox) = self.outbox.clone() {
+            outbox.update(cx, |outbox, cx| outbox.undo(key, cx));
+        }
+    }
+
+    /// The answer queued for `key`, and whether it can still be undone. `None` when nothing is queued.
+    fn queued(&self, key: &str, cx: &App) -> Option<(String, bool)> {
+        self.outbox.as_ref()?.read(cx).pending_answer(key)
     }
 
     /// Shows the Report tab for the work row `row_key`.
@@ -245,26 +275,156 @@ impl BoardPanel {
         }
     }
 
-    /// What the card shows for `shown`, the pick that `effective_pick` resolved on `snapshot`.
+    /// The items as the panel draws them: an item with an answer queued reads as resolved, with that
+    /// answer. Every other item is as the board has it.
+    fn shown_items(&self, snapshot: &BoardSnapshot, cx: &App) -> Vec<NeedItem> {
+        snapshot
+            .items
+            .iter()
+            .map(|item| {
+                let queued = self.queued(&item.key, cx);
+                shown_item(item, queued.as_ref().map(|(answer, _)| answer.as_str()))
+            })
+            .collect()
+    }
+
+    /// What the card shows for `shown`, the pick that `effective_pick` resolved on `snapshot`. `items`
+    /// are the items as shown (see `shown_items`).
     fn card_face(
         &self,
         snapshot: &BoardSnapshot,
+        items: &[NeedItem],
         shown: Option<&BoardPick>,
         tree: Option<&HerdrTree>,
+        can_act: bool,
         cx: &Context<Self>,
     ) -> CardFace {
         match shown {
-            Some(BoardPick::Item(key)) => snapshot
-                .items
+            Some(BoardPick::Item(key)) => items
                 .iter()
                 .find(|item| item.key == *key)
-                .map_or(CardFace::Empty, |item| CardFace::Item(item.clone())),
+                .map_or(CardFace::Empty, |item| {
+                    CardFace::Item(self.item_face(item, items, can_act, cx))
+                }),
             Some(BoardPick::Row(key)) => match snapshot.rows.iter().find(|row| row.key == *key) {
                 Some(row) => CardFace::Row(self.row_face(row, tree, cx)),
                 None => CardFace::Empty,
             },
             None => CardFace::Empty,
         }
+    }
+
+    /// The face of the item card for `item`, one of `items` as shown. The actions follow the item's
+    /// state: an answer queued for it, then an open decision, to-do or news item, else a resolved item.
+    /// With `can_act` false the buttons that send an action have no click. Undo, Open link and Next
+    /// still work, because they do not send.
+    fn item_face(
+        &self,
+        item: &NeedItem,
+        items: &[NeedItem],
+        can_act: bool,
+        cx: &Context<Self>,
+    ) -> ItemFace {
+        let actions = match self.queued(&item.key, cx) {
+            Some((_, undoable)) => ItemActions::Resolved {
+                answer: resolved_answer(item),
+                undo: undoable.then(|| self.undo_click(item.key.clone(), cx)),
+                sending: !undoable,
+            },
+            None if !item.open => ItemActions::Resolved {
+                answer: resolved_answer(item),
+                undo: None,
+                sending: false,
+            },
+            None => match item.kind {
+                ItemKind::Ask => ItemActions::Decide {
+                    options: card_options(item)
+                        .into_iter()
+                        .map(|(index, label, recommended)| OptionFace {
+                            label: label.to_owned(),
+                            recommended,
+                            on_click: can_act.then(|| {
+                                self.sends_click(
+                                    Action::Answer {
+                                        key: item.key.clone(),
+                                        option: index,
+                                        label: label.to_owned(),
+                                    },
+                                    cx,
+                                )
+                            }),
+                        })
+                        .collect(),
+                    chat: can_act.then(|| self.chat_click(item.key.clone(), cx)),
+                },
+                ItemKind::Do => ItemActions::Do {
+                    done: can_act.then(|| {
+                        self.sends_click(
+                            Action::Done {
+                                key: item.key.clone(),
+                            },
+                            cx,
+                        )
+                    }),
+                    link: item
+                        .link
+                        .as_deref()
+                        .map(|link| self.open_click(link_url(link))),
+                },
+                ItemKind::Know | ItemKind::Other => ItemActions::Know {
+                    dismiss: can_act.then(|| {
+                        self.sends_click(
+                            Action::Dismiss {
+                                key: item.key.clone(),
+                            },
+                            cx,
+                        )
+                    }),
+                },
+            },
+        };
+        let next = next_open(items, &item.key, |other| other.open).map(|next| {
+            let pick = BoardPick::Item(next.key.clone());
+            (next.key.clone(), self.pick_click(pick, cx))
+        });
+        ItemFace {
+            item: item.clone(),
+            actions,
+            next,
+            inert: !can_act,
+        }
+    }
+
+    /// A click that sends `action` through the queue, with no status line.
+    fn sends_click(&self, action: Action, cx: &Context<Self>) -> ClickFn {
+        click_fn(cx.listener(move |this, _: &ClickEvent, _, cx| {
+            this.send_action(action.clone(), None, cx);
+        }))
+    }
+
+    /// A click on `Answer in chat` for `key`.
+    fn chat_click(&self, key: String, cx: &Context<Self>) -> ClickFn {
+        click_fn(cx.listener(move |this, _: &ClickEvent, _, cx| this.chat(key.clone(), cx)))
+    }
+
+    /// A click on `undo` for the answer queued for `key`.
+    fn undo_click(&self, key: String, cx: &Context<Self>) -> ClickFn {
+        click_fn(cx.listener(move |this, _: &ClickEvent, _, cx| this.undo_answer(&key, cx)))
+    }
+
+    /// A click that picks `pick`, as a click on a row does.
+    fn pick_click(&self, pick: BoardPick, cx: &Context<Self>) -> ClickFn {
+        click_fn(cx.listener(move |this, _: &ClickEvent, _, cx| {
+            this.set_pick(pick.clone(), cx);
+        }))
+    }
+
+    /// A click that opens `url` through the panel's Open PR call (the app opens it in the browser).
+    fn open_click(&self, url: String) -> ClickFn {
+        let open = self.open.clone();
+        click_fn(move |_: &ClickEvent, _: &mut Window, cx: &mut App| {
+            open(url.clone(), cx);
+        })
     }
 
     /// The buttons of a work row. Focus needs a pane that the tree holds in a tab, Report needs a
@@ -286,12 +446,7 @@ impl BoardPanel {
                 this.show_report(key.clone(), cx);
             }))
         });
-        let open_pr = row.url.clone().map(|url| {
-            let open = self.open.clone();
-            click_fn(move |_: &ClickEvent, _: &mut Window, cx: &mut App| {
-                open(url.clone(), cx);
-            })
-        });
+        let open_pr = row.url.clone().map(|url| self.open_click(url));
         RowFace {
             row: row.clone(),
             focus,
@@ -326,14 +481,28 @@ impl Render for BoardPanel {
         let problem = board.problem.clone();
         let snapshot = board.snapshot.clone();
         let tree = cx.global::<GlobalHerdr>().0.read(cx).live.tree.clone();
-        // The pick and the card come first, so every use of `cx` for them is done before the header.
+        // The pick, the items and the card come first, so every use of `cx` for them is done
+        // before the header.
         let shown = snapshot
             .as_deref()
             .and_then(|current| effective_pick(current, self.pick.as_ref()));
+        let can_act = self
+            .outbox
+            .as_ref()
+            .is_some_and(|outbox| outbox.read(cx).can_act());
+        let items = snapshot
+            .as_deref()
+            .map(|current| self.shown_items(current, cx))
+            .unwrap_or_default();
         let face = match (snapshot.as_deref(), self.tab) {
-            (Some(current), PanelTab::Board) => {
-                self.card_face(current, shown.as_ref(), tree.as_deref(), cx)
-            }
+            (Some(current), PanelTab::Board) => self.card_face(
+                current,
+                &items,
+                shown.as_ref(),
+                tree.as_deref(),
+                can_act,
+                cx,
+            ),
             _ => CardFace::Empty,
         };
         let picked_item = match &shown {
@@ -341,10 +510,6 @@ impl Render for BoardPanel {
             _ => None,
         };
         let pick_item = item_pick(cx.weak_entity());
-        let can_act = self
-            .outbox
-            .as_ref()
-            .is_some_and(|outbox| outbox.read(cx).can_act());
         let wrap_up = snapshot.as_ref().map(|current| current.wrap_up);
         let on_wrap = wrap_up.filter(|_| can_act).map(|wrap_up| {
             let (action, feedback) = wrap_flip(wrap_up);
@@ -370,7 +535,7 @@ impl Render for BoardPanel {
                 root.child(summary(&snapshot, problem.as_deref()))
                     .child(work_section(&self.work, snapshot.clear_rows, on_clear_rows))
                     .child(needs_section(
-                        &snapshot.items,
+                        &items,
                         snapshot.need_count,
                         snapshot.clear_items,
                         picked_item.as_deref(),
@@ -398,7 +563,7 @@ fn open_in_browser(url: String, cx: &mut App) {
 /// The click handler that calls `send_action` with `action` and `feedback`.
 fn sends(action: Action, feedback: &'static str, cx: &Context<BoardPanel>) -> ActionClick {
     Box::new(cx.listener(move |this, _: &ClickEvent, _, cx| {
-        this.send_action(action.clone(), feedback, cx);
+        this.send_action(action.clone(), Some(feedback), cx);
     }))
 }
 
@@ -609,9 +774,10 @@ fn wrap_text(wrap_up: bool) -> &'static str {
 pub(crate) mod test_support {
     use super::*;
     use crate::board::{BridgePane, init_detached};
+    use crate::board_actions::{actions_path, parse_actions};
     use crate::board_model::{BridgeRef, parse_board};
     use crate::herdr::{GlobalHerdr, Herdr};
-    use crate::status_message::StatusMessage;
+    use crate::status_message::{GlobalStatusMessage, StatusMessage};
     use contr_herdr::LiveHerdr;
     use gpui::{Bounds, Pixels, TestAppContext, VisualTestContext, size};
     use std::sync::Arc;
@@ -713,6 +879,17 @@ pub(crate) mod test_support {
         dir: &std::path::Path,
         snapshot: BoardSnapshot,
     ) -> (Entity<BoardPanel>, &'a mut VisualTestContext) {
+        panel_with_queue_on(cx, dir, snapshot, ignored_focus(), ignored_open())
+    }
+
+    /// `panel_with_queue`, with the Focus and Open PR calls given, so the tests can record them.
+    pub(crate) fn panel_with_queue_on<'a>(
+        cx: &'a mut TestAppContext,
+        dir: &std::path::Path,
+        snapshot: BoardSnapshot,
+        focus: FocusFn,
+        open: OpenFn,
+    ) -> (Entity<BoardPanel>, &'a mut VisualTestContext) {
         cx.update(|app| {
             let herdr = app.new(|cx| Herdr::detached(LiveHerdr::default(), cx));
             app.set_global(GlobalHerdr(herdr));
@@ -724,7 +901,32 @@ pub(crate) mod test_support {
                 board.set(Some(snapshot), None, Some(bridge()), cx)
             });
         });
-        open_in_window(cx, ignored_focus(), ignored_open())
+        open_in_window(cx, focus, open)
+    }
+
+    /// The queued actions of the fixture's session in `dir`, as `(seq, action)`. `None` when no
+    /// actions file was written.
+    pub(crate) fn queued(dir: &std::path::Path) -> Option<Vec<(u64, Action)>> {
+        let session = fixture().session;
+        let file = parse_actions(&std::fs::read(actions_path(dir, &session)).ok()?)?;
+        Some(
+            file.actions
+                .into_iter()
+                .map(|envelope| (envelope.seq, envelope.action))
+                .collect(),
+        )
+    }
+
+    /// The status line in the status bar, if one is shown.
+    pub(crate) fn status(cx: &VisualTestContext) -> Option<String> {
+        cx.read(|app| {
+            app.global::<GlobalStatusMessage>()
+                .0
+                .read(app)
+                .text
+                .as_ref()
+                .map(|text| text.to_string())
+        })
     }
 
     /// Opens the panel in a window of the reference size and lets it settle. The panel's Focus and
@@ -754,11 +956,9 @@ pub(crate) mod test_support {
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
-    use super::test_support::{bounds, bridge, fixture, panel, panel_with_queue};
+    use super::test_support::{bounds, bridge, fixture, panel, panel_with_queue, queued, status};
     use super::*;
     use crate::board::NO_BOARD_FILE;
-    use crate::board_actions::{actions_path, parse_actions};
-    use crate::status_message::GlobalStatusMessage;
     use gpui::{Modifiers, TestAppContext, VisualTestContext};
 
     /// A RESULT.md with the S1 fixture, in a new temp dir. The dir is returned so it lives as long as
@@ -1075,31 +1275,6 @@ mod tests {
         assert_eq!(reads(cx, &view), 0);
     }
 
-    /// The queued actions of the fixture's session in `dir`, as `(seq, action)`. `None` when no
-    /// actions file was written.
-    fn queued(dir: &std::path::Path) -> Option<Vec<(u64, Action)>> {
-        let session = fixture().session;
-        let file = parse_actions(&std::fs::read(actions_path(dir, &session)).ok()?)?;
-        Some(
-            file.actions
-                .into_iter()
-                .map(|envelope| (envelope.seq, envelope.action))
-                .collect(),
-        )
-    }
-
-    /// The status line in the status bar, if one is shown.
-    fn status(cx: &VisualTestContext) -> Option<String> {
-        cx.read(|app| {
-            app.global::<GlobalStatusMessage>()
-                .0
-                .read(app)
-                .text
-                .as_ref()
-                .map(|text| text.to_string())
-        })
-    }
-
     /// Sets the board to `snapshot` on the bridge pane, as a read would, and lets the panel react.
     fn set_board(cx: &mut VisualTestContext, snapshot: BoardSnapshot) {
         let board = cx.read(|app| app.global::<GlobalBoard>().0.clone());
@@ -1215,7 +1390,7 @@ mod tests {
         let (view, cx) = panel(cx, Some(fixture()), None, Some(bridge()));
         let sent = cx.update(|_, app| {
             view.update(app, |panel, cx| {
-                panel.send_action(Action::ClearRows, CLEAR_SENT, cx)
+                panel.send_action(Action::ClearRows, Some(CLEAR_SENT), cx)
             })
         });
         assert!(!sent, "no queue, nothing is sent");

@@ -1,7 +1,6 @@
 //! The answer card: the fixed 168 px frame at the foot of the board panel. It shows what the pick names:
-//! a needs-you item, or a work row with its Focus, Report and Open PR buttons. The card only draws. The
-//! panel resolves the pick and makes the clicks (`BoardPanel::card_face`). The item actions come with
-//! the item card (S5).
+//! a needs-you item with its actions, or a work row with its Focus, Report and Open PR buttons. The card
+//! only draws. The panel resolves the pick, builds the faces and makes the clicks (`BoardPanel::card_face`).
 
 use crate::board_actions::ago;
 use crate::board_model::{BoardSnapshot, NeedItem, WorkRow, item_status};
@@ -64,10 +63,96 @@ pub fn tab_label_for_pane(tree: &HerdrTree, pane_id: &str) -> Option<String> {
 pub enum CardFace {
     /// Nothing is picked and no item is open: the frame, with nothing in it.
     Empty,
-    /// A needs-you item. Its actions come with the item card (S5).
-    Item(NeedItem),
+    /// A needs-you item, with its actions.
+    Item(ItemFace),
     /// A work row, with the buttons that apply to it.
     Row(RowFace),
+}
+
+/// A needs-you item on the card.
+pub struct ItemFace {
+    /// The item as the card draws it. An item with an answer queued reads as resolved (see `shown_item`).
+    pub item: NeedItem,
+    pub actions: ItemActions,
+    /// `Next: {key}` and the click that picks that item. `None` when no other item is open.
+    pub next: Option<(String, ClickFn)>,
+    /// `true` when the board takes no actions: the foot says so, and the item buttons do nothing.
+    pub inert: bool,
+}
+
+/// The actions line of an item. A button's `on_click` is `None` when the board takes no actions.
+pub enum ItemActions {
+    /// An open decision: one button per option in card order, then `Answer in chat`.
+    Decide {
+        options: Vec<OptionFace>,
+        chat: Option<ClickFn>,
+    },
+    /// An open to-do: `Done`, then `Open link` when the item has a link.
+    Do {
+        done: Option<ClickFn>,
+        link: Option<ClickFn>,
+    },
+    /// Open news: `Dismiss`.
+    Know { dismiss: Option<ClickFn> },
+    /// A resolved item, or one with an answer queued: `✓ {answer}`, then `undo` while the answer can
+    /// still be taken back, then `· sending` once it is written.
+    Resolved {
+        answer: String,
+        undo: Option<ClickFn>,
+        sending: bool,
+    },
+}
+
+/// One option of a decision. `recommended` makes it the filled button.
+pub struct OptionFace {
+    pub label: String,
+    pub recommended: bool,
+    pub on_click: Option<ClickFn>,
+}
+
+/// How a card button is drawn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ButtonStyle {
+    /// White, with bold dark text: the owner acts (`YOU_BG`, `YOU_TEXT`).
+    Filled,
+    /// Outlined grey, with `TEXT`.
+    Outlined,
+    /// No border: text in `colour`, underlined on hover.
+    Plain { colour: u32 },
+}
+
+/// The style of an option button: the recommended option is filled, the others are outlined.
+pub fn option_style(recommended: bool) -> ButtonStyle {
+    if recommended {
+        ButtonStyle::Filled
+    } else {
+        ButtonStyle::Outlined
+    }
+}
+
+/// The item as the card and the needs-you rows draw it. An item with an answer queued reads as
+/// resolved, with that answer, until the mod takes the action or refuses it.
+pub fn shown_item(item: &NeedItem, queued: Option<&str>) -> NeedItem {
+    let mut shown = item.clone();
+    if let Some(answer) = queued {
+        shown.open = false;
+        shown.answer = Some(answer.to_owned());
+    }
+    shown
+}
+
+/// The answer that a resolved item shows: its answer, or `done` when it has none.
+pub fn resolved_answer(item: &NeedItem) -> String {
+    item.answer.clone().unwrap_or_else(|| "done".to_owned())
+}
+
+/// The URL that a to-do's link opens. A link without `://` gets `http://` in front.
+pub fn link_url(link: &str) -> String {
+    if link.contains("://") {
+        link.to_owned()
+    } else {
+        format!("http://{link}")
+    }
 }
 
 /// A work row on the card. A button is drawn only when its field is set.
@@ -83,13 +168,13 @@ pub struct RowFace {
 
 /// The card with what `face` shows. `now_ms` dates the `ago` part of an item's meta line.
 pub fn answer_card(face: CardFace, now_ms: u64) -> impl IntoElement {
-    let (head, text, actions) = match face {
-        CardFace::Empty => (None, None, Vec::new()),
-        // The item's actions come with S5. Until then the actions line is empty.
-        CardFace::Item(item) => (
-            Some(item_head(&item, now_ms).into_any_element()),
-            item.text.clone(),
-            Vec::new(),
+    let (head, text, actions, foot) = match face {
+        CardFace::Empty => (None, None, Vec::new(), Vec::new()),
+        CardFace::Item(face) => (
+            Some(item_head(&face.item, now_ms).into_any_element()),
+            face.item.text.clone(),
+            item_actions(face.actions),
+            item_foot(face.inert, face.next),
         ),
         CardFace::Row(row) => {
             let head = head_line(
@@ -102,6 +187,7 @@ pub fn answer_card(face: CardFace, now_ms: u64) -> impl IntoElement {
                 Some(head.into_any_element()),
                 row.row.now.clone(),
                 row_buttons(row),
+                Vec::new(),
             )
         }
     };
@@ -125,15 +211,18 @@ pub fn answer_card(face: CardFace, now_ms: u64) -> impl IntoElement {
             div()
                 .flex_none()
                 .flex()
+                .flex_wrap()
                 .gap(px(ANSWER_BUTTON_GAP))
                 .children(actions),
         )
-        // The foot line is empty until the item card (S5) fills it with `Next: {key}`.
         .child(
             div()
                 .debug_selector(|| "card-foot".into())
                 .h(px(LINE_HEIGHT))
-                .flex_none(),
+                .flex_none()
+                .flex()
+                .items_center()
+                .children(foot),
         )
 }
 
@@ -231,22 +320,161 @@ fn row_buttons(row: RowFace) -> Vec<AnyElement> {
     let mut buttons = Vec::new();
     if let Some((tab, on_click)) = row.focus {
         let label = format!("Focus {tab}");
-        buttons.push(card_button("card-focus", label, on_click).into_any_element());
+        buttons.push(action_line_button(
+            "card-focus",
+            label,
+            ButtonStyle::Outlined,
+            Some(on_click),
+        ));
     }
     if let Some(on_click) = row.report {
-        buttons.push(card_button("card-report", "Report".to_owned(), on_click).into_any_element());
+        buttons.push(action_line_button(
+            "card-report",
+            "Report".to_owned(),
+            ButtonStyle::Outlined,
+            Some(on_click),
+        ));
     }
     if let Some(on_click) = row.open_pr {
-        buttons.push(card_button("card-pr", "Open PR".to_owned(), on_click).into_any_element());
+        buttons.push(action_line_button(
+            "card-pr",
+            "Open PR".to_owned(),
+            ButtonStyle::Outlined,
+            Some(on_click),
+        ));
     }
     buttons
 }
 
-/// An outlined button of the card. Its accessible name is its label.
-fn card_button(selector: &'static str, label: String, on_click: ClickFn) -> impl IntoElement {
-    div()
-        .id(selector)
-        .debug_selector(move || selector.to_owned())
+/// The actions line of an item, in order. See `ItemActions` for each kind.
+fn item_actions(actions: ItemActions) -> Vec<AnyElement> {
+    match actions {
+        ItemActions::Decide { options, chat } => {
+            let mut line: Vec<AnyElement> = options
+                .into_iter()
+                .enumerate()
+                .map(|(position, option)| {
+                    action_line_button(
+                        &format!("card-opt-{position}"),
+                        option.label,
+                        option_style(option.recommended),
+                        option.on_click,
+                    )
+                })
+                .collect();
+            line.push(action_line_button(
+                "card-chat",
+                "Answer in chat".to_owned(),
+                ButtonStyle::Plain { colour: TEXT_DIM },
+                chat,
+            ));
+            line
+        }
+        ItemActions::Do { done, link } => {
+            let mut line = vec![action_line_button(
+                "card-done",
+                "Done".to_owned(),
+                ButtonStyle::Filled,
+                done,
+            )];
+            if let Some(on_click) = link {
+                line.push(action_line_button(
+                    "card-link",
+                    "Open link".to_owned(),
+                    ButtonStyle::Outlined,
+                    Some(on_click),
+                ));
+            }
+            line
+        }
+        ItemActions::Know { dismiss } => vec![action_line_button(
+            "card-dismiss",
+            "Dismiss".to_owned(),
+            ButtonStyle::Outlined,
+            dismiss,
+        )],
+        ItemActions::Resolved {
+            answer,
+            undo,
+            sending,
+        } => {
+            let mut line = vec![
+                div()
+                    .debug_selector(|| "card-answer".into())
+                    .flex_none()
+                    .text_color(rgb(TEXT_2))
+                    .child(format!("✓ {answer}"))
+                    .into_any_element(),
+            ];
+            if let Some(on_click) = undo {
+                line.push(action_line_button(
+                    "card-undo",
+                    "undo".to_owned(),
+                    ButtonStyle::Plain { colour: TEXT },
+                    Some(on_click),
+                ));
+            }
+            if sending {
+                line.push(
+                    div()
+                        .debug_selector(|| "card-sending".into())
+                        .flex_none()
+                        .text_color(rgb(TEXT_DIM))
+                        .child("· sending")
+                        .into_any_element(),
+                );
+            }
+            line
+        }
+    }
+}
+
+/// The foot of an item card: the inert note on the left when the board takes no actions, and
+/// `Next: {key}` on the right.
+fn item_foot(inert: bool, next: Option<(String, ClickFn)>) -> Vec<AnyElement> {
+    let mut foot = Vec::new();
+    if inert {
+        foot.push(
+            div()
+                .debug_selector(|| "card-inert".into())
+                .flex_none()
+                .text_color(rgb(TEXT_DIM))
+                .child("coordinator mod takes no actions")
+                .into_any_element(),
+        );
+    }
+    if let Some((key, on_click)) = next {
+        foot.push(
+            div()
+                .flex_none()
+                .ml_auto()
+                .child(action_line_button(
+                    "card-next",
+                    format!("Next: {key}"),
+                    ButtonStyle::Plain { colour: TEXT_DIM },
+                    Some(on_click),
+                ))
+                .into_any_element(),
+        );
+    }
+    foot
+}
+
+/// A card button as an element. With `on_click` `None` the board takes no actions: the button is dim
+/// and does nothing. The button's accessible name is its label.
+fn action_line_button(
+    selector: &str,
+    label: String,
+    style: ButtonStyle,
+    on_click: Option<ClickFn>,
+) -> AnyElement {
+    let live = on_click.is_some();
+    let base = div()
+        .id(selector.to_owned())
+        .debug_selector({
+            let selector = selector.to_owned();
+            move || selector
+        })
         .role(Role::Button)
         .aria_label(label.clone())
         .h(px(ANSWER_BUTTON_HEIGHT))
@@ -255,12 +483,32 @@ fn card_button(selector: &'static str, label: String, on_click: ClickFn) -> impl
         .items_center()
         .px(px(ANSWER_BUTTON_PAD_X))
         .rounded(px(ANSWER_BUTTON_RADIUS))
-        .border_1()
-        .border_color(rgb(CARD_BORDER))
-        .text_color(rgb(TEXT))
-        .cursor_pointer()
-        .on_click(move |event, window, cx| on_click(event, window, cx))
-        .child(label)
+        .child(label);
+    let styled = match style {
+        ButtonStyle::Filled if live => base
+            .bg(rgb(YOU_BG))
+            .font_weight(FontWeight::BOLD)
+            .text_color(rgb(YOU_TEXT)),
+        ButtonStyle::Plain { colour } if live => base
+            .text_color(rgb(colour))
+            .hover(|hovered| hovered.underline()),
+        ButtonStyle::Plain { .. } => base.text_color(rgb(TEXT_DIM)),
+        ButtonStyle::Filled | ButtonStyle::Outlined if live => base
+            .border_1()
+            .border_color(rgb(CARD_BORDER))
+            .text_color(rgb(TEXT)),
+        ButtonStyle::Filled | ButtonStyle::Outlined => base
+            .border_1()
+            .border_color(rgb(CARD_BORDER))
+            .text_color(rgb(TEXT_DIM)),
+    };
+    match on_click {
+        Some(on_click) => styled
+            .cursor_pointer()
+            .on_click(move |event, window, cx| on_click(event, window, cx))
+            .into_any_element(),
+        None => styled.into_any_element(),
+    }
 }
 
 #[cfg(test)]
@@ -269,15 +517,19 @@ mod tests {
     use super::*;
     use crate::agents_list::FocusFn;
     use crate::board::GlobalBoard;
+    use crate::board_actions::{Action, UNDO_MS};
+    use crate::board_model::ActionFailure;
     use crate::board_panel::BoardPanel;
     use crate::board_panel::OpenFn;
     use crate::board_panel::test_support::{
-        bounds, bridge, fixture, ignored_focus, ignored_open, panel, panel_on,
+        bounds, bridge, fixture, ignored_focus, ignored_open, panel, panel_on, panel_with_queue_on,
+        queued, status,
     };
     use contr_herdr::{AgentState, Pane, Tab, Workspace};
-    use gpui::{Entity, Modifiers, TestAppContext, VisualTestContext};
+    use gpui::{Bounds, Entity, Modifiers, Pixels, TestAppContext, VisualTestContext};
     use std::cell::RefCell;
     use std::collections::BTreeMap;
+    use std::time::Duration;
 
     /// One workspace with one tab, labelled `tab`, that holds the panes `panes`.
     fn tree_with(tab: &str, panes: &[&str]) -> HerdrTree {
@@ -633,5 +885,398 @@ mod tests {
         assert!(bounds(cx, "card-focus").is_some());
         let stored = view.read_with(cx, |panel, _| panel.picked().cloned());
         assert_eq!(stored, Some(BoardPick::Row(ROW_640.to_owned())));
+    }
+
+    /// The answer that D7's first button sends when the fixture recommends its second option.
+    const D7_ANSWER: &str = "two lines per row";
+
+    /// The fixture with D7 recommending its second option, so `card-opt-0` is `D7_ANSWER` (index 1).
+    fn fixture_recommending_the_second_option() -> BoardSnapshot {
+        let mut snapshot = fixture();
+        item_mut(&mut snapshot, "D7").recommended = Some(1);
+        snapshot
+    }
+
+    /// The item with `key` in `snapshot`.
+    fn item_mut<'a>(snapshot: &'a mut BoardSnapshot, key: &str) -> &'a mut NeedItem {
+        snapshot
+            .items
+            .iter_mut()
+            .find(|item| item.key == key)
+            .unwrap()
+    }
+
+    /// Moves the test clock by `by`, after what is due has run, and runs what that makes due.
+    fn advance(cx: &mut VisualTestContext, by: Duration) {
+        cx.run_until_parked();
+        cx.executor().advance_clock(by);
+        cx.run_until_parked();
+    }
+
+    /// A panel with a queue in `dir` over `snapshot`, with the Focus and Open PR calls recorded.
+    fn queued_recording_panel<'a>(
+        cx: &'a mut TestAppContext,
+        dir: &std::path::Path,
+        snapshot: BoardSnapshot,
+    ) -> (Entity<BoardPanel>, Calls, Calls, &'a mut VisualTestContext) {
+        let focused: Calls = Rc::new(RefCell::new(Vec::new()));
+        let opened: Calls = Rc::new(RefCell::new(Vec::new()));
+        let focus_log = focused.clone();
+        let open_log = opened.clone();
+        let focus: FocusFn =
+            Rc::new(move |pane: String, _: &mut App| focus_log.borrow_mut().push(pane));
+        let open: OpenFn = Rc::new(move |url: String, _: &mut App| open_log.borrow_mut().push(url));
+        let (view, cx) = panel_with_queue_on(cx, dir, snapshot, focus, open);
+        (view, focused, opened, cx)
+    }
+
+    #[test]
+    fn a_link_without_a_scheme_gets_http() {
+        assert_eq!(
+            link_url("example.com/pull/41"),
+            "http://example.com/pull/41"
+        );
+        assert_eq!(
+            link_url("https://example.com/pull/41"),
+            "https://example.com/pull/41"
+        );
+    }
+
+    #[test]
+    fn the_recommended_option_is_filled_and_the_others_are_outlined() {
+        assert_eq!(option_style(true), ButtonStyle::Filled);
+        assert_eq!(option_style(false), ButtonStyle::Outlined);
+    }
+
+    #[test]
+    fn a_queued_answer_shows_the_item_resolved_with_it() {
+        let item: NeedItem = serde_json::from_str(r#"{"key":"D7","kind":"ask"}"#).unwrap();
+        let queued = shown_item(&item, Some(D7_ANSWER));
+        assert!(!queued.open);
+        assert_eq!(queued.answer.as_deref(), Some(D7_ANSWER));
+        assert_eq!(
+            shown_item(&item, None),
+            item,
+            "without a queued answer, nothing changes"
+        );
+    }
+
+    #[test]
+    fn a_resolved_item_without_an_answer_shows_done() {
+        let answered: NeedItem =
+            serde_json::from_str(r#"{"key":"D6","kind":"ask","open":false,"answer":"keep"}"#)
+                .unwrap();
+        let bare: NeedItem =
+            serde_json::from_str(r#"{"key":"D6","kind":"ask","open":false}"#).unwrap();
+        assert_eq!(resolved_answer(&answered), "keep");
+        assert_eq!(resolved_answer(&bare), "done");
+    }
+
+    #[gpui::test]
+    fn a_decide_item_shows_its_options_then_answer_in_chat(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let (_view, _focused, _opened, cx) =
+            queued_recording_panel(cx, dir.path(), fixture_recommending_the_second_option());
+        click(cx, "need-row-1");
+
+        // The actions line may wrap, so the order is reading order: the line first, then x.
+        let first = bounds(cx, "card-opt-0").unwrap();
+        let second = bounds(cx, "card-opt-1").unwrap();
+        let chat = bounds(cx, "card-chat").unwrap();
+        let reads_before = |a: Bounds<Pixels>, b: Bounds<Pixels>| {
+            a.origin.y < b.origin.y || (a.origin.y == b.origin.y && a.origin.x < b.origin.x)
+        };
+        assert!(
+            reads_before(first, second),
+            "the recommended option is first"
+        );
+        assert!(reads_before(second, chat), "Answer in chat comes last");
+        assert!(bounds(cx, "card-done").is_none(), "a decision has no Done");
+        assert!(bounds(cx, "card-next").is_some(), "N4 is open after D7");
+    }
+
+    #[gpui::test]
+    fn an_option_click_queues_the_answer_and_undo_takes_it_back(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let (view, _focused, _opened, cx) =
+            queued_recording_panel(cx, dir.path(), fixture_recommending_the_second_option());
+        click(cx, "need-row-1");
+        click(cx, "card-opt-0");
+
+        assert!(bounds(cx, "card-answer").is_some(), "the answer shows");
+        assert!(
+            bounds(cx, "card-undo").is_some(),
+            "the answer can be undone"
+        );
+        assert!(
+            bounds(cx, "need-row-1-resolved").is_some(),
+            "D7 reads as resolved"
+        );
+        assert!(bounds(cx, "card-opt-0").is_none(), "the options are gone");
+        let stored = view.read_with(cx, |panel, _| panel.picked().cloned());
+        assert_eq!(
+            stored,
+            Some(BoardPick::Item("D7".to_owned())),
+            "the pick stays on D7"
+        );
+        assert_eq!(queued(dir.path()), None, "a held answer is not written yet");
+
+        click(cx, "card-undo");
+        assert!(bounds(cx, "card-opt-0").is_some(), "the options are back");
+        assert!(bounds(cx, "card-answer").is_none());
+        advance(cx, Duration::from_millis(UNDO_MS));
+        assert_eq!(
+            queued(dir.path()),
+            None,
+            "the undone answer is never written"
+        );
+    }
+
+    #[gpui::test]
+    fn an_answer_is_written_after_the_undo_window_and_leaves_once_acted(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let (_view, _focused, _opened, cx) =
+            queued_recording_panel(cx, dir.path(), fixture_recommending_the_second_option());
+        click(cx, "need-row-1");
+        click(cx, "card-opt-0");
+
+        advance(cx, Duration::from_millis(UNDO_MS - 1));
+        assert_eq!(queued(dir.path()), None, "the window is not over");
+        assert!(bounds(cx, "card-sending").is_none());
+
+        advance(cx, Duration::from_millis(1));
+        let answer = Action::Answer {
+            key: "D7".to_owned(),
+            option: 1,
+            label: D7_ANSWER.to_owned(),
+        };
+        assert_eq!(queued(dir.path()), Some(vec![(1, answer)]));
+        assert!(
+            bounds(cx, "card-sending").is_some(),
+            "it is written, not yet taken"
+        );
+        assert!(
+            bounds(cx, "card-undo").is_none(),
+            "a written answer can not be undone"
+        );
+
+        // The mod takes seq 1 and shows D7 answered.
+        let mut taken = fixture_recommending_the_second_option();
+        taken.rev = 43;
+        taken.acted = 1;
+        let d7 = item_mut(&mut taken, "D7");
+        d7.open = false;
+        d7.answer = Some(D7_ANSWER.to_owned());
+        show(cx, taken);
+        assert_eq!(
+            queued(dir.path()),
+            Some(vec![]),
+            "the taken action leaves the file"
+        );
+        assert!(
+            bounds(cx, "card-answer").is_some(),
+            "the answer stays on the card"
+        );
+        assert!(bounds(cx, "card-sending").is_none());
+        assert!(bounds(cx, "card-undo").is_none());
+    }
+
+    #[gpui::test]
+    fn a_refused_answer_shows_its_status_and_the_options_again(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let (_view, _focused, _opened, cx) =
+            queued_recording_panel(cx, dir.path(), fixture_recommending_the_second_option());
+        click(cx, "need-row-1");
+        click(cx, "card-opt-0");
+        advance(cx, Duration::from_millis(UNDO_MS));
+
+        let mut refused = fixture_recommending_the_second_option();
+        refused.rev = 43;
+        refused.acted = 1;
+        refused.failed = vec![ActionFailure {
+            seq: 1,
+            key: Some("D7".to_owned()),
+            text: "options changed".to_owned(),
+        }];
+        show(cx, refused);
+        assert_eq!(status(cx).as_deref(), Some("D7 not sent: options changed"));
+        assert!(
+            bounds(cx, "card-answer").is_none(),
+            "the optimistic answer is dropped"
+        );
+        assert!(bounds(cx, "card-opt-0").is_some(), "D7 is open again");
+    }
+
+    #[gpui::test]
+    fn a_to_do_shows_done_and_its_link_which_opens_with_http(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let mut snapshot = fixture();
+        item_mut(&mut snapshot, "T12").link = Some("example.com/pull/41".to_owned());
+        let (_view, _focused, opened, cx) = queued_recording_panel(cx, dir.path(), snapshot);
+
+        assert!(bounds(cx, "card-done").is_some(), "T12 is the default pick");
+        assert!(bounds(cx, "card-opt-0").is_none(), "a to-do has no options");
+        assert!(
+            bounds(cx, "card-dismiss").is_none(),
+            "a to-do has no Dismiss"
+        );
+        click(cx, "card-link");
+        assert_eq!(
+            *opened.borrow(),
+            vec!["http://example.com/pull/41".to_owned()]
+        );
+    }
+
+    #[gpui::test]
+    fn done_is_written_after_the_undo_window(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let (_view, _focused, _opened, cx) = queued_recording_panel(cx, dir.path(), fixture());
+        click(cx, "card-done");
+        assert!(
+            bounds(cx, "card-answer").is_some(),
+            "Done shows its answer at once"
+        );
+        assert_eq!(queued(dir.path()), None, "a held Done is not written yet");
+
+        advance(cx, Duration::from_millis(UNDO_MS));
+        assert_eq!(
+            queued(dir.path()),
+            Some(vec![(
+                1,
+                Action::Done {
+                    key: "T12".to_owned()
+                }
+            )])
+        );
+    }
+
+    #[gpui::test]
+    fn a_news_item_shows_dismiss_which_is_written_after_the_undo_window(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let (_view, _focused, _opened, cx) = queued_recording_panel(cx, dir.path(), fixture());
+        click(cx, "need-row-2");
+        assert!(bounds(cx, "card-dismiss").is_some());
+        assert!(bounds(cx, "card-done").is_none(), "news has no Done");
+        assert!(bounds(cx, "card-opt-0").is_none(), "news has no options");
+
+        click(cx, "card-dismiss");
+        advance(cx, Duration::from_millis(UNDO_MS));
+        assert_eq!(
+            queued(dir.path()),
+            Some(vec![(
+                1,
+                Action::Dismiss {
+                    key: "N4".to_owned()
+                }
+            )])
+        );
+    }
+
+    #[gpui::test]
+    fn next_picks_the_next_open_item(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let (view, _focused, _opened, cx) = queued_recording_panel(cx, dir.path(), fixture());
+        assert!(bounds(cx, "card-next").is_some(), "D7 comes after T12");
+        click(cx, "card-next");
+
+        assert!(bounds(cx, "need-row-1-picked").is_some(), "D7 is picked");
+        let stored = view.read_with(cx, |panel, _| panel.picked().cloned());
+        assert_eq!(stored, Some(BoardPick::Item("D7".to_owned())));
+    }
+
+    #[gpui::test]
+    fn without_another_open_item_there_is_no_next(cx: &mut TestAppContext) {
+        let mut snapshot = fixture();
+        snapshot.items.retain(|item| item.key == "T12");
+        let (_view, cx) = panel(cx, Some(snapshot), None, Some(bridge()));
+        assert!(bounds(cx, "card-done").is_some());
+        assert!(bounds(cx, "card-next").is_none(), "no other item is open");
+    }
+
+    #[gpui::test]
+    fn answer_in_chat_sends_chat_and_focuses_the_bridge_pane(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let (_view, focused, _opened, cx) = queued_recording_panel(cx, dir.path(), fixture());
+        click(cx, "need-row-1");
+        click(cx, "card-chat");
+
+        let chat = Action::Chat {
+            key: "D7".to_owned(),
+        };
+        assert_eq!(queued(dir.path()), Some(vec![(1, chat)]));
+        assert_eq!(
+            *focused.borrow(),
+            vec!["w1:p1".to_owned()],
+            "the bridge pane is focused"
+        );
+    }
+
+    #[gpui::test]
+    fn answer_in_chat_without_a_bridge_pane_sends_but_focuses_nothing(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let (_view, focused, _opened, cx) = queued_recording_panel(cx, dir.path(), fixture());
+        let board = cx.read(|app| app.global::<GlobalBoard>().0.clone());
+        cx.update(|_, app| {
+            board.update(app, |board, cx| board.set(Some(fixture()), None, None, cx))
+        });
+        cx.run_until_parked();
+
+        click(cx, "need-row-1");
+        click(cx, "card-chat");
+        let chat = Action::Chat {
+            key: "D7".to_owned(),
+        };
+        assert_eq!(queued(dir.path()), Some(vec![(1, chat)]));
+        assert!(focused.borrow().is_empty(), "there is no pane to focus");
+    }
+
+    #[gpui::test]
+    fn an_inert_board_dims_the_item_buttons_and_queues_nothing(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let mut snapshot = fixture();
+        snapshot.actions = 0;
+        let (_view, focused, opened, cx) = queued_recording_panel(cx, dir.path(), snapshot);
+        assert!(
+            bounds(cx, "card-inert").is_some(),
+            "the foot says the mod takes no actions"
+        );
+
+        click(cx, "card-done");
+        assert!(bounds(cx, "card-answer").is_none(), "Done does nothing");
+        click(cx, "card-link");
+        assert_eq!(
+            *opened.borrow(),
+            vec!["https://example.com/pull/41".to_owned()],
+            "the link still opens"
+        );
+        click(cx, "card-next");
+        assert!(
+            bounds(cx, "need-row-1-picked").is_some(),
+            "Next still picks"
+        );
+        click(cx, "card-opt-0");
+        click(cx, "card-chat");
+
+        assert_eq!(queued(dir.path()), None, "no actions file is written");
+        assert_eq!(status(cx), None, "no status line is shown");
+        assert!(
+            focused.borrow().is_empty(),
+            "Answer in chat focuses nothing"
+        );
+        assert!(bounds(cx, "card-opt-0").is_some(), "the options stay");
+    }
+
+    #[gpui::test]
+    fn a_resolved_item_shows_its_answer_and_no_undo(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let (_view, _focused, _opened, cx) = queued_recording_panel(cx, dir.path(), fixture());
+        click(cx, "need-row-3");
+        assert!(bounds(cx, "card-answer").is_some(), "D6 shows its answer");
+        assert!(bounds(cx, "card-undo").is_none());
+        assert!(bounds(cx, "card-sending").is_none());
+        assert!(
+            bounds(cx, "card-opt-0").is_none(),
+            "a resolved item has no options"
+        );
     }
 }
