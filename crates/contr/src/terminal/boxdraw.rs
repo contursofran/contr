@@ -297,7 +297,7 @@ mod tests {
 
     /// Every character the table draws with lines.
     const LINE_GLYPHS: &str = "─│┌┐└┘├┤┬┴┼╴╵╶╷━┃┏┓┗┛┣┫┳┻╋═║╔╗╚╝╠╣╦╩╬";
-    /// A 8 × 20 logical pixel cell at the origin.
+    /// An 8 × 20 logical pixel cell at the origin.
     const CELL: Rect = Rect {
         x: 0.,
         y: 0.,
@@ -415,6 +415,35 @@ mod tests {
         let shade = segments('░').map(BoxGlyph::alpha);
         assert_eq!(shade, Some(0.25));
         assert_eq!(segments('▓').map(BoxGlyph::alpha), Some(0.75));
+    }
+
+    #[test]
+    fn a_block_meets_the_cell_edges_at_scale_1_and_2() {
+        for scale in [1., 2.] {
+            assert_eq!(
+                lines_quads('█', CELL, scale),
+                vec![CELL],
+                "scale {scale}: full"
+            );
+            let lower = Rect {
+                x: 0.,
+                y: 10.,
+                w: 8.,
+                h: 10.,
+            };
+            assert_eq!(
+                lines_quads('▄', CELL, scale),
+                vec![lower],
+                "scale {scale}: lower half"
+            );
+        }
+    }
+
+    #[test]
+    fn a_cell_with_no_width_draws_nothing() {
+        let flat = Rect { w: 0., ..CELL };
+        assert!(lines_quads('─', flat, 1.).is_empty());
+        assert!(lines_quads('█', flat, 1.).is_empty());
     }
 
     #[test]
