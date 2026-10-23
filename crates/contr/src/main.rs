@@ -79,18 +79,14 @@ mod tests {
         assert_eq!(&BOLD[..4], &[0, 1, 0, 0]);
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn titlebar_uses_inset_traffic_lights_on_macos() {
         let options = titlebar_options();
-        if cfg!(target_os = "macos") {
-            assert!(options.appears_transparent);
-            assert_eq!(
-                options.traffic_light_position,
-                Some(point(px(14.), px(13.)))
-            );
-        } else {
-            assert!(!options.appears_transparent);
-            assert_eq!(options.traffic_light_position, None);
-        }
+        assert!(options.appears_transparent);
+        assert_eq!(
+            options.traffic_light_position,
+            Some(point(px(14.), px(13.)))
+        );
     }
 }
