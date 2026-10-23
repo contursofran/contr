@@ -42,3 +42,5 @@ jobs:
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
       - name: Test
         run: cargo test --locked --workspace
+      - name: Bundle script
+        run: scripts/test-bundle.sh
