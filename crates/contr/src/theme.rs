@@ -106,6 +106,19 @@ pub const WORK_LABEL_WIDTH: f32 = 52.; // "#123456"
 pub const SEGMENT_PAD_X: f32 = 8.; // Board | Report segment
 pub const SEGMENT_PAD_Y: f32 = 4.;
 pub const SEGMENT_RADIUS: f32 = 5.;
+pub const BOARD_GAP: f32 = 8.; // "Work" to "clear done"
+
+// Report tab (planner defaults; docs/DESIGN.md has no sizes for these)
+pub const REPORT_GAP: f32 = 12.; // between "Open in editor" and "back"
+pub const REPORT_INDENT: f32 = 14.; // per list depth (same as ROW_INDENT)
+pub const REPORT_MARKER_WIDTH: f32 = 22.; // "•" or "10." column
+pub const REPORT_BLOCK_GAP: f32 = 9.; // above level 1 and 2 headings
+pub const REPORT_BLANK_HEIGHT: f32 = 9.; // half a line
+pub const REPORT_BODY_PAD_TOP: f32 = 6.; // between the divider and the first line
+pub const REPORT_CODE_PAD_X: f32 = 6.; // inside a code line's background
+pub const REPORT_CODE_BG: u32 = BG_BARS; // grey
+pub const REPORT_QUOTE_PAD: f32 = 8.; // between a quote's rule and its text
+pub const REPORT_RULE_MARGIN: f32 = 8.; // above and below a horizontal rule
 
 #[cfg(test)]
 mod tests {
@@ -136,6 +149,7 @@ mod tests {
             ICON_YOU,
             ICON_GREY,
             ICON_FAINT,
+            REPORT_CODE_BG,
         ];
         for colour in colours {
             assert!(grey(colour), "{colour:#08X} is not grey");

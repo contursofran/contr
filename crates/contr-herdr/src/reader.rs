@@ -3,9 +3,11 @@
 //! it never writes to herdr.
 
 use std::convert::Infallible;
+use std::net::Shutdown;
+use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -22,9 +24,6 @@ pub const NOT_RUNNING_LINE: &str = "herdr is not running · start it with `herdr
 const LOG: &str = "contr_herdr";
 /// Longest wait for one reply: ping, snapshot and the subscription ack.
 const CALL_TIMEOUT: Duration = Duration::from_secs(2);
-/// Longest wait for one event. A stream that stays quiet this long takes a
-/// snapshot, so a lone status change shows after this long.
-const POLL: Duration = Duration::from_millis(250);
 /// After the first event not yet in a snapshot, wait this long for the burst to
 /// end, then snapshot.
 const COALESCE: Duration = Duration::from_millis(50);
@@ -32,11 +31,8 @@ const COALESCE: Duration = Duration::from_millis(50);
 /// gets at most four snapshots per second.
 const SNAPSHOT_GAP: Duration = Duration::from_millis(250);
 /// Snapshot interval. herdr sends no event for a pane label or cwd change, so
-/// without this those fields would go stale. Checked after each read, so a
-/// snapshot can be up to POLL late.
+/// without this those fields would go stale.
 const REFRESH: Duration = Duration::from_secs(10);
-/// Longest sleep between two stop checks while waiting.
-const WAIT_STEP: Duration = Duration::from_millis(100);
 const BASE_RETRY: Duration = Duration::from_millis(500);
 const MAX_RETRY: Duration = Duration::from_secs(5);
 /// Wait before retrying after herdr replied in a form contr does not read.
@@ -120,8 +116,7 @@ pub enum Target {
 /// Owns the reader thread. Dropping it asks the thread to stop and does not
 /// wait for it, so dropping on the UI thread never blocks.
 pub struct HerdrReader {
-    stop: Arc<AtomicBool>,
-    visible: Arc<AtomicBool>,
+    control: Arc<Control>,
     thread: Option<JoinHandle<()>>,
 }
 
@@ -131,31 +126,131 @@ impl HerdrReader {
     /// the refresh timer. When the window is shown again, the thread takes one
     /// snapshot. This never blocks.
     pub fn set_visible(&self, visible: bool) {
-        self.visible.store(visible, Ordering::Release);
+        let was_visible = self.control.visible.swap(visible, Ordering::AcqRel);
+        if visible && !was_visible {
+            self.control.wake();
+        }
     }
 
     /// The value last given to [`HerdrReader::set_visible`]. `true` at start.
     pub fn is_visible(&self) -> bool {
-        self.visible.load(Ordering::Acquire)
+        self.control.visible.load(Ordering::Acquire)
     }
 }
 
 impl Drop for HerdrReader {
     fn drop(&mut self) {
-        self.stop.store(true, Ordering::Release);
-        // The thread checks the flag before every read and between waits, so it
-        // stops within one read (POLL) or one wait step; a snapshot in flight
-        // ends within CALL_TIMEOUT. Dropping the handle detaches it.
+        // This ends a blocked event read and a retry wait at once; a snapshot in
+        // flight ends within CALL_TIMEOUT. Dropping the handle detaches the thread.
+        self.control.stop();
         self.thread.take();
+    }
+}
+
+/// What the UI side shares with the reader thread. The thread never wakes on a
+/// timer to look at it: [`Control::stop`] and [`Control::wake`] wake the thread.
+struct Control {
+    /// Whether the window is shown. Set by [`HerdrReader::set_visible`].
+    visible: AtomicBool,
+    signals: Mutex<Signals>,
+    /// Notified on stop, so a retry wait ends at once.
+    stopped: Condvar,
+    /// Event reads started. Tests count them to prove that a quiet stream does
+    /// not wake the thread.
+    #[cfg(test)]
+    reads: std::sync::atomic::AtomicUsize,
+}
+
+#[derive(Default)]
+struct Signals {
+    stop: bool,
+    /// A second handle to the open subscription, while there is one.
+    /// A shutdown on it ends the thread's blocked read.
+    events: Option<UnixStream>,
+    /// Set when [`Control::wake`] shut down `events`.
+    woken: bool,
+}
+
+impl Control {
+    fn new() -> Self {
+        Self {
+            visible: AtomicBool::new(true),
+            signals: Mutex::new(Signals::default()),
+            stopped: Condvar::new(),
+            #[cfg(test)]
+            reads: std::sync::atomic::AtomicUsize::new(0),
+        }
+    }
+
+    /// The flags are plain values, so a panic while they were held leaves them valid.
+    fn signals(&self) -> MutexGuard<'_, Signals> {
+        self.signals.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn stop(&self) {
+        let mut signals = self.signals();
+        signals.stop = true;
+        if let Some(events) = signals.events.take() {
+            events.shutdown(Shutdown::Both).ok();
+        }
+        self.stopped.notify_all();
+    }
+
+    /// Ends the open subscription, if any, so the thread subscribes again and
+    /// takes a snapshot. With no subscription open, the thread takes a snapshot
+    /// before its next read anyway.
+    fn wake(&self) {
+        let mut signals = self.signals();
+        if let Some(events) = signals.events.take() {
+            signals.woken = true;
+            events.shutdown(Shutdown::Both).ok();
+        }
+    }
+
+    /// Keeps `events` for [`Control::stop`] and [`Control::wake`]. `false` when a
+    /// stop came first: then nothing will wake a read on it.
+    fn follow(&self, events: UnixStream) -> bool {
+        let mut signals = self.signals();
+        signals.woken = false;
+        if signals.stop {
+            return false;
+        }
+        signals.events = Some(events);
+        true
+    }
+
+    /// Forgets the subscription handle. `true` when [`Control::wake`] ended it.
+    fn unfollow(&self) -> bool {
+        let mut signals = self.signals();
+        signals.events = None;
+        std::mem::take(&mut signals.woken)
+    }
+
+    fn is_stopped(&self) -> bool {
+        self.signals().stop
+    }
+
+    /// Waits for `delay` or a stop. `false` on a stop.
+    fn wait(&self, delay: Duration) -> bool {
+        let (signals, _) = self
+            .stopped
+            .wait_timeout_while(self.signals(), delay, |signals| !signals.stop)
+            .unwrap_or_else(PoisonError::into_inner);
+        !signals.stop
     }
 }
 
 #[cfg(test)]
 impl HerdrReader {
+    /// Event reads the thread has started.
+    fn reads(&self) -> usize {
+        self.control.reads.load(Ordering::SeqCst)
+    }
+
     /// Stops the thread and waits up to 1 s for it to end. Panics when it is
     /// still running then, or when it panicked.
     fn join_for_test(mut self) {
-        self.stop.store(true, Ordering::Release);
+        self.control.stop();
         let Some(thread) = self.thread.take() else {
             return;
         };
@@ -183,15 +278,13 @@ fn spawn_with_refresh(
     tx: Sender<HerdrUpdate>,
     refresh_every: Duration,
 ) -> std::io::Result<HerdrReader> {
-    let stop = Arc::new(AtomicBool::new(false));
-    let visible = Arc::new(AtomicBool::new(true));
-    let mut reader = Reader::new(tx, Arc::clone(&stop), Arc::clone(&visible), refresh_every);
+    let control = Arc::new(Control::new());
+    let mut reader = Reader::new(tx, Arc::clone(&control), refresh_every);
     let thread = thread::Builder::new()
         .name("contr-herdr".into())
         .spawn(move || reader.run(&target))?;
     Ok(HerdrReader {
-        stop,
-        visible,
+        control,
         thread: Some(thread),
     })
 }
@@ -225,9 +318,7 @@ enum Ended {
 /// sent, so nothing is sent or logged twice.
 struct Reader {
     tx: Sender<HerdrUpdate>,
-    stop: Arc<AtomicBool>,
-    /// Whether the window is shown. Set by [`HerdrReader::set_visible`].
-    visible: Arc<AtomicBool>,
+    control: Arc<Control>,
     /// Snapshot interval with no event: [`REFRESH`], or a shorter one in tests.
     refresh_every: Duration,
     state: Option<ConnState>,
@@ -237,16 +328,10 @@ struct Reader {
 }
 
 impl Reader {
-    fn new(
-        tx: Sender<HerdrUpdate>,
-        stop: Arc<AtomicBool>,
-        visible: Arc<AtomicBool>,
-        refresh_every: Duration,
-    ) -> Self {
+    fn new(tx: Sender<HerdrUpdate>, control: Arc<Control>, refresh_every: Duration) -> Self {
         Self {
             tx,
-            stop,
-            visible,
+            control,
             refresh_every,
             state: None,
             tree: None,
@@ -307,8 +392,21 @@ impl Reader {
         loop {
             // Subscribe before the snapshot, so no change falls between the two.
             let mut sub = self.open(path, &mut panes, &mut refused)?;
-            if self.refresh(path, &mut panes)? {
-                self.watch(path, &mut sub, &mut panes)?;
+            let events = sub.wake_handle().map_err(|e| self.failed(e))?;
+            // Kept before the snapshot, so a show during the snapshot is not lost.
+            if !self.control.follow(events) {
+                return Err(Ended::Stop);
+            }
+            let watched = match self.refresh(path, &mut panes) {
+                Ok(true) => self.watch(path, &mut sub, &mut panes),
+                other => other.map(drop),
+            };
+            let woken = self.control.unfollow();
+            match watched {
+                Err(_) if self.stopped() => return Err(Ended::Stop),
+                // The window was shown: subscribe again, then take a snapshot.
+                Err(Ended::NotRunning(_)) if woken => {}
+                result => result?,
             }
         }
     }
@@ -325,7 +423,7 @@ impl Reader {
         panes: &mut Vec<String>,
         refused: &mut Option<Vec<String>>,
     ) -> Result<Subscription, Ended> {
-        match Subscription::open(path, panes, CALL_TIMEOUT, POLL) {
+        match Subscription::open(path, panes, CALL_TIMEOUT) {
             Ok(sub) => {
                 if !panes.is_empty() {
                     *refused = None;
@@ -339,7 +437,7 @@ impl Reader {
             {
                 *refused = Some(panes.clone());
                 panes.clear();
-                Subscription::open(path, panes, CALL_TIMEOUT, POLL).map_err(|e| self.failed(e))
+                Subscription::open(path, panes, CALL_TIMEOUT).map_err(|e| self.failed(e))
             }
             Err(err) => Err(self.failed(err)),
         }
@@ -363,7 +461,9 @@ impl Reader {
     /// A snapshot runs when the stream goes quiet, or [`COALESCE`] after the
     /// first event not yet in a snapshot, but never less than [`SNAPSHOT_GAP`]
     /// after the last one. While the window is shown, it also runs every
-    /// `refresh_every`. When the window is shown again, it runs once.
+    /// `refresh_every`. A read waits only until the next snapshot is due; with
+    /// none due (window hidden, no event pending), it waits with no timer until
+    /// an event, the end of the stream, or a stop or show from [`Control`].
     fn watch(
         &mut self,
         path: &Path,
@@ -372,12 +472,21 @@ impl Reader {
     ) -> Result<(), Ended> {
         let mut pending: Option<Instant> = None; // first event not yet in a snapshot
         let mut refreshed = Instant::now();
-        let mut visible = self.visible.load(Ordering::Acquire);
         loop {
             if self.stopped() {
                 return Err(Ended::Stop);
             }
-            let quiet = match sub.next_event() {
+            let visible = self.control.visible.load(Ordering::Acquire);
+            let burst_end = pending.map(|since| (since + COALESCE).max(refreshed + SNAPSHOT_GAP));
+            let timer = visible.then(|| refreshed + self.refresh_every);
+            let due_at = match (burst_end, timer) {
+                (Some(a), Some(b)) => Some(a.min(b)),
+                (a, b) => a.or(b),
+            };
+            #[cfg(test)]
+            self.control.reads.fetch_add(1, Ordering::SeqCst);
+            let wait = due_at.map(|at| at.saturating_duration_since(Instant::now()));
+            let quiet = match sub.next_event(wait) {
                 Ok(true) => false,
                 Ok(false) => true,
                 Err(err) => return Err(self.failed(err)),
@@ -385,14 +494,11 @@ impl Reader {
             if !quiet && pending.is_none() {
                 pending = Some(Instant::now());
             }
-            // A hide and a show inside one read timeout (POLL) take no snapshot. Harmless.
-            let now_visible = self.visible.load(Ordering::Acquire);
-            let shown_again = now_visible && !visible;
-            visible = now_visible;
+            // Read again: the window can be hidden while the read waits for the timer.
+            let visible = self.control.visible.load(Ordering::Acquire);
             let due = pending.is_some_and(|since| {
                 quiet || (since.elapsed() >= COALESCE && refreshed.elapsed() >= SNAPSHOT_GAP)
-            }) || shown_again
-                || (visible && refreshed.elapsed() >= self.refresh_every);
+            }) || (visible && refreshed.elapsed() >= self.refresh_every);
             if due {
                 if !self.refresh(path, panes)? {
                     return Ok(());
@@ -474,20 +580,13 @@ impl Reader {
     }
 
     fn stopped(&self) -> bool {
-        self.stop.load(Ordering::Acquire) || self.tx.is_closed()
+        self.control.is_stopped() || self.tx.is_closed()
     }
 
-    /// Sleeps for `delay` in short steps. `false` when the reader must stop first.
+    /// Waits for `delay`. `false` when the reader must stop first. A receiver
+    /// dropped during the wait is seen at its end.
     fn wait(&self, delay: Duration) -> bool {
-        let until = Instant::now() + delay;
-        while !self.stopped() {
-            let now = Instant::now();
-            if now >= until {
-                return true;
-            }
-            thread::sleep(WAIT_STEP.min(until - now));
-        }
-        false
+        !self.stopped() && self.control.wait(delay) && !self.stopped()
     }
 }
 
@@ -854,8 +953,7 @@ mod tests {
     #[test]
     fn a_state_or_tree_equal_to_the_last_one_is_not_sent_again() {
         let (tx, rx) = async_channel::bounded(16);
-        let visible = Arc::new(AtomicBool::new(true));
-        let mut reader = Reader::new(tx, Arc::new(AtomicBool::new(false)), visible, REFRESH);
+        let mut reader = Reader::new(tx, Arc::new(Control::new()), REFRESH);
         let idle = tree_from(&snapshot("idle"));
 
         reader.report(ConnState::Connecting).expect("open");
@@ -943,6 +1041,62 @@ mod tests {
         );
         // Events 10 ms apart never leave the stream quiet, so only a check on every read stops it.
         reader.join_for_test();
+    }
+
+    /// A reader connected to a herdr that acks and then stays quiet, with the
+    /// window hidden. Returns once the reader is in its event loop. Keep the
+    /// receiver: when it is dropped, the reader ends at its next send.
+    fn quiet_hidden_reader(dir: &Path) -> (HerdrReader, Receiver<HerdrUpdate>) {
+        let path = fake_herdr(dir, |method, _| match method {
+            "ping" => answer(PONG),
+            "session.snapshot" => answer(&snapshot_reply(&snapshot("idle"))),
+            _ => held_ack(),
+        });
+        let (tx, rx) = async_channel::bounded(16);
+        // A short timer: if hiding did not stop it, the reader would wake often.
+        let reader =
+            spawn_with_refresh(Target::Socket(path), tx, Duration::from_millis(50)).expect("spawn");
+        reader.set_visible(false);
+        assert!(matches!(
+            next(&rx),
+            HerdrUpdate::State(ConnState::Connecting)
+        ));
+        assert!(matches!(
+            next(&rx),
+            HerdrUpdate::State(ConnState::Connected { .. })
+        ));
+        tree_of(next(&rx));
+        (reader, rx)
+    }
+
+    #[test]
+    fn a_quiet_stream_does_not_wake_the_reader_while_hidden() {
+        let dir = tempdir();
+        let (reader, _rx) = quiet_hidden_reader(dir.path());
+        let before = reader.reads();
+        // Time must pass to show that nothing happens in it.
+        thread::sleep(Duration::from_secs(1));
+        // At most the read that was waiting when the test started.
+        let reads = reader.reads() - before;
+        assert!(reads <= 1, "{reads} event reads in 1 s with no event");
+        reader.join_for_test();
+    }
+
+    #[test]
+    fn a_stop_ends_a_read_that_waits_with_no_timer_at_once() {
+        let dir = tempdir();
+        let (reader, _rx) = quiet_hidden_reader(dir.path());
+        let Some(thread) = reader.thread.as_ref() else {
+            panic!("no thread");
+        };
+        assert!(!thread.is_finished());
+        let started = Instant::now();
+        reader.join_for_test();
+        assert!(
+            started.elapsed() < Duration::from_millis(200),
+            "the thread ended {:?} after the stop",
+            started.elapsed()
+        );
     }
 
     #[test]

@@ -6,15 +6,17 @@
 use crate::agents_list::{FocusFn, focus_in_background};
 use crate::git::{self, Scan};
 use crate::herdr::{GlobalHerdr, Herdr};
+use crate::host::{GlobalHost, Host, HostStats};
 use crate::selection::{GlobalSelection, Selected, Selection};
 use crate::spaces_model::{self, Badge, RepoGroup, WorktreeRow};
 use crate::status_icon::StatusIcon;
 use crate::theme::{
     BADGE_PAD_X, BADGE_RADIUS, BG_CARD, CARD_BORDER, CARD_INSET_X, CARD_RADIUS, HOST_DOT_SIZE,
-    ICON_FAINT, ICON_SIZE_SMALL, LINE_HEIGHT, ROW_INDENT, SIDEBAR_PAD_X, SIDEBAR_TOGGLE_BOX,
-    SIDEBAR_TOGGLE_FILL, SIDEBAR_TOGGLE_HEIGHT, SIDEBAR_TOGGLE_RADIUS, SIDEBAR_TOGGLE_WIDTH,
-    SPACES_GAP, SPACES_ROW_HEIGHT, TEXT, TEXT_2, TEXT_DIM, TEXT_DIM_2, TITLE_BAR_HEIGHT,
-    TRAFFIC_LIGHT_INSET, WORKTREE_ROW_HEIGHT, YOU_BG, YOU_TEXT,
+    ICON_FAINT, ICON_SIZE_SMALL, LINE, LINE_HEIGHT, MEM_BAR_HEIGHT, MEM_BAR_WIDTH, ROW_INDENT,
+    SIDEBAR_PAD_X, SIDEBAR_TOGGLE_BOX, SIDEBAR_TOGGLE_FILL, SIDEBAR_TOGGLE_HEIGHT,
+    SIDEBAR_TOGGLE_RADIUS, SIDEBAR_TOGGLE_WIDTH, SPACES_GAP, SPACES_ROW_HEIGHT, TEXT, TEXT_2,
+    TEXT_DIM, TEXT_DIM_2, TITLE_BAR_HEIGHT, TRAFFIC_LIGHT_INSET, USAGE_BAR_RADIUS,
+    WORKTREE_ROW_HEIGHT, YOU_BG, YOU_TEXT,
 };
 use crate::visibility::GlobalVisibility;
 use async_channel::Receiver;
@@ -39,6 +41,8 @@ pub enum SpacesEvent {
 pub struct Spaces {
     herdr: Entity<Herdr>,
     selection: Entity<Selection>,
+    /// The host sampler. The host card shows its latest reading.
+    host: Entity<Host>,
     /// Starts a focus call for a pane. The app sends `pane.focus`; the tests record the ids.
     focus: FocusFn,
     /// The repo groups the body shows. Empty while herdr has no tree.
@@ -68,8 +72,8 @@ pub struct Spaces {
 impl EventEmitter<SpacesEvent> for Spaces {}
 
 impl Spaces {
-    /// Needs `Herdr::init`, `Selection::init` and `Visibility::init` first. Scans at once when
-    /// herdr already has a tree, then follows herdr's changes and the rescan timer.
+    /// Needs `Herdr::init`, `Host::init`, `Selection::init` and `Visibility::init` first. Scans at
+    /// once when herdr already has a tree, then follows herdr's changes and the rescan timer.
     pub fn new(cx: &mut Context<Self>) -> Self {
         Self::with_focus(Rc::new(focus_in_background), cx)
     }
@@ -78,10 +82,13 @@ impl Spaces {
     fn with_focus(focus: FocusFn, cx: &mut Context<Self>) -> Self {
         let herdr = cx.global::<GlobalHerdr>().0.clone();
         let selection = cx.global::<GlobalSelection>().0.clone();
+        let host = cx.global::<GlobalHost>().0.clone();
         let visibility = cx.global::<GlobalVisibility>().0.clone();
         let herdr_sub = cx.observe(&herdr, |this, _, cx| this.on_herdr_changed(cx));
         // The rows draw the selection: a change moves the mark, and only the rows it moves redraw.
         let selection_sub = cx.observe(&selection, |this, _, cx| this.sync_selected(cx));
+        // The host card redraws when the host publishes a changed reading.
+        let host_sub = cx.observe(&host, |_, _, cx| cx.notify());
         // Every visibility change is sent; the timer loop keeps the last one.
         let (changes_tx, changes_rx) = async_channel::unbounded::<bool>();
         let visibility_sub = cx.observe(&visibility, move |_, visibility, cx| {
@@ -92,6 +99,7 @@ impl Spaces {
         let mut spaces = Self {
             herdr,
             selection,
+            host,
             focus,
             groups: Vec::new(),
             rows: Vec::new(),
@@ -102,7 +110,7 @@ impl Spaces {
             scanning: None,
             #[cfg(test)]
             scans: 0,
-            _subs: vec![herdr_sub, visibility_sub, selection_sub],
+            _subs: vec![herdr_sub, visibility_sub, selection_sub, host_sub],
             _row_clicks: Vec::new(),
             _tick: tick,
         };
@@ -405,7 +413,7 @@ impl Render for Spaces {
                     .min_h_0()
                     .overflow_y_scroll()
                     .child(spaces_header())
-                    .child(host_card(self.online))
+                    .child(host_card(self.online, self.host.read(cx).stats))
                     .children(groups),
             )
     }
@@ -431,9 +439,9 @@ fn spaces_header() -> Div {
         )
 }
 
-/// The host card: `Local`, and a dot that is lit while herdr is connected. CPU and memory come
-/// later.
-fn host_card(online: bool) -> Div {
+/// The host card: `Local`, then the CPU reading, the memory bar and a dot that is lit while herdr
+/// is connected. Without a reading the CPU shows a dash and the bar stays empty.
+fn host_card(online: bool, stats: Option<HostStats>) -> Div {
     div()
         .debug_selector(|| "host-local".into())
         .mx(px(CARD_INSET_X))
@@ -449,10 +457,56 @@ fn host_card(online: bool) -> Div {
         .child(div().text_color(rgb(TEXT)).child("Local"))
         .child(
             div()
-                .debug_selector(|| "host-online".into())
-                .size(px(HOST_DOT_SIZE))
-                .rounded_full()
-                .bg(rgb(online_colour(online))),
+                .flex()
+                .items_center()
+                .gap(px(SPACES_GAP))
+                .child(
+                    div()
+                        .debug_selector(|| "host-cpu".into())
+                        .text_color(rgb(TEXT_DIM))
+                        .child(host_cpu_text(stats)),
+                )
+                .child(mem_bar(stats))
+                .child(
+                    div()
+                        .debug_selector(|| "host-online".into())
+                        .size(px(HOST_DOT_SIZE))
+                        .rounded_full()
+                        .bg(rgb(online_colour(online))),
+                ),
+        )
+}
+
+/// The CPU text on the host card: "CPU 38%", or "CPU –" without a reading.
+fn host_cpu_text(stats: Option<HostStats>) -> String {
+    match stats {
+        Some(stats) => format!("CPU {}", stats.cpu_label()),
+        None => "CPU –".into(),
+    }
+}
+
+/// The memory bar: a track `MEM_BAR_WIDTH` wide, filled to the memory share. Without a reading the
+/// fill has no width.
+fn mem_bar(stats: Option<HostStats>) -> Div {
+    let filled = stats.map_or(0, |stats| stats.mem_bar_pixels());
+    div()
+        .debug_selector(|| "host-mem".into())
+        .relative()
+        .flex_none()
+        .w(px(MEM_BAR_WIDTH))
+        .h(px(MEM_BAR_HEIGHT))
+        .rounded(px(USAGE_BAR_RADIUS))
+        .bg(rgb(LINE))
+        .child(
+            div()
+                .debug_selector(|| "host-mem-fill".into())
+                .absolute()
+                .top_0()
+                .left_0()
+                .h_full()
+                .w(px(filled as f32))
+                .rounded(px(USAGE_BAR_RADIUS))
+                .bg(rgb(TEXT_DIM)),
         )
 }
 
@@ -780,8 +834,9 @@ mod tests {
         assert!(events.borrow().is_empty());
     }
 
-    /// Registers what a `Spaces` reads: a shown window, the selection, and a detached herdr that
-    /// starts with `tree`. Returns the herdr, so a test can send it updates.
+    /// Registers what a `Spaces` reads: a shown window, the selection, a detached host with no
+    /// reading, and a detached herdr that starts with `tree`. Returns the herdr, so a test can send
+    /// it updates.
     fn register(cx: &mut TestAppContext, tree: Option<HerdrTree>) -> Entity<Herdr> {
         cx.update(Visibility::init);
         cx.update(Selection::init);
@@ -794,8 +849,30 @@ mod tests {
             };
             let herdr = app.new(|cx| Herdr::detached(live, cx));
             app.set_global(GlobalHerdr(herdr.clone()));
+            let host = app.new(|cx| Host::detached(None, cx));
+            app.set_global(GlobalHost(host));
             herdr
         })
+    }
+
+    /// Publishes a host reading to the sidebar's host, as the sampler would. Works in a test whose
+    /// sidebar is already in a window.
+    fn set_host_stats(cx: &mut TestAppContext, stats: Option<HostStats>) {
+        cx.update(|app| {
+            let host = app.global::<GlobalHost>().0.clone();
+            host.update(app, |host, cx| {
+                host.stats = stats;
+                cx.notify();
+            })
+        });
+    }
+
+    fn host_stats(cpu_percent: f32, mem_used: u64, mem_total: u64) -> HostStats {
+        HostStats {
+            cpu_percent,
+            mem_used,
+            mem_total,
+        }
     }
 
     fn pane(id: &str, cwd: &str, state: Option<AgentState>) -> Pane {
@@ -1435,6 +1512,54 @@ mod tests {
         assert!(cx.debug_bounds("spaces-new").is_some());
         assert!(cx.debug_bounds("host-local").is_some());
         assert!(cx.debug_bounds("host-online").is_some());
+    }
+
+    #[test]
+    fn the_cpu_text_rounds_or_shows_a_dash() {
+        assert_eq!(host_cpu_text(Some(host_stats(38.4, 0, 1))), "CPU 38%");
+        assert_eq!(host_cpu_text(Some(host_stats(37.5, 0, 1))), "CPU 38%");
+        assert_eq!(host_cpu_text(None), "CPU –");
+    }
+
+    #[gpui::test]
+    fn the_host_card_fills_the_memory_bar_to_the_share(cx: &mut TestAppContext) {
+        register(cx, None);
+        set_host_stats(cx, Some(host_stats(38., 50, 100)));
+        let (_spaces, _focused, cx) = show_spaces(cx);
+
+        let card = cx.debug_bounds("host-local").unwrap();
+        let bar = cx.debug_bounds("host-mem").unwrap();
+        assert_eq!(bar.size.width, px(MEM_BAR_WIDTH));
+        assert_eq!(bar.size.height, px(MEM_BAR_HEIGHT));
+        assert!(bar.right() <= card.right(), "the bar sits inside the card");
+        assert_eq!(
+            cx.debug_bounds("host-mem-fill").unwrap().size.width,
+            px(30.)
+        );
+        assert!(cx.debug_bounds("host-cpu").is_some());
+    }
+
+    #[gpui::test]
+    fn no_reading_leaves_the_bar_empty(cx: &mut TestAppContext) {
+        register(cx, None);
+        let (_spaces, _focused, cx) = show_spaces(cx);
+
+        assert!(cx.debug_bounds("host-cpu").is_some());
+        assert_eq!(cx.debug_bounds("host-mem-fill").unwrap().size.width, px(0.));
+    }
+
+    #[gpui::test]
+    fn a_new_reading_repaints_the_host_card(cx: &mut TestAppContext) {
+        register(cx, None);
+        let (_spaces, _focused, cx) = show_spaces(cx);
+        assert_eq!(cx.debug_bounds("host-mem-fill").unwrap().size.width, px(0.));
+
+        set_host_stats(cx, Some(host_stats(10., 75, 100)));
+        cx.run_until_parked();
+        assert_eq!(
+            cx.debug_bounds("host-mem-fill").unwrap().size.width,
+            px(45.)
+        );
     }
 
     #[gpui::test]

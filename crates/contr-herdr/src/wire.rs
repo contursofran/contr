@@ -371,20 +371,9 @@ pub struct Subscription {
 impl Subscription {
     /// Connects and subscribes to [`GLOBAL_EVENTS`] plus one `pane.agent_status_changed`
     /// per pane id. Waits up to `timeout` for `subscription_started`; a server error
-    /// (for example `pane_not_found`) fails. Then reads wait up to `poll` per call.
-    /// `timeout` bounds the write and the ack wait; the ack wait is checked after
-    /// each `poll`-long read, so it can overrun `timeout` by up to one `poll`.
-    /// A zero `poll` fails with `Io(InvalidInput)`: the socket rejects a zero read
-    /// timeout.
-    pub fn open(
-        path: &Path,
-        pane_ids: &[String],
-        timeout: Duration,
-        poll: Duration,
-    ) -> Result<Self, WireError> {
-        // Reads use `poll` from the start; the ack is awaited against `timeout`
-        // below, so no socket option changes after the ack.
-        let mut stream = connect(path, poll, timeout)?;
+    /// (for example `pane_not_found`) fails. `timeout` bounds the write and the ack wait.
+    pub fn open(path: &Path, pane_ids: &[String], timeout: Duration) -> Result<Self, WireError> {
+        let mut stream = connect(path, timeout, timeout)?;
         let mut subscriptions: Vec<Value> = GLOBAL_EVENTS
             .iter()
             .map(|kind| json!({ "type": kind }))
@@ -417,10 +406,26 @@ impl Subscription {
         Ok(Self { reader })
     }
 
-    /// `Ok(true)`: an event line arrived. `Ok(false)`: nothing within the poll
-    /// interval. `Err(Closed)`: herdr ended the stream.
-    pub fn next_event(&mut self) -> Result<bool, WireError> {
+    /// Waits for the next event. `wait` is the longest wait; `None` waits until an
+    /// event comes or the stream ends, with no timer. `Ok(true)`: an event line
+    /// arrived. `Ok(false)`: nothing within `wait`. `Err(Closed)`: the stream ended.
+    pub fn next_event(&mut self, wait: Option<Duration>) -> Result<bool, WireError> {
+        // The socket rejects a zero read timeout, so a wait that is already over
+        // becomes the shortest wait it accepts.
+        let wait = wait.map(|w| w.max(Duration::from_millis(1)));
+        match self.reader.inner.set_read_timeout(wait) {
+            // macOS refuses the option once the peer has closed or the socket
+            // was shut down. The read below then reports the end at once.
+            Err(e) if e.kind() == io::ErrorKind::InvalidInput => {}
+            other => other.map_err(WireError::Io)?,
+        }
         Ok(self.reader.next_line()?.is_some())
+    }
+
+    /// A second handle to the socket. A `shutdown` on it ends a blocked
+    /// [`Subscription::next_event`] at once with `Err(Closed)`.
+    pub fn wake_handle(&self) -> Result<UnixStream, WireError> {
+        self.reader.inner.try_clone().map_err(WireError::Io)
     }
 }
 
@@ -869,9 +874,9 @@ mod tests {
         let dir = tempdir();
         let (path, server) = serve(dir.path(), &[ACK, EVENT], Duration::ZERO);
         let panes = ["w1:p1".to_owned(), "w1:p2".to_owned()];
-        let mut stream = Subscription::open(&path, &panes, T, POLL).expect("open");
-        assert!(stream.next_event().expect("event"));
-        assert!(matches!(stream.next_event(), Err(WireError::Closed)));
+        let mut stream = Subscription::open(&path, &panes, T).expect("open");
+        assert!(stream.next_event(Some(T)).expect("event"));
+        assert!(matches!(stream.next_event(None), Err(WireError::Closed)));
 
         let request = request_json(&server.join().expect("server"));
         assert_eq!(request["id"], "contr-sub");
@@ -898,10 +903,10 @@ mod tests {
     fn subscription_quiet_poll_is_not_an_error() {
         let dir = tempdir();
         let (path, server) = serve(dir.path(), &[ACK], Duration::from_millis(300));
-        let mut stream = Subscription::open(&path, &[], T, POLL).expect("open");
-        assert!(!stream.next_event().expect("quiet poll"));
+        let mut stream = Subscription::open(&path, &[], T).expect("open");
+        assert!(!stream.next_event(Some(POLL)).expect("quiet poll"));
         let end = loop {
-            match stream.next_event() {
+            match stream.next_event(Some(POLL)) {
                 Ok(false) => continue,
                 other => break other,
             }
@@ -911,12 +916,32 @@ mod tests {
     }
 
     #[test]
+    fn a_shutdown_on_the_wake_handle_ends_a_read_with_no_timer() {
+        let dir = tempdir();
+        // herdr keeps the stream open and quiet for 5 s.
+        let (path, _server) = serve(dir.path(), &[ACK], Duration::from_secs(5));
+        let mut stream = Subscription::open(&path, &[], T).expect("open");
+        let wake = stream.wake_handle().expect("wake handle");
+        let started = Instant::now();
+        let waker = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(100));
+            wake.shutdown(std::net::Shutdown::Both).expect("shutdown");
+        });
+        assert!(matches!(stream.next_event(None), Err(WireError::Closed)));
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "the read ended {:?} after the start, not on the shutdown",
+            started.elapsed()
+        );
+        waker.join().expect("waker");
+    }
+
+    #[test]
     fn subscription_open_fails_on_pane_not_found() {
         let dir = tempdir();
         let reply = r#"{"id":"contr-sub","error":{"code":"pane_not_found","message":"pane w9:p99 not found"}}"#;
         let (path, server) = serve(dir.path(), &[reply], Duration::ZERO);
-        let err =
-            Subscription::open(&path, &["w9:p99".to_owned()], T, POLL).expect_err("open must fail");
+        let err = Subscription::open(&path, &["w9:p99".to_owned()], T).expect_err("open must fail");
         assert!(matches!(err, WireError::Server { ref code, .. } if code == "pane_not_found"));
         server.join().expect("server");
     }
@@ -925,7 +950,7 @@ mod tests {
     fn subscription_open_fails_when_closed_before_ack() {
         let dir = tempdir();
         let (path, server) = serve(dir.path(), &[], Duration::ZERO);
-        let err = Subscription::open(&path, &[], T, POLL).expect_err("closed");
+        let err = Subscription::open(&path, &[], T).expect_err("closed");
         assert!(matches!(err, WireError::Closed));
         server.join().expect("server");
     }
@@ -934,7 +959,7 @@ mod tests {
     fn subscription_open_times_out_without_ack() {
         let dir = tempdir();
         let (path, server) = serve(dir.path(), &[], Duration::from_millis(600));
-        let err = Subscription::open(&path, &[], SHORT, POLL).expect_err("no ack");
+        let err = Subscription::open(&path, &[], SHORT).expect_err("no ack");
         assert!(matches!(err, WireError::Io(ref e) if e.kind() == io::ErrorKind::TimedOut));
         server.join().expect("server");
     }

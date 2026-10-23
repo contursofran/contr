@@ -15,7 +15,7 @@ use gpui::{
 use super::boxdraw::{self, BoxGlyph};
 use super::colors::cell_colors;
 use super::grid::Metrics;
-use crate::theme::{FONT_FAMILY, TERMINAL_FONT_SIZE};
+use crate::theme::{BG_TERMINAL, FONT_FAMILY, TERMINAL_FONT_SIZE, TEXT};
 
 /// herdr's modifier bits (`Cell::attrs`) that the painter reads.
 const BOLD: u16 = 1;
@@ -32,6 +32,36 @@ const CURSOR_LINE: f32 = 2.;
 
 /// The shaped text of one row: each line starts at its column.
 pub(super) type RowCache = Vec<(Row, Vec<(usize, ShapedLine)>)>;
+
+/// What the view adds to a paint: whether it has focus, and the text the IME is composing.
+pub(super) struct Typing<'a> {
+    pub focused: bool,
+    pub marked: Option<&'a str>,
+}
+
+/// Brings `cache` to `rows`, one entry per row, and truncates it to the row count. A row that is
+/// the same `Arc` as its cached entry keeps its lines. Any other row is shaped by `shape_row`.
+pub(super) fn refresh_rows<L>(
+    cache: &mut Vec<(Row, Vec<(usize, L)>)>,
+    rows: &[Row],
+    mut shape_row: impl FnMut(&[Cell]) -> Vec<(usize, L)>,
+) {
+    cache.truncate(rows.len());
+    for (y, row) in rows.iter().enumerate() {
+        if cache
+            .get(y)
+            .is_some_and(|(cached, _)| Arc::ptr_eq(cached, row))
+        {
+            continue;
+        }
+        let entry = (Arc::clone(row), shape_row(row));
+        if y < cache.len() {
+            cache[y] = entry;
+        } else {
+            cache.push(entry);
+        }
+    }
+}
 
 /// The look of a run of text. Two cells with equal styles join one span.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -149,18 +179,17 @@ pub(super) fn cursor_rect(cell: Bounds<Pixels>, shape: u8) -> Bounds<Pixels> {
     }
 }
 
-/// Paints `surface` with its top-left cell at `origin`. `focused` draws the cursor solid; without
-/// it the cursor is an outline.
+/// Paints `surface` with its top-left cell at `origin`. `typing.focused` draws the cursor solid;
+/// without it the cursor is an outline.
 pub(super) fn paint_surface(
     window: &mut Window,
     cx: &mut App,
     origin: Point<Pixels>,
     m: Metrics,
     surface: &Surface,
-    focused: bool,
+    typing: Typing<'_>,
     cache: &mut RowCache,
 ) {
-    cache.truncate(surface.rows.len());
     for (y, row) in surface.rows.iter().enumerate() {
         let top = origin.y + px(y as f32 * m.cell_h);
         for (start, len, colour) in background_runs(row) {
@@ -171,36 +200,27 @@ pub(super) fn paint_surface(
     }
     paint_quad_glyphs(window, origin, m, surface);
 
-    for (y, row) in surface.rows.iter().enumerate() {
-        if !cache
-            .get(y)
-            .is_some_and(|(cached, _)| Arc::ptr_eq(cached, row))
-        {
-            let shaped = spans(row)
-                .iter()
-                .map(|span| (span.col, shape(span, window)))
-                .collect();
-            let entry = (Arc::clone(row), shaped);
-            if y < cache.len() {
-                cache[y] = entry;
-            } else {
-                cache.push(entry);
-            }
-        }
-    }
+    refresh_rows(cache, &surface.rows, |row| {
+        spans(row)
+            .iter()
+            .map(|span| (span.col, shape(&span.text, span.style, window)))
+            .collect()
+    });
     for (y, (_, lines)) in cache.iter().enumerate() {
         let top = origin.y + px(y as f32 * m.cell_h);
         for (col, line) in lines {
             let at = point(origin.x + px(*col as f32 * m.cell_w), top);
-            // A line that cannot paint leaves its text out; the rest of the surface still paints.
-            if let Err(e) = line.paint(at, px(m.cell_h), TextAlign::Left, None, window, cx) {
-                tracing::debug!("terminal text not painted: {e}");
-            }
+            paint_line(line, at, m, window, cx);
         }
     }
 
-    if let Some(cursor) = surface.cursor.filter(|c| c.visible) {
-        paint_cursor(window, origin, m, cursor, surface.size, focused);
+    if let Some(cursor) = surface.cursor {
+        if let Some(text) = typing.marked {
+            paint_marked(window, cx, origin, m, cursor, surface.size, text);
+        }
+        if cursor.visible {
+            paint_cursor(window, origin, m, cursor, surface.size, typing.focused);
+        }
     }
 }
 
@@ -229,6 +249,41 @@ fn paint_quad_glyphs(window: &mut Window, origin: Point<Pixels>, m: Metrics, sur
     }
 }
 
+/// Paints one shaped line. A line that cannot paint leaves its text out; the rest still paints.
+fn paint_line(line: &ShapedLine, at: Point<Pixels>, m: Metrics, window: &mut Window, cx: &mut App) {
+    if let Err(e) = line.paint(at, px(m.cell_h), TextAlign::Left, None, window, cx) {
+        tracing::debug!("terminal text not painted: {e}");
+    }
+}
+
+/// Paints the text the IME is composing, underlined, at the cursor cell. Its background is the
+/// terminal's, so the glyphs under it do not show through.
+fn paint_marked(
+    window: &mut Window,
+    cx: &mut App,
+    origin: Point<Pixels>,
+    m: Metrics,
+    cursor: Cursor,
+    grid: GridSize,
+    text: &str,
+) {
+    let (x, y) = cursor_cell(cursor, grid);
+    let at = point(
+        origin.x + px(f32::from(x) * m.cell_w),
+        origin.y + px(f32::from(y) * m.cell_h),
+    );
+    let style = Style {
+        fg: TEXT,
+        bold: false,
+        underline: true,
+        strike: false,
+    };
+    let line = shape(text, style, window);
+    let cover = Bounds::new(at, size(line.width(), px(m.cell_h)));
+    window.paint_quad(fill(cover, Hsla::from(rgb(BG_TERMINAL))));
+    paint_line(&line, at, m, window, cx);
+}
+
 fn paint_cursor(
     window: &mut Window,
     origin: Point<Pixels>,
@@ -251,34 +306,31 @@ fn paint_cursor(
     }
 }
 
-/// Shapes one span in the terminal font, at the terminal size.
-fn shape(span: &Span, window: &Window) -> ShapedLine {
-    let colour = Hsla::from(rgb(span.style.fg));
+/// Shapes `text` in the terminal font, at the terminal size, in the look `style` gives.
+fn shape(text: &str, style: Style, window: &Window) -> ShapedLine {
+    let colour = Hsla::from(rgb(style.fg));
     let mut face = font(FONT_FAMILY);
-    if span.style.bold {
+    if style.bold {
         face.weight = FontWeight::BOLD;
     }
     let run = TextRun {
-        len: span.text.len(),
+        len: text.len(),
         font: face,
         color: colour,
         background_color: None,
-        underline: span.style.underline.then_some(UnderlineStyle {
+        underline: style.underline.then_some(UnderlineStyle {
             thickness: px(1.),
             color: Some(colour),
             wavy: false,
         }),
-        strikethrough: span.style.strike.then_some(StrikethroughStyle {
+        strikethrough: style.strike.then_some(StrikethroughStyle {
             thickness: px(1.),
             color: Some(colour),
         }),
     };
-    window.text_system().shape_line(
-        span.text.clone().into(),
-        px(TERMINAL_FONT_SIZE),
-        &[run],
-        None,
-    )
+    window
+        .text_system()
+        .shape_line(text.to_owned().into(), px(TERMINAL_FONT_SIZE), &[run], None)
 }
 
 fn style_of(cell: &Cell) -> Style {
@@ -303,6 +355,8 @@ fn is_blank(span: &Span) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
+
     use super::*;
 
     const RED: u32 = 0x02E0_6C6C;
@@ -458,6 +512,43 @@ mod tests {
         assert_eq!(f32::from(underline.size.width), 8.);
         assert_eq!(f32::from(underline.size.height), 2.);
         assert_eq!(f32::from(underline.origin.y), 38.);
+    }
+
+    #[test]
+    fn a_row_herdr_sends_again_is_shaped_only_when_it_is_a_new_row() {
+        let first: Row = Arc::from(vec![cell("a", 0)]);
+        let second: Row = Arc::from(vec![cell("b", 0)]);
+        let mut cache: Vec<(Row, Vec<(usize, String)>)> = Vec::new();
+        let shaped: RefCell<Vec<String>> = RefCell::new(Vec::new());
+        let shape_row = |row: &[Cell]| {
+            shaped.borrow_mut().push(row[0].text.clone());
+            vec![(0, row[0].text.clone())]
+        };
+
+        refresh_rows(
+            &mut cache,
+            &[Arc::clone(&first), Arc::clone(&second)],
+            shape_row,
+        );
+        assert_eq!(*shaped.borrow(), ["a", "b"]);
+
+        // The same rows again, as herdr sends them with a patch that leaves them alone: no shaping.
+        refresh_rows(
+            &mut cache,
+            &[Arc::clone(&first), Arc::clone(&second)],
+            shape_row,
+        );
+        assert_eq!(*shaped.borrow(), ["a", "b"]);
+
+        // A patch that replaces the second row: only that row is shaped again.
+        let patched: Row = Arc::from(vec![cell("c", 0)]);
+        refresh_rows(&mut cache, &[first.clone(), patched], shape_row);
+        assert_eq!(*shaped.borrow(), ["a", "b", "c"]);
+
+        // A shorter surface drops the rows below it: nothing is shaped.
+        refresh_rows(&mut cache, std::slice::from_ref(&first), shape_row);
+        assert_eq!(*shaped.borrow(), ["a", "b", "c"]);
+        assert_eq!(cache.len(), 1);
     }
 
     #[test]

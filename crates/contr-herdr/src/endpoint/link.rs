@@ -192,6 +192,30 @@ pub fn spawn_link(
     ))
 }
 
+/// A link with no thread behind it, for the tests of the crates that use the link. Its frames
+/// arrive on the receiver in the order the UI queued them. Dropping the link queues a `Detach`.
+#[cfg(any(test, feature = "test-support"))]
+pub fn test_link() -> (SurfaceLink, LinkHandle, Receiver<Vec<u8>>) {
+    let (tx, rx) = async_channel::unbounded();
+    let shared = Arc::new(Shared {
+        stop: AtomicBool::new(false),
+        size: Mutex::new((
+            GridSize { cols: 80, rows: 24 },
+            CellPx {
+                width: 8,
+                height: 16,
+            },
+        )),
+        outbox: Mutex::new(Some(tx)),
+        latest: Mutex::new(None),
+        pending: AtomicBool::new(false),
+    });
+    let link = SurfaceLink {
+        shared: Arc::clone(&shared),
+    };
+    (link, LinkHandle { shared }, rx)
+}
+
 /// The `contr-surface` thread's state.
 struct Runner {
     target: LinkTarget,
