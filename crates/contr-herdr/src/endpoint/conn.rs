@@ -90,41 +90,44 @@ pub struct Conn {
 
 impl Conn {
     /// Connects, sends the hello and reads the welcome. `timeout` bounds the
-    /// whole handshake. No surface is requested yet. The read timeout is left
-    /// at the last value the handshake set (at most `timeout`), so call
-    /// [`Conn::set_read_timeout`] before `recv`. The handshake makes no socket
-    /// call after the welcome: on macOS, setting a timeout on a socket whose
-    /// peer already closed fails with `EINVAL`.
+    /// whole handshake. No surface is requested yet. Both socket timeouts are
+    /// set to `timeout` before the hello is sent, and the handshake makes no
+    /// socket timeout call after that. The read timeout is therefore `timeout`
+    /// after `open`. Call [`Conn::set_read_timeout`] before `recv` to change it.
+    /// On macOS a timeout set on a socket whose peer already closed fails with
+    /// `EINVAL`, so `open` never sets one after the hello.
     pub fn open(
         path: &Path,
         size: GridSize,
         cell: CellPx,
         timeout: Duration,
     ) -> Result<Conn, ConnError> {
+        let deadline = Instant::now() + timeout;
         let mut stream = UnixStream::connect(path).map_err(|e| match e.kind() {
             io::ErrorKind::NotFound | io::ErrorKind::ConnectionRefused => {
                 ConnError::NotRunning(format!("herdr is not running: {e}"))
             }
             _ => ConnError::Io(e),
         })?;
-        // The write timeout stays set for the life of the socket. Clones from
-        // `try_clone_writer` share it, so a write that blocks past `timeout` fails there too.
+        // Both timeouts are set before the hello. The peer cannot have closed yet:
+        // herdr answers the hello first. The write timeout stays set for the life
+        // of the socket. Clones from `try_clone_writer` share it.
         stream
             .set_write_timeout(Some(timeout))
+            .map_err(ConnError::Io)?;
+        stream
+            .set_read_timeout(Some(timeout))
             .map_err(ConnError::Io)?;
         write_frame(&mut stream, &ClientMsg::Hello { size, cell }.encode())
             .map_err(ConnError::Io)?;
 
         let mut inbox = Inbox::default();
-        let deadline = Instant::now() + timeout;
         let first = loop {
-            let left = deadline.saturating_duration_since(Instant::now());
-            if left.is_zero() {
+            if Instant::now() >= deadline {
                 return Err(ConnError::NotRunning(format!(
                     "herdr sent no welcome within {timeout:?}"
                 )));
             }
-            stream.set_read_timeout(Some(left)).map_err(ConnError::Io)?;
             match read_payload(&mut stream, &mut inbox) {
                 Ok(Some(payload)) => break payload,
                 // A read timeout: the deadline check at the top ends the wait.
@@ -693,6 +696,18 @@ mod tests {
         let conn = Conn::open(&path, SIZE, CELL, WAIT).unwrap();
         let writer = conn.try_clone_writer().unwrap();
         assert_eq!(writer.write_timeout().unwrap(), Some(WAIT));
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn open_leaves_the_handshake_timeout_as_the_read_timeout() {
+        let (_dir, path, server) = fake_herdr(|mut stream| {
+            read_hello(&mut stream);
+            put(&mut stream, &welcome("0.9.3"));
+            thread::sleep(Duration::from_millis(100));
+        });
+        let conn = Conn::open(&path, SIZE, CELL, WAIT).unwrap();
+        assert_eq!(conn.stream.read_timeout().unwrap(), Some(WAIT));
         server.join().unwrap();
     }
 
