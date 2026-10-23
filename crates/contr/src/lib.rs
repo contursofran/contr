@@ -4,6 +4,7 @@ pub mod agents_list;
 pub mod board;
 pub mod board_model;
 pub mod board_panel;
+pub mod board_report;
 pub mod frame;
 pub mod git;
 pub mod herdr;
