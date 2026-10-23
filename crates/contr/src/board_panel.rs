@@ -1,14 +1,15 @@
 //! The board panel: the header with the `Board | Report` switch and the wrap label, then the summary
-//! line and the two sections that the next slices fill in (work rows, needs you). Read-only: the
-//! switch and the wrap label are inert in #9. The panel reads the `Board` entity and redraws only
-//! when that entity notifies.
+//! line, the work section and the needs-you section (filled in by #9-S6). Read-only: the switch and
+//! the wrap label are inert in #9. The panel reads the `Board` entity and redraws only when that
+//! entity notifies.
 
 use crate::board::{Board, GlobalBoard};
-use crate::board_model::BoardSnapshot;
+use crate::board_model::{BoardSnapshot, WorkRow};
+use crate::board_work::{WorkRowView, work_section};
 use crate::theme::*;
 use gpui::{
     Context, Entity, IntoElement, ParentElement, Render, Styled, Subscription, Window, div,
-    prelude::*, px, rgb,
+    prelude::*, px, rgb, transparent_black,
 };
 
 /// The two tabs of the panel. `Report` shows in the switch but is inert until #11.
@@ -23,6 +24,8 @@ pub enum PanelTab {
 pub struct BoardPanel {
     board: Entity<Board>,
     tab: PanelTab,
+    /// One view per work row, in the coordinator's order.
+    work: Vec<Entity<WorkRowView>>,
     _observe: Subscription,
 }
 
@@ -30,12 +33,49 @@ impl BoardPanel {
     /// Needs `Board::init` first. Redraws when the board notifies.
     pub fn new(cx: &mut Context<Self>) -> Self {
         let board = cx.global::<GlobalBoard>().0.clone();
-        let observe = cx.observe(&board, |_, _, cx| cx.notify());
-        Self {
+        let observe = cx.observe(&board, |this, _, cx| this.sync_work(cx));
+        let mut panel = Self {
             board,
             tab: PanelTab::default(),
+            work: Vec::new(),
             _observe: observe,
+        };
+        panel.sync_work(cx);
+        panel
+    }
+
+    /// Brings the work rows in line with the board. When the keys match in order, only the rows that
+    /// changed are updated, and only they redraw. Otherwise the views are rebuilt.
+    fn sync_work(&mut self, cx: &mut Context<Self>) {
+        let snapshot = self.board.read(cx).snapshot.clone();
+        let rows: &[WorkRow] = snapshot
+            .as_ref()
+            .map(|shown| shown.rows.as_slice())
+            .unwrap_or(&[]);
+        let same_keys = self.work.len() == rows.len()
+            && self
+                .work
+                .iter()
+                .zip(rows)
+                .all(|(view, row)| view.read(cx).key() == row.key);
+        if same_keys {
+            for (view, row) in self.work.iter().zip(rows) {
+                view.update(cx, |view, cx| view.set_row(row, cx));
+            }
+        } else {
+            self.work = rows
+                .iter()
+                .enumerate()
+                .map(|(index, row)| cx.new(|_| WorkRowView::new(row.clone(), index)))
+                .collect();
         }
+        cx.notify();
+    }
+
+    /// The work row views, in order. Tests read them.
+    #[cfg(test)]
+    pub(crate) fn work_rows(&self) -> &[Entity<WorkRowView>] {
+        &self.work
     }
 }
 
@@ -57,7 +97,7 @@ impl Render for BoardPanel {
         match snapshot {
             Some(snapshot) => root
                 .child(summary(&snapshot, problem.as_deref()))
-                .child(div().debug_selector(|| "work-section".into()))
+                .child(work_section(&self.work, snapshot.clear_rows))
                 .child(
                     div()
                         .debug_selector(|| "needs-section".into())
@@ -99,7 +139,7 @@ fn header(tab: PanelTab, wrap_up: Option<bool>) -> impl IntoElement {
 }
 
 /// One segment of the switch. The selected one is a card with a 1 px border. The border is always
-/// there (the panel colour when not selected), so the labels do not move when the selection does.
+/// there (transparent when not selected), so the labels do not move when the selection does.
 fn segment(selector: &'static str, label: &'static str, selected: bool) -> impl IntoElement {
     div()
         .debug_selector(move || selector.to_owned())
@@ -107,7 +147,11 @@ fn segment(selector: &'static str, label: &'static str, selected: bool) -> impl 
         .py(px(SEGMENT_PAD_Y))
         .rounded(px(SEGMENT_RADIUS))
         .border_1()
-        .border_color(rgb(if selected { CARD_BORDER } else { BG_WINDOW }))
+        .border_color(if selected {
+            rgb(CARD_BORDER).into()
+        } else {
+            transparent_black()
+        })
         .when(selected, |tab| tab.bg(rgb(BG_CARD)).text_color(rgb(TEXT)))
         .when(!selected, |tab| tab.text_color(rgb(TEXT_DIM)))
         .child(label)
@@ -141,7 +185,7 @@ fn summary(snapshot: &BoardSnapshot, problem: Option<&str>) -> impl IntoElement 
 }
 
 /// One line of text across the panel: `BOARD_LINE_HEIGHT` tall, padded, and cut with an ellipsis.
-fn text_line(selector: &'static str, text: String, colour: u32) -> impl IntoElement {
+pub(crate) fn text_line(selector: &'static str, text: String, colour: u32) -> impl IntoElement {
     div()
         .debug_selector(move || selector.to_owned())
         .h(px(BOARD_LINE_HEIGHT))
@@ -185,23 +229,24 @@ fn wrap_text(wrap_up: bool) -> &'static str {
     if wrap_up { "keep going" } else { "wrap up" }
 }
 
+/// Helpers for the panel's tests here and in `board_work`: the panel in a frame-sized column.
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
-mod tests {
+pub(crate) mod test_support {
     use super::*;
-    use crate::board::{BridgePane, NO_BOARD_FILE, init_detached};
+    use crate::board::{BridgePane, init_detached};
     use crate::board_model::{BridgeRef, parse_board};
     use crate::herdr::{GlobalHerdr, Herdr};
     use contr_herdr::LiveHerdr;
-    use gpui::{Bounds, Pixels, TestAppContext, VisualTestContext, px, size};
+    use gpui::{Bounds, Pixels, TestAppContext, VisualTestContext, size};
 
-    const FIXTURE: &str = include_str!("board_fixture_v1.json");
+    pub(crate) const FIXTURE: &str = include_str!("board_fixture_v1.json");
 
-    fn fixture() -> BoardSnapshot {
+    pub(crate) fn fixture() -> BoardSnapshot {
         parse_board(FIXTURE.as_bytes()).unwrap()
     }
 
-    fn bridge() -> BridgePane {
+    pub(crate) fn bridge() -> BridgePane {
         BridgePane {
             pane_id: "w1:p1".into(),
             bridge: BridgeRef {
@@ -211,9 +256,27 @@ mod tests {
         }
     }
 
-    /// A panel in a window of the panel's size, over a board that shows `snapshot`, `problem` and
-    /// `bridge` (set by the test, not read from a file).
-    fn panel<'a>(
+    /// Hosts the panel in a column of the frame's width, as the frame does, so the panel's bounds
+    /// are the real ones in a window of the reference size.
+    pub(crate) struct InFrame {
+        panel: Entity<BoardPanel>,
+    }
+
+    impl Render for InFrame {
+        fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+            div().size_full().flex().child(
+                div()
+                    .w(px(PANEL_WIDTH))
+                    .h_full()
+                    .flex_none()
+                    .child(self.panel.clone()),
+            )
+        }
+    }
+
+    /// A panel over a board that shows `snapshot`, `problem` and `bridge` (set by the test, not read
+    /// from a file).
+    pub(crate) fn panel<'a>(
         cx: &'a mut TestAppContext,
         snapshot: Option<BoardSnapshot>,
         problem: Option<&str>,
@@ -229,15 +292,30 @@ mod tests {
         cx.update(|app| {
             board.update(app, |board, cx| board.set(snapshot, problem, bridge, cx));
         });
-        let (view, cx) = cx.add_window_view(|_, cx| BoardPanel::new(cx));
-        cx.simulate_resize(size(px(PANEL_WIDTH), px(900.)));
+        let (host, cx) = cx.add_window_view(|_, cx| InFrame {
+            panel: cx.new(BoardPanel::new),
+        });
+        let view = host.read_with(cx, |host, _| host.panel.clone());
+        cx.simulate_resize(size(px(WINDOW_WIDTH), px(WINDOW_HEIGHT)));
         cx.run_until_parked();
         (view, cx)
     }
 
-    fn bounds(cx: &mut VisualTestContext, selector: &'static str) -> Option<Bounds<Pixels>> {
+    pub(crate) fn bounds(
+        cx: &mut VisualTestContext,
+        selector: &'static str,
+    ) -> Option<Bounds<Pixels>> {
         cx.debug_bounds(selector)
     }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests {
+    use super::test_support::{bounds, bridge, fixture, panel};
+    use super::*;
+    use crate::board::NO_BOARD_FILE;
+    use gpui::TestAppContext;
 
     #[test]
     fn the_panel_opens_on_the_board_tab() {
