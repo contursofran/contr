@@ -498,7 +498,7 @@ mod tests {
         let (_panel, cx) = panel(cx, Some(fixture()), None, Some(bridge()));
         assert!(
             bounds(cx, "work-row-0-picked").is_none(),
-            "the item is picked"
+            "no row is picked at first"
         );
 
         click(cx, "work-row-0");

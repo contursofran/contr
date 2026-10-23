@@ -286,13 +286,13 @@ impl Render for BoardPanel {
         let problem = board.problem.clone();
         let snapshot = board.snapshot.clone();
         let tree = cx.global::<GlobalHerdr>().0.read(cx).live.tree.clone();
-        // The card, the pick and the item's click are made before the header takes `cx`.
+        // The pick and the card come first, so every use of `cx` for them is done before the header.
         let shown = snapshot
             .as_deref()
-            .and_then(|board| effective_pick(board, self.pick.as_ref()));
+            .and_then(|current| effective_pick(current, self.pick.as_ref()));
         let face = match (snapshot.as_deref(), self.tab) {
-            (Some(board), PanelTab::Board) => {
-                self.card_face(board, shown.as_ref(), tree.as_deref(), cx)
+            (Some(current), PanelTab::Board) => {
+                self.card_face(current, shown.as_ref(), tree.as_deref(), cx)
             }
             _ => CardFace::Empty,
         };
