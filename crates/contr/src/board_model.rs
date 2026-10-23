@@ -526,6 +526,9 @@ mod tests {
             "1 abc 1 extra",
             "1  abc 1",
             "1 abc 1 ",
+            "1 abc ",
+            " 1 abc 1",
+            "1 abc 18446744073709551616",
             "",
         ];
         for token in bad {
