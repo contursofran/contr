@@ -200,6 +200,7 @@ mod tests {
         AgentInfo, AgentState, ConnState, HerdrTree, HerdrUpdate, LiveHerdr, Pane, Tab, Workspace,
     };
     use gpui::{TestAppContext, VisualTestContext, size};
+    use std::collections::BTreeMap;
     use std::sync::Arc;
 
     /// One workspace with one tab per entry. The tab is labelled as given, has one pane `p{i}`, and
@@ -222,6 +223,7 @@ mod tests {
                         name: "claude".into(),
                         status,
                     }),
+                    tokens: BTreeMap::new(),
                 }],
             })
             .collect();
