@@ -1,5 +1,6 @@
 //! The empty three-column frame: sidebar, title bar, terminal, board panel, status bar.
 
+use crate::agents_list::AgentsList;
 use crate::herdr::{GlobalHerdr, Herdr};
 use crate::spaces::{Spaces, SpacesEvent, toggle_box};
 use crate::status_bar::StatusBar;
@@ -12,6 +13,7 @@ use gpui::{
 
 pub struct Frame {
     spaces: Entity<Spaces>,
+    agents: Entity<AgentsList>,
     herdr: Entity<Herdr>,
     status_bar: Entity<StatusBar>,
     title_bar: Entity<TitleBar>,
@@ -27,6 +29,7 @@ impl Frame {
     /// the first two, and the terminal area shows the connection's line.
     pub fn new(cx: &mut Context<Self>) -> Self {
         let spaces = cx.new(Spaces::new);
+        let agents = cx.new(AgentsList::new);
         let herdr = cx.global::<GlobalHerdr>().0.clone();
         let status_bar = cx.new(StatusBar::new);
         let toggle = cx.subscribe(&spaces, |this, _, event: &SpacesEvent, cx| {
@@ -50,6 +53,7 @@ impl Frame {
         });
         Self {
             spaces,
+            agents,
             herdr,
             status_bar,
             title_bar,
@@ -90,7 +94,8 @@ impl Render for Frame {
                                 .bg(rgb(BG_BARS))
                                 .border_r_1()
                                 .border_color(rgb(LINE))
-                                .child(self.spaces.clone()),
+                                .child(div().flex_1().min_h_0().child(self.spaces.clone()))
+                                .child(self.agents.clone()),
                         )
                     })
                     .child(

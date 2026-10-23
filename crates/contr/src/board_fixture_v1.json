@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "session": "8c1f0f6e-3a2b-4c5d-9e8f-1a2b3c4d5e6f",
+  "rev": 42,
+  "summary": "1 of 2 workers busy · 3 need you",
+  "wrap_up": false,
+  "need_count": 3,
+  "clear_rows": true,
+  "clear_items": true,
+  "context": { "tokens": 120000, "limit": 300000 },
+  "rows": [
+    {
+      "key": "owner/name#640",
+      "label": "#640",
+      "title": "sort bags",
+      "stages": ["done", "run", "none", "none", "none"],
+      "who": { "text": "b-1151 5m", "kind": "text" },
+      "joined": null,
+      "finished": false,
+      "now": "b-1151 (builder) is working (5m).",
+      "item": null,
+      "pane_id": "w1:p4",
+      "url": "https://example.com/pull/40",
+      "report": "/example/b-1151/RESULT.md",
+      "report_by": "b-1151"
+    },
+    {
+      "key": "owner/name#641",
+      "label": "#641",
+      "title": "bag drag",
+      "stages": ["done", "done", "done", "done", "todo"],
+      "who": { "text": "your test", "kind": "you" },
+      "joined": null,
+      "finished": false,
+      "now": "Waiting on your test of the drag.",
+      "item": "T12",
+      "pane_id": "w1:p2",
+      "url": "https://example.com/pull/41",
+      "report": null,
+      "report_by": null
+    },
+    {
+      "key": "owner/name#642",
+      "label": "#642",
+      "title": "tab order",
+      "stages": [],
+      "who": { "text": "", "kind": "dim" },
+      "joined": "#641",
+      "finished": true,
+      "now": null,
+      "item": null,
+      "pane_id": null,
+      "url": null,
+      "report": null,
+      "report_by": null
+    }
+  ],
+  "items": [
+    {
+      "key": "T12",
+      "kind": "do",
+      "title": "Test the bag drag",
+      "open": true,
+      "task": "#641",
+      "link": "https://example.com/pull/41"
+    },
+    {
+      "key": "D7",
+      "kind": "ask",
+      "title": "Row layout",
+      "open": true,
+      "task": "#640",
+      "text": "Which row layout should the board use?",
+      "from": "p-7",
+      "at": 1761234567890,
+      "options": ["one line per row", "two lines per row"],
+      "recommended": 0
+    },
+    {
+      "key": "N4",
+      "kind": "know",
+      "title": "CI is green on linux-pc",
+      "open": true
+    },
+    {
+      "key": "D6",
+      "kind": "ask",
+      "title": "Keep the old colours?",
+      "open": false,
+      "answer": "keep the old colours (owner)"
+    }
+  ]
+}
