@@ -3,7 +3,7 @@
 //! `working` icon redraws only its own row.
 
 use crate::board_model::{STAGE_HEADS, Stage, WhoKind, WorkRow, stage_status};
-use crate::board_panel::text_line;
+use crate::board_panel::{ActionClick, clear_done, text_line};
 use crate::status_icon::StatusIcon;
 use crate::theme::*;
 use gpui::{
@@ -81,14 +81,18 @@ impl Render for WorkRowView {
 
 /// The work section: the header, then the rows, or the empty line when there are none. The section
 /// is at most half the panel tall, and the rows scroll inside it.
-pub fn work_section(work: &[Entity<WorkRowView>], clear_rows: bool) -> impl IntoElement {
+pub fn work_section(
+    work: &[Entity<WorkRowView>],
+    clear_rows: bool,
+    on_clear: Option<ActionClick>,
+) -> impl IntoElement {
     let section = div()
         .debug_selector(|| "work-section".into())
         .flex_none()
         .max_h(relative(0.5))
         .flex()
         .flex_col()
-        .child(work_header(clear_rows));
+        .child(work_header(clear_rows, on_clear));
     if work.is_empty() {
         section.child(text_line(
             "work-empty",
@@ -111,8 +115,8 @@ pub fn work_section(work: &[Entity<WorkRowView>], clear_rows: bool) -> impl Into
     }
 }
 
-/// "Work", the inert `clear done` label when `clear_rows`, and the five stage heads on the right.
-fn work_header(clear_rows: bool) -> impl IntoElement {
+/// "Work", the `clear done` control when `clear_rows`, and the five stage heads on the right.
+fn work_header(clear_rows: bool, on_clear: Option<ActionClick>) -> impl IntoElement {
     div()
         .debug_selector(|| "work-header".into())
         .h(px(BOARD_LINE_HEIGHT))
@@ -128,13 +132,7 @@ fn work_header(clear_rows: bool) -> impl IntoElement {
                 .items_center()
                 .child(div().text_color(rgb(TEXT_DIM)).child("Work"))
                 .when(clear_rows, |left| {
-                    left.child(
-                        div()
-                            .debug_selector(|| "work-clear".into())
-                            .ml(px(BOARD_GAP))
-                            .text_color(rgb(TEXT_DIM_2))
-                            .child("clear done"),
-                    )
+                    left.child(clear_done("work-clear", on_clear).ml(px(BOARD_GAP)))
                 }),
         )
         .children(STAGE_HEADS.iter().enumerate().map(|(column, head)| {
