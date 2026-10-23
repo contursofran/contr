@@ -106,6 +106,7 @@ pub const WORK_LABEL_WIDTH: f32 = 52.; // "#123456"
 pub const SEGMENT_PAD_X: f32 = 8.; // Board | Report segment
 pub const SEGMENT_PAD_Y: f32 = 4.;
 pub const SEGMENT_RADIUS: f32 = 5.;
+pub const BOARD_GAP: f32 = 8.; // "Work" to "clear done"
 
 // Report tab (planner defaults; docs/DESIGN.md has no sizes for these)
 pub const REPORT_GAP: f32 = 12.; // between "Open in editor" and "back"
