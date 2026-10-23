@@ -22,5 +22,6 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
+contr-herdr = { workspace = true, features = ["test-support"] }
 gpui = { workspace = true, features = ["test-support"] }
 tempfile.workspace = true

@@ -1,6 +1,8 @@
-//! Host CPU and memory for the status bar. One reading every `HOST_SAMPLE_EVERY` while the frame
-//! window is visible; no timers and no sampling while it is hidden.
+//! Host CPU and memory for the status bar and the sidebar's host card. One reading every
+//! `HOST_SAMPLE_EVERY` while the frame window is visible; no timers and no sampling while it is
+//! hidden.
 
+use crate::theme::MEM_BAR_WIDTH;
 use crate::visibility::{GlobalVisibility, Visibility};
 use async_channel::Receiver;
 use gpui::{App, AsyncApp, Context, Entity, Global, Subscription, Task, WeakEntity, prelude::*};
@@ -34,6 +36,11 @@ impl HostStats {
     /// CPU rounded to a whole percent and clamped to 0 to 100, e.g. "38%".
     pub fn cpu_label(&self) -> String {
         format!("{}%", self.cpu_percent.round().clamp(0., 100.) as u32)
+    }
+
+    /// Filled length of the sidebar's memory bar, in whole pixels, 0 to `MEM_BAR_WIDTH`.
+    pub fn mem_bar_pixels(&self) -> u32 {
+        (self.mem_fraction() * MEM_BAR_WIDTH).round() as u32
     }
 
     /// Memory share rounded to a whole percent, e.g. "62%".
@@ -102,10 +109,11 @@ impl Host {
         }
     }
 
-    /// Stores the reading. Notifies only when a shown label changes.
+    /// Stores the reading. Notifies only when a shown value changes: the CPU label, the memory
+    /// label (the status bar shows it) or the sidebar bar's pixel width.
     fn record(&mut self, stats: HostStats, cx: &mut Context<Self>) {
-        let shown_before = self.stats.map(|s| (s.cpu_label(), s.mem_label()));
-        let changed = shown_before != Some((stats.cpu_label(), stats.mem_label()));
+        let shown_before = self.stats.as_ref().map(shown_values);
+        let changed = shown_before != Some(shown_values(&stats));
         self.stats = Some(stats);
         if changed {
             cx.notify();
@@ -121,6 +129,11 @@ impl Host {
             _sub: None,
         }
     }
+}
+
+/// The values the views draw from a reading: the CPU label, the memory label and the bar's pixels.
+fn shown_values(stats: &HostStats) -> (String, String, u32) {
+    (stats.cpu_label(), stats.mem_label(), stats.mem_bar_pixels())
 }
 
 /// The sampling loop. Hidden: waits for the next change and starts no timer. A timer already pending
@@ -188,7 +201,7 @@ fn push(this: &WeakEntity<Host>, cx: &mut AsyncApp, stats: HostStats) -> bool {
 mod tests {
     use super::*;
     use async_channel::Receiver;
-    use gpui::{AsyncApp, TestAppContext};
+    use gpui::{AsyncApp, EmptyView, TestAppContext, WindowVisibility};
     use std::cell::Cell;
     use std::rc::Rc;
     use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
@@ -218,34 +231,37 @@ mod tests {
         assert_eq!(stats(0., 5, 0).mem_label(), "0%");
     }
 
-    /// Counts sampler calls and reports the CPU value the test sets.
+    /// Counts sampler calls and returns the reading the test sets.
     #[derive(Clone)]
     struct Fake {
         calls: Arc<AtomicUsize>,
-        cpu: Arc<Mutex<f32>>,
+        reading: Arc<Mutex<HostStats>>,
     }
 
     impl Fake {
         fn new(cpu: f32) -> Self {
             Self {
                 calls: Arc::new(AtomicUsize::new(0)),
-                cpu: Arc::new(Mutex::new(cpu)),
+                reading: Arc::new(Mutex::new(stats(cpu, 50, 100))),
             }
+        }
+
+        /// The reading the next sample returns.
+        fn set(&self, reading: HostStats) {
+            *self.reading.lock().unwrap() = reading;
         }
 
         /// Registers `Visibility` (visible) and a `Host` that samples through this fake.
         fn init(&self, cx: &mut TestAppContext) {
             let fake = self.clone();
             cx.update(Visibility::init);
-            cx.update(|app| {
-                Host::init_with(
-                    app,
-                    Arc::new(move || {
-                        fake.calls.fetch_add(1, SeqCst);
-                        stats(*fake.cpu.lock().unwrap(), 50, 100)
-                    }),
-                )
-            });
+            cx.update(|app| Host::init_with(app, Arc::new(move || fake.sample())));
+        }
+
+        /// One sampler call: counts it and returns the reading the test set.
+        fn sample(&self) -> HostStats {
+            self.calls.fetch_add(1, SeqCst);
+            *self.reading.lock().unwrap()
         }
 
         fn calls(&self) -> usize {
@@ -388,15 +404,91 @@ mod tests {
         advance(cx, HOST_RESUME_GAP);
         assert_eq!(notified.get(), 1, "the first reading shows a value");
 
-        // 40.2 rounds to the same "40%"; the memory label is unchanged too.
-        *fake.cpu.lock().unwrap() = 40.2;
+        // 40.2 rounds to the same "40%"; the memory label and the bar are unchanged too.
+        fake.set(stats(40.2, 50, 100));
         advance(cx, HOST_SAMPLE_EVERY);
         assert_eq!(fake.calls(), 3);
         assert_eq!(notified.get(), 1);
 
-        *fake.cpu.lock().unwrap() = 55.;
+        fake.set(stats(55., 50, 100));
         advance(cx, HOST_SAMPLE_EVERY);
         assert_eq!(notified.get(), 2);
         assert_eq!(shown(cx, &host).unwrap().cpu_label(), "55%");
+    }
+
+    #[test]
+    fn mem_bar_pixels_round_the_share_of_the_bar() {
+        assert_eq!(stats(0., 50, 100).mem_bar_pixels(), 30);
+        assert_eq!(stats(0., 1, 3).mem_bar_pixels(), 20);
+        assert_eq!(stats(0., 0, 100).mem_bar_pixels(), 0);
+        assert_eq!(stats(0., 100, 100).mem_bar_pixels(), 60);
+        assert_eq!(stats(0., 12, 10).mem_bar_pixels(), 60, "clamped to the bar");
+        assert_eq!(stats(0., 5, 0).mem_bar_pixels(), 0, "no total, no fill");
+    }
+
+    #[gpui::test]
+    fn notifies_when_the_bar_width_changes_alone(cx: &mut TestAppContext) {
+        let fake = Fake::new(40.);
+        fake.init(cx);
+        let host = host(cx);
+        // 6 and 9 of 1000 both show "1%", but the bar moves from 0 px to 1 px.
+        fake.set(stats(40., 6, 1000));
+        advance(cx, HOST_RESUME_GAP);
+        assert_eq!(shown(cx, &host).unwrap().mem_bar_pixels(), 0);
+        let notified = Rc::new(Cell::new(0));
+        let counter = notified.clone();
+        let _subscription =
+            cx.update(|app| app.observe(&host, move |_, _| counter.set(counter.get() + 1)));
+
+        fake.set(stats(40., 9, 1000));
+        advance(cx, HOST_SAMPLE_EVERY);
+        assert_eq!(shown(cx, &host).unwrap().mem_label(), "1%");
+        assert_eq!(shown(cx, &host).unwrap().mem_bar_pixels(), 1);
+        assert_eq!(notified.get(), 1, "the bar width alone notifies");
+    }
+
+    #[gpui::test]
+    fn notifies_when_the_memory_label_changes_alone(cx: &mut TestAppContext) {
+        let fake = Fake::new(40.);
+        fake.init(cx);
+        let host = host(cx);
+        advance(cx, HOST_RESUME_GAP);
+        fake.set(stats(40., 500, 1000));
+        advance(cx, HOST_SAMPLE_EVERY);
+        let notified = Rc::new(Cell::new(0));
+        let counter = notified.clone();
+        let _subscription =
+            cx.update(|app| app.observe(&host, move |_, _| counter.set(counter.get() + 1)));
+
+        // 50.5% shows "51%" (the status bar's label) while the bar stays 30 px wide.
+        fake.set(stats(40., 505, 1000));
+        advance(cx, HOST_SAMPLE_EVERY);
+        assert_eq!(
+            notified.get(),
+            1,
+            "the status bar's memory label alone notifies"
+        );
+        assert_eq!(shown(cx, &host).unwrap().mem_label(), "51%");
+    }
+
+    #[gpui::test]
+    fn hidden_window_takes_no_readings_through_the_window(cx: &mut TestAppContext) {
+        let fake = Fake::new(40.);
+        fake.init(cx);
+        let (_view, cx) = cx.add_window_view(|window, cx| {
+            Visibility::watch(window, cx);
+            EmptyView
+        });
+        advance(cx, HOST_RESUME_GAP);
+        let shown_calls = fake.calls();
+
+        // Hidden or minimized: gpui reports both as `WindowVisibility::Hidden`.
+        cx.simulate_visibility_change(WindowVisibility::Hidden);
+        advance(cx, Duration::from_secs(60));
+        assert_eq!(fake.calls(), shown_calls, "no reading while hidden");
+
+        cx.simulate_visibility_change(WindowVisibility::Visible);
+        advance(cx, HOST_RESUME_GAP);
+        assert!(fake.calls() > shown_calls, "readings resume when shown");
     }
 }

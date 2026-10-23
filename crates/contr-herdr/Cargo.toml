@@ -9,6 +9,10 @@ version.workspace      = true
 [lints]
 workspace = true
 
+[features]
+# Test helpers for the crates that use the surface link (`endpoint::link::test_link`).
+test-support = []
+
 [dependencies]
 async-channel.workspace = true
 serde.workspace      = true
