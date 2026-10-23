@@ -1,6 +1,9 @@
 //! contr: a native herdr client. Opens the empty v0.1 frame, or the status icon legend with `--icons`.
 
-use contr::{frame, host::Host, legend, selection::Selection, theme, visibility::Visibility};
+use contr::{
+    frame, host::Host, legend, selection::Selection, status_message::StatusMessage, theme,
+    visibility::Visibility,
+};
 use gpui::{
     App, Bounds, TitlebarOptions, WindowBounds, WindowOptions, point, prelude::*, px, size,
 };
@@ -50,6 +53,7 @@ fn main() -> std::process::ExitCode {
             // The legend shows no host stats, so only the frame samples the host.
             Visibility::init(cx);
             Host::init(cx);
+            StatusMessage::init(cx);
             cx.open_window(options, |window, cx| {
                 Visibility::watch(window, cx);
                 cx.new(frame::Frame::new)
