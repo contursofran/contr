@@ -1,10 +1,14 @@
 //! contr: a native herdr client. Opens the empty v0.1 frame, or the status icon legend with `--icons`.
 
-use contr::{frame, host::Host, legend, selection::Selection, theme, visibility::Visibility};
+use contr::{
+    frame, herdr::Herdr, host::Host, legend, selection::Selection, status_message::StatusMessage,
+    theme, visibility::Visibility,
+};
 use gpui::{
     App, Bounds, TitlebarOptions, WindowBounds, WindowOptions, point, prelude::*, px, size,
 };
 use std::borrow::Cow;
+use tracing_subscriber::EnvFilter;
 
 const LEGEND_WIDTH: f32 = 480.;
 const LEGEND_HEIGHT: f32 = 420.;
@@ -16,6 +20,12 @@ fn main() -> std::process::ExitCode {
     if is_statusline(std::env::args()) {
         return statusline(std::env::args());
     }
+    // herdr connection logs (`contr_herdr`); RUST_LOG overrides the default.
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| "contr_herdr=info".into()),
+        )
+        .init();
     let failed = std::rc::Rc::new(std::cell::Cell::new(false));
     let open_failed = failed.clone();
     gpui_platform::application().run(move |cx: &mut App| {
@@ -50,9 +60,12 @@ fn main() -> std::process::ExitCode {
             cx.open_window(options, |_, cx| cx.new(legend::Legend::new))
                 .map(|_| ())
         } else {
-            // The legend shows no host stats, so only the frame samples the host.
+            // The legend shows no host stats and no herdr, so only the frame samples the host and
+            // follows herdr.
             Visibility::init(cx);
             Host::init(cx);
+            Herdr::init(cx);
+            StatusMessage::init(cx);
             cx.open_window(options, |window, cx| {
                 Visibility::watch(window, cx);
                 cx.new(frame::Frame::new)
