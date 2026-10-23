@@ -3,6 +3,7 @@
 pub mod agents_list;
 pub mod board;
 pub mod board_model;
+pub mod board_needs;
 pub mod board_panel;
 pub mod board_work;
 pub mod frame;
@@ -10,6 +11,7 @@ pub mod git;
 pub mod herdr;
 pub mod host;
 pub mod legend;
+pub mod report;
 pub mod selection;
 pub mod spaces;
 pub mod spaces_model;

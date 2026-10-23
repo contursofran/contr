@@ -1,10 +1,11 @@
 //! The board panel: the header with the `Board | Report` switch and the wrap label, then the summary
-//! line, the work section and the needs-you section (filled in by #9-S6). Read-only: the switch and
+//! line, the work section and the needs-you section. Read-only: the switch and
 //! the wrap label are inert in #9. The panel reads the `Board` entity and redraws only when that
 //! entity notifies.
 
 use crate::board::{Board, GlobalBoard};
 use crate::board_model::{BoardSnapshot, WorkRow};
+use crate::board_needs::needs_section;
 use crate::board_work::{WorkRowView, work_section};
 use crate::theme::*;
 use gpui::{
@@ -98,12 +99,11 @@ impl Render for BoardPanel {
             Some(snapshot) => root
                 .child(summary(&snapshot, problem.as_deref()))
                 .child(work_section(&self.work, snapshot.clear_rows))
-                .child(
-                    div()
-                        .debug_selector(|| "needs-section".into())
-                        .flex_1()
-                        .min_h_0(),
-                ),
+                .child(needs_section(
+                    &snapshot.items,
+                    snapshot.need_count,
+                    snapshot.clear_items,
+                )),
             None => root.child(text_line(
                 "board-empty",
                 empty_text(bridge, problem.as_deref()),
@@ -414,5 +414,15 @@ mod tests {
         let (_view, cx) = panel(cx, Some(fixture()), Some(NO_BOARD_FILE), Some(bridge()));
         assert!(bounds(cx, "board-summary").is_some());
         assert!(bounds(cx, "board-empty").is_none());
+    }
+
+    #[gpui::test]
+    fn the_needs_section_shows_the_snapshot_and_ends_at_the_panel_bottom(cx: &mut TestAppContext) {
+        let (_view, cx) = panel(cx, Some(fixture()), None, Some(bridge()));
+        assert!(bounds(cx, "needs-count-3").is_some());
+        assert!(bounds(cx, "need-row-3-resolved").is_some());
+        let panel = bounds(cx, "board-panel").unwrap();
+        let section = bounds(cx, "needs-section").unwrap();
+        assert_eq!(section.bottom(), panel.bottom());
     }
 }

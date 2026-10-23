@@ -371,7 +371,10 @@ mod tests {
 
     #[gpui::test]
     fn a_working_row_shows_done_and_working_in_their_columns(cx: &mut TestAppContext) {
-        let (_panel, cx) = panel(cx, Some(with_rows(vec![row(0)])), None, Some(bridge()));
+        // No items: a resolved item draws its own `icon-done`, which would hide the row's.
+        let mut snapshot = with_rows(vec![row(0)]);
+        snapshot.items.clear();
+        let (_panel, cx) = panel(cx, Some(snapshot), None, Some(bridge()));
         let board = bounds(cx, "board-panel").unwrap();
         let line = bounds(cx, ROWS[0]).unwrap();
         assert_eq!(line.size.width, board.size.width, "the row spans the panel");
