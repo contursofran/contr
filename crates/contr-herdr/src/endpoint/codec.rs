@@ -152,7 +152,7 @@ impl<'a> Dec<'a> {
 
     /// A varint length. Rejects a length larger than the bytes left: every
     /// element takes at least one byte, so a bad length never allocates.
-    /// Reads a length prefix; it is not the size of the decoder, so no `is_empty`.
+    // This reads a length prefix; it is not the size of the decoder, so there is no `is_empty`.
     #[allow(clippy::len_without_is_empty)]
     pub fn len(&mut self) -> Result<usize, CodecError> {
         let n = self.vu()?;

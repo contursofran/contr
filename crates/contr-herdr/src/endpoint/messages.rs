@@ -346,7 +346,16 @@ pub fn decode_server(payload: &[u8]) -> Result<ServerMsg, CodecError> {
     Ok(match tag {
         S_WELCOME_LEGACY => {
             let _version = d.vu32()?;
-            let _encoding = d.vu()?;
+            // RenderEncoding has two variants; any other index is not a layout we know.
+            match d.vu32()? {
+                0 | 1 => {}
+                other => {
+                    return Err(CodecError::BadTag {
+                        what: "render encoding",
+                        tag: other,
+                    });
+                }
+            }
             ServerMsg::LegacyWelcome {
                 error: opt_str(&mut d)?,
             }
@@ -677,6 +686,37 @@ mod tests {
             decode_server(&ok).unwrap(),
             ServerMsg::LegacyWelcome { error: None }
         );
+    }
+
+    #[test]
+    fn legacy_welcome_checks_the_render_encoding_index() {
+        for encoding in [0, 1] {
+            let payload = server_payload(|e| {
+                e.vu(u64::from(S_WELCOME_LEGACY));
+                e.vu(1);
+                e.vu(encoding);
+                e.none();
+            });
+            assert_eq!(
+                decode_server(&payload).unwrap(),
+                ServerMsg::LegacyWelcome { error: None },
+                "encoding {encoding}"
+            );
+        }
+
+        let unknown = server_payload(|e| {
+            e.vu(u64::from(S_WELCOME_LEGACY));
+            e.vu(1);
+            e.vu(2);
+            e.none();
+        });
+        assert!(matches!(
+            decode_server(&unknown),
+            Err(CodecError::BadTag {
+                what: "render encoding",
+                tag: 2
+            })
+        ));
     }
 
     #[test]
