@@ -211,8 +211,16 @@ fn frame(d: &mut Dec<'_>) -> Result<Frame, CodecError> {
     })
 }
 
+/// herdr's largest surface in cells (its limit on cols × rows).
+const MAX_CELLS: usize = 1_000_000;
+
 fn cells(d: &mut Dec<'_>) -> Result<Vec<Cell>, CodecError> {
     let n = d.len()?;
+    if n > MAX_CELLS {
+        return Err(CodecError::Invalid(
+            "more cells than herdr's 1,000,000 limit",
+        ));
+    }
     let mut out = Vec::new();
     for _ in 0..n {
         out.push(cell(d)?);
@@ -646,6 +654,30 @@ mod tests {
             decode_server(&enc_surface(&s)),
             Err(CodecError::Invalid("frame size"))
         ));
+    }
+
+    #[test]
+    fn cell_count_over_herdr_limit_is_refused_before_any_cell_is_read() {
+        // One past the limit, with that many bytes after the count so only the cap can refuse it.
+        let mut e = Enc::default();
+        e.vu((MAX_CELLS + 1) as u64);
+        e.buf.resize(e.buf.len() + MAX_CELLS + 1, 0);
+        assert!(matches!(
+            cells(&mut Dec::new(&e.buf)),
+            Err(CodecError::Invalid(_))
+        ));
+    }
+
+    #[test]
+    fn cell_count_at_herdr_limit_is_read() {
+        // A blank cell is six bytes: empty text, fg, bg, attrs, no tail, no hyperlink.
+        let blank_cell = plain("");
+        let mut e = Enc::default();
+        e.vu(MAX_CELLS as u64);
+        for _ in 0..MAX_CELLS {
+            put_cell(&mut e, &blank_cell);
+        }
+        assert_eq!(cells(&mut Dec::new(&e.buf)).unwrap().len(), MAX_CELLS);
     }
 
     #[test]

@@ -3,6 +3,7 @@
 use crate::spaces::{Spaces, SpacesEvent, toggle_box};
 use crate::status_bar::StatusBar;
 use crate::theme::*;
+use crate::title_bar::{TitleBar, TitleBarEvent};
 use gpui::{
     Context, Entity, IntoElement, ParentElement, Render, StyleRefinement, Styled, Subscription,
     Window, div, prelude::*, px, rgb,
@@ -11,9 +12,11 @@ use gpui::{
 pub struct Frame {
     spaces: Entity<Spaces>,
     status_bar: Entity<StatusBar>,
+    title_bar: Entity<TitleBar>,
     sidebar_open: bool,
     panel_open: bool,
     _toggle: Subscription,
+    _title_events: Subscription,
 }
 
 impl Frame {
@@ -27,12 +30,26 @@ impl Frame {
             }
             cx.notify();
         });
+        let title_bar = cx.new(|cx| TitleBar::new(true, cx));
+        let title_events = cx.subscribe(&title_bar, |this, bar, event: &TitleBarEvent, cx| {
+            match event {
+                TitleBarEvent::TogglePanel => {
+                    this.panel_open = !this.panel_open;
+                    let open = this.panel_open;
+                    bar.update(cx, |bar, cx| bar.set_panel_open(open, cx));
+                    cx.notify();
+                }
+                TitleBarEvent::Command(_) => {} // S4 sends these to herdr
+            }
+        });
         Self {
             spaces,
             status_bar,
+            title_bar,
             sidebar_open: true,
             panel_open: true,
             _toggle: toggle,
+            _title_events: title_events,
         }
     }
 }
@@ -84,7 +101,10 @@ impl Render for Frame {
                                     .bg(rgb(BG_BARS))
                                     .border_b_1()
                                     .border_color(rgb(LINE))
-                                    .when(!self.sidebar_open, |bar| bar.child(reopen_sidebar(cx))),
+                                    .when(!self.sidebar_open, |bar| bar.child(reopen_sidebar(cx)))
+                                    .child(self.title_bar.clone().cached(
+                                        StyleRefinement::default().flex_1().min_w_0().h_full(),
+                                    )),
                             )
                             .child(
                                 div()
@@ -209,6 +229,29 @@ mod tests {
         cx.run_until_parked();
         assert!(cx.debug_bounds("sidebar-reopen").is_none());
         assert_eq!(cx.debug_bounds("sidebar").unwrap().size.width, px(280.));
+        assert_eq!(cx.debug_bounds("terminal").unwrap().size.width, px(720.));
+    }
+
+    #[gpui::test]
+    fn panel_toggle_hides_and_shows_the_panel(cx: &mut TestAppContext) {
+        cx.update(Selection::init);
+        let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
+        cx.simulate_resize(size(px(1440.), px(900.)));
+        cx.run_until_parked();
+        assert!(cx.debug_bounds("panel-toggle-open").is_some());
+
+        let button = cx.debug_bounds("panel-toggle").unwrap();
+        cx.simulate_click(button.center(), Modifiers::none());
+        cx.run_until_parked();
+        assert!(cx.debug_bounds("panel").is_none());
+        assert!(cx.debug_bounds("panel-toggle-closed").is_some());
+        assert_eq!(cx.debug_bounds("terminal").unwrap().size.width, px(1160.));
+
+        let button = cx.debug_bounds("panel-toggle").unwrap();
+        cx.simulate_click(button.center(), Modifiers::none());
+        cx.run_until_parked();
+        assert_eq!(cx.debug_bounds("panel").unwrap().size.width, px(440.));
+        assert!(cx.debug_bounds("panel-toggle-open").is_some());
         assert_eq!(cx.debug_bounds("terminal").unwrap().size.width, px(720.));
     }
 }
