@@ -141,10 +141,10 @@ impl BoardPanel {
         sent
     }
 
-    /// Shows the Report tab for the work row `row_key`.
+    /// Shows the Report tab for the work row `row_key`. The card's Report button calls it.
     pub fn show_report(&mut self, row_key: String, cx: &mut Context<Self>) {
         self.report_row = Some(row_key);
-        self.open_report_tab(cx);
+        self.enter_report_tab(cx);
     }
 
     /// Picks `pick`: the card shows it, and the picked work row draws as selected.
@@ -154,8 +154,17 @@ impl BoardPanel {
         cx.notify();
     }
 
-    /// The Report tab's click. The tab keeps the row it followed before, if any.
+    /// The Report tab's click. A picked work row becomes the row the tab follows. Otherwise the tab
+    /// keeps the row it followed before, if any.
     fn open_report_tab(&mut self, cx: &mut Context<Self>) {
+        if let Some(BoardPick::Row(key)) = &self.pick {
+            self.report_row = Some(key.clone());
+        }
+        self.enter_report_tab(cx);
+    }
+
+    /// Shows the Report tab for the row that `report_row` names.
+    fn enter_report_tab(&mut self, cx: &mut Context<Self>) {
         self.tab = PanelTab::Report;
         self.sync_report(cx);
         cx.notify();
@@ -1273,6 +1282,113 @@ mod tests {
         assert!(bounds(cx, "board-empty").is_some());
         assert!(bounds(cx, "report").is_none());
         assert_eq!(reads(cx, &view), 0);
+    }
+
+    /// The key of the work row that the Report tab follows.
+    fn report_key(cx: &mut VisualTestContext, view: &Entity<BoardPanel>) -> Option<String> {
+        view.read_with(cx, |panel, _| panel.report_key().map(str::to_owned))
+    }
+
+    #[gpui::test]
+    fn card_report_shows_only_for_a_row_with_a_report(cx: &mut TestAppContext) {
+        let (_view, cx) = panel(cx, Some(fixture()), None, Some(bridge()));
+        assert!(
+            bounds(cx, "card-report").is_none(),
+            "the item T12 is picked"
+        );
+
+        click(cx, "work-row-0");
+        assert!(bounds(cx, "card-report").is_some(), "#640 has a report");
+
+        click(cx, "work-row-1");
+        assert!(bounds(cx, "card-report").is_none(), "#641 has no report");
+    }
+
+    #[gpui::test]
+    fn card_report_opens_the_report_tab_for_that_row(cx: &mut TestAppContext) {
+        let (_dir, raw) = report_file();
+        let (view, cx) = panel(cx, Some(snapshot_with_report(&raw)), None, Some(bridge()));
+        click(cx, "work-row-0");
+        click(cx, "card-report");
+
+        assert!(bounds(cx, "board-tab-report-on").is_some());
+        assert_eq!(report_key(cx, &view).as_deref(), Some("owner/name#640"));
+        assert!(
+            bounds(cx, "report-heading-0").is_some(),
+            "the row's file is drawn"
+        );
+        assert_eq!(reads(cx, &view), 1);
+    }
+
+    #[gpui::test]
+    fn the_report_tab_follows_the_picked_row(cx: &mut TestAppContext) {
+        let (dir, raw) = report_file();
+        let other = dir.path().join("OTHER.md");
+        std::fs::write(&other, "Other row, plain text.\n").unwrap();
+        let mut snapshot = snapshot_with_report(&raw);
+        snapshot.rows[1].report = Some(other.to_str().unwrap().to_owned());
+        let (view, cx) = panel(cx, Some(snapshot), None, Some(bridge()));
+
+        click(cx, "work-row-1");
+        click(cx, "board-tab-report");
+        assert_eq!(report_key(cx, &view).as_deref(), Some("owner/name#641"));
+        assert!(
+            bounds(cx, "report-text-0").is_some(),
+            "#641's file is drawn"
+        );
+        click(cx, "board-tab-board");
+
+        click(cx, "work-row-0");
+        click(cx, "board-tab-report");
+        assert_eq!(report_key(cx, &view).as_deref(), Some("owner/name#640"));
+        assert!(
+            bounds(cx, "report-heading-0").is_some(),
+            "#640's file is drawn"
+        );
+        assert_eq!(reads(cx, &view), 2, "each pick reads its own report once");
+    }
+
+    #[gpui::test]
+    fn back_keeps_the_pick(cx: &mut TestAppContext) {
+        let (view, cx) = panel(cx, Some(fixture()), None, Some(bridge()));
+        click(cx, "work-row-0");
+        click(cx, "board-tab-report");
+        click(cx, "report-back");
+
+        assert!(bounds(cx, "board-tab-board-on").is_some());
+        assert!(
+            bounds(cx, "work-row-0-picked").is_some(),
+            "the row stays picked"
+        );
+        assert!(
+            bounds(cx, "card-report").is_some(),
+            "the card still shows the row"
+        );
+        let picked = view.read_with(cx, |panel, _| panel.picked().cloned());
+        assert_eq!(picked, Some(BoardPick::Row("owner/name#640".to_owned())));
+    }
+
+    #[gpui::test]
+    fn the_report_tab_keeps_its_row_when_an_item_is_picked(cx: &mut TestAppContext) {
+        let (_dir, raw) = report_file();
+        let (view, cx) = panel(cx, Some(snapshot_with_report(&raw)), None, Some(bridge()));
+        show_report_for(cx, &view, "owner/name#640");
+        click(cx, "board-tab-board");
+        click(cx, "need-row-1");
+
+        click(cx, "board-tab-report");
+        assert_eq!(report_key(cx, &view).as_deref(), Some("owner/name#640"));
+        assert!(bounds(cx, "report-heading-0").is_some());
+    }
+
+    #[gpui::test]
+    fn show_report_keeps_its_row_over_another_pick(cx: &mut TestAppContext) {
+        let (view, cx) = panel(cx, Some(fixture()), None, Some(bridge()));
+        click(cx, "work-row-1");
+        show_report_for(cx, &view, "owner/name#640");
+
+        assert!(bounds(cx, "board-tab-report-on").is_some());
+        assert_eq!(report_key(cx, &view).as_deref(), Some("owner/name#640"));
     }
 
     /// Sets the board to `snapshot` on the bridge pane, as a read would, and lets the panel react.
