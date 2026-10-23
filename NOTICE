@@ -1,0 +1,9 @@
+contr
+Copyright 2026 Franco Conturso
+
+Bundled fonts: JetBrains Mono v2.304, Copyright 2020 The JetBrains Mono
+Project Authors, licensed under the SIL Open Font License 1.1; the full
+text is in crates/contr/assets/fonts/OFL.txt.
+
+GPUI (crates gpui-pre, gpui-pre-platform) is used as a dependency under
+the Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0).
