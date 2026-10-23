@@ -282,8 +282,20 @@ mod tests {
         set_visible(cx, &visibility, false);
         // A socket that does not exist: the reader retries in the background until dropped.
         let dir = tempfile::tempdir().unwrap();
-        let (tx, rx) = async_channel::bounded(1);
-        let reader = spawn_reader(Target::Socket(dir.path().join("missing.sock")), tx).unwrap();
+        // The reader thread sends into a queue only this test reads. If its sends reached the
+        // entity's task, they would wake that task from the reader thread, and the test
+        // scheduler fails a test on any such wake (#73).
+        let (reader_tx, reader_rx) = async_channel::bounded(1);
+        let reader =
+            spawn_reader(Target::Socket(dir.path().join("missing.sock")), reader_tx).unwrap();
+        assert!(
+            matches!(
+                reader_rx.recv_blocking(),
+                Ok(HerdrUpdate::State(ConnState::Connecting))
+            ),
+            "the reader thread runs"
+        );
+        let (_tx, rx) = async_channel::bounded(1);
         let herdr = cx.update(|app| {
             app.new(|cx| Herdr::new(LiveHerdr::default(), Some(reader), rx, &visibility, cx))
         });
