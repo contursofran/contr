@@ -1,0 +1,54 @@
+name: Bundle
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - 'crates/contr/assets/app/**'
+      - 'crates/**/Cargo.toml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - '.github/workflows/bundle.yml'
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bundle:
+    name: Release bundle (macOS arm64)
+    runs-on: macos-15
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - name: Cache Cargo registry, git and release target
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-release-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-release-
+      # On pull_request runs, ContrCommit in Info.plist is the short hash of the test-merge
+      # commit, not the PR head.
+      - name: Build and bundle
+        run: scripts/bundle.sh --zip
+      - name: Upload bundle
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: contr-macos-arm64
+          path: target/bundle/contr-*-macos-arm64.zip
+          retention-days: 14
+          if-no-files-found: error
