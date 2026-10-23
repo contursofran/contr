@@ -2,7 +2,7 @@
 
 use contr::{
     board::Board, frame, herdr::Herdr, host::Host, legend, selection::Selection,
-    status_message::StatusMessage, theme, visibility::Visibility,
+    status_message::StatusMessage, theme, usage::Usage, visibility::Visibility,
 };
 use gpui::{
     App, Bounds, TitlebarOptions, WindowBounds, WindowOptions, point, prelude::*, px, size,
@@ -67,6 +67,7 @@ fn main() -> std::process::ExitCode {
             Herdr::init(cx);
             Board::init(cx);
             StatusMessage::init(cx);
+            Usage::init(cx);
             cx.open_window(options, |window, cx| {
                 Visibility::watch(window, cx);
                 cx.new(|cx| frame::Frame::new(window, cx))
