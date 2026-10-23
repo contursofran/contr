@@ -1,7 +1,8 @@
 #!/bin/bash
 # Test of scripts/install.sh with a dummy bundle. It runs no cargo build, so it takes seconds.
-# Every run passes --dest and --bin-dir under mktemp -d, so the real /Applications and
-# ~/.local/bin are never written. The guard cases only check refusals, which stop before any change.
+# Every install run passes --dest and --bin-dir under mktemp -d, so the real /Applications and
+# ~/.local/bin are never written. The default --dest is checked by sourcing install.sh and calling
+# check_dest only. The guard cases only check refusals, which stop before any change.
 set -euo pipefail
 unset CDPATH # with CDPATH set, cd prints the directory and breaks $(cd ... && pwd)
 
@@ -159,16 +160,19 @@ make_bundle "$tmp/notours.app" com.example.other x
 expect_failed "not a contr bundle" --app "$tmp/notours.app" --dest "$tmp/apps9" --bin-dir "$tmp/bin9"
 [ ! -e "$tmp/apps9" ] || fail "a bad --app created the dest dir"
 
-# Dest guards: empty, /, /Applications, $HOME and symlinks to them are refused (exit 2) before any change.
-ln -s /Applications "$tmp/apps-link"
+# The default --dest (/Applications) passes the dest guard. The script is sourced, so no install
+# runs: only check_dest runs, and it only reads /Applications. Nothing is written there.
+(
+    . "$install"
+    [ "$dest" = /Applications ] || exit 1
+    check_dest
+) || fail "the default --dest /Applications should pass the dest guard"
+
+# Dest guards: / and $HOME, and a symlink to $HOME, are refused (exit 2) before any change.
 ln -s "$HOME" "$tmp/home-link"
-expect_refused "dir is empty" --app "$app" --dest "" --bin-dir "$tmp/bin10"
 expect_refused "protected dir" --app "$app" --dest / --bin-dir "$tmp/bin10"
-expect_refused "protected dir" --app "$app" --dest /Applications --bin-dir "$tmp/bin10"
-expect_refused "protected dir" --app "$app" --dest /applications --bin-dir "$tmp/bin10"
 expect_refused "protected dir" --app "$app" --dest "$HOME" --bin-dir "$tmp/bin10"
 expect_refused "protected dir" --app "$app" --dest "$HOME/" --bin-dir "$tmp/bin10"
-expect_refused "protected dir" --app "$app" --dest "$tmp/apps-link" --bin-dir "$tmp/bin10"
 expect_refused "protected dir" --app "$app" --dest "$tmp/home-link" --bin-dir "$tmp/bin10"
 [ ! -e "$tmp/bin10" ] || fail "a refused --dest created the bin dir"
 
@@ -201,6 +205,7 @@ grep -q "^install.sh: HOME is not set" "$tmp/run.err" || fail "an unset HOME sho
 expect_failed "unknown argument" --nope
 expect_failed "needs a dir" --dest
 expect_failed "needs a dir, not a flag" --dest --replace
+expect_failed "needs a dir, not an empty value" --dest ""
 expect_failed "needs a path" --app
 expect_failed "needs a path, not an empty value" --app ""
 expect_failed "needs a dir, not an empty value" --bin-dir ""

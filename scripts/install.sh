@@ -78,11 +78,12 @@ link_is_ours() {
     esac
 }
 
-# Refuses a --dest that is empty, or that is /, /Applications or $HOME (checked physically,
-# in lower case, because APFS is case-insensitive). An existing dest is resolved here.
+# Refuses a --dest that is / or $HOME (checked physically, in lower case, because APFS is
+# case-insensitive). /Applications is allowed: it is the folder that holds contr.app.
+# The script never removes or replaces the dest dir itself, only <dest>/contr.app.
+# An existing dest is resolved here.
 check_dest() {
     local phys home lower_phys lower_home name
-    [ -n "$dest" ] || refuse "refusing --dest: the dir is empty"
     if [ -d "$dest" ]; then
         dest="$(cd -- "$dest" && pwd)" || die "cannot resolve --dest: $dest"
         phys="$(cd -- "$dest" && pwd -P)" || die "cannot resolve --dest: $dest"
@@ -92,9 +93,9 @@ check_dest() {
         fi
         lower_phys="$(printf '%s' "$phys" | tr '[:upper:]' '[:lower:]')"
         lower_home="$(printf '%s' "$home" | tr '[:upper:]' '[:lower:]')"
-        for name in / /applications "$lower_home"; do
+        for name in / "$lower_home"; do
             if [ -n "$name" ] && [ "$lower_phys" = "$name" ]; then
-                refuse "refusing --dest $dest: it is a protected dir (/, /Applications or \$HOME)"
+                refuse "refusing --dest $dest: it is a protected dir (/ or \$HOME)"
             fi
         done
     else
@@ -140,6 +141,9 @@ install_app() {
     mkdir -p -- "$dest" || die "cannot create --dest: $dest"
     if [ -e "$stage" ] || [ -L "$stage" ]; then remove_bundle "$stage"; fi
     ditto "$app_src" "$stage" || die "ditto failed"
+    # The old bundle is removed before the new one is moved in. Between the two steps there is no
+    # app at $target, and if the move fails the old app is already gone. A rename swap would avoid
+    # that, but it needs a third name in $dest, and only $dest/contr.app may be removed or replaced.
     if [ -e "$target" ] || [ -L "$target" ]; then remove_bundle "$target"; fi
     mv -- "$stage" "$target"
     stage=""
@@ -157,6 +161,10 @@ print_hint() {
     esac
 }
 
+# When the file is sourced, only the functions above are defined.
+# The test sources it to call check_dest.
+if [ "${BASH_SOURCE[0]}" != "$0" ]; then return 0; fi
+
 while [ $# -gt 0 ]; do
     case "$1" in
         --app)
@@ -169,6 +177,7 @@ while [ $# -gt 0 ]; do
         --dest)
             [ $# -ge 2 ] || die "--dest needs a dir"
             case "$2" in -*) die "--dest needs a dir, not a flag: $2" ;; esac
+            [ -n "$2" ] || die "--dest needs a dir, not an empty value"
             dest="$2"
             shift 2
             ;;
