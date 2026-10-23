@@ -7,3 +7,6 @@ text is in crates/contr/assets/fonts/OFL.txt.
 
 GPUI (crates gpui-pre, gpui-pre-platform) is used as a dependency under
 the Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0).
+
+herdr (Apache License, Version 2.0) is the terminal multiplexer contr talks to. The endpoint protocol code in
+crates/contr-herdr/src/endpoint/ is our own code, written from herdr's source to match its wire format.
