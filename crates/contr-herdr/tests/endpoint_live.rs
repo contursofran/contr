@@ -1,5 +1,6 @@
 //! Live check of the endpoint client against an isolated `herdr server`: the
-//! handshake, a command's colour and bold reaching the surface, and a resize.
+//! handshake, a command's colour and bold reaching the surface, a resize, and
+//! that tab focus changes (`tab.create`, `tab.focus`) move the surface.
 //!
 //! Run with:
 //! `CONTR_HERDR_BIN=$(command -v herdr) cargo test -p contr-herdr --test endpoint_live -- --ignored --nocapture`
@@ -22,7 +23,7 @@ use contr_herdr::endpoint::messages::{
     CellPx, ClientMsg, GridSize, InputEvent, KeyCode, SNAPSHOT_KIND, ServerMsg, ShellSnapshot,
     VersionCheck,
 };
-use contr_herdr::endpoint::surface::Surface;
+use contr_herdr::endpoint::surface::{Rect, Surface, SurfacePane};
 use contr_herdr::wire::request_line;
 use serde_json::{Value, json};
 
@@ -125,8 +126,8 @@ impl Sandbox {
     }
 
     /// One workspace, so the server has a focused pane. The request is a raw
-    /// JSON line on the API socket of this isolated server.
-    fn create_workspace(&self) {
+    /// JSON line on the API socket of this isolated server. Returns the reply.
+    fn create_workspace(&self) -> Value {
         let mut stream = UnixStream::connect(self.api_socket()).unwrap();
         stream.set_read_timeout(Some(WAIT)).unwrap();
         let request = request_line("t", "workspace.create", json!({ "cwd": "/tmp" }));
@@ -138,6 +139,7 @@ impl Sandbox {
             reply.get("result").is_some(),
             "workspace.create failed: {line}"
         );
+        reply
     }
 }
 
@@ -206,6 +208,43 @@ fn find_red(surface: &Surface) -> Option<(usize, usize)> {
     None
 }
 
+/// The pane id of the focused pane in the surface, once a surface has arrived.
+fn surface_pane(shown: &Shown) -> Option<String> {
+    shown
+        .surface
+        .as_ref()?
+        .focused_pane()
+        .map(|p| p.pane_id.clone())
+}
+
+#[test]
+fn surface_pane_is_the_focused_pane_of_the_surface() {
+    let pane = |id: &str, focused: bool| SurfacePane {
+        pane_id: id.to_owned(),
+        rect: Rect::default(),
+        inner_rect: Rect::default(),
+        focused,
+        alternate_screen: false,
+    };
+    let mut shown = Shown::default();
+    assert_eq!(surface_pane(&shown), None, "no surface yet");
+
+    let surface = |panes: Vec<SurfacePane>| Surface {
+        boot_id: "b1".to_owned(),
+        projection_revision: 0,
+        revision: 0,
+        size: SIZE,
+        rows: Vec::new(),
+        cursor: None,
+        panes,
+    };
+    shown.surface = Some(surface(vec![pane("w1:p1", false)]));
+    assert_eq!(surface_pane(&shown), None, "a surface with no focused pane");
+
+    shown.surface = Some(surface(vec![pane("w1:p1", false), pane("w1:p2", true)]));
+    assert_eq!(surface_pane(&shown).as_deref(), Some("w1:p2"));
+}
+
 #[test]
 #[ignore = "needs CONTR_HERDR_BIN; starts an isolated herdr"]
 fn handshake_colour_and_resize_against_an_isolated_herdr() {
@@ -269,5 +308,57 @@ fn handshake_colour_and_resize_against_an_isolated_herdr() {
         "a 40x8 surface after the resize",
         |s| s.size_is(SMALL),
     );
+    conn.send(&ClientMsg::Detach).unwrap();
+}
+
+#[test]
+#[ignore = "needs CONTR_HERDR_BIN; starts an isolated herdr"]
+fn tab_focus_moves_the_endpoint_surface() {
+    let bin = std::env::var("CONTR_HERDR_BIN").expect("set CONTR_HERDR_BIN to the herdr binary");
+    let sandbox = Sandbox::new();
+    let _server = sandbox.start_server(&bin);
+    let reply = sandbox.create_workspace();
+    println!("workspace.create reply: {reply}");
+    let ws = reply["result"]["workspace"]["workspace_id"]
+        .as_str()
+        .expect("a workspace id in the reply")
+        .to_owned();
+    let first_tab = reply["result"]["tab"]["tab_id"]
+        .as_str()
+        .expect("a tab id in the reply")
+        .to_owned();
+
+    let mut conn = Conn::open(&sandbox.endpoint_socket(), SIZE, CELL, WAIT).unwrap();
+    conn.set_read_timeout(Some(POLL)).unwrap();
+
+    let mut shown = Shown::default();
+    pump(
+        &mut conn,
+        &mut shown,
+        "a surface with a focused pane",
+        |s| surface_pane(s).is_some(),
+    );
+    let first_pane = surface_pane(&shown).expect("a focused pane");
+    println!("first pane {first_pane} in tab {first_tab}");
+
+    // tab.create sends focus: true, so the API focus change must move the surface.
+    contr_herdr::command::create_tab(&sandbox.api_socket(), &ws, WAIT).unwrap();
+    pump(&mut conn, &mut shown, "a surface of the new tab", |s| {
+        surface_pane(s).is_some_and(|p| p != first_pane)
+    });
+    println!(
+        "new tab pane {}",
+        surface_pane(&shown).expect("a focused pane")
+    );
+
+    // The title-bar click path: tab.focus on the first tab moves the surface back.
+    contr_herdr::command::focus_tab(&sandbox.api_socket(), &first_tab, WAIT).unwrap();
+    pump(
+        &mut conn,
+        &mut shown,
+        "the first tab's surface again",
+        |s| surface_pane(s).as_deref() == Some(first_pane.as_str()),
+    );
+
     conn.send(&ClientMsg::Detach).unwrap();
 }

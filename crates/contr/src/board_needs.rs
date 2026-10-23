@@ -1,17 +1,20 @@
-//! The needs-you section of the board panel: the `Needs you N` head with the inert `clear done`
-//! label, then one row per item in the coordinator's order. The rows are plain elements. Their icons
+//! The needs-you section of the board panel: the `Needs you N` head with the `clear done` control,
+//! then one row per item in the coordinator's order. The rows are plain elements. Their icons
 //! are static, so the section needs no cached views. Read-only in #9: rows never move on their own.
 
 use crate::board_model::{ItemKind, NeedItem, item_kind_label, item_status};
+use crate::board_panel::{ActionClick, clear_done};
 use crate::status_icon::StatusIcon;
 use crate::theme::*;
-use gpui::{
-    FontWeight, IntoElement, ParentElement, Role, StatefulInteractiveElement, Styled, div,
-    prelude::*, px, rgb,
-};
+use gpui::{FontWeight, Role, div, prelude::*, px, rgb};
 
 /// The needs-you section. It takes the rest of the panel's height, and its rows scroll inside it.
-pub fn needs_section(items: &[NeedItem], need_count: u32, clear_items: bool) -> impl IntoElement {
+pub fn needs_section(
+    items: &[NeedItem],
+    need_count: u32,
+    clear_items: bool,
+    on_clear: Option<ActionClick>,
+) -> impl IntoElement {
     let rows = div()
         .id("needs-rows")
         .role(Role::List)
@@ -37,12 +40,12 @@ pub fn needs_section(items: &[NeedItem], need_count: u32, clear_items: bool) -> 
         .min_h_0()
         .flex()
         .flex_col()
-        .child(head(need_count, clear_items))
+        .child(head(need_count, clear_items, on_clear))
         .child(rows)
 }
 
 /// `Needs you`, the open count in bold, then `clear done` while the section has resolved items.
-fn head(need_count: u32, clear_items: bool) -> impl IntoElement {
+fn head(need_count: u32, clear_items: bool, on_clear: Option<ActionClick>) -> impl IntoElement {
     div()
         .debug_selector(|| "needs-header".into())
         .h(px(BOARD_LINE_HEIGHT))
@@ -60,12 +63,7 @@ fn head(need_count: u32, clear_items: bool) -> impl IntoElement {
                 .child(need_count.to_string()),
         )
         .when(clear_items, |line| {
-            line.child(
-                div()
-                    .debug_selector(|| "needs-clear".into())
-                    .text_color(rgb(TEXT_DIM_2))
-                    .child("clear done"),
-            )
+            line.child(clear_done("needs-clear", on_clear))
         })
 }
 
@@ -178,6 +176,7 @@ mod tests {
                     &self.items,
                     self.need_count,
                     self.clear_items,
+                    None,
                 ))
         }
     }
@@ -270,7 +269,7 @@ mod tests {
     }
 
     #[gpui::test]
-    fn clear_done_follows_clear_items(cx: &mut TestAppContext) {
+    fn clear_done_shows_with_clear_items(cx: &mut TestAppContext) {
         let shown = host(cx, fixture_items(), 3, true);
         assert!(bounds(shown, "needs-clear").is_some());
     }

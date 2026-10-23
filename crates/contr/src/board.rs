@@ -256,6 +256,11 @@ impl Board {
         }
     }
 
+    /// The board directory that board files are read from, `None` when there is none.
+    pub fn dir(&self) -> Option<&Path> {
+        self.dir.as_deref()
+    }
+
     /// What the views read. A change in any of these notifies.
     fn shown(
         &self,
@@ -538,6 +543,20 @@ mod tests {
         assert_eq!(problem, None);
         assert_eq!(reads, 1);
         assert_eq!(pane_id.as_deref(), Some("w1:p1"));
+    }
+
+    #[gpui::test]
+    fn dir_is_the_directory_the_board_was_given(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let (_herdr, board) = setup(cx, Some(dir.path().to_path_buf()));
+        let shown = read(cx, &board, |b| b.dir().map(Path::to_path_buf));
+        assert_eq!(shown, Some(dir.path().to_path_buf()));
+    }
+
+    #[gpui::test]
+    fn dir_is_none_without_a_board_directory(cx: &mut TestAppContext) {
+        let (_herdr, board) = setup(cx, None);
+        assert!(read(cx, &board, |b| b.dir().is_none()));
     }
 
     #[gpui::test]

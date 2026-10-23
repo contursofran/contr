@@ -4,17 +4,21 @@
 //! redraws only its row. A click selects the row and focuses its top holder's pane.
 
 use crate::agents_list::{FocusFn, focus_in_background};
+use crate::board::{Board, GlobalBoard};
+use crate::board_model::pane_marks;
 use crate::git::{self, Scan};
 use crate::herdr::{GlobalHerdr, Herdr};
+use crate::host::{GlobalHost, Host, HostStats};
 use crate::selection::{GlobalSelection, Selected, Selection};
 use crate::spaces_model::{self, Badge, RepoGroup, WorktreeRow};
 use crate::status_icon::StatusIcon;
 use crate::theme::{
     BADGE_PAD_X, BADGE_RADIUS, BG_CARD, CARD_BORDER, CARD_INSET_X, CARD_RADIUS, HOST_DOT_SIZE,
-    ICON_FAINT, ICON_SIZE_SMALL, LINE_HEIGHT, ROW_INDENT, SIDEBAR_PAD_X, SIDEBAR_TOGGLE_BOX,
-    SIDEBAR_TOGGLE_FILL, SIDEBAR_TOGGLE_HEIGHT, SIDEBAR_TOGGLE_RADIUS, SIDEBAR_TOGGLE_WIDTH,
-    SPACES_GAP, SPACES_ROW_HEIGHT, TEXT, TEXT_2, TEXT_DIM, TEXT_DIM_2, TITLE_BAR_HEIGHT,
-    TRAFFIC_LIGHT_INSET, WORKTREE_ROW_HEIGHT, YOU_BG, YOU_TEXT,
+    ICON_FAINT, ICON_SIZE_SMALL, LINE, LINE_HEIGHT, MEM_BAR_HEIGHT, MEM_BAR_WIDTH, ROW_INDENT,
+    SIDEBAR_PAD_X, SIDEBAR_TOGGLE_BOX, SIDEBAR_TOGGLE_FILL, SIDEBAR_TOGGLE_HEIGHT,
+    SIDEBAR_TOGGLE_RADIUS, SIDEBAR_TOGGLE_WIDTH, SPACES_GAP, SPACES_ROW_HEIGHT, TEXT, TEXT_2,
+    TEXT_DIM, TEXT_DIM_2, TITLE_BAR_HEIGHT, TRAFFIC_LIGHT_INSET, USAGE_BAR_RADIUS,
+    WORKTREE_ROW_HEIGHT, YOU_BG, YOU_TEXT,
 };
 use crate::visibility::GlobalVisibility;
 use async_channel::Receiver;
@@ -39,6 +43,11 @@ pub enum SpacesEvent {
 pub struct Spaces {
     herdr: Entity<Herdr>,
     selection: Entity<Selection>,
+    /// The host sampler. The host card shows its latest reading.
+    host: Entity<Host>,
+    /// The coordinator's board, when `Board::init` ran. The rows take their second line and badge
+    /// from its snapshot.
+    board: Option<Entity<Board>>,
     /// Starts a focus call for a pane. The app sends `pane.focus`; the tests record the ids.
     focus: FocusFn,
     /// The repo groups the body shows. Empty while herdr has no tree.
@@ -68,8 +77,9 @@ pub struct Spaces {
 impl EventEmitter<SpacesEvent> for Spaces {}
 
 impl Spaces {
-    /// Needs `Herdr::init`, `Selection::init` and `Visibility::init` first. Scans at once when
-    /// herdr already has a tree, then follows herdr's changes and the rescan timer.
+    /// Needs `Herdr::init`, `Host::init`, `Selection::init` and `Visibility::init` first. Uses
+    /// `Board::init` when it ran. Scans at once when herdr already has a tree, then follows herdr's
+    /// changes and the rescan timer.
     pub fn new(cx: &mut Context<Self>) -> Self {
         Self::with_focus(Rc::new(focus_in_background), cx)
     }
@@ -78,20 +88,33 @@ impl Spaces {
     fn with_focus(focus: FocusFn, cx: &mut Context<Self>) -> Self {
         let herdr = cx.global::<GlobalHerdr>().0.clone();
         let selection = cx.global::<GlobalSelection>().0.clone();
+        let host = cx.global::<GlobalHost>().0.clone();
         let visibility = cx.global::<GlobalVisibility>().0.clone();
+        let board = cx
+            .try_global::<GlobalBoard>()
+            .map(|global| global.0.clone());
         let herdr_sub = cx.observe(&herdr, |this, _, cx| this.on_herdr_changed(cx));
         // The rows draw the selection: a change moves the mark, and only the rows it moves redraw.
         let selection_sub = cx.observe(&selection, |this, _, cx| this.sync_selected(cx));
+        // The host card redraws when the host publishes a changed reading.
+        let host_sub = cx.observe(&host, |_, _, cx| cx.notify());
         // Every visibility change is sent; the timer loop keeps the last one.
         let (changes_tx, changes_rx) = async_channel::unbounded::<bool>();
         let visibility_sub = cx.observe(&visibility, move |_, visibility, cx| {
             let _ = changes_tx.try_send(visibility.read(cx).visible);
         });
+        let mut subs = vec![herdr_sub, visibility_sub, selection_sub, host_sub];
+        // A board change may change a row's second line or badge, so the groups are rebuilt.
+        if let Some(board) = &board {
+            subs.push(cx.observe(board, |this, _, cx| this.rebuild(cx)));
+        }
         let visible = visibility.read(cx).visible;
         let tick = cx.spawn(async move |this, cx| tick(this, cx, changes_rx, visible).await);
         let mut spaces = Self {
             herdr,
             selection,
+            host,
+            board,
             focus,
             groups: Vec::new(),
             rows: Vec::new(),
@@ -102,7 +125,7 @@ impl Spaces {
             scanning: None,
             #[cfg(test)]
             scans: 0,
-            _subs: vec![herdr_sub, visibility_sub, selection_sub],
+            _subs: subs,
             _row_clicks: Vec::new(),
             _tick: tick,
         };
@@ -197,16 +220,23 @@ impl Spaces {
         }));
     }
 
-    /// Rebuilds `groups` from the herdr tree and the scan, and the connection flag. Notifies only
-    /// when one of them changed, and then brings the row views up to the groups. Then clears a
-    /// selected worktree that no row has any more.
+    /// Rebuilds `groups` from the herdr tree, the scan and the board's marks, and the connection
+    /// flag. Notifies only when one of them changed, and then brings the row views up to the groups.
+    /// Then clears a selected worktree that no row has any more.
     fn rebuild(&mut self, cx: &mut Context<Self>) {
         let live = &self.herdr.read(cx).live;
-        let groups = live
+        let mut groups = live
             .tree
             .as_deref()
             .map(|tree| spaces_model::build(tree, &self.scan))
             .unwrap_or_default();
+        let marks = self
+            .board
+            .as_ref()
+            .and_then(|board| board.read(cx).snapshot.clone())
+            .map(|snapshot| pane_marks(&snapshot))
+            .unwrap_or_default();
+        spaces_model::apply_marks(&mut groups, &marks);
         let online = matches!(live.state, ConnState::Connected { .. });
         if groups != self.groups || online != self.online {
             self.groups = groups;
@@ -405,7 +435,7 @@ impl Render for Spaces {
                     .min_h_0()
                     .overflow_y_scroll()
                     .child(spaces_header())
-                    .child(host_card(self.online))
+                    .child(host_card(self.online, self.host.read(cx).stats))
                     .children(groups),
             )
     }
@@ -431,9 +461,9 @@ fn spaces_header() -> Div {
         )
 }
 
-/// The host card: `Local`, and a dot that is lit while herdr is connected. CPU and memory come
-/// later.
-fn host_card(online: bool) -> Div {
+/// The host card: `Local`, then the CPU reading, the memory bar and a dot that is lit while herdr
+/// is connected. Without a reading the CPU shows a dash and the bar stays empty.
+fn host_card(online: bool, stats: Option<HostStats>) -> Div {
     div()
         .debug_selector(|| "host-local".into())
         .mx(px(CARD_INSET_X))
@@ -449,10 +479,56 @@ fn host_card(online: bool) -> Div {
         .child(div().text_color(rgb(TEXT)).child("Local"))
         .child(
             div()
-                .debug_selector(|| "host-online".into())
-                .size(px(HOST_DOT_SIZE))
-                .rounded_full()
-                .bg(rgb(online_colour(online))),
+                .flex()
+                .items_center()
+                .gap(px(SPACES_GAP))
+                .child(
+                    div()
+                        .debug_selector(|| "host-cpu".into())
+                        .text_color(rgb(TEXT_DIM))
+                        .child(host_cpu_text(stats)),
+                )
+                .child(mem_bar(stats))
+                .child(
+                    div()
+                        .debug_selector(|| "host-online".into())
+                        .size(px(HOST_DOT_SIZE))
+                        .rounded_full()
+                        .bg(rgb(online_colour(online))),
+                ),
+        )
+}
+
+/// The CPU text on the host card: "CPU 38%", or "CPU –" without a reading.
+fn host_cpu_text(stats: Option<HostStats>) -> String {
+    match stats {
+        Some(stats) => format!("CPU {}", stats.cpu_label()),
+        None => "CPU –".into(),
+    }
+}
+
+/// The memory bar: a track `MEM_BAR_WIDTH` wide, filled to the memory share. Without a reading the
+/// fill has no width.
+fn mem_bar(stats: Option<HostStats>) -> Div {
+    let filled = stats.map_or(0, |stats| stats.mem_bar_pixels());
+    div()
+        .debug_selector(|| "host-mem".into())
+        .relative()
+        .flex_none()
+        .w(px(MEM_BAR_WIDTH))
+        .h(px(MEM_BAR_HEIGHT))
+        .rounded(px(USAGE_BAR_RADIUS))
+        .bg(rgb(LINE))
+        .child(
+            div()
+                .debug_selector(|| "host-mem-fill".into())
+                .absolute()
+                .top_0()
+                .left_0()
+                .h_full()
+                .w(px(filled as f32))
+                .rounded(px(USAGE_BAR_RADIUS))
+                .bg(rgb(TEXT_DIM)),
         )
 }
 
@@ -605,7 +681,7 @@ fn worktree_row(
                         .text_color(rgb(name_colour(held)))
                         .child(row.name.clone()),
                 )
-                .child(hold_line(g, r, row.hold.as_deref())),
+                .child(hold_line(g, r, row.hold.as_deref(), row.hold_you)),
         )
         .when_some(row.badge.as_ref(), |line, badge| {
             line.child(badge_chip(g, r, badge))
@@ -627,8 +703,9 @@ fn selected_card(g: usize, r: usize) -> Div {
         .border_color(rgb(CARD_BORDER))
 }
 
-/// The second line: the top holder's tab and state. A row without a holder keeps the line, empty.
-fn hold_line(g: usize, r: usize, hold: Option<&str>) -> Div {
+/// The second line: the top holder's tab and state, or the board's `who`. `you` draws it as the you
+/// chip, the owner's turn. A row without a holder keeps the line, empty.
+fn hold_line(g: usize, r: usize, hold: Option<&str>, you: bool) -> Div {
     let line = div()
         .h(px(LINE_HEIGHT))
         .overflow_hidden()
@@ -636,11 +713,29 @@ fn hold_line(g: usize, r: usize, hold: Option<&str>) -> Div {
         .whitespace_nowrap()
         .text_color(rgb(TEXT_DIM_2));
     match hold {
-        Some(text) => line
-            .debug_selector(move || format!("wt-{g}-{r}-hold"))
-            .child(text.to_string()),
+        Some(text) => {
+            let line = line.debug_selector(move || format!("wt-{g}-{r}-hold"));
+            if you {
+                line.child(you_chip(g, r, text))
+            } else {
+                line.child(text.to_string())
+            }
+        }
         None => line,
     }
+}
+
+/// The owner's turn on the second line: the text in the you style, as `WhoKind::You` draws it on
+/// the board.
+fn you_chip(g: usize, r: usize, text: &str) -> Div {
+    div()
+        .debug_selector(move || format!("wt-{g}-{r}-hold-you"))
+        .px(px(BADGE_PAD_X))
+        .rounded(px(BADGE_RADIUS))
+        .bg(rgb(YOU_BG))
+        .text_color(rgb(YOU_TEXT))
+        .font_weight(FontWeight::BOLD)
+        .child(text.to_string())
 }
 
 /// The row's mark: `#640` for a pull request, or a white chip for a value that waits on the owner.
@@ -722,6 +817,7 @@ pub fn toggle_box() -> Div {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::board_model::parse_board;
     use crate::git::fake::{linked, main_repo, write};
     use crate::status_icon::Status;
     use crate::theme::{SIDEBAR_WIDTH, WINDOW_HEIGHT};
@@ -780,8 +876,9 @@ mod tests {
         assert!(events.borrow().is_empty());
     }
 
-    /// Registers what a `Spaces` reads: a shown window, the selection, and a detached herdr that
-    /// starts with `tree`. Returns the herdr, so a test can send it updates.
+    /// Registers what a `Spaces` reads: a shown window, the selection, a detached host with no
+    /// reading, and a detached herdr that starts with `tree`. Returns the herdr, so a test can send
+    /// it updates.
     fn register(cx: &mut TestAppContext, tree: Option<HerdrTree>) -> Entity<Herdr> {
         cx.update(Visibility::init);
         cx.update(Selection::init);
@@ -794,8 +891,30 @@ mod tests {
             };
             let herdr = app.new(|cx| Herdr::detached(live, cx));
             app.set_global(GlobalHerdr(herdr.clone()));
+            let host = app.new(|cx| Host::detached(None, cx));
+            app.set_global(GlobalHost(host));
             herdr
         })
+    }
+
+    /// Publishes a host reading to the sidebar's host, as the sampler would. Works in a test whose
+    /// sidebar is already in a window.
+    fn set_host_stats(cx: &mut TestAppContext, stats: Option<HostStats>) {
+        cx.update(|app| {
+            let host = app.global::<GlobalHost>().0.clone();
+            host.update(app, |host, cx| {
+                host.stats = stats;
+                cx.notify();
+            })
+        });
+    }
+
+    fn host_stats(cpu_percent: f32, mem_used: u64, mem_total: u64) -> HostStats {
+        HostStats {
+            cpu_percent,
+            mem_used,
+            mem_total,
+        }
     }
 
     fn pane(id: &str, cwd: &str, state: Option<AgentState>) -> Pane {
@@ -1437,6 +1556,54 @@ mod tests {
         assert!(cx.debug_bounds("host-online").is_some());
     }
 
+    #[test]
+    fn the_cpu_text_rounds_or_shows_a_dash() {
+        assert_eq!(host_cpu_text(Some(host_stats(38.4, 0, 1))), "CPU 38%");
+        assert_eq!(host_cpu_text(Some(host_stats(37.5, 0, 1))), "CPU 38%");
+        assert_eq!(host_cpu_text(None), "CPU –");
+    }
+
+    #[gpui::test]
+    fn the_host_card_fills_the_memory_bar_to_the_share(cx: &mut TestAppContext) {
+        register(cx, None);
+        set_host_stats(cx, Some(host_stats(38., 50, 100)));
+        let (_spaces, _focused, cx) = show_spaces(cx);
+
+        let card = cx.debug_bounds("host-local").unwrap();
+        let bar = cx.debug_bounds("host-mem").unwrap();
+        assert_eq!(bar.size.width, px(MEM_BAR_WIDTH));
+        assert_eq!(bar.size.height, px(MEM_BAR_HEIGHT));
+        assert!(bar.right() <= card.right(), "the bar sits inside the card");
+        assert_eq!(
+            cx.debug_bounds("host-mem-fill").unwrap().size.width,
+            px(30.)
+        );
+        assert!(cx.debug_bounds("host-cpu").is_some());
+    }
+
+    #[gpui::test]
+    fn no_reading_leaves_the_bar_empty(cx: &mut TestAppContext) {
+        register(cx, None);
+        let (_spaces, _focused, cx) = show_spaces(cx);
+
+        assert!(cx.debug_bounds("host-cpu").is_some());
+        assert_eq!(cx.debug_bounds("host-mem-fill").unwrap().size.width, px(0.));
+    }
+
+    #[gpui::test]
+    fn a_new_reading_repaints_the_host_card(cx: &mut TestAppContext) {
+        register(cx, None);
+        let (_spaces, _focused, cx) = show_spaces(cx);
+        assert_eq!(cx.debug_bounds("host-mem-fill").unwrap().size.width, px(0.));
+
+        set_host_stats(cx, Some(host_stats(10., 75, 100)));
+        cx.run_until_parked();
+        assert_eq!(
+            cx.debug_bounds("host-mem-fill").unwrap().size.width,
+            px(45.)
+        );
+    }
+
     #[gpui::test]
     fn a_click_selects_the_row_and_focuses_its_holder(cx: &mut TestAppContext) {
         let (_guard, wt1) = register_held_worktree(cx);
@@ -1645,5 +1812,139 @@ mod tests {
         assert_eq!(selected_in_view(cx), Some(Selected::Worktree(text(&wt2))));
         assert!(cx.debug_bounds("wt-0-2-selected").is_some());
         assert!(cx.debug_bounds("wt-0-1-selected").is_none());
+    }
+
+    /// Registers a board as `Board::init` would, with no board dir, and returns it. Call it before
+    /// `show_spaces`, which reads the board when it is made.
+    fn board_in(cx: &mut TestAppContext) -> Entity<Board> {
+        cx.update(|app| {
+            let board = app.new(|cx| Board::new(None, cx));
+            app.set_global(GlobalBoard(board.clone()));
+            board
+        })
+    }
+
+    /// Puts `json` (a v1 board) in the board as a finished read would, and notifies.
+    fn put_board(cx: &mut VisualTestContext, board: &Entity<Board>, json: &str) {
+        let snapshot = parse_board(json.as_bytes()).unwrap();
+        board.update(cx, |board, cx| {
+            board.snapshot = Some(Arc::new(snapshot));
+            cx.notify();
+        });
+        cx.run_until_parked();
+    }
+
+    /// A v1 board with the given `rows` JSON array and no other rows.
+    fn board_json(rows: &str) -> String {
+        format!(r#"{{"version": 1, "session": "s", "rev": 1, "rows": {rows}}}"#)
+    }
+
+    #[gpui::test]
+    fn the_board_sets_the_second_line_and_badge(cx: &mut TestAppContext) {
+        let (_guard, _wt1) = register_held_worktree(cx);
+        let board = board_in(cx);
+        let (spaces, _focused, cx) = show_spaces(cx);
+        put_board(
+            cx,
+            &board,
+            &board_json(
+                r##"[{"key": "k", "label": "#640", "pane_id": "w1:p2",
+                    "who": {"text": "b-1151 5m", "kind": "text"}}]"##,
+            ),
+        );
+
+        let row = spaces.read_with(cx, |spaces, _| spaces.groups[0].rows[0].clone());
+        assert_eq!(row.hold.as_deref(), Some("b-1151 5m"));
+        assert_eq!(row.badge, Some(Badge::Pr(640)));
+        assert!(cx.debug_bounds("wt-0-0-badge").is_some());
+        assert!(
+            cx.debug_bounds("wt-0-0-hold-you").is_none(),
+            "a text who is not the you style"
+        );
+    }
+
+    #[gpui::test]
+    fn a_you_line_draws_the_you_chip(cx: &mut TestAppContext) {
+        let (_guard, _wt1) = register_held_worktree(cx);
+        let board = board_in(cx);
+        let (_spaces, _focused, cx) = show_spaces(cx);
+        put_board(
+            cx,
+            &board,
+            &board_json(
+                r##"[{"key": "k", "label": "#640", "pane_id": "w1:p2",
+                    "who": {"text": "your test", "kind": "you"}}]"##,
+            ),
+        );
+
+        assert!(cx.debug_bounds("wt-0-0-hold").is_some());
+        assert!(cx.debug_bounds("wt-0-0-hold-you").is_some());
+    }
+
+    #[gpui::test]
+    fn without_a_board_the_row_keeps_the_herdr_fallback(cx: &mut TestAppContext) {
+        let (_guard, _wt1) = register_held_worktree(cx);
+        let (spaces, _focused, cx) = show_spaces(cx);
+
+        let row = spaces.read_with(cx, |spaces, _| spaces.groups[0].rows[0].clone());
+        assert_eq!(row.hold.as_deref(), Some("a done"));
+        assert_eq!(row.badge, None);
+        assert!(cx.debug_bounds("wt-0-0-badge").is_none());
+        assert!(cx.debug_bounds("wt-0-0-hold-you").is_none());
+    }
+
+    #[gpui::test]
+    fn a_board_that_drops_the_pane_restores_the_fallback(cx: &mut TestAppContext) {
+        let (_guard, _wt1) = register_held_worktree(cx);
+        let board = board_in(cx);
+        let (spaces, _focused, cx) = show_spaces(cx);
+        put_board(
+            cx,
+            &board,
+            &board_json(
+                r##"[{"key": "k", "label": "#640", "pane_id": "w1:p2",
+                    "who": {"text": "your test", "kind": "you"}}]"##,
+            ),
+        );
+        assert!(cx.debug_bounds("wt-0-0-hold-you").is_some());
+
+        put_board(cx, &board, &board_json("[]"));
+        let row = spaces.read_with(cx, |spaces, _| spaces.groups[0].rows[0].clone());
+        assert_eq!(row.hold.as_deref(), Some("a done"));
+        assert_eq!(row.badge, None);
+        assert!(cx.debug_bounds("wt-0-0-hold-you").is_none());
+    }
+
+    #[gpui::test]
+    fn a_board_change_redraws_only_the_row_it_changes(cx: &mut TestAppContext) {
+        let (_guard, base) = temp_dir();
+        let (wt1, wt2) = repo_with_two_worktrees(&base);
+        register(
+            cx,
+            Some(tree(vec![
+                pane("w1:p2", &text(&wt1), Some(AgentState::Done)),
+                pane("w1:p3", &text(&wt2), Some(AgentState::Done)),
+            ])),
+        );
+        let board = board_in(cx);
+        let (spaces, _focused, cx) = show_spaces(cx);
+        let rows = row_views(&spaces, cx);
+        let before = renders(&rows, cx);
+
+        put_board(
+            cx,
+            &board,
+            &board_json(
+                r##"[{"key": "k", "label": "#640", "pane_id": "w1:p2",
+                    "who": {"text": "b-1151 5m", "kind": "text"}}]"##,
+            ),
+        );
+
+        let after = renders(&rows, cx);
+        assert!(
+            after[0] > before[0],
+            "the row whose mark changed did not redraw"
+        );
+        assert_eq!(after[1], before[1], "the row without a change redrew");
     }
 }

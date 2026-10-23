@@ -7,6 +7,9 @@
   "need_count": 3,
   "clear_rows": true,
   "clear_items": true,
+  "actions": 1,
+  "acted": 0,
+  "failed": [],
   "context": { "tokens": 120000, "limit": 300000 },
   "rows": [
     {

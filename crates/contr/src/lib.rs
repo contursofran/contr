@@ -2,8 +2,10 @@
 
 pub mod agents_list;
 pub mod board;
+pub mod board_actions;
 pub mod board_model;
 pub mod board_needs;
+pub mod board_outbox;
 pub mod board_panel;
 pub mod board_report;
 pub mod board_work;
