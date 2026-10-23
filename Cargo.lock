@@ -939,6 +939,8 @@ dependencies = [
  "gpui-pre-platform",
  "sysinfo",
  "tempfile",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

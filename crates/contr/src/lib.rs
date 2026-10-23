@@ -2,6 +2,7 @@
 
 pub mod frame;
 pub mod git;
+pub mod herdr;
 pub mod host;
 pub mod legend;
 pub mod selection;

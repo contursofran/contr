@@ -191,10 +191,12 @@ pub fn init_detached(cx: &mut App, stats: Option<crate::host::HostStats>) {
 mod tests {
     use super::*;
     use crate::frame::Frame;
+    use crate::herdr::{GlobalHerdr, Herdr};
     use crate::host::HostStats;
     use crate::selection::Selection;
     use crate::status_message::{GlobalStatusMessage, MESSAGE_TTL, StatusMessage};
-    use gpui::{Entity, TestAppContext, px, size};
+    use contr_herdr::{ConnState, LiveHerdr};
+    use gpui::{AppContext, Entity, TestAppContext, px, size};
     use std::time::Duration;
 
     fn stats(cpu_percent: f32, mem_used: u64, mem_total: u64) -> HostStats {
@@ -205,7 +207,8 @@ mod tests {
         }
     }
 
-    /// Opens the frame (which holds the status bar) at `width` × 900 with a detached host.
+    /// Opens the frame (which holds the status bar) at `width` × 900 with a detached host and a
+    /// connected, detached herdr (the frame reads it).
     fn frame(
         cx: &mut TestAppContext,
         host: Option<HostStats>,
@@ -213,6 +216,16 @@ mod tests {
     ) -> &mut gpui::VisualTestContext {
         cx.update(Selection::init);
         cx.update(|app| init_detached(app, host));
+        cx.update(|app| {
+            let live = LiveHerdr {
+                state: ConnState::Connected {
+                    server_version: "0.9.3".into(),
+                },
+                tree: None,
+            };
+            let herdr = app.new(|cx| Herdr::detached(live, cx));
+            app.set_global(GlobalHerdr(herdr));
+        });
         let (_view, cx) = cx.add_window_view(|_, cx| Frame::new(cx));
         cx.simulate_resize(size(px(width), px(900.)));
         cx.run_until_parked();
