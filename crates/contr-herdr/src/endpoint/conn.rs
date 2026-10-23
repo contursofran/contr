@@ -431,6 +431,16 @@ mod tests {
         }
     }
 
+    /// Empties the `capture` buffer of this thread when it goes out of scope.
+    /// This also runs when the captured closure panics.
+    struct ClearCapture;
+
+    impl Drop for ClearCapture {
+        fn drop(&mut self) {
+            CAPTURED.set(None);
+        }
+    }
+
     /// Log lines written while `f` runs, from the thread that runs `f`.
     ///
     /// One global subscriber, set once, collects the lines. A scoped subscriber
@@ -438,6 +448,12 @@ mod tests {
     /// the interest of a new callsite from the default of the thread that
     /// reaches it first. A parallel test without a capture can reach it first
     /// and turn that log line off for all threads.
+    ///
+    /// `set_global_default` rebuilds the interest of the callsites that exist
+    /// when it runs, and it marks the global as set only at its end. A callsite
+    /// that another thread reaches in between gets "never" and keeps it. The
+    /// rebuild after `set_global_default` gives that callsite the interest of
+    /// the global subscriber.
     fn capture<T>(f: impl FnOnce() -> T) -> (T, String) {
         static GLOBAL: Once = Once::new();
         GLOBAL.call_once(|| {
@@ -447,8 +463,10 @@ mod tests {
                 .with_writer(ThreadLogs)
                 .finish();
             tracing::subscriber::set_global_default(subscriber).unwrap();
+            tracing::callsite::rebuild_interest_cache();
         });
         CAPTURED.set(Some(Vec::new()));
+        let _clear = ClearCapture;
         let out = f();
         let logs = CAPTURED.take().unwrap_or_default();
         (out, String::from_utf8(logs).unwrap())
@@ -482,7 +500,8 @@ mod tests {
         let (_dir, path, server) = fake_herdr(serve);
         let (_other_dir, other_path, other_server) = fake_herdr(serve);
         let (opened, logs) = capture(|| {
-            // This thread has no capture. It reaches the log lines in `open` first.
+            // This thread has no capture. If it is the first to reach the log
+            // lines in `open`, it must not turn them off for other threads.
             thread::spawn(move || Conn::open(&other_path, SIZE, CELL, WAIT).unwrap())
                 .join()
                 .unwrap();
@@ -496,6 +515,13 @@ mod tests {
         );
         server.join().unwrap();
         other_server.join().unwrap();
+    }
+
+    #[test]
+    fn capture_clears_its_buffer_when_the_closure_panics() {
+        let panicked = std::panic::catch_unwind(|| capture(|| -> u8 { panic!("boom") }));
+        assert!(panicked.is_err());
+        assert!(CAPTURED.with_borrow(Option::is_none));
     }
 
     #[test]
