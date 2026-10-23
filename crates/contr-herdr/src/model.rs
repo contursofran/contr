@@ -97,7 +97,8 @@ pub struct StatusChange {
 
 impl HerdrTree {
     /// Groups the flat snapshot into the tree, in the snapshot's order. Tabs whose
-    /// workspace is missing and panes whose tab is missing are dropped.
+    /// workspace is missing and panes whose tab is missing are dropped. A pane is
+    /// placed by its `tab_id` alone: its `workspace_id` is not checked against the tab's.
     pub fn from_snapshot(s: &WireSnapshot) -> Self {
         let mut tabs_by_workspace: HashMap<&str, Vec<&WireTab>> = HashMap::new();
         for tab in &s.tabs {
@@ -243,6 +244,19 @@ impl HerdrTree {
             }
         }
         shape
+    }
+}
+
+impl StatusChange {
+    /// `herdr status pane=<id> agent=<name> <from> -> <to>`; `-` for no agent or no state.
+    pub fn log_line(&self) -> String {
+        let name = self.agent.as_deref().unwrap_or("-");
+        let from = self.from.map_or("-", AgentState::label);
+        let to = self.to.map_or("-", AgentState::label);
+        format!(
+            "herdr status pane={} agent={name} {from} -> {to}",
+            self.pane_id
+        )
     }
 }
 
@@ -468,6 +482,30 @@ mod tests {
     }
 
     #[test]
+    fn an_agent_leaving_a_pane_is_a_change_to_none_named_as_before() {
+        let before = two_agents("idle", "working");
+        let after = parse(
+            r#"{"workspace_id":"w1","label":"contr","agent_status":"idle"}"#,
+            r#"{"tab_id":"t1","workspace_id":"w1","label":"main","agent_status":"idle"}"#,
+            r#"{"pane_id":"p1","tab_id":"t1","workspace_id":"w1","agent":"claude","agent_status":"idle"},
+               {"pane_id":"p2","tab_id":"t1","workspace_id":"w1","agent_status":"unknown"}"#,
+        );
+
+        let changes =
+            HerdrTree::from_snapshot(&before).status_changes(&HerdrTree::from_snapshot(&after));
+
+        assert_eq!(
+            changes,
+            [StatusChange {
+                pane_id: "p2".into(),
+                agent: Some("codex".into()),
+                from: Some(AgentState::Working),
+                to: None,
+            }]
+        );
+    }
+
+    #[test]
     fn a_new_or_gone_pane_is_not_a_status_change() {
         let one_pane = parse(
             r#"{"workspace_id":"w1","label":"contr","agent_status":"working"}"#,
@@ -519,6 +557,15 @@ mod tests {
     }
 
     #[test]
+    fn same_shape_is_false_when_a_pane_label_changes() {
+        let before = two_agents("idle", "idle");
+        let mut after = before.clone();
+        after.panes[1].label = Some("renamed".into());
+
+        assert!(!HerdrTree::from_snapshot(&before).same_shape(&HerdrTree::from_snapshot(&after)));
+    }
+
+    #[test]
     fn pane_ids_follow_tree_order() {
         let mut s = two_agents("idle", "idle");
         s.panes.reverse();
@@ -526,6 +573,44 @@ mod tests {
         let tree = HerdrTree::from_snapshot(&s);
 
         assert_eq!(tree.pane_ids(), ["p2", "p1"]);
+    }
+
+    #[test]
+    fn pane_ids_follow_tree_order_across_tabs() {
+        // The snapshot lists t2's pane first; the tree puts each pane under its tab.
+        let s = parse(
+            r#"{"workspace_id":"w1","label":"contr","agent_status":"idle"}"#,
+            r#"{"tab_id":"t1","workspace_id":"w1","label":"a","agent_status":"idle"},
+               {"tab_id":"t2","workspace_id":"w1","label":"b","agent_status":"idle"}"#,
+            r#"{"pane_id":"p3","tab_id":"t2","workspace_id":"w1","agent_status":"unknown"},
+               {"pane_id":"p1","tab_id":"t1","workspace_id":"w1","agent_status":"unknown"},
+               {"pane_id":"p2","tab_id":"t1","workspace_id":"w1","agent_status":"unknown"}"#,
+        );
+
+        assert_eq!(HerdrTree::from_snapshot(&s).pane_ids(), ["p1", "p2", "p3"]);
+    }
+
+    #[test]
+    fn status_change_log_lines_name_the_pane_and_both_states() {
+        let change = |from, to| StatusChange {
+            pane_id: "w2:p9Z".into(),
+            agent: Some("claude".into()),
+            from,
+            to,
+        };
+
+        assert_eq!(
+            change(Some(AgentState::Working), Some(AgentState::Idle)).log_line(),
+            "herdr status pane=w2:p9Z agent=claude working -> idle"
+        );
+        assert_eq!(
+            change(None, Some(AgentState::Blocked)).log_line(),
+            "herdr status pane=w2:p9Z agent=claude - -> blocked"
+        );
+        assert_eq!(
+            change(Some(AgentState::Done), None).log_line(),
+            "herdr status pane=w2:p9Z agent=claude done -> -"
+        );
     }
 
     #[test]
