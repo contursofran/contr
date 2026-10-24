@@ -255,6 +255,154 @@ pub struct RowFace {
     pub open_pr: Option<ClickFn>,
 }
 
+/// The selector of the option button at `position` (0 for the first in card order).
+fn option_selector(position: usize) -> String {
+    format!("card-opt-{position}")
+}
+
+/// The label of a row's Focus button: `Focus {tab}`.
+fn focus_label(tab: &str) -> String {
+    format!("Focus {tab}")
+}
+
+/// The label of the card's Next button: `Next: {key}`, with the key of the next open item.
+fn next_label(key: &str) -> String {
+    format!("Next: {key}")
+}
+
+/// The labels of the card buttons that do not change with the face.
+const ANSWER_IN_CHAT: &str = "Answer in chat";
+const DONE: &str = "Done";
+const OPEN_LINK: &str = "Open link";
+const DISMISS: &str = "Dismiss";
+const UNDO: &str = "undo";
+const REPORT: &str = "Report";
+const OPEN_PR: &str = "Open PR";
+
+/// One button that the card draws, for the dev control's state: its selector id, its label, and its
+/// click. `click` is `None` when the card draws the button dim, as the board takes no actions.
+#[cfg(debug_assertions)]
+pub(crate) struct DevButton {
+    pub(crate) id: String,
+    pub(crate) label: String,
+    pub(crate) click: Option<ClickFn>,
+}
+
+/// What the card draws, for the dev control's state: the face, what it names, its accessible label
+/// and the buttons in drawing order.
+#[cfg(debug_assertions)]
+pub(crate) struct DevCard {
+    pub(crate) face: &'static str,
+    pub(crate) key: Option<String>,
+    pub(crate) label: String,
+    pub(crate) buttons: Vec<DevButton>,
+}
+
+/// The card as the dev control reads it. The buttons are the ones the drawing adds, in the same
+/// order, with the labels and selector ids that the drawing uses.
+#[cfg(debug_assertions)]
+pub(crate) fn dev_card(face: CardFace) -> DevCard {
+    match face {
+        CardFace::Empty => DevCard {
+            face: "empty",
+            key: None,
+            label: String::new(),
+            buttons: Vec::new(),
+        },
+        CardFace::Item(item) => {
+            let label = item_card_label(&item.item, &item.actions);
+            let mut buttons = Vec::new();
+            match item.actions {
+                ItemActions::Decide { options, chat } => {
+                    for (position, option) in options.into_iter().enumerate() {
+                        buttons.push(DevButton {
+                            id: option_selector(position),
+                            label: option.label,
+                            click: option.on_click,
+                        });
+                    }
+                    buttons.push(DevButton {
+                        id: "card-chat".to_owned(),
+                        label: ANSWER_IN_CHAT.to_owned(),
+                        click: chat,
+                    });
+                }
+                ItemActions::Do { done, link } => {
+                    buttons.push(DevButton {
+                        id: "card-done".to_owned(),
+                        label: DONE.to_owned(),
+                        click: done,
+                    });
+                    if let Some(link) = link {
+                        buttons.push(DevButton {
+                            id: "card-link".to_owned(),
+                            label: OPEN_LINK.to_owned(),
+                            click: Some(link),
+                        });
+                    }
+                }
+                ItemActions::Know { dismiss } => buttons.push(DevButton {
+                    id: "card-dismiss".to_owned(),
+                    label: DISMISS.to_owned(),
+                    click: dismiss,
+                }),
+                ItemActions::Resolved { undo, .. } => {
+                    if let Some(undo) = undo {
+                        buttons.push(DevButton {
+                            id: "card-undo".to_owned(),
+                            label: UNDO.to_owned(),
+                            click: Some(undo),
+                        });
+                    }
+                }
+            }
+            if let Some((key, click)) = item.next {
+                buttons.push(DevButton {
+                    id: "card-next".to_owned(),
+                    label: next_label(&key),
+                    click: Some(click),
+                });
+            }
+            DevCard {
+                face: "item",
+                key: Some(item.item.key),
+                label,
+                buttons,
+            }
+        }
+        CardFace::Row(row) => {
+            let mut buttons = Vec::new();
+            if let Some((tab, click)) = row.focus {
+                buttons.push(DevButton {
+                    id: "card-focus".to_owned(),
+                    label: focus_label(&tab),
+                    click: Some(click),
+                });
+            }
+            if let Some(click) = row.report {
+                buttons.push(DevButton {
+                    id: "card-report".to_owned(),
+                    label: REPORT.to_owned(),
+                    click: Some(click),
+                });
+            }
+            if let Some(click) = row.open_pr {
+                buttons.push(DevButton {
+                    id: "card-pr".to_owned(),
+                    label: OPEN_PR.to_owned(),
+                    click: Some(click),
+                });
+            }
+            DevCard {
+                face: "row",
+                key: Some(row.row.key),
+                label: row.row.label,
+                buttons,
+            }
+        }
+    }
+}
+
 /// The card with what `face` shows. `now_ms` dates the `ago` part of an item's meta line.
 pub fn answer_card(face: CardFace, now_ms: u64) -> impl IntoElement {
     let label = match &face {
@@ -416,10 +564,9 @@ fn card_text(text: Option<String>) -> impl IntoElement {
 fn row_buttons(row: RowFace) -> Vec<AnyElement> {
     let mut buttons = Vec::new();
     if let Some((tab, on_click)) = row.focus {
-        let label = format!("Focus {tab}");
         buttons.push(action_line_button(
             "card-focus",
-            label,
+            focus_label(&tab),
             ButtonStyle::Outlined,
             Some(on_click),
         ));
@@ -427,7 +574,7 @@ fn row_buttons(row: RowFace) -> Vec<AnyElement> {
     if let Some(on_click) = row.report {
         buttons.push(action_line_button(
             "card-report",
-            "Report".to_owned(),
+            REPORT.to_owned(),
             ButtonStyle::Outlined,
             Some(on_click),
         ));
@@ -435,7 +582,7 @@ fn row_buttons(row: RowFace) -> Vec<AnyElement> {
     if let Some(on_click) = row.open_pr {
         buttons.push(action_line_button(
             "card-pr",
-            "Open PR".to_owned(),
+            OPEN_PR.to_owned(),
             ButtonStyle::Outlined,
             Some(on_click),
         ));
@@ -452,7 +599,7 @@ fn item_actions(actions: ItemActions) -> Vec<AnyElement> {
                 .enumerate()
                 .map(|(position, option)| {
                     action_line_button(
-                        &format!("card-opt-{position}"),
+                        &option_selector(position),
                         option.label,
                         option_style(option.recommended),
                         option.on_click,
@@ -461,7 +608,7 @@ fn item_actions(actions: ItemActions) -> Vec<AnyElement> {
                 .collect();
             line.push(action_line_button(
                 "card-chat",
-                "Answer in chat".to_owned(),
+                ANSWER_IN_CHAT.to_owned(),
                 ButtonStyle::Plain { colour: TEXT_DIM },
                 chat,
             ));
@@ -470,14 +617,14 @@ fn item_actions(actions: ItemActions) -> Vec<AnyElement> {
         ItemActions::Do { done, link } => {
             let mut line = vec![action_line_button(
                 "card-done",
-                "Done".to_owned(),
+                DONE.to_owned(),
                 ButtonStyle::Filled,
                 done,
             )];
             if let Some(on_click) = link {
                 line.push(action_line_button(
                     "card-link",
-                    "Open link".to_owned(),
+                    OPEN_LINK.to_owned(),
                     ButtonStyle::Outlined,
                     Some(on_click),
                 ));
@@ -486,7 +633,7 @@ fn item_actions(actions: ItemActions) -> Vec<AnyElement> {
         }
         ItemActions::Know { dismiss } => vec![action_line_button(
             "card-dismiss",
-            "Dismiss".to_owned(),
+            DISMISS.to_owned(),
             ButtonStyle::Outlined,
             dismiss,
         )],
@@ -506,7 +653,7 @@ fn item_actions(actions: ItemActions) -> Vec<AnyElement> {
             if let Some(on_click) = undo {
                 line.push(action_line_button(
                     "card-undo",
-                    "undo".to_owned(),
+                    UNDO.to_owned(),
                     ButtonStyle::Plain { colour: TEXT },
                     Some(on_click),
                 ));
@@ -547,7 +694,7 @@ fn item_foot(inert: bool, next: Option<(String, ClickFn)>) -> Vec<AnyElement> {
                 .ml_auto()
                 .child(action_line_button(
                     "card-next",
-                    format!("Next: {key}"),
+                    next_label(&key),
                     ButtonStyle::Plain { colour: TEXT_DIM },
                     Some(on_click),
                 ))

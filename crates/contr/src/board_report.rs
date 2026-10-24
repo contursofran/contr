@@ -216,10 +216,82 @@ impl ReportView {
     }
 
     /// Opens the shown file with the app for its type. Does nothing without a valid path.
-    fn open_in_editor(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn open_in_editor(&mut self, cx: &mut Context<Self>) {
         if let Some(path) = readable_path(&self.target) {
             (self.open)(path, cx);
         }
+    }
+
+    /// The `back` click: tells the parent to show the Board tab. `report-back` and the dev control
+    /// both call it.
+    pub(crate) fn back(&mut self, cx: &mut Context<Self>) {
+        cx.emit(ReportEvent::Back);
+    }
+
+    /// Whether the view draws `Open in editor`: the target has a valid file path.
+    #[cfg(debug_assertions)]
+    pub(crate) fn can_open(&self) -> bool {
+        readable_path(&self.target).is_some()
+    }
+
+    /// What the view draws, for the dev control's state.
+    #[cfg(debug_assertions)]
+    pub(crate) fn dev_report(&self) -> DevReport {
+        let (row, title, by) = match &self.target {
+            ReportTarget::Row(source) => (
+                Some(source.key.clone()),
+                Some(title_text(source)),
+                source.report_by.clone(),
+            ),
+            ReportTarget::None | ReportTarget::Gone => (None, None, None),
+        };
+        let problem = match &self.body {
+            ReportBody::Text { problem, .. } => problem.clone(),
+            ReportBody::Empty(_) | ReportBody::Loading | ReportBody::Failed(_) => None,
+        };
+        let lines = match &self.body {
+            ReportBody::Text { text, .. } => text.lines.iter().map(line_text).collect(),
+            ReportBody::Empty(line) => vec![(*line).to_owned()],
+            ReportBody::Failed(line) => vec![line.clone()],
+            ReportBody::Loading => vec![LOADING.to_owned()],
+        };
+        DevReport {
+            row,
+            title,
+            by,
+            problem,
+            lines,
+        }
+    }
+}
+
+/// What the Report tab draws, for the dev control's state.
+#[cfg(debug_assertions)]
+pub(crate) struct DevReport {
+    /// The key of the work row that the tab follows.
+    pub row: Option<String>,
+    /// The head line: the row's label, then its title.
+    pub title: Option<String>,
+    /// Who wrote the report.
+    pub by: Option<String>,
+    /// A re-read problem, shown after the head.
+    pub problem: Option<String>,
+    /// One text per drawn line of the body.
+    pub lines: Vec<String>,
+}
+
+/// The text of one drawn line of the body. A list item keeps its marker, a rule reads as `---` and
+/// a blank line is empty.
+#[cfg(debug_assertions)]
+fn line_text(line: &ReportLine) -> String {
+    match line {
+        ReportLine::Heading { text, .. }
+        | ReportLine::Code(text)
+        | ReportLine::Quote(text)
+        | ReportLine::Text(text) => text.clone(),
+        ReportLine::Item { marker, text, .. } => format!("{marker} {text}"),
+        ReportLine::Rule => "---".to_owned(),
+        ReportLine::Blank => String::new(),
     }
 }
 
@@ -328,7 +400,7 @@ impl ReportView {
         let back = action(
             "report-back",
             BACK,
-            cx.listener(|_, _: &ClickEvent, _, cx| cx.emit(ReportEvent::Back)),
+            cx.listener(|this, _: &ClickEvent, _, cx| this.back(cx)),
         );
         div()
             .debug_selector(|| "report-head".into())

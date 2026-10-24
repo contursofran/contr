@@ -46,6 +46,17 @@ impl Frame {
 
     /// `new` with the focus call that the sidebar's rows make, so the tests can record the panes.
     pub(crate) fn with_focus(window: &mut Window, cx: &mut Context<Self>, focus: FocusFn) -> Self {
+        Self::build(window, focus, BoardPanel::new, cx)
+    }
+
+    /// `new`, with the focus call that the sidebar's rows make and the board panel made by `panel`.
+    /// The tests use it to record the calls instead of running them.
+    fn build(
+        window: &mut Window,
+        focus: FocusFn,
+        panel: impl FnOnce(&mut Context<BoardPanel>) -> BoardPanel,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let spaces = {
             let focus = focus.clone();
             cx.new(|cx| Spaces::with_focus(focus, cx))
@@ -53,7 +64,7 @@ impl Frame {
         let agents = cx.new(|cx| AgentsList::with_focus(focus, cx));
         let herdr = cx.global::<GlobalHerdr>().0.clone();
         let status_bar = cx.new(StatusBar::new);
-        let board_panel = cx.new(BoardPanel::new);
+        let board_panel = cx.new(panel);
         let terminal = cx.new(|cx| TerminalView::new(window, cx));
         let toggle = cx.subscribe(&spaces, |this, _, event: &SpacesEvent, cx| match event {
             SpacesEvent::ToggleSidebar => this.toggle_sidebar(cx),
@@ -102,6 +113,24 @@ impl Frame {
     pub(crate) fn reopen_sidebar(&mut self, cx: &mut Context<Self>) {
         self.sidebar_open = true;
         cx.notify();
+    }
+
+    /// `new`, with the board panel's Focus, Open PR and Open in editor calls given, so a test can
+    /// record them.
+    #[cfg(test)]
+    pub(crate) fn with_panel_actions(
+        window: &mut Window,
+        focus: FocusFn,
+        open: crate::board_panel::OpenFn,
+        open_path: crate::board_report::OpenPathFn,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        Self::build(
+            window,
+            Rc::new(focus_in_background),
+            move |cx| BoardPanel::with_actions(focus, open, open_path, cx),
+            cx,
+        )
     }
 
     /// Closes the board panel, or opens it again. The title bar's toggle and the dev control both
