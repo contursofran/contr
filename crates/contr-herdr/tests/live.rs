@@ -1,6 +1,7 @@
 //! Starts an isolated `herdr server` in a temporary directory and checks the
 //! reader against it: the connection, the first tree, the agent status of a
-//! reported agent, then the reconnect after the server restarts. It never
+//! reported agent, then the reconnect after the server restarts, also when
+//! `herdr server stop` ends the server and a new server process starts. It never
 //! touches your own herdr: the server gets its own HOME, config and sockets,
 //! and its process is killed when the test ends.
 //!
@@ -68,6 +69,32 @@ impl Server {
         self.child = spawn_child(bin, self.dir.path());
     }
 
+    /// Asks the server to stop with `herdr server stop`, as a user does, and
+    /// waits up to ten seconds for its process to exit.
+    fn stop_with_command(&mut self, bin: &OsStr) {
+        let status = isolated(Command::new(bin), self.dir.path())
+            .args(["server", "stop"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .expect("run herdr server stop");
+        assert!(status.success(), "herdr server stop failed: {status}");
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while self.child.try_wait().expect("poll the server").is_none() {
+            assert!(
+                Instant::now() < deadline,
+                "the server did not exit after herdr server stop"
+            );
+            thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    /// Starts a new server process on the same paths after the old one exited.
+    fn start_again(&mut self, bin: &OsStr) {
+        self.child = spawn_child(bin, self.dir.path());
+    }
+
     /// Waits until the server answers `ping` on `sock`. Fails after ten seconds,
     /// or at once when the server has exited.
     fn wait_until_answering(&mut self, sock: &Path) {
@@ -98,9 +125,19 @@ fn spawn_child(bin: &OsStr, home: &Path) -> Child {
         .append(true)
         .open(home.join("herdr.log"))
         .expect("open the server log");
-    Command::new(bin)
+    isolated(Command::new(bin), home)
         .arg("server")
-        .env_clear()
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(log.try_clone().expect("clone the server log")))
+        .stderr(Stdio::from(log))
+        .spawn()
+        .expect("start the isolated herdr server")
+}
+
+/// `cmd` with an environment that holds only the paths inside `home`, so it
+/// can reach no other herdr.
+fn isolated(mut cmd: Command, home: &Path) -> Command {
+    cmd.env_clear()
         .env("HOME", home)
         .env("XDG_CONFIG_HOME", home.join("config"))
         .env("XDG_STATE_HOME", home.join("state"))
@@ -113,12 +150,8 @@ fn spawn_child(bin: &OsStr, home: &Path) -> Child {
         .env("HERDR_CLIENT_SOCKET_PATH", home.join("a-client.sock"))
         .env("SHELL", "/bin/sh")
         .env("TERM", "xterm-256color")
-        .env("PATH", "/usr/bin:/bin:/usr/sbin:/sbin")
-        .stdin(Stdio::null())
-        .stdout(Stdio::from(log.try_clone().expect("clone the server log")))
-        .stderr(Stdio::from(log))
-        .spawn()
-        .expect("start the isolated herdr server")
+        .env("PATH", "/usr/bin:/bin:/usr/sbin:/sbin");
+    cmd
 }
 
 /// One request on a fresh connection to `sock`. Returns the reply's `result`, or
@@ -295,4 +328,105 @@ fn isolated_server_reports_tree_agent_status_and_reconnects() {
         },
     );
     drop(reader);
+}
+
+/// Reports `status` for an agent in `pane_id` and waits until a tree with that
+/// status reaches the reader.
+fn report_and_wait(sock: &Path, rx: &Receiver<HerdrUpdate>, pane_id: &str, status: AgentState) {
+    call(
+        sock,
+        "pane.report_agent",
+        json!({
+            "pane_id": pane_id,
+            "source": "contr-test",
+            "agent": "claude",
+            "state": status.label(),
+        }),
+    )
+    .expect("report the agent");
+    wait_for(
+        rx,
+        Duration::from_secs(5),
+        status.label(),
+        |update| match update {
+            HerdrUpdate::Tree(tree) => first_agent(tree)
+                .filter(|agent| agent.name == "claude" && agent.status == status)
+                .map(|_| ()),
+            HerdrUpdate::State(_) => None,
+        },
+    );
+}
+
+/// The id of the first pane in the server's tree. Creates a workspace first
+/// when the server has none.
+fn first_pane(sock: &Path) -> String {
+    let pane = |result: &Value| {
+        result["snapshot"]["panes"][0]["pane_id"]
+            .as_str()
+            .map(str::to_owned)
+    };
+    let snapshot = call(sock, "session.snapshot", json!({})).expect("take a snapshot");
+    if let Some(id) = pane(&snapshot) {
+        return id;
+    }
+    let created =
+        call(sock, "workspace.create", json!({ "cwd": "/tmp" })).expect("create a workspace");
+    assert_eq!(created["type"], "workspace_created", "reply: {created}");
+    let snapshot = call(sock, "session.snapshot", json!({})).expect("take a snapshot");
+    pane(&snapshot).unwrap_or_else(|| panic!("no pane after workspace.create: {snapshot}"))
+}
+
+/// `herdr server stop` ends the server, then a new server process starts on
+/// the same paths. The reader reports that herdr is gone, connects to the new
+/// server and passes on a status change made there. With `visible` false the
+/// reader runs as for a hidden window, with no refresh timer.
+fn stop_and_new_server_reach_the_reader(visible: bool) {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::new("contr_herdr=info"))
+        .with_test_writer()
+        .try_init();
+    let bin = std::env::var_os("CONTR_HERDR_BIN").expect("set CONTR_HERDR_BIN to the herdr binary");
+    let mut server = Server::start(&bin);
+    let sock = server.dir.path().join("a.sock");
+    server.wait_until_answering(&sock);
+    let pane_id = first_pane(&sock);
+
+    let (tx, rx) = async_channel::bounded(64);
+    let reader = spawn_reader(Target::Socket(sock.clone()), tx).expect("spawn the reader");
+    reader.set_visible(visible);
+    wait_for(&rx, Duration::from_secs(10), "Connected", |update| {
+        matches!(update, HerdrUpdate::State(ConnState::Connected { .. })).then_some(())
+    });
+    report_and_wait(&sock, &rx, &pane_id, AgentState::Idle);
+
+    server.stop_with_command(&bin);
+    wait_for(
+        &rx,
+        Duration::from_secs(10),
+        "NotRunning after herdr server stop",
+        |update| matches!(update, HerdrUpdate::State(ConnState::NotRunning { .. })).then_some(()),
+    );
+    server.start_again(&bin);
+    server.wait_until_answering(&sock);
+    wait_for(
+        &rx,
+        Duration::from_secs(15),
+        "Connected to the new server",
+        |update| matches!(update, HerdrUpdate::State(ConnState::Connected { .. })).then_some(()),
+    );
+    let pane_id = first_pane(&sock);
+    report_and_wait(&sock, &rx, &pane_id, AgentState::Working);
+    drop(reader);
+}
+
+#[test]
+#[ignore = "needs CONTR_HERDR_BIN; starts an isolated herdr"]
+fn server_stop_and_a_new_server_reach_a_shown_reader() {
+    stop_and_new_server_reach_the_reader(true);
+}
+
+#[test]
+#[ignore = "needs CONTR_HERDR_BIN; starts an isolated herdr"]
+fn server_stop_and_a_new_server_reach_a_hidden_reader() {
+    stop_and_new_server_reach_the_reader(false);
 }
