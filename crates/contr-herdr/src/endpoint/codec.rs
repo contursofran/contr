@@ -172,6 +172,12 @@ impl<'a> Dec<'a> {
         String::from_utf8(self.take(n)?.to_vec()).map_err(|_| CodecError::BadUtf8)
     }
 
+    /// A varint length, then that many raw bytes. The bytes are not checked for UTF-8.
+    pub fn bytes(&mut self) -> Result<&'a [u8], CodecError> {
+        let n = self.len()?;
+        self.take(n)
+    }
+
     /// Skips a varint length and that many bytes.
     pub fn skip_bytes(&mut self) -> Result<(), CodecError> {
         let n = self.len()?;
@@ -384,6 +390,22 @@ mod tests {
         let mut d = Dec::new(&bytes);
         d.skip_bytes().unwrap();
         assert_eq!(d.u8().unwrap(), 7);
+    }
+
+    #[test]
+    fn bytes_reads_a_blob_without_a_utf8_check() {
+        let bytes = [2, 0xFF, 0x00, 7];
+        let mut d = Dec::new(&bytes);
+        assert_eq!(d.bytes().unwrap(), &[0xFF, 0x00]);
+        assert_eq!(d.u8().unwrap(), 7);
+    }
+
+    #[test]
+    fn bytes_rejects_a_length_past_the_end() {
+        assert!(matches!(
+            Dec::new(&[5, 1, 2]).bytes(),
+            Err(CodecError::TooLong(5))
+        ));
     }
 
     #[test]
