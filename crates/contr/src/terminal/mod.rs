@@ -934,7 +934,7 @@ mod tests {
                 height: 2,
             },
             focused: focused == Some(id),
-            alternate_screen: false,
+            ..Default::default()
         };
         Arc::new(Surface {
             boot_id: "boot".to_owned(),
