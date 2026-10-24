@@ -78,6 +78,42 @@ impl TitleBar {
             cx.notify();
         }
     }
+
+    /// The strip the bar shows. The dev control reads it.
+    #[cfg(debug_assertions)]
+    pub(crate) fn strip(&self) -> &TabStrip {
+        &self.strip
+    }
+
+    /// A click on tab `i`: an inactive tab asks herdr to focus it, and the active tab does
+    /// nothing. The click handler and the dev control both call it.
+    pub(crate) fn click_tab(&mut self, i: usize, cx: &mut Context<Self>) {
+        let Some(tab) = self.strip.tabs.get(i) else {
+            return;
+        };
+        if !tab.active {
+            cx.emit(TitleBarEvent::Command(TabCommand::Focus(tab.id.clone())));
+        }
+    }
+
+    /// A click on "+": a new focused tab in the strip's workspace. Shown only with a workspace.
+    pub(crate) fn click_new(&mut self, cx: &mut Context<Self>) {
+        if let Some(workspace) = self.strip.workspace_id.clone() {
+            cx.emit(TitleBarEvent::Command(TabCommand::Create(workspace)));
+        }
+    }
+
+    /// A click on the split button: split the strip's pane to the right. Shown only with a pane.
+    pub(crate) fn click_split(&mut self, cx: &mut Context<Self>) {
+        if let Some(pane) = self.strip.split_pane_id.clone() {
+            cx.emit(TitleBarEvent::Command(TabCommand::SplitRight(pane)));
+        }
+    }
+
+    /// A click on the panel toggle.
+    pub(crate) fn toggle_panel(&mut self, cx: &mut Context<Self>) {
+        cx.emit(TitleBarEvent::TogglePanel);
+    }
 }
 
 impl Render for TitleBar {
@@ -93,8 +129,8 @@ impl Render for TitleBar {
             .flex()
             .items_stretch()
             .child(tabs_row(&strip.tabs, cx))
-            .when_some(strip.workspace_id.clone(), |bar, workspace| {
-                bar.child(new_tab_button(workspace, cx))
+            .when(strip.workspace_id.is_some(), |bar| {
+                bar.child(new_tab_button(cx))
             })
             .child(title_drag())
             .child(right_group(
@@ -162,20 +198,17 @@ fn tab(i: usize, item: &TabItem, cx: &mut Context<TitleBar>) -> Stateful<Div> {
                 .bg(rgb(TEXT)),
         );
     } else {
-        let id = item.id.clone();
         element = element
             .cursor_pointer()
             .text_color(rgb(TEXT_2))
             .hover(|style| style.text_color(rgb(TEXT)))
-            .on_click(cx.listener(move |_, _, _, cx| {
-                cx.emit(TitleBarEvent::Command(TabCommand::Focus(id.clone())))
-            }));
+            .on_click(cx.listener(move |bar, _, _, cx| bar.click_tab(i, cx)));
     }
     element
 }
 
-/// "+": a new focused tab in `workspace`. Shown only when the strip has a workspace.
-fn new_tab_button(workspace: String, cx: &mut Context<TitleBar>) -> Stateful<Div> {
+/// "+": a new focused tab in the workspace. Shown only when the strip has a workspace.
+fn new_tab_button(cx: &mut Context<TitleBar>) -> Stateful<Div> {
     div()
         .id("tab-new")
         .debug_selector(|| "tab-new".into())
@@ -188,11 +221,7 @@ fn new_tab_button(workspace: String, cx: &mut Context<TitleBar>) -> Stateful<Div
         .text_color(rgb(TEXT_DIM))
         .hover(|style| style.text_color(rgb(TEXT)))
         .cursor_pointer()
-        .on_click(cx.listener(move |_, _, _, cx| {
-            cx.emit(TitleBarEvent::Command(TabCommand::Create(
-                workspace.clone(),
-            )))
-        }))
+        .on_click(cx.listener(|bar, _, _, cx| bar.click_new(cx)))
         .child("+")
 }
 
@@ -234,9 +263,7 @@ fn right_group(split_pane: Option<String>, panel_open: bool, cx: &mut Context<Ti
         .flex_none()
         .items_center()
         .pr(px(8.))
-        .when_some(split_pane, |group, pane| {
-            group.child(split_button(pane, cx))
-        })
+        .when(split_pane.is_some(), |group| group.child(split_button(cx)))
         .child(panel_button(panel_open, cx))
 }
 
@@ -255,13 +282,11 @@ fn button(id: &'static str) -> Stateful<Div> {
         .cursor_pointer()
 }
 
-/// The split button: an outline box with a vertical line in the middle. Splits `pane` to the
-/// right (D20).
-fn split_button(pane: String, cx: &mut Context<TitleBar>) -> Stateful<Div> {
+/// The split button: an outline box with a vertical line in the middle. Splits the strip's pane to
+/// the right (D20).
+fn split_button(cx: &mut Context<TitleBar>) -> Stateful<Div> {
     button("split")
-        .on_click(cx.listener(move |_, _, _, cx| {
-            cx.emit(TitleBarEvent::Command(TabCommand::SplitRight(pane.clone())))
-        }))
+        .on_click(cx.listener(|bar, _, _, cx| bar.click_split(cx)))
         .child(
             glyph_outline("split").justify_center().child(
                 div()
@@ -281,7 +306,7 @@ fn panel_button(panel_open: bool, cx: &mut Context<TitleBar>) -> Stateful<Div> {
         "panel-toggle-closed"
     };
     button("panel-toggle")
-        .on_click(cx.listener(|_, _, _, cx| cx.emit(TitleBarEvent::TogglePanel)))
+        .on_click(cx.listener(|bar, _, _, cx| bar.toggle_panel(cx)))
         .child(
             glyph_outline("panel-toggle")
                 .debug_selector(move || mark.into())
@@ -554,6 +579,14 @@ pub(crate) mod tests {
             *events.borrow(),
             vec![TitleBarEvent::Command(TabCommand::Create("w1".into()))]
         );
+    }
+
+    #[gpui::test]
+    fn a_click_on_a_tab_outside_the_strip_emits_nothing(cx: &mut TestAppContext) {
+        let (bar, cx) = window_with(cx, three_tabs(), true);
+        let events = record_events(cx, &bar);
+        bar.update(cx, |bar, cx| bar.click_tab(99, cx));
+        assert!(events.borrow().is_empty());
     }
 
     #[gpui::test]

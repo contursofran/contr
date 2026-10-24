@@ -334,13 +334,11 @@ mod tests {
         assert_eq!(state["selection"], Value::Null);
         // The terminal takes the focus when it is built.
         assert_eq!(state["focus"], "terminal");
-        for section in ["sidebar", "title", "status_bar"] {
-            assert_eq!(
-                state[section],
-                Value::Null,
-                "{section} lands in a later slice"
-            );
-        }
+        // The sidebar is open, so its section is there. It has no repos without a herdr tree.
+        assert_eq!(state["sidebar"]["repos"], json!([]));
+        // The title bar and the status bar follow the same herdr tree.
+        assert_eq!(state["title"]["tabs"], json!([]));
+        assert!(state["status_bar"]["right"].is_array());
         // The board panel is shown from the start, on its Board tab, with no board to read.
         assert_eq!(state["board"]["tab"], "board");
         assert_eq!(state["board"]["line"], "no coordinator board");
@@ -447,9 +445,9 @@ mod tests {
     #[gpui::test]
     fn an_id_that_no_control_owns_is_unknown(cx: &mut TestAppContext) {
         let (_frame, cx) = frame_with(cx, connected());
-        assert_eq!(err(click_id(cx, "nope")).code, code::UNKNOWN_ID);
-        // The panel toggle is a title bar control, and no title bar section exists yet.
-        assert_eq!(err(click_id(cx, "panel-toggle")).code, code::UNKNOWN_ID);
+        for id in ["nope", "tab:"] {
+            assert_eq!(err(click_id(cx, id)).code, code::UNKNOWN_ID, "{id}");
+        }
     }
 
     #[gpui::test]
@@ -555,7 +553,7 @@ mod tests {
             .code,
             code::NOT_A_ROW
         );
-        // A row id passes the row check. No sidebar owns it yet, so it is an unknown id.
+        // A row id passes the row check. No row has this id, so it is an unknown id.
         let reply = send(
             cx,
             Request::Select {
