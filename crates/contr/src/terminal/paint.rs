@@ -8,8 +8,9 @@ use std::sync::Arc;
 use contr_herdr::endpoint::messages::GridSize;
 use contr_herdr::endpoint::surface::{Cell, Cursor, Row, Surface};
 use gpui::{
-    App, BorderStyle, Bounds, FontWeight, Hsla, Pixels, Point, ShapedLine, StrikethroughStyle,
-    TextAlign, TextRun, UnderlineStyle, Window, fill, font, outline, point, px, rgb, rgba, size,
+    App, BorderStyle, Bounds, Font, FontFeatures, FontWeight, Hsla, Pixels, Point, ShapedLine,
+    StrikethroughStyle, TextAlign, TextRun, UnderlineStyle, Window, fill, font, outline, point, px,
+    rgb, rgba, size,
 };
 
 use super::boxdraw::{self, BoxGlyph};
@@ -302,10 +303,23 @@ fn paint_cursor(
     }
 }
 
+/// The terminal font: JetBrains Mono with the ligature features off. Each cell then draws its own
+/// character, so `->` and `!=` stay as separate glyphs. Paint and the cell measure both use it, so
+/// their advances match. The UI chrome keeps the default features.
+pub(super) fn terminal_font() -> Font {
+    let mut face = font(FONT_FAMILY);
+    face.features = FontFeatures(Arc::new(vec![
+        ("calt".to_owned(), 0),
+        ("clig".to_owned(), 0),
+        ("liga".to_owned(), 0),
+    ]));
+    face
+}
+
 /// Shapes `text` in the terminal font, at the terminal size, in the look `style` gives.
 fn shape(text: &str, style: Style, window: &Window) -> ShapedLine {
     let colour = Hsla::from(rgb(style.fg));
-    let mut face = font(FONT_FAMILY);
+    let mut face = terminal_font();
     if style.bold {
         face.weight = FontWeight::BOLD;
     }
@@ -588,5 +602,20 @@ mod tests {
         let row = cell("│a", 0);
         assert_eq!(quad_glyph(&row), None);
         assert_eq!(texts(&[row]), vec![(0, "│a".to_owned())]);
+    }
+
+    #[test]
+    fn the_terminal_font_keeps_its_family_and_turns_the_ligature_features_off() {
+        let face = terminal_font();
+        assert_eq!(&*face.family, FONT_FAMILY);
+        assert_eq!(face.features.is_calt_enabled(), Some(false));
+        for tag in ["calt", "clig", "liga"] {
+            assert!(
+                face.features
+                    .tag_value_list()
+                    .contains(&(tag.to_owned(), 0)),
+                "{tag} should be off"
+            );
+        }
     }
 }

@@ -26,13 +26,11 @@ use gpui::{
     App, Bounds, ClipboardItem, Context, ElementInputHandler, EntityInputHandler, FocusHandle,
     InputHandler, IntoElement, KeyDownEvent, Modifiers, MouseButton, MouseDownEvent, ParentElement,
     Pixels, Point, Render, Styled, Subscription, Task, TextInputConfiguration, UTF16Selection,
-    Window, canvas, div, font, point, prelude::*, px, rgb, size,
+    Window, canvas, div, point, prelude::*, px, rgb, size,
 };
 use tracing::debug;
 
-use crate::theme::{
-    FONT_FAMILY, TERM_PADDING, TERMINAL_FONT_SIZE, TERMINAL_LINE_HEIGHT, TEXT_2, TEXT_DIM,
-};
+use crate::theme::{TERM_PADDING, TERMINAL_FONT_SIZE, TERMINAL_LINE_HEIGHT, TEXT_2, TEXT_DIM};
 use grid::{Metrics, cell_px, grid_for};
 
 /// The variable that starts the surface link (D38).
@@ -645,7 +643,7 @@ fn reassert_due(last: Option<Instant>, now: Instant) -> bool {
 /// terminal line height. `None` when the font has no advance for `m`.
 fn cell_metrics(window: &Window) -> Option<Metrics> {
     let text = window.text_system();
-    let font_id = text.resolve_font(&font(FONT_FAMILY));
+    let font_id = text.resolve_font(&paint::terminal_font());
     let advance = text.advance(font_id, px(TERMINAL_FONT_SIZE), 'm').ok()?;
     Some(Metrics {
         cell_w: f32::from(advance.width),
