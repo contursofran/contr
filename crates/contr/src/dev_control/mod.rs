@@ -1,11 +1,15 @@
 //! The dev control server. The module exists only in debug builds (`lib.rs` gates it), and it
 //! listens only when `CONTR_DEV_CONTROL` names a socket path. A release build has none of it.
 
+pub mod board;
+pub mod dispatch;
 pub mod server;
+pub mod sidebar;
+pub mod title;
+pub mod window_id;
 
 use crate::dev_protocol::{self, Reply, Request};
 use gpui::{App, Window, WindowHandle};
-use serde_json::json;
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -13,12 +17,9 @@ use std::rc::Rc;
 /// Answers one request in the window. It runs on the UI thread, inside the window's update.
 pub type Handler = Rc<dyn Fn(Request, &mut Window, &mut App) -> Reply>;
 
-/// The handler for the window. It is a placeholder: every request gets the protocol version
-/// until the request dispatcher exists.
+/// The handler for the window: the request dispatcher.
 pub fn handler() -> Handler {
-    Rc::new(|_: Request, _: &mut Window, _: &mut App| {
-        Reply::Ok(json!({"v": dev_protocol::VERSION}))
-    })
+    Rc::new(dispatch::handle)
 }
 
 /// The socket path that `CONTR_DEV_CONTROL` names. An unset or empty variable names none.

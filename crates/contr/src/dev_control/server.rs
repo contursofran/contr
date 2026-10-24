@@ -596,16 +596,6 @@ mod tests {
     }
 
     #[gpui::test]
-    fn the_first_handler_answers_with_the_version(cx: &mut TestAppContext) {
-        let window = test_window(cx);
-        let jobs = cx.update(|cx| pump(window, handler(), cx));
-        assert_eq!(
-            ask(cx, &jobs, Request::WindowId),
-            Reply::Ok(json!({"v": 1}))
-        );
-    }
-
-    #[gpui::test]
     fn a_job_for_a_closed_window_gets_no_window(cx: &mut TestAppContext) {
         let window = test_window(cx);
         let removed = cx.update(|cx| window.update(cx, |_, window, _| window.remove_window()));
