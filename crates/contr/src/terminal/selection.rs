@@ -527,6 +527,8 @@ mod tests {
             inner_rect,
             focused: true,
             alternate_screen: false,
+            mouse_reporting: false,
+            scroll: None,
         }
     }
 
