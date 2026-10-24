@@ -64,6 +64,9 @@ pub enum LinkUpdate {
     /// can be newer than the `Arc` here, because updates coalesce.
     Surface(Arc<Surface>),
     Snapshot(Arc<ShellSnapshot>),
+    /// Text a program wrote to the clipboard with OSC 52. The UI writes it to the
+    /// system clipboard. Each update is one write, in the order herdr sent them.
+    Clipboard(String),
 }
 
 /// Where the link connects.
@@ -367,6 +370,11 @@ impl Runner {
                         self.publish(surface);
                     }
                 }
+                ServerMsg::Clipboard(text) => {
+                    if !self.send(LinkUpdate::Clipboard(text)) {
+                        return Ended::Stopped;
+                    }
+                }
                 ServerMsg::Shutdown(reason) => {
                     return Ended::Gone(reason.unwrap_or_else(|| "herdr stopped".to_owned()));
                 }
@@ -511,8 +519,8 @@ mod tests {
     use super::*;
     use crate::endpoint::codec::{Dec, Enc, read_frame};
     use crate::endpoint::messages::{
-        C_CONTROL, C_DETACH, C_FOCUS, C_PANE_INPUT, HELLO_KIND, MAX_FRAME, S_PATCH, S_SHUTDOWN,
-        S_SURFACE, WELCOME_KIND,
+        C_CONTROL, C_DETACH, C_FOCUS, C_PANE_INPUT, HELLO_KIND, MAX_FRAME, S_CLIPBOARD, S_PATCH,
+        S_SHUTDOWN, S_SURFACE, WELCOME_KIND,
     };
     use crate::endpoint::testing::{control, put, read_hello, welcome, welcome_json};
 
@@ -638,6 +646,14 @@ mod tests {
         e.vu(0); // modifier
         e.bool(false); // skip
         e.none(); // hyperlink
+    }
+
+    /// One `Clipboard` frame whose data is the base64 text `data`.
+    fn clipboard_frame(data: &str) -> Vec<u8> {
+        let mut e = Enc::default();
+        e.vu(u64::from(S_CLIPBOARD));
+        e.str(data);
+        e.buf
     }
 
     fn shutdown_frame(reason: Option<&str>) -> Vec<u8> {
@@ -771,6 +787,44 @@ mod tests {
         assert_eq!(surface.revision, 1);
         assert_eq!(surface.size, SIZE);
         assert_eq!(surface.rows[0][0].text, "a");
+    }
+
+    #[test]
+    fn a_clipboard_write_reaches_the_ui_as_one_update() {
+        let (_dir, path) = serve_each(1, |mut stream, _| {
+            read_hello(&mut stream);
+            put(&mut stream, &welcome("0.9.3"));
+            put(&mut stream, &clipboard_frame("aGk="));
+            thread::sleep(WAIT);
+        });
+        let (_link, _handle, rx) = start(LinkTarget::Socket(path));
+        assert_eq!(next_state(&rx), LinkState::Connecting);
+        assert_eq!(next_state(&rx), live("0.9.3", false));
+        match next(&rx) {
+            LinkUpdate::Clipboard(text) => assert_eq!(text, "hi"),
+            other => panic!("{other:?}"),
+        }
+        assert!(rx.try_recv().is_err(), "one write, one update");
+    }
+
+    #[test]
+    fn a_clipboard_payload_that_is_dropped_keeps_the_connection_up() {
+        let (_dir, path) = serve_each(1, |mut stream, _| {
+            read_hello(&mut stream);
+            put(&mut stream, &welcome("0.9.3"));
+            // Not base64: dropped without an update or a state change.
+            put(&mut stream, &clipboard_frame("!!"));
+            put(&mut stream, &clipboard_frame("aGk="));
+            thread::sleep(WAIT);
+        });
+        let (_link, _handle, rx) = start(LinkTarget::Socket(path));
+        assert_eq!(next_state(&rx), LinkState::Connecting);
+        // Had the link ended, a state other than `Live` would come next.
+        assert_eq!(next_state(&rx), live("0.9.3", false));
+        match next(&rx) {
+            LinkUpdate::Clipboard(text) => assert_eq!(text, "hi"),
+            other => panic!("{other:?}"),
+        }
     }
 
     #[test]

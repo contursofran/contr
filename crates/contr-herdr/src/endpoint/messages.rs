@@ -4,8 +4,10 @@
 //! layout; see NOTICE.
 
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 
 use super::codec::{CodecError, Dec, Enc};
+use super::osc52;
 use super::surface::{self, SurfaceFrame, SurfacePatch};
 
 pub const ENDPOINT_GENERATION: u32 = 1;
@@ -36,6 +38,7 @@ pub(crate) const C_CONTROL: u32 = 20;
 // ServerMessage tags we read. Every other tag is `ServerMsg::Other`.
 pub(crate) const S_WELCOME_LEGACY: u32 = 0;
 pub(crate) const S_SHUTDOWN: u32 = 3;
+pub(crate) const S_CLIPBOARD: u32 = 5;
 pub(crate) const S_SHELL_ERROR: u32 = 15;
 pub(crate) const S_CONTROL: u32 = 20;
 pub(crate) const S_SURFACE: u32 = 13;
@@ -348,6 +351,9 @@ pub enum ServerMsg {
     Surface(SurfaceFrame),
     /// Row spans that change the last surface (`PaneSurfacePatch`).
     Patch(SurfacePatch),
+    /// Text a program wrote with OSC 52. A payload that is not base64 UTF-8 text
+    /// within the size limit never becomes this: it comes back as `Other`.
+    Clipboard(String),
     Other(u32),
 }
 
@@ -373,6 +379,14 @@ pub fn decode_server(payload: &[u8]) -> Result<ServerMsg, CodecError> {
             }
         }
         S_SHUTDOWN => ServerMsg::Shutdown(opt_str(&mut d)?),
+        S_CLIPBOARD => match osc52::decode(d.bytes()?) {
+            Some(text) => ServerMsg::Clipboard(text),
+            None => {
+                // A dropped write is not an error: the link stays up and ignores it.
+                debug!("dropped a clipboard payload: not base64 UTF-8, or over the size limit");
+                ServerMsg::Other(S_CLIPBOARD)
+            }
+        },
         S_SHELL_ERROR => ServerMsg::ShellError(d.str()?),
         S_CONTROL => ServerMsg::Control {
             kind: d.str()?,
@@ -672,6 +686,61 @@ mod tests {
             decode_server(&payload).unwrap(),
             ServerMsg::ShellError("hi".into())
         );
+    }
+
+    /// A `Clipboard` payload whose data is `data` as raw bytes, so any byte can be sent.
+    fn clipboard_payload(data: &[u8]) -> Vec<u8> {
+        server_payload(|e| {
+            e.vu(u64::from(S_CLIPBOARD));
+            e.vu(data.len() as u64);
+            e.buf.extend_from_slice(data);
+        })
+    }
+
+    #[test]
+    fn decodes_a_clipboard_write_to_its_text() {
+        let padded = server_payload(|e| {
+            e.vu(u64::from(S_CLIPBOARD));
+            e.str("aGk=");
+        });
+        assert_eq!(
+            decode_server(&padded).unwrap(),
+            ServerMsg::Clipboard("hi".into())
+        );
+        assert_eq!(
+            decode_server(&clipboard_payload(b"aGk")).unwrap(),
+            ServerMsg::Clipboard("hi".into()),
+            "unpadded"
+        );
+    }
+
+    #[test]
+    fn a_clipboard_payload_that_is_not_usable_text_is_other() {
+        let oversized = "A".repeat(osc52::MAX_TEXT_BYTES * 2);
+        let cases: [(&str, &[u8]); 6] = [
+            ("not base64", b"!!"),
+            // An OSC 52 query asks for the clipboard; contr never answers it.
+            ("a query", b"?"),
+            ("not UTF-8 once decoded", b"/w=="),
+            ("not UTF-8 on the wire", &[0xFF]),
+            ("a lone symbol", b"A"),
+            ("too large", oversized.as_bytes()),
+        ];
+        for (what, data) in cases {
+            assert_eq!(
+                decode_server(&clipboard_payload(data)).unwrap(),
+                ServerMsg::Other(S_CLIPBOARD),
+                "{what}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_clipboard_frame_whose_length_is_past_the_end_is_an_error() {
+        assert!(matches!(
+            decode_server(&[5, 9, b'a']),
+            Err(CodecError::TooLong(9))
+        ));
     }
 
     #[test]
