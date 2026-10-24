@@ -8,6 +8,7 @@ pub mod grid;
 mod keys;
 mod paint;
 mod panes;
+pub mod selection;
 
 use std::cell::RefCell;
 use std::io;
