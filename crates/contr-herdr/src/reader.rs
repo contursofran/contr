@@ -1404,4 +1404,52 @@ mod tests {
         assert_eq!(live.tree.expect("tree").pane_ids(), ["w1:p2"]);
         reader.join_for_test();
     }
+
+    /// The server ends the subscription and exits; a new server binds the same
+    /// path (a new socket file). A hidden reader, which has no refresh timer,
+    /// reports that herdr is gone, connects to the new server and sends its tree.
+    #[test]
+    fn a_hidden_reader_follows_a_new_server_on_the_same_path() {
+        let dir = tempdir();
+        let path = fake_herdr(dir.path(), |method, _| match method {
+            "ping" => answer(PONG),
+            "session.snapshot" => answer(&snapshot_reply(&snapshot("idle"))),
+            _ => Answer {
+                lines: vec![ACK.into()],
+                hold: Duration::from_millis(500),
+                stream: None,
+            },
+        });
+        let (tx, rx) = async_channel::bounded(16);
+        let reader = spawn_reader(Target::Socket(path.clone()), tx).expect("spawn");
+        reader.set_visible(false);
+        let live = live_after(&rx, 3);
+        assert_eq!(
+            first_pane_status(live.tree.as_deref().expect("tree")),
+            Some(AgentState::Idle)
+        );
+
+        // The old server still holds the subscription; its path now leads to a new one.
+        std::fs::remove_file(&path).expect("remove the old socket");
+        let new_path = fake_herdr(dir.path(), |method, _| match method {
+            "ping" => answer(PONG),
+            "session.snapshot" => answer(&snapshot_reply(&snapshot("working"))),
+            _ => held_ack(),
+        });
+        assert_eq!(new_path, path);
+
+        assert!(matches!(
+            next(&rx),
+            HerdrUpdate::State(ConnState::NotRunning { .. })
+        ));
+        assert!(matches!(
+            next(&rx),
+            HerdrUpdate::State(ConnState::Connected { .. })
+        ));
+        assert_eq!(
+            first_pane_status(&tree_of(next(&rx))),
+            Some(AgentState::Working)
+        );
+        reader.join_for_test();
+    }
 }
