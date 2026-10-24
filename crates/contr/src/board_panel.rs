@@ -16,7 +16,9 @@ use crate::board_card::{
 use crate::board_model::{BoardSnapshot, ItemKind, NeedItem, WorkRow};
 use crate::board_needs::{PickFn, needs_section};
 use crate::board_outbox::{BoardOutbox, GlobalBoardOutbox, now_ms, show_status};
-use crate::board_report::{ReportEvent, ReportSource, ReportTarget, ReportView};
+use crate::board_report::{
+    OpenPathFn, ReportEvent, ReportSource, ReportTarget, ReportView, open_in_system,
+};
 use crate::board_work::{WorkRowEvent, WorkRowView, work_section};
 use crate::herdr::GlobalHerdr;
 use crate::theme::*;
@@ -97,7 +99,12 @@ impl BoardPanel {
     /// On the Report tab, a board revision also syncs the report. Focus and Open PR use the app's
     /// calls. Uses the queue from `BoardOutbox::init`, when there is one.
     pub fn new(cx: &mut Context<Self>) -> Self {
-        Self::with_actions(Rc::new(focus_in_background), Rc::new(open_in_browser), cx)
+        Self::with_actions(
+            Rc::new(focus_in_background),
+            Rc::new(open_in_browser),
+            Rc::new(open_in_system),
+            cx,
+        )
     }
 
     /// Binds the panel's keys in its key context: ↑ and ↓ move the pick, enter sends the default action,
@@ -153,8 +160,13 @@ impl BoardPanel {
             .is_some_and(|outbox| outbox.read(cx).can_act())
     }
 
-    /// `new` with the Focus and Open PR calls given, so the tests can record them.
-    pub(crate) fn with_actions(focus_pane: FocusFn, open: OpenFn, cx: &mut Context<Self>) -> Self {
+    /// `new` with the Focus, Open PR and Open in editor calls given, so the tests can record them.
+    pub(crate) fn with_actions(
+        focus_pane: FocusFn,
+        open: OpenFn,
+        open_path: OpenPathFn,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let board = cx.global::<GlobalBoard>().0.clone();
         let herdr = cx.global::<GlobalHerdr>().0.clone();
         let observe = cx.observe(&board, |this, _, cx| {
@@ -170,7 +182,7 @@ impl BoardPanel {
         let outbox_observe = outbox
             .as_ref()
             .map(|outbox| cx.observe(outbox, |_, _, cx| cx.notify()));
-        let report = cx.new(ReportView::new);
+        let report = cx.new(|cx| ReportView::with_open(open_path, cx));
         let report_events = cx.subscribe(&report, |this, _, event: &ReportEvent, cx| match event {
             ReportEvent::Back => this.open_board_tab(cx),
         });
@@ -1010,6 +1022,11 @@ pub(crate) mod test_support {
         Rc::new(|_: String, _: &mut App| {})
     }
 
+    /// An Open in editor call that does nothing.
+    pub(crate) fn ignored_open_path() -> OpenPathFn {
+        Rc::new(|_: std::path::PathBuf, _: &mut App| {})
+    }
+
     /// A panel over a board that shows `snapshot`, `problem` and `bridge` (set by the test, not read
     /// from a file). The herdr tree is empty, and Focus and Open PR do nothing.
     pub(crate) fn panel<'a>(
@@ -1123,7 +1140,7 @@ pub(crate) mod test_support {
         open: OpenFn,
     ) -> (Entity<BoardPanel>, &mut VisualTestContext) {
         let (host, cx) = cx.add_window_view(move |_, cx| InFrame {
-            panel: cx.new(|cx| BoardPanel::with_actions(focus, open, cx)),
+            panel: cx.new(|cx| BoardPanel::with_actions(focus, open, ignored_open_path(), cx)),
         });
         let view = host.read_with(cx, |host, _| host.panel.clone());
         cx.simulate_resize(size(px(WINDOW_WIDTH), px(WINDOW_HEIGHT)));

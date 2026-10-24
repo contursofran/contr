@@ -265,7 +265,7 @@ fn focus_label(tab: &str) -> String {
     format!("Focus {tab}")
 }
 
-/// The label of the card's Next button: `Next {key}`, with the key of the next open item.
+/// The label of the card's Next button: `Next: {key}`, with the key of the next open item.
 fn next_label(key: &str) -> String {
     format!("Next: {key}")
 }

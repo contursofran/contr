@@ -280,7 +280,10 @@ fn click_control(
         "board-wrap" => panel.update(cx, |panel, cx| panel.send_wrap(cx)),
         "work-clear" => panel.update(cx, |panel, cx| panel.send_clear(true, cx)),
         "needs-clear" => panel.update(cx, |panel, cx| panel.send_clear(false, cx)),
-        "report-back" => report(parts, cx).update(cx, |report, cx| report.back(cx)),
+        // The button emits `ReportEvent::Back`, and the panel's subscriber shows the Board tab.
+        // gpui runs the event after this reply is built, so the dev path calls the subscriber's
+        // path here and the reply shows the new tab.
+        "report-back" => panel.update(cx, |panel, cx| panel.open_board_tab(cx)),
         "report-open" => report(parts, cx).update(cx, |report, cx| report.open_in_editor(cx)),
         _ => return Err(not_on_board(id)),
     }
@@ -365,8 +368,9 @@ mod tests {
     use crate::board_panel::BoardPanel;
     use crate::board_panel::OpenFn;
     use crate::board_panel::test_support::{
-        bridge, fixture, ignored_focus, ignored_open, queued, status,
+        bridge, fixture, ignored_focus, ignored_open, ignored_open_path, queued, status,
     };
+    use crate::board_report::OpenPathFn;
     use crate::dev_control::dispatch::handle;
     use crate::dev_protocol::{Reply, Request};
     use crate::frame::{Frame, parts};
@@ -378,7 +382,7 @@ mod tests {
     use contr_herdr::LiveHerdr;
     use gpui::{AppContext, Entity, TestAppContext, VisualTestContext, px, size};
     use std::cell::RefCell;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
     use std::rc::Rc;
     use std::sync::Arc;
     use std::time::Duration;
@@ -424,10 +428,12 @@ mod tests {
             LiveHerdr::default(),
             ignored_focus(),
             ignored_open(),
+            ignored_open_path(),
         )
     }
 
-    /// `frame_with`, with the herdr `live` state and the card's Focus and Open PR calls given.
+    /// `frame_with`, with the herdr `live` state and the card's Focus, Open PR and Open in editor
+    /// calls given.
     fn frame_with_actions<'a>(
         cx: &'a mut TestAppContext,
         snapshot: Option<BoardSnapshot>,
@@ -435,6 +441,7 @@ mod tests {
         live: LiveHerdr,
         focus: FocusFn,
         open: OpenFn,
+        open_path: OpenPathFn,
     ) -> (Entity<Frame>, &'a mut VisualTestContext) {
         cx.update(Visibility::init);
         cx.update(Selection::init);
@@ -454,8 +461,9 @@ mod tests {
         cx.update(|app| {
             board.update(app, |board, cx| board.set(snapshot, None, has_bridge, cx));
         });
-        let (frame, cx) = cx
-            .add_window_view(move |window, cx| Frame::with_panel_actions(window, focus, open, cx));
+        let (frame, cx) = cx.add_window_view(move |window, cx| {
+            Frame::with_panel_actions(window, focus, open, open_path, cx)
+        });
         cx.simulate_resize(size(px(1440.), px(900.)));
         cx.run_until_parked();
         (frame, cx)
@@ -850,6 +858,24 @@ mod tests {
     }
 
     #[gpui::test]
+    fn an_inert_board_draws_the_options_dim_and_card_opt_0_is_disabled(cx: &mut TestAppContext) {
+        let (_frame, cx) = frame_with(cx, Some(fixture()), None);
+        ok(click_id(cx, "need:D7"));
+        let card = card_state(cx);
+        assert_eq!(
+            card_buttons(&card),
+            vec![
+                ("card-opt-0", "one line per row", false),
+                ("card-opt-1", "two lines per row", false),
+                ("card-chat", "Answer in chat", false),
+                ("card-next", "Next: N4", true),
+            ],
+            "the board takes no actions, so the options and Answer in chat are dim"
+        );
+        assert_eq!(err(click_id(cx, "card-opt-0")).code, code::DISABLED);
+    }
+
+    #[gpui::test]
     fn an_option_click_writes_the_answer_and_the_card_shows_it_resolved(cx: &mut TestAppContext) {
         let dir = tempfile::tempdir().unwrap();
         let (_frame, cx) = frame_with(cx, Some(fixture()), Some(dir.path()));
@@ -933,6 +959,7 @@ mod tests {
             live_with_tree(),
             focus_into(focused.clone()),
             open_into(opened.clone()),
+            ignored_open_path(),
         );
         ok(click_id(cx, "work:owner/name#641"));
 
@@ -991,10 +1018,8 @@ mod tests {
             "the hidden comment is not a drawn line"
         );
 
-        // `back` emits an event; the panel handles it when the update's effects run, just after the
-        // reply. The next state has the Board tab.
-        ok(click_id(cx, "report-back"));
-        let state = ok(send(cx, Request::State));
+        // `back` shows the Board tab in the reply: the dev path calls the subscriber's path.
+        let state = ok(click_id(cx, "report-back"));
         assert_eq!(state["board"]["tab"], "board");
         assert_eq!(
             state["board"]["pick"],
@@ -1002,6 +1027,39 @@ mod tests {
             "the pick is kept"
         );
         assert_eq!(state["board"]["report"], Value::Null);
+    }
+
+    #[gpui::test]
+    fn report_open_opens_the_rows_file(cx: &mut TestAppContext) {
+        let file = tempfile::tempdir().unwrap();
+        let path = file.path().join("RESULT.md");
+        std::fs::write(&path, "Plain text.\n").unwrap();
+        let mut snapshot = fixture();
+        snapshot.rows[0].report = Some(path.to_str().unwrap().to_owned());
+        let opened = calls();
+        let log = opened.clone();
+        let open_path: OpenPathFn = Rc::new(move |path: PathBuf, _: &mut App| {
+            log.borrow_mut().push(path.to_string_lossy().into_owned())
+        });
+        let (_frame, cx) = frame_with_actions(
+            cx,
+            Some(snapshot),
+            None,
+            LiveHerdr::default(),
+            ignored_focus(),
+            ignored_open(),
+            open_path,
+        );
+
+        ok(click_id(cx, "work:owner/name#640"));
+        ok(click_id(cx, "card-report"));
+        let state = ok(click_id(cx, "report-open"));
+        assert_eq!(state["board"]["tab"], "report", "the tab stays");
+        assert_eq!(
+            *opened.borrow(),
+            vec![path.to_str().unwrap().to_owned()],
+            "the row's file went to the open call"
+        );
     }
 
     #[gpui::test]

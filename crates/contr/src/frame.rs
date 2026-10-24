@@ -115,18 +115,20 @@ impl Frame {
         cx.notify();
     }
 
-    /// `new`, with the board panel's Focus and Open PR calls given, so a test can record them.
+    /// `new`, with the board panel's Focus, Open PR and Open in editor calls given, so a test can
+    /// record them.
     #[cfg(test)]
     pub(crate) fn with_panel_actions(
         window: &mut Window,
         focus: FocusFn,
         open: crate::board_panel::OpenFn,
+        open_path: crate::board_report::OpenPathFn,
         cx: &mut Context<Self>,
     ) -> Self {
         Self::build(
             window,
             Rc::new(focus_in_background),
-            move |cx| BoardPanel::with_actions(focus, open, cx),
+            move |cx| BoardPanel::with_actions(focus, open, open_path, cx),
             cx,
         )
     }
