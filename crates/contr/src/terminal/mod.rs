@@ -317,6 +317,12 @@ impl TerminalView {
         }
     }
 
+    /// The keyboard focus of the view, for the dev control's `terminal` click.
+    #[cfg(debug_assertions)]
+    pub(crate) fn focus_handle(&self) -> &FocusHandle {
+        &self.focus
+    }
+
     /// A click takes the keyboard, and tries a failed link start again. A click on a pane that
     /// herdr does not focus also makes herdr focus it.
     fn click(&mut self, at: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
