@@ -3,9 +3,9 @@
 #[cfg(debug_assertions)]
 use contr::dev_control;
 use contr::{
-    board::Board, board_outbox::BoardOutbox, board_panel::BoardPanel, dev_client, dev_protocol,
-    frame, herdr::Herdr, host::Host, legend, selection::Selection, status_message::StatusMessage,
-    theme, usage::Usage, visibility::Visibility,
+    actions, board::Board, board_outbox::BoardOutbox, board_panel::BoardPanel, dev_client,
+    dev_protocol, frame, herdr::Herdr, host::Host, legend, selection::Selection,
+    status_message::StatusMessage, theme, usage::Usage, visibility::Visibility,
 };
 use gpui::{
     App, Bounds, TitlebarOptions, WindowBounds, WindowOptions, point, prelude::*, px, size,
@@ -156,6 +156,7 @@ fn open_window(icons: bool) -> std::process::ExitCode {
         })
         .detach();
         Selection::init(cx);
+        actions::init(cx);
         let (width, height) = if icons {
             (LEGEND_WIDTH, LEGEND_HEIGHT)
         } else {
