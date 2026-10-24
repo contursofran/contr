@@ -1,5 +1,6 @@
 //! contr: a native herdr client.
 
+pub mod actions;
 pub mod agents_list;
 pub mod board;
 pub mod board_actions;
@@ -19,6 +20,7 @@ pub mod git;
 pub mod herdr;
 pub mod host;
 pub mod legend;
+pub mod menus;
 pub mod report;
 pub mod selection;
 pub mod spaces;

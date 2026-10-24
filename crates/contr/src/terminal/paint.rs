@@ -1,30 +1,34 @@
-//! Paints a surface: cell backgrounds, box glyphs as quads, text and the cursor. Text is shaped per
-//! row and kept while herdr sends the same row again (`Arc::ptr_eq`), so a patch that changes one
-//! row shapes one row. The span, run and cursor rules are pure functions, so they are tested
-//! without a window.
+// Adapted from Herdr UI (Apache-2.0); changes: italic bit and face; underlines drawn per cell.
+//! Paints a surface: cell backgrounds, box glyphs as quads, text, underlines and the cursor. Text is
+//! shaped per row and kept while herdr sends the same row again (`Arc::ptr_eq`), so a patch that
+//! changes one row shapes one row. The span, run and cursor rules are pure functions, so they are
+//! tested without a window.
 
 use std::sync::Arc;
 
 use contr_herdr::endpoint::messages::GridSize;
 use contr_herdr::endpoint::surface::{Cell, Cursor, Row, Surface};
 use gpui::{
-    App, BorderStyle, Bounds, Font, FontFeatures, FontWeight, Hsla, Pixels, Point, ShapedLine,
-    StrikethroughStyle, TextAlign, TextRun, UnderlineStyle, Window, fill, font, outline, point, px,
-    rgb, rgba, size,
+    App, BorderStyle, Bounds, Font, FontFeatures, FontStyle, FontWeight, Hsla, Pixels, Point,
+    ShapedLine, StrikethroughStyle, TextAlign, TextRun, UnderlineStyle, Window, fill, font,
+    outline, point, px, rgb, rgba, size,
 };
 
 use super::boxdraw::{self, BoxGlyph};
 use super::colors::cell_colors;
+use super::decorations::{Mark, Underline, marks, underline_runs};
 use super::grid::Metrics;
 use crate::theme::{BG_TERMINAL, FONT_FAMILY, TERMINAL_FONT_SIZE, TEXT};
 
-/// herdr's modifier bits (`Cell::attrs`) that the painter reads.
-const BOLD: u16 = 1;
-const UNDERLINE: u16 = 8;
-const HIDDEN: u16 = 128;
-const STRIKETHROUGH: u16 = 256;
-/// herdr keeps an underline style in the bits above the low byte. Any of them means underlined.
-const UNDERLINE_STYLE: u16 = 0xF000;
+/// herdr's modifier bits (`Cell::attrs`) that the painter reads: ratatui's `Modifier` bits.
+pub(super) const BOLD: u16 = 1;
+pub(super) const ITALIC: u16 = 1 << 2;
+pub(super) const UNDERLINE: u16 = 8;
+pub(super) const HIDDEN: u16 = 128;
+pub(super) const STRIKETHROUGH: u16 = 256;
+/// herdr keeps the underline style in bits 12–15. Any of them set means underlined.
+pub(super) const UNDERLINE_STYLE: u16 = 0xF000;
+pub(super) const UNDERLINE_STYLE_SHIFT: u16 = 12;
 
 /// The cursor is 50 % white (`docs/DESIGN.md` greys, and white only for what the owner acts on).
 const CURSOR_RGBA: u32 = 0xFFFFFF80;
@@ -64,12 +68,13 @@ pub(super) fn refresh_rows<L>(
     }
 }
 
-/// The look of a run of text. Two cells with equal styles join one span.
+/// The look of a run of text. Two cells with equal styles join one span. Underlines are not part of
+/// it: they are drawn per cell from `underline_runs`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Style {
     pub fg: u32,
     pub bold: bool,
-    pub underline: bool,
+    pub italic: bool,
     pub strike: bool,
 }
 
@@ -96,7 +101,7 @@ fn quad_glyph(cell: &Cell) -> Option<BoxGlyph> {
 
 /// The spans of a row, in column order. Wide glyph tails, hidden cells and box glyphs make no
 /// span: box glyphs are drawn as quads. A span of blanks makes none either, unless it is
-/// underlined or struck through.
+/// struck through.
 pub(super) fn spans(row: &[Cell]) -> Vec<Span> {
     let mut out: Vec<Span> = Vec::new();
     for (col, cell) in row.iter().enumerate() {
@@ -206,6 +211,7 @@ pub(super) fn paint_surface(
             paint_line(line, at, m, window, cx);
         }
     }
+    paint_underlines(window, origin, m, surface);
 
     if let Some(cursor) = surface.cursor {
         if let Some(text) = typing.marked {
@@ -272,13 +278,57 @@ fn paint_marked(
     let style = Style {
         fg: TEXT,
         bold: false,
-        underline: true,
+        italic: false,
         strike: false,
     };
     let line = shape(text, style, window);
     let cover = Bounds::new(at, size(line.width(), px(m.cell_h)));
     window.paint_quad(fill(cover, Hsla::from(rgb(BG_TERMINAL))));
     paint_line(&line, at, m, window, cx);
+    let x0 = f32::from(x) * m.cell_w;
+    let row_top = f32::from(y) * m.cell_h;
+    for mark in marks(
+        Underline::Single,
+        x0,
+        x0 + f32::from(line.width()),
+        m.cell_h,
+    ) {
+        paint_mark(window, origin, row_top, mark, TEXT);
+    }
+}
+
+/// Paints the underlines of `surface` under its text, one run of cells at a time.
+fn paint_underlines(window: &mut Window, origin: Point<Pixels>, m: Metrics, surface: &Surface) {
+    for (y, row) in surface.rows.iter().enumerate() {
+        let row_top = y as f32 * m.cell_h;
+        for run in underline_runs(row) {
+            let x0 = run.col as f32 * m.cell_w;
+            let x1 = (run.col + run.cols) as f32 * m.cell_w;
+            for mark in marks(run.kind, x0, x1, m.cell_h) {
+                paint_mark(window, origin, row_top, mark, run.colour);
+            }
+        }
+    }
+}
+
+/// Paints one underline mark. `row_top` is the top of its row, in pixels from `origin`.
+fn paint_mark(window: &mut Window, origin: Point<Pixels>, row_top: f32, mark: Mark, colour: u32) {
+    let colour = Hsla::from(rgb(colour));
+    match mark {
+        Mark::Bar { x0, x1, y } => {
+            let at = point(origin.x + px(x0), origin.y + px(row_top + y));
+            window.paint_quad(fill(Bounds::new(at, size(px(x1 - x0), px(1.))), colour));
+        }
+        Mark::Wave { x0, x1, y } => {
+            let at = point(origin.x + px(x0), origin.y + px(row_top + y));
+            let style = UnderlineStyle {
+                thickness: px(1.),
+                color: Some(colour),
+                wavy: true,
+            };
+            window.paint_underline(at, px(x1 - x0), &style);
+        }
+    }
 }
 
 fn paint_cursor(
@@ -316,23 +366,30 @@ pub(super) fn terminal_font() -> Font {
     face
 }
 
-/// Shapes `text` in the terminal font, at the terminal size, in the look `style` gives.
-fn shape(text: &str, style: Style, window: &Window) -> ShapedLine {
-    let colour = Hsla::from(rgb(style.fg));
+/// The terminal font in the face `style` asks for: bold takes the bold weight and italic the italic
+/// style. The bundled set has no italic face, and GPUI picks only among the faces it loaded, so
+/// italic text paints upright until an italic face is bundled.
+fn styled_font(style: Style) -> Font {
     let mut face = terminal_font();
     if style.bold {
         face.weight = FontWeight::BOLD;
     }
+    if style.italic {
+        face.style = FontStyle::Italic;
+    }
+    face
+}
+
+/// Shapes `text` in the terminal font, at the terminal size, in the look `style` gives. The
+/// underline is not part of the run: `paint_underlines` draws it.
+fn shape(text: &str, style: Style, window: &Window) -> ShapedLine {
+    let colour = Hsla::from(rgb(style.fg));
     let run = TextRun {
         len: text.len(),
-        font: face,
+        font: styled_font(style),
         color: colour,
         background_color: None,
-        underline: style.underline.then_some(UnderlineStyle {
-            thickness: px(1.),
-            color: Some(colour),
-            wavy: false,
-        }),
+        underline: None,
         strikethrough: style.strike.then_some(StrikethroughStyle {
             thickness: px(1.),
             color: Some(colour),
@@ -347,7 +404,7 @@ fn style_of(cell: &Cell) -> Style {
     Style {
         fg: cell_colors(cell).0,
         bold: cell.attrs & BOLD != 0,
-        underline: cell.attrs & (UNDERLINE | UNDERLINE_STYLE) != 0,
+        italic: cell.attrs & ITALIC != 0,
         strike: cell.attrs & STRIKETHROUGH != 0,
     }
 }
@@ -358,9 +415,9 @@ fn is_ascii_char(text: &str) -> bool {
     matches!((chars.next(), chars.next()), (Some(c), None) if (' '..='~').contains(&c))
 }
 
-/// True when a span is only whitespace and has no underline or strikethrough to draw.
+/// True when a span is only whitespace and has no strikethrough to draw.
 fn is_blank(span: &Span) -> bool {
-    span.text.trim().is_empty() && !span.style.underline && !span.style.strike
+    span.text.trim().is_empty() && !span.style.strike
 }
 
 #[cfg(test)]
@@ -423,11 +480,48 @@ mod tests {
     }
 
     #[test]
-    fn a_blank_run_makes_no_span_but_an_underlined_one_does() {
+    fn a_blank_run_makes_no_span_even_when_underlined() {
+        // An underline is drawn per cell, so a blank run needs no span for it.
         let plain = [cell(" ", 0), cell(" ", 0)];
         assert!(spans(&plain).is_empty());
         let underlined = [cell(" ", UNDERLINE)];
-        assert_eq!(texts(&underlined), vec![(0, " ".to_owned())]);
+        assert!(spans(&underlined).is_empty());
+    }
+
+    #[test]
+    fn a_struck_blank_run_still_makes_a_span() {
+        let struck = [cell(" ", STRIKETHROUGH)];
+        assert_eq!(texts(&struck), vec![(0, " ".to_owned())]);
+    }
+
+    #[test]
+    fn an_italic_cell_starts_a_new_span_and_keeps_its_column() {
+        let row = [cell("a", 0), cell("b", ITALIC), cell("c", ITALIC)];
+        assert_eq!(texts(&row), vec![(0, "a".to_owned()), (1, "bc".to_owned())]);
+    }
+
+    #[test]
+    fn the_run_font_is_italic_only_when_the_style_asks() {
+        let plain = Style {
+            fg: TEXT,
+            bold: false,
+            italic: false,
+            strike: false,
+        };
+        let italic = Style {
+            italic: true,
+            ..plain
+        };
+        let bold_italic = Style {
+            bold: true,
+            ..italic
+        };
+        assert_eq!(styled_font(plain).style, FontStyle::Normal);
+        assert_eq!(styled_font(plain).weight, FontWeight::NORMAL);
+        assert_eq!(styled_font(italic).style, FontStyle::Italic);
+        assert_eq!(styled_font(italic).weight, FontWeight::NORMAL);
+        assert_eq!(styled_font(bold_italic).style, FontStyle::Italic);
+        assert_eq!(styled_font(bold_italic).weight, FontWeight::BOLD);
     }
 
     #[test]
@@ -465,14 +559,13 @@ mod tests {
     }
 
     #[test]
-    fn bold_strike_and_any_underline_style_are_read_from_attrs() {
+    fn bold_italic_and_strike_are_read_from_attrs() {
         let style = |attrs| style_of(&cell("a", attrs));
         assert!(style(BOLD).bold);
-        assert!(style(UNDERLINE).underline);
-        // herdr's underline style lives above the low byte.
-        assert!(style(0x1000).underline);
+        assert!(style(ITALIC).italic);
         assert!(style(STRIKETHROUGH).strike);
-        assert!(!style(0).bold && !style(0).underline && !style(0).strike);
+        assert!(!style(0).bold && !style(0).italic && !style(0).strike);
+        // The underline is read by `decorations::underline_of`, not here.
     }
 
     #[test]
