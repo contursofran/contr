@@ -114,6 +114,12 @@ impl BoardPanel {
         ]);
     }
 
+    /// The panel's keyboard focus, for the dev control's `board-panel` click.
+    #[cfg(debug_assertions)]
+    pub(crate) fn focus_handle(&self) -> &FocusHandle {
+        &self.focus
+    }
+
     /// `new` with the Focus and Open PR calls given, so the tests can record them.
     fn with_actions(focus_pane: FocusFn, open: OpenFn, cx: &mut Context<Self>) -> Self {
         let board = cx.global::<GlobalBoard>().0.clone();

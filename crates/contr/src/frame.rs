@@ -89,6 +89,52 @@ impl Frame {
             _title_events: title_events,
         }
     }
+
+    /// Opens the sidebar again. The reopen button and the dev control both call it.
+    pub(crate) fn reopen_sidebar(&mut self, cx: &mut Context<Self>) {
+        self.sidebar_open = true;
+        cx.notify();
+    }
+
+    #[cfg(debug_assertions)]
+    pub(crate) fn sidebar_open(&self) -> bool {
+        self.sidebar_open
+    }
+
+    #[cfg(debug_assertions)]
+    pub(crate) fn panel_open(&self) -> bool {
+        self.panel_open
+    }
+}
+
+/// The frame's views, as clones of their handles, for the dev control to read and drive.
+#[cfg(debug_assertions)]
+#[allow(dead_code)] // Not every part is read yet: the sections read them as they are built.
+pub(crate) struct FrameParts {
+    pub(crate) frame: Entity<Frame>,
+    pub(crate) spaces: Entity<Spaces>,
+    pub(crate) agents: Entity<AgentsList>,
+    pub(crate) title_bar: Entity<TitleBar>,
+    pub(crate) board_panel: Entity<BoardPanel>,
+    pub(crate) terminal: Entity<TerminalView>,
+    pub(crate) status_bar: Entity<StatusBar>,
+    pub(crate) herdr: Entity<Herdr>,
+}
+
+/// The parts of the frame `this`.
+#[cfg(debug_assertions)]
+pub(crate) fn parts(this: &Entity<Frame>, cx: &gpui::App) -> FrameParts {
+    let frame = this.read(cx);
+    FrameParts {
+        frame: this.clone(),
+        spaces: frame.spaces.clone(),
+        agents: frame.agents.clone(),
+        title_bar: frame.title_bar.clone(),
+        board_panel: frame.board_panel.clone(),
+        terminal: frame.terminal.clone(),
+        status_bar: frame.status_bar.clone(),
+        herdr: frame.herdr.clone(),
+    }
 }
 
 impl Render for Frame {
@@ -149,7 +195,7 @@ impl Render for Frame {
                                     .bg(rgb(BG_BARS))
                                     .border_b_1()
                                     .border_color(rgb(LINE))
-                                    .when(!self.sidebar_open, |bar| bar.child(reopen_sidebar(cx)))
+                                    .when(!self.sidebar_open, |bar| bar.child(reopen_button(cx)))
                                     .child(self.title_bar.clone().cached(
                                         StyleRefinement::default().flex_1().min_w_0().h_full(),
                                     )),
@@ -209,7 +255,7 @@ fn herdr_state(line: String) -> impl IntoElement {
 
 /// The title bar's first child while the sidebar is closed: the window-button inset, then the
 /// toggle drawing at its right edge. Clicking anywhere on it opens the sidebar again.
-fn reopen_sidebar(cx: &mut Context<Frame>) -> impl IntoElement {
+fn reopen_button(cx: &mut Context<Frame>) -> impl IntoElement {
     div()
         .debug_selector(|| "sidebar-reopen".into())
         .id("sidebar-reopen")
@@ -219,10 +265,7 @@ fn reopen_sidebar(cx: &mut Context<Frame>) -> impl IntoElement {
         .flex()
         .justify_end()
         .cursor_pointer()
-        .on_click(cx.listener(|this, _, _, cx| {
-            this.sidebar_open = true;
-            cx.notify();
-        }))
+        .on_click(cx.listener(|this, _, _, cx| this.reopen_sidebar(cx)))
         .child(toggle_box())
 }
 
