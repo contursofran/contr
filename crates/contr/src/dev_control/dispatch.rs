@@ -334,13 +334,16 @@ mod tests {
         assert_eq!(state["selection"], Value::Null);
         // The terminal takes the focus when it is built.
         assert_eq!(state["focus"], "terminal");
-        for section in ["sidebar", "title", "status_bar", "board"] {
+        for section in ["sidebar", "title", "status_bar"] {
             assert_eq!(
                 state[section],
                 Value::Null,
                 "{section} lands in a later slice"
             );
         }
+        // The board panel is shown from the start, on its Board tab, with no board to read.
+        assert_eq!(state["board"]["tab"], "board");
+        assert_eq!(state["board"]["line"], "no coordinator board");
     }
 
     #[gpui::test]
