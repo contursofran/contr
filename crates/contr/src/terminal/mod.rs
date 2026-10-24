@@ -86,6 +86,9 @@ pub struct TerminalView {
     /// How often `render` ran. Tests read it to see whether a parent's redraw renders the view.
     #[cfg(test)]
     pub(crate) renders: u32,
+    /// How many clipboard writes the view made. Tests read it to see that one update writes once.
+    #[cfg(test)]
+    clipboard_writes: u32,
 }
 
 impl TerminalView {
@@ -119,6 +122,8 @@ impl TerminalView {
             sends: Vec::new(),
             #[cfg(test)]
             renders: 0,
+            #[cfg(test)]
+            clipboard_writes: 0,
         }
     }
 
@@ -233,7 +238,17 @@ impl TerminalView {
                 }
             }
             LinkUpdate::Snapshot(snapshot) => self.shell_pane = snapshot.focused_pane_id.clone(),
+            LinkUpdate::Clipboard(text) => self.write_clipboard(text, cx),
         }
+    }
+
+    /// Puts a program's OSC 52 text on the system clipboard. Each update is one write.
+    fn write_clipboard(&mut self, text: String, cx: &mut Context<Self>) {
+        #[cfg(test)]
+        {
+            self.clipboard_writes += 1;
+        }
+        cx.write_to_clipboard(ClipboardItem::new_string(text));
     }
 
     /// Shows `next` unless it is the surface already shown. A new revision notifies once.
@@ -1267,6 +1282,21 @@ mod tests {
         assert_eq!(
             queued(&frames),
             vec![input(PANE, &[InputEvent::Paste("one".to_owned())])]
+        );
+    }
+
+    #[gpui::test]
+    fn a_clipboard_update_writes_the_clipboard_once(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+
+        view.update(cx, |view, cx| {
+            view.on_update(LinkUpdate::Clipboard("one\ntwo".to_owned()), cx);
+        });
+
+        assert_eq!(view.read_with(cx, |view, _| view.clipboard_writes), 1);
+        assert_eq!(
+            cx.read_from_clipboard().and_then(|item| item.text()),
+            Some("one\ntwo".to_owned())
         );
     }
 
