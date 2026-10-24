@@ -1,4 +1,5 @@
-// Adapted from Herdr UI (Apache-2.0); changes: takes the raw wire bytes, drops the pending-write bound (the link queues updates), adds tests for a query and for an empty clear.
+// Adapted from Herdr UI (Apache-2.0); changes: takes the raw wire bytes, drops the
+// pending-write bound (the link queues updates), adds tests for a query and an empty clear.
 
 //! OSC 52 clipboard writes that herdr forwards to this client.
 //!
