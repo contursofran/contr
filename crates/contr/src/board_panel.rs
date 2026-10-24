@@ -132,6 +132,12 @@ impl BoardPanel {
         &self.board
     }
 
+    /// The Report tab's view. The dev control's state reads it while the tab is shown.
+    #[cfg(debug_assertions)]
+    pub(crate) fn report(&self) -> &Entity<ReportView> {
+        &self.report
+    }
+
     /// The pick the card shows on `snapshot`: the held pick, or the fall-back. For the dev control's
     /// state.
     #[cfg(debug_assertions)]
@@ -148,7 +154,7 @@ impl BoardPanel {
     }
 
     /// `new` with the Focus and Open PR calls given, so the tests can record them.
-    fn with_actions(focus_pane: FocusFn, open: OpenFn, cx: &mut Context<Self>) -> Self {
+    pub(crate) fn with_actions(focus_pane: FocusFn, open: OpenFn, cx: &mut Context<Self>) -> Self {
         let board = cx.global::<GlobalBoard>().0.clone();
         let herdr = cx.global::<GlobalHerdr>().0.clone();
         let observe = cx.observe(&board, |this, _, cx| {
@@ -433,7 +439,38 @@ impl BoardPanel {
             .collect()
     }
 
-    /// What the card shows for `shown`, the pick that `effective_pick` resolved on `snapshot`. `items`
+    /// The face the card draws now: the snapshot, the items as shown, the effective pick, the tree
+    /// and whether the board takes actions. Empty without a snapshot or off the Board tab.
+    fn current_face(&self, cx: &Context<Self>) -> CardFace {
+        let board = self.board.read(cx);
+        let Some(snapshot) = board.snapshot.as_deref() else {
+            return CardFace::Empty;
+        };
+        if self.tab != PanelTab::Board {
+            return CardFace::Empty;
+        }
+        let tree = cx.global::<GlobalHerdr>().0.read(cx).live.tree.clone();
+        let items = self.shown_items(snapshot, cx);
+        let shown = effective_pick(snapshot, self.pick.as_ref());
+        let can_act = self.can_act(cx);
+        self.card_face(
+            snapshot,
+            &items,
+            shown.as_ref(),
+            tree.as_deref(),
+            can_act,
+            cx,
+        )
+    }
+
+    /// The card as the dev control reads it: the face the card draws, with each button and its
+    /// click. Empty without a snapshot or off the Board tab, when the card is not drawn.
+    #[cfg(debug_assertions)]
+    pub(crate) fn dev_card(&self, cx: &Context<Self>) -> crate::board_card::DevCard {
+        crate::board_card::dev_card(self.current_face(cx))
+    }
+
+    /// The card's face for `shown`, the pick that `effective_pick` resolved on `snapshot`. `items`
     /// are the items as shown (see `shown_items`).
     fn card_face(
         &self,
@@ -625,9 +662,8 @@ impl Render for BoardPanel {
         let bridge = board.bridge.is_some();
         let problem = board.problem.clone();
         let snapshot = board.snapshot.clone();
-        let tree = cx.global::<GlobalHerdr>().0.read(cx).live.tree.clone();
-        // The pick, the items and the card come first, so every use of `cx` for them is done
-        // before the header.
+        // The pick and the items come first, so every use of `cx` for them is done before the
+        // header.
         let shown = snapshot
             .as_deref()
             .and_then(|current| effective_pick(current, self.pick.as_ref()));
@@ -636,17 +672,7 @@ impl Render for BoardPanel {
             .as_deref()
             .map(|current| self.shown_items(current, cx))
             .unwrap_or_default();
-        let face = match (snapshot.as_deref(), self.tab) {
-            (Some(current), PanelTab::Board) => self.card_face(
-                current,
-                &items,
-                shown.as_ref(),
-                tree.as_deref(),
-                can_act,
-                cx,
-            ),
-            _ => CardFace::Empty,
-        };
+        let face = self.current_face(cx);
         let picked_item = match &shown {
             Some(BoardPick::Item(key)) => Some(key.clone()),
             _ => None,

@@ -40,11 +40,21 @@ impl Frame {
     /// bar reads the first two, the terminal area shows the connection's line or the terminal view,
     /// and the panel reads the board.
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        Self::build(window, BoardPanel::new, cx)
+    }
+
+    /// `new`, with the board panel made by `panel`. The tests give the panel Focus and Open PR calls
+    /// that record, instead of running them.
+    fn build(
+        window: &mut Window,
+        panel: impl FnOnce(&mut Context<BoardPanel>) -> BoardPanel,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let spaces = cx.new(Spaces::new);
         let agents = cx.new(AgentsList::new);
         let herdr = cx.global::<GlobalHerdr>().0.clone();
         let status_bar = cx.new(StatusBar::new);
-        let board_panel = cx.new(BoardPanel::new);
+        let board_panel = cx.new(panel);
         let terminal = cx.new(|cx| TerminalView::new(window, cx));
         let toggle = cx.subscribe(&spaces, |this, _, event: &SpacesEvent, cx| {
             match event {
@@ -94,6 +104,21 @@ impl Frame {
     pub(crate) fn reopen_sidebar(&mut self, cx: &mut Context<Self>) {
         self.sidebar_open = true;
         cx.notify();
+    }
+
+    /// `new`, with the board panel's Focus and Open PR calls given, so a test can record them.
+    #[cfg(test)]
+    pub(crate) fn with_panel_actions(
+        window: &mut Window,
+        focus: crate::agents_list::FocusFn,
+        open: crate::board_panel::OpenFn,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        Self::build(
+            window,
+            move |cx| BoardPanel::with_actions(focus, open, cx),
+            cx,
+        )
     }
 
     #[cfg(debug_assertions)]

@@ -46,7 +46,12 @@ pub fn handle(request: Request, window: &mut Window, cx: &mut App) -> Reply {
 }
 
 /// The reply to a drive command: the state after the command ran, or its error.
-fn finish(result: Result<(), DevError>, parts: &FrameParts, window: &Window, cx: &App) -> Reply {
+fn finish(
+    result: Result<(), DevError>,
+    parts: &FrameParts,
+    window: &Window,
+    cx: &mut App,
+) -> Reply {
     match result {
         Ok(()) => Reply::Ok(state(parts, window, cx)),
         Err(error) => Reply::Err(error),
@@ -155,7 +160,7 @@ fn resize(width: f32, height: f32, window: &mut Window) -> Result<(), DevError> 
 
 /// The state object of the Contract, version 1. The sections that a later slice adds are `null`
 /// until it lands.
-fn state(parts: &FrameParts, window: &Window, cx: &App) -> Value {
+fn state(parts: &FrameParts, window: &Window, cx: &mut App) -> Value {
     let viewport = window.viewport_size();
     let visible = cx.global::<GlobalVisibility>().0.read(cx).visible;
     let frame = parts.frame.read(cx);
