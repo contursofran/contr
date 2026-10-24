@@ -1,9 +1,9 @@
 //! contr: a native herdr client. Opens the empty v0.1 frame, or the status icon legend with `--icons`.
 
 use contr::{
-    board::Board, board_outbox::BoardOutbox, board_panel::BoardPanel, frame, herdr::Herdr,
-    host::Host, legend, selection::Selection, status_message::StatusMessage, theme, usage::Usage,
-    visibility::Visibility,
+    board::Board, board_outbox::BoardOutbox, board_panel::BoardPanel, dev_client, dev_protocol,
+    frame, herdr::Herdr, host::Host, legend, selection::Selection, status_message::StatusMessage,
+    theme, usage::Usage, visibility::Visibility,
 };
 use gpui::{
     App, Bounds, TitlebarOptions, WindowBounds, WindowOptions, point, prelude::*, px, size,
@@ -20,6 +20,7 @@ const USAGE: &str = "Usage:
   contr                                     open the window
   contr --icons                             open the window with the status icon legend
   contr statusline [-- <command> [args…]]   print the Claude Code status line
+  contr dev <state|click|key|select|resize|window-id> …   drive a dev window (debug builds)
   contr --help, -h                          print this text
 ";
 
@@ -35,6 +36,8 @@ enum Command {
     Help,
     /// `statusline`. `then` is the command after `--`, if any.
     Statusline { then: Vec<String> },
+    /// `dev`. The words after `dev` are read by `dev_client`.
+    Dev(Vec<String>),
     /// An argument that is not part of the command line.
     Unknown(String),
 }
@@ -45,10 +48,16 @@ fn main() -> std::process::ExitCode {
         Command::Help => print_usage(&mut io::stdout().lock()),
         Command::Unknown(arg) => reject_argument(&arg, &mut io::stderr().lock()),
         Command::Statusline { then } => statusline(&then),
+        Command::Dev(words) => dev_client::run(
+            &words,
+            std::env::var_os(dev_protocol::ENV),
+            &mut io::stdout().lock(),
+            &mut io::stderr().lock(),
+        ),
     }
 }
 
-/// Reads the arguments after the program name. `statusline` must be the first
+/// Reads the arguments after the program name. `statusline` or `dev` must be the first
 /// argument. Otherwise the arguments are read in order: the first `--help` or
 /// `-h` asks for the usage, and the first argument other than `--icons` is unknown.
 fn parse_args(args: impl IntoIterator<Item = String>) -> Command {
@@ -58,6 +67,10 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Command {
         return Command::Statusline {
             then: statusline_command(args),
         };
+    }
+    if args.peek().is_some_and(|arg| arg == "dev") {
+        args.next();
+        return Command::Dev(args.collect());
     }
     let mut icons = false;
     for arg in args {
@@ -328,6 +341,32 @@ mod tests {
     }
 
     #[test]
+    fn dev_argument_passes_the_words_on() {
+        assert_eq!(
+            parse(&["contr", "dev", "state"]),
+            Command::Dev(vec!["state".into()])
+        );
+        assert_eq!(parse(&["contr", "dev"]), Command::Dev(Vec::new()));
+        // The words after `dev` are not read as flags, so `--help` reaches `dev_client`.
+        assert_eq!(
+            parse(&["contr", "dev", "click", "a b", "--help"]),
+            Command::Dev(vec!["click".into(), "a b".into(), "--help".into()])
+        );
+    }
+
+    #[test]
+    fn dev_after_another_argument_is_unknown() {
+        assert_eq!(
+            parse(&["contr", "--icons", "dev"]),
+            Command::Unknown("dev".into())
+        );
+        assert_eq!(
+            parse(&["contr", "extra", "dev", "state"]),
+            Command::Unknown("extra".into())
+        );
+    }
+
+    #[test]
     fn usage_lists_every_form() {
         let mut text = Vec::new();
         write_usage(&mut text, None).unwrap();
@@ -336,6 +375,7 @@ mod tests {
         for form in [
             "contr --icons",
             "contr statusline [-- <command> [args…]]",
+            "contr dev <state|click|key|select|resize|window-id> …",
             "contr --help, -h",
         ] {
             assert!(text.contains(form), "usage lacks {form}");
