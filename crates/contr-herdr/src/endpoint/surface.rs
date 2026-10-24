@@ -38,14 +38,27 @@ pub struct Rect {
     pub height: u16,
 }
 
+/// herdr's scroll position of a pane: rows above the bottom, the most that can be
+/// scrolled up, and the rows shown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ScrollMetrics {
+    pub offset_from_bottom: u64,
+    pub max_offset_from_bottom: u64,
+    pub viewport_rows: u64,
+}
+
 /// One pane of the shown tab, in surface coordinates.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct SurfacePane {
     pub pane_id: String,
     pub rect: Rect,
     pub inner_rect: Rect,
     pub focused: bool,
     pub alternate_screen: bool,
+    /// The program reads the mouse, so a wheel reaches it as mouse reports.
+    pub mouse_reporting: bool,
+    /// `None` when herdr sends no scroll metrics for the pane.
+    pub scroll: Option<ScrollMetrics>,
 }
 
 /// One row of cells. Rows are shared, so a patch that changes one row keeps the others.
@@ -275,7 +288,7 @@ fn rect(d: &mut Dec<'_>) -> Result<Rect, CodecError> {
     })
 }
 
-/// A `PaneSurfacePane`. Its scroll, mouse and pixel fields are read past.
+/// A `PaneSurfacePane`. Its scrollbar rect, sgr pixel mouse and pixel fields are read past.
 fn pane(d: &mut Dec<'_>) -> Result<SurfacePane, CodecError> {
     let pane_id = d.str()?;
     d.vu()?; // content_revision
@@ -284,14 +297,17 @@ fn pane(d: &mut Dec<'_>) -> Result<SurfacePane, CodecError> {
     if d.option()? {
         rect(d)?; // scrollbar_rect
     }
-    if d.option()? {
-        // scroll: offset_from_bottom, max_offset_from_bottom, viewport_rows
-        d.vu()?;
-        d.vu()?;
-        d.vu()?;
-    }
+    let scroll = if d.option()? {
+        Some(ScrollMetrics {
+            offset_from_bottom: d.vu()?,
+            max_offset_from_bottom: d.vu()?,
+            viewport_rows: d.vu()?,
+        })
+    } else {
+        None
+    };
     let focused = d.bool()?;
-    d.bool()?; // mouse_reporting
+    let mouse_reporting = d.bool()?;
     d.bool()?; // sgr_pixel_mouse
     let alternate_screen = d.bool()?;
     d.vu32()?; // pixel_width
@@ -302,6 +318,8 @@ fn pane(d: &mut Dec<'_>) -> Result<SurfacePane, CodecError> {
         inner_rect: inner,
         focused,
         alternate_screen,
+        mouse_reporting,
+        scroll,
     })
 }
 
@@ -369,7 +387,7 @@ mod tests {
                 height: 1,
             },
             focused,
-            alternate_screen: false,
+            ..Default::default()
         }
     }
 
@@ -552,7 +570,7 @@ mod tests {
                     height: 1,
                 },
                 focused: true,
-                alternate_screen: false,
+                ..Default::default()
             }],
         }
     }
@@ -719,6 +737,7 @@ mod tests {
                     },
                     focused: false,
                     alternate_screen: true,
+                    ..Default::default()
                 }],
                 cursor: Some(Cursor {
                     x: 1,
@@ -731,9 +750,9 @@ mod tests {
     }
 
     #[test]
-    fn pane_scrollbar_and_scroll_metrics_are_read_past() {
+    fn pane_scroll_metrics_and_mouse_reporting_are_read() {
         // The optional scrollbar rect and scroll metrics are present here, so the
-        // fields after them only line up if both are skipped in full.
+        // fields after them only line up if the rect is skipped and the metrics are read.
         let mut e = Enc::default();
         e.vu(u64::from(S_PATCH));
         e.str("b1");
@@ -786,10 +805,29 @@ mod tests {
         assert_eq!(
             decode_server(&e.buf).unwrap(),
             ServerMsg::Patch(SurfacePatch {
-                panes: vec![pane("w1:p1", true)],
+                panes: vec![SurfacePane {
+                    mouse_reporting: true,
+                    scroll: Some(ScrollMetrics {
+                        offset_from_bottom: 5,
+                        max_offset_from_bottom: 300,
+                        viewport_rows: 2,
+                    }),
+                    ..pane("w1:p1", true)
+                }],
                 ..patch(9, 10, Vec::new())
             })
         );
+    }
+
+    #[test]
+    fn pane_without_scroll_metrics_has_none() {
+        // FRAME_GOLDEN sends `scroll none` and mouse reporting off.
+        let ServerMsg::Surface(SurfaceFrame(surface)) = decode_server(FRAME_GOLDEN).unwrap() else {
+            panic!("FRAME_GOLDEN is a surface frame");
+        };
+        let pane = &surface.panes[0];
+        assert_eq!(pane.scroll, None);
+        assert!(!pane.mouse_reporting);
     }
 
     #[test]

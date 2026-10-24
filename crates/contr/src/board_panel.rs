@@ -120,6 +120,33 @@ impl BoardPanel {
         &self.focus
     }
 
+    /// The tab the panel shows, for the dev control's state.
+    #[cfg(debug_assertions)]
+    pub(crate) fn tab(&self) -> PanelTab {
+        self.tab
+    }
+
+    /// The board the panel shows. The dev control's state reads its snapshot, problem and bridge.
+    #[cfg(debug_assertions)]
+    pub(crate) fn board(&self) -> &Entity<Board> {
+        &self.board
+    }
+
+    /// The pick the card shows on `snapshot`: the held pick, or the fall-back. For the dev control's
+    /// state.
+    #[cfg(debug_assertions)]
+    pub(crate) fn shown_pick(&self, snapshot: &BoardSnapshot) -> Option<BoardPick> {
+        effective_pick(snapshot, self.pick.as_ref())
+    }
+
+    /// Whether the board takes actions now: a queue is held and the board is live. The panel's
+    /// buttons send only when this is true.
+    pub(crate) fn can_act(&self, cx: &App) -> bool {
+        self.outbox
+            .as_ref()
+            .is_some_and(|outbox| outbox.read(cx).can_act())
+    }
+
     /// `new` with the Focus and Open PR calls given, so the tests can record them.
     fn with_actions(focus_pane: FocusFn, open: OpenFn, cx: &mut Context<Self>) -> Self {
         let board = cx.global::<GlobalBoard>().0.clone();
@@ -182,6 +209,27 @@ impl BoardPanel {
         sent
     }
 
+    /// The wrap label's click: sends the other wrap state, with its status line. Nothing is sent
+    /// without a snapshot.
+    pub(crate) fn send_wrap(&mut self, cx: &mut Context<Self>) {
+        let Some(snapshot) = self.board.read(cx).snapshot.clone() else {
+            return;
+        };
+        let (action, feedback) = wrap_flip(snapshot.wrap_up);
+        self.send_action(action, Some(feedback), cx);
+    }
+
+    /// The `clear done` click of the work section (`rows`) or of the needs-you section. Sends the
+    /// clear, with its status line.
+    pub(crate) fn send_clear(&mut self, rows: bool, cx: &mut Context<Self>) {
+        let action = if rows {
+            Action::ClearRows
+        } else {
+            Action::ClearItems
+        };
+        self.send_action(action, Some(CLEAR_SENT), cx);
+    }
+
     /// Shows the Report tab for the work row `row_key`. The card's Report button calls it.
     pub fn show_report(&mut self, row_key: String, cx: &mut Context<Self>) {
         self.report_row = Some(row_key);
@@ -197,7 +245,7 @@ impl BoardPanel {
 
     /// The Report tab's click. A picked work row becomes the row the tab follows. Otherwise the tab
     /// keeps the row it followed before, if any.
-    fn open_report_tab(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn open_report_tab(&mut self, cx: &mut Context<Self>) {
         if let Some(BoardPick::Row(key)) = &self.pick {
             self.report_row = Some(key.clone());
         }
@@ -212,7 +260,7 @@ impl BoardPanel {
     }
 
     /// The Board tab's click, and `back` in the report. The report row stays.
-    fn open_board_tab(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn open_board_tab(&mut self, cx: &mut Context<Self>) {
         self.tab = PanelTab::Board;
         cx.notify();
     }
@@ -374,7 +422,7 @@ impl BoardPanel {
 
     /// The items as the panel draws them: an item with an answer queued reads as resolved, with that
     /// answer. Every other item is as the board has it.
-    fn shown_items(&self, snapshot: &BoardSnapshot, cx: &App) -> Vec<NeedItem> {
+    pub(crate) fn shown_items(&self, snapshot: &BoardSnapshot, cx: &App) -> Vec<NeedItem> {
         snapshot
             .items
             .iter()
@@ -583,10 +631,7 @@ impl Render for BoardPanel {
         let shown = snapshot
             .as_deref()
             .and_then(|current| effective_pick(current, self.pick.as_ref()));
-        let can_act = self
-            .outbox
-            .as_ref()
-            .is_some_and(|outbox| outbox.read(cx).can_act());
+        let can_act = self.can_act(cx);
         let items = snapshot
             .as_deref()
             .map(|current| self.shown_items(current, cx))
@@ -608,10 +653,7 @@ impl Render for BoardPanel {
         };
         let pick_item = item_pick(cx.weak_entity());
         let wrap_up = snapshot.as_ref().map(|current| current.wrap_up);
-        let on_wrap = wrap_up.filter(|_| can_act).map(|wrap_up| {
-            let (action, feedback) = wrap_flip(wrap_up);
-            sends(action, feedback, cx)
-        });
+        let on_wrap = wrap_up.filter(|_| can_act).map(|_| wrap_click(cx));
         let root = div()
             .debug_selector(|| "board-panel".into())
             .size_full()
@@ -643,8 +685,8 @@ impl Render for BoardPanel {
             )),
             (Some(_), PanelTab::Report) => root.child(report_area(self.report.clone())),
             (Some(snapshot), PanelTab::Board) => {
-                let on_clear_rows = can_act.then(|| sends(Action::ClearRows, CLEAR_SENT, cx));
-                let on_clear_items = can_act.then(|| sends(Action::ClearItems, CLEAR_SENT, cx));
+                let on_clear_rows = can_act.then(|| clear_click(true, cx));
+                let on_clear_items = can_act.then(|| clear_click(false, cx));
                 root.child(summary(&snapshot, problem.as_deref()))
                     .child(work_section(&self.work, snapshot.clear_rows, on_clear_rows))
                     .child(needs_section(
@@ -673,11 +715,14 @@ fn open_in_browser(url: String, cx: &mut App) {
     cx.open_url(&url);
 }
 
-/// The click handler that calls `send_action` with `action` and `feedback`.
-fn sends(action: Action, feedback: &'static str, cx: &Context<BoardPanel>) -> ActionClick {
-    Box::new(cx.listener(move |this, _: &ClickEvent, _, cx| {
-        this.send_action(action.clone(), Some(feedback), cx);
-    }))
+/// The click handler of the wrap label: `send_wrap`.
+fn wrap_click(cx: &Context<BoardPanel>) -> ActionClick {
+    Box::new(cx.listener(|this, _: &ClickEvent, _, cx| this.send_wrap(cx)))
+}
+
+/// The click handler of a `clear done` control: `send_clear` for the rows (`rows`) or the items.
+fn clear_click(rows: bool, cx: &Context<BoardPanel>) -> ActionClick {
+    Box::new(cx.listener(move |this, _: &ClickEvent, _, cx| this.send_clear(rows, cx)))
 }
 
 /// The action that flips the wrap state, and its status line. From wrap up, the action is
@@ -858,7 +903,7 @@ pub(crate) fn text_line(selector: &'static str, text: String, colour: u32) -> im
 
 /// The line in place of the board while there is no snapshot: no bridge, a problem, or a read in
 /// progress.
-fn empty_text(bridge: bool, problem: Option<&str>) -> String {
+pub(crate) fn empty_text(bridge: bool, problem: Option<&str>) -> String {
     match (bridge, problem) {
         (false, _) => "no coordinator board".to_owned(),
         (true, Some(problem)) => problem.to_owned(),
@@ -868,7 +913,7 @@ fn empty_text(bridge: bool, problem: Option<&str>) -> String {
 
 /// The summary line text. With a problem, the problem follows the summary after " · ". With an
 /// empty summary, the problem is the whole line.
-fn summary_text(summary: &str, problem: Option<&str>) -> String {
+pub(crate) fn summary_text(summary: &str, problem: Option<&str>) -> String {
     match problem {
         None => summary.to_owned(),
         Some(problem) if summary.is_empty() => problem.to_owned(),
@@ -877,7 +922,7 @@ fn summary_text(summary: &str, problem: Option<&str>) -> String {
 }
 
 /// The wrap label: `keep going` while the coordinator wraps up, else `wrap up`.
-fn wrap_text(wrap_up: bool) -> &'static str {
+pub(crate) fn wrap_text(wrap_up: bool) -> &'static str {
     if wrap_up { "keep going" } else { "wrap up" }
 }
 

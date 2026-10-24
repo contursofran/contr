@@ -64,7 +64,7 @@ mod tests {
                 height: 2,
             },
             focused: false,
-            alternate_screen: false,
+            ..Default::default()
         };
         Surface {
             boot_id: "boot".to_owned(),
