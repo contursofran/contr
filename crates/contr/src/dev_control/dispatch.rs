@@ -334,13 +334,8 @@ mod tests {
         assert_eq!(state["selection"], Value::Null);
         // The terminal takes the focus when it is built.
         assert_eq!(state["focus"], "terminal");
-        for section in ["sidebar", "title", "status_bar"] {
-            assert_eq!(
-                state[section],
-                Value::Null,
-                "{section} lands in a later slice"
-            );
-        }
+        // The sidebar is the last section of the state to be filled.
+        assert_eq!(state["sidebar"], Value::Null, "the sidebar lands later");
         // The board panel is shown from the start, on its Board tab, with no board to read.
         assert_eq!(state["board"]["tab"], "board");
         assert_eq!(state["board"]["line"], "no coordinator board");
@@ -447,9 +442,9 @@ mod tests {
     #[gpui::test]
     fn an_id_that_no_control_owns_is_unknown(cx: &mut TestAppContext) {
         let (_frame, cx) = frame_with(cx, connected());
-        assert_eq!(err(click_id(cx, "nope")).code, code::UNKNOWN_ID);
-        // The panel toggle is a title bar control, and no title bar section exists yet.
-        assert_eq!(err(click_id(cx, "panel-toggle")).code, code::UNKNOWN_ID);
+        for id in ["nope", "tab:"] {
+            assert_eq!(err(click_id(cx, id)).code, code::UNKNOWN_ID, "{id}");
+        }
     }
 
     #[gpui::test]
