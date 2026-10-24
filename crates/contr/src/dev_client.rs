@@ -9,7 +9,8 @@ use std::io::{self, BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::process::ExitCode;
-use std::time::Duration;
+use std::sync::mpsc::{self, RecvTimeoutError};
+use std::time::{Duration, Instant};
 
 /// How long the client waits for the connection and for the reply.
 const TIMEOUT: Duration = Duration::from_secs(15);
@@ -53,10 +54,7 @@ fn run_with_timeout(
         return usage_error(&format!("{} is not set", dev_protocol::ENV), err);
     };
     let path = Path::new(&socket);
-    let line = match dev_protocol::request_line(&request) {
-        Ok(line) => line,
-        Err(error) => return failure(&format!("cannot encode the request: {error}"), err),
-    };
+    let line = dev_protocol::request_line(&request);
     let reply = match exchange(path, &line, timeout) {
         Ok(reply) => reply,
         Err(Exchange::NoServer) => {
@@ -117,16 +115,18 @@ enum Exchange {
     Failed(String),
 }
 
-/// Connects to `path`, sends `line` and returns the reply line. The timeout covers the
-/// reading and the writing. The standard library cannot time out a connect on a Unix socket.
+/// Connects to `path`, sends `line` and returns the reply line. The timeout covers the connect
+/// and the reply together.
 fn exchange(path: &Path, line: &str, timeout: Duration) -> Result<String, Exchange> {
-    let mut stream = UnixStream::connect(path).map_err(|error| match error.kind() {
-        io::ErrorKind::NotFound | io::ErrorKind::ConnectionRefused => Exchange::NoServer,
-        _ => io_failure(&error, timeout),
-    })?;
+    let started = Instant::now();
+    let mut stream = connect_within(path, timeout)?;
+    // The reply gets what is left of the budget. A zero timeout is refused, so the least is 1 ms.
+    let left = timeout
+        .saturating_sub(started.elapsed())
+        .max(Duration::from_millis(1));
     stream
-        .set_read_timeout(Some(timeout))
-        .and_then(|()| stream.set_write_timeout(Some(timeout)))
+        .set_read_timeout(Some(left))
+        .and_then(|()| stream.set_write_timeout(Some(left)))
         .map_err(|error| io_failure(&error, timeout))?;
     stream
         .write_all(line.as_bytes())
@@ -141,6 +141,44 @@ fn exchange(path: &Path, line: &str, timeout: Duration) -> Result<String, Exchan
         ));
     }
     Ok(reply)
+}
+
+/// Connects to the socket at `path` within `timeout`.
+fn connect_within(path: &Path, timeout: Duration) -> Result<UnixStream, Exchange> {
+    let path = path.to_path_buf();
+    connect_on_thread(move || UnixStream::connect(path), timeout)
+}
+
+/// Runs `connect` on a helper thread and waits at most `timeout` for its result. The standard
+/// library cannot time out a connect on a Unix socket. After a timeout the helper thread stays
+/// behind, and the process exits without waiting for it.
+fn connect_on_thread(
+    connect: impl FnOnce() -> io::Result<UnixStream> + Send + 'static,
+    timeout: Duration,
+) -> Result<UnixStream, Exchange> {
+    let (sent, received) = mpsc::channel();
+    let spawned = std::thread::Builder::new()
+        .name("contr-dev-connect".to_owned())
+        .spawn(move || {
+            // After a timeout the receiver is gone, so a late result is dropped.
+            let _ = sent.send(connect());
+        });
+    if let Err(error) = spawned {
+        return Err(Exchange::Failed(error.to_string()));
+    }
+    match received.recv_timeout(timeout) {
+        Ok(Ok(stream)) => Ok(stream),
+        Ok(Err(error)) => match error.kind() {
+            io::ErrorKind::NotFound | io::ErrorKind::ConnectionRefused => Err(Exchange::NoServer),
+            _ => Err(Exchange::Failed(error.to_string())),
+        },
+        Err(RecvTimeoutError::Timeout) => Err(Exchange::Failed(format!(
+            "no connection within {timeout:?}"
+        ))),
+        Err(RecvTimeoutError::Disconnected) => {
+            Err(Exchange::Failed("the connect thread stopped".to_owned()))
+        }
+    }
 }
 
 fn io_failure(error: &io::Error, timeout: Duration) -> Exchange {
@@ -385,6 +423,60 @@ mod tests {
         assert_eq!(status, ExitCode::from(1));
         assert_eq!(err, "contr dev: no reply within 100ms\n");
         fake.request.join().unwrap();
+    }
+
+    /// The outcome of a connect, as text, for the assertions below.
+    fn outcome(result: Result<UnixStream, Exchange>) -> String {
+        match result {
+            Ok(_) => "connected".to_owned(),
+            Err(Exchange::NoServer) => "no server".to_owned(),
+            Err(Exchange::Failed(message)) => message,
+        }
+    }
+
+    #[test]
+    fn a_connect_that_succeeds_returns_the_stream() {
+        let result = connect_on_thread(|| UnixStream::pair().map(|(stream, _)| stream), TIMEOUT);
+        assert_eq!(outcome(result), "connected");
+    }
+
+    #[test]
+    fn a_connect_that_takes_too_long_times_out() {
+        let result = connect_on_thread(
+            || {
+                std::thread::sleep(Duration::from_millis(600));
+                Err(io::Error::other("late"))
+            },
+            Duration::from_millis(100),
+        );
+        assert_eq!(outcome(result), "no connection within 100ms");
+    }
+
+    #[test]
+    fn a_refused_connect_means_no_server() {
+        let result = connect_on_thread(
+            || Err(io::ErrorKind::ConnectionRefused.into()),
+            Duration::from_secs(5),
+        );
+        assert_eq!(outcome(result), "no server");
+    }
+
+    #[test]
+    fn another_connect_error_is_reported() {
+        let result = connect_on_thread(
+            || Err(io::Error::new(io::ErrorKind::PermissionDenied, "denied")),
+            Duration::from_secs(5),
+        );
+        assert_eq!(outcome(result), "denied");
+    }
+
+    #[test]
+    fn a_connect_thread_that_stops_is_reported() {
+        let result = connect_on_thread(
+            || -> io::Result<UnixStream> { panic!("connect failed") },
+            Duration::from_secs(5),
+        );
+        assert_eq!(outcome(result), "the connect thread stopped");
     }
 
     #[test]
