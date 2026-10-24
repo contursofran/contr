@@ -1,6 +1,7 @@
 //! Live check of the endpoint client against an isolated `herdr server`: the
-//! handshake, a command's colour and bold reaching the surface, a resize, and
-//! that tab focus changes (`tab.create`, `tab.focus`) move the surface.
+//! handshake, a command's colour and bold reaching the surface, a resize, that
+//! tab focus changes (`tab.create`, `tab.focus`) move the surface, and that a
+//! wheel scrolls the history and a key returns to the live screen.
 //!
 //! Run with:
 //! `CONTR_HERDR_BIN=$(command -v herdr) cargo test -p contr-herdr --test endpoint_live -- --ignored --nocapture`
@@ -21,9 +22,9 @@ use std::time::{Duration, Instant};
 use contr_herdr::endpoint::conn::Conn;
 use contr_herdr::endpoint::messages::{
     CellPx, ClientMsg, GridSize, InputEvent, KeyCode, SNAPSHOT_KIND, ServerMsg, ShellSnapshot,
-    VersionCheck,
+    VersionCheck, WheelDir,
 };
-use contr_herdr::endpoint::surface::{Rect, Surface, SurfacePane};
+use contr_herdr::endpoint::surface::{Cell, Rect, ScrollMetrics, Surface, SurfacePane};
 use contr_herdr::wire::request_line;
 use serde_json::{Value, json};
 
@@ -217,6 +218,44 @@ fn surface_pane(shown: &Shown) -> Option<String> {
         .map(|p| p.pane_id.clone())
 }
 
+/// The text of one row: each cell's text, in column order.
+fn row_text(row: &[Cell]) -> String {
+    row.iter().map(|cell| cell.text.as_str()).collect()
+}
+
+/// Whether a row of the surface reads exactly `line` once its padding is trimmed.
+/// Only the focused pane's inner columns count: herdr paints its scrollbar in the
+/// column after them.
+fn shows(shown: &Shown, line: &str) -> bool {
+    let Some(surface) = shown.surface.as_ref() else {
+        return false;
+    };
+    let Some(pane) = surface.focused_pane() else {
+        return false;
+    };
+    let width = usize::from(pane.inner_rect.width);
+    surface
+        .rows
+        .iter()
+        .any(|row| row_text(&row[..width.min(row.len())]).trim() == line)
+}
+
+/// The scroll position of the focused pane, once a surface has arrived.
+fn focused_scroll(shown: &Shown) -> Option<ScrollMetrics> {
+    shown.surface.as_ref()?.focused_pane()?.scroll
+}
+
+/// One wheel step at the pane's first cell.
+fn wheel(dir: WheelDir, lines: u16) -> InputEvent {
+    InputEvent::Wheel {
+        dir,
+        column: 0,
+        row: 0,
+        mods: 0,
+        lines,
+    }
+}
+
 #[test]
 fn surface_pane_is_the_focused_pane_of_the_surface() {
     let pane = |id: &str, focused: bool| SurfacePane {
@@ -224,7 +263,7 @@ fn surface_pane_is_the_focused_pane_of_the_surface() {
         rect: Rect::default(),
         inner_rect: Rect::default(),
         focused,
-        alternate_screen: false,
+        ..Default::default()
     };
     let mut shown = Shown::default();
     assert_eq!(surface_pane(&shown), None, "no surface yet");
@@ -359,6 +398,95 @@ fn tab_focus_moves_the_endpoint_surface() {
         "the first tab's surface again",
         |s| surface_pane(s).as_deref() == Some(first_pane.as_str()),
     );
+
+    conn.send(&ClientMsg::Detach).unwrap();
+}
+
+#[test]
+#[ignore = "needs CONTR_HERDR_BIN; starts an isolated herdr"]
+fn wheel_scrolls_history_and_a_key_returns_to_live() {
+    let bin = std::env::var("CONTR_HERDR_BIN").expect("set CONTR_HERDR_BIN to the herdr binary");
+    let sandbox = Sandbox::new();
+    let _server = sandbox.start_server(&bin);
+    sandbox.create_workspace();
+
+    let mut conn = Conn::open(&sandbox.endpoint_socket(), SIZE, CELL, WAIT).unwrap();
+    conn.set_read_timeout(Some(POLL)).unwrap();
+
+    let mut shown = Shown::default();
+    pump(&mut conn, &mut shown, "snapshot and a 60x12 surface", |s| {
+        s.focused_pane().is_some() && s.size_is(SIZE)
+    });
+    let pane = shown.focused_pane().expect("a focused pane");
+
+    // 500 lines push the top of the output into herdr's history. "500" is the
+    // last output line, so it is on screen until the view scrolls.
+    let events = [
+        InputEvent::Text("seq 1 500".to_owned()),
+        InputEvent::Key {
+            code: KeyCode::Enter,
+            mods: 0,
+            repeat: false,
+        },
+    ];
+    conn.send(&ClientMsg::Input {
+        pane_id: &pane,
+        events: &events,
+    })
+    .unwrap();
+    pump(&mut conn, &mut shown, "500 on screen", |s| shows(s, "500"));
+
+    // A wheel step up moves the view into the history: "500" leaves the screen and
+    // the pane reports an offset from the bottom.
+    conn.send(&ClientMsg::Input {
+        pane_id: &pane,
+        events: &[wheel(WheelDir::Up, 20)],
+    })
+    .unwrap();
+    pump(&mut conn, &mut shown, "the history above the screen", |s| {
+        !shows(s, "500") && focused_scroll(s).is_some_and(|m| m.offset_from_bottom > 0)
+    });
+    let up = focused_scroll(&shown).expect("scroll metrics after the wheel");
+    println!("wheel up 20 lines: {up:?}");
+
+    // A wheel step down moves the view back by 5 lines. Plan: 15 rows above the
+    // bottom. If herdr reports another number, the offset must still fall.
+    let before = up.offset_from_bottom;
+    conn.send(&ClientMsg::Input {
+        pane_id: &pane,
+        events: &[wheel(WheelDir::Down, 5)],
+    })
+    .unwrap();
+    pump(&mut conn, &mut shown, "the offset to change", |s| {
+        focused_scroll(s).is_some_and(|m| m.offset_from_bottom != before)
+    });
+    let after = focused_scroll(&shown)
+        .expect("scroll metrics after the wheel")
+        .offset_from_bottom;
+    println!("wheel down 5 lines: offset {after} (was {before})");
+    if after != 15 {
+        println!("herdr reports offset {after}, not 15; checking only that it fell");
+    }
+    assert!(
+        after < before,
+        "a wheel down must move the view toward the bottom"
+    );
+
+    // A key returns to the live screen: "500" is back and the view is at the bottom.
+    let events = [InputEvent::Key {
+        code: KeyCode::Left,
+        mods: 0,
+        repeat: false,
+    }];
+    conn.send(&ClientMsg::Input {
+        pane_id: &pane,
+        events: &events,
+    })
+    .unwrap();
+    pump(&mut conn, &mut shown, "the live screen again", |s| {
+        shows(s, "500") && focused_scroll(s).is_none_or(|m| m.offset_from_bottom == 0)
+    });
+    println!("back to live: scroll {:?}", focused_scroll(&shown));
 
     conn.send(&ClientMsg::Detach).unwrap();
 }

@@ -794,7 +794,7 @@ mod tests {
                     rect: Rect::default(),
                     inner_rect: Rect::default(),
                     focused: true,
-                    alternate_screen: false,
+                    ..Default::default()
                 })
                 .into_iter()
                 .collect(),
