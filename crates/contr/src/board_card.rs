@@ -2,8 +2,10 @@
 //! a needs-you item with its actions, or a work row with its Focus, Report and Open PR buttons. The card
 //! only draws. The panel resolves the pick, builds the faces and makes the clicks (`BoardPanel::card_face`).
 
-use crate::board_actions::ago;
-use crate::board_model::{BoardSnapshot, NeedItem, WorkRow, item_status};
+use crate::board_actions::{Action, ago, card_options};
+use crate::board_model::{
+    BoardSnapshot, ItemKind, NeedItem, WorkRow, item_kind_label, item_status,
+};
 use crate::status_icon::{Status, StatusIcon};
 use crate::theme::*;
 use contr_herdr::HerdrTree;
@@ -48,6 +50,93 @@ pub fn effective_pick(snapshot: &BoardSnapshot, pick: Option<&BoardPick>) -> Opt
                 .find(|item| item.open)
                 .map(|item| BoardPick::Item(item.key.clone()))
         })
+}
+
+/// The item that a card key acts on: the item the card shows. `None` for a work row, or with no pick.
+pub fn card_item<'a>(items: &'a [NeedItem], shown: Option<&BoardPick>) -> Option<&'a NeedItem> {
+    match shown {
+        Some(BoardPick::Item(key)) => items.iter().find(|item| item.key == *key),
+        _ => None,
+    }
+}
+
+/// The pick that an up or down key moves to, from the pick the card shows (`shown`). Down goes to the
+/// next item in slot order, up to the one before, and the ends stop. Down from a work row, or with no
+/// pick, goes to the first item. Up from a work row, or with no pick, does not move. `None` when the
+/// key does not move the pick.
+pub fn stepped_pick(
+    items: &[NeedItem],
+    shown: Option<&BoardPick>,
+    down: bool,
+) -> Option<BoardPick> {
+    let index = match shown {
+        Some(BoardPick::Item(key)) => items.iter().position(|item| item.key == *key),
+        _ => None,
+    };
+    let target = match (index, down) {
+        (Some(index), true) => items.get(index + 1),
+        (Some(index), false) => index
+            .checked_sub(1)
+            .and_then(|previous| items.get(previous)),
+        (None, true) => items.first(),
+        (None, false) => None,
+    };
+    target.map(|item| BoardPick::Item(item.key.clone()))
+}
+
+/// The action that `enter` sends for `item`, the same as its main button: the recommended option of an
+/// open decision (none when no option is recommended), Done for an open to-do, Dismiss for open news.
+/// `None` for a resolved item.
+pub fn enter_action(item: &NeedItem) -> Option<Action> {
+    if !item.open {
+        return None;
+    }
+    match item.kind {
+        ItemKind::Ask => card_options(item)
+            .first()
+            .filter(|(_, _, recommended)| *recommended)
+            .map(|(index, label, _)| answer(item, *index, label)),
+        ItemKind::Do => Some(Action::Done {
+            key: item.key.clone(),
+        }),
+        ItemKind::Know | ItemKind::Other => Some(Action::Dismiss {
+            key: item.key.clone(),
+        }),
+    }
+}
+
+/// The action that the digit key for `position` (0 for `1`) sends for `item`: the option at that place
+/// in the card's order, the same as its option button. Only an open decision has options. `None` when
+/// there is no such option.
+pub fn option_action(item: &NeedItem, position: usize) -> Option<Action> {
+    if !item.open || item.kind != ItemKind::Ask {
+        return None;
+    }
+    card_options(item)
+        .get(position)
+        .map(|(index, label, _)| answer(item, *index, label))
+}
+
+/// The `Answer` for option `option` of `item`, with its `label`.
+fn answer(item: &NeedItem, option: usize, label: &str) -> Action {
+    Action::Answer {
+        key: item.key.clone(),
+        option,
+        label: label.to_owned(),
+    }
+}
+
+/// The accessible name of an item card: `{key} {title}, {kind label}`. A decision adds its option
+/// labels after `options`, in the card's order.
+pub fn item_card_label(item: &NeedItem, actions: &ItemActions) -> String {
+    let base = format!("{} {}, {}", item.key, item.title, item_kind_label(item));
+    match actions {
+        ItemActions::Decide { options, .. } => {
+            let labels: Vec<&str> = options.iter().map(|option| option.label.as_str()).collect();
+            format!("{base}, options {}", labels.join(", "))
+        }
+        ItemActions::Do { .. } | ItemActions::Know { .. } | ItemActions::Resolved { .. } => base,
+    }
 }
 
 /// The label of the tab that holds the pane `pane_id`, or `None` when no tab of `tree` holds it.
@@ -168,6 +257,10 @@ pub struct RowFace {
 
 /// The card with what `face` shows. `now_ms` dates the `ago` part of an item's meta line.
 pub fn answer_card(face: CardFace, now_ms: u64) -> impl IntoElement {
+    let label = match &face {
+        CardFace::Item(face) => Some(item_card_label(&face.item, &face.actions)),
+        CardFace::Empty | CardFace::Row(_) => None,
+    };
     let (head, text, actions, foot) = match face {
         CardFace::Empty => (None, None, Vec::new(), Vec::new()),
         CardFace::Item(face) => (
@@ -192,7 +285,11 @@ pub fn answer_card(face: CardFace, now_ms: u64) -> impl IntoElement {
         }
     };
     div()
+        .id("answer-card")
         .debug_selector(|| "answer-card".into())
+        .when_some(label, |card, label| {
+            card.role(Role::Group).aria_label(label)
+        })
         .mx(px(ANSWER_MARGIN))
         .mb(px(ANSWER_MARGIN))
         .h(px(ANSWER_CARD_HEIGHT))
@@ -1277,6 +1374,197 @@ mod tests {
         assert!(
             bounds(cx, "card-opt-0").is_none(),
             "a resolved item has no options"
+        );
+    }
+
+    /// An open item of `kind`, with the given `recommended`, for the key helpers.
+    fn open_item(kind: &str, recommended: Option<usize>) -> NeedItem {
+        let mut item: NeedItem = serde_json::from_str(&format!(
+            r#"{{"key":"X1","kind":"{kind}","title":"Title","open":true,"options":["one","two"]}}"#
+        ))
+        .unwrap();
+        item.recommended = recommended;
+        item
+    }
+
+    #[test]
+    fn the_card_item_is_the_picked_item_only() {
+        let items = fixture().items;
+        let picked = card_item(&items, Some(&BoardPick::Item("N4".into())));
+        assert_eq!(picked.map(|item| item.key.as_str()), Some("N4"));
+        assert!(card_item(&items, Some(&BoardPick::Item("D99".into()))).is_none());
+        assert!(card_item(&items, Some(&BoardPick::Row(ROW_640.into()))).is_none());
+        assert!(card_item(&items, None).is_none());
+    }
+
+    #[test]
+    fn down_steps_through_the_items_and_stops_at_the_last() {
+        let items = fixture().items;
+        assert_eq!(
+            stepped_pick(&items, Some(&BoardPick::Item("T12".into())), true),
+            Some(BoardPick::Item("D7".into()))
+        );
+        assert_eq!(
+            stepped_pick(&items, Some(&BoardPick::Item("D6".into())), true),
+            None,
+            "D6 is the last item"
+        );
+    }
+
+    #[test]
+    fn up_steps_back_and_stops_at_the_first() {
+        let items = fixture().items;
+        assert_eq!(
+            stepped_pick(&items, Some(&BoardPick::Item("D7".into())), false),
+            Some(BoardPick::Item("T12".into()))
+        );
+        assert_eq!(
+            stepped_pick(&items, Some(&BoardPick::Item("T12".into())), false),
+            None,
+            "T12 is the first item"
+        );
+    }
+
+    #[test]
+    fn down_from_a_row_or_no_pick_goes_to_the_first_item_and_up_does_not_move() {
+        let items = fixture().items;
+        let row = BoardPick::Row(ROW_640.into());
+        assert_eq!(
+            stepped_pick(&items, Some(&row), true),
+            Some(BoardPick::Item("T12".into()))
+        );
+        assert_eq!(stepped_pick(&items, Some(&row), false), None);
+        assert_eq!(
+            stepped_pick(&items, None, true),
+            Some(BoardPick::Item("T12".into()))
+        );
+        assert_eq!(stepped_pick(&items, None, false), None);
+    }
+
+    #[test]
+    fn with_no_items_no_key_moves_the_pick() {
+        assert_eq!(stepped_pick(&[], None, true), None);
+        assert_eq!(
+            stepped_pick(&[], Some(&BoardPick::Item("D7".into())), false),
+            None
+        );
+    }
+
+    #[test]
+    fn enter_sends_the_recommended_option_of_an_open_decision() {
+        let items = fixture().items;
+        assert_eq!(
+            enter_action(&items[1]),
+            Some(Action::Answer {
+                key: "D7".into(),
+                option: 0,
+                label: "one line per row".into(),
+            })
+        );
+    }
+
+    #[test]
+    fn enter_sends_nothing_for_a_decision_without_a_usable_recommendation() {
+        assert_eq!(enter_action(&open_item("ask", None)), None);
+        assert_eq!(
+            enter_action(&open_item("ask", Some(7))),
+            None,
+            "the recommended option is out of range"
+        );
+    }
+
+    #[test]
+    fn enter_sends_done_for_a_to_do_and_dismiss_for_news() {
+        let items = fixture().items;
+        assert_eq!(
+            enter_action(&items[0]),
+            Some(Action::Done { key: "T12".into() })
+        );
+        assert_eq!(
+            enter_action(&items[2]),
+            Some(Action::Dismiss { key: "N4".into() })
+        );
+        assert_eq!(
+            enter_action(&open_item("weird", None)),
+            Some(Action::Dismiss { key: "X1".into() }),
+            "an unknown kind reads as news"
+        );
+    }
+
+    #[test]
+    fn enter_sends_nothing_for_a_resolved_item() {
+        let items = fixture().items;
+        assert_eq!(enter_action(&items[3]), None, "D6 is resolved");
+    }
+
+    #[test]
+    fn a_digit_sends_the_option_at_its_place_in_card_order() {
+        let mut item = open_item("ask", Some(0));
+        let answer = |option: usize, label: &str| Action::Answer {
+            key: "X1".into(),
+            option,
+            label: label.into(),
+        };
+        assert_eq!(option_action(&item, 0), Some(answer(0, "one")));
+        assert_eq!(option_action(&item, 1), Some(answer(1, "two")));
+        assert_eq!(option_action(&item, 2), None, "there are two options");
+
+        item.recommended = Some(1);
+        assert_eq!(
+            option_action(&item, 0),
+            Some(answer(1, "two")),
+            "the recommended option comes first"
+        );
+    }
+
+    #[test]
+    fn a_digit_sends_nothing_for_a_to_do_news_or_a_resolved_decision() {
+        let items = fixture().items;
+        assert_eq!(option_action(&items[0], 0), None, "a to-do has no options");
+        assert_eq!(option_action(&items[2], 0), None, "news has no options");
+        let mut resolved = open_item("ask", Some(0));
+        resolved.open = false;
+        assert_eq!(
+            option_action(&resolved, 0),
+            None,
+            "a resolved item has none"
+        );
+    }
+
+    #[test]
+    fn the_item_card_label_names_the_item_its_kind_and_its_options() {
+        let items = fixture().items;
+        let options = |labels: [&str; 2]| -> Vec<OptionFace> {
+            labels
+                .into_iter()
+                .enumerate()
+                .map(|(position, label)| OptionFace {
+                    label: label.to_owned(),
+                    recommended: position == 0,
+                    on_click: None,
+                })
+                .collect()
+        };
+        let decide = ItemActions::Decide {
+            options: options(["one line per row", "two lines per row"]),
+            chat: None,
+        };
+        assert_eq!(
+            item_card_label(&items[1], &decide),
+            "D7 Row layout, decide, options one line per row, two lines per row"
+        );
+        let to_do = ItemActions::Do {
+            done: None,
+            link: None,
+        };
+        assert_eq!(
+            item_card_label(&items[0], &to_do),
+            "T12 Test the bag drag, do"
+        );
+        let news = ItemActions::Know { dismiss: None };
+        assert_eq!(
+            item_card_label(&items[2], &news),
+            "N4 CI is green on linux-pc, fyi"
         );
     }
 }

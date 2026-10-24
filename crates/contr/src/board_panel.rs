@@ -10,8 +10,8 @@ use crate::board::{Board, GlobalBoard};
 use crate::board_actions::{Action, card_options, next_open};
 use crate::board_card::{
     BoardPick, CardFace, ClickFn, ItemActions, ItemFace, OptionFace, RowFace, answer_card,
-    click_fn, effective_pick, link_url, names_on_board, resolved_answer, shown_item,
-    tab_label_for_pane,
+    card_item, click_fn, effective_pick, enter_action, link_url, names_on_board, option_action,
+    resolved_answer, shown_item, stepped_pick, tab_label_for_pane,
 };
 use crate::board_model::{BoardSnapshot, ItemKind, NeedItem, WorkRow};
 use crate::board_needs::{PickFn, needs_section};
@@ -22,10 +22,27 @@ use crate::herdr::GlobalHerdr;
 use crate::theme::*;
 use contr_herdr::HerdrTree;
 use gpui::{
-    App, ClickEvent, Context, Div, Entity, IntoElement, ParentElement, Render, Role, Stateful,
-    Styled, Subscription, WeakEntity, Window, div, prelude::*, px, rgb, transparent_black,
+    App, ClickEvent, Context, Div, Entity, FocusHandle, IntoElement, KeyBinding, MouseButton,
+    MouseDownEvent, ParentElement, Render, Role, Stateful, Styled, Subscription, WeakEntity,
+    Window, actions, div, prelude::*, px, rgb, transparent_black,
 };
 use std::rc::Rc;
+
+actions!(
+    board_panel,
+    [
+        PickUp,
+        PickDown,
+        AnswerDefault,
+        PickOption1,
+        PickOption2,
+        PickOption3,
+        PickOption4
+    ]
+);
+
+/// The key context of the panel. The key bindings name it, and the panel's root sets it.
+const KEY_CONTEXT: &str = "BoardPanel";
 
 /// The two tabs of the panel. `Report` shows the report of the row in `report_row`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -67,10 +84,12 @@ pub struct BoardPanel {
     /// The key of the work row that the Report tab follows. It stays when the tab is left.
     report_row: Option<String>,
     _report_events: Subscription,
-    /// Focuses a pane, for the card's `Focus` button.
-    focus: FocusFn,
+    /// Focuses a pane, for the card's `Focus` button and `Answer in chat`.
+    focus_pane: FocusFn,
     /// Opens a URL, for the card's `Open PR` button.
     open: OpenFn,
+    /// The panel's keyboard focus. A click in the panel takes it. The keys act only while it is held.
+    focus: FocusHandle,
 }
 
 impl BoardPanel {
@@ -81,8 +100,22 @@ impl BoardPanel {
         Self::with_actions(Rc::new(focus_in_background), Rc::new(open_in_browser), cx)
     }
 
+    /// Binds the panel's keys in its key context: ↑ and ↓ move the pick, enter sends the default action,
+    /// and 1 to 4 send an option. Called once at start-up. The keys act only while the panel has focus.
+    pub fn bind_keys(cx: &mut App) {
+        cx.bind_keys([
+            KeyBinding::new("up", PickUp, Some(KEY_CONTEXT)),
+            KeyBinding::new("down", PickDown, Some(KEY_CONTEXT)),
+            KeyBinding::new("enter", AnswerDefault, Some(KEY_CONTEXT)),
+            KeyBinding::new("1", PickOption1, Some(KEY_CONTEXT)),
+            KeyBinding::new("2", PickOption2, Some(KEY_CONTEXT)),
+            KeyBinding::new("3", PickOption3, Some(KEY_CONTEXT)),
+            KeyBinding::new("4", PickOption4, Some(KEY_CONTEXT)),
+        ]);
+    }
+
     /// `new` with the Focus and Open PR calls given, so the tests can record them.
-    fn with_actions(focus: FocusFn, open: OpenFn, cx: &mut Context<Self>) -> Self {
+    fn with_actions(focus_pane: FocusFn, open: OpenFn, cx: &mut Context<Self>) -> Self {
         let board = cx.global::<GlobalBoard>().0.clone();
         let herdr = cx.global::<GlobalHerdr>().0.clone();
         let observe = cx.observe(&board, |this, _, cx| {
@@ -102,6 +135,7 @@ impl BoardPanel {
         let report_events = cx.subscribe(&report, |this, _, event: &ReportEvent, cx| match event {
             ReportEvent::Back => this.open_board_tab(cx),
         });
+        let focus = cx.focus_handle();
         let mut panel = Self {
             board,
             outbox,
@@ -115,8 +149,9 @@ impl BoardPanel {
             report,
             report_row: None,
             _report_events: report_events,
-            focus,
+            focus_pane,
             open,
+            focus,
         };
         panel.sync_work(cx);
         panel
@@ -280,8 +315,55 @@ impl BoardPanel {
             .as_ref()
             .map(|bridge| bridge.pane_id.clone());
         if let Some(pane) = pane {
-            (self.focus)(pane, cx);
+            (self.focus_pane)(pane, cx);
         }
+    }
+
+    /// Moves the pick one item up or, with `down`, down. See `stepped_pick`. Nothing moves on the Report
+    /// tab, or without a snapshot.
+    fn step_pick(&mut self, down: bool, cx: &mut Context<Self>) {
+        if self.tab == PanelTab::Report {
+            return;
+        }
+        let Some(snapshot) = self.board.read(cx).snapshot.clone() else {
+            return;
+        };
+        let items = self.shown_items(&snapshot, cx);
+        let shown = effective_pick(&snapshot, self.pick.as_ref());
+        if let Some(pick) = stepped_pick(&items, shown.as_ref(), down) {
+            self.set_pick(pick, cx);
+        }
+    }
+
+    /// Sends what `key_action` gives for the item the card shows, as the card's buttons send theirs.
+    /// Nothing is sent on the Report tab, when the card shows no item, or when the board takes no
+    /// actions (`send_action` then returns false).
+    fn send_for_card_item(
+        &mut self,
+        key_action: impl Fn(&NeedItem) -> Option<Action>,
+        cx: &mut Context<Self>,
+    ) {
+        if self.tab == PanelTab::Report {
+            return;
+        }
+        let Some(snapshot) = self.board.read(cx).snapshot.clone() else {
+            return;
+        };
+        let items = self.shown_items(&snapshot, cx);
+        let shown = effective_pick(&snapshot, self.pick.as_ref());
+        if let Some(action) = card_item(&items, shown.as_ref()).and_then(key_action) {
+            self.send_action(action, None, cx);
+        }
+    }
+
+    /// `enter`: the card's default action. See `enter_action`.
+    fn send_default(&mut self, cx: &mut Context<Self>) {
+        self.send_for_card_item(enter_action, cx);
+    }
+
+    /// The digit key for `position` (0 for `1`): the option at that place in the card's order.
+    fn send_option(&mut self, position: usize, cx: &mut Context<Self>) {
+        self.send_for_card_item(|item| option_action(item, position), cx);
     }
 
     /// The items as the panel draws them: an item with an answer queued reads as resolved, with that
@@ -442,7 +524,7 @@ impl BoardPanel {
     fn row_face(&self, row: &WorkRow, tree: Option<&HerdrTree>, cx: &Context<Self>) -> RowFace {
         let focus = row.pane_id.as_deref().and_then(|pane| {
             let tab = tree.and_then(|tree| tab_label_for_pane(tree, pane))?;
-            let focus = self.focus.clone();
+            let focus = self.focus_pane.clone();
             let pane = pane.to_owned();
             let on_click = click_fn(move |_: &ClickEvent, _: &mut Window, cx: &mut App| {
                 focus(pane.clone(), cx);
@@ -524,13 +606,29 @@ impl Render for BoardPanel {
             let (action, feedback) = wrap_flip(wrap_up);
             sends(action, feedback, cx)
         });
-        let head = header(self.tab, wrap_up, on_wrap, cx);
         let root = div()
             .debug_selector(|| "board-panel".into())
             .size_full()
             .flex()
             .flex_col()
-            .child(head);
+            .key_context(KEY_CONTEXT)
+            .track_focus(&self.focus)
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _: &MouseDownEvent, window, cx| {
+                    window.focus(&this.focus, cx);
+                }),
+            )
+            .on_action(cx.listener(|this, _: &PickUp, _, cx| this.step_pick(false, cx)))
+            .on_action(cx.listener(|this, _: &PickDown, _, cx| this.step_pick(true, cx)))
+            .on_action(cx.listener(|this, _: &AnswerDefault, _, cx| this.send_default(cx)))
+            .on_action(cx.listener(|this, _: &PickOption1, _, cx| this.send_option(0, cx)))
+            .on_action(cx.listener(|this, _: &PickOption2, _, cx| this.send_option(1, cx)))
+            .on_action(cx.listener(|this, _: &PickOption3, _, cx| this.send_option(2, cx)))
+            .on_action(cx.listener(|this, _: &PickOption4, _, cx| this.send_option(3, cx)));
+        // The header is built after the listeners: it borrows `cx` for as long as it lives.
+        let head = header(self.tab, wrap_up, on_wrap, cx);
+        let root = root.child(head);
         match (snapshot, self.tab) {
             (None, _) => root.child(text_line(
                 "board-empty",
@@ -872,6 +970,7 @@ pub(crate) mod test_support {
             let herdr = app.new(|cx| Herdr::detached(live, cx));
             app.set_global(GlobalHerdr(herdr));
             init_detached(app);
+            BoardPanel::bind_keys(app);
         });
         let board = cx.read(|app| app.global::<GlobalBoard>().0.clone());
         let problem = problem.map(str::to_owned);
@@ -906,6 +1005,7 @@ pub(crate) mod test_support {
             let board = app.new(|cx| Board::new(Some(dir.to_path_buf()), cx));
             app.set_global(GlobalBoard(board.clone()));
             BoardOutbox::init(app);
+            BoardPanel::bind_keys(app);
             board.update(app, |board, cx| {
                 board.set(Some(snapshot), None, Some(bridge()), cx)
             });
@@ -968,7 +1068,9 @@ mod tests {
     use super::test_support::{bounds, bridge, fixture, panel, panel_with_queue, queued, status};
     use super::*;
     use crate::board::NO_BOARD_FILE;
+    use crate::board_actions::UNDO_MS;
     use gpui::{Modifiers, TestAppContext, VisualTestContext};
+    use std::time::Duration;
 
     /// A RESULT.md with the S1 fixture, in a new temp dir. The dir is returned so it lives as long as
     /// the test. The path is absolute and ends in `.md`.
@@ -1510,5 +1612,238 @@ mod tests {
             })
         });
         assert!(!sent, "no queue, nothing is sent");
+    }
+
+    /// The pick the panel holds, before the fall-back to the first open item.
+    fn picked(cx: &mut VisualTestContext, view: &Entity<BoardPanel>) -> Option<BoardPick> {
+        view.read_with(cx, |panel, _| panel.picked().cloned())
+    }
+
+    /// Moves the test clock by `by`, after what is due has run, and runs what that makes due.
+    fn advance(cx: &mut VisualTestContext, by: Duration) {
+        cx.run_until_parked();
+        cx.executor().advance_clock(by);
+        cx.run_until_parked();
+    }
+
+    #[gpui::test]
+    fn the_keys_do_nothing_until_the_panel_has_focus(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let (view, cx) = panel_with_queue(cx, dir.path(), fixture());
+        cx.simulate_keystrokes("down enter 1");
+        assert_eq!(picked(cx, &view), None, "the pick does not move");
+        assert_eq!(queued(dir.path()), None, "nothing is sent");
+    }
+
+    #[gpui::test]
+    fn the_arrow_keys_move_the_pick_through_the_items(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let (view, cx) = panel_with_queue(cx, dir.path(), fixture());
+        click(cx, "board-summary");
+
+        cx.simulate_keystrokes("up");
+        assert_eq!(picked(cx, &view), None, "up from the first item stays");
+        assert!(
+            bounds(cx, "need-row-0-picked").is_some(),
+            "T12 is still shown"
+        );
+
+        cx.simulate_keystrokes("down");
+        assert!(
+            bounds(cx, "need-row-1-picked").is_some(),
+            "down moves to D7"
+        );
+        cx.simulate_keystrokes("down down");
+        assert!(bounds(cx, "need-row-3-picked").is_some(), "down reaches D6");
+        cx.simulate_keystrokes("down");
+        assert!(
+            bounds(cx, "need-row-3-picked").is_some(),
+            "down stops at D6"
+        );
+
+        cx.simulate_keystrokes("up");
+        assert!(bounds(cx, "need-row-2-picked").is_some(), "up moves to N4");
+    }
+
+    #[gpui::test]
+    fn down_from_a_picked_row_goes_to_the_first_item(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let (view, cx) = panel_with_queue(cx, dir.path(), fixture());
+        click(cx, "work-row-0");
+
+        cx.simulate_keystrokes("up");
+        assert!(
+            bounds(cx, "work-row-0-picked").is_some(),
+            "up keeps the row"
+        );
+
+        cx.simulate_keystrokes("down");
+        assert!(bounds(cx, "need-row-0-picked").is_some(), "down picks T12");
+        assert!(bounds(cx, "work-row-0-picked").is_none());
+        assert_eq!(picked(cx, &view), Some(BoardPick::Item("T12".to_owned())));
+    }
+
+    #[gpui::test]
+    fn enter_on_an_open_decision_queues_its_recommended_answer(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let (_view, cx) = panel_with_queue(cx, dir.path(), fixture());
+        click(cx, "need-row-1");
+
+        cx.simulate_keystrokes("enter");
+        assert!(
+            bounds(cx, "card-undo").is_some(),
+            "the answer can be undone"
+        );
+        assert_eq!(queued(dir.path()), None, "a held answer is not written yet");
+
+        advance(cx, Duration::from_millis(UNDO_MS));
+        let answer = Action::Answer {
+            key: "D7".to_owned(),
+            option: 0,
+            label: "one line per row".to_owned(),
+        };
+        assert_eq!(queued(dir.path()), Some(vec![(1, answer)]));
+    }
+
+    #[gpui::test]
+    fn enter_on_a_to_do_sends_done_and_enter_on_news_dismisses(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let (_view, cx) = panel_with_queue(cx, dir.path(), fixture());
+        click(cx, "board-summary");
+
+        cx.simulate_keystrokes("enter");
+        advance(cx, Duration::from_millis(UNDO_MS));
+        let done = Action::Done {
+            key: "T12".to_owned(),
+        };
+        assert_eq!(queued(dir.path()), Some(vec![(1, done.clone())]));
+
+        click(cx, "need-row-2");
+        cx.simulate_keystrokes("enter");
+        advance(cx, Duration::from_millis(UNDO_MS));
+        let dismiss = Action::Dismiss {
+            key: "N4".to_owned(),
+        };
+        assert_eq!(queued(dir.path()), Some(vec![(1, done), (2, dismiss)]));
+    }
+
+    #[gpui::test]
+    fn enter_does_nothing_on_a_resolved_item_or_while_an_answer_is_held(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let (_view, cx) = panel_with_queue(cx, dir.path(), fixture());
+        click(cx, "need-row-3");
+        cx.simulate_keystrokes("enter");
+        assert_eq!(queued(dir.path()), None, "D6 is resolved");
+
+        click(cx, "need-row-1");
+        cx.simulate_keystrokes("enter enter");
+        advance(cx, Duration::from_millis(UNDO_MS));
+        let answer = Action::Answer {
+            key: "D7".to_owned(),
+            option: 0,
+            label: "one line per row".to_owned(),
+        };
+        assert_eq!(
+            queued(dir.path()),
+            Some(vec![(1, answer)]),
+            "the second enter sends nothing"
+        );
+    }
+
+    #[gpui::test]
+    fn digit_1_sends_the_first_option_in_card_order(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let mut snapshot = fixture();
+        snapshot.items[1].recommended = Some(1);
+        let (_view, cx) = panel_with_queue(cx, dir.path(), snapshot);
+        click(cx, "need-row-1");
+
+        cx.simulate_keystrokes("1");
+        advance(cx, Duration::from_millis(UNDO_MS));
+        let answer = Action::Answer {
+            key: "D7".to_owned(),
+            option: 1,
+            label: "two lines per row".to_owned(),
+        };
+        assert_eq!(queued(dir.path()), Some(vec![(1, answer)]));
+    }
+
+    #[gpui::test]
+    fn digit_2_sends_the_second_option_in_card_order(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let (_view, cx) = panel_with_queue(cx, dir.path(), fixture());
+        click(cx, "need-row-1");
+
+        cx.simulate_keystrokes("2");
+        advance(cx, Duration::from_millis(UNDO_MS));
+        let answer = Action::Answer {
+            key: "D7".to_owned(),
+            option: 1,
+            label: "two lines per row".to_owned(),
+        };
+        assert_eq!(queued(dir.path()), Some(vec![(1, answer)]));
+    }
+
+    #[gpui::test]
+    fn digits_send_nothing_past_the_last_option_or_on_a_to_do(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let (_view, cx) = panel_with_queue(cx, dir.path(), fixture());
+        click(cx, "board-summary");
+        cx.simulate_keystrokes("1");
+        assert!(bounds(cx, "card-done").is_some(), "T12 is still open");
+        assert_eq!(queued(dir.path()), None, "a to-do has no options");
+
+        click(cx, "need-row-1");
+        cx.simulate_keystrokes("4");
+        advance(cx, Duration::from_millis(UNDO_MS));
+        assert_eq!(queued(dir.path()), None, "D7 has two options only");
+        assert!(bounds(cx, "card-undo").is_none());
+    }
+
+    #[gpui::test]
+    fn the_report_tab_ignores_the_arrow_keys_enter_and_digits(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let (view, cx) = panel_with_queue(cx, dir.path(), fixture());
+        click(cx, "work-row-0");
+        click(cx, "board-tab-report");
+        cx.simulate_keystrokes("down up enter 1");
+        assert_eq!(
+            picked(cx, &view),
+            Some(BoardPick::Row("owner/name#640".to_owned())),
+            "the row stays picked"
+        );
+
+        click(cx, "board-tab-board");
+        click(cx, "need-row-1");
+        click(cx, "board-tab-report");
+        cx.simulate_keystrokes("down up enter 1 2");
+        assert_eq!(
+            picked(cx, &view),
+            Some(BoardPick::Item("D7".to_owned())),
+            "the item stays picked"
+        );
+        advance(cx, Duration::from_millis(UNDO_MS));
+        assert_eq!(queued(dir.path()), None, "nothing is sent");
+
+        click(cx, "board-tab-board");
+        assert!(bounds(cx, "card-opt-0").is_some(), "D7 is still open");
+        assert!(bounds(cx, "card-undo").is_none());
+    }
+
+    #[gpui::test]
+    fn an_inert_board_moves_the_pick_and_sends_nothing(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().unwrap();
+        let mut snapshot = fixture();
+        snapshot.actions = 0;
+        let (_view, cx) = panel_with_queue(cx, dir.path(), snapshot);
+        click(cx, "board-summary");
+
+        cx.simulate_keystrokes("down");
+        assert!(bounds(cx, "need-row-1-picked").is_some(), "the pick moves");
+        cx.simulate_keystrokes("enter 1");
+        advance(cx, Duration::from_millis(UNDO_MS));
+        assert_eq!(queued(dir.path()), None, "no actions file is written");
+        assert_eq!(status(cx), None, "no status line is shown");
+        assert!(bounds(cx, "card-opt-0").is_some(), "the options stay");
     }
 }
