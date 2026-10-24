@@ -1,6 +1,6 @@
-//! The terminal view: the focused herdr tab, painted from the surface link and typed into through
-//! it. The link starts only with `CONTR_SURFACE=1` (D38). Without it the view shows a line and
-//! connects to nothing.
+//! The terminal view: the focused herdr tab, painted from the surface link, typed into and
+//! scrolled through it. The link starts only with `CONTR_SURFACE=1` (D38). Without it the view
+//! shows a line and connects to nothing.
 
 mod boxdraw;
 pub mod colors;
@@ -8,6 +8,7 @@ pub mod grid;
 mod keys;
 mod paint;
 mod panes;
+mod wheel;
 
 use std::cell::RefCell;
 use std::io;
@@ -26,8 +27,8 @@ use contr_herdr::endpoint::surface::Surface;
 use gpui::{
     App, Bounds, ClipboardItem, Context, ElementInputHandler, EntityInputHandler, FocusHandle,
     InputHandler, IntoElement, KeyDownEvent, Modifiers, MouseButton, MouseDownEvent, ParentElement,
-    Pixels, Point, Render, Styled, Subscription, Task, TextInputConfiguration, UTF16Selection,
-    Window, canvas, div, point, prelude::*, px, rgb, size,
+    Pixels, Point, Render, ScrollWheelEvent, Styled, Subscription, Task, TextInputConfiguration,
+    TouchPhase, UTF16Selection, Window, canvas, div, point, prelude::*, px, rgb, size,
 };
 use tracing::debug;
 
@@ -75,6 +76,11 @@ pub struct TerminalView {
     /// Where cell (0, 0) is painted, in window pixels, as of the last layout. A click is mapped
     /// to a cell with it.
     cells_origin: Option<Point<Pixels>>,
+    /// Top-left of the grid in window coordinates, from the last layout. A wheel event is mapped
+    /// to a cell with it.
+    grid_origin: Option<Point<Pixels>>,
+    /// Sub-line wheel motion kept until it makes a whole line or notch.
+    wheel: wheel::WheelAccum,
     /// The size herdr was last told, in the hello or a resize.
     sent: Option<(GridSize, CellPx)>,
     /// When the size was last sent again after the owner typed (D12).
@@ -128,6 +134,8 @@ impl TerminalView {
             grid: None,
             metrics: None,
             cells_origin: None,
+            grid_origin: None,
+            wheel: wheel::WheelAccum::default(),
             sent: None,
             reasserted_at: None,
             resize_task: None,
@@ -155,6 +163,7 @@ impl TerminalView {
         let m = cell_metrics(window)?;
         self.metrics = Some(m);
         self.cells_origin = Some(bounds.origin + point(px(m.pad), px(m.pad)));
+        self.grid_origin = Some(bounds.origin);
         let width = f32::from(bounds.size.width);
         let height = f32::from(bounds.size.height);
         if let Some(size) = grid_for(width, height, &m) {
@@ -299,6 +308,7 @@ impl TerminalView {
         ) {
             self.surface = None;
             self.rows_cache.borrow_mut().clear();
+            self.wheel.clear();
         }
         if matches!(self.state, LinkState::NotRunning(_)) {
             self.shell_pane = None;
@@ -386,6 +396,60 @@ impl TerminalView {
         }
     }
 
+    /// A wheel or trackpad event over the grid scrolls the pane under the pointer, not the
+    /// focused one. Fractional trackpad motion is kept until it makes a whole line (D88). A
+    /// program that reads the mouse or is on the alternate screen gets one event per notch.
+    /// Nothing notifies: the view changes when herdr sends the scrolled surface.
+    fn scroll_wheel(&mut self, event: &ScrollWheelEvent, cx: &mut Context<Self>) {
+        // A new gesture does not add its motion to the last one's remainder.
+        if event.touch_phase == TouchPhase::Started {
+            self.wheel.clear();
+        }
+        let (Some(m), Some(origin), Some(surface)) =
+            (self.metrics, self.grid_origin, self.surface.as_deref())
+        else {
+            self.wheel.clear();
+            return;
+        };
+        if self.link.is_none() {
+            self.wheel.clear();
+            return;
+        }
+        let pos = (f32::from(event.position.x), f32::from(event.position.y));
+        let origin = (f32::from(origin.x), f32::from(origin.y));
+        let Some(cell) = wheel::cell_at(pos, origin, &m, surface.size) else {
+            self.wheel.clear();
+            return;
+        };
+        let Some(pane) = wheel::pane_at(surface, cell) else {
+            self.wheel.clear();
+            return;
+        };
+        self.wheel
+            .add(&pane.pane_id, wheel::delta_lines(event.delta, m.cell_h));
+        if wheel::sideways(event.delta) {
+            self.wheel
+                .add_columns(&pane.pane_id, wheel::delta_columns(event.delta, m.cell_w));
+        }
+        // A program gets a wheel event per notch; the history scrolls by whole lines.
+        let unit = if wheel::reports(pane) {
+            wheel::WHEEL_LINES
+        } else {
+            1.
+        };
+        let steps = self.wheel.take(unit);
+        let columns = self.wheel.take_columns(unit);
+        let at = wheel::pane_cell(pane, cell);
+        let mods = wheel::wheel_mods(&event.modifiers);
+        let mut events = wheel::wheel_events(pane, at, steps, mods);
+        events.extend(wheel::wheel_column_events(pane, at, columns, mods));
+        if !events.is_empty() {
+            // A wheel is not typing, so D12's size re-assert does not run.
+            self.send_to(&pane.pane_id, &events);
+        }
+        cx.stop_propagation();
+    }
+
     /// Sends `events` to the focused pane. Nothing is sent without a link or a pane. After the
     /// owner types, the size may be sent again (D12).
     fn send(&mut self, events: &[InputEvent], now: Instant) {
@@ -393,13 +457,24 @@ impl TerminalView {
             debug!("terminal input not sent: no focused pane");
             return;
         };
+        // D12: the size is re-asserted only when the input was queued.
+        if self.send_to(&pane, events) {
+            self.reassert_size(now);
+        }
+    }
+
+    /// Queues `events` on the link for `pane`. False when nothing was queued: there is no link,
+    /// or the link refused the frame.
+    fn send_to(&self, pane: &str, events: &[InputEvent]) -> bool {
         let Some((_, handle)) = &self.link else {
-            return;
+            return false;
         };
-        match handle.send_input(&pane, events) {
-            // D12: the size is re-asserted only when the input was queued.
-            Ok(()) => self.reassert_size(now),
-            Err(e) => debug!("terminal input not queued: {e:?}"),
+        match handle.send_input(pane, events) {
+            Ok(()) => true,
+            Err(e) => {
+                debug!("terminal input not queued: {e:?}");
+                false
+            }
         }
     }
 
@@ -738,6 +813,9 @@ impl Render for TerminalView {
                     this.click(event.position, window, cx)
                 }),
             )
+            .on_scroll_wheel(cx.listener(|this, event: &ScrollWheelEvent, _, cx| {
+                this.scroll_wheel(event, cx);
+            }))
             .when(stale, |grid| grid.opacity(STALE_OPACITY))
             .child(
                 canvas(
@@ -797,10 +875,11 @@ mod tests {
 
     use async_channel::Receiver;
     use contr_herdr::endpoint::link::test_link;
-    use contr_herdr::endpoint::messages::{ClientMsg, KeyCode, ShellSnapshot, mods};
+    use contr_herdr::endpoint::messages::{ClientMsg, KeyCode, ShellSnapshot, WheelDir, mods};
     use contr_herdr::endpoint::surface::{Cell, Cursor, Rect, SurfacePane};
     use gpui::{
-        ClipboardItem, Entity, Modifiers, Subscription, TestAppContext, VisualTestContext, size,
+        ClipboardItem, Entity, Modifiers, ScrollDelta, Subscription, TestAppContext,
+        VisualTestContext, size,
     };
 
     use super::*;
@@ -903,6 +982,103 @@ mod tests {
     /// Every frame queued on the test link so far, in order.
     fn queued(frames: &Receiver<Vec<u8>>) -> Vec<Vec<u8>> {
         std::iter::from_fn(|| frames.try_recv().ok()).collect()
+    }
+
+    /// A surface of `size` with no rows and `panes`, for a wheel to land on.
+    fn shown_panes(revision: u64, size: GridSize, panes: Vec<SurfacePane>) -> Arc<Surface> {
+        Arc::new(Surface {
+            boot_id: "boot".to_owned(),
+            projection_revision: 1,
+            revision,
+            size,
+            rows: Vec::new(),
+            cursor: None,
+            panes,
+        })
+    }
+
+    /// A focused pane covering the whole grid of `size`, with the given mouse flags.
+    fn grid_pane(
+        id: &str,
+        size: GridSize,
+        mouse_reporting: bool,
+        alternate_screen: bool,
+    ) -> SurfacePane {
+        let all = Rect {
+            x: 0,
+            y: 0,
+            width: size.cols,
+            height: size.rows,
+        };
+        SurfacePane {
+            pane_id: id.to_owned(),
+            rect: all,
+            inner_rect: all,
+            focused: true,
+            mouse_reporting,
+            alternate_screen,
+            ..Default::default()
+        }
+    }
+
+    /// Gives the view a test link and `panes` as the shown surface, at the grid size of the last
+    /// layout. The pointer moves to `at` first, so the grid's hitbox takes wheel events there.
+    /// Returns the frames the view sends; nothing is queued yet.
+    fn attach_panes(
+        cx: &mut VisualTestContext,
+        view: &Entity<TerminalView>,
+        at: Point<Pixels>,
+        panes: Vec<SurfacePane>,
+    ) -> Receiver<Vec<u8>> {
+        let size = view.read_with(cx, |view, _| view.grid.unwrap().0);
+        let (link, handle, frames) = test_link();
+        view.update(cx, |view, cx| {
+            view.link = Some((link, handle));
+            view.accept_surface(shown_panes(1, size, panes), cx);
+        });
+        cx.simulate_mouse_move(at, Option::<MouseButton>::None, Modifiers::none());
+        cx.run_until_parked();
+        assert!(queued(&frames).is_empty());
+        frames
+    }
+
+    /// A wheel or trackpad event at `at` in the gesture's moving phase.
+    fn scroll(at: Point<Pixels>, delta: ScrollDelta) -> ScrollWheelEvent {
+        scroll_in(at, delta, TouchPhase::Moved)
+    }
+
+    /// A wheel or trackpad event at `at` in `touch_phase`.
+    fn scroll_in(
+        at: Point<Pixels>,
+        delta: ScrollDelta,
+        touch_phase: TouchPhase,
+    ) -> ScrollWheelEvent {
+        ScrollWheelEvent {
+            position: at,
+            delta,
+            modifiers: Modifiers::none(),
+            touch_phase,
+        }
+    }
+
+    /// A trackpad delta in pixels.
+    fn pixels(x: f32, y: f32) -> ScrollDelta {
+        ScrollDelta::Pixels(point(px(x), px(y)))
+    }
+
+    /// A mouse wheel delta in lines.
+    fn lines(x: f32, y: f32) -> ScrollDelta {
+        ScrollDelta::Lines(point(x, y))
+    }
+
+    fn wheel(dir: WheelDir, column: u16, row: u16, count: u16) -> InputEvent {
+        InputEvent::Wheel {
+            dir,
+            column,
+            row,
+            mods: 0,
+            lines: count,
+        }
     }
 
     /// The frame that sends `events` to `pane`.
@@ -1445,6 +1621,211 @@ mod tests {
 
         cx.simulate_keystrokes("alt-e");
         assert!(queued(&frames).is_empty(), "Option types characters (D11)");
+    }
+
+    #[gpui::test]
+    fn a_trackpad_swipe_adds_up_to_whole_lines(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        let size = view.read_with(cx, |view, _| view.grid.unwrap().0);
+        let cell_h = view.read_with(cx, |view, _| view.metrics.unwrap().cell_h);
+        let at = cell_centre(cx, &view, 3, 2);
+        let frames = attach_panes(cx, &view, at, vec![grid_pane(PANE, size, false, false)]);
+
+        // Sub-line motion is kept: two events of 0.6 of a cell make one line.
+        cx.simulate_event(scroll(at, pixels(0., 0.6 * cell_h)));
+        assert!(queued(&frames).is_empty());
+        cx.simulate_event(scroll(at, pixels(0., 0.6 * cell_h)));
+        assert_eq!(
+            queued(&frames),
+            vec![input(PANE, &[wheel(WheelDir::Up, 3, 2, 1)])]
+        );
+    }
+
+    #[gpui::test]
+    fn a_wheel_notch_scrolls_three_lines_in_a_shell(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        let size = view.read_with(cx, |view, _| view.grid.unwrap().0);
+        let at = cell_centre(cx, &view, 3, 2);
+        let frames = attach_panes(cx, &view, at, vec![grid_pane(PANE, size, false, false)]);
+
+        cx.simulate_event(scroll(at, lines(0., 1.)));
+        assert_eq!(
+            queued(&frames),
+            vec![input(PANE, &[wheel(WheelDir::Up, 3, 2, 3)])]
+        );
+
+        cx.simulate_event(scroll(at, lines(0., -1.)));
+        assert_eq!(
+            queued(&frames),
+            vec![input(PANE, &[wheel(WheelDir::Down, 3, 2, 3)])]
+        );
+    }
+
+    #[gpui::test]
+    fn a_program_with_mouse_reports_gets_one_event_per_notch(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        let size = view.read_with(cx, |view, _| view.grid.unwrap().0);
+        let cell_h = view.read_with(cx, |view, _| view.metrics.unwrap().cell_h);
+        let at = cell_centre(cx, &view, 3, 2);
+        let frames = attach_panes(cx, &view, at, vec![grid_pane(PANE, size, true, false)]);
+
+        // Two notches are two reports; herdr turns each into one report for the program.
+        let notch = wheel(WheelDir::Up, 3, 2, 3);
+        cx.simulate_event(scroll(at, lines(0., 2.)));
+        assert_eq!(queued(&frames), vec![input(PANE, &[notch.clone(), notch])]);
+
+        // A trackpad needs three cells of swipe for a notch.
+        cx.simulate_event(scroll(at, pixels(0., 2. * cell_h)));
+        assert!(queued(&frames).is_empty());
+        cx.simulate_event(scroll(at, pixels(0., cell_h)));
+        assert_eq!(
+            queued(&frames),
+            vec![input(PANE, &[wheel(WheelDir::Up, 3, 2, 3)])]
+        );
+    }
+
+    #[gpui::test]
+    fn the_wheel_goes_to_the_pane_under_the_pointer_at_its_cell(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        let at = cell_centre(cx, &view, 8, 2);
+        let panes = two_panes(1, Some("p1")).panes.clone();
+        let frames = attach_panes(cx, &view, at, panes);
+
+        // The pointer is on p2, whose inner rect starts at column 7, row 1. The focus stays p1.
+        cx.simulate_event(scroll(at, lines(0., 1.)));
+        assert_eq!(
+            queued(&frames),
+            vec![input("p2", &[wheel(WheelDir::Up, 1, 1, 3)])]
+        );
+    }
+
+    #[gpui::test]
+    fn a_sideways_swipe_scrolls_a_program_but_not_a_shell(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        let size = view.read_with(cx, |view, _| view.grid.unwrap().0);
+        let cell_w = view.read_with(cx, |view, _| view.metrics.unwrap().cell_w);
+        let cell_h = view.read_with(cx, |view, _| view.metrics.unwrap().cell_h);
+        let at = cell_centre(cx, &view, 3, 2);
+        let frames = attach_panes(cx, &view, at, vec![grid_pane(PANE, size, true, false)]);
+
+        // A mostly vertical swipe's sideways drift is not a horizontal step.
+        cx.simulate_event(scroll(at, pixels(0.5 * cell_w, 3. * cell_h)));
+        assert_eq!(
+            queued(&frames),
+            vec![input(PANE, &[wheel(WheelDir::Up, 3, 2, 3)])]
+        );
+
+        // Three cells sideways make one notch, left for positive columns.
+        cx.simulate_event(scroll(at, pixels(2. * cell_w, 0.)));
+        assert!(queued(&frames).is_empty());
+        cx.simulate_event(scroll(at, pixels(cell_w, 0.)));
+        assert_eq!(
+            queued(&frames),
+            vec![input(PANE, &[wheel(WheelDir::Left, 3, 2, 3)])]
+        );
+        cx.simulate_event(scroll(at, pixels(-3. * cell_w, 0.)));
+        assert_eq!(
+            queued(&frames),
+            vec![input(PANE, &[wheel(WheelDir::Right, 3, 2, 3)])]
+        );
+    }
+
+    #[gpui::test]
+    fn a_wheel_with_no_link_or_outside_the_panes_sends_nothing(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        let size = view.read_with(cx, |view, _| view.grid.unwrap().0);
+        let at = cell_centre(cx, &view, 3, 2);
+        // No surface and no link yet: the wheel is dropped.
+        cx.simulate_event(scroll(at, lines(0., 1.)));
+
+        // A surface, but no link: the wheel is dropped.
+        view.update(cx, |view, cx| {
+            let panes = vec![grid_pane(PANE, size, false, false)];
+            view.accept_surface(shown_panes(2, size, panes), cx)
+        });
+        cx.simulate_mouse_move(at, Option::<MouseButton>::None, Modifiers::none());
+        cx.simulate_event(scroll(at, lines(0., 1.)));
+
+        // A link, but the pointer is outside every pane's rect.
+        let mut half = grid_pane(PANE, size, false, false);
+        half.rect.width = size.cols / 2;
+        half.inner_rect = half.rect;
+        let right = cell_centre(cx, &view, size.cols - 2, 2);
+        let frames = attach_panes(cx, &view, right, vec![half]);
+        cx.simulate_event(scroll(right, lines(0., 1.)));
+        let sent = queued(&frames);
+        assert!(sent.is_empty(), "{sent:?}");
+    }
+
+    #[gpui::test]
+    fn a_new_gesture_drops_the_old_remainder(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        let size = view.read_with(cx, |view, _| view.grid.unwrap().0);
+        let cell_h = view.read_with(cx, |view, _| view.metrics.unwrap().cell_h);
+        let at = cell_centre(cx, &view, 3, 2);
+        let frames = attach_panes(cx, &view, at, vec![grid_pane(PANE, size, false, false)]);
+
+        cx.simulate_event(scroll(at, pixels(0., 0.6 * cell_h)));
+        // The new gesture starts from nothing; its 0.4 of a cell is not a line.
+        cx.simulate_event(scroll_in(at, pixels(0., 0.4 * cell_h), TouchPhase::Started));
+        assert!(queued(&frames).is_empty());
+        cx.simulate_event(scroll(at, pixels(0., 0.6 * cell_h)));
+        assert_eq!(
+            queued(&frames),
+            vec![input(PANE, &[wheel(WheelDir::Up, 3, 2, 1)])]
+        );
+    }
+
+    #[gpui::test]
+    fn a_lost_link_forgets_the_wheel_remainder(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        let size = view.read_with(cx, |view, _| view.grid.unwrap().0);
+        let cell_h = view.read_with(cx, |view, _| view.metrics.unwrap().cell_h);
+        let at = cell_centre(cx, &view, 3, 2);
+        let frames = attach_panes(cx, &view, at, vec![grid_pane(PANE, size, false, false)]);
+        cx.simulate_event(scroll(at, pixels(0., 0.6 * cell_h)));
+        assert!(queued(&frames).is_empty());
+
+        // The link drops the surface: the half line kept for it goes too.
+        view.update(cx, |view, cx| {
+            view.set_state(LinkState::NotRunning(NOT_RUNNING.to_owned()), cx)
+        });
+        view.update(cx, |view, cx| {
+            let panes = vec![grid_pane(PANE, size, false, false)];
+            view.accept_surface(shown_panes(2, size, panes), cx)
+        });
+        cx.simulate_event(scroll(at, pixels(0., 0.6 * cell_h)));
+        assert!(queued(&frames).is_empty(), "the old remainder is gone");
+        cx.simulate_event(scroll(at, pixels(0., 0.6 * cell_h)));
+        assert_eq!(
+            queued(&frames),
+            vec![input(PANE, &[wheel(WheelDir::Up, 3, 2, 1)])]
+        );
+    }
+
+    #[gpui::test]
+    fn a_key_after_a_scroll_is_sent_as_usual(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        let size = view.read_with(cx, |view, _| view.grid.unwrap().0);
+        let at = cell_centre(cx, &view, 3, 2);
+        let frames = attach_panes(cx, &view, at, vec![grid_pane(PANE, size, false, false)]);
+
+        cx.simulate_event(scroll(at, lines(0., 2.)));
+        let scrolled = input(PANE, &[wheel(WheelDir::Up, 3, 2, 6)]);
+        assert_eq!(queued(&frames), vec![scrolled]);
+
+        // herdr returns to the live screen on the key; contr only sends it.
+        cx.simulate_keystrokes("a");
+        assert_eq!(queued(&frames), vec![input(PANE, &[text("a")])]);
     }
 
     #[gpui::test]
