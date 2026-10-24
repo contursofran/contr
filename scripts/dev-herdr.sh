@@ -46,6 +46,7 @@ run_herdr() {
         HERDR_SOCKET_PATH="$api_sock" \
         SHELL=/bin/sh \
         TERM=xterm-256color \
+        LANG=en_US.UTF-8 \
         PATH="${CONTR_DEV_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}" \
         "$bin_path" "$@"
 }
