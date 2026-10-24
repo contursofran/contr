@@ -11,6 +11,8 @@ pub mod board_panel;
 pub mod board_report;
 pub mod board_work;
 pub mod dev_client;
+#[cfg(debug_assertions)]
+pub mod dev_control;
 pub mod dev_protocol;
 pub mod frame;
 pub mod git;

@@ -1,5 +1,7 @@
 //! contr: a native herdr client. Opens the empty v0.1 frame, or the status icon legend with `--icons`.
 
+#[cfg(debug_assertions)]
+use contr::dev_control;
 use contr::{
     board::Board, board_outbox::BoardOutbox, board_panel::BoardPanel, dev_client, dev_protocol,
     frame, herdr::Herdr, host::Host, legend, selection::Selection, status_message::StatusMessage,
@@ -17,11 +19,11 @@ const LEGEND_HEIGHT: f32 = 420.;
 
 /// The usage text. It lists every form that the command line accepts.
 const USAGE: &str = "Usage:
-  contr                                     open the window
-  contr --icons                             open the window with the status icon legend
-  contr statusline [-- <command> [args…]]   print the Claude Code status line
+  contr                                                   open the window
+  contr --icons                                           open the window with the status icon legend
+  contr statusline [-- <command> [args…]]                 print the Claude Code status line
   contr dev <state|click|key|select|resize|window-id> …   drive a dev window (debug builds)
-  contr --help, -h                          print this text
+  contr --help, -h                                        print this text
 ";
 
 static REGULAR: &[u8] = include_bytes!("../assets/fonts/JetBrainsMono-Regular.ttf");
@@ -181,11 +183,15 @@ fn open_window(icons: bool) -> std::process::ExitCode {
             BoardPanel::bind_keys(cx);
             StatusMessage::init(cx);
             Usage::init(cx);
-            cx.open_window(options, |window, cx| {
+            let frame = cx.open_window(options, |window, cx| {
                 Visibility::watch(window, cx);
                 cx.new(|cx| frame::Frame::new(window, cx))
-            })
-            .map(|_| ())
+            });
+            #[cfg(debug_assertions)]
+            if let Ok(handle) = &frame {
+                dev_control::start_from_env(*handle, cx);
+            }
+            frame.map(|_| ())
         };
         if let Err(error) = result {
             eprintln!("contr: unable to open the window: {error}");

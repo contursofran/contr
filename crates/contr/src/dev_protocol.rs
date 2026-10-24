@@ -105,12 +105,15 @@ pub fn parse_request(line: &str) -> Result<Request, DevError> {
 }
 
 /// The request line for `request`, with its newline.
-pub fn request_line(request: &Request) -> Result<String, serde_json::Error> {
+pub fn request_line(request: &Request) -> String {
     let envelope = Envelope {
         v: VERSION,
         request: request.clone(),
     };
-    serde_json::to_string(&envelope).map(|line| line + "\n")
+    // Every field is a string, a list of strings or a number, and serde_json writes a
+    // non-finite number as null. So serialization cannot fail, and the empty fallback is never used.
+    let body = serde_json::to_string(&envelope).unwrap_or_default();
+    body + "\n"
 }
 
 /// The reply line for `reply`, with its newline. The keys are in the order of the contract:
@@ -189,7 +192,7 @@ mod tests {
     #[test]
     fn every_request_round_trips() {
         for request in every_request() {
-            let line = request_line(&request).unwrap();
+            let line = request_line(&request);
             assert!(line.ends_with('\n'));
             assert_eq!(parse_request(&line).unwrap(), request);
         }
@@ -198,40 +201,36 @@ mod tests {
     #[test]
     fn request_lines_match_the_contract() {
         assert_eq!(
-            request_line(&Request::State).unwrap(),
+            request_line(&Request::State),
             "{\"v\":1,\"cmd\":\"state\"}\n"
         );
         assert_eq!(
             request_line(&Request::Click {
                 id: "terminal".into()
-            })
-            .unwrap(),
+            }),
             "{\"v\":1,\"cmd\":\"click\",\"id\":\"terminal\"}\n"
         );
         assert_eq!(
             request_line(&Request::Key {
                 keys: vec!["down".into(), "enter".into()]
-            })
-            .unwrap(),
+            }),
             "{\"v\":1,\"cmd\":\"key\",\"keys\":[\"down\",\"enter\"]}\n"
         );
         assert_eq!(
             request_line(&Request::Select {
                 row: "wt:/a".into()
-            })
-            .unwrap(),
+            }),
             "{\"v\":1,\"cmd\":\"select\",\"row\":\"wt:/a\"}\n"
         );
         assert_eq!(
             request_line(&Request::Resize {
                 width: 1200.0,
                 height: 800.0
-            })
-            .unwrap(),
+            }),
             "{\"v\":1,\"cmd\":\"resize\",\"width\":1200.0,\"height\":800.0}\n"
         );
         assert_eq!(
-            request_line(&Request::WindowId).unwrap(),
+            request_line(&Request::WindowId),
             "{\"v\":1,\"cmd\":\"window-id\"}\n"
         );
     }
