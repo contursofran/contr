@@ -30,7 +30,7 @@ pub struct Frame {
     panel_open: bool,
     /// The herdr commands the title bar asked for, in order. Tests read them instead of sending.
     #[cfg(test)]
-    sent: Vec<TabCommand>,
+    pub(crate) sent: Vec<TabCommand>,
     _toggle: Subscription,
     _herdr: Subscription,
     _title_events: Subscription,
@@ -63,13 +63,8 @@ impl Frame {
         let title_events =
             cx.subscribe(
                 &title_bar,
-                |this, bar, event: &TitleBarEvent, cx| match event {
-                    TitleBarEvent::TogglePanel => {
-                        this.panel_open = !this.panel_open;
-                        let open = this.panel_open;
-                        bar.update(cx, |bar, cx| bar.set_panel_open(open, cx));
-                        cx.notify();
-                    }
+                |this, _bar, event: &TitleBarEvent, cx| match event {
+                    TitleBarEvent::TogglePanel => this.toggle_panel(cx),
                     TitleBarEvent::Command(cmd) => {
                         #[cfg(test)]
                         this.sent.push(cmd.clone());
@@ -106,6 +101,16 @@ impl Frame {
     /// Opens the sidebar again. The reopen button and the dev control both call it.
     pub(crate) fn reopen_sidebar(&mut self, cx: &mut Context<Self>) {
         self.sidebar_open = true;
+        cx.notify();
+    }
+
+    /// Closes the board panel, or opens it again. The title bar's toggle and the dev control both
+    /// call it.
+    pub(crate) fn toggle_panel(&mut self, cx: &mut Context<Self>) {
+        self.panel_open = !self.panel_open;
+        let open = self.panel_open;
+        self.title_bar
+            .update(cx, |bar, cx| bar.set_panel_open(open, cx));
         cx.notify();
     }
 

@@ -93,7 +93,7 @@ struct PlanSegment {
 
 impl PlanSegment {
     /// The item as plain text, e.g. "claude 62%". The bar has no text.
-    #[cfg(test)]
+    #[cfg(any(test, debug_assertions))]
     fn text(&self) -> String {
         format!("{} {}", self.plan.label(), left_label(self.left))
     }
@@ -313,7 +313,8 @@ impl Render for StatusBar {
     }
 }
 
-#[cfg(test)]
+/// The bar's texts, for the tests and for the dev control (a debug build).
+#[cfg(any(test, debug_assertions))]
 impl StatusBar {
     /// The texts of the right side's items, in display order, without separators.
     pub fn right_texts(cx: &App) -> Vec<String> {
