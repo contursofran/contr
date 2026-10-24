@@ -25,7 +25,7 @@ pub(super) fn pane_at(surface: &Surface, m: Metrics, x: f32, y: f32) -> Option<&
 }
 
 /// True when cell (`col`, `row`) lies inside `rect`.
-fn holds(rect: Rect, col: u16, row: u16) -> bool {
+pub(super) fn holds(rect: Rect, col: u16, row: u16) -> bool {
     let (col, row) = (u32::from(col), u32::from(row));
     col >= u32::from(rect.x)
         && col < u32::from(rect.x) + u32::from(rect.width)
