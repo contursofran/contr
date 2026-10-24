@@ -11,8 +11,9 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{FileTypeExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// A socket path must be shorter than this many bytes. macOS keeps 104 bytes for the path,
 /// with the terminating NUL.
@@ -20,6 +21,10 @@ const PATH_LIMIT: usize = 104;
 
 /// How long a connection may wait for the client's line, and for the reply to be written.
 const IO_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// How long a connection waits for the UI thread to answer. It is shorter than the client's 15 s
+/// budget, so the client gets a reply rather than a timeout of its own.
+const REPLY_WAIT: Duration = Duration::from_secs(10);
 
 /// How many requests may wait for the UI thread.
 const QUEUE: usize = 16;
@@ -30,8 +35,13 @@ const ACCEPT_RETRY: Duration = Duration::from_millis(100);
 /// How many bytes of a too-long line are read and dropped before the connection closes.
 const DRAIN_LIMIT: u64 = 1024 * 1024;
 
-/// A request that reached the UI thread, with the channel that takes its reply.
-pub type Job = (Request, async_channel::Sender<Reply>);
+/// A request that reached the UI thread. `reply` takes its answer. The connection stops waiting
+/// at `until`, so a job that is still queued after that is skipped: nobody reads its answer.
+pub struct Job {
+    pub request: Request,
+    pub until: Instant,
+    pub reply: mpsc::SyncSender<Reply>,
+}
 
 /// Binds the socket at `path`. A live socket at the path is an error, because another window
 /// owns it. A dead socket is removed first. Any other file at the path is an error too. The
@@ -80,7 +90,7 @@ pub fn spawn_listener(
         .spawn(move || {
             for connection in listener.incoming() {
                 match connection {
-                    Ok(stream) => serve(stream, &jobs, IO_TIMEOUT),
+                    Ok(stream) => serve(stream, &jobs, IO_TIMEOUT, REPLY_WAIT),
                     Err(error) => {
                         tracing::warn!(target: "contr", "dev control: accept failed: {error}");
                         std::thread::sleep(ACCEPT_RETRY);
@@ -93,12 +103,17 @@ pub fn spawn_listener(
 /// Serves one connection: reads one request line, runs it and writes the reply. A line that is
 /// too long gets its reply, and then the rest of the line is read and dropped. The client then
 /// sees the reply, not a reset.
-fn serve(mut stream: UnixStream, jobs: &async_channel::Sender<Job>, timeout: Duration) {
+fn serve(
+    mut stream: UnixStream,
+    jobs: &async_channel::Sender<Job>,
+    io_timeout: Duration,
+    reply_wait: Duration,
+) {
     // An accepted socket can inherit the listener's non-blocking mode, so the mode is set here.
     let setup = stream
         .set_nonblocking(false)
-        .and_then(|()| stream.set_read_timeout(Some(timeout)))
-        .and_then(|()| stream.set_write_timeout(Some(timeout)));
+        .and_then(|()| stream.set_read_timeout(Some(io_timeout)))
+        .and_then(|()| stream.set_write_timeout(Some(io_timeout)));
     if let Err(error) = setup {
         tracing::warn!(target: "contr", "dev control: cannot set up the connection: {error}");
         return;
@@ -106,7 +121,7 @@ fn serve(mut stream: UnixStream, jobs: &async_channel::Sender<Job>, timeout: Dur
     let (reply, too_long) = match read_line(&stream) {
         Ok(line) => {
             let too_long = line.len() > MAX_LINE && !line.ends_with(b"\n");
-            (answer(&line, jobs), too_long)
+            (answer(&line, jobs, reply_wait), too_long)
         }
         Err(error) => (
             Reply::Err(DevError::new(
@@ -134,8 +149,9 @@ fn read_line(stream: &UnixStream) -> io::Result<Vec<u8>> {
 }
 
 /// The reply to one line. A line that is not valid is answered here. A valid request goes to the
-/// UI thread, and its reply comes back on a channel of its own.
-fn answer(line: &[u8], jobs: &async_channel::Sender<Job>) -> Reply {
+/// UI thread, and its reply comes back on a channel of its own. The wait has a limit, so a UI
+/// thread that does not answer cannot hold up the accept loop.
+fn answer(line: &[u8], jobs: &async_channel::Sender<Job>, reply_wait: Duration) -> Reply {
     let Ok(text) = std::str::from_utf8(line) else {
         return Reply::Err(DevError::new(code::BAD_REQUEST, "the request is not UTF-8"));
     };
@@ -143,16 +159,38 @@ fn answer(line: &[u8], jobs: &async_channel::Sender<Job>) -> Reply {
         Ok(request) => request,
         Err(error) => return Reply::Err(error),
     };
-    let (reply_tx, reply_rx) = async_channel::bounded(1);
-    if jobs.send_blocking((request, reply_tx)).is_err() {
-        return no_window();
+    let (reply, waiting) = mpsc::sync_channel(1);
+    let job = Job {
+        request,
+        until: Instant::now() + reply_wait,
+        reply,
+    };
+    match jobs.try_send(job) {
+        Ok(()) => {}
+        Err(async_channel::TrySendError::Full(_)) => return busy(),
+        Err(async_channel::TrySendError::Closed(_)) => return no_window(),
     }
-    reply_rx.recv_blocking().unwrap_or_else(|_| no_window())
+    match waiting.recv_timeout(reply_wait) {
+        Ok(reply) => reply,
+        Err(RecvTimeoutError::Timeout) => Reply::Err(DevError::new(
+            code::NO_WINDOW,
+            "the dev window did not answer in time",
+        )),
+        Err(RecvTimeoutError::Disconnected) => no_window(),
+    }
 }
 
 /// The reply when the window that should answer is gone.
 fn no_window() -> Reply {
     Reply::Err(DevError::new(code::NO_WINDOW, "the dev window is closed"))
+}
+
+/// The reply when the requests waiting for the window are full. The window is not answering.
+fn busy() -> Reply {
+    Reply::Err(DevError::new(
+        code::NO_WINDOW,
+        "the dev window has too many requests waiting",
+    ))
 }
 
 /// Binds the socket at `path`, starts the listener thread and the UI pump for `window`. A
@@ -176,19 +214,22 @@ pub fn start(path: PathBuf, window: AnyWindowHandle, handler: Handler, cx: &mut 
 }
 
 /// The UI side. One task on the foreground executor takes each job in turn, runs the handler in
-/// the window and sends the reply back. The task lives as long as the app. Once the window is
-/// gone, every job gets `no_window`.
+/// the window and sends the reply back. A job whose connection has stopped waiting is skipped.
+/// The task lives as long as the app. Once the window is gone, every job gets `no_window`.
 fn pump(window: AnyWindowHandle, handler: Handler, cx: &mut App) -> async_channel::Sender<Job> {
     let (jobs, queue) = async_channel::bounded::<Job>(QUEUE);
     cx.spawn(async move |cx| {
-        while let Ok((request, reply)) = queue.recv().await {
+        while let Ok(job) = queue.recv().await {
+            if Instant::now() >= job.until {
+                continue;
+            }
             let answer = cx.update(|cx| {
                 window
-                    .update(cx, |_, window, cx| handler(request, window, cx))
+                    .update(cx, |_, window, cx| handler(job.request, window, cx))
                     .unwrap_or_else(|_| no_window())
             });
             // The waiting connection may have gone. Then nothing reads the reply.
-            let _ = reply.send(answer).await;
+            let _ = job.reply.try_send(answer);
         }
     })
     .detach();
@@ -304,14 +345,27 @@ mod tests {
         assert!(!path.exists());
     }
 
+    /// A job for `request` whose connection waits until `until`, and the receiver of its reply.
+    fn job_until(request: Request, until: Instant) -> (Job, mpsc::Receiver<Reply>) {
+        let (reply, waiting) = mpsc::sync_channel(1);
+        (
+            Job {
+                request,
+                until,
+                reply,
+            },
+            waiting,
+        )
+    }
+
     #[test]
     fn a_state_request_reaches_the_jobs_and_its_reply_goes_back() {
         let dir = short_dir();
         let (path, jobs) = listener_at(&dir);
         let client = std::thread::spawn(move || send(&path, b"{\"v\":1,\"cmd\":\"state\"}\n"));
-        let (request, reply) = jobs.recv_blocking().unwrap();
-        assert_eq!(request, Request::State);
-        reply.send_blocking(Reply::Ok(json!({"v": 1}))).unwrap();
+        let job = jobs.recv_blocking().unwrap();
+        assert_eq!(job.request, Request::State);
+        job.reply.send(Reply::Ok(json!({"v": 1}))).unwrap();
         assert_eq!(
             client.join().unwrap(),
             "{\"ok\":true,\"result\":{\"v\":1}}\n"
@@ -366,7 +420,7 @@ mod tests {
         let (server_end, mut client_end) = UnixStream::pair().unwrap();
         let (jobs, queue) = async_channel::bounded(QUEUE);
         // The client keeps its end open and sends nothing, so the read times out.
-        serve(server_end, &jobs, Duration::from_millis(50));
+        serve(server_end, &jobs, Duration::from_millis(50), REPLY_WAIT);
         let mut reply = String::new();
         client_end.read_to_string(&mut reply).unwrap();
         let error = error_of(&reply);
@@ -389,9 +443,9 @@ mod tests {
         let (jobs, queue) = async_channel::bounded(QUEUE);
         spawn_listener(listener, jobs).unwrap();
         let client = std::thread::spawn(move || send(&path, b"{\"v\":1,\"cmd\":\"state\"}\n"));
-        let (request, reply) = queue.recv_blocking().unwrap();
-        assert_eq!(request, Request::State);
-        reply.send_blocking(Reply::Ok(json!({"v": 1}))).unwrap();
+        let job = queue.recv_blocking().unwrap();
+        assert_eq!(job.request, Request::State);
+        job.reply.send(Reply::Ok(json!({"v": 1}))).unwrap();
         assert_eq!(
             client.join().unwrap(),
             "{\"ok\":true,\"result\":{\"v\":1}}\n"
@@ -405,11 +459,70 @@ mod tests {
         for turn in ["first", "second"] {
             let path = path.clone();
             let client = std::thread::spawn(move || send(&path, b"{\"v\":1,\"cmd\":\"state\"}\n"));
-            let (_, reply) = jobs.recv_blocking().unwrap();
+            let job = jobs.recv_blocking().unwrap();
             let sent = Reply::Ok(json!({"turn": turn}));
-            reply.send_blocking(sent.clone()).unwrap();
+            job.reply.send(sent.clone()).unwrap();
             assert_eq!(client.join().unwrap(), dev_protocol::reply_line(&sent));
         }
+    }
+
+    /// Runs one connection over a socket pair, with `request` written first, and returns the
+    /// reply line. The connection waits for the UI at most `reply_wait`.
+    fn serve_pair(
+        jobs: &async_channel::Sender<Job>,
+        request: &[u8],
+        reply_wait: Duration,
+    ) -> String {
+        let (server_end, mut client_end) = UnixStream::pair().unwrap();
+        client_end.write_all(request).unwrap();
+        serve(server_end, jobs, IO_TIMEOUT, reply_wait);
+        let mut reply = String::new();
+        client_end.read_to_string(&mut reply).unwrap();
+        reply
+    }
+
+    #[test]
+    fn a_job_the_ui_does_not_answer_in_time_gets_a_timeout_reply() {
+        let (jobs, queue) = async_channel::bounded(QUEUE);
+        let reply = serve_pair(
+            &jobs,
+            b"{\"v\":1,\"cmd\":\"state\"}\n",
+            Duration::from_millis(50),
+        );
+        let error = error_of(&reply);
+        assert_eq!(error.code, code::NO_WINDOW);
+        assert_eq!(error.message, "the dev window did not answer in time");
+        // The job stays queued, and its wait has ended, so the UI skips it when it comes round.
+        let job = queue.try_recv().unwrap();
+        assert_eq!(job.request, Request::State);
+        assert!(job.until <= Instant::now());
+    }
+
+    #[test]
+    fn a_full_queue_gets_a_busy_reply_without_a_wait() {
+        let (jobs, queue) = async_channel::bounded(QUEUE);
+        for _ in 0..QUEUE {
+            let (job, _waiting) = job_until(Request::State, Instant::now() + REPLY_WAIT);
+            assert!(jobs.try_send(job).is_ok());
+        }
+        let reply = serve_pair(&jobs, b"{\"v\":1,\"cmd\":\"state\"}\n", REPLY_WAIT);
+        let error = error_of(&reply);
+        assert_eq!(error.code, code::NO_WINDOW);
+        assert_eq!(
+            error.message,
+            "the dev window has too many requests waiting"
+        );
+        assert_eq!(queue.len(), QUEUE, "the refused request was not queued");
+    }
+
+    #[test]
+    fn a_closed_queue_gets_no_window() {
+        let (jobs, queue) = async_channel::bounded::<Job>(QUEUE);
+        drop(queue);
+        let reply = serve_pair(&jobs, b"{\"v\":1,\"cmd\":\"state\"}\n", REPLY_WAIT);
+        let error = error_of(&reply);
+        assert_eq!(error.code, code::NO_WINDOW);
+        assert_eq!(error.message, "the dev window is closed");
     }
 
     /// The root view of a test window. It draws nothing.
@@ -428,10 +541,39 @@ mod tests {
     /// Sends one request to the pump and returns its reply. The test runs the foreground tasks
     /// first, so the pump has taken the job.
     fn ask(cx: &mut TestAppContext, jobs: &async_channel::Sender<Job>, request: Request) -> Reply {
-        let (reply_tx, reply_rx) = async_channel::bounded(1);
-        assert!(jobs.try_send((request, reply_tx)).is_ok());
+        let (job, reply) = job_until(request, Instant::now() + Duration::from_secs(60));
+        assert!(jobs.try_send(job).is_ok());
         cx.run_until_parked();
-        reply_rx.try_recv().unwrap()
+        reply.try_recv().unwrap()
+    }
+
+    #[gpui::test]
+    fn a_job_whose_connection_stopped_waiting_is_not_run(cx: &mut TestAppContext) {
+        let window = test_window(cx);
+        let seen = Rc::new(RefCell::new(Vec::new()));
+        let recorder = seen.clone();
+        let recording: Handler = Rc::new(
+            move |request: Request, _window: &mut Window, _cx: &mut App| {
+                recorder.borrow_mut().push(request);
+                Reply::Ok(json!({"seen": true}))
+            },
+        );
+        let jobs = cx.update(|cx| pump(window, recording, cx));
+        // Its wait ended before the UI took it: the handler does not run, and the reply is dropped.
+        let (stale, stale_reply) = job_until(Request::State, Instant::now());
+        assert!(jobs.try_send(stale).is_ok());
+        cx.run_until_parked();
+        assert!(seen.borrow().is_empty());
+        assert_eq!(
+            stale_reply.try_recv(),
+            Err(mpsc::TryRecvError::Disconnected)
+        );
+        // A job that is still waited for runs.
+        assert_eq!(
+            ask(cx, &jobs, Request::WindowId),
+            Reply::Ok(json!({"seen": true}))
+        );
+        assert_eq!(*seen.borrow(), vec![Request::WindowId]);
     }
 
     #[gpui::test]
