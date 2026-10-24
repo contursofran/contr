@@ -7,6 +7,7 @@ pub mod colors;
 pub mod grid;
 mod keys;
 mod paint;
+mod panes;
 
 use std::cell::RefCell;
 use std::io;
@@ -30,8 +31,10 @@ use gpui::{
 };
 use tracing::debug;
 
+use crate::agents_list::{FocusFn, focus_in_background};
 use crate::theme::{TERM_PADDING, TERMINAL_FONT_SIZE, TERMINAL_LINE_HEIGHT, TEXT_2, TEXT_DIM};
 use grid::{Metrics, cell_px, grid_for};
+use panes::pane_at;
 
 /// The variable that starts the surface link (D38).
 const SURFACE_ENV: &str = "CONTR_SURFACE";
@@ -55,6 +58,8 @@ pub struct TerminalView {
     enabled: bool,
     /// Starts the link.
     start: Starter,
+    /// Asks herdr to focus a pane a click picked. The app's call runs in the background.
+    focus_pane: FocusFn,
     /// The link and the handle that sends through it. The handle is `None` until the link starts.
     link: Option<(SurfaceLink, LinkHandle)>,
     state: LinkState,
@@ -67,6 +72,9 @@ pub struct TerminalView {
     grid: Option<(GridSize, CellPx)>,
     /// The metrics of the last layout. The IME places its window with them.
     metrics: Option<Metrics>,
+    /// Where cell (0, 0) is painted, in window pixels, as of the last layout. A click is mapped
+    /// to a cell with it.
+    cells_origin: Option<Point<Pixels>>,
     /// The size herdr was last told, in the hello or a resize.
     sent: Option<(GridSize, CellPx)>,
     /// When the size was last sent again after the owner typed (D12).
@@ -97,10 +105,18 @@ impl TerminalView {
         let _activation = cx.observe_window_activation(window, |this, window, cx| {
             this.set_window_active(window.is_window_active(), cx);
         });
+        // Tests never reach herdr's socket, so their focus call does nothing; the tests that count
+        // focus calls replace it.
+        let focus_pane: FocusFn = if cfg!(test) {
+            Rc::new(|_: String, _: &mut App| {})
+        } else {
+            Rc::new(focus_in_background)
+        };
         Self {
             focus,
             enabled: !cfg!(test) && std::env::var(SURFACE_ENV).is_ok_and(|v| v == "1"),
             start: spawn_link,
+            focus_pane,
             link: None,
             state: LinkState::Connecting,
             surface: None,
@@ -108,6 +124,7 @@ impl TerminalView {
             window_active: window.is_window_active(),
             grid: None,
             metrics: None,
+            cells_origin: None,
             sent: None,
             reasserted_at: None,
             resize_task: None,
@@ -132,6 +149,7 @@ impl TerminalView {
     ) -> Option<Metrics> {
         let m = cell_metrics(window)?;
         self.metrics = Some(m);
+        self.cells_origin = Some(bounds.origin + point(px(m.pad), px(m.pad)));
         let width = f32::from(bounds.size.width);
         let height = f32::from(bounds.size.height);
         if let Some(size) = grid_for(width, height, &m) {
@@ -299,10 +317,36 @@ impl TerminalView {
         }
     }
 
-    /// A click takes the keyboard, and tries a failed link start again.
-    fn click(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// The keyboard focus of the view, for the dev control's `terminal` click.
+    #[cfg(debug_assertions)]
+    pub(crate) fn focus_handle(&self) -> &FocusHandle {
+        &self.focus
+    }
+
+    /// A click takes the keyboard, and tries a failed link start again. A click on a pane that
+    /// herdr does not focus also makes herdr focus it.
+    fn click(&mut self, at: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.focus, cx);
         self.ensure_link(cx);
+        self.focus_clicked_pane(at, cx);
+    }
+
+    /// Asks herdr to focus the pane under `at`, when that pane is not the focused one. A point on a
+    /// border, outside the panes, or with no surface sends nothing.
+    fn focus_clicked_pane(&mut self, at: Point<Pixels>, cx: &mut Context<Self>) {
+        let (Some(origin), Some(m), Some(surface)) =
+            (self.cells_origin, self.metrics, self.surface.as_deref())
+        else {
+            return;
+        };
+        let x = f32::from(at.x - origin.x);
+        let y = f32::from(at.y - origin.y);
+        let Some(pane) = pane_at(surface, m, x, y) else {
+            return;
+        };
+        if self.focused_pane().as_deref() != Some(pane.pane_id.as_str()) {
+            (self.focus_pane)(pane.pane_id.clone(), cx);
+        }
     }
 
     /// A key the terminal takes is sent to the focused pane, and the event stops there. Cmd-V alone
@@ -675,7 +719,9 @@ impl Render for TerminalView {
             }))
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(|this, _: &MouseDownEvent, window, cx| this.click(window, cx)),
+                cx.listener(|this, event: &MouseDownEvent, window, cx| {
+                    this.click(event.position, window, cx)
+                }),
             )
             .when(stale, |grid| grid.opacity(STALE_OPACITY))
             .child(
@@ -868,6 +914,68 @@ mod tests {
     /// The size and cell the view last sent. Tests use it to name the resize herdr should get.
     fn sent_size(cx: &mut VisualTestContext, view: &Entity<TerminalView>) -> (GridSize, CellPx) {
         view.read_with(cx, |view, _| view.sent.unwrap())
+    }
+
+    /// Two panes side by side in a 12 × 4 surface, `p1` at the left and `p2` at the right. Each
+    /// pane's inner rect leaves a one-cell border. `focused` names the pane herdr focuses, if any.
+    fn two_panes(revision: u64, focused: Option<&str>) -> Arc<Surface> {
+        let pane = |id: &str, x: u16| SurfacePane {
+            pane_id: id.to_owned(),
+            rect: Rect {
+                x,
+                y: 0,
+                width: 6,
+                height: 4,
+            },
+            inner_rect: Rect {
+                x: x + 1,
+                y: 1,
+                width: 4,
+                height: 2,
+            },
+            focused: focused == Some(id),
+            alternate_screen: false,
+        };
+        Arc::new(Surface {
+            boot_id: "boot".to_owned(),
+            projection_revision: 1,
+            revision,
+            size: GridSize { cols: 12, rows: 4 },
+            rows: Vec::new(),
+            cursor: None,
+            panes: vec![pane("p1", 0), pane("p2", 6)],
+        })
+    }
+
+    /// Replaces the focus call with one that records the pane ids it is given, in order.
+    fn recording_focus(
+        cx: &mut VisualTestContext,
+        view: &Entity<TerminalView>,
+    ) -> Rc<RefCell<Vec<String>>> {
+        let asked = Rc::new(RefCell::new(Vec::new()));
+        let sink = Rc::clone(&asked);
+        view.update(cx, |view, _| {
+            view.focus_pane = Rc::new(move |pane: String, _: &mut App| {
+                sink.borrow_mut().push(pane);
+            });
+        });
+        asked
+    }
+
+    /// The window point at the centre of grid cell (`col`, `row`), as laid out by the last frame.
+    fn cell_centre(
+        cx: &mut VisualTestContext,
+        view: &Entity<TerminalView>,
+        col: u16,
+        row: u16,
+    ) -> Point<Pixels> {
+        let m = view.read_with(cx, |view, _| view.metrics).unwrap();
+        let grid = cx.debug_bounds("terminal-grid").unwrap();
+        grid.origin
+            + point(
+                px(m.pad + (f32::from(col) + 0.5) * m.cell_w),
+                px(m.pad + (f32::from(row) + 0.5) * m.cell_h),
+            )
     }
 
     /// A start that fails the way a thread that cannot be made does.
@@ -1186,6 +1294,99 @@ mod tests {
 
         cx.simulate_click(point(px(CENTRE.0), px(CENTRE.1)), Modifiers::none());
         assert!(cx.update(|window, _| focus.is_focused(window)));
+    }
+
+    #[gpui::test]
+    fn a_click_on_a_pane_herdr_does_not_focus_asks_herdr_for_it_once(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        view.update(cx, |view, cx| {
+            view.accept_surface(two_panes(1, Some("p1")), cx)
+        });
+        let asked = recording_focus(cx, &view);
+
+        let right = cell_centre(cx, &view, 8, 2);
+        cx.simulate_click(right, Modifiers::none());
+        cx.run_until_parked();
+        assert_eq!(*asked.borrow(), vec!["p2".to_owned()]);
+
+        // herdr shows p2 focused: a click on it asks for nothing more.
+        view.update(cx, |view, cx| {
+            view.accept_surface(two_panes(2, Some("p2")), cx)
+        });
+        cx.simulate_click(right, Modifiers::none());
+        cx.run_until_parked();
+        assert_eq!(*asked.borrow(), vec!["p2".to_owned()]);
+    }
+
+    #[gpui::test]
+    fn a_click_on_the_focused_pane_asks_herdr_for_nothing(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        view.update(cx, |view, cx| {
+            view.accept_surface(two_panes(1, Some("p1")), cx)
+        });
+        let asked = recording_focus(cx, &view);
+
+        let left = cell_centre(cx, &view, 2, 2);
+        cx.simulate_click(left, Modifiers::none());
+        cx.run_until_parked();
+        assert!(asked.borrow().is_empty());
+    }
+
+    #[gpui::test]
+    fn a_click_that_is_not_on_a_pane_asks_herdr_for_nothing(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        view.update(cx, |view, cx| {
+            view.accept_surface(two_panes(1, Some("p1")), cx)
+        });
+        let asked = recording_focus(cx, &view);
+
+        // A pane's corner, its right border, and the other pane's left border.
+        for (col, row) in [(0, 0), (5, 2), (6, 2)] {
+            let at = cell_centre(cx, &view, col, row);
+            cx.simulate_click(at, Modifiers::none());
+        }
+        // Below the surface, and in the padding before the first cell.
+        let below = cell_centre(cx, &view, 2, 10);
+        cx.simulate_click(below, Modifiers::none());
+        let grid = cx.debug_bounds("terminal-grid").unwrap();
+        cx.simulate_click(grid.origin + point(px(2.), px(2.)), Modifiers::none());
+        cx.run_until_parked();
+        assert!(asked.borrow().is_empty());
+    }
+
+    #[gpui::test]
+    fn a_click_with_no_surface_asks_herdr_for_nothing(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        let asked = recording_focus(cx, &view);
+
+        cx.simulate_click(point(px(CENTRE.0), px(CENTRE.1)), Modifiers::none());
+        cx.run_until_parked();
+        assert!(asked.borrow().is_empty());
+    }
+
+    #[gpui::test]
+    fn a_click_asks_for_the_pane_the_shell_reports_when_no_pane_is_focused(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        view.update(cx, |view, cx| {
+            view.shell_pane = Some("p1".to_owned());
+            view.accept_surface(two_panes(1, None), cx);
+        });
+        let asked = recording_focus(cx, &view);
+
+        // The shell's pane is p1, so a click on p1 asks for nothing; a click on p2 asks for p2.
+        let left = cell_centre(cx, &view, 2, 2);
+        cx.simulate_click(left, Modifiers::none());
+        let right = cell_centre(cx, &view, 8, 2);
+        cx.simulate_click(right, Modifiers::none());
+        cx.run_until_parked();
+        assert_eq!(*asked.borrow(), vec!["p2".to_owned()]);
     }
 
     #[gpui::test]
