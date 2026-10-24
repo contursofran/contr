@@ -52,7 +52,7 @@ impl AgentsList {
     }
 
     /// `new` with the focus call given, so the tests can record the pane ids that a click focuses.
-    fn with_focus(focus: FocusFn, cx: &mut Context<Self>) -> Self {
+    pub(crate) fn with_focus(focus: FocusFn, cx: &mut Context<Self>) -> Self {
         let herdr = cx.global::<GlobalHerdr>().0.clone();
         let selection = cx.global::<GlobalSelection>().0.clone();
         let board = cx
@@ -142,11 +142,20 @@ impl AgentsList {
     }
 
     /// The pane of the selected agent, if an agent is selected.
-    fn selected_pane(&self, cx: &App) -> Option<String> {
+    pub(crate) fn selected_pane(&self, cx: &App) -> Option<String> {
         match &self.selection.read(cx).current {
             Some(Selected::Agent(pane_id)) => Some(pane_id.clone()),
             _ => None,
         }
+    }
+
+    /// The rows the list shows, in order: what the row views hold. Empty without a tree.
+    #[cfg(debug_assertions)]
+    pub(crate) fn rows(&self, cx: &App) -> Vec<AgentRow> {
+        self.rows
+            .iter()
+            .map(|view| view.read(cx).row.clone())
+            .collect()
     }
 
     /// A selected agent that the new tree no longer has leaves the selection. Another kind of
@@ -164,7 +173,7 @@ impl AgentsList {
 
     /// A row was clicked: it becomes the selection, and herdr focuses its pane. A second click on
     /// the same row focuses it again.
-    fn activate(&mut self, pane_id: String, cx: &mut Context<Self>) {
+    pub(crate) fn activate(&mut self, pane_id: String, cx: &mut Context<Self>) {
         self.selection.update(cx, |selection, cx| {
             selection.select(Selected::Agent(pane_id.clone()), cx)
         });

@@ -339,7 +339,9 @@ mod tests {
         assert_eq!(state["selection"], Value::Null);
         // The terminal takes the focus when it is built.
         assert_eq!(state["focus"], "terminal");
-        for section in ["sidebar", "title", "status_bar"] {
+        // The sidebar is open, so its section is there. It has no repos without a herdr tree.
+        assert_eq!(state["sidebar"]["repos"], json!([]));
+        for section in ["title", "status_bar"] {
             assert_eq!(
                 state[section],
                 Value::Null,
@@ -560,7 +562,7 @@ mod tests {
             .code,
             code::NOT_A_ROW
         );
-        // A row id passes the row check. No sidebar owns it yet, so it is an unknown id.
+        // A row id passes the row check. No row has this id, so it is an unknown id.
         let reply = send(
             cx,
             Request::Select {

@@ -1,5 +1,6 @@
 //! Messages of herdr's endpoint socket, generation 1: the ones contr sends
-//! (hello, resize, input, focus, detach) and the server ones it reads. Surface
+//! (hello, resize, input with keys, text, paste and wheel, focus, detach) and
+//! the server ones it reads. Surface
 //! frames and patches are decoded in `surface`. Written from herdr's wire
 //! layout; see NOTICE.
 
@@ -86,6 +87,15 @@ pub mod mods {
     pub const ALT: u8 = 4;
 }
 
+/// The direction of one wheel step. `Left` and `Right` are horizontal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WheelDir {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InputEvent {
     Key {
@@ -95,6 +105,15 @@ pub enum InputEvent {
     },
     Text(String),
     Paste(String),
+    /// A wheel step at a cell of the pane, relative to its inner rect. herdr scrolls its own
+    /// history by `lines`, or sends one wheel report or arrow key to the program.
+    Wheel {
+        dir: WheelDir,
+        column: u16,
+        row: u16,
+        mods: u8,
+        lines: u16,
+    },
 }
 
 /// What contr sends to herdr.
@@ -227,6 +246,27 @@ fn put_event(e: &mut Enc, event: &InputEvent) {
         InputEvent::Paste(text) => {
             e.vu(3); // Paste
             e.str(text);
+        }
+        InputEvent::Wheel {
+            dir,
+            column,
+            row,
+            mods,
+            lines,
+        } => {
+            e.vu(2); // Mouse
+            e.vu(match dir {
+                WheelDir::Up => 4,    // ScrollUp
+                WheelDir::Down => 5,  // ScrollDown
+                WheelDir::Left => 6,  // ScrollLeft
+                WheelDir::Right => 7, // ScrollRight
+            });
+            e.vu(0); // position: Cell
+            e.vu(u64::from(*column));
+            e.vu(u64::from(*row));
+            e.none(); // geometry: none, as cells are sent, not pixels
+            e.u8(*mods);
+            e.vu(u64::from(*lines));
         }
     }
 }
@@ -529,6 +569,66 @@ mod tests {
             },
         );
         assert_eq!(e.buf, [0, 1, 0, 1, 1, 0, 0, 0, 0, 0], "repeat is kind 1");
+    }
+
+    #[test]
+    fn wheel_golden_bytes() {
+        let events = [
+            InputEvent::Wheel {
+                dir: WheelDir::Up,
+                column: 3,
+                row: 200,
+                mods: mods::SHIFT,
+                lines: 3,
+            },
+            InputEvent::Wheel {
+                dir: WheelDir::Down,
+                column: 0,
+                row: 0,
+                mods: 0,
+                lines: 300,
+            },
+        ];
+        let msg = ClientMsg::Input {
+            pane_id: "w1:p1",
+            events: &events,
+        };
+        // Tag 13, pane id (len 5), 2 events.
+        // Wheel Up: tag 2 (Mouse), kind 4 (ScrollUp), position tag 0 (Cell), column 3, row 200,
+        //   geometry none, mods 1 (SHIFT), lines 3.
+        // Wheel Down: tag 2, kind 5 (ScrollDown), Cell 0, column 0, row 0, none, mods 0,
+        //   lines 300 (marker 251, then u16 little-endian: 44, 1).
+        #[rustfmt::skip]
+        let expected = [
+            13, 5, b'w', b'1', b':', b'p', b'1',
+            2,
+            2, 4, 0, 3, 200, 0, 1, 3,
+            2, 5, 0, 0, 0, 0, 0, 251, 44, 1,
+        ];
+        assert_eq!(msg.encode(), expected);
+    }
+
+    #[test]
+    fn every_wheel_direction_has_its_kind() {
+        let cases: [(WheelDir, u8); 4] = [
+            (WheelDir::Up, 4),
+            (WheelDir::Down, 5),
+            (WheelDir::Left, 6),
+            (WheelDir::Right, 7),
+        ];
+        for (dir, kind) in cases {
+            let event = InputEvent::Wheel {
+                dir,
+                column: 0,
+                row: 0,
+                mods: 0,
+                lines: 1,
+            };
+            let mut e = Enc::default();
+            put_event(&mut e, &event);
+            // Mouse tag 2, the kind, Cell 0, column 0, row 0, geometry none, mods 0, lines 1.
+            assert_eq!(e.buf, [2, kind, 0, 0, 0, 0, 0, 1], "{dir:?}");
+        }
     }
 
     #[test]
