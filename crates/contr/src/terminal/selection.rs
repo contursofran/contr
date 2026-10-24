@@ -277,10 +277,14 @@ fn word(surface: &Surface, region: &Region, row: u16, column: u16) -> Option<Ran
 }
 
 /// The cells one pointer chose in one pane. The pane is looked up in the surface on every use, so
-/// a pane that closed or shrank neither paints nor copies stale cells.
+/// a pane that closed, moved or changed size neither paints nor copies stale cells: its cells are
+/// not the ones the pointer chose.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Selection {
     pane_id: String,
+    /// The pane's inner rect when the press landed. A pane whose rect changed no longer holds these
+    /// cells, so the selection is stale.
+    rect: Rect,
     unit: Unit,
     /// The unit the press chose. A drag never gives it up.
     origin: (Edge, Edge),
@@ -288,7 +292,7 @@ pub struct Selection {
     head: Edge,
     dragging: bool,
     /// The hash of each selected row's text when the drag ended, sorted by row. See
-    /// `remember_text`.
+    /// `text_unchanged`.
     seen: Vec<(u16, u64)>,
 }
 
@@ -305,6 +309,7 @@ impl Selection {
         let origin = unit.span(surface, &region, edge);
         Some(Self {
             pane_id: pane.pane_id.clone(),
+            rect: pane.inner_rect,
             unit,
             origin,
             anchor: origin.0,
@@ -349,14 +354,19 @@ impl Selection {
         changed
     }
 
-    /// Ends the drag. Returns `true` when this call ended it, and `false` when it had already
-    /// ended.
-    pub fn release(&mut self) -> bool {
-        std::mem::take(&mut self.dragging)
+    /// Ends the drag, and remembers the text of the selected rows so `text_unchanged` can tell
+    /// later whether the program has written over them. Returns `true` when this call ended the
+    /// drag, and `false` when it had already ended.
+    pub fn release(&mut self, surface: &Surface) -> bool {
+        if !std::mem::take(&mut self.dragging) {
+            return false;
+        }
+        self.remember_text(surface);
+        true
     }
 
     /// The selected columns of each row the pane shows, as surface rows. Empty for a click that did
-    /// not leave its half-cell, and for a pane that is no longer on screen.
+    /// not leave its half-cell, and for a pane that moved, changed size or is no longer on screen.
     pub fn rows(&self, surface: &Surface) -> Vec<(u16, Range<u16>)> {
         self.region(surface)
             .map(|region| self.spans(&region))
@@ -364,8 +374,9 @@ impl Selection {
     }
 
     /// The selected text, one line per row, with the trailing spaces removed from each line. A wide
-    /// glyph is written once. A concealed cell is written as a space. `Stale` when the pane or one
-    /// of its rows is gone, and `TooLarge` past `MAX_SELECTION_BYTES`.
+    /// glyph is written once. A concealed cell is written as a space. `Stale` when the pane moved,
+    /// changed size or one of its rows is gone, so a selection never copies part of a pane.
+    /// `TooLarge` past `MAX_SELECTION_BYTES`.
     pub fn text(&self, surface: &Surface) -> Result<String, SelectionError> {
         let region = self.region(surface).ok_or(SelectionError::Stale)?;
         let mut text = String::new();
@@ -384,15 +395,14 @@ impl Selection {
         Ok(text)
     }
 
-    /// Remembers the text of the selected rows, so `text_unchanged` can tell later whether the
-    /// program has written over them.
+    /// Remembers the text of the selected rows. `release` calls this, so a view does not have to.
     pub fn remember_text(&mut self, surface: &Surface) {
         self.seen = self.row_hashes(surface);
     }
 
     /// False once a remembered row shows other text: the program wrote over the selected rows, and
-    /// the highlight would mark cells the user did not choose. A row that was not remembered, or
-    /// that is no longer on screen, is no evidence either way.
+    /// the highlight would mark cells the user did not choose. A row that is no longer on screen is
+    /// no evidence either way.
     pub fn text_unchanged(&self, surface: &Surface) -> bool {
         self.row_hashes(surface).iter().all(|&(row, hash)| {
             self.seen
@@ -419,13 +429,16 @@ impl Selection {
             .collect()
     }
 
-    /// The pane's region, or `None` once the surface no longer shows the pane.
+    /// The pane's region, or `None` once the surface no longer shows the pane, or shows it with
+    /// another rect.
     fn region(&self, surface: &Surface) -> Option<Region> {
         let pane = surface
             .panes
             .iter()
             .find(|pane| pane.pane_id == self.pane_id)?;
-        Region::of(pane.inner_rect)
+        (pane.inner_rect == self.rect)
+            .then_some(pane.inner_rect)
+            .and_then(Region::of)
     }
 
     /// The first and last edge, in reading order.
@@ -579,7 +592,7 @@ mod tests {
         let mut selection =
             Selection::begin(surface, M, from.0, from.1, 1).expect("a press on a pane");
         selection.extend(surface, M, to.0, to.1);
-        selection.release();
+        selection.release(surface);
         selection
     }
 
@@ -719,9 +732,9 @@ mod tests {
         assert!(selection.dragging());
         assert!(selection.rows(&surface).is_empty());
         assert_eq!(copied(&selection, &surface), "");
-        assert!(selection.release());
+        assert!(selection.release(&surface));
         assert!(!selection.dragging());
-        assert!(!selection.release());
+        assert!(!selection.release(&surface));
     }
 
     #[test]
@@ -870,7 +883,7 @@ mod tests {
         assert_eq!(selection.rows(&surface), vec![(0, 0..6)]);
         assert_eq!(copied(&selection, &surface), "ab  cd");
         selection.extend(&surface, M, right(2, 1).0, right(2, 1).1);
-        selection.release();
+        selection.release(&surface);
         assert_eq!(copied(&selection, &surface), "ab  cd\nxyz");
     }
 
@@ -887,7 +900,7 @@ mod tests {
         let surface = screen(vec![cells("one two three")], vec![pane("p", 0, 0, 13, 1)]);
         let mut selection = press(&surface, right(5, 0), 2);
         selection.extend(&surface, M, left(0, 0).0, left(0, 0).1);
-        selection.release();
+        selection.release(&surface);
         assert_eq!(copied(&selection, &surface), "one two");
     }
 
@@ -905,7 +918,7 @@ mod tests {
         let surface = screen(vec![cells("abcdef")], vec![pane("p", 0, 0, 6, 1)]);
         let mut selection = press(&surface, left(1, 0), 1);
         selection.extend(&surface, M, right(3, 0).0, right(3, 0).1);
-        selection.release();
+        selection.release(&surface);
         assert!(!selection.extend(&surface, M, right(5, 0).0, right(5, 0).1));
         assert_eq!(selection.rows(&surface), vec![(0, 1..4)]);
     }
@@ -918,7 +931,7 @@ mod tests {
         );
         let mut selection = press(&surface, left(1, 0), 1);
         selection.extend(&surface, M, right(7, 0).0, right(7, 0).1);
-        selection.release();
+        selection.release(&surface);
         assert_eq!(selection.pane_id(), "a");
         assert_eq!(copied(&selection, &surface), "bcd");
     }
@@ -930,6 +943,34 @@ mod tests {
         surface.panes.clear();
         assert!(selection.rows(&surface).is_empty());
         assert_eq!(selection.text(&surface), Err(SelectionError::Stale));
+    }
+
+    #[test]
+    fn a_selection_gives_no_text_once_its_pane_moves() {
+        let before = screen(vec![cells("abcdef")], vec![pane("p", 0, 0, 6, 1)]);
+        let selection = drag(&before, left(1, 0), right(3, 0));
+        assert_eq!(copied(&selection, &before), "bcd");
+
+        // The pane shows the same text, one row down: the cells the pointer chose are not under the
+        // selection any more, so the text alone would not tell.
+        let moved = screen(
+            vec![cells("abcdef"), cells("abcdef")],
+            vec![pane("p", 0, 1, 6, 1)],
+        );
+        assert!(selection.rows(&moved).is_empty());
+        assert_eq!(selection.text(&moved), Err(SelectionError::Stale));
+    }
+
+    #[test]
+    fn a_selection_gives_no_text_once_its_pane_shrinks() {
+        let before = screen(vec![cells("ab"), cells("cd")], vec![pane("p", 0, 0, 2, 2)]);
+        let selection = drag(&before, left(0, 0), right(1, 1));
+        assert_eq!(copied(&selection, &before), "ab\ncd");
+
+        // One row is gone: a copy would be part of the selection, so there is none.
+        let shrunk = screen(vec![cells("ab")], vec![pane("p", 0, 0, 2, 1)]);
+        assert!(selection.rows(&shrunk).is_empty());
+        assert_eq!(selection.text(&shrunk), Err(SelectionError::Stale));
     }
 
     #[test]
@@ -978,8 +1019,7 @@ mod tests {
     #[test]
     fn text_unchanged_holds_while_the_selected_text_reads_the_same() {
         let before = screen(vec![cells("abcdef")], vec![pane("p", 0, 0, 6, 1)]);
-        let mut selection = drag(&before, left(1, 0), right(3, 0));
-        selection.remember_text(&before);
+        let selection = drag(&before, left(1, 0), right(3, 0));
 
         let mut recoloured = cells("abcdef");
         recoloured.iter_mut().for_each(|cell| cell.fg = 1);
@@ -990,8 +1030,7 @@ mod tests {
     #[test]
     fn text_unchanged_fails_once_a_selected_row_is_written_over() {
         let before = screen(vec![cells("abcdef")], vec![pane("p", 0, 0, 6, 1)]);
-        let mut selection = drag(&before, left(1, 0), right(3, 0));
-        selection.remember_text(&before);
+        let selection = drag(&before, left(1, 0), right(3, 0));
 
         let written = screen(vec![cells("axcdef")], vec![pane("p", 0, 0, 6, 1)]);
         assert!(!selection.text_unchanged(&written));
@@ -1000,17 +1039,17 @@ mod tests {
     #[test]
     fn text_unchanged_ignores_a_change_outside_the_selected_cells() {
         let before = screen(vec![cells("abcdef")], vec![pane("p", 0, 0, 6, 1)]);
-        let mut selection = drag(&before, left(1, 0), right(3, 0));
-        selection.remember_text(&before);
+        let selection = drag(&before, left(1, 0), right(3, 0));
 
         let written = screen(vec![cells("abcdez")], vec![pane("p", 0, 0, 6, 1)]);
         assert!(selection.text_unchanged(&written));
     }
 
     #[test]
-    fn text_unchanged_is_true_when_nothing_was_remembered() {
+    fn a_drag_still_in_progress_remembers_no_text() {
         let before = screen(vec![cells("abcdef")], vec![pane("p", 0, 0, 6, 1)]);
-        let selection = drag(&before, left(1, 0), right(3, 0));
+        let mut selection = press(&before, left(1, 0), 1);
+        selection.extend(&before, M, right(3, 0).0, right(3, 0).1);
 
         let written = screen(vec![cells("xxxxxx")], vec![pane("p", 0, 0, 6, 1)]);
         assert!(selection.text_unchanged(&written));

@@ -1,3 +1,4 @@
+// Adapted from Herdr UI (Apache-2.0); changes: one surface and one pane selection, no scrollback or copy on select; the pointer gesture and its order are adapted.
 //! The terminal view: the focused herdr tab, painted from the surface link, typed into and
 //! scrolled through it. The link starts only with `CONTR_SURFACE=1` (D38). Without it the view
 //! shows a line and connects to nothing.
@@ -28,9 +29,10 @@ use contr_herdr::endpoint::messages::{CellPx, GridSize, InputEvent};
 use contr_herdr::endpoint::surface::Surface;
 use gpui::{
     App, Bounds, ClipboardItem, Context, ElementInputHandler, EntityInputHandler, FocusHandle,
-    InputHandler, IntoElement, KeyDownEvent, Modifiers, MouseButton, MouseDownEvent, ParentElement,
-    Pixels, Point, Render, ScrollWheelEvent, Styled, Subscription, Task, TextInputConfiguration,
-    TouchPhase, UTF16Selection, Window, canvas, div, point, prelude::*, px, rgb, size,
+    InputHandler, IntoElement, KeyDownEvent, Modifiers, MouseButton, MouseDownEvent,
+    MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, Point, Render, ScrollWheelEvent, Styled,
+    Subscription, Task, TextInputConfiguration, TouchPhase, UTF16Selection, Window, canvas, div,
+    point, prelude::*, px, rgb, size,
 };
 use tracing::debug;
 
@@ -39,6 +41,7 @@ use crate::agents_list::{FocusFn, focus_in_background};
 use crate::theme::{TERM_PADDING, TERMINAL_FONT_SIZE, TERMINAL_LINE_HEIGHT, TEXT_2, TEXT_DIM};
 use grid::{Metrics, cell_px, grid_for};
 use panes::pane_at;
+use selection::Selection;
 
 /// The variable that starts the surface link (D38).
 const SURFACE_ENV: &str = "CONTR_SURFACE";
@@ -92,6 +95,8 @@ pub struct TerminalView {
     resize_task: Option<Task<()>>,
     /// The text the IME is composing. It is painted at the cursor, and sent when it is committed.
     marked: Option<String>,
+    /// The cells the pointer chose, or `None`. The view paints their tint and Cmd-C copies them.
+    selection: Option<Selection>,
     /// Shaped text per row, reused while herdr sends the same row. The canvas paints it.
     rows_cache: Rc<RefCell<paint::RowCache>>,
     _drain: Option<Task<()>>,
@@ -143,6 +148,7 @@ impl TerminalView {
             reasserted_at: None,
             resize_task: None,
             marked: None,
+            selection: None,
             rows_cache: Rc::default(),
             _drain: None,
             _activation,
@@ -281,7 +287,8 @@ impl TerminalView {
         cx.write_to_clipboard(ClipboardItem::new_string(text));
     }
 
-    /// Shows `next` unless it is the surface already shown. A new revision notifies once.
+    /// Shows `next` unless it is the surface already shown. A new revision notifies once. A released
+    /// selection whose rows the program wrote over, or whose pane moved or went, goes with it.
     fn accept_surface(&mut self, next: Arc<Surface>, cx: &mut Context<Self>) {
         let same = self.surface.as_ref().is_some_and(|held| {
             held.boot_id == next.boot_id
@@ -293,6 +300,7 @@ impl TerminalView {
             return;
         }
         self.surface = Some(next);
+        self.retire_selection();
         cx.notify();
     }
 
@@ -310,6 +318,7 @@ impl TerminalView {
             LinkState::NotRunning(_) | LinkState::Incompatible(_)
         ) {
             self.surface = None;
+            self.selection = None;
             self.rows_cache.borrow_mut().clear();
             self.wheel.clear();
         }
@@ -351,12 +360,124 @@ impl TerminalView {
         &self.focus
     }
 
-    /// A click takes the keyboard, and tries a failed link start again. A click on a pane that
-    /// herdr does not focus also makes herdr focus it.
-    fn click(&mut self, at: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
+    /// A left press: the keyboard goes to the terminal, a failed link start is tried again, and
+    /// herdr focuses the pane under the pointer. The press also starts a selection, unless Cmd is
+    /// down: a Cmd-click is the link gesture (#104), so it takes no selection and leaves the one on
+    /// screen alone.
+    fn mouse_down(&mut self, event: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.focus, cx);
         self.ensure_link(cx);
-        self.focus_clicked_pane(at, cx);
+        self.focus_clicked_pane(event.position, cx);
+        if event.modifiers.platform {
+            return;
+        }
+        self.begin_selection(event.position, event.click_count, cx);
+    }
+
+    /// A move with the left button down follows the pointer, clamped to the pane of the press.
+    fn mouse_move(&mut self, event: &MouseMoveEvent, cx: &mut Context<Self>) {
+        if event.pressed_button != Some(MouseButton::Left) {
+            return;
+        }
+        let position = self.grid_position(event.position);
+        let (Some(m), Some((x, y)), Some(surface)) =
+            (self.metrics, position, self.surface.as_deref())
+        else {
+            return;
+        };
+        let Some(selection) = self.selection.as_mut() else {
+            return;
+        };
+        if selection.extend(surface, m, x, y) {
+            cx.notify();
+        }
+    }
+
+    /// Ends the drag. Nothing is copied: macOS copies only on Cmd-C (D83). A press that chose no
+    /// cell leaves no selection. A released selection stays, so Cmd-C can copy it later.
+    fn mouse_up(&mut self, cx: &mut Context<Self>) {
+        let Some(surface) = self.surface.clone() else {
+            return;
+        };
+        let Some(selection) = self.selection.as_mut() else {
+            return;
+        };
+        if !selection.release(&surface) {
+            return;
+        }
+        if selection.rows(&surface).is_empty() {
+            self.selection = None;
+            cx.notify();
+        }
+    }
+
+    /// Starts a selection at a press: the half-cell under it, the word for a double click, or the
+    /// row for a triple click. A press that lands on no pane clears the one on screen.
+    fn begin_selection(&mut self, at: Point<Pixels>, clicks: usize, cx: &mut Context<Self>) {
+        let next = match (
+            self.surface.as_deref(),
+            self.metrics,
+            self.grid_position(at),
+        ) {
+            (Some(surface), Some(m), Some((x, y))) => Selection::begin(surface, m, x, y, clicks),
+            _ => None,
+        };
+        self.set_selection(next, cx);
+    }
+
+    /// Shows `next` as the selection. Only a change notifies, so a drag repaints on a new cell only.
+    fn set_selection(&mut self, next: Option<Selection>, cx: &mut Context<Self>) {
+        if self.selection == next {
+            return;
+        }
+        self.selection = next;
+        cx.notify();
+    }
+
+    /// The point in pixels from the top-left corner of cell (0, 0), as the selection model takes
+    /// it. `None` before the first layout.
+    fn grid_position(&self, at: Point<Pixels>) -> Option<(f32, f32)> {
+        let origin = self.cells_origin?;
+        Some((f32::from(at.x - origin.x), f32::from(at.y - origin.y)))
+    }
+
+    /// Drops a released selection once the program writes over its rows, or its pane moves, changes
+    /// size or goes. A drag is left alone: it follows the pointer and copies from the rows on
+    /// screen.
+    fn retire_selection(&mut self) {
+        let Some(surface) = self.surface.as_deref() else {
+            return;
+        };
+        let Some(selection) = self.selection.as_ref() else {
+            return;
+        };
+        if selection.dragging() {
+            return;
+        }
+        if selection.rows(surface).is_empty() || !selection.text_unchanged(surface) {
+            self.selection = None;
+        }
+    }
+
+    /// Writes the selected text to the clipboard and reports whether there was any. Cmd-C and the
+    /// Edit menu's Copy item (#106) call this. An empty or stale selection copies nothing, so the
+    /// key falls through to the app.
+    pub(crate) fn copy_selection(&self, cx: &mut Context<Self>) -> bool {
+        let (Some(selection), Some(surface)) = (self.selection.as_ref(), self.surface.as_deref())
+        else {
+            return false;
+        };
+        match selection.text(surface) {
+            Ok(text) if !text.is_empty() => {
+                cx.write_to_clipboard(ClipboardItem::new_string(text));
+                true
+            }
+            Ok(_) => false,
+            Err(e) => {
+                debug!("terminal selection not copied: {e:?}");
+                false
+            }
+        }
     }
 
     /// Asks herdr to focus the pane under `at`, when that pane is not the focused one. A point on a
@@ -377,12 +498,15 @@ impl TerminalView {
         }
     }
 
-    /// A key the terminal takes is sent to the focused pane, and the event stops there. Cmd-V alone
-    /// pastes the clipboard's text. Other keys reach the app.
+    /// A key the terminal takes is sent to the focused pane, and the event stops there. Cmd-C
+    /// copies the selection, and falls through with none. Cmd-V alone pastes the clipboard's text.
+    /// Other keys reach the app.
     fn key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         self.ensure_link(cx);
         let keystroke = &event.keystroke;
-        let taken = if keystroke.key == "v" && keystroke.modifiers == Modifiers::command() {
+        let taken = if keystroke.key == "c" && keystroke.modifiers == Modifiers::command() {
+            self.copy_selection(cx)
+        } else if keystroke.key == "v" && keystroke.modifiers == Modifiers::command() {
             self.paste_clipboard(cx);
             true
         } else if let Some(ev) = keys::key_event(keystroke) {
@@ -805,6 +929,10 @@ impl Render for TerminalView {
         let input_view = view.clone();
         let surface = self.surface.clone();
         let marked = self.marked.clone();
+        let highlights = match (self.selection.as_ref(), self.surface.as_deref()) {
+            (Some(selection), Some(surface)) => selection.rows(surface),
+            _ => Vec::new(),
+        };
         let rows = Rc::clone(&self.rows_cache);
         let focus = self.focus.clone();
         let stale = is_stale(self.surface.is_some(), &self.state);
@@ -820,15 +948,29 @@ impl Render for TerminalView {
                 this.ensure_link(cx);
                 this.paste_clipboard(cx);
             }))
-            // Copy and Select All need a terminal selection, which the pointer does not make yet.
-            // Until it does they do nothing, and the Edit menu items stay enabled over the terminal.
-            .on_action(|_: &actions::Copy, _, _| {})
+            // Copy needs a terminal selection; without one it leaves the clipboard alone. Select
+            // All is still a stub: the terminal only selects with the pointer.
+            .on_action(cx.listener(|this, _: &actions::Copy, _, cx| {
+                this.copy_selection(cx);
+            }))
             .on_action(|_: &actions::SelectAll, _, _| {})
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, event: &MouseDownEvent, window, cx| {
-                    this.click(event.position, window, cx)
+                    this.mouse_down(event, window, cx)
                 }),
+            )
+            .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _, cx| {
+                this.mouse_move(event, cx);
+            }))
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _: &MouseUpEvent, _, cx| this.mouse_up(cx)),
+            )
+            // A release outside the window still ends the drag.
+            .on_mouse_up_out(
+                MouseButton::Left,
+                cx.listener(|this, _: &MouseUpEvent, _, cx| this.mouse_up(cx)),
             )
             .on_scroll_wheel(cx.listener(|this, event: &ScrollWheelEvent, _, cx| {
                 this.scroll_wheel(event, cx);
@@ -858,6 +1000,7 @@ impl Render for TerminalView {
                             origin,
                             m,
                             surface,
+                            &highlights,
                             typing,
                             &mut rows.borrow_mut(),
                         );
@@ -893,7 +1036,7 @@ mod tests {
     use async_channel::Receiver;
     use contr_herdr::endpoint::link::test_link;
     use contr_herdr::endpoint::messages::{ClientMsg, KeyCode, ShellSnapshot, WheelDir, mods};
-    use contr_herdr::endpoint::surface::{Cell, Cursor, Rect, SurfacePane};
+    use contr_herdr::endpoint::surface::{Cell, Cursor, Rect, Row, SurfacePane};
     use gpui::{
         ClipboardItem, Entity, Modifiers, ScrollDelta, Subscription, TestAppContext,
         VisualTestContext, size,
@@ -1203,13 +1346,113 @@ mod tests {
         col: u16,
         row: u16,
     ) -> Point<Pixels> {
+        cell_point(cx, view, col, row, 0.5)
+    }
+
+    /// The window point a `fraction` of the way across cell (`col`, `row`), at its mid height, as
+    /// laid out by the last frame. Below a half is the cell's left half, and above it the right one.
+    fn cell_point(
+        cx: &mut VisualTestContext,
+        view: &Entity<TerminalView>,
+        col: u16,
+        row: u16,
+        fraction: f32,
+    ) -> Point<Pixels> {
         let m = view.read_with(cx, |view, _| view.metrics).unwrap();
         let grid = cx.debug_bounds("terminal-grid").unwrap();
         grid.origin
             + point(
-                px(m.pad + (f32::from(col) + 0.5) * m.cell_w),
+                px(m.pad + (f32::from(col) + fraction) * m.cell_w),
                 px(m.pad + (f32::from(row) + 0.5) * m.cell_h),
             )
+    }
+
+    /// A surface the size of the view's grid, with one pane that holds every cell and whose inner
+    /// rect is `inner`. `lines` sit at the top, padded with blanks to the grid's width.
+    fn page(
+        cx: &mut VisualTestContext,
+        view: &Entity<TerminalView>,
+        revision: u64,
+        lines: &[&str],
+        inner: Rect,
+    ) -> Arc<Surface> {
+        let size = view.read_with(cx, |view, _| view.grid.unwrap().0);
+        let cell = |text: &str| Cell {
+            text: text.to_owned(),
+            fg: 0,
+            bg: 0,
+            attrs: 0,
+            wide_tail: false,
+        };
+        let mut rows: Vec<Row> = lines
+            .iter()
+            .map(|line| {
+                let mut cells: Vec<Cell> = line.chars().map(|c| cell(&c.to_string())).collect();
+                cells.resize(usize::from(size.cols), cell(" "));
+                Arc::from(cells)
+            })
+            .collect();
+        while rows.len() < usize::from(size.rows) {
+            rows.push(Arc::from(vec![cell(" "); usize::from(size.cols)]));
+        }
+        Arc::new(Surface {
+            boot_id: "boot".to_owned(),
+            projection_revision: 1,
+            revision,
+            size,
+            rows,
+            cursor: None,
+            panes: vec![SurfacePane {
+                pane_id: PANE.to_owned(),
+                rect: Rect {
+                    x: 0,
+                    y: 0,
+                    width: size.cols,
+                    height: size.rows,
+                },
+                inner_rect: inner,
+                focused: true,
+                ..Default::default()
+            }],
+        })
+    }
+
+    /// A page whose single pane holds every cell.
+    fn full_page(
+        cx: &mut VisualTestContext,
+        view: &Entity<TerminalView>,
+        revision: u64,
+        lines: &[&str],
+    ) -> Arc<Surface> {
+        let size = view.read_with(cx, |view, _| view.grid.unwrap().0);
+        let inner = Rect {
+            x: 0,
+            y: 0,
+            width: size.cols,
+            height: size.rows,
+        };
+        page(cx, view, revision, lines, inner)
+    }
+
+    /// Drags from the left half of one cell to the right half of another, and releases.
+    fn drag(
+        cx: &mut VisualTestContext,
+        view: &Entity<TerminalView>,
+        from: (u16, u16),
+        to: (u16, u16),
+    ) {
+        let (start, end) = (
+            cell_point(cx, view, from.0, from.1, 0.2),
+            cell_point(cx, view, to.0, to.1, 0.8),
+        );
+        cx.simulate_mouse_down(start, MouseButton::Left, Modifiers::none());
+        cx.simulate_mouse_move(end, MouseButton::Left, Modifiers::none());
+        cx.simulate_mouse_up(end, MouseButton::Left, Modifiers::none());
+    }
+
+    /// Writes the clipboard's text, so a test can see whether a copy replaced it.
+    fn clipboard(cx: &mut VisualTestContext) -> Option<String> {
+        cx.read_from_clipboard().and_then(|item| item.text())
     }
 
     /// A start that fails the way a thread that cannot be made does.
@@ -2293,5 +2536,317 @@ mod tests {
         cx.run_until_parked();
         assert_eq!(STARTS.with(Counter::get), 1, "no timer starts it again");
         assert!(view.read_with(cx, |view, _| view.link.is_none()));
+    }
+
+    #[gpui::test]
+    fn a_drag_then_cmd_c_copies_the_selected_text(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        let frames = attach(cx, &view);
+        let page = full_page(cx, &view, 2, &["abcdef"]);
+        view.update(cx, |view, cx| view.accept_surface(page, cx));
+        cx.run_until_parked();
+        cx.write_to_clipboard(ClipboardItem::new_string("kept".to_owned()));
+
+        drag(cx, &view, (0, 0), (2, 0));
+        assert_eq!(
+            clipboard(cx),
+            Some("kept".to_owned()),
+            "a release copies nothing (D83)"
+        );
+
+        cx.simulate_keystrokes("cmd-c");
+        assert_eq!(clipboard(cx), Some("abc".to_owned()));
+        assert!(queued(&frames).is_empty(), "a selection sends no input");
+    }
+
+    #[gpui::test]
+    fn the_copy_action_copies_the_selection(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        attach(cx, &view);
+        let page = full_page(cx, &view, 2, &["abcdef"]);
+        view.update(cx, |view, cx| view.accept_surface(page, cx));
+        cx.run_until_parked();
+        drag(cx, &view, (0, 0), (2, 0));
+
+        // The Edit menu's Copy is the same entry point as Cmd-C (#106).
+        cx.dispatch_action(actions::Copy);
+        assert_eq!(clipboard(cx), Some("abc".to_owned()));
+    }
+
+    #[gpui::test]
+    fn releasing_a_drag_copies_nothing_and_keeps_the_selection(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        attach(cx, &view);
+        let page = full_page(cx, &view, 2, &["abcdef"]);
+        view.update(cx, |view, cx| view.accept_surface(page, cx));
+        cx.run_until_parked();
+        cx.write_to_clipboard(ClipboardItem::new_string("kept".to_owned()));
+
+        drag(cx, &view, (1, 0), (3, 0));
+        assert_eq!(clipboard(cx), Some("kept".to_owned()));
+        view.read_with(cx, |view, _| {
+            let Some(selection) = view.selection.as_ref() else {
+                panic!("a kept selection");
+            };
+            assert!(!selection.dragging());
+            assert_eq!(
+                selection.rows(view.surface.as_deref().unwrap()),
+                vec![(0, 1..4)]
+            );
+        });
+    }
+
+    #[gpui::test]
+    fn a_click_without_a_drag_clears_the_selection(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        attach(cx, &view);
+        let page = full_page(cx, &view, 2, &["abcdef"]);
+        view.update(cx, |view, cx| view.accept_surface(page, cx));
+        cx.run_until_parked();
+        cx.write_to_clipboard(ClipboardItem::new_string("kept".to_owned()));
+
+        drag(cx, &view, (0, 0), (2, 0));
+        assert!(view.read_with(cx, |view, _| view.selection.is_some()));
+
+        let clear = cell_centre(cx, &view, 4, 0);
+        cx.simulate_click(clear, Modifiers::none());
+        assert!(view.read_with(cx, |view, _| view.selection.is_none()));
+        cx.simulate_keystrokes("cmd-c");
+        assert_eq!(
+            clipboard(cx),
+            Some("kept".to_owned()),
+            "a click copies nothing"
+        );
+    }
+
+    #[gpui::test]
+    fn a_double_click_selects_a_word_that_cmd_c_copies(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        attach(cx, &view);
+        let page = full_page(cx, &view, 2, &["ls -la src/main.rs:12 ok"]);
+        view.update(cx, |view, cx| view.accept_surface(page, cx));
+        cx.run_until_parked();
+
+        let at = cell_point(cx, &view, 12, 0, 0.8);
+        cx.simulate_event(MouseDownEvent {
+            position: at,
+            button: MouseButton::Left,
+            modifiers: Modifiers::none(),
+            click_count: 2,
+            first_mouse: false,
+        });
+        cx.simulate_mouse_up(at, MouseButton::Left, Modifiers::none());
+        cx.simulate_keystrokes("cmd-c");
+        assert_eq!(clipboard(cx), Some("src/main.rs:12".to_owned()));
+    }
+
+    #[gpui::test]
+    fn a_triple_click_selects_the_whole_row_that_cmd_c_copies(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        attach(cx, &view);
+        let page = full_page(cx, &view, 2, &["one two", "three"]);
+        view.update(cx, |view, cx| view.accept_surface(page, cx));
+        cx.run_until_parked();
+
+        // The row copies without its trailing blanks.
+        let at = cell_point(cx, &view, 1, 0, 0.8);
+        cx.simulate_event(MouseDownEvent {
+            position: at,
+            button: MouseButton::Left,
+            modifiers: Modifiers::none(),
+            click_count: 3,
+            first_mouse: false,
+        });
+        cx.simulate_mouse_up(at, MouseButton::Left, Modifiers::none());
+        cx.simulate_keystrokes("cmd-c");
+        assert_eq!(clipboard(cx), Some("one two".to_owned()));
+    }
+
+    #[gpui::test]
+    fn a_cmd_click_starts_no_selection(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        attach(cx, &view);
+        let page = full_page(cx, &view, 2, &["abcdef"]);
+        view.update(cx, |view, cx| view.accept_surface(page, cx));
+        cx.run_until_parked();
+
+        // #104 holds a Cmd-click for the link under the pointer.
+        let at = cell_point(cx, &view, 1, 0, 0.2);
+        let far = cell_point(cx, &view, 3, 0, 0.8);
+        cx.simulate_mouse_down(at, MouseButton::Left, Modifiers::command());
+        cx.simulate_mouse_move(far, MouseButton::Left, Modifiers::command());
+        cx.simulate_mouse_up(far, MouseButton::Left, Modifiers::command());
+        assert!(view.read_with(cx, |view, _| view.selection.is_none()));
+
+        // It leaves a selection that is already there alone.
+        drag(cx, &view, (0, 0), (2, 0));
+        let selected = view.read_with(cx, |view, _| view.selection.clone());
+        assert!(selected.is_some());
+        let elsewhere = cell_centre(cx, &view, 4, 0);
+        cx.simulate_click(elsewhere, Modifiers::command());
+        assert_eq!(
+            view.read_with(cx, |view, _| view.selection.clone()),
+            selected
+        );
+    }
+
+    #[gpui::test]
+    fn cmd_c_with_no_selection_leaves_the_clipboard_and_herdr_alone(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        let frames = attach(cx, &view);
+        cx.write_to_clipboard(ClipboardItem::new_string("kept".to_owned()));
+
+        cx.simulate_keystrokes("cmd-c");
+        assert_eq!(clipboard(cx), Some("kept".to_owned()));
+        assert!(queued(&frames).is_empty());
+        // Cmd-C falls through to the app: the entry point reports that there was nothing to copy.
+        view.update(cx, |view, cx| assert!(!view.copy_selection(cx)));
+    }
+
+    #[gpui::test]
+    fn a_program_write_over_the_selected_rows_drops_the_selection(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        attach(cx, &view);
+        let page = full_page(cx, &view, 2, &["abcdef"]);
+        view.update(cx, |view, cx| view.accept_surface(page, cx));
+        cx.run_until_parked();
+        drag(cx, &view, (0, 0), (2, 0));
+        assert!(view.read_with(cx, |view, _| view.selection.is_some()));
+
+        // The second cell of the selection reads `x` now: the tint would mark cells the user did
+        // not choose, so the release's remembered text retires the selection.
+        let written = full_page(cx, &view, 3, &["axcdef"]);
+        view.update(cx, |view, cx| view.accept_surface(written, cx));
+        cx.run_until_parked();
+        assert!(view.read_with(cx, |view, _| view.selection.is_none()));
+    }
+
+    #[gpui::test]
+    fn a_recolour_keeps_the_selection(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        attach(cx, &view);
+        let page = full_page(cx, &view, 2, &["abcdef"]);
+        view.update(cx, |view, cx| view.accept_surface(page, cx));
+        cx.run_until_parked();
+        drag(cx, &view, (0, 0), (2, 0));
+
+        let recoloured = full_page(cx, &view, 3, &["abcdef"]);
+        view.update(cx, |view, cx| view.accept_surface(recoloured, cx));
+        cx.run_until_parked();
+        assert!(view.read_with(cx, |view, _| view.selection.is_some()));
+    }
+
+    #[gpui::test]
+    fn a_drag_notifies_only_when_the_selected_cells_change(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        attach(cx, &view);
+        let page = full_page(cx, &view, 2, &["abcdef"]);
+        view.update(cx, |view, cx| view.accept_surface(page, cx));
+        cx.run_until_parked();
+
+        let start = cell_point(cx, &view, 0, 0, 0.2);
+        let moved = cell_point(cx, &view, 2, 0, 0.8);
+        let further = cell_point(cx, &view, 3, 0, 0.8);
+        cx.simulate_mouse_down(start, MouseButton::Left, Modifiers::none());
+        cx.run_until_parked();
+        let (notices, _observer) = count_notices(cx, &view);
+
+        cx.simulate_mouse_move(moved, MouseButton::Left, Modifiers::none());
+        assert_eq!(notices.get(), 1);
+        cx.simulate_mouse_move(moved, MouseButton::Left, Modifiers::none());
+        assert_eq!(notices.get(), 1, "the same cells repaint nothing");
+        cx.simulate_mouse_move(further, MouseButton::Left, Modifiers::none());
+        assert_eq!(notices.get(), 2);
+    }
+
+    #[gpui::test]
+    fn a_surface_change_does_not_retire_a_drag_in_progress(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        attach(cx, &view);
+        let page = full_page(cx, &view, 2, &["abcdef"]);
+        view.update(cx, |view, cx| view.accept_surface(page, cx));
+        cx.run_until_parked();
+
+        let start = cell_point(cx, &view, 0, 0, 0.2);
+        let moved = cell_point(cx, &view, 2, 0, 0.8);
+        cx.simulate_mouse_down(start, MouseButton::Left, Modifiers::none());
+        cx.simulate_mouse_move(moved, MouseButton::Left, Modifiers::none());
+
+        // The program writes while the pointer is down: the highlight follows the pointer, so the
+        // drag is kept. It is only retired once it has ended.
+        let written = full_page(cx, &view, 3, &["xyzxyz"]);
+        view.update(cx, |view, cx| view.accept_surface(written, cx));
+        cx.run_until_parked();
+        view.read_with(cx, |view, _| {
+            let Some(selection) = view.selection.as_ref() else {
+                panic!("a kept drag");
+            };
+            assert!(selection.dragging());
+        });
+    }
+
+    #[gpui::test]
+    fn a_pane_that_moves_or_shrinks_drops_the_selection(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        let frames = attach(cx, &view);
+        let initial = full_page(cx, &view, 2, &["abcdef"]);
+        view.update(cx, |view, cx| view.accept_surface(initial, cx));
+        cx.run_until_parked();
+        drag(cx, &view, (0, 0), (2, 0));
+
+        // The same text, one row down: the cells the pointer chose are not in the pane any more.
+        let size = view.read_with(cx, |view, _| view.grid.unwrap().0);
+        let moved = page(
+            cx,
+            &view,
+            3,
+            &["abcdef"],
+            Rect {
+                x: 0,
+                y: 1,
+                width: size.cols,
+                height: size.rows - 1,
+            },
+        );
+        view.update(cx, |view, cx| view.accept_surface(moved, cx));
+        cx.run_until_parked();
+        assert!(view.read_with(cx, |view, _| view.selection.is_none()));
+
+        // Select again, then take a row away: a copy would be part of the selection.
+        let again = full_page(cx, &view, 4, &["abcdef"]);
+        view.update(cx, |view, cx| view.accept_surface(again, cx));
+        cx.run_until_parked();
+        drag(cx, &view, (0, 0), (2, 0));
+        let shrunk = page(
+            cx,
+            &view,
+            5,
+            &["abcdef"],
+            Rect {
+                x: 0,
+                y: 0,
+                width: size.cols,
+                height: size.rows - 1,
+            },
+        );
+        view.update(cx, |view, cx| view.accept_surface(shrunk, cx));
+        cx.run_until_parked();
+        assert!(view.read_with(cx, |view, _| view.selection.is_none()));
+
+        // Nothing reached herdr through any of this.
+        assert!(queued(&frames).is_empty());
     }
 }

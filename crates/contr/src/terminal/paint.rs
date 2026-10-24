@@ -1,9 +1,10 @@
-// Adapted from Herdr UI (Apache-2.0); changes: italic bit and face; underlines drawn per cell.
-//! Paints a surface: cell backgrounds, box glyphs as quads, text, underlines and the cursor. Text is
-//! shaped per row and kept while herdr sends the same row again (`Arc::ptr_eq`), so a patch that
-//! changes one row shapes one row. The span, run and cursor rules are pure functions, so they are
-//! tested without a window.
+// Adapted from Herdr UI (Apache-2.0); changes: italic bit and face; underlines drawn per cell; selection tint between the backgrounds and the glyphs.
+//! Paints a surface: cell backgrounds, the selection tint, box glyphs as quads, text, underlines
+//! and the cursor. Text is shaped per row and kept while herdr sends the same row again
+//! (`Arc::ptr_eq`), so a patch that changes one row shapes one row. The span, run, tint and cursor
+//! rules are pure functions, so they are tested without a window.
 
+use std::ops::Range;
 use std::sync::Arc;
 
 use contr_herdr::endpoint::messages::GridSize;
@@ -32,6 +33,8 @@ pub(super) const UNDERLINE_STYLE_SHIFT: u16 = 12;
 
 /// The cursor is 50 % white (`docs/DESIGN.md` greys, and white only for what the owner acts on).
 const CURSOR_RGBA: u32 = 0xFFFFFF80;
+/// The selection tint: white at 25 %, painted over the cells so their own colours stay (D84).
+const SELECTION_RGBA: u32 = 0xFFFFFF40;
 /// Thickness of a bar or underline cursor, in logical pixels.
 const CURSOR_LINE: f32 = 2.;
 
@@ -177,14 +180,17 @@ pub(super) fn cursor_rect(cell: Bounds<Pixels>, shape: u8) -> Bounds<Pixels> {
     }
 }
 
-/// Paints `surface` with its top-left cell at `origin`. `typing.focused` draws the cursor solid;
-/// without it the cursor is an outline.
+/// Paints `surface` with its top-left cell at `origin`. `highlights` are the selected cells, tinted
+/// between the backgrounds and the glyphs. `typing.focused` draws the cursor solid; without it the
+/// cursor is an outline.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn paint_surface(
     window: &mut Window,
     cx: &mut App,
     origin: Point<Pixels>,
     m: Metrics,
     surface: &Surface,
+    highlights: &[(u16, Range<u16>)],
     typing: Typing<'_>,
     cache: &mut RowCache,
 ) {
@@ -196,6 +202,7 @@ pub(super) fn paint_surface(
             window.paint_quad(fill(run, Hsla::from(rgb(colour))));
         }
     }
+    paint_highlights(window, origin, m, surface, highlights);
     paint_quad_glyphs(window, origin, m, surface);
 
     refresh_rows(cache, &surface.rows, |row| {
@@ -221,6 +228,43 @@ pub(super) fn paint_surface(
             paint_cursor(window, origin, m, cursor, surface.size, typing.focused);
         }
     }
+}
+
+/// Paints the selection tint over the cells `highlights` name. It is white at 25 %, so the program's
+/// own colours stay and its glyphs, painted after, read on every theme.
+fn paint_highlights(
+    window: &mut Window,
+    origin: Point<Pixels>,
+    m: Metrics,
+    surface: &Surface,
+    highlights: &[(u16, Range<u16>)],
+) {
+    let tint = Hsla::from(rgba(SELECTION_RGBA));
+    for (row, columns) in highlights {
+        if let Some(bounds) = highlight_rect(origin, m, *row, columns.clone(), surface.rows.len()) {
+            window.paint_quad(fill(bounds, tint));
+        }
+    }
+}
+
+/// The square one selection tint covers: the cells `columns` of `row`. `None` for an empty span or a
+/// row the surface does not hold.
+pub(super) fn highlight_rect(
+    origin: Point<Pixels>,
+    m: Metrics,
+    row: u16,
+    columns: Range<u16>,
+    rows: usize,
+) -> Option<Bounds<Pixels>> {
+    if columns.start >= columns.end || usize::from(row) >= rows {
+        return None;
+    }
+    let at = point(
+        origin.x + px(f32::from(columns.start) * m.cell_w),
+        origin.y + px(f32::from(row) * m.cell_h),
+    );
+    let width = px(f32::from(columns.end - columns.start) * m.cell_w);
+    Some(Bounds::new(at, size(width, px(m.cell_h))))
 }
 
 /// Paints the box and block glyphs of the surface as quads, each in its own cell. Every edge is
@@ -710,5 +754,33 @@ mod tests {
                 "{tag} should be off"
             );
         }
+    }
+
+    #[test]
+    fn the_selection_tint_is_white_at_a_quarter() {
+        assert_eq!(SELECTION_RGBA, 0xFFFF_FF40);
+        // 25 % of 255 is 63.75, which rounds to 64.
+        assert_eq!(SELECTION_RGBA & 0xFF, 64);
+    }
+
+    #[test]
+    fn a_selection_tint_covers_the_cells_of_its_row() {
+        let m = Metrics {
+            cell_w: 8.,
+            cell_h: 20.,
+            pad: 0.,
+        };
+        let origin = point(px(10.), px(20.));
+        let Some(tint) = highlight_rect(origin, m, 2, 3..5, 4) else {
+            panic!("a tint over cells the surface holds");
+        };
+        assert_eq!(f32::from(tint.origin.x), 34.);
+        assert_eq!(f32::from(tint.origin.y), 60.);
+        assert_eq!(f32::from(tint.size.width), 16.);
+        assert_eq!(f32::from(tint.size.height), 20.);
+
+        // A row the surface does not hold, and an empty span, paint nothing.
+        assert!(highlight_rect(origin, m, 4, 0..1, 4).is_none());
+        assert!(highlight_rect(origin, m, 0, 2..2, 4).is_none());
     }
 }
