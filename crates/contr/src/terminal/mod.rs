@@ -4,6 +4,7 @@
 
 mod boxdraw;
 pub mod colors;
+mod decorations;
 pub mod grid;
 mod keys;
 mod paint;
@@ -856,6 +857,32 @@ mod tests {
         })
     }
 
+    /// A surface with one row per entry of `attrs`. Each row is one "a" cell with those attributes.
+    fn styled(revision: u64, attrs: &[u16]) -> Arc<Surface> {
+        let cell = |attrs| Cell {
+            text: "a".to_owned(),
+            fg: 0,
+            bg: 0,
+            attrs,
+            wide_tail: false,
+        };
+        Arc::new(Surface {
+            boot_id: "boot".to_owned(),
+            projection_revision: 1,
+            revision,
+            size: GridSize {
+                cols: 1,
+                rows: attrs.len() as u16,
+            },
+            rows: attrs
+                .iter()
+                .map(|&attrs| Arc::from(vec![cell(attrs)]))
+                .collect(),
+            cursor: None,
+            panes: Vec::new(),
+        })
+    }
+
     /// A surface of `size` with no rows, whose focused pane is `pane` when it is given.
     fn shown(revision: u64, size: GridSize, pane: Option<&str>) -> Arc<Surface> {
         Arc::new(Surface {
@@ -1129,6 +1156,27 @@ mod tests {
         cx.run_until_parked();
         assert!(cx.debug_bounds("terminal-grid").is_some());
         // The grid is set only when the layout had metrics, and the paint needs them too.
+        view.read_with(cx, |view, _| assert!(view.grid.is_some()));
+    }
+
+    #[gpui::test]
+    fn a_surface_with_every_underline_style_and_italic_renders(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        cx.simulate_resize(size(px(800.), px(600.)));
+        // One row per underline style, then an italic row. The underline and text passes run for
+        // each row on the frame. The geometry of each style is tested in `decorations`.
+        let styles = [
+            0,
+            paint::UNDERLINE,
+            paint::UNDERLINE | 0x2000,
+            paint::UNDERLINE | 0x3000,
+            paint::UNDERLINE | 0x4000,
+            paint::UNDERLINE | 0x5000,
+            paint::ITALIC,
+        ];
+        view.update(cx, |view, cx| view.accept_surface(styled(1, &styles), cx));
+        cx.run_until_parked();
+        assert!(cx.debug_bounds("terminal-grid").is_some());
         view.read_with(cx, |view, _| assert!(view.grid.is_some()));
     }
 

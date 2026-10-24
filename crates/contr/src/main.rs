@@ -28,6 +28,19 @@ const USAGE: &str = "Usage:
 
 static REGULAR: &[u8] = include_bytes!("../assets/fonts/JetBrainsMono-Regular.ttf");
 static BOLD: &[u8] = include_bytes!("../assets/fonts/JetBrainsMono-Bold.ttf");
+static ITALIC: &[u8] = include_bytes!("../assets/fonts/JetBrainsMono-Italic.ttf");
+static BOLD_ITALIC: &[u8] = include_bytes!("../assets/fonts/JetBrainsMono-BoldItalic.ttf");
+
+/// The bundled faces of JetBrains Mono v2.304. They register with the family `theme::FONT_FAMILY`,
+/// so `FontStyle::Italic` picks the italic faces and bold takes the bold ones.
+fn bundled_fonts() -> Vec<Cow<'static, [u8]>> {
+    vec![
+        Cow::Borrowed(REGULAR),
+        Cow::Borrowed(BOLD),
+        Cow::Borrowed(ITALIC),
+        Cow::Borrowed(BOLD_ITALIC),
+    ]
+}
 
 /// What the command line asks for. Only the forms in `USAGE` are accepted.
 #[derive(Debug, PartialEq, Eq)]
@@ -143,10 +156,7 @@ fn open_window(icons: bool) -> std::process::ExitCode {
     let failed = std::rc::Rc::new(std::cell::Cell::new(false));
     let open_failed = failed.clone();
     gpui_platform::application().run(move |cx: &mut App| {
-        if let Err(error) = cx
-            .text_system()
-            .add_fonts(vec![Cow::Borrowed(REGULAR), Cow::Borrowed(BOLD)])
-        {
+        if let Err(error) = cx.text_system().add_fonts(bundled_fonts()) {
             eprintln!("contr: unable to load JetBrains Mono: {error}"); // falls back to system font
         }
         cx.on_window_closed(|cx, _| {
@@ -422,10 +432,79 @@ mod tests {
         );
     }
 
+    /// The table of `tag` in a TrueType face, or None when the directory or the table is cut short.
+    fn table<'a>(face: &'a [u8], tag: &[u8]) -> Option<&'a [u8]> {
+        let count = usize::from(u16::from_be_bytes(face.get(4..6)?.try_into().ok()?));
+        (0..count).find_map(|i| {
+            let record = face.get(12 + 16 * i..28 + 16 * i)?;
+            if &record[..4] != tag {
+                return None;
+            }
+            let offset = u32::from_be_bytes(record[8..12].try_into().ok()?) as usize;
+            let length = u32::from_be_bytes(record[12..16].try_into().ok()?) as usize;
+            face.get(offset..offset + length)
+        })
+    }
+
+    /// The family name (name ID 1, Windows) and the italic bit (OS/2 `fsSelection`) of a face. None
+    /// when a table or the name is missing.
+    fn family_and_italic(face: &[u8]) -> Option<(String, bool)> {
+        let os2 = table(face, b"OS/2")?;
+        let italic = u16::from_be_bytes(os2.get(62..64)?.try_into().ok()?) & 1 != 0;
+        let name = table(face, b"name")?;
+        let count = usize::from(u16::from_be_bytes(name.get(2..4)?.try_into().ok()?));
+        let storage = usize::from(u16::from_be_bytes(name.get(4..6)?.try_into().ok()?));
+        let family = (0..count).find_map(|i| {
+            let record = name.get(6 + 12 * i..18 + 12 * i)?;
+            let field = |at: usize| u16::from_be_bytes([record[at], record[at + 1]]);
+            let (platform, id) = (field(0), field(6));
+            if platform != 3 || id != 1 {
+                return None;
+            }
+            let start = storage + usize::from(field(10));
+            let bytes = name.get(start..start + usize::from(field(8)))?;
+            let units: Vec<u16> = bytes
+                .chunks_exact(2)
+                .map(|pair| u16::from_be_bytes([pair[0], pair[1]]))
+                .collect();
+            String::from_utf16(&units).ok()
+        })?;
+        Some((family, italic))
+    }
+
     #[test]
     fn fonts_are_truetype() {
-        assert_eq!(&REGULAR[..4], &[0, 1, 0, 0]);
-        assert_eq!(&BOLD[..4], &[0, 1, 0, 0]);
+        for face in bundled_fonts() {
+            assert_eq!(&face[..4], &[0, 1, 0, 0]);
+        }
+        assert_eq!(
+            bundled_fonts().len(),
+            4,
+            "regular, bold, italic, bold italic"
+        );
+    }
+
+    #[test]
+    fn the_italic_faces_are_the_terminal_family_and_italic() {
+        // GPUI matches the faces it loaded by family name and style. These are the same fields.
+        let faces = [
+            (REGULAR, false),
+            (BOLD, false),
+            (ITALIC, true),
+            (BOLD_ITALIC, true),
+        ];
+        for (face, italic) in faces {
+            assert_eq!(
+                family_and_italic(face),
+                Some((theme::FONT_FAMILY.to_owned(), italic))
+            );
+        }
+    }
+
+    #[test]
+    fn a_face_cut_short_has_no_family() {
+        assert_eq!(family_and_italic(&ITALIC[..12]), None);
+        assert_eq!(family_and_italic(&[]), None);
     }
 
     #[cfg(target_os = "macos")]
