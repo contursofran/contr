@@ -1,6 +1,6 @@
 //! The empty three-column frame: sidebar, title bar, terminal, board panel, status bar.
 
-use crate::agents_list::AgentsList;
+use crate::agents_list::{AgentsList, FocusFn, focus_in_background};
 use crate::board_panel::BoardPanel;
 use crate::herdr::{GlobalHerdr, Herdr};
 use crate::spaces::{Spaces, SpacesEvent, toggle_box};
@@ -16,6 +16,7 @@ use gpui::{
     AnyElement, Context, Entity, IntoElement, ParentElement, Render, StyleRefinement, Styled,
     Subscription, Window, div, prelude::*, px, rgb,
 };
+use std::rc::Rc;
 
 pub struct Frame {
     spaces: Entity<Spaces>,
@@ -40,17 +41,22 @@ impl Frame {
     /// bar reads the first two, the terminal area shows the connection's line or the terminal view,
     /// and the panel reads the board.
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let spaces = cx.new(Spaces::new);
-        let agents = cx.new(AgentsList::new);
+        Self::with_focus(window, cx, Rc::new(focus_in_background))
+    }
+
+    /// `new` with the focus call that the sidebar's rows make, so the tests can record the panes.
+    pub(crate) fn with_focus(window: &mut Window, cx: &mut Context<Self>, focus: FocusFn) -> Self {
+        let spaces = {
+            let focus = focus.clone();
+            cx.new(|cx| Spaces::with_focus(focus, cx))
+        };
+        let agents = cx.new(|cx| AgentsList::with_focus(focus, cx));
         let herdr = cx.global::<GlobalHerdr>().0.clone();
         let status_bar = cx.new(StatusBar::new);
         let board_panel = cx.new(BoardPanel::new);
         let terminal = cx.new(|cx| TerminalView::new(window, cx));
-        let toggle = cx.subscribe(&spaces, |this, _, event: &SpacesEvent, cx| {
-            match event {
-                SpacesEvent::ToggleSidebar => this.sidebar_open = !this.sidebar_open,
-            }
-            cx.notify();
+        let toggle = cx.subscribe(&spaces, |this, _, event: &SpacesEvent, cx| match event {
+            SpacesEvent::ToggleSidebar => this.toggle_sidebar(cx),
         });
         let herdr_sub = cx.observe(&herdr, |_, _, cx| cx.notify());
         let title_bar = cx.new(|cx| TitleBar::new(true, cx));
@@ -88,6 +94,13 @@ impl Frame {
             _herdr: herdr_sub,
             _title_events: title_events,
         }
+    }
+
+    /// Shows or hides the sidebar. The header toggle reaches it through `SpacesEvent::ToggleSidebar`,
+    /// and the dev control calls it directly, so its reply shows the new layout at once.
+    pub(crate) fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
+        self.sidebar_open = !self.sidebar_open;
+        cx.notify();
     }
 
     /// Opens the sidebar again. The reopen button and the dev control both call it.

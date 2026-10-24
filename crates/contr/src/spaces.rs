@@ -85,7 +85,7 @@ impl Spaces {
     }
 
     /// `new` with the focus call given, so the tests can record the pane ids that a click focuses.
-    fn with_focus(focus: FocusFn, cx: &mut Context<Self>) -> Self {
+    pub(crate) fn with_focus(focus: FocusFn, cx: &mut Context<Self>) -> Self {
         let herdr = cx.global::<GlobalHerdr>().0.clone();
         let selection = cx.global::<GlobalSelection>().0.clone();
         let host = cx.global::<GlobalHost>().0.clone();
@@ -312,7 +312,7 @@ impl Spaces {
     }
 
     /// The id of the selected worktree row, if a worktree is selected.
-    fn selected_worktree(&self, cx: &App) -> Option<String> {
+    pub(crate) fn selected_worktree(&self, cx: &App) -> Option<String> {
         match &self.selection.read(cx).current {
             Some(Selected::Worktree(id)) => Some(id.clone()),
             _ => None,
@@ -322,13 +322,24 @@ impl Spaces {
     /// A worktree row was clicked: it becomes the selection, and its top holder's pane is focused
     /// in herdr. A row without a holder is selected and nothing is focused. A second click focuses
     /// again.
-    fn activate(&mut self, row_id: String, focus_pane: Option<String>, cx: &mut Context<Self>) {
+    pub(crate) fn activate(
+        &mut self,
+        row_id: String,
+        focus_pane: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
         self.selection.update(cx, |selection, cx| {
             selection.select(Selected::Worktree(row_id), cx)
         });
         if let Some(pane_id) = focus_pane {
             (self.focus)(pane_id, cx);
         }
+    }
+
+    /// The header toggle's path: asks the frame to show or hide the sidebar. The dev control calls
+    /// it too.
+    pub(crate) fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
+        cx.emit(SpacesEvent::ToggleSidebar);
     }
 
     /// Clears the selection when it names a worktree that no group lists any more. An agent
@@ -746,13 +757,22 @@ fn badge_chip(g: usize, r: usize, badge: &Badge) -> Div {
         .px(px(BADGE_PAD_X))
         .rounded(px(BADGE_RADIUS))
         .whitespace_nowrap();
+    let text = badge_text(badge);
     match badge {
-        Badge::Pr(number) => chip.text_color(rgb(TEXT_DIM)).child(format!("#{number}")),
-        Badge::You(text) => chip
+        Badge::Pr(_) => chip.text_color(rgb(TEXT_DIM)).child(text),
+        Badge::You(_) => chip
             .bg(rgb(YOU_BG))
             .text_color(rgb(YOU_TEXT))
             .font_weight(FontWeight::BOLD)
-            .child(text.clone()),
+            .child(text),
+    }
+}
+
+/// The text a badge draws: `#640` for a pull request, the owner's value as it is otherwise.
+pub(crate) fn badge_text(badge: &Badge) -> String {
+    match badge {
+        Badge::Pr(number) => format!("#{number}"),
+        Badge::You(text) => text.clone(),
     }
 }
 
@@ -770,7 +790,7 @@ fn header(cx: &mut Context<Spaces>) -> impl IntoElement {
         .on_mouse_down(MouseButton::Left, |_, window, _| window.start_window_move())
         .child(
             toggle("sidebar-toggle")
-                .on_click(cx.listener(|_, _, _, cx| cx.emit(SpacesEvent::ToggleSidebar))),
+                .on_click(cx.listener(|spaces, _, _, cx| spaces.toggle_sidebar(cx))),
         )
         .child(
             div()
