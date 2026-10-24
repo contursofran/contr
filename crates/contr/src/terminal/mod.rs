@@ -882,7 +882,7 @@ mod tests {
                     rect: Rect::default(),
                     inner_rect: Rect::default(),
                     focused: true,
-                    alternate_screen: false,
+                    ..Default::default()
                 })
                 .into_iter()
                 .collect(),
@@ -976,7 +976,7 @@ mod tests {
                 height: 2,
             },
             focused: focused == Some(id),
-            alternate_screen: false,
+            ..Default::default()
         };
         Arc::new(Surface {
             boot_id: "boot".to_owned(),
