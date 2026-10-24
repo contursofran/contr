@@ -5,4 +5,4 @@
 - Never block the UI thread: herdr I/O and file reads run on background tasks and reach views as events.
 - Small PRs: one issue, one PR, ideally under ~400 changed lines. Split anything bigger.
 - UI follows docs/DESIGN.md exactly: mono font, greyscale, white only for what needs the owner.
-- Study other implementations freely, but write our own code; do not copy code 1:1 from other projects. Do not name or link other GitHub users or repositories in code, docs, commits or PRs.
+- You may adapt code from Apache-2.0 or MIT projects that NOTICE credits. Each file with adapted code gets one header comment that names the source and the changes. Do not name or link other GitHub users or repositories anywhere else (code, docs, commits, issues or PRs), and do not @-mention people.
