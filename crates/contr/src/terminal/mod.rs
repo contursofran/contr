@@ -4,10 +4,12 @@
 
 mod boxdraw;
 pub mod colors;
+mod decorations;
 pub mod grid;
 mod keys;
 mod paint;
 mod panes;
+pub mod selection;
 
 use std::cell::RefCell;
 use std::io;
@@ -31,6 +33,7 @@ use gpui::{
 };
 use tracing::debug;
 
+use crate::actions;
 use crate::agents_list::{FocusFn, focus_in_background};
 use crate::theme::{TERM_PADDING, TERMINAL_FONT_SIZE, TERMINAL_LINE_HEIGHT, TEXT_2, TEXT_DIM};
 use grid::{Metrics, cell_px, grid_for};
@@ -370,9 +373,7 @@ impl TerminalView {
         self.ensure_link(cx);
         let keystroke = &event.keystroke;
         let taken = if keystroke.key == "v" && keystroke.modifiers == Modifiers::command() {
-            if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
-                self.send(&[InputEvent::Paste(text)], Instant::now());
-            }
+            self.paste_clipboard(cx);
             true
         } else if let Some(ev) = keys::key_event(keystroke) {
             self.send(&[ev], Instant::now());
@@ -383,6 +384,14 @@ impl TerminalView {
         if taken {
             cx.stop_propagation();
             window.prevent_default();
+        }
+    }
+
+    /// Pastes the clipboard's text into the focused pane as one paste. Cmd-V and the Edit menu's
+    /// Paste both do this. An empty clipboard sends nothing.
+    fn paste_clipboard(&mut self, cx: &mut Context<Self>) {
+        if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
+            self.send(&[InputEvent::Paste(text)], Instant::now());
         }
     }
 
@@ -732,6 +741,14 @@ impl Render for TerminalView {
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 this.key_down(event, window, cx);
             }))
+            .on_action(cx.listener(|this, _: &actions::Paste, _, cx| {
+                this.ensure_link(cx);
+                this.paste_clipboard(cx);
+            }))
+            // Copy and Select All need a terminal selection, which the pointer does not make yet.
+            // Until it does they do nothing, and the Edit menu items stay enabled over the terminal.
+            .on_action(|_: &actions::Copy, _, _| {})
+            .on_action(|_: &actions::SelectAll, _, _| {})
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, event: &MouseDownEvent, window, cx| {
@@ -836,6 +853,32 @@ mod tests {
                 visible: true,
                 shape: 0,
             }),
+            panes: Vec::new(),
+        })
+    }
+
+    /// A surface with one row per entry of `attrs`. Each row is one "a" cell with those attributes.
+    fn styled(revision: u64, attrs: &[u16]) -> Arc<Surface> {
+        let cell = |attrs| Cell {
+            text: "a".to_owned(),
+            fg: 0,
+            bg: 0,
+            attrs,
+            wide_tail: false,
+        };
+        Arc::new(Surface {
+            boot_id: "boot".to_owned(),
+            projection_revision: 1,
+            revision,
+            size: GridSize {
+                cols: 1,
+                rows: attrs.len() as u16,
+            },
+            rows: attrs
+                .iter()
+                .map(|&attrs| Arc::from(vec![cell(attrs)]))
+                .collect(),
+            cursor: None,
             panes: Vec::new(),
         })
     }
@@ -1113,6 +1156,27 @@ mod tests {
         cx.run_until_parked();
         assert!(cx.debug_bounds("terminal-grid").is_some());
         // The grid is set only when the layout had metrics, and the paint needs them too.
+        view.read_with(cx, |view, _| assert!(view.grid.is_some()));
+    }
+
+    #[gpui::test]
+    fn a_surface_with_every_underline_style_and_italic_renders(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        cx.simulate_resize(size(px(800.), px(600.)));
+        // One row per underline style, then an italic row. The underline and text passes run for
+        // each row on the frame. The geometry of each style is tested in `decorations`.
+        let styles = [
+            0,
+            paint::UNDERLINE,
+            paint::UNDERLINE | 0x2000,
+            paint::UNDERLINE | 0x3000,
+            paint::UNDERLINE | 0x4000,
+            paint::UNDERLINE | 0x5000,
+            paint::ITALIC,
+        ];
+        view.update(cx, |view, cx| view.accept_surface(styled(1, &styles), cx));
+        cx.run_until_parked();
+        assert!(cx.debug_bounds("terminal-grid").is_some());
         view.read_with(cx, |view, _| assert!(view.grid.is_some()));
     }
 
@@ -1498,6 +1562,85 @@ mod tests {
         assert_eq!(
             cx.read_from_clipboard().and_then(|item| item.text()),
             Some("one\ntwo".to_owned())
+        );
+    }
+
+    #[gpui::test]
+    fn the_paste_action_pastes_the_clipboard_text_as_one_paste(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        let frames = attach(cx, &view);
+
+        cx.dispatch_action(actions::Paste);
+        assert!(
+            queued(&frames).is_empty(),
+            "an empty clipboard pastes nothing"
+        );
+
+        cx.write_to_clipboard(ClipboardItem::new_string("one\ntwo".to_owned()));
+        cx.dispatch_action(actions::Paste);
+        assert_eq!(
+            queued(&frames),
+            vec![input(PANE, &[InputEvent::Paste("one\ntwo".to_owned())])]
+        );
+    }
+
+    #[gpui::test]
+    fn the_paste_action_with_no_link_sends_nothing(cx: &mut TestAppContext) {
+        let (_view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        cx.write_to_clipboard(ClipboardItem::new_string("one".to_owned()));
+
+        // No link is running, so there is no pane to paste into. The action must not panic.
+        cx.dispatch_action(actions::Paste);
+    }
+
+    #[gpui::test]
+    fn copy_and_select_all_are_enabled_and_do_nothing_without_a_selection(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        let frames = attach(cx, &view);
+        cx.write_to_clipboard(ClipboardItem::new_string("kept".to_owned()));
+
+        assert!(cx.update(|window, app| window.is_action_available(&actions::Copy, app)));
+        assert!(cx.update(|window, app| window.is_action_available(&actions::SelectAll, app)));
+        cx.dispatch_action(actions::Copy);
+        cx.dispatch_action(actions::SelectAll);
+
+        assert!(
+            queued(&frames).is_empty(),
+            "no selection, so nothing is sent"
+        );
+        assert_eq!(
+            cx.read_from_clipboard().and_then(|item| item.text()),
+            Some("kept".to_owned()),
+            "Copy with no selection leaves the clipboard alone"
+        );
+    }
+
+    #[gpui::test]
+    fn cmd_v_pastes_once_and_cmd_c_and_cmd_a_send_nothing_with_the_edit_bindings(
+        cx: &mut TestAppContext,
+    ) {
+        // The menu bindings give the Edit items their labels. A keymap match would run the action
+        // on top of the key handler, so Cmd-V would paste twice.
+        cx.update(actions::bind_keys);
+        let (view, cx) = cx.add_window_view(TerminalView::new);
+        settle(cx, 800., 600.);
+        let frames = attach(cx, &view);
+        cx.write_to_clipboard(ClipboardItem::new_string("one".to_owned()));
+
+        cx.simulate_keystrokes("cmd-v");
+        assert_eq!(
+            queued(&frames),
+            vec![input(PANE, &[InputEvent::Paste("one".to_owned())])],
+            "one paste"
+        );
+
+        cx.simulate_keystrokes("cmd-c cmd-a");
+        assert!(
+            queued(&frames).is_empty(),
+            "Copy and Select All send nothing"
         );
     }
 
