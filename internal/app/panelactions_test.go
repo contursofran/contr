@@ -45,8 +45,8 @@ func (r *panelRig) wantQueued(want []board.Action, why string) {
 	r.t.Helper()
 	got, ok := r.queued()
 	if want == nil {
-		if ok && len(got) > 0 {
-			r.t.Errorf("%s: queued %v", why, got)
+		if ok {
+			r.t.Errorf("%s: an actions file exists: %v", why, got)
 		}
 		return
 	}
@@ -153,7 +153,7 @@ func TestARefusedAnswerShowsItsStatusAndTheOptionsAgain(t *testing.T) {
 	refused.Failed = []board.ActionFailure{{Seq: 1, Key: &key, Text: "options changed"}}
 	r.set(refused)
 
-	if got := r.status(); !slices.Contains(got, "D7 not sent: options changed") {
+	if got := r.status(); !slices.Equal(got, []string{"D7 not sent: options changed"}) {
 		t.Errorf("status lines %v", got)
 	}
 	if r.has(cardAnswerMark + d7Answer) {
