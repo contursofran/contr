@@ -11,24 +11,14 @@ import (
 // answerD7 is the answer to D7 with option index and label.
 func answerD7(index uint64, label string) board.Action { return board.Answer("D7", index, label) }
 
-// wantKeysQueued checks the actions written so far.
+// wantKeysQueued checks the actions file: no arguments mean no file at all,
+// otherwise the actions in order with their seqs.
 func (r *panelRig) wantKeysQueued(want ...board.Action) {
 	r.t.Helper()
-	got, ok := r.queued()
 	if len(want) == 0 {
-		if ok && len(got) != 0 {
-			r.t.Fatalf("queued = %v, want nothing", got)
-		}
-		return
+		want = nil
 	}
-	if !ok || len(got) != len(want) {
-		r.t.Fatalf("queued = %v (%v), want %v", got, ok, want)
-	}
-	for i, a := range want {
-		if got[i].Action != a {
-			r.t.Fatalf("queued[%d] = %v, want %v", i, got[i].Action, a)
-		}
-	}
+	r.wantQueued(want, "keys")
 }
 
 // pickedNeed is the key of the item that the needs section draws as picked.
