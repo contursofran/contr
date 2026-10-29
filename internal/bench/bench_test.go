@@ -115,8 +115,9 @@ func TestSummarize(t *testing.T) {
 }
 
 func TestRow(t *testing.T) {
-	got := Row("idle shown", Stats{CPUMin: 0, CPUMed: 0.1, CPUMax: 0.4, FootprintMaxMB: 112, RSSMaxMB: 98}, "2.1")
-	want := "| idle shown | 0.0 / 0.1 / 0.4 % | 112 MB | 98 MB | 2.1 |"
+	got := Row("idle shown", Phase{Frames: 30, FramesPerSec: 2, CPUSeconds: 0.123},
+		Stats{CPUMin: 0, CPUMed: 0.1, CPUMax: 0.4, FootprintMaxMB: 112, RSSMaxMB: 98}, "2.1")
+	want := "| idle shown | no | 30 (2.0) | 0.12 | 0.0 / 0.1 / 0.4 % | 112 MB | 98 MB | 2.1 |"
 	if got != want {
 		t.Errorf("got %q", got)
 	}

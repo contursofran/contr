@@ -172,6 +172,48 @@ profiled further.
 Screenshots (`tmp/bench/start.png`, `busy.png`) show the sidebar, the grid
 with the shell prompt, the board, and the busy pane scrolling.
 
+### Frames and CPU seconds per phase (M13.6)
+
+CPU percent on a shared Mac moves with other load: idle shown read 3.4,
+5.3, 18.3 and 15.9 % in four runs. Frames and CPU seconds depend much less
+on load. **Compare runs by frames and CPU seconds**, not by CPU percent.
+The test now records, for each phase:
+
+- Frames: the lines of MyGo's frame log (`MYGO_FRAME_STATS=all`, which the
+  test sets for the app) between the phase's "samples start" and "samples
+  end" marks in `tmp/bench/app.log`, and frames a second (frames divided by
+  the time between the marks, about 15 s).
+- CPU s: the CPU time of the app process (user plus system, from `ps -o
+  time=`, 10 ms steps) at the end of the phase minus the value at the start.
+- Working: whether a working item (the spinning arc) is on screen. The
+  fixture row has its working stage on or off; the test sets it. Every
+  phase has nothing working, except "idle shown, one item working", which
+  measures the cost of the arc.
+
+The CPU percent columns and the targets list stay; a miss is reported only.
+
+Owner decision D4: the arc paints 30 times a second, and the idle target
+(0.5 %) is measured with nothing working. So "idle shown" has nothing
+working. Tables from M13.3 and M13.4 above had a working item in every
+shown phase, so their shown phases are not comparable with the new
+"nothing working" phases; the new "idle shown, one item working" phase is.
+
+`tmp/bench/result.json` has the same numbers for a later CI job to compare
+with a baseline from the same runner. It is one object: the phase name to
+an object with these keys:
+
+| Key | Meaning |
+|---|---|
+| `frames` | frames drawn in the phase |
+| `frames_per_s` | frames divided by the seconds of the phase |
+| `cpu_seconds` | CPU seconds (user plus system) the app used in the phase |
+| `cpu_med` | median CPU percent of the samples |
+| `footprint_max` | largest footprint in MB |
+| `working` | true when a working item was on screen |
+
+Example: `{"idle shown": {"frames": 11, "frames_per_s": 0.693,
+"cpu_seconds": 0.06, "cpu_med": 0, "footprint_max": 202, "working": false}}`.
+
 ## How to run the grid test again
 
 The terminal painter test is `cmd/gridbench` (build tag `bench`). Run it from
@@ -188,8 +230,8 @@ The earlier MyGo, Gio and GPUI programs are not in this repository.
 
 ## How to run the app test
 
-The app test (M13) measures the whole app in six phases: idle shown, busy
-pane shown, flood pane shown, board updates shown, idle hidden, busy pane
+The app test (M13) measures the whole app in seven phases: idle shown, idle
+shown with one item working (M13.6), busy pane shown, flood pane shown, board updates shown, idle hidden, busy pane
 hidden. Each phase has a 6 s warm-up and 15 samples, one per second. It
 runs only against the dev herdr, with a scratch repo and a scratch board.
 
@@ -199,10 +241,10 @@ runs only against the dev herdr, with a scratch repo and a scratch board.
 
 One heavy job at a time: run nothing else (e2e, app, build) at the same
 time. The test writes `tmp/bench/start.png`, `tmp/bench/busy.png`,
-`tmp/bench/result.md` and the app's log `tmp/bench/app.log`, and lists
-each target as met or MISS. To count frames, set `MYGO_FRAME_STATS=all`
-and `-count=1`: the log then has one line a frame, and the test marks
-where the samples of each phase start and end. A miss is
+`tmp/bench/result.md`, `tmp/bench/result.json` and the app's log `tmp/bench/app.log`, and lists
+each target as met or MISS. The test sets `MYGO_FRAME_STATS=all` for the app, so the log has one line
+a frame, and the test marks where the samples of each phase start and end.
+Use `-count=1`. A miss is
 reported only; it does not fail the run. The measured build has the
 automation plugin (`-tags e2e`); it only listens on a socket. The app pane
 is smaller than 200x60 cells, so the numbers are not the grid test load.

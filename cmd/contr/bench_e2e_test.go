@@ -24,10 +24,10 @@ const (
 	benchFlood   = `i=0; while :; do i=$((i+1)); echo "bench line $i abcdefghij 0123456789 -_=+()[]{}<>"; done`
 )
 
-// TestAppBench measures the whole app (CPU and memory) in six phases against
+// TestAppBench measures the whole app (frames, CPU and memory) in seven phases against
 // the dev herdr. See docs/BENCHMARKS.md, "How to run the app test". It is a
 // heavy job: run nothing else at the same time. Files go to tmp/bench/:
-// start.png, busy.png and result.md.
+// start.png, busy.png, result.md and result.json.
 func TestAppBench(t *testing.T) {
 	herdrSock := os.Getenv("HERDR_SOCKET_PATH")
 	if !strings.Contains(herdrSock, "contr-go-dev-herdr") {
@@ -87,8 +87,30 @@ func TestAppBench(t *testing.T) {
 	}
 	doc["session"] = session
 	boardFile := filepath.Join(boardDir, session+".json")
+	// The fixture has one working row (stage "run"). Phases that measure
+	// "nothing working" (owner decision D4) turn it to "done"; one phase
+	// turns it back on. mu guards doc and the revision, as the board updater
+	// runs on its own goroutine.
+	var (
+		mu      sync.Mutex
+		curRev  int
+		working = true
+	)
 	writeBoard := func(rev int) error {
+		mu.Lock()
+		defer mu.Unlock()
 		doc["bench_rev"] = rev // one field that changes on each update
+		stage := "done"
+		if working {
+			stage = "run"
+		}
+		rows, _ := doc["rows"].([]any)
+		if len(rows) == 0 {
+			return fmt.Errorf("fixture has no rows")
+		}
+		row, _ := rows[0].(map[string]any)
+		row["stages"] = []any{"done", stage, "none", "none", "none"}
+		curRev = rev
 		data, err := json.Marshal(doc)
 		if err != nil {
 			return err
@@ -99,6 +121,7 @@ func TestAppBench(t *testing.T) {
 		}
 		return os.Rename(tmp, boardFile)
 	}
+	working = false
 	if err := writeBoard(1); err != nil {
 		t.Fatal(err)
 	}
@@ -126,6 +149,23 @@ func TestAppBench(t *testing.T) {
 			"--token", "contr_board=1 "+session+" "+strconv.Itoa(rev))
 	}
 	token(1)
+	// setWorking changes the working row and tells the app (new revision).
+	setWorking := func(w bool) {
+		t.Helper()
+		mu.Lock()
+		changed := working != w
+		working = w
+		rev := curRev + 1
+		mu.Unlock()
+		if !changed {
+			return
+		}
+		if err := writeBoard(rev); err != nil {
+			t.Fatal(err)
+		}
+		token(rev)
+		time.Sleep(time.Second)
+	}
 	defer func() {
 		_ = exec.Command("herdr", "pane", "report-metadata", pane, "--source", "bench", "--clear-token", "contr_board").Run()
 	}()
@@ -133,7 +173,8 @@ func TestAppBench(t *testing.T) {
 	sock := filepath.Join(dir, "a.sock")
 	app := exec.Command(bin)
 	app.Env = append(os.Environ(), "MYGO_AUTOMATION="+sock, "CONTR_BOARD_DIR="+boardDir,
-		"CONTR_STATE_DIR="+filepath.Join(dir, "state"), "CODEX_HOME="+filepath.Join(dir, "codex"))
+		"CONTR_STATE_DIR="+filepath.Join(dir, "state"), "CODEX_HOME="+filepath.Join(dir, "codex"),
+		"MYGO_FRAME_STATS=all") // the frame log gives the frames of each phase
 	// The app's log, with MyGo's frame log when MYGO_FRAME_STATS is set.
 	appLog, err := os.Create(filepath.Join(out, "app.log"))
 	if err != nil {
@@ -173,16 +214,31 @@ func TestAppBench(t *testing.T) {
 
 	var table []string
 	stats := map[string]bench.Stats{}
+	type timing struct {
+		seconds, cpuSeconds float64
+		working             bool
+	}
+	timings := map[string]timing{}
+	loads := map[string]string{}
+	var order []string
 	table = append(table, bench.Header())
 	t.Log("\n" + bench.Header())
-	phase := func(name string, setup func(), teardown func()) {
+	// phase runs one phase. isWorking tells whether a working item is on
+	// screen (the phase sets the board to that before it starts).
+	phase := func(name string, isWorking bool, setup func(), teardown func()) {
 		t.Helper()
 		load := strings.TrimSpace(sysctlLoad(t))
+		setWorking(isWorking)
 		if setup != nil {
 			setup()
 		}
 		time.Sleep(benchWarmup)
-		fmt.Fprintf(appLog, "bench: phase %q: samples start\n", name)
+		cpu0, err := bench.ReadCPUTime(app.Process.Pid)
+		if err != nil {
+			t.Fatalf("phase %q: %v", name, err)
+		}
+		t0 := time.Now()
+		fmt.Fprintf(appLog, "%s\n", bench.StartMark(name))
 		var samples []bench.Sample
 		for i := 0; i < benchSamples; i++ {
 			s, err := bench.Read(app.Process.Pid)
@@ -192,7 +248,14 @@ func TestAppBench(t *testing.T) {
 			samples = append(samples, s)
 			time.Sleep(time.Second)
 		}
-		fmt.Fprintf(appLog, "bench: phase %q: samples end\n", name)
+		fmt.Fprintf(appLog, "%s\n", bench.EndMark(name))
+		secs := time.Since(t0).Seconds()
+		cpu1, err := bench.ReadCPUTime(app.Process.Pid)
+		if err != nil {
+			t.Fatalf("phase %q: %v", name, err)
+		}
+		timings[name] = timing{seconds: secs, cpuSeconds: cpu1 - cpu0, working: isWorking}
+		order = append(order, name)
 		if teardown != nil {
 			teardown()
 		}
@@ -200,38 +263,42 @@ func TestAppBench(t *testing.T) {
 		stats[name] = st
 		t.Logf("phase %q footprint first/last: %d / %d MB", name,
 			samples[0].FootprintKB/1024, samples[len(samples)-1].FootprintKB/1024)
-		row := bench.Row(name, st, load)
-		t.Log(row)
-		table = append(table, row)
+		// The frames come from the app log after the run (see below), so
+		// the row is built then; here the load is kept.
+		loads[name] = load
 	}
 	stopLoop := func() { c.key(t, "Ctrl+C"); time.Sleep(500 * time.Millisecond) }
 	startLoop := func(cmd string) func() { return func() { c.typeLine(t, cmd) } }
 
-	phase("idle shown", nil, nil)
+	phase("idle shown", false, nil, nil)
 	idleShown := stats["idle shown"].CPUMed
-	phase("busy pane shown", startLoop(benchBusy), func() {
+	phase("idle shown, one item working", true, nil, nil)
+	phase("busy pane shown", false, startLoop(benchBusy), func() {
 		c.capture(t, filepath.Join(out, "busy.png"))
 		stopLoop()
 	})
-	phase("flood pane shown", startLoop(benchFlood), stopLoop)
+	phase("flood pane shown", false, startLoop(benchFlood), stopLoop)
 
 	// Board updates: a ticker writes the file and bumps the bridge mark.
 	// herdrCmd fails the test, so the goroutine runs the command itself.
 	done := make(chan struct{})
 	var wg sync.WaitGroup
 	var updErr error
-	phase("board updates shown", func() {
+	phase("board updates shown", false, func() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			tick := time.NewTicker(time.Second)
 			defer tick.Stop()
-			for rev := 2; ; rev++ {
+			for {
 				select {
 				case <-done:
 					return
 				case <-tick.C:
 				}
+				mu.Lock()
+				rev := curRev + 1 // always above the revision of setWorking
+				mu.Unlock()
 				if err := writeBoard(rev); err != nil {
 					updErr = err
 					return
@@ -253,7 +320,7 @@ func TestAppBench(t *testing.T) {
 		c.call(t, "menu", map[string]any{"path": []string{"contr", "Hide contr"}})
 		time.Sleep(2 * time.Second)
 	}
-	phase("idle hidden", hide, nil)
+	phase("idle hidden", false, hide, nil)
 	hiddenIdle := stats["idle hidden"].CPUMed
 	if hiddenIdle > idleShown {
 		t.Logf("WARNING: idle hidden CPU median %.1f %% is above idle shown %.1f %%", hiddenIdle, idleShown)
@@ -265,7 +332,7 @@ func TestAppBench(t *testing.T) {
 	busyHidden := strings.Replace(benchBusy, `; sleep`, `; echo $i > '`+counter+`'; sleep`, 1)
 	// herdr starts and stops the loop: automation input does not reach a
 	// hidden window.
-	phase("busy pane hidden", func() { herdrCmd(t, "pane", "run", pane, busyHidden) }, func() {
+	phase("busy pane hidden", false, func() { herdrCmd(t, "pane", "run", pane, busyHidden) }, func() {
 		n := readCounter(counter)
 		herdrCmd(t, "pane", "send-keys", pane, "C-c")
 		t.Logf("busy loop counter while hidden: %d lines", n)
@@ -273,6 +340,32 @@ func TestAppBench(t *testing.T) {
 			t.Errorf("busy loop did not run while hidden: counter %d, want at least %d", n, min)
 		}
 	})
+
+	// Frames per phase, from the app's frame log between the phase marks.
+	logData, err := os.ReadFile(filepath.Join(out, "app.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	frames := bench.CountFrames(string(logData))
+	result := map[string]bench.Phase{}
+	for _, name := range order {
+		tm := timings[name]
+		p := bench.NewPhase(frames[name], tm.seconds, tm.cpuSeconds, stats[name], tm.working)
+		if p.Frames == 0 && name != "idle hidden" && name != "busy pane hidden" {
+			t.Logf("WARNING: phase %q: no frames in the app log (is MYGO_FRAME_STATS set?)", name)
+		}
+		result[name] = p
+		row := bench.Row(name, p, stats[name], loads[name])
+		t.Log(row)
+		table = append(table, row)
+	}
+	js, err := bench.MarshalResult(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(out, "result.json"), js, 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	// A miss is reported, never a failure (owner answer to Q6).
 	res := strings.Join(table, "\n") + "\n\nTargets (a miss is reported only):\n"
