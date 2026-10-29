@@ -1,0 +1,52 @@
+name: Bundle
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - 'assets/app/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'VERSION'
+      - '.github/workflows/bundle.yml'
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bundle:
+    name: Release bundle (macOS arm64)
+    runs-on: macos-15
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      # On pull_request runs, ContrCommit in Info.plist is the short hash of the test-merge
+      # commit, not the PR head.
+      - name: Build and bundle
+        run: scripts/bundle.sh --zip
+      - name: Check the release binary has no automation plugin
+        run: |
+          binary=dist/bundle/contr.app/Contents/MacOS/contr
+          test -f "$binary" || { echo "no binary at $binary" >&2; exit 1; }
+          if grep -aq 'mygo/plugins/automation' "$binary"; then
+            echo "the release binary contains the automation plugin" >&2
+            exit 1
+          fi
+      - name: Upload bundle
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: contr-macos-arm64
+          path: dist/bundle/contr-*-macos-arm64.zip
+          retention-days: 14
+          if-no-files-found: error
