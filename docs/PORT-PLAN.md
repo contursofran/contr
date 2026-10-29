@@ -83,4 +83,7 @@ the control itself; it then becomes a view test or an e2e test.
 | # | State |
 |---|---|
 | M0 | Done in the first commit |
-| M1–M13 | Not started |
+| M1 | Done (M1.1). The `AgentState` to icon mapping moves to M4. |
+| M2 | In progress |
+| M3 | In progress |
+| M4–M13 | Not started |
