@@ -43,6 +43,8 @@ type panelRig struct {
 	dir   string
 	tree  *herdr.HerdrTree
 	c     *ui.Context // the context of the last frame
+	// extra, when set, adds a view next to the panel, such as the terminal.
+	extra func(c *ui.Context)
 
 	mu      sync.Mutex
 	focused []string
@@ -133,6 +135,9 @@ func (r *panelRig) host(c *ui.Context) {
 		ui.Box(c).Label("panel host").Width(theme.PanelWidth).FillHeight().Shrink(0).Children(func() {
 			r.p.View(c)
 		})
+		if r.extra != nil {
+			r.extra(c)
+		}
 	})
 }
 
@@ -243,4 +248,22 @@ func snapshotWithReport(t *testing.T, raw string) *board.Snapshot {
 	snap := panelFixture(t)
 	snap.Rows[0].Report = &raw
 	return snap
+}
+
+// key sends key to the window, as a press on the keyboard, and lets what it
+// starts settle.
+func (r *panelRig) key(k ui.Key) {
+	r.t.Helper()
+	r.tt.Key(0, k)
+	r.settle()
+}
+
+// advance moves the test clock by ms, after what is due has run, and lets
+// what that makes due settle.
+func (r *panelRig) advance(ms uint64) {
+	r.t.Helper()
+	r.out.Wait()
+	r.clock.advance(ms)
+	r.out.Wait()
+	r.tt.Frame()
 }
