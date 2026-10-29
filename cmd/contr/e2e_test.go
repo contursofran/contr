@@ -179,9 +179,12 @@ func TestBoardPanelCapture(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 	c.capture(t, filepath.Join(out, "board.png"))
 
-	// The card of an item is named after the item (ItemCardLabel).
-	if !c.hasPrefix(t, "T12 Test the bag drag,") {
-		t.Errorf("no answer card under the sections")
+	// The card of an item is named after the item (ItemCardLabel), and so is
+	// the item's row in the needs list (NeedLabel). Two nodes with this label
+	// mean the row and the card are both shown.
+	const itemLabel = "T12 Test the bag drag,"
+	if n := c.countPrefix(t, itemLabel); n < 2 {
+		t.Errorf("want the needs row and the answer card labelled %q, found %d node(s)", itemLabel, n)
 	}
 
 	c.call(t, "act", map[string]any{"id": c.idOf(t, "Report tab"), "action": "press"})
@@ -218,12 +221,19 @@ func lastPane(t *testing.T) string {
 
 func (c *client) hasPrefix(t *testing.T, prefix string) bool {
 	t.Helper()
-	for _, n := range c.nodes(t) {
-		if strings.HasPrefix(n.Label, prefix) {
-			return true
+	return c.countPrefix(t, prefix) > 0
+}
+
+// countPrefix counts the nodes whose label starts with prefix.
+func (c *client) countPrefix(t *testing.T, prefix string) int {
+	t.Helper()
+	n := 0
+	for _, nd := range c.nodes(t) {
+		if strings.HasPrefix(nd.Label, prefix) {
+			n++
 		}
 	}
-	return false
+	return n
 }
 
 type client struct {
