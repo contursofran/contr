@@ -3,23 +3,29 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/herdr"
 )
 
 func main() {
 	app.InitActions()
+	frame := app.NewFrame(nil)
 	mygo.App.WhenReady(func() {
-		mygo.NewWindow(mygo.WindowOptions{
-			Title:   "contr",
-			Width:   1440,
-			Height:  900,
-			Content: ui.View(app.Frame),
+		win := mygo.NewWindow(mygo.WindowOptions{
+			Title:         "contr",
+			Width:         1440,
+			Height:        900,
+			TitleBarStyle: mygo.TitleBarHidden,
+			Content:       ui.View(frame.View),
 		})
+		stop := frame.Attach(context.Background(), win, herdr.LocalTarget())
+		win.OnClosed(stop)
 	})
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)

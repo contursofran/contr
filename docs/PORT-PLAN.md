@@ -86,5 +86,9 @@ the control itself; it then becomes a view test or an e2e test.
 | M1 | Done (M1.1). The `AgentState` to icon mapping moves to M4. |
 | M2 | Done (M2.1–M2.7). Live tests run with `-tags live` against `scripts/dev-herdr.sh`. |
 | M3 | Done (M3.1–M3.6). Live tests run with `-tags live` against `scripts/dev-herdr.sh`. |
-| M4 | In progress |
-| M5–M13 | Not started |
+| M4 | Done (M4.1–M4.4). The frame test for title bar clicks moves to M6. The redraw test checks that a slot builds once per redraw (MyGo is immediate mode). |
+| M5 | In progress |
+| M7 | In progress |
+| M8 | In progress |
+| M10 | In progress |
+| M6, M9, M11–M13 | Not started |
