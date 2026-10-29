@@ -64,12 +64,25 @@ func TestFrameWindowCapture(t *testing.T) {
 	c.call(t, "idle", map[string]any{"timeout": 10000})
 
 	labels := c.labels(t)
-	for _, want := range []string{"Toggle sidebar", "Toggle panel", "contr"} {
+	for _, want := range []string{"Toggle sidebar", "Toggle panel", "contr", "New tab", "Split pane"} {
 		if !labels[want] {
 			t.Errorf("no element %q; labels %v", want, keys(labels))
 		}
 	}
 	c.capture(t, filepath.Join(out, "frame.png"))
+
+	// "New tab" sends tab.create to the dev herdr; the tree then holds one more tab.
+	before := c.tabCount(t)
+	c.call(t, "act", map[string]any{"id": c.idOf(t, "New tab"), "action": "press"})
+	deadline := time.Now().Add(10 * time.Second)
+	for c.tabCount(t) <= before && time.Now().Before(deadline) {
+		time.Sleep(100 * time.Millisecond)
+	}
+	if got := c.tabCount(t); got <= before {
+		t.Errorf("tabs %d after New tab, want more than %d", got, before)
+	}
+	c.call(t, "idle", map[string]any{"timeout": 10000})
+	c.capture(t, filepath.Join(out, "frame-tabs.png"))
 
 	c.call(t, "act", map[string]any{"id": c.idOf(t, "Toggle panel"), "action": "press"})
 	c.call(t, "idle", map[string]any{"timeout": 10000})
@@ -160,6 +173,20 @@ func (c *client) labels(t *testing.T) map[string]bool {
 		m[n.Label] = true
 	}
 	return m
+}
+
+// tabCount counts the tab buttons in the window: their labels end in a status word.
+func (c *client) tabCount(t *testing.T) int {
+	t.Helper()
+	n := 0
+	for _, nd := range c.nodes(t) {
+		for _, status := range []string{", idle", ", working", ", blocked", ", done"} {
+			if strings.HasSuffix(nd.Label, status) {
+				n++
+			}
+		}
+	}
+	return n
 }
 
 func (c *client) idOf(t *testing.T, label string) string {

@@ -91,4 +91,5 @@ the control itself; it then becomes a view test or an e2e test.
 | M7 | In progress |
 | M8 | In progress |
 | M10 | In progress |
-| M6, M9, M11–M13 | Not started |
+| M6 | Done (M6.1). The panel toggle sits right of split, as DESIGN.md orders them. |
+| M9, M11–M13 | Not started |

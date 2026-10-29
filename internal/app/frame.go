@@ -21,7 +21,6 @@ type Slot func(c *ui.Context)
 type Slots struct {
 	Spaces    Slot // sidebar, under its header
 	Agents    Slot // sidebar, at the bottom
-	Tabs      Slot // title bar, between the sidebar toggle and the panel toggle
 	Terminal  Slot // shown only while herdr is connected
 	Panel     Slot // board panel, shown while it is open
 	StatusBar Slot
@@ -32,7 +31,6 @@ func PlaceholderSlots() Slots {
 	return Slots{
 		Spaces:    placeholder("spaces"),
 		Agents:    placeholder("agents"),
-		Tabs:      placeholder("tabs"),
 		Terminal:  placeholder("terminal"),
 		Panel:     placeholder("panel"),
 		StatusBar: placeholder("usage"),
@@ -62,7 +60,11 @@ type Frame struct {
 	Visibility *state.Visibility
 	Selection  *state.Selection
 	Status     *state.StatusMessage
+	// Send takes the title bar's herdr commands. [Frame.Attach] sets it. When it is nil, the
+	// commands are dropped.
+	Send func(TabCommand)
 
+	bar         titleBar
 	sidebarOpen bool
 	panelOpen   bool
 }
@@ -134,7 +136,7 @@ func (f *Frame) sidebar(c *ui.Context) {
 		BorderColor(color(theme.Line)).Children(func() {
 		ui.Row(c).Label(LabelSidebarHeader).FillWidth().Height(theme.TitleBarHeight).Shrink(0).
 			PaddingStart(theme.TrafficLightInset).Gap(theme.SpacesGap).DragWindow().Children(func() {
-			f.toggleButton(c, LabelSidebarToggle, true, f.ToggleSidebar)
+			toggleButton(c, LabelSidebarToggle, true, f.ToggleSidebar)
 			ui.Text(c, "contr").TextColor(color(theme.Text2))
 		})
 		ui.Box(c).Grow(1).MinHeight(0).Children(func() { f.run(c, f.Slots.Spaces) })
@@ -159,15 +161,20 @@ func (f *Frame) main(c *ui.Context) {
 func (f *Frame) titleBar(c *ui.Context) {
 	ui.Row(c).Label(LabelTitleBar).FillWidth().Height(theme.TitleBarHeight).Shrink(0).
 		Background(color(theme.BgBars)).BorderWidth(0, 0, 1, 0).BorderColor(color(theme.Line)).
-		PaddingX(theme.PanelPadX).Gap(theme.SpacesGap).DragWindow().Children(func() {
+		PaddingEnd(theme.TitleBarPadEnd).DragWindow().Children(func() {
 		if !f.sidebarOpen {
 			// The window buttons sit over this corner: keep the room, then
 			// show the toggle that opens the sidebar again.
-			ui.Box(c).Width(theme.TrafficLightInset - theme.PanelPadX).Shrink(0)
-			f.toggleButton(c, LabelSidebarReopen, false, f.ToggleSidebar)
+			ui.Box(c).Width(theme.TrafficLightInset).Shrink(0)
+			toggleButton(c, LabelSidebarReopen, false, f.ToggleSidebar)
 		}
-		ui.Box(c).Grow(1).MinWidth(0).Children(func() { f.run(c, f.Slots.Tabs) })
-		f.toggleButton(c, LabelPanelToggle, f.panelOpen, f.TogglePanel)
+		var strip herdr.TabStrip
+		if f.Herdr != nil {
+			strip = herdr.TabStripFromTree(f.Herdr.Live().Tree)
+		}
+		f.bar.setStrip(strip)
+		f.bar.send = f.send
+		f.bar.build(c, f.panelOpen, f.TogglePanel)
 	})
 }
 
@@ -185,10 +192,20 @@ func (f *Frame) terminal(c *ui.Context) {
 	})
 }
 
+func (f *Frame) send(cmd TabCommand) {
+	if f.Send != nil {
+		f.Send(cmd)
+	}
+}
+
+func panelToggle(c *ui.Context, open bool, onClick func()) {
+	toggleButton(c, LabelPanelToggle, open, onClick)
+}
+
 // toggleButton draws the sidebar or panel toggle: a small outline with one
 // filled part. The sidebar's fill is on the left, the panel's on the right,
 // and the fill shows while the part is open.
-func (f *Frame) toggleButton(c *ui.Context, label string, open bool, onClick func()) {
+func toggleButton(c *ui.Context, label string, open bool, onClick func()) {
 	left := label != LabelPanelToggle
 	ui.ButtonBase(c).Label(label).Size(theme.TitleButtonSize, theme.TitleButtonSize).Shrink(0).
 		Cursor(ui.CursorPointer).OnClick(onClick).Children(func() {
@@ -221,6 +238,7 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	f.Herdr = h
 	f.Selection = state.NewSelection(w.Invalidate)
 	f.Status = state.NewStatusMessage(w.Invalidate)
+	f.Send = newCommander(f.Status.Show).Send
 	f.Visibility = state.NewVisibility(h.SetVisible)
 	unwatch := f.Visibility.Watch(w)
 	return func() {
