@@ -88,10 +88,10 @@ the control itself; it then becomes a view test or an e2e test.
 | M4 | Done (M4.1–M4.4). The frame test for title bar clicks moves to M6. The redraw test checks that a slot builds once per redraw (MyGo is immediate mode). |
 | M5 | Done (M5.1–M5.7f). Held keys repeat: the app registers ApplePressAndHoldEnabled = NO in its own defaults (D20). The Shift+wheel check needs a real device and is open for the owner. |
 | M7 | Done (M7.1–M7.4). Rows redraw one by one through cached layers (D12). The spaces column rescans git every 10 s while the window is shown, as Rust does (D15). |
-| M8 | In progress |
+| M8 | Done (M8.1–M8.6). The panel keys run as shortcuts on the focusable panel root (D23). |
 | M10 | Done (M10.1–M10.5). Host stats use purego Mach calls (D11). The `contr statusline` command line comes in M11. |
 | M6 | Done (M6.1). The panel toggle sits right of split, as DESIGN.md orders them. |
-| M9 | In progress |
+| M9 | Done (M9.1–M9.3). The board panel sends item actions through the outbox (M8.6c2). |
 | M11 | Done (M11). The usage text has no `dev` line (D5). The traffic-light inset is not set: MyGo v0.7.3 has no option for it. |
 | M12 | Done (M12). `go build` replaces cargo in `bundle.sh` (D17). `scripts/check.sh` runs both script tests in temp dirs. |
 | M13 | Not started |
