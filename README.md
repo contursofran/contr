@@ -20,7 +20,7 @@ in. It is written in Go and uses MyGo's native UI.
 
 ```sh
 scripts/bundle.sh      # builds dist/bundle/contr.app
-scripts/install.sh     # installs the app and a `contr` link
+scripts/install.sh     # installs to /Applications and links `contr` in ~/.local/bin
 ```
 
 ## Build and check

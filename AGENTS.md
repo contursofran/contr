@@ -5,8 +5,8 @@ in. It is written in Go with MyGo's native UI.
 
 ## Goal and reference
 
-- The Rust app is at tag `rust-final`. Read it with `git show rust-final:<path>`.
-  Do not change it.
+- The Rust app is at tag `rust-final`. Read it with
+  `git show rust-final:<path>`. Do not change it.
 - `docs/DESIGN.md` is the source of truth for the UI.
 - `docs/DECISIONS.md` records why things are the way they are.
 - `docs/PORT-PLAN.md` records how the Go port was built.
