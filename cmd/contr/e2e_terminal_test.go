@@ -115,7 +115,10 @@ func TestTerminalTypingAndPaste(t *testing.T) {
 		t.Errorf("backspace %q, want %q (Backspace once)", got, "ab\n")
 	}
 
-	old, _ := exec.Command("pbpaste").Output()
+	old, err := exec.Command("pbpaste").Output()
+	if err != nil {
+		t.Fatalf("pbpaste: %v", err)
+	}
 	defer func() {
 		cmd := exec.Command("pbcopy")
 		cmd.Stdin = strings.NewReader(string(old))

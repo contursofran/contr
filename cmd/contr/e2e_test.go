@@ -151,7 +151,7 @@ func TestBoardPanelCapture(t *testing.T) {
 	}
 
 	// Mark one pane of the dev herdr as the bridge.
-	pane := firstPane(t)
+	pane := lastPane(t)
 	herdrCmd(t, "pane", "report-metadata", pane, "--source", "e2e", "--token", "contr_board=1 "+session+" 42")
 	defer func() {
 		_ = exec.Command("herdr", "pane", "report-metadata", pane, "--source", "e2e", "--clear-token", "contr_board").Run()
@@ -199,8 +199,8 @@ func herdrCmd(t *testing.T, args ...string) []byte {
 	return msg
 }
 
-// firstPane returns the id of the last pane of the dev herdr.
-func firstPane(t *testing.T) string {
+// lastPane returns the id of the last pane of the dev herdr.
+func lastPane(t *testing.T) string {
 	t.Helper()
 	var res struct {
 		Result struct {
@@ -216,6 +216,7 @@ func firstPane(t *testing.T) string {
 }
 
 func (c *client) hasPrefix(t *testing.T, prefix string) bool {
+	t.Helper()
 	for _, n := range c.nodes(t) {
 		if strings.HasPrefix(n.Label, prefix) {
 			return true
