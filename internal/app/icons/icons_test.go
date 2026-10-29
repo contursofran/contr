@@ -9,6 +9,7 @@ import (
 
 	"github.com/contursofran/contr/assets"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/herdr"
 )
 
 func one(s Status, size float32) func(*ui.Context) {
@@ -127,6 +128,24 @@ func TestSpinAngleTurnsOncePerPeriod(t *testing.T) {
 	} {
 		if got := SpinAngle(base.Add(tc.after)); got != tc.want {
 			t.Errorf("after %v angle %v, want %v", tc.after, got, tc.want)
+		}
+	}
+}
+
+func TestAgentStatesMapToTheirIcons(t *testing.T) {
+	cases := []struct {
+		in   herdr.AgentState
+		want Status
+	}{
+		{herdr.StateIdle, Idle},
+		{herdr.StateWorking, Working},
+		{herdr.StateBlocked, Blocked},
+		{herdr.StateDone, Done},
+		{herdr.StateUnknown, Idle},
+	}
+	for _, c := range cases {
+		if got := FromAgentState(c.in); got != c.want {
+			t.Errorf("FromAgentState(%s) = %s, want %s", c.in.Label(), got.Label(), c.want.Label())
 		}
 	}
 }

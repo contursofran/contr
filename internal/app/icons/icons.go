@@ -13,6 +13,7 @@ import (
 
 	"github.com/contursofran/contr/assets"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/herdr"
 )
 
 // Status is one of the ten icons.
@@ -145,4 +146,18 @@ func Sized(c *ui.Context, s Status, size float32) ui.Element {
 			p.Icon(arc, r, theme.Color(theme.IconYou))
 		})
 	})
+}
+
+// FromAgentState returns the icon for an agent's state. Unknown shows as
+// idle.
+func FromAgentState(s herdr.AgentState) Status {
+	switch s {
+	case herdr.StateWorking:
+		return Working
+	case herdr.StateBlocked:
+		return Blocked
+	case herdr.StateDone:
+		return Done
+	}
+	return Idle
 }
