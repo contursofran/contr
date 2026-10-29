@@ -69,6 +69,9 @@ type Frame struct {
 	// Board is the coordinator's board. [Frame.Attach] sets it. Views read
 	// it with Board.View.
 	Board *Board
+	// Outbox queues the actions that contr sends to the coordinator mod.
+	// [Frame.Attach] sets it.
+	Outbox *BoardOutbox
 	// AgentsList is the agents section. [Frame.Attach] makes it and puts
 	// its view in Slots.Agents.
 	AgentsList *AgentsList
@@ -276,6 +279,15 @@ func (f *Frame) syncHerdr() {
 	f.syncAgents()
 }
 
+// syncBoard follows a change of the board: the outbox reads its report, and
+// the agents list takes the new rows. UI thread.
+func (f *Frame) syncBoard() {
+	if f.Outbox != nil && f.Board != nil {
+		f.Outbox.Sync(f.Board.View().Snapshot)
+	}
+	f.syncAgents()
+}
+
 func (f *Frame) syncAgents() {
 	if f.AgentsList != nil {
 		f.AgentsList.Sync()
@@ -296,7 +308,8 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	// An onChange func can run on any goroutine or on the UI thread. It only
 	// queues the sync with Window.Update, which is safe from both.
 	dir, hasDir := board.Dir()
-	f.Board = NewBoard(dir, hasDir, func() { w.Update(f.syncAgents) })
+	f.Board = NewBoard(dir, hasDir, func() { w.Update(f.syncBoard) })
+	f.Outbox = NewBoardOutbox(dir, hasDir, w.Invalidate, f.Status.Show)
 	h := NewHerdr(ctx, target, w.IsVisible(), func() { w.Update(f.syncHerdr) })
 	f.Herdr = h
 	f.AgentsList = NewAgentsList(h, f.Board, f.Selection, f.Status)
@@ -325,6 +338,9 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	unwatch := f.Visibility.Watch(w)
 	return func() {
 		unwatch()
+		// Held actions are written now, so quit loses none.
+		f.Outbox.ReleaseForQuit()
+		f.Outbox.Wait()
 		h.Close()
 		f.Host.Close()
 		f.Usage.Close()
