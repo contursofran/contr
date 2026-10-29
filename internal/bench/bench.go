@@ -4,6 +4,7 @@ package bench
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"sort"
 	"strconv"
@@ -24,9 +25,13 @@ type Stats struct {
 	RSSMaxMB               float64
 }
 
-// run starts a command and returns its output. Tests replace it.
+// run starts a command and returns its output. Tests replace it, so tests
+// that do this must not run in parallel. LC_ALL=C keeps the number and unit
+// format of ps and footprint the same in every locale.
 var run = func(name string, args ...string) ([]byte, error) {
-	return exec.Command(name, args...).Output()
+	cmd := exec.Command(name, args...)
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
+	return cmd.Output()
 }
 
 // ParsePS parses the output of `ps -o %cpu= -o rss=`: two numbers.
