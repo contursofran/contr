@@ -75,6 +75,9 @@ type Frame struct {
 	// AgentsList is the agents section. [Frame.Attach] makes it and puts
 	// its view in Slots.Agents.
 	AgentsList *AgentsList
+	// Panel is the board panel. [Frame.Attach] makes it and puts its view in
+	// Slots.Panel.
+	Panel *BoardPanel
 	// SpacesList is the spaces column body. [Frame.Attach] makes it and puts
 	// its view in Slots.Spaces.
 	SpacesList *SpacesList
@@ -285,6 +288,10 @@ func (f *Frame) syncBoard() {
 	if f.Outbox != nil && f.Board != nil {
 		f.Outbox.Sync(f.Board.View().Snapshot)
 	}
+	// After the outbox, so CanAct is current.
+	if f.Panel != nil {
+		f.Panel.Sync()
+	}
 	f.syncAgents()
 }
 
@@ -315,6 +322,14 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	f.AgentsList = NewAgentsList(h, f.Board, f.Selection, f.Status)
 	f.Slots.Agents = f.AgentsList.View
 	f.Board.Sync(h.Live().Tree)
+	f.Panel = NewBoardPanel(PanelDeps{
+		Board:      f.Board,
+		Outbox:     f.Outbox,
+		Tree:       func() *herdr.HerdrTree { return h.Live().Tree },
+		Status:     f.Status.Show,
+		Invalidate: w.Invalidate,
+	})
+	f.Slots.Panel = f.Panel.View
 	if f.Host == nil {
 		f.Host = host.NewSystem(w.Invalidate)
 	}
