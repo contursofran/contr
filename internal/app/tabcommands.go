@@ -93,12 +93,16 @@ func (c *commander) do(cmd TabCommand) {
 		return
 	}
 	slog.Warn("herdr command failed", "cmd", cmd.String(), "err", err)
+	c.report(failureLine(err))
+}
+
+// failureLine is the status line for a failed herdr command.
+func failureLine(err error) string {
 	var wire *herdr.WireError
 	if errors.As(err, &wire) && wire.IsNotRunning() {
-		c.report("herdr is not running")
-		return
+		return "herdr is not running"
 	}
-	c.report(fmt.Sprintf("herdr: %v", err))
+	return fmt.Sprintf("herdr: %v", err)
 }
 
 // socketOrWarn returns the socket path, or false with a warning that cmd is not sent.

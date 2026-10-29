@@ -10,6 +10,7 @@ import (
 
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/board"
 	"github.com/contursofran/contr/internal/herdr"
 )
 
@@ -63,6 +64,12 @@ type Frame struct {
 	// Send takes the title bar's herdr commands. [Frame.Attach] sets it. When it is nil, the
 	// commands are dropped.
 	Send func(TabCommand)
+	// Board is the coordinator's board. [Frame.Attach] sets it. Views read
+	// it with Board.View.
+	Board *Board
+	// AgentsList is the agents section. [Frame.Attach] makes it and puts
+	// its view in Slots.Agents.
+	AgentsList *AgentsList
 
 	bar         titleBar
 	sidebarOpen bool
@@ -140,7 +147,8 @@ func (f *Frame) sidebar(c *ui.Context) {
 			ui.Text(c, "contr").TextColor(color(theme.Text2))
 		})
 		ui.Box(c).Grow(1).MinHeight(0).Children(func() { f.run(c, f.Slots.Spaces) })
-		ui.Box(c).Shrink(0).Children(func() { f.run(c, f.Slots.Agents) })
+		// The agents section takes at most its share of the sidebar.
+		ui.Column(c).Shrink(0).MaxHeightPercent(theme.AgentsMaxShare * 100).Children(func() { f.run(c, f.Slots.Agents) })
 	})
 }
 
@@ -229,16 +237,38 @@ type Window interface {
 	Update(fn func())
 }
 
+// syncHerdr follows a change of the herdr tree: the board looks at the bridge
+// again, and the agents list takes the new rows. UI thread.
+func (f *Frame) syncHerdr() {
+	if f.Herdr != nil && f.Board != nil {
+		f.Board.Sync(f.Herdr.Live().Tree)
+	}
+	f.syncAgents()
+}
+
+func (f *Frame) syncAgents() {
+	if f.AgentsList != nil {
+		f.AgentsList.Sync()
+	}
+}
+
 // Attach connects the frame's state and the herdr connection to the window.
 // A change of any of them redraws the window; Visibility follows the window
 // and tells herdr. Call it once, on the UI thread, after the window exists.
 // The returned function ends the connection and the watching.
 func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop func()) {
-	h := NewHerdr(ctx, target, w.IsVisible(), w.Invalidate)
-	f.Herdr = h
 	f.Selection = state.NewSelection(w.Invalidate)
 	f.Status = state.NewStatusMessage(w.Invalidate)
 	f.Send = newCommander(f.Status.Show).Send
+	// Both onChange funcs run on a goroutine: they hand the sync to the UI
+	// thread and ask for a redraw there.
+	dir, hasDir := board.Dir()
+	f.Board = NewBoard(dir, hasDir, func() { w.Update(f.syncAgents) })
+	h := NewHerdr(ctx, target, w.IsVisible(), func() { w.Update(f.syncHerdr) })
+	f.Herdr = h
+	f.AgentsList = NewAgentsList(h, f.Board, f.Selection, f.Status)
+	f.Slots.Agents = f.AgentsList.View
+	f.Board.Sync(h.Live().Tree)
 	f.Visibility = state.NewVisibility(h.SetVisible)
 	unwatch := f.Visibility.Watch(w)
 	return func() {
