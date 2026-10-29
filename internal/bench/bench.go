@@ -132,14 +132,20 @@ func Summarize(s []Sample) Stats {
 	}
 }
 
-// Header is the Markdown table head that matches Row.
+// Header is the Markdown table head that matches Row. Frames and CPU
+// seconds are the columns to compare across runs.
 func Header() string {
-	return "| Phase | CPU min / med / max | Footprint max | RSS max | Load avg |\n" +
-		"|---|---|---|---|---|"
+	return "| Phase | Working | Frames (per s) | CPU s | CPU min / med / max | Footprint max | RSS max | Load avg |\n" +
+		"|---|---|---|---|---|---|---|---|"
 }
 
 // Row is one Markdown table row.
-func Row(phase string, s Stats, load string) string {
-	return fmt.Sprintf("| %s | %.1f / %.1f / %.1f %% | %.0f MB | %.0f MB | %s |",
-		phase, s.CPUMin, s.CPUMed, s.CPUMax, s.FootprintMaxMB, s.RSSMaxMB, load)
+func Row(phase string, p Phase, s Stats, load string) string {
+	working := "no"
+	if p.Working {
+		working = "yes"
+	}
+	return fmt.Sprintf("| %s | %s | %d (%.1f) | %.2f | %.1f / %.1f / %.1f %% | %.0f MB | %.0f MB | %s |",
+		phase, working, p.Frames, p.FramesPerSec, p.CPUSeconds,
+		s.CPUMin, s.CPUMed, s.CPUMax, s.FootprintMaxMB, s.RSSMaxMB, load)
 }
