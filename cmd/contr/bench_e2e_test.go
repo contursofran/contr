@@ -197,7 +197,7 @@ func TestAppBench(t *testing.T) {
 	startLoop := func(cmd string) func() { return func() { c.typeLine(t, cmd) } }
 
 	phase("idle shown", nil, nil)
-	idleShown := lastMedian(table)
+	idleShown := stats["idle shown"].CPUMed
 	phase("busy pane shown", startLoop(benchBusy), func() {
 		c.capture(t, filepath.Join(out, "busy.png"))
 		stopLoop()
@@ -243,11 +243,25 @@ func TestAppBench(t *testing.T) {
 		time.Sleep(2 * time.Second)
 	}
 	phase("idle hidden", hide, nil)
-	hiddenIdle := lastMedian(table)
+	hiddenIdle := stats["idle hidden"].CPUMed
 	if hiddenIdle > idleShown {
 		t.Logf("WARNING: idle hidden CPU median %.1f %% is above idle shown %.1f %%", hiddenIdle, idleShown)
 	}
-	phase("busy pane hidden", startLoop(benchBusy), stopLoop)
+	// The window is hidden, so the input has no visible proof. The loop also
+	// writes its counter to a file. If the counter did not grow, the loop did
+	// not run and the reading is not a valid result (not a target miss).
+	counter := filepath.Join(dir, "n")
+	busyHidden := strings.Replace(benchBusy, `; sleep`, `; echo $i > '`+counter+`'; sleep`, 1)
+	// herdr starts and stops the loop: automation input does not reach a
+	// hidden window.
+	phase("busy pane hidden", func() { herdrCmd(t, "pane", "run", pane, busyHidden) }, func() {
+		n := readCounter(counter)
+		herdrCmd(t, "pane", "send-keys", pane, "C-c")
+		t.Logf("busy loop counter while hidden: %d lines", n)
+		if min := benchSamples * 20; n < min {
+			t.Errorf("busy loop did not run while hidden: counter %d, want at least %d", n, min)
+		}
+	})
 
 	// A miss is reported, never a failure (owner answer to Q6).
 	res := strings.Join(table, "\n") + "\n\nTargets (a miss is reported only):\n"
@@ -299,16 +313,12 @@ func sysctlLoad(t *testing.T) string {
 	return strings.Trim(strings.TrimSpace(string(b)), "{} ")
 }
 
-// lastMedian reads the CPU median from the last table row.
-func lastMedian(table []string) float64 {
-	cells := strings.Split(table[len(table)-1], "|")
-	if len(cells) < 3 {
+// readCounter reads the busy loop counter file; a missing file counts as 0.
+func readCounter(path string) int {
+	b, err := os.ReadFile(path)
+	if err != nil {
 		return 0
 	}
-	f := strings.Split(strings.TrimSpace(cells[2]), "/")
-	if len(f) != 3 {
-		return 0
-	}
-	v, _ := strconv.ParseFloat(strings.TrimSpace(f[1]), 64)
-	return v
+	n, _ := strconv.Atoi(strings.TrimSpace(string(b)))
+	return n
 }

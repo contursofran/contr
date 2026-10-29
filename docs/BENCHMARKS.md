@@ -107,3 +107,6 @@ time. The test writes `tmp/bench/start.png`, `tmp/bench/busy.png` and
 reported only; it does not fail the run. The measured build has the
 automation plugin (`-tags e2e`); it only listens on a socket. The app pane
 is smaller than 200x60 cells, so the numbers are not the grid test load.
+The test logs the pane size in points, not cells. In phase 6 the loop also
+writes a counter file; if it does not grow, the test fails (the loop did not
+run, so the reading is not valid).
