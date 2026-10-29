@@ -1,0 +1,198 @@
+//go:build e2e
+
+package main
+
+import (
+	"bufio"
+	"encoding/base64"
+	"encoding/json"
+	"net"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+// TestFrameWindowCapture runs the built app against the dev herdr, checks the
+// frame's elements and saves the window as tmp/e2e/frame.png (and
+// frame-no-panel.png after the panel toggle). Start the dev herdr first:
+//
+//	eval "$(scripts/dev-herdr.sh)"
+//	go test -tags e2e -run TestFrameWindowCapture ./cmd/contr
+//
+// It refuses to run against any herdr but the dev one.
+func TestFrameWindowCapture(t *testing.T) {
+	herdrSock := os.Getenv("HERDR_SOCKET_PATH")
+	if !strings.Contains(herdrSock, "contr-go-dev-herdr") {
+		t.Skip("HERDR_SOCKET_PATH is not the dev herdr; run eval \"$(scripts/dev-herdr.sh)\" first")
+	}
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(root, "tmp", "e2e")
+	if err := os.MkdirAll(out, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	bin := filepath.Join(out, "contr-e2e")
+	build := exec.Command("go", "build", "-tags", "e2e", "-o", bin, "./cmd/contr")
+	build.Dir = root
+	build.Env = append(os.Environ(), "CGO_ENABLED=0")
+	if msg, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build: %v\n%s", err, msg)
+	}
+
+	// A short path: macOS limits socket paths to 103 bytes.
+	dir, err := os.MkdirTemp("", "contr-e2e")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	sock := filepath.Join(dir, "a.sock")
+	app := exec.Command(bin)
+	app.Env = append(os.Environ(), "MYGO_AUTOMATION="+sock)
+	if err := app.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = app.Process.Kill(); _ = app.Wait() }()
+
+	c := dial(t, sock)
+	defer c.conn.Close()
+	c.waitWindow(t)
+	c.call(t, "idle", map[string]any{"timeout": 10000})
+
+	labels := c.labels(t)
+	for _, want := range []string{"Toggle sidebar", "Toggle panel", "contr"} {
+		if !labels[want] {
+			t.Errorf("no element %q; labels %v", want, keys(labels))
+		}
+	}
+	c.capture(t, filepath.Join(out, "frame.png"))
+
+	c.call(t, "act", map[string]any{"id": c.idOf(t, "Toggle panel"), "action": "press"})
+	c.call(t, "idle", map[string]any{"timeout": 10000})
+	c.capture(t, filepath.Join(out, "frame-no-panel.png"))
+}
+
+type client struct {
+	conn net.Conn
+	r    *bufio.Reader
+	next int
+}
+
+func dial(t *testing.T, sock string) *client {
+	t.Helper()
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		conn, err := net.Dial("unix", sock)
+		if err == nil {
+			return &client{conn: conn, r: bufio.NewReaderSize(conn, 1<<26)}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("automation socket: %v", err)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+// waitWindow waits until the app has opened its window.
+func (c *client) waitWindow(t *testing.T) {
+	t.Helper()
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		var res struct{ Windows []json.RawMessage }
+		if err := json.Unmarshal(c.call(t, "windows", map[string]any{}), &res); err != nil {
+			t.Fatal(err)
+		}
+		if len(res.Windows) > 0 {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the app opened no window")
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+func (c *client) call(t *testing.T, method string, params map[string]any) json.RawMessage {
+	t.Helper()
+	c.next++
+	req, _ := json.Marshal(map[string]any{"id": c.next, "method": method, "params": params})
+	if _, err := c.conn.Write(append(req, '\n')); err != nil {
+		t.Fatal(err)
+	}
+	line, err := c.r.ReadBytes('\n')
+	if err != nil {
+		t.Fatal(err)
+	}
+	var resp struct {
+		Result json.RawMessage `json:"result"`
+		Error  *struct{ Message string }
+	}
+	if err := json.Unmarshal(line, &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Error != nil {
+		t.Fatalf("%s: %s", method, resp.Error.Message)
+	}
+	return resp.Result
+}
+
+type node struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+}
+
+func (c *client) nodes(t *testing.T) []node {
+	t.Helper()
+	var tree struct{ Nodes []node }
+	if err := json.Unmarshal(c.call(t, "tree", map[string]any{}), &tree); err != nil {
+		t.Fatal(err)
+	}
+	return tree.Nodes
+}
+
+func (c *client) labels(t *testing.T) map[string]bool {
+	m := map[string]bool{}
+	for _, n := range c.nodes(t) {
+		m[n.Label] = true
+	}
+	return m
+}
+
+func (c *client) idOf(t *testing.T, label string) string {
+	t.Helper()
+	for _, n := range c.nodes(t) {
+		if n.Label == label {
+			return n.ID
+		}
+	}
+	t.Fatalf("no element %q", label)
+	return ""
+}
+
+func (c *client) capture(t *testing.T, path string) {
+	t.Helper()
+	var res struct{ PNG string }
+	if err := json.Unmarshal(c.call(t, "capture", map[string]any{}), &res); err != nil {
+		t.Fatal(err)
+	}
+	png, err := base64.StdEncoding.DecodeString(res.PNG)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, png, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("captured %s", path)
+}
+
+func keys(m map[string]bool) []string {
+	var out []string
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
