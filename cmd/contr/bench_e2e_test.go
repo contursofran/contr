@@ -134,6 +134,13 @@ func TestAppBench(t *testing.T) {
 	app := exec.Command(bin)
 	app.Env = append(os.Environ(), "MYGO_AUTOMATION="+sock, "CONTR_BOARD_DIR="+boardDir,
 		"CONTR_STATE_DIR="+filepath.Join(dir, "state"), "CODEX_HOME="+filepath.Join(dir, "codex"))
+	// The app's log, with MyGo's frame log when MYGO_FRAME_STATS is set.
+	appLog, err := os.Create(filepath.Join(out, "app.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer appLog.Close()
+	app.Stdout, app.Stderr = appLog, appLog
 	if err := app.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -175,6 +182,7 @@ func TestAppBench(t *testing.T) {
 			setup()
 		}
 		time.Sleep(benchWarmup)
+		fmt.Fprintf(appLog, "bench: phase %q: samples start\n", name)
 		var samples []bench.Sample
 		for i := 0; i < benchSamples; i++ {
 			s, err := bench.Read(app.Process.Pid)
@@ -184,6 +192,7 @@ func TestAppBench(t *testing.T) {
 			samples = append(samples, s)
 			time.Sleep(time.Second)
 		}
+		fmt.Fprintf(appLog, "bench: phase %q: samples end\n", name)
 		if teardown != nil {
 			teardown()
 		}

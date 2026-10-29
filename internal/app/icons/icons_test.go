@@ -115,20 +115,51 @@ func TestWorkingIconRequestsAFrame(t *testing.T) {
 	}
 }
 
+// The working arc shows at most theme.SpinFPS positions a second, not one
+// at each refresh of the display: at the display's rate the arc was the
+// whole idle CPU of the app (M13.4). The Tester has no refresh rate, so it
+// paces no frames; the image shows the steps, and the bench's frame log
+// shows the frames.
+func TestWorkingIconPaintsAtSpinFPS(t *testing.T) {
+	tt := ui.NewTester(one(Working, 14), 20, 20)
+	refresh := time.Second / 60 // the Tester's display
+	last := tt.Image().Pix
+	paints := 0
+	for i := 0; i < 60; i++ {
+		tt.Advance(refresh)
+		img := tt.Image().Pix
+		if string(img) != string(last) {
+			paints++
+		}
+		last = img
+	}
+	if paints < theme.SpinFPS-1 || paints > theme.SpinFPS+1 {
+		t.Errorf("the arc painted %d times in a second, want %d", paints, theme.SpinFPS)
+	}
+	if !tt.FramePending() {
+		t.Error("the arc stopped asking for frames")
+	}
+}
+
 func TestSpinAngleTurnsOncePerPeriod(t *testing.T) {
 	base := time.UnixMilli(1_000_000 * theme.SpinPeriod.Milliseconds())
+	step := time.Second / theme.SpinFPS
 	for _, tc := range []struct {
 		after time.Duration
 		want  float32
 	}{
 		{0, 0},
-		{theme.SpinPeriod / 4, 90},
+		{step - time.Millisecond, 0},
+		{step + time.Millisecond, 360 / float32(spinSteps)},
 		{theme.SpinPeriod / 2, 180},
 		{theme.SpinPeriod, 0},
 	} {
 		if got := SpinAngle(base.Add(tc.after)); got != tc.want {
 			t.Errorf("after %v angle %v, want %v", tc.after, got, tc.want)
 		}
+	}
+	if spinSteps != 42 {
+		t.Errorf("%d steps a turn, want 42 (1.4 s at 30 a second)", spinSteps)
 	}
 }
 

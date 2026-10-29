@@ -56,6 +56,10 @@ const IconFaint = 0x4A4A4A // not started, working ring (owner-decided default)
 // SpinPeriod is one turn of "working".
 const SpinPeriod = 1400 * time.Millisecond
 
+// SpinFPS is how often the working arc paints a second. At the display's
+// rate the arc was the whole idle CPU of the app (M13.4, D26).
+const SpinFPS = 30
+
 // Window and frame sizes
 const WindowWidth = 1440
 const WindowHeight = 900

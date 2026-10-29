@@ -114,11 +114,16 @@ func svg(name string) *ui.SVG {
 	return parsed[name]
 }
 
+// spinSteps is how many positions the working arc has in one turn.
+const spinSteps = int64(theme.SpinPeriod) * theme.SpinFPS / int64(time.Second)
+
 // SpinAngle is the turn of the working arc, in degrees, at time t. One turn
-// takes theme.SpinPeriod.
+// takes theme.SpinPeriod, in steps of 1/theme.SpinFPS seconds: the arc
+// paints at that rate, so each paint shows a new step.
 func SpinAngle(t time.Time) float32 {
-	phase := t.UnixMilli() % theme.SpinPeriod.Milliseconds()
-	return 360 * float32(phase) / float32(theme.SpinPeriod.Milliseconds())
+	phase := t.UnixNano() % int64(theme.SpinPeriod)
+	step := phase * theme.SpinFPS / int64(time.Second)
+	return 360 * float32(step) / float32(spinSteps)
 }
 
 // Icon shows a status icon at theme.IconSize.
@@ -127,9 +132,11 @@ func Icon(c *ui.Context, s Status) ui.Element { return Sized(c, s, theme.IconSiz
 // Sized shows a status icon at size DIPs (12 to 14).
 //
 // A working icon draws itself: it turns from the frame time and asks for
-// frames only while it is visible. MyGo paints those frames from the last
-// build without running any view, so the turn costs painting only, and no
-// other row repaints (see ui/drawing.md, "Animation").
+// frames only while it is visible, at theme.SpinFPS. MyGo paints those
+// frames from the last build without running any view, so the turn costs
+// painting only, and no other row repaints (see ui/drawing.md,
+// "Animation"). Each frame still costs the process CPU, so the arc does not
+// ask for the display's rate (AnimationFrame).
 func Sized(c *ui.Context, s Status, size float32) ui.Element {
 	file, color := s.glyph()
 	if svg(file) == nil || (s == Working && svg("working_arc") == nil) {
@@ -140,7 +147,7 @@ func Sized(c *ui.Context, s Status, size float32) ui.Element {
 	}
 	ring, arc := svg(file), svg("working_arc")
 	return ui.Box(c).Size(size, size).Label(s.Label()).Draw(func(p *ui.Painter, r ui.Rect) {
-		p.AnimationFrame()
+		p.AnimationFrameRate(theme.SpinFPS)
 		p.Icon(ring, r, theme.Color(color))
 		p.Transform(ui.Rotation(SpinAngle(p.Now())), r.X+r.W/2, r.Y+r.H/2, func() {
 			p.Icon(arc, r, theme.Color(theme.IconYou))
