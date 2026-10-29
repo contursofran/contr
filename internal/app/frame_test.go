@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"testing"
 
@@ -272,5 +273,29 @@ func TestAttachWiresTheStateToTheWindow(t *testing.T) {
 	stop()
 	if w.hide != nil || w.show != nil {
 		t.Error("stop should end the watching")
+	}
+}
+
+func (f *fakeLive) setLive(l herdr.LiveHerdr) {
+	f.mu.Lock()
+	f.live = l
+	f.mu.Unlock()
+}
+
+// The Rust frame kept the commands it sent in a list. The Go frame hands them to Send.
+func TestTitleBarClicksReachTheCommandHandlerInOrder(t *testing.T) {
+	f, live, tt := newTester(t, connected())
+	live.setLive(connectedWith(sampleTree()))
+	var sent []TabCommand
+	f.Send = func(c TabCommand) { sent = append(sent, c) }
+	tt.Frame()
+	for _, label := range []string{"docs, blocked", LabelTabNew, LabelSplit} {
+		if err := tt.Click(label); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []TabCommand{{TabFocus, "w1:t2"}, {TabCreate, "w1"}, {TabSplitRight, "w1:p1"}}
+	if !reflect.DeepEqual(sent, want) {
+		t.Errorf("sent %v, want %v", sent, want)
 	}
 }

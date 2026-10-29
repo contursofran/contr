@@ -110,6 +110,7 @@ const TabUnderline = 2     // active tab, bottom edge
 const TitleButtonSize = 28 // "+", split, panel toggle: square hit areas
 const TitleGlyphWidth = 14 // split and panel glyphs, border included
 const TitleGlyphHeight = 12
+const TitleBarPadEnd = 8 // title bar: room right of the panel toggle
 const TitleGlyphFill = 4 // panel glyph: filled right part when the panel is open
 
 // Board panel (planner defaults; docs/DESIGN.md has no sizes for these). The "you" chip reuses
