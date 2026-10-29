@@ -26,7 +26,7 @@ func workTester(l *WorkList, clearRows bool, onClear ActionClick) *ui.Tester {
 	}, theme.PanelWidth, 600)
 }
 
-func workList(t *testing.T, rows []board.WorkRow) *WorkList {
+func workList(rows []board.WorkRow) *WorkList {
 	l := NewWorkList(nil)
 	l.Sync(rows)
 	return l
@@ -77,7 +77,7 @@ func TestWhoColourFollowsTheKind(t *testing.T) {
 }
 
 func TestTheFiveStageHeadsFillTheRight220Px(t *testing.T) {
-	tt := workTester(workList(t, cardFixture(t).Rows), true, nil)
+	tt := workTester(workList(cardFixture(t).Rows), true, nil)
 	tt.Frame()
 	right := float32(theme.PanelWidth - theme.PanelPadX)
 	for i, head := range board.StageHeads {
@@ -94,7 +94,7 @@ func TestTheFiveStageHeadsFillTheRight220Px(t *testing.T) {
 
 func TestEachWorkRowIs42PxTall(t *testing.T) {
 	rows := cardFixture(t).Rows
-	tt := workTester(workList(t, rows), true, nil)
+	tt := workTester(workList(rows), true, nil)
 	for _, row := range rows {
 		if r := findRect(t, tt, WorkRowLabel(row)); r.H != theme.WorkRowHeight || r.W != theme.PanelWidth {
 			t.Errorf("%s is %vx%v", row.Label, r.W, r.H)
@@ -103,7 +103,7 @@ func TestEachWorkRowIs42PxTall(t *testing.T) {
 }
 
 func TestAWorkingRowShowsDoneAndWorkingInTheirColumns(t *testing.T) {
-	tt := workTester(workList(t, cardFixture(t).Rows[:1]), true, nil)
+	tt := workTester(workList(cardFixture(t).Rows[:1]), true, nil)
 	tt.Frame()
 	right := float32(theme.PanelWidth - theme.PanelPadX)
 	inColumn := func(icon string, column int) {
@@ -122,7 +122,7 @@ func TestAWorkingRowShowsDoneAndWorkingInTheirColumns(t *testing.T) {
 }
 
 func TestTheYouRowShowsItsChip(t *testing.T) {
-	tt := workTester(workList(t, cardFixture(t).Rows), true, nil)
+	tt := workTester(workList(cardFixture(t).Rows), true, nil)
 	r := findRect(t, tt, "your test")
 	row := findRect(t, tt, WorkRowLabel(workRow(t, 1)))
 	if r.Y < row.Y || r.Y+r.H > row.Y+row.H {
@@ -134,7 +134,7 @@ func TestTheYouRowShowsItsChip(t *testing.T) {
 }
 
 func TestAJoinedRowHasNoStageIcons(t *testing.T) {
-	tt := workTester(workList(t, cardFixture(t).Rows[2:]), true, nil)
+	tt := workTester(workList(cardFixture(t).Rows[2:]), true, nil)
 	tt.Frame()
 	if _, ok := tt.Find("joined #641"); !ok {
 		t.Error("missing the join")
@@ -145,7 +145,7 @@ func TestAJoinedRowHasNoStageIcons(t *testing.T) {
 }
 
 func TestClearDoneShowsOnlyWhenRowsCanBeCleared(t *testing.T) {
-	l := workList(t, cardFixture(t).Rows)
+	l := workList(cardFixture(t).Rows)
 	findRect(t, workTester(l, true, nil), LabelClearWork)
 	tt := workTester(l, false, nil)
 	tt.Frame()
@@ -155,7 +155,7 @@ func TestClearDoneShowsOnlyWhenRowsCanBeCleared(t *testing.T) {
 }
 
 func TestClearDoneIsInertWithoutAClickAndSendsWithOne(t *testing.T) {
-	l := workList(t, cardFixture(t).Rows)
+	l := workList(cardFixture(t).Rows)
 	tt := workTester(l, true, nil)
 	findRect(t, tt, LabelClearWork)
 	if err := tt.Click(LabelClearWork); err != nil {
@@ -172,7 +172,7 @@ func TestClearDoneIsInertWithoutAClickAndSendsWithOne(t *testing.T) {
 func TestRowsKeepTheCoordinatorsOrder(t *testing.T) {
 	a, b := workRow(t, 0), workRow(t, 1)
 	a.Key, a.Label, b.Key, b.Label = "b", "#2", "a", "#1"
-	l := workList(t, []board.WorkRow{a, b})
+	l := workList([]board.WorkRow{a, b})
 	tt := workTester(l, true, nil)
 	first := findRect(t, tt, WorkRowLabel(a))
 	second := findRect(t, tt, WorkRowLabel(b))
@@ -185,7 +185,7 @@ func TestRowsKeepTheCoordinatorsOrder(t *testing.T) {
 }
 
 func TestAChangedStageRedrawsOnlyItsRow(t *testing.T) {
-	l := workList(t, cardFixture(t).Rows)
+	l := workList(cardFixture(t).Rows)
 	next := cardFixture(t).Rows
 	next[1].Stages[4] = board.StageDone
 	got := l.Sync(next)
@@ -195,7 +195,7 @@ func TestAChangedStageRedrawsOnlyItsRow(t *testing.T) {
 }
 
 func TestANewPickRedrawsOnlyTheRowsThatChange(t *testing.T) {
-	l := workList(t, cardFixture(t).Rows)
+	l := workList(cardFixture(t).Rows)
 	if !l.SetPicked("owner/name#640") {
 		t.Error("a new pick is not a change")
 	}
@@ -208,14 +208,14 @@ func TestANewPickRedrawsOnlyTheRowsThatChange(t *testing.T) {
 }
 
 func TestTheSameSnapshotAgainRedrawsNoRow(t *testing.T) {
-	l := workList(t, cardFixture(t).Rows)
+	l := workList(cardFixture(t).Rows)
 	if got := l.Sync(cardFixture(t).Rows); got.Any() {
 		t.Errorf("change %+v", got)
 	}
 }
 
 func TestNewKeysRebuildTheRows(t *testing.T) {
-	l := workList(t, cardFixture(t).Rows)
+	l := workList(cardFixture(t).Rows)
 	if got := l.Sync(cardFixture(t).Rows[:1]); !got.Rebuilt {
 		t.Errorf("change %+v", got)
 	}
@@ -227,7 +227,7 @@ func TestNewKeysRebuildTheRows(t *testing.T) {
 }
 
 func TestNoRowsShowsTheEmptyLine(t *testing.T) {
-	tt := workTester(workList(t, nil), true, nil)
+	tt := workTester(workList(nil), true, nil)
 	findRect(t, tt, LabelWorkEmpty)
 	if _, ok := tt.Find(LabelWorkRows); ok {
 		t.Error("the rows list shows with no rows")
@@ -262,7 +262,7 @@ func TestALongListScrollsInsideHalfThePanel(t *testing.T) {
 		rows[i].Key = "k" + string(rune('a'+i))
 		rows[i].Label = "#" + string(rune('a'+i))
 	}
-	tt := workTester(workList(t, rows), true, nil)
+	tt := workTester(workList(rows), true, nil)
 	section := findRect(t, tt, LabelWorkSection)
 	list := findRect(t, tt, LabelWorkRows)
 	if section.H > 300 {
@@ -270,5 +270,20 @@ func TestALongListScrollsInsideHalfThePanel(t *testing.T) {
 	}
 	if list.Y+list.H != section.Y+section.H {
 		t.Errorf("the rows %v do not fill the section %v", list, section)
+	}
+}
+
+func TestAPickedRowDrawsAsTheSelectedCard(t *testing.T) {
+	l := workList(cardFixture(t).Rows)
+	l.SetPicked(cardFixture(t).Rows[0].Key)
+	tt := workTester(l, true, nil)
+	for i, row := range cardFixture(t).Rows {
+		want := uint32(theme.BgWindow)
+		if i == 0 {
+			want = theme.BgCard
+		}
+		if got := rowFill(t, tt, WorkRowLabel(row)); got != want {
+			t.Errorf("row %d: fill %#x, want %#x", i, got, want)
+		}
 	}
 }

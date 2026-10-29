@@ -167,3 +167,31 @@ func TestAPickedItemKeepsItsRowSize(t *testing.T) {
 		t.Errorf("picked row is %v tall", row.H)
 	}
 }
+
+func TestOnlyTheResolvedRowHasTheResolvedMarker(t *testing.T) {
+	h := &needsHost{items: cardFixture(t).Items, count: 3}
+	tt := h.tester()
+	for _, item := range h.items {
+		title := findRect(t, tt, item.Title)
+		run := strikeRun(tt, title)
+		// A struck title has a line across its whole text, longer than
+		// any run in plain letters.
+		if struck := run >= 5*len(item.Title); struck != !item.Open {
+			t.Errorf("%s: open %v, longest run %d of %v", item.Key, item.Open, run, title.W)
+		}
+	}
+}
+
+func TestThePickedItemDrawsAsTheSelectedCard(t *testing.T) {
+	h := &needsHost{items: cardFixture(t).Items, count: 3, picked: "D7"}
+	tt := h.tester()
+	for _, item := range h.items {
+		want := uint32(theme.BgWindow)
+		if item.Key == "D7" {
+			want = theme.BgCard
+		}
+		if got := rowFill(t, tt, NeedLabel(item)); got != want {
+			t.Errorf("%s: fill %#x, want %#x", item.Key, got, want)
+		}
+	}
+}
