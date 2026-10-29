@@ -12,6 +12,8 @@ import (
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/board"
 	"github.com/contursofran/contr/internal/herdr"
+	"github.com/contursofran/contr/internal/host"
+	"github.com/contursofran/contr/internal/usage"
 )
 
 // Slot is a view that fills one place of the frame. Later milestones replace
@@ -34,7 +36,7 @@ func PlaceholderSlots() Slots {
 		Agents:    placeholder("agents"),
 		Terminal:  placeholder("terminal"),
 		Panel:     placeholder("panel"),
-		StatusBar: placeholder("usage"),
+		StatusBar: nil,
 	}
 }
 
@@ -70,7 +72,12 @@ type Frame struct {
 	// AgentsList is the agents section. [Frame.Attach] makes it and puts
 	// its view in Slots.Agents.
 	AgentsList *AgentsList
+	// Host and Usage feed the status bar. [Frame.Attach] creates them when they are nil (tests set
+	// fakes first) and ends them with its stop function.
+	Host  *host.Host
+	Usage *usage.Sampler
 
+	status      statusBar
 	bar         titleBar
 	sidebarOpen bool
 	panelOpen   bool
@@ -127,8 +134,28 @@ func (f *Frame) View(c *ui.Context) {
 			f.main(c)
 		})
 		ui.Box(c).Label(LabelStatusBar).FillWidth().Height(theme.StatusBarHeight).Shrink(0).
-			Background(color(theme.BgBars)).Children(func() { f.run(c, f.Slots.StatusBar) })
+			Background(color(theme.BgBars)).BorderWidth(1, 0, 0, 0).BorderColor(color(theme.Line)).
+			Children(func() { f.statusBar(c) })
 	})
+}
+
+// statusBar draws the slot when one is set, and the status bar otherwise.
+func (f *Frame) statusBar(c *ui.Context) {
+	if f.Slots.StatusBar != nil {
+		f.Slots.StatusBar(c)
+		return
+	}
+	f.status.herdr = f.Herdr
+	if f.Host != nil {
+		f.status.host = f.Host
+	}
+	if f.Usage != nil {
+		f.status.usage = f.Usage
+	}
+	if f.Status != nil {
+		f.status.message = f.Status
+	}
+	f.status.View(c)
 }
 
 func (f *Frame) run(c *ui.Context, s Slot) {
@@ -260,8 +287,8 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	f.Selection = state.NewSelection(w.Invalidate)
 	f.Status = state.NewStatusMessage(w.Invalidate)
 	f.Send = newCommander(f.Status.Show).Send
-	// Both onChange funcs run on a goroutine: they hand the sync to the UI
-	// thread and ask for a redraw there.
+	// An onChange func can run on any goroutine or on the UI thread. It only
+	// queues the sync with Window.Update, which is safe from both.
 	dir, hasDir := board.Dir()
 	f.Board = NewBoard(dir, hasDir, func() { w.Update(f.syncAgents) })
 	h := NewHerdr(ctx, target, w.IsVisible(), func() { w.Update(f.syncHerdr) })
@@ -269,10 +296,26 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	f.AgentsList = NewAgentsList(h, f.Board, f.Selection, f.Status)
 	f.Slots.Agents = f.AgentsList.View
 	f.Board.Sync(h.Live().Tree)
-	f.Visibility = state.NewVisibility(h.SetVisible)
+	if f.Host == nil {
+		f.Host = host.NewSystem(w.Invalidate)
+	}
+	if f.Usage == nil {
+		f.Usage = usage.NewFileSampler(w.Invalidate)
+	}
+	f.Visibility = state.NewVisibility(func(visible bool) {
+		h.SetVisible(visible)
+		f.Host.SetVisible(visible)
+		f.Usage.SetVisible(visible)
+	})
+	// Visibility starts as visible, so a window that starts hidden is the only change that Watch
+	// reports. The samplers start hidden: tell them the window state now.
+	f.Host.SetVisible(w.IsVisible())
+	f.Usage.SetVisible(w.IsVisible())
 	unwatch := f.Visibility.Watch(w)
 	return func() {
 		unwatch()
 		h.Close()
+		f.Host.Close()
+		f.Usage.Close()
 	}
 }

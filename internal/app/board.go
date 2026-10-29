@@ -49,8 +49,9 @@ type BoardView struct {
 
 // NewBoard returns a board that reads files from the directory given, from
 // [board.Dir] for the real app. hasDir false means there is no board
-// directory. onChange runs, on the goroutine that changed the board, when
-// what the views read changed; it should only ask the window to redraw. Call
+// directory. onChange runs when what the views read changed. It can run on
+// a goroutine or on the UI thread, so it should only queue work with
+// Window.Update or ask for a redraw. Call
 // [Board.Sync] with the current tree to start.
 func NewBoard(dir string, hasDir bool, onChange func()) *Board {
 	return &Board{dir: dir, hasDir: hasDir, onChange: onChange}

@@ -7,12 +7,15 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/herdr"
+	"github.com/contursofran/contr/internal/host"
+	"github.com/contursofran/contr/internal/usage"
 )
 
 // fakeLive is a liveSource the test changes.
@@ -144,12 +147,15 @@ func TestHerdrLineFollowsTheConnection(t *testing.T) {
 	if !tt.HasText("[terminal]") {
 		t.Fatalf("connected: texts %q, want the terminal slot", tt.Texts())
 	}
+	lost := notRunning()
+	notRunningLine, _ := lost.Line()
+	connectingLine, _ := herdr.ConnState{Kind: herdr.Connecting}.Line()
 	step := func(s herdr.ConnState, line string) {
 		t.Helper()
 		live.set(s)
 		tt.Frame()
 		if line == "" {
-			if !tt.HasText("[terminal]") || tt.HasText("herdr") {
+			if !tt.HasText("[terminal]") || tt.HasText(notRunningLine) || tt.HasText(connectingLine) {
 				t.Fatalf("state %+v: texts %q, want the terminal and no line", s, tt.Texts())
 			}
 			return
@@ -158,9 +164,6 @@ func TestHerdrLineFollowsTheConnection(t *testing.T) {
 			t.Fatalf("state %+v: texts %q, want only the line %q", s, tt.Texts(), line)
 		}
 	}
-	lost := notRunning()
-	notRunningLine, _ := lost.Line()
-	connectingLine, _ := herdr.ConnState{Kind: herdr.Connecting}.Line()
 	step(lost, notRunningLine)
 	step(herdr.ConnState{Kind: herdr.Connecting}, connectingLine)
 	step(connected(), "")
@@ -253,6 +256,8 @@ func (w *fakeWindow) OnRestore(fn func()) func() {
 func TestAttachWiresTheStateToTheWindow(t *testing.T) {
 	w := &fakeWindow{visible: true}
 	f := NewFrame(nil)
+	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
+	f.Usage = usage.NewSampler(usage.Unread, nil)
 	stop := f.Attach(context.Background(), w, herdr.SocketTarget(filepath.Join(t.TempDir(), "missing.sock")))
 	if f.Herdr == nil || f.Visibility == nil || f.Selection == nil || f.Status == nil {
 		t.Fatal("Attach should set the herdr and the state")
@@ -297,5 +302,39 @@ func TestTitleBarClicksReachTheCommandHandlerInOrder(t *testing.T) {
 	want := []TabCommand{{TabFocus, "w1:t2"}, {TabCreate, "w1"}, {TabSplitRight, "w1:p1"}}
 	if !reflect.DeepEqual(sent, want) {
 		t.Errorf("sent %v, want %v", sent, want)
+	}
+}
+
+// The samplers follow the window: they read while it is shown and stay idle while it is hidden (D9).
+func TestAttachTiesTheSamplersToTheWindowVisibility(t *testing.T) {
+	reads := make(chan struct{}, 8)
+	attach := func(visible bool) (*fakeWindow, func()) {
+		w := &fakeWindow{visible: visible}
+		f := NewFrame(nil)
+		f.Host = host.New(func() (host.Stats, error) { reads <- struct{}{}; return host.Stats{}, nil }, nil)
+		f.Usage = usage.NewSampler(usage.Unread, nil)
+		return w, f.Attach(context.Background(), w, herdr.SocketTarget(filepath.Join(t.TempDir(), "missing.sock")))
+	}
+	_, stop := attach(false)
+	select {
+	case <-reads:
+		t.Fatal("a hidden window should cause no host reading")
+	case <-time.After(50 * time.Millisecond):
+	}
+	stop()
+
+	w, stop := attach(true)
+	defer stop()
+	select {
+	case <-reads:
+	case <-time.After(2 * time.Second):
+		t.Fatal("a shown window should cause a host reading")
+	}
+	w.hide()
+	w.show()
+	select {
+	case <-reads:
+	case <-time.After(2 * time.Second):
+		t.Fatal("showing the window again should cause a host reading")
 	}
 }
