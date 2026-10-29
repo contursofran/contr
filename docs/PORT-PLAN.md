@@ -92,4 +92,6 @@ the control itself; it then becomes a view test or an e2e test.
 | M8 | In progress |
 | M10 | Done (M10.1–M10.5). Host stats use purego Mach calls (D11). The `contr statusline` command line comes in M11. |
 | M6 | Done (M6.1). The panel toggle sits right of split, as DESIGN.md orders them. |
-| M9, M11–M13 | Not started |
+| M9 | In progress |
+| M11 | Done (M11). The usage text has no `dev` line (D5). The traffic-light inset is not set: MyGo v0.7.3 has no option for it. |
+| M12–M13 | Not started |
