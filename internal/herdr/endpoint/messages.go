@@ -4,3 +4,9 @@ package endpoint
 
 // MaxFrame is the largest frame payload, in bytes: 32 MiB.
 const MaxFrame = 32 * 1024 * 1024
+
+// GridSize is a size in terminal cells.
+type GridSize struct {
+	Cols uint16
+	Rows uint16
+}
