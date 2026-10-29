@@ -148,7 +148,9 @@ type View struct {
 	ime       imeClient
 	selection *Selection
 	wheel     WheelAccum
-	cache     Cache
+	// lastScroll is the time of the last scroll event; zero for none (D18).
+	lastScroll time.Time
+	cache      Cache
 }
 
 // NewView returns a view with no link. The link starts on the first layout
