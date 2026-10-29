@@ -625,8 +625,8 @@ func TestActivateGivesTheStatusMessageToTheFocus(t *testing.T) {
 }
 
 func TestAttachMakesTheBoardAndTheAgentsList(t *testing.T) {
-	// Update queues nothing here: the test runs the sync itself on this goroutine.
-	w := &queueWindow{fakeWindow: fakeWindow{visible: true}}
+	// Update only queues: the test runs the sync itself on this goroutine.
+	w := &fakeWindow{visible: true}
 	f := NewFrame(nil)
 	stop := f.Attach(context.Background(), w, herdr.SocketTarget(filepath.Join(t.TempDir(), "missing.sock")))
 	defer stop()
@@ -640,16 +640,10 @@ func TestAttachMakesTheBoardAndTheAgentsList(t *testing.T) {
 	}
 }
 
-// queueWindow drops the funcs given to Update, so no other goroutine runs
-// view code during a test.
-type queueWindow struct{ fakeWindow }
-
-func (w *queueWindow) Update(func()) {}
-
 func TestAttachPutsTheBoardPanelInThePanelSlot(t *testing.T) {
 	// A board directory that holds nothing: the board has no bridge.
 	t.Setenv(board.DirEnv, t.TempDir())
-	w := &queueWindow{fakeWindow: fakeWindow{visible: true}}
+	w := &fakeWindow{visible: true}
 	f := NewFrame(nil)
 	stop := f.Attach(context.Background(), w, herdr.SocketTarget(filepath.Join(t.TempDir(), "missing.sock")))
 	defer stop()

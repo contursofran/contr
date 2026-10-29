@@ -1025,7 +1025,7 @@ func TestAnEmptyColumnStillShowsTheHostCard(t *testing.T) {
 }
 
 func TestAttachPutsTheSpacesColumnInTheSidebar(t *testing.T) {
-	w := &queueWindow{fakeWindow: fakeWindow{visible: true}}
+	w := &fakeWindow{visible: true}
 	f := NewFrame(nil)
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
 	stop := f.Attach(t.Context(), w, herdr.SocketTarget(filepath.Join(t.TempDir(), "missing.sock")))
