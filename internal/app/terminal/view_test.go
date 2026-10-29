@@ -409,6 +409,19 @@ func TestClosedViewDropsLateUpdates(t *testing.T) {
 	}
 }
 
+func TestAClosedViewStartsNoLink(t *testing.T) {
+	starts := 0
+	v, tt, _ := newTestViewWith(t, Options{Enabled: true, Start: failingStart(&starts)})
+	settle(tt, 800, 600)
+	v.Close()
+	before := starts
+	tt.ClickAt(400, 300)
+	v.ensureLink()
+	if starts != before {
+		t.Errorf("a closed view made %d starts", starts-before)
+	}
+}
+
 func TestTheLinkUpdatesReachTheViewThroughPost(t *testing.T) {
 	var posted []func()
 	invalidations := 0
