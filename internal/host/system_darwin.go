@@ -30,7 +30,7 @@ const (
 // systemReader reads CPU and memory through Mach's host calls, which libSystem
 // exports. purego loads them without cgo.
 type systemReader struct {
-	hostSelf   func() uint32
+	host       uint32 // the host port, taken once; each mach_host_self call adds a send right
 	hostStats  func(host uint32, flavor int32, info *uint32, count *uint32) int32
 	hostStats6 func(host uint32, flavor int32, info *uint32, count *uint32) int32
 
@@ -48,7 +48,9 @@ func SystemReader() Reader {
 	if err != nil {
 		return func() (Stats, error) { return Stats{}, fmt.Errorf("load libSystem: %w", err) }
 	}
-	purego.RegisterLibFunc(&r.hostSelf, lib, machHostSelfName)
+	var hostSelf func() uint32
+	purego.RegisterLibFunc(&hostSelf, lib, machHostSelfName)
+	r.host = hostSelf()
 	purego.RegisterLibFunc(&r.hostStats, lib, hostStatisticsFn)
 	purego.RegisterLibFunc(&r.hostStats6, lib, hostStatistics64N)
 	return r.read
@@ -65,11 +67,9 @@ func (r *systemReader) read() (Stats, error) {
 	if err != nil {
 		return Stats{}, fmt.Errorf("vm.pagesize: %w", err)
 	}
-	host := r.hostSelf()
-
 	var vm [vmInfo64Count]uint32
 	n := uint32(vmInfo64Count)
-	if kr := r.hostStats6(host, hostVMInfo64, &vm[0], &n); kr != machOK {
+	if kr := r.hostStats6(r.host, hostVMInfo64, &vm[0], &n); kr != machOK {
 		return Stats{}, fmt.Errorf("host_statistics64: kern_return %d", kr)
 	}
 	// Available memory is what the system can give back at once: free
@@ -79,7 +79,7 @@ func (r *systemReader) read() (Stats, error) {
 
 	var cpu [cpuLoadInfoCount]uint32
 	c := uint32(cpuLoadInfoCount)
-	if kr := r.hostStats(host, hostCPULoadInfo, &cpu[0], &c); kr != machOK {
+	if kr := r.hostStats(r.host, hostCPULoadInfo, &cpu[0], &c); kr != machOK {
 		return Stats{}, fmt.Errorf("host_statistics: kern_return %d", kr)
 	}
 	return Stats{CPUPercent: r.cpuPercent(cpu), MemUsed: used, MemTotal: total}, nil
