@@ -1,21 +1,15 @@
-# Working on contr (Go)
+# Working on contr
 
 contr is a native macOS client for herdr, with the herdr-agents board built
-in. This repository is the Go port of the Rust contr. When the port reaches
-parity, it replaces the Rust app in the `contursofran/contr` repository.
+in. It is written in Go with MyGo's native UI.
 
 ## Goal and reference
 
-- Goal: feature parity with the Rust contr at commit `fae6154` (2026-10-24).
-  `docs/PORT-PLAN.md` lists the milestones in order and their state.
-- The Rust code is the reference, and its tests are the spec. Port the
-  behavior and the test cases. Do not copy the Rust structure where Go or
-  MyGo has a simpler form.
-- Read the Rust code in the read-only export that your task brief names, or
-  with `git show fae6154:<path>` in a Rust contr checkout. Do not change the
-  Rust repository.
+- The Rust app is at tag `rust-final`. Read it with `git show rust-final:<path>`.
+  Do not change it.
 - `docs/DESIGN.md` is the source of truth for the UI.
 - `docs/DECISIONS.md` records why things are the way they are.
+- `docs/PORT-PLAN.md` records how the Go port was built.
 
 ## Stack
 
@@ -43,8 +37,7 @@ parity, it replaces the Rust app in the `contursofran/contr` repository.
 | `assets` | fonts, status icons, app icon |
 | `scripts` | `check.sh`, `dev-herdr.sh` |
 
-`docs/PORT-PLAN.md` names the package for each Rust module. Add packages
-under `internal/` when a milestone needs them.
+Add packages under `internal/` when a change needs them.
 
 ## Rules
 
@@ -60,8 +53,8 @@ under `internal/` when a milestone needs them.
   log them or show them.
 - The UI follows `docs/DESIGN.md` exactly: mono font, greyscale, and white
   only for what needs the owner.
-- Small slices: one slice, one branch, ideally under about 400 changed
-  lines. Test-heavy slices stay whole.
+- Small changes: one issue, one branch, one PR, ideally under about 400
+  changed lines. Test-heavy changes stay whole.
 - Adapted code: `NOTICE` credits the projects that code comes from. When you
   port a Rust file that starts with `// Adapted from Herdr UI (Apache-2.0);
   changes: …`, keep that comment in the Go file and add "ported to Go" to
@@ -94,39 +87,31 @@ under `internal/` when a milestone needs them.
 - Unit and view tests run with `go test`. Test a view with `ui.NewTester`:
   it builds the view without a window, clicks by label, sends keys and
   reads texts.
-- Port each Rust test case for the behavior that you port. When a Go test is
-  a direct port, give it the Rust test's name in Go style, so that parity
-  can be checked.
+- Add a test for each new behavior, error paths included.
 - End-to-end tests use MyGo's automation plugin, in files with
   `//go:build e2e`. The plugin lists elements, clicks, types and captures a
   window as a PNG. To check a visible change, capture the window and look at
-  the PNG yourself. This replaces the Rust dev control (decision D5).
+  the PNG yourself (decision D5).
 - Run the app only against `scripts/dev-herdr.sh` and a scratch project under
   `/tmp`, never against the owner's herdr.
 - On the owner's Mac, run one heavy job at a time: an app run with dev herdr,
   an e2e run or a release build. `go build` and `go test` are light and can
   run in parallel.
 
-## Workflow (local, decision D8)
+## Workflow (decision D27)
 
-This repository has no GitHub remote, no issues, no PRs and no CI until the
-port reaches parity. Work tracking, review and merges are local.
+Work is tracked in GitHub issues and pull requests.
 
-- Your brief names a slice ID (for example `M2.1`), a worktree and a branch
-  `agent/<slice>-<slug>`. Work only there. Do not edit the main checkout.
-  Temporary files go in `tmp/`, which git ignores.
-- Commit on your branch with clear messages. No `Co-Authored-By`, AI
-  attribution or generated-by lines. Do not rewrite commits that a reviewer
-  has seen.
-- Before you report done, merge local `main` into your branch if it moved,
-  and run `scripts/check.sh` on the final head. `scripts/check.sh` is the
-  gate in place of CI.
-- Report the branch, the head SHA, the `scripts/check.sh` result and any
-  deviation from the brief, in RESULT.md when the brief asks for it.
-- Do not merge into `main`. The orchestrator merges after a reviewer
-  APPROVE at the exact head and a passing `scripts/check.sh` on the merged
-  tree.
-- When your change makes a doc wrong (`docs/DECISIONS.md`,
-  `docs/DESIGN.md`), update it on your branch. A new decision gets a new row
-  in `docs/DECISIONS.md`. Do not delete old rows; mark them "Replaced". The
-  orchestrator keeps the state table in `docs/PORT-PLAN.md`; do not edit it.
+- One issue, one branch `agent/<issue>-<slug>`, one PR into `main`. Ideally
+  the PR is under about 400 changed lines.
+- `scripts/check.sh` and the `CI` check must pass before you ask for review.
+- Update a branch by merging `main` into it. Never force-push. Do not
+  rewrite commits that a reviewer has seen.
+- Commit with clear messages. No `Co-Authored-By`, AI attribution or
+  generated-by lines. Temporary files go in `tmp/`, which git ignores.
+- Squash merge is the default. A reviewer approves the exact head. Do not
+  merge your own PR.
+- When your change makes a doc wrong (`docs/DECISIONS.md`, `docs/DESIGN.md`),
+  update it in the same PR. A new decision gets a new row in
+  `docs/DECISIONS.md`. Do not delete old rows; mark them "Replaced by Dn".
+- Report the PR number, the head SHA, the check status and any deviation.
