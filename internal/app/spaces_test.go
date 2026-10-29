@@ -21,7 +21,7 @@ import (
 
 // ---- Fake git layouts on disk (plain files, no `git` binary) ----
 
-func writeFile(t *testing.T, path, text string) {
+func writeFakeFile(t *testing.T, path, text string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
@@ -36,7 +36,7 @@ func writeFile(t *testing.T, path, text string) {
 func mainRepo(t *testing.T, root, head string) string {
 	t.Helper()
 	gitDir := filepath.Join(root, ".git")
-	writeFile(t, filepath.Join(gitDir, "HEAD"), head)
+	writeFakeFile(t, filepath.Join(gitDir, "HEAD"), head)
 	return gitDir
 }
 
@@ -45,10 +45,10 @@ func mainRepo(t *testing.T, root, head string) string {
 func linkedWorktree(t *testing.T, common, name, root, head string) string {
 	t.Helper()
 	admin := filepath.Join(common, "worktrees", name)
-	writeFile(t, filepath.Join(admin, "HEAD"), head)
-	writeFile(t, filepath.Join(admin, "gitdir"), filepath.Join(root, ".git")+"\n")
-	writeFile(t, filepath.Join(admin, "commondir"), "../..\n")
-	writeFile(t, filepath.Join(root, ".git"), "gitdir: "+admin+"\n")
+	writeFakeFile(t, filepath.Join(admin, "HEAD"), head)
+	writeFakeFile(t, filepath.Join(admin, "gitdir"), filepath.Join(root, ".git")+"\n")
+	writeFakeFile(t, filepath.Join(admin, "commondir"), "../..\n")
+	writeFakeFile(t, filepath.Join(root, ".git"), "gitdir: "+admin+"\n")
 	return admin
 }
 
@@ -441,7 +441,7 @@ func TestABranchChangeShowsAfterTheNextRescan(t *testing.T) {
 	if got := h.rowOf(0, 0).Branch; got != "feature" {
 		t.Fatalf("branch %q", got)
 	}
-	writeFile(t, filepath.Join(admin, "HEAD"), "ref: refs/heads/renamed\n")
+	writeFakeFile(t, filepath.Join(admin, "HEAD"), "ref: refs/heads/renamed\n")
 	h.send(live)
 	if got := h.rowOf(0, 0).Branch; got != "feature" {
 		t.Errorf("branch %q: the scan is fresh, so it is not read again", got)
