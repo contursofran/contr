@@ -133,6 +133,15 @@ type View struct {
 
 	// services come from the last Build. The clipboard needs them.
 	services ui.Services
+	// hasServices is false before the first Build.
+	hasServices bool
+	// pendingClip is OSC 52 text that came before the first Build; the next
+	// Build writes it.
+	pendingClip string
+	hasPending  bool
+	// now is the time of the last Build or Draw. IME callbacks carry no
+	// event time, so they use it.
+	now time.Time
 	// refocus asks the next Build to give the grid the keyboard.
 	refocus bool
 
@@ -148,7 +157,9 @@ func NewView(o Options) *View {
 	if o.Start == nil {
 		o.Start = SpawnStarter
 	}
-	return &View{opts: o, state: endpoint.LinkState{Kind: endpoint.LinkConnecting}}
+	v := &View{opts: o, state: endpoint.LinkState{Kind: endpoint.LinkConnecting}}
+	v.ime.view = v
+	return v
 }
 
 // invalidate asks for a new frame.
@@ -418,7 +429,11 @@ func reassertDue(last, now time.Time) bool {
 
 // Build builds the view. It is the frame's terminal slot.
 func (v *View) Build(c *ui.Context) {
-	v.services = c.Services()
+	v.services, v.hasServices, v.now = c.Services(), true, c.Now()
+	if v.hasPending {
+		v.services.WriteClipboard(v.pendingClip)
+		v.pendingClip, v.hasPending = "", false
+	}
 	stale := isStale(v.surface != nil, v.state)
 	line, colour, showLine := statusLine(v.opts.Enabled, v.surface != nil, v.state)
 	ui.Box(c).Fill().Center().Children(func() {
@@ -442,6 +457,7 @@ func (v *View) Build(c *ui.Context) {
 
 // draw runs the layout and paints the surface.
 func (v *View) draw(p *ui.Painter, r ui.Rect, focused bool) {
+	v.now = p.Now()
 	if rest := v.layout(r, p.Scale(), p.Now()); rest > 0 {
 		p.After(rest)
 	}
