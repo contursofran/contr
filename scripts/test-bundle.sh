@@ -1,12 +1,15 @@
 #!/bin/bash
-# Test of scripts/bundle.sh with dummy binaries. It runs no cargo build, so it takes seconds.
-# Every path it writes is under a mktemp -d dir.
+# Test of scripts/bundle.sh with dummy binaries. It runs no go build, so it takes seconds.
+# Every path it writes is under a dir in tmp/ of the repository. HOME points into that dir.
 set -euo pipefail
 unset CDPATH # with CDPATH set, cd prints the directory and breaks $(cd ... && pwd)
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 bundle="$repo/scripts/bundle.sh"
-tmp="$(mktemp -d)"
+mkdir -p "$repo/tmp"
+tmp="$(cd "$(mktemp -d "$repo/tmp/test-bundle.XXXXXX")" && pwd)"
+export HOME="$tmp/home"
+mkdir -p "$HOME"
 trap 'rm -rf "$tmp"' EXIT
 
 fail() {
@@ -14,19 +17,10 @@ fail() {
     exit 1
 }
 
-version="$(awk '
-    /^\[workspace\.package\]/ { in_pkg = 1; next }
-    /^\[/ { in_pkg = 0 }
-    in_pkg && /^version[[:space:]]*=/ {
-        sub(/^[^"]*"/, "")
-        sub(/".*$/, "")
-        print
-        exit
-    }
-' "$repo/Cargo.toml")"
+version="$(sed -n 1p "$repo/VERSION")"
 case "$version" in
     [0-9]*.[0-9]*.[0-9]*) ;;
-    *) fail "no workspace version in Cargo.toml: '$version'" ;;
+    *) fail "no version in VERSION: '$version'" ;;
 esac
 
 # Runs bundle.sh with the given arguments. Output goes to $tmp/run.out and $tmp/run.err.
@@ -137,17 +131,6 @@ fi
 [ ! -e "$app/stale-file" ] || fail "second run kept the old bundle"
 [ ! -e "$tmp/out/contr.app.tmp" ] || fail "second run left contr.app.tmp behind"
 codesign --verify --strict "$app" >/dev/null 2>&1 || fail "second run: signature does not verify"
-
-# Without --out, the bundle goes under cargo's target directory (CARGO_TARGET_DIR here).
-if ! CARGO_TARGET_DIR="$tmp/target" "$bundle" --bin "$tmp/contr" >"$tmp/run.out" 2>"$tmp/run.err"; then
-    cat "$tmp/run.err" >&2
-    fail "bundle.sh failed with CARGO_TARGET_DIR set"
-fi
-case "$(cat "$tmp/run.out")" in
-    */target/bundle/contr.app) ;;
-    *) fail "default output should be <target>/bundle/contr.app, got: $(cat "$tmp/run.out")" ;;
-esac
-[ -d "$tmp/target/bundle/contr.app" ] || fail "no bundle under CARGO_TARGET_DIR"
 
 # CDPATH set and a relative --out: stdout must still be the one app path. The run starts in
 # $tmp/cdpath, so the out dir exists under a CDPATH entry and a bare cd would print it.

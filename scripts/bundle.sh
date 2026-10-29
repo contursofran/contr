@@ -4,12 +4,12 @@
 #   scripts/bundle.sh [--bin PATH] [--out DIR] [--zip]
 #
 #   --bin PATH  use this binary instead of building (tests use a dummy); default:
-#               cargo build --release --locked -p contr, then <target>/release/contr
-#   --out DIR   output dir (default: <target>/bundle); contr.app inside is replaced.
+#               CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath ./cmd/contr
+#   --out DIR   output dir (default: <repo>/dist/bundle); contr.app inside is replaced.
 #               Refuses /, /Applications and $HOME.
 #   --zip       also write contr-<version>-macos-arm64.zip next to the .app
 #
-# <target> is cargo's target directory (CARGO_TARGET_DIR or the cargo config).
+# The version is the first line of the VERSION file in the repository root.
 # On success prints the absolute path of contr.app, and the zip path with --zip.
 # Errors go to stderr as "bundle.sh: <message>" with exit 1.
 
@@ -29,13 +29,14 @@ repo="$(cd "$(dirname "$0")/.." && pwd)"
 bin=""
 out=""
 zip=0
-td=""
 app_tmp=""
 icon_dir=""
+build_dir=""
 
 cleanup() {
     if [ -n "$app_tmp" ]; then rm -rf "$app_tmp"; fi
     if [ -n "$icon_dir" ]; then rm -rf "$icon_dir"; fi
+    if [ -n "$build_dir" ]; then rm -rf "$build_dir"; fi
 }
 trap cleanup EXIT
 trap 'echo "bundle.sh: a command failed at line $LINENO" >&2; exit 1' ERR
@@ -70,19 +71,6 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-# cargo's target directory for this workspace. cargo honours CARGO_TARGET_DIR,
-# so this is not always ./target. Read once, only when a path needs it.
-# The value is read with sed, not a JSON parser: a path with a '"' or a '\' in it is read wrong.
-# That does not happen in this repo.
-need_target() {
-    if [ -z "$td" ]; then
-        td="$(cd "$repo" && cargo metadata --format-version 1 --no-deps 2>/dev/null |
-            sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p')" ||
-            die "cannot read cargo's target directory"
-        [ -n "$td" ] || die "cannot read cargo's target directory"
-    fi
-}
-
 # Refuses an --out dir that the rm -rf below must not reach: it removes <out>/contr.app, so
 # /, /Applications and $HOME are refused. The physical path is compared (symlinks resolved), in
 # lower case, because APFS is case-insensitive.
@@ -100,10 +88,10 @@ check_out() {
 }
 
 if [ -z "$bin" ]; then
-    (cd "$repo" && cargo build --release --locked -p contr) 1>&2 ||
-        die "cargo build failed"
-    need_target
-    bin="$td/release/contr"
+    build_dir="$(mktemp -d)"
+    bin="$build_dir/contr"
+    (cd "$repo" && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -o "$bin" ./cmd/contr) 1>&2 ||
+        die "go build failed"
 fi
 [ -f "$bin" ] || die "binary not found: $bin"
 
@@ -114,29 +102,19 @@ min_macos="$(vtool -show-build "$bin" 2>/dev/null | awk '/minos/ && !v { v = $2 
     die "cannot read the minimum macOS version of $bin"
 [ -n "$min_macos" ] || die "no minimum macOS version in $bin"
 
-version="$(awk '
-    /^\[workspace\.package\]/ { in_pkg = 1; next }
-    /^\[/ { in_pkg = 0 }
-    in_pkg && /^version[[:space:]]*=/ {
-        sub(/^[^"]*"/, "")
-        sub(/".*$/, "")
-        print
-        exit
-    }
-' "$repo/Cargo.toml")" || die "cannot read the version in Cargo.toml"
+version="$(sed -n 1p "$repo/VERSION" 2>/dev/null)" || die "cannot read $repo/VERSION"
 case "$version" in
     [0-9]*.[0-9]*.[0-9]*) ;;
-    *) die "no workspace version in Cargo.toml: '$version'" ;;
+    *) die "no version in VERSION: '$version'" ;;
 esac
 
 commit="$(git -C "$repo" rev-parse --short HEAD 2>/dev/null)" || commit=unknown
 
-icon_src="$repo/crates/contr/assets/app/icon.svg"
+icon_src="$repo/assets/app/icon.svg"
 [ -f "$icon_src" ] || die "icon not found: $icon_src"
 
 if [ -z "$out" ]; then
-    need_target
-    out="$td/bundle"
+    out="$repo/dist/bundle"
 fi
 mkdir -p "$out"
 out="$(cd "$out" && pwd)"
