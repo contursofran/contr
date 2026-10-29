@@ -90,6 +90,8 @@ type BoardPanel struct {
 	// reportRow is the key of the work row that the Report tab follows. It
 	// stays when the tab is left.
 	reportRow *string
+	// handle is the root's focus handle: the keys act while it has focus.
+	handle ui.Handle
 }
 
 // NewBoardPanel returns a panel on the Board tab.
@@ -289,7 +291,8 @@ func wrapFlip(wrapUp bool) (board.Action, string) {
 // View builds the panel.
 func (p *BoardPanel) View(c *ui.Context) {
 	v := p.deps.Board.View()
-	ui.Column(c).Label(LabelBoardRoot).Fill().Children(func() {
+	root := ui.Column(c).Label(LabelBoardRoot).Fill().Focusable().FocusRing(false).Bind(&p.handle)
+	p.bindKeys(root).Children(func() {
 		p.header(c, v.Snapshot)
 		switch {
 		case v.Snapshot == nil:
