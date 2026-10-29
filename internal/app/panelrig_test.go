@@ -257,13 +257,3 @@ func (r *panelRig) key(k ui.Key) {
 	r.tt.Key(0, k)
 	r.settle()
 }
-
-// advance moves the test clock by ms, after what is due has run, and lets
-// what that makes due settle.
-func (r *panelRig) advance(ms uint64) {
-	r.t.Helper()
-	r.out.Wait()
-	r.clock.advance(ms)
-	r.out.Wait()
-	r.tt.Frame()
-}

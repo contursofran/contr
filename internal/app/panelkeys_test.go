@@ -11,8 +11,8 @@ import (
 // answerD7 is the answer to D7 with option index and label.
 func answerD7(index uint64, label string) board.Action { return board.Answer("D7", index, label) }
 
-// wantQueued checks the actions written so far.
-func (r *panelRig) wantQueued(want ...board.Action) {
+// wantKeysQueued checks the actions written so far.
+func (r *panelRig) wantKeysQueued(want ...board.Action) {
 	r.t.Helper()
 	got, ok := r.queued()
 	if len(want) == 0 {
@@ -44,7 +44,7 @@ func TestProbeKeysReachThePanelAfterAClickOnARowOrTheSummary(t *testing.T) {
 	r.click(itemLabel(snap, 1))
 	r.key(ui.KeyEnter)
 	r.advance(board.UndoMS)
-	r.wantQueued(answerD7(0, "one line per row"))
+	r.wantKeysQueued(answerD7(0, "one line per row"))
 
 	r2 := newQueuedPanelRig(t, snap)
 	r2.click(LabelBoardSummary)
@@ -53,7 +53,7 @@ func TestProbeKeysReachThePanelAfterAClickOnARowOrTheSummary(t *testing.T) {
 	}
 	r2.key(ui.KeyEnter)
 	r2.advance(board.UndoMS)
-	r2.wantQueued(board.Done("T12"))
+	r2.wantKeysQueued(board.Done("T12"))
 }
 
 // Port of the Rust test the_keys_do_nothing_until_the_panel_has_focus.
@@ -66,7 +66,7 @@ func TestTheKeysDoNothingUntilThePanelHasFocus(t *testing.T) {
 		t.Errorf("the pick moved to %v", *r.p.pick)
 	}
 	r.advance(board.UndoMS)
-	r.wantQueued()
+	r.wantKeysQueued()
 }
 
 // The keys do not reach the panel while another view, such as the terminal,
@@ -91,7 +91,7 @@ func TestTheKeysDoNotReachThePanelWhileAnotherViewHasFocus(t *testing.T) {
 	if r.p.pick != nil {
 		t.Errorf("the pick moved to %v", *r.p.pick)
 	}
-	r.wantQueued()
+	r.wantKeysQueued()
 	if keys == 0 {
 		t.Error("the terminal view took no key")
 	}
@@ -153,9 +153,9 @@ func TestEnterOnAnOpenDecisionQueuesItsRecommendedAnswer(t *testing.T) {
 	if !r.has(CardUndo) {
 		t.Error("the answer can be undone")
 	}
-	r.wantQueued()
+	r.wantKeysQueued()
 	r.advance(board.UndoMS)
-	r.wantQueued(answerD7(0, "one line per row"))
+	r.wantKeysQueued(answerD7(0, "one line per row"))
 }
 
 // Port of the Rust test enter_on_a_to_do_sends_done_and_enter_on_news_dismisses.
@@ -165,12 +165,12 @@ func TestEnterOnAToDoSendsDoneAndEnterOnNewsDismisses(t *testing.T) {
 	r.click(LabelBoardSummary)
 	r.key(ui.KeyEnter)
 	r.advance(board.UndoMS)
-	r.wantQueued(board.Done("T12"))
+	r.wantKeysQueued(board.Done("T12"))
 
 	r.click(itemLabel(snap, 2))
 	r.key(ui.KeyEnter)
 	r.advance(board.UndoMS)
-	r.wantQueued(board.Done("T12"), board.Dismiss("N4"))
+	r.wantKeysQueued(board.Done("T12"), board.Dismiss("N4"))
 }
 
 // Port of the Rust test
@@ -180,13 +180,13 @@ func TestEnterDoesNothingOnAResolvedItemOrWhileAnAnswerIsHeld(t *testing.T) {
 	r := newQueuedPanelRig(t, snap)
 	r.click(itemLabel(snap, 3))
 	r.key(ui.KeyEnter)
-	r.wantQueued()
+	r.wantKeysQueued()
 
 	r.click(itemLabel(snap, 1))
 	r.key(ui.KeyEnter)
 	r.key(ui.KeyEnter)
 	r.advance(board.UndoMS)
-	r.wantQueued(answerD7(0, "one line per row"))
+	r.wantKeysQueued(answerD7(0, "one line per row"))
 }
 
 // Port of the Rust test digit_1_sends_the_first_option_in_card_order.
@@ -198,7 +198,7 @@ func TestDigit1SendsTheFirstOptionInCardOrder(t *testing.T) {
 	r.click(itemLabel(snap, 1))
 	r.key(ui.Key1)
 	r.advance(board.UndoMS)
-	r.wantQueued(answerD7(1, "two lines per row"))
+	r.wantKeysQueued(answerD7(1, "two lines per row"))
 }
 
 // Port of the Rust test digit_2_sends_the_second_option_in_card_order.
@@ -208,7 +208,7 @@ func TestDigit2SendsTheSecondOptionInCardOrder(t *testing.T) {
 	r.click(itemLabel(snap, 1))
 	r.key(ui.Key2)
 	r.advance(board.UndoMS)
-	r.wantQueued(answerD7(1, "two lines per row"))
+	r.wantKeysQueued(answerD7(1, "two lines per row"))
 }
 
 // Port of the Rust test digits_send_nothing_past_the_last_option_or_on_a_to_do.
@@ -220,12 +220,12 @@ func TestDigitsSendNothingPastTheLastOptionOrOnAToDo(t *testing.T) {
 	if !r.has(CardDone) {
 		t.Error("T12 is still open")
 	}
-	r.wantQueued()
+	r.wantKeysQueued()
 
 	r.click(itemLabel(snap, 1))
 	r.key(ui.Key4)
 	r.advance(board.UndoMS)
-	r.wantQueued()
+	r.wantKeysQueued()
 	if r.has(CardUndo) {
 		t.Error("nothing is held")
 	}
@@ -255,7 +255,7 @@ func TestTheReportTabIgnoresTheArrowKeysEnterAndDigits(t *testing.T) {
 		t.Errorf("the item stays picked: %v", r.p.pick)
 	}
 	r.advance(board.UndoMS)
-	r.wantQueued()
+	r.wantKeysQueued()
 
 	r.click(LabelTabBoard)
 	if !r.has("one line per row") || r.has(CardUndo) {
@@ -281,7 +281,7 @@ func TestAnInertBoardMovesThePickAndSendsNothing(t *testing.T) {
 	r.key(ui.KeyEnter)
 	r.key(ui.Key1)
 	r.advance(board.UndoMS)
-	r.wantQueued()
+	r.wantKeysQueued()
 	if st := r.status(); len(st) != 0 {
 		t.Errorf("status = %v", st)
 	}
