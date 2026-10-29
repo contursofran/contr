@@ -88,7 +88,7 @@ the control itself; it then becomes a view test or an e2e test.
 | M3 | Done (M3.1–M3.6). Live tests run with `-tags live` against `scripts/dev-herdr.sh`. |
 | M4 | Done (M4.1–M4.4). The frame test for title bar clicks moves to M6. The redraw test checks that a slot builds once per redraw (MyGo is immediate mode). |
 | M5 | In progress |
-| M7 | In progress |
+| M7 | Done (M7.1–M7.4). Rows redraw one by one through cached layers (D12). The spaces column rescans git every 10 s while the window is shown, as Rust does (D15). |
 | M8 | In progress |
 | M10 | Done (M10.1–M10.5). Host stats use purego Mach calls (D11). The `contr statusline` command line comes in M11. |
 | M6 | Done (M6.1). The panel toggle sits right of split, as DESIGN.md orders them. |
