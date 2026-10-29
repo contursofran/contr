@@ -35,7 +35,7 @@ in. It is written in Go with MyGo's native UI.
 | `internal/herdr/endpoint` | herdr's binary endpoint socket: codec, messages, surface, conn, link, osc52 |
 | `internal/usage` | plan usage: Claude status line, Codex logs |
 | `assets` | fonts, status icons, app icon |
-| `scripts` | `check.sh`, `dev-herdr.sh` |
+| `scripts` | `check.sh`, `bundle.sh`, `install.sh`, `dev-herdr.sh` |
 
 Add packages under `internal/` when a change needs them.
 
