@@ -153,7 +153,7 @@ func TestTheReportTabFollowsThePickedRow(t *testing.T) {
 
 // Port of the Rust test the_report_tab_keeps_its_row_when_an_item_is_picked,
 // through a click on the item row.
-func TestTheReportTabKeepsItsRowWhenAnItemRowIsClicked(t *testing.T) {
+func TestTheReportTabKeepsItsRowWhenAnItemIsPicked(t *testing.T) {
 	snap := snapshotWithReport(t, reportFile(t))
 	r := newPanelRig(t, snap, "", testBridge())
 	r.showReport(row640)
