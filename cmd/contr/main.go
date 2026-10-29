@@ -12,6 +12,7 @@ import (
 )
 
 func main() {
+	app.InitActions()
 	mygo.App.WhenReady(func() {
 		mygo.NewWindow(mygo.WindowOptions{
 			Title:   "contr",
