@@ -219,7 +219,7 @@ func (v *View) setGrid(want wanted, now time.Time) {
 // on a grid change and on each click or key, so a failed start is tried again
 // with no timer: layout runs every frame.
 func (v *View) ensureLink() {
-	if v.link != nil || !v.opts.Enabled || !v.hasWant {
+	if v.closed || v.link != nil || !v.opts.Enabled || !v.hasWant {
 		return
 	}
 	v.startLink(v.want)
