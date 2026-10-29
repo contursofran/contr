@@ -54,8 +54,38 @@ Rust contr itself (43,600 lines), for scale: an edit plus a build took
 With four of those at the same time, each took 7–14 s. The cargo processes
 waited on cargo's shared package cache lock.
 
+## Terminal painter (M5.4)
+
+Measured on 2026-10-29, same machine, one run at a time, 15 samples of `ps`
+CPU over 15 s after a 6 s warm-up. The earlier MyGo test was run again in the
+same session, so both columns share the machine load. The painter draws the
+same 200×60 workload from an `endpoint.Surface`, with the bundled JetBrains
+Mono (the earlier test used the system UI font). Cell size 7.2×15.8 so the
+grid fits the same window.
+
+| | MyGo test (rerun) | Terminal painter |
+|---|---:|---:|
+| Idle: CPU / memory | 0.0 % / 67 MB (table above) | 0.0 % / 83–87 MB |
+| Scroll: CPU / memory / fps | 23 % / 195 MB / 60 | 19–24 % / 230 MB / 60 |
+| Churn: CPU / memory / fps | 68 % / 200 MB / 60 | 29–51 % / 78–195 MB / 60 |
+| Scroll with the app hidden: CPU | not rerun (3–4 % above) | 1–2 % |
+
+CPU is at or under the MyGo numbers. Memory is 20–35 MB higher at idle and in
+scroll; the cause is not measured (the registered font faces and the glyph
+atlas for them are the likely part). The painter keeps shaped glyphs per row
+(by row identity) and by content, so text that moves to another row, as in a
+scroll, is not shaped again. Without the content memo, scroll took 48 % CPU.
+
 ## How to run the grid test again
 
-The grid test programs are not in this repository. When M5 adds the
-terminal painter, add a benchmark that draws the same grid with it and
-compare it with the MyGo column above.
+The terminal painter test is `cmd/gridbench` (build tag `bench`). Run it from
+the repository root, one mode at a time, and read CPU with `ps`:
+
+    go build -tags bench -o tmp/gridbench ./cmd/gridbench
+    tmp/gridbench -mode idle|scroll|churn
+
+`-mode sample` shows a fixed surface (colors, box glyphs, underline styles,
+selection, cursor). Build it with `-tags bench,e2e` to capture the window with
+MyGo's automation plugin.
+
+The earlier MyGo, Gio and GPUI programs are not in this repository.
