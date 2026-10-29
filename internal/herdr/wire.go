@@ -37,6 +37,12 @@ func APISocketPath() (string, bool) {
 	return socketPathFrom(os.Getenv)
 }
 
+// SocketPathFrom is [APISocketPath] with the environment passed in. The
+// endpoint package uses it to find the default socket directory.
+func SocketPathFrom(env func(string) string) (string, bool) {
+	return socketPathFrom(env)
+}
+
 // socketPathFrom is the testable core of [APISocketPath]. Empty values count
 // as unset.
 func socketPathFrom(env func(string) string) (string, bool) {
