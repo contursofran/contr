@@ -188,6 +188,24 @@ func (r *panelRig) status() []string {
 	return slices.Clone(r.lines)
 }
 
+// queued returns the actions written to the actions file of the queue session
+// so far. ok is false when there is no file yet.
+func (r *panelRig) queued() ([]board.Envelope, bool) {
+	r.t.Helper()
+	r.out.mu.Lock()
+	session := ""
+	if r.out.queue != nil {
+		session = r.out.queue.Session()
+	}
+	r.out.mu.Unlock()
+	data, err := os.ReadFile(board.ActionsPath(r.dir, session))
+	if err != nil {
+		return nil, false
+	}
+	f, ok := board.ParseActions(data)
+	return f.Actions, ok
+}
+
 // reads is the number of reads that the panel's report view started.
 func (r *panelRig) reads() int {
 	r.p.report.mu.Lock()
