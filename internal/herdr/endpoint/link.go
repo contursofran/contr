@@ -364,7 +364,7 @@ func (r *runner) read(conn *Conn, version string) ended {
 		}
 		switch m := msg.(type) {
 		case nil:
-			// The read timeout passed. Read again.
+			// Recv returned no message. Read again.
 		case ControlMsg:
 			if m.Kind != SnapshotKind {
 				continue
