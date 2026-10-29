@@ -85,6 +85,6 @@ the control itself; it then becomes a view test or an e2e test.
 | M0 | Done in the first commit |
 | M1 | Done (M1.1). The `AgentState` to icon mapping moves to M4. |
 | M2 | Done (M2.1–M2.7). Live tests run with `-tags live` against `scripts/dev-herdr.sh`. |
-| M3 | In progress |
+| M3 | Done (M3.1–M3.6). Live tests run with `-tags live` against `scripts/dev-herdr.sh`. |
 | M4 | In progress |
 | M5–M13 | Not started |
