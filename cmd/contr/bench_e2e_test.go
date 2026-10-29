@@ -189,6 +189,8 @@ func TestAppBench(t *testing.T) {
 		}
 		st := bench.Summarize(samples)
 		stats[name] = st
+		t.Logf("phase %q footprint first/last: %d / %d MB", name,
+			samples[0].FootprintKB/1024, samples[len(samples)-1].FootprintKB/1024)
 		row := bench.Row(name, st, load)
 		t.Log(row)
 		table = append(table, row)
