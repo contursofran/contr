@@ -76,6 +76,57 @@ atlas for them are the likely part). The painter keeps shaped glyphs per row
 (by row identity) and by content, so text that moves to another row, as in a
 scroll, is not shaped again. Without the content memo, scroll took 48 % CPU.
 
+## Whole app (M13)
+
+Measured on 2026-10-29 with `cmd/contr` (build tag `e2e`) against the dev
+herdr, on `main` 26b904b plus the log line in d823bb0. Same machine as
+above. Three runs, one at a time; the table is the median run (by idle
+shown CPU). Other processes ran on the Mac (load average 1.7–3.8, shown per
+phase), as in the earlier tables. Method: 6 s warm-up, 15 samples, one per
+second, from `ps` and `footprint`. The window was hidden with the menu
+contr > Hide. A window that other windows cover was not measured (D9).
+The terminal pane is 720×834 points, smaller than the 200×60 cells of the
+grid test, so these numbers are not the same workload. The board shows a
+working worker (an animated arc).
+
+| Phase | CPU min / med / max | Footprint max | RSS max | Load avg |
+|---|---|---|---|---|
+| idle shown | 11.5 / 18.3 / 22.6 % | 218 MB | 168 MB | 2.47 2.71 3.21 |
+| busy pane shown | 12.2 / 16.2 / 18.5 % | 180 MB | 194 MB | 2.41 2.68 3.19 |
+| flood pane shown | 10.1 / 10.7 / 12.0 % | 188 MB | 214 MB | 2.06 2.57 3.14 |
+| board updates shown | 16.5 / 23.4 / 27.4 % | 187 MB | 214 MB | 2.16 2.56 3.12 |
+| idle hidden | 0.0 / 0.0 / 0.5 % | 80 MB | 215 MB | 2.00 2.49 3.08 |
+| busy pane hidden | 1.9 / 2.0 / 5.7 % | 82 MB | 215 MB | 1.68 2.37 3.01 |
+
+RSS max is a high-water mark from the whole run, so it does not fall when
+the window is hidden. Use the footprint column for memory.
+
+Targets (a miss is reported only):
+
+- idle shown: not met. CPU 18.3 % against 0.5 %. Footprint 218 MB against
+  the 150 MB flag.
+- busy pane shown: met. CPU 16.2 % against 24 %; 180 MB against 230 MB.
+- flood pane shown: met. CPU 10.7 % against 51 %; 188 MB against 230 MB.
+- board updates shown: not met. CPU 23.4 % against 2 %. Footprint went
+  from 184 MB to 187 MB across the phase (run 1: 187 to 170, run 2: 183 to
+  186), so there is no growth.
+- idle hidden: met. CPU 0.0 %.
+- busy pane hidden: met. CPU 2.0 % against 2 %. Runs 1 and 2 gave 2.1 %.
+
+Run to run, the other phases changed by less than 3 points. Board updates
+shown gave 10.8 % in run 1 and 21.7–23.4 % in runs 2 and 3.
+
+Likely cause of the misses (read from the code, not profiled): the working
+arc in the board panel redraws every frame (`icons.go`, `AnimationFrame`),
+about 60 frames per second while the window is shown. This fits the idle
+CPU, the rise in the board phase (the board also redraws each second), and
+the busy phases using less CPU than idle (the arc is the same cost in all
+shown phases). Hidden, the frames stop and CPU is 0.0 %. Memory is at idle
+20–40 MB over the painter test; the fonts and atlas are the likely part.
+
+Screenshots (`tmp/bench/start.png`, `busy.png`) show the sidebar, the grid
+with the shell prompt, the board, and the busy pane scrolling.
+
 ## How to run the grid test again
 
 The terminal painter test is `cmd/gridbench` (build tag `bench`). Run it from
