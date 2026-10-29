@@ -476,3 +476,116 @@ func TestABoardThatTakesNoActionsRefusesTheSendWithoutFeedback(t *testing.T) {
 		t.Errorf("status lines %v", got)
 	}
 }
+
+// Port of the Rust test wrap_flip_sends_the_other_state_with_its_status.
+func TestWrapFlipSendsTheOtherStateWithItsStatus(t *testing.T) {
+	for _, tc := range []struct {
+		wrapUp bool
+		want   board.Action
+		line   string
+	}{
+		{false, board.WrapUp(true), "wrap up sent"},
+		{true, board.WrapUp(false), "keep going sent"},
+	} {
+		if a, line := wrapFlip(tc.wrapUp); a != tc.want || line != tc.line {
+			t.Errorf("wrapFlip(%v) = %v, %q", tc.wrapUp, a, line)
+		}
+	}
+}
+
+// Port of the Rust test wrap_up_click_queues_wrap_up_and_shows_the_status.
+func TestWrapUpClickQueuesWrapUpAndShowsTheStatus(t *testing.T) {
+	r := newQueuedPanelRig(t, panelFixture(t))
+	r.click(LabelBoardWrap)
+	got, ok := r.queued()
+	if !ok || len(got) != 1 || got[0].Action != board.WrapUp(true) {
+		t.Fatalf("queued = %v, %v", got, ok)
+	}
+	if st := r.status(); len(st) != 1 || st[0] != "wrap up sent" {
+		t.Errorf("status = %v", st)
+	}
+}
+
+// Port of the Rust test keep_going_click_queues_wrap_up_off.
+func TestKeepGoingClickQueuesWrapUpOff(t *testing.T) {
+	snap := panelFixture(t)
+	snap.WrapUp = true
+	r := newQueuedPanelRig(t, snap)
+	r.click(LabelBoardWrap)
+	got, ok := r.queued()
+	if !ok || len(got) != 1 || got[0].Action != board.WrapUp(false) {
+		t.Fatalf("queued = %v, %v", got, ok)
+	}
+	if st := r.status(); len(st) != 1 || st[0] != "keep going sent" {
+		t.Errorf("status = %v", st)
+	}
+}
+
+// Port of the Rust test clear_done_on_the_work_section_queues_clear_rows.
+func TestClearDoneOnTheWorkSectionQueuesClearRows(t *testing.T) {
+	r := newQueuedPanelRig(t, panelFixture(t))
+	r.click(LabelClearWork)
+	got, ok := r.queued()
+	if !ok || len(got) != 1 || got[0].Action != board.ClearRows() {
+		t.Fatalf("queued = %v, %v", got, ok)
+	}
+	if st := r.status(); len(st) != 1 || st[0] != ClearSent {
+		t.Errorf("status = %v", st)
+	}
+}
+
+// Port of the Rust test clear_done_on_the_needs_section_queues_clear_items.
+func TestClearDoneOnTheNeedsSectionQueuesClearItems(t *testing.T) {
+	r := newQueuedPanelRig(t, panelFixture(t))
+	r.click(LabelClearNeed)
+	got, ok := r.queued()
+	if !ok || len(got) != 1 || got[0].Action != board.ClearItems() {
+		t.Fatalf("queued = %v, %v", got, ok)
+	}
+	if st := r.status(); len(st) != 1 || st[0] != ClearSent {
+		t.Errorf("status = %v", st)
+	}
+}
+
+// Port of the Rust test a_board_that_takes_no_actions_queues_nothing. The
+// controls are inert, and a direct send is refused and shows nothing.
+func TestABoardThatTakesNoActionsQueuesNothing(t *testing.T) {
+	snap := panelFixture(t)
+	r := newQueuedPanelRig(t, snap)
+	next := panelFixture(t)
+	next.Actions = 0
+	r.set(next)
+	if r.p.CanAct() {
+		t.Fatal("CanAct on a board that takes no actions")
+	}
+	for _, label := range []string{LabelBoardWrap, LabelClearWork, LabelClearNeed} {
+		r.click(label)
+	}
+	r.p.sendWrap()
+	r.p.sendClear(true)
+	r.p.sendClear(false)
+	r.settle()
+	if got, ok := r.queued(); ok && len(got) != 0 {
+		t.Errorf("queued = %v", got)
+	}
+	if st := r.status(); len(st) != 0 {
+		t.Errorf("status = %v", st)
+	}
+}
+
+// Port of the Rust test the_wrap_label_follows_the_next_snapshot. After the
+// board changes, a click sends the flip of the new state.
+func TestTheWrapLabelFollowsTheNextSnapshot(t *testing.T) {
+	r := newQueuedPanelRig(t, panelFixture(t))
+	next := panelFixture(t)
+	next.WrapUp = true
+	r.set(next)
+	if !r.tt.HasText("keep going") || r.tt.HasText("wrap up") {
+		t.Fatalf("texts %v", r.tt.Texts())
+	}
+	r.click(LabelBoardWrap)
+	got, ok := r.queued()
+	if !ok || len(got) != 1 || got[0].Action != board.WrapUp(false) {
+		t.Fatalf("queued = %v, %v", got, ok)
+	}
+}

@@ -148,6 +148,43 @@ func (p *BoardPanel) sendAction(action board.Action, feedback string) bool {
 	return true
 }
 
+// sendWrap sends the other wrap state: wrap up when the coordinator goes on,
+// keep going when it wraps up. It reads the board as it is now.
+func (p *BoardPanel) sendWrap() {
+	s := p.deps.Board.View().Snapshot
+	if s == nil {
+		return
+	}
+	action, line := wrapFlip(s.WrapUp)
+	p.sendAction(action, line)
+}
+
+// sendClear sends clear done for the work rows (rows) or the needs-you items.
+func (p *BoardPanel) sendClear(rows bool) {
+	action := board.ClearItems()
+	if rows {
+		action = board.ClearRows()
+	}
+	p.sendAction(action, ClearSent)
+}
+
+// wrapClick, clearRowsClick and clearItemsClick give the click of a control,
+// or nil, so that the control is drawn inert, while the board takes no
+// actions.
+func (p *BoardPanel) wrapClick() ActionClick {
+	if !p.CanAct() {
+		return nil
+	}
+	return p.sendWrap
+}
+
+func (p *BoardPanel) clearClick(rows bool) ActionClick {
+	if !p.CanAct() {
+		return nil
+	}
+	return func() { p.sendClear(rows) }
+}
+
 // ShowReport shows the Report tab for the work row rowKey. The card's Report
 // button calls it.
 func (p *BoardPanel) ShowReport(rowKey string) {
@@ -270,15 +307,15 @@ func (p *BoardPanel) View(c *ui.Context) {
 }
 
 // boardTab adds the summary, the work section, the needs-you section and the
-// answer card. The clear controls and the card are inert in this slice.
+// answer card. The card is inert in this slice.
 func (p *BoardPanel) boardTab(c *ui.Context, s *board.Snapshot, problem string) {
 	colour := uint32(theme.Text2)
 	if problem != "" {
 		colour = theme.TextDim
 	}
 	TextLine(c, LabelBoardSummary, SummaryText(s.Summary, problem), colour)
-	p.work.View(c, s.ClearRows, nil)
-	NeedsSection(c, s.Items, s.NeedCount, s.ClearItems, "", nil, nil)
+	p.work.View(c, s.ClearRows, p.clearClick(true))
+	NeedsSection(c, s.Items, s.NeedCount, s.ClearItems, "", nil, p.clearClick(false))
 	AnswerCard(c, nil, nowMS())
 }
 
@@ -292,7 +329,7 @@ func (p *BoardPanel) header(c *ui.Context, s *board.Snapshot) {
 			switchSegment(c, LabelTabReport, tabReportText, p.tab == TabReport, p.OpenReportTab)
 		})
 		if s != nil {
-			wrapLabel(c, s.WrapUp)
+			wrapLabel(c, s.WrapUp, p.wrapClick())
 		}
 	})
 }
@@ -315,10 +352,13 @@ func switchSegment(c *ui.Context, label, text string, on bool, click func()) {
 	el.Children(func() { ui.Text(c, text) })
 }
 
-// wrapLabel adds the wrap label on the right of the header. It is dim and
-// inert: the click comes in a later slice.
-func wrapLabel(c *ui.Context, wrapUp bool) {
-	ui.Row(c).Label(LabelBoardWrap).Children(func() {
-		ui.Text(c, WrapText(wrapUp)).TextColor(theme.Color(theme.TextDim))
-	})
+// wrapLabel adds the wrap label on the right of the header. It is dim. It
+// is a button when click is set, else inert.
+func wrapLabel(c *ui.Context, wrapUp bool, click ActionClick) {
+	text := func() { ui.Text(c, WrapText(wrapUp)).TextColor(theme.Color(theme.TextDim)) }
+	if click == nil {
+		ui.Row(c).Label(LabelBoardWrap).Children(text)
+		return
+	}
+	ui.ButtonBase(c).Label(LabelBoardWrap).Cursor(ui.CursorPointer).OnClick(click).Children(text)
 }
