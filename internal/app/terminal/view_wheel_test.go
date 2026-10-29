@@ -109,7 +109,7 @@ func TestASidewaysSwipeScrollsAProgramButNotAShell(t *testing.T) {
 }
 
 func TestAWheelWithNoLinkOrOutsideThePanesSendsNothing(t *testing.T) {
-	// The mods ride along: Shift is a flag on the event.
+	// Extra check, not a Rust case: the mods ride along. Shift is a flag on the event.
 	v, tt, f := wheelView(t, true)
 	x, y := cellPoint(v, tt, 1, 1, 0.5)
 	rx, ry := relative(tt, x, y)
@@ -205,4 +205,14 @@ func TestALostLinkForgetsTheWheelRemainder(t *testing.T) {
 	f.queued()
 	tt.Scroll(x, y, 0, dy)
 	wantMsgs(t, f)
+}
+
+func TestAKeyAfterAScrollIsSentAsUsual(t *testing.T) {
+	v, tt, f := wheelView(t, false)
+	x, y := cellPoint(v, tt, 2, 1, 0.5)
+	tt.Scroll(x, y, 0, -2*v.metrics.CellH)
+	wantMsgs(t, f, wheelMsg(paneID, wheelEvent(endpoint.WheelUp, 2, 1, 2)))
+	// herdr returns to the live screen on the key; contr only sends it.
+	tt.Type("a")
+	wantMsgs(t, f, inputMsg(paneID, textEv("a")))
 }

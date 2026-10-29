@@ -5,10 +5,13 @@ package app
 
 import (
 	"context"
+	"os"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/state"
+	"github.com/contursofran/contr/internal/app/terminal"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/board"
 	"github.com/contursofran/contr/internal/herdr"
@@ -75,6 +78,9 @@ type Frame struct {
 	// AgentsList is the agents section. [Frame.Attach] makes it and puts
 	// its view in Slots.Agents.
 	AgentsList *AgentsList
+	// Panel is the board panel. [Frame.Attach] makes it and puts its view in
+	// Slots.Panel.
+	Panel *BoardPanel
 	// SpacesList is the spaces column body. [Frame.Attach] makes it and puts
 	// its view in Slots.Spaces.
 	SpacesList *SpacesList
@@ -266,6 +272,9 @@ func toggleButton(c *ui.Context, label string, open bool, onClick func()) {
 // Window is the part of a MyGo window that [Frame.Attach] uses.
 type Window interface {
 	state.WindowEvents
+	IsFocused() bool
+	OnFocus(fn func()) (off func())
+	OnBlur(fn func()) (off func())
 	Invalidate()
 	Update(fn func())
 }
@@ -284,6 +293,10 @@ func (f *Frame) syncHerdr() {
 func (f *Frame) syncBoard() {
 	if f.Outbox != nil && f.Board != nil {
 		f.Outbox.Sync(f.Board.View().Snapshot)
+	}
+	// After the outbox, so CanAct is current.
+	if f.Panel != nil {
+		f.Panel.Sync()
 	}
 	f.syncAgents()
 }
@@ -315,6 +328,14 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	f.AgentsList = NewAgentsList(h, f.Board, f.Selection, f.Status)
 	f.Slots.Agents = f.AgentsList.View
 	f.Board.Sync(h.Live().Tree)
+	f.Panel = NewBoardPanel(PanelDeps{
+		Board:      f.Board,
+		Outbox:     f.Outbox,
+		Tree:       func() *herdr.HerdrTree { return h.Live().Tree },
+		Status:     f.Status.Show,
+		Invalidate: w.Invalidate,
+	})
+	f.Slots.Panel = f.Panel.View
 	if f.Host == nil {
 		f.Host = host.NewSystem(w.Invalidate)
 	}
@@ -340,8 +361,10 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	f.Usage.SetVisible(w.IsVisible())
 	f.SpacesList.SetVisible(w.IsVisible())
 	unwatch := f.Visibility.Watch(w)
+	term := f.attachTerminal(w)
 	return func() {
 		unwatch()
+		term()
 		// Held actions are written now, so quit loses none.
 		f.Outbox.ReleaseForQuit()
 		f.Outbox.Wait()
@@ -349,5 +372,26 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 		f.SpacesList.Close()
 		f.Host.Close()
 		f.Usage.Close()
+	}
+}
+
+// attachTerminal puts the terminal view in its slot and follows the window
+// focus. The returned function stops both. The link runs while the window is
+// hidden, as in the Rust app; MyGo holds the frames (D9).
+func (f *Frame) attachTerminal(w Window) (stop func()) {
+	view := terminal.NewView(terminal.Options{
+		Enabled:    os.Getenv(terminal.SurfaceEnv) == "1",
+		Post:       mygo.RunOnMain,
+		Invalidate: w.Invalidate,
+		FocusPane:  func(id string) { FocusInBackground(id, f.Status.Show) },
+	})
+	f.Slots.Terminal = view.Build
+	view.SetWindowActive(w.IsFocused())
+	offFocus := w.OnFocus(func() { view.SetWindowActive(true) })
+	offBlur := w.OnBlur(func() { view.SetWindowActive(false) })
+	return func() {
+		offFocus()
+		offBlur()
+		view.Close()
 	}
 }

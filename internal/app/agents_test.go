@@ -645,3 +645,25 @@ func TestAttachMakesTheBoardAndTheAgentsList(t *testing.T) {
 type queueWindow struct{ fakeWindow }
 
 func (w *queueWindow) Update(func()) {}
+
+func TestAttachPutsTheBoardPanelInThePanelSlot(t *testing.T) {
+	// A board directory that holds nothing: the board has no bridge.
+	t.Setenv(board.DirEnv, t.TempDir())
+	w := &queueWindow{fakeWindow: fakeWindow{visible: true}}
+	f := NewFrame(nil)
+	stop := f.Attach(context.Background(), w, herdr.SocketTarget(filepath.Join(t.TempDir(), "missing.sock")))
+	defer stop()
+	if f.Panel == nil || f.Slots.Panel == nil {
+		t.Fatal("Attach should make the board panel and put it in the panel slot")
+	}
+	tt := ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)
+	tt.Frame()
+	panel, ok := tt.Find(LabelPanel)
+	header, hok := tt.Find(LabelBoardHeader)
+	if !ok || !hok || header.X < panel.X || header.X+header.W > panel.X+panel.W {
+		t.Errorf("the board panel box %v should hold the board header %v", panel, header)
+	}
+	if !tt.HasText(EmptyText(false, "")) {
+		t.Errorf("with no bridge the panel should show %q", EmptyText(false, ""))
+	}
+}

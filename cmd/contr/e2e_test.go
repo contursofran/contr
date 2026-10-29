@@ -91,6 +91,139 @@ func TestFrameWindowCapture(t *testing.T) {
 	c.capture(t, filepath.Join(out, "frame-no-panel.png"))
 }
 
+// TestBoardPanelCapture shows a scratch board in the panel and saves the
+// window as tmp/e2e/board.png (header, sections and the card) and
+// board-report-tab.png (the Report tab selected). Row picks and the card's
+// buttons come with the pick slice.
+// It marks one pane of the dev herdr as the bridge and clears the mark at the
+// end. Start the dev herdr first:
+//
+//	eval "$(scripts/dev-herdr.sh)"
+//	go test -tags e2e -run TestBoardPanelCapture ./cmd/contr
+//
+// It refuses to run against any herdr but the dev one.
+func TestBoardPanelCapture(t *testing.T) {
+	herdrSock := os.Getenv("HERDR_SOCKET_PATH")
+	if !strings.Contains(herdrSock, "contr-go-dev-herdr") {
+		t.Skip("HERDR_SOCKET_PATH is not the dev herdr; run eval \"$(scripts/dev-herdr.sh)\" first")
+	}
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(root, "tmp", "e2e")
+	if err := os.MkdirAll(out, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	bin := filepath.Join(out, "contr-e2e")
+	build := exec.Command("go", "build", "-tags", "e2e", "-o", bin, "./cmd/contr")
+	build.Dir = root
+	build.Env = append(os.Environ(), "CGO_ENABLED=0")
+	if msg, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build: %v\n%s", err, msg)
+	}
+
+	// A short path: macOS limits socket paths to 103 bytes.
+	dir, err := os.MkdirTemp("", "contr-e2e")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	// The scratch board: the board fixture, under its own session name.
+	const session = "e2e-board"
+	fixture, err := os.ReadFile(filepath.Join(root, "internal", "board", "testdata", "board_fixture_v1.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(fixture, &doc); err != nil {
+		t.Fatal(err)
+	}
+	doc["session"] = session
+	data, _ := json.Marshal(doc)
+	boardDir := filepath.Join(dir, "board")
+	if err := os.MkdirAll(boardDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(boardDir, session+".json"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Mark one pane of the dev herdr as the bridge.
+	pane := firstPane(t)
+	herdrCmd(t, "pane", "report-metadata", pane, "--source", "e2e", "--token", "contr_board=1 "+session+" 42")
+	defer func() {
+		_ = exec.Command("herdr", "pane", "report-metadata", pane, "--source", "e2e", "--clear-token", "contr_board").Run()
+	}()
+
+	sock := filepath.Join(dir, "a.sock")
+	app := exec.Command(bin)
+	app.Env = append(os.Environ(), "MYGO_AUTOMATION="+sock, "CONTR_BOARD_DIR="+boardDir,
+		"CONTR_STATE_DIR="+filepath.Join(dir, "state"), "CODEX_HOME="+filepath.Join(dir, "codex"))
+	if err := app.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = app.Process.Kill(); _ = app.Wait() }()
+
+	c := dial(t, sock)
+	defer c.conn.Close()
+	c.waitWindow(t)
+	deadline := time.Now().Add(15 * time.Second)
+	for !c.labels(t)["board header"] || !c.hasPrefix(t, "#640") {
+		if time.Now().After(deadline) {
+			t.Fatalf("the board did not show; labels %v", keys(c.labels(t)))
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	time.Sleep(500 * time.Millisecond)
+	c.capture(t, filepath.Join(out, "board.png"))
+
+	if !c.labels(t)["answer card"] {
+		t.Errorf("no answer card under the sections")
+	}
+
+	c.call(t, "act", map[string]any{"id": c.idOf(t, "Report tab"), "action": "press"})
+	time.Sleep(500 * time.Millisecond)
+	c.capture(t, filepath.Join(out, "board-report-tab.png"))
+}
+
+// herdrCmd runs the herdr command line. The test runs it only against the
+// dev herdr, whose socket the environment names.
+func herdrCmd(t *testing.T, args ...string) []byte {
+	t.Helper()
+	msg, err := exec.Command("herdr", args...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("herdr %v: %v\n%s", args, err, msg)
+	}
+	return msg
+}
+
+// firstPane returns the id of the last pane of the dev herdr.
+func firstPane(t *testing.T) string {
+	t.Helper()
+	var res struct {
+		Result struct {
+			Panes []struct {
+				PaneID string `json:"pane_id"`
+			}
+		}
+	}
+	if err := json.Unmarshal(herdrCmd(t, "pane", "list"), &res); err != nil || len(res.Result.Panes) == 0 {
+		t.Fatalf("pane list: %v", err)
+	}
+	return res.Result.Panes[len(res.Result.Panes)-1].PaneID
+}
+
+func (c *client) hasPrefix(t *testing.T, prefix string) bool {
+	for _, n := range c.nodes(t) {
+		if strings.HasPrefix(n.Label, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 type client struct {
 	conn net.Conn
 	r    *bufio.Reader

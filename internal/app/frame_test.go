@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/state"
+	"github.com/contursofran/contr/internal/app/terminal"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/herdr"
 	"github.com/contursofran/contr/internal/host"
@@ -227,13 +228,23 @@ func TestAFrameRedrawDoesNotRenderTheTerminalAgain(t *testing.T) {
 
 // fakeWindow is a Window the test drives.
 type fakeWindow struct {
-	visible          bool
+	visible, focused bool
+	focus, blur      func()
 	show, hide       func()
 	minimize, restor func()
 	invalidated      int
 }
 
-func (w *fakeWindow) IsVisible() bool  { return w.visible }
+func (w *fakeWindow) IsVisible() bool { return w.visible }
+func (w *fakeWindow) IsFocused() bool { return w.focused }
+func (w *fakeWindow) OnFocus(fn func()) func() {
+	w.focus = fn
+	return func() { w.focus = nil }
+}
+func (w *fakeWindow) OnBlur(fn func()) func() {
+	w.blur = fn
+	return func() { w.blur = nil }
+}
 func (w *fakeWindow) Invalidate()      { w.invalidated++ }
 func (w *fakeWindow) Update(fn func()) { fn() }
 func (w *fakeWindow) OnShow(fn func()) func() {
@@ -336,5 +347,37 @@ func TestAttachTiesTheSamplersToTheWindowVisibility(t *testing.T) {
 	case <-reads:
 	case <-time.After(2 * time.Second):
 		t.Fatal("showing the window again should cause a host reading")
+	}
+}
+
+func TestAttachWiresTheTerminalToTheWindowFocus(t *testing.T) {
+	w := &fakeWindow{visible: true, focused: true}
+	f := NewFrame(nil)
+	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
+	f.Usage = usage.NewSampler(usage.Unread, nil)
+	stop := f.Attach(context.Background(), w, herdr.SocketTarget(filepath.Join(t.TempDir(), "missing.sock")))
+	if f.Slots.Terminal == nil {
+		t.Fatal("Attach should put the terminal view in its slot")
+	}
+	if w.focus == nil || w.blur == nil {
+		t.Fatal("Attach should follow the window focus and blur")
+	}
+	w.blur()
+	w.focus()
+	stop()
+	if w.focus != nil || w.blur != nil {
+		t.Error("stop should end the focus watching")
+	}
+}
+
+func TestTheTerminalGridIsInsideTheTerminalArea(t *testing.T) {
+	f, _, tt := newTester(t, connected())
+	v := terminal.NewView(terminal.Options{Invalidate: func() {}})
+	t.Cleanup(v.Close)
+	f.Slots.Terminal = v.Build
+	tt.Frame()
+	grid, area := box(t, tt, terminal.LabelGrid), box(t, tt, LabelTerminal)
+	if grid.X < area.X || grid.Y < area.Y || grid.X+grid.W > area.X+area.W+0.5 || grid.Y+grid.H > area.Y+area.H+0.5 {
+		t.Errorf("grid %+v is not inside the terminal area %+v", grid, area)
 	}
 }
