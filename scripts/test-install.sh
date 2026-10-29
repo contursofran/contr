@@ -1,7 +1,7 @@
 #!/bin/bash
-# Test of scripts/install.sh with a dummy bundle. It runs no cargo build, so it takes seconds.
-# Every install run passes --dest and --bin-dir under mktemp -d, so the real /Applications and
-# ~/.local/bin are never written. The default --dest is checked by sourcing install.sh and calling
+# Test of scripts/install.sh with a dummy bundle. It runs no go build, so it takes seconds.
+# HOME is a dir under tmp/ of the repository. Every install run passes --dest and --bin-dir
+# under tmp/, so the real /Applications and ~/.local/bin are never written. The default --dest is checked by sourcing install.sh and calling
 # check_dest only. The guard cases only check refusals, which stop before any change.
 set -euo pipefail
 unset CDPATH # with CDPATH set, cd prints the directory and breaks $(cd ... && pwd)
@@ -9,7 +9,10 @@ unset CDPATH # with CDPATH set, cd prints the directory and breaks $(cd ... && p
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 install="$repo/scripts/install.sh"
 bundle="$repo/scripts/bundle.sh"
-tmp="$(cd "$(mktemp -d)" && pwd)" # normalised, so the paths printed by install.sh compare equal
+mkdir -p "$repo/tmp"
+tmp="$(cd "$(mktemp -d "$repo/tmp/test-install.XXXXXX")" && pwd)" # normalised, so the paths printed by install.sh compare equal
+export HOME="$tmp/home"
+mkdir -p "$HOME"
 trap 'rm -rf "$tmp"' EXIT
 
 fail() {

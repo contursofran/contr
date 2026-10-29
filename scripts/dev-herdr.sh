@@ -2,7 +2,7 @@
 # Isolated herdr server for developing contr.
 #
 # The server runs with a cleared environment, its own HOME and XDG dirs, an
-# empty config and its own sockets, all under ${TMPDIR:-/tmp}/contr-dev-herdr.
+# empty config and its own sockets, all under ${TMPDIR:-/tmp}/contr-go-dev-herdr.
 # Never point it at the real herdr config dir or the real sockets. The owner's
 # herdr is not touched.
 #
@@ -19,7 +19,7 @@
 set -eu
 
 base="${TMPDIR:-/tmp}"
-base="${base%/}/contr-dev-herdr"
+base="${base%/}/contr-go-dev-herdr"
 api_sock="$base/a.sock"
 client_sock="$base/a-client.sock"
 bin="${CONTR_HERDR_BIN:-herdr}"
