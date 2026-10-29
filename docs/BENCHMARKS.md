@@ -111,18 +111,63 @@ Targets (a miss is reported only):
   from 184 MB to 187 MB across the phase (run 1: 187 to 170, run 2: 183 to
   186), so there is no growth.
 - idle hidden: met. CPU 0.0 %.
-- busy pane hidden: met. CPU 2.0 % against 2 %. Runs 1 and 2 gave 2.1 %.
+- busy pane hidden: met at the limit. CPU 2.0 % against 2 %. Runs 1 and 2
+  gave 2.1 %, so 2 of 3 runs were over the target.
 
 Run to run, the other phases changed by less than 3 points. Board updates
 shown gave 10.8 % in run 1 and 21.7–23.4 % in runs 2 and 3.
 
-Likely cause of the misses (read from the code, not profiled): the working
-arc in the board panel redraws every frame (`icons.go`, `AnimationFrame`),
-about 60 frames per second while the window is shown. This fits the idle
-CPU, the rise in the board phase (the board also redraws each second), and
-the busy phases using less CPU than idle (the arc is the same cost in all
-shown phases). Hidden, the frames stop and CPU is 0.0 %. Memory is at idle
-20–40 MB over the painter test; the fonts and atlas are the likely part.
+Likely cause of the misses (read from the code, not profiled; M13.4 below
+proves it): the working arc in the board panel redraws every frame
+(`icons.go`, `AnimationFrame`), about 60 frames per second while the window
+is shown. Hidden, the frames stop and CPU is 0.0 %. Memory: likely, not
+profiled at M13.3; M13.4 below has a `footprint` breakdown.
+
+### Working arc at 30 frames a second (M13.4)
+
+Measured on 2026-10-29, same machine and method, one run each, on `main`
+a7895f2 (before) and on the M13.4 branch (after). The display refreshes
+at 60 Hz. Load average 1.9–4.6.
+
+Proof of the cause. With `MYGO_FRAME_STATS=all`, the idle shown phase drew
+964 frames in 15 s (64 a second), and 956 of them were "painted again"
+(no view build) with a redraw of 880×96 pixels, the arc's row. Each frame
+took about 0.5 ms on the main thread. A test build with the arc's frame
+request removed gave idle shown 0.0 % and board updates shown 0.3 %. So
+the arc is all of the idle CPU, and the board updates cost almost nothing
+alone (about one view build a second, 1–2.6 ms, only the changed parts
+redrawn).
+
+The fix: the arc asks for frames with `AnimationFrameRate(30)` and turns
+in 42 steps of 1/30 s (`theme.SpinFPS`, D26). Rust (GPUI
+`repeat_synced`) draws the arc at the display's rate.
+
+| Phase (CPU median) | Before | After, 30 a second | Test, 15 a second |
+|---|---|---|---|
+| idle shown | 15.9 % | 10.1 % | 5.1 % |
+| busy pane shown | 16.2 % | 11.5 % | 7.7 % |
+| flood pane shown | 10.8 % | 5.9 % | 3.1 % |
+| board updates shown | 19.2 % | 12.6 % | 6.3 % |
+| idle hidden | 0.0 % | 0.0 % | 0.0 % |
+| busy pane hidden | 1.9 % | 1.9 % | 1.7 % |
+
+Footprint max, before / after: idle shown 218 / 210 MB, hidden 82 / 81 MB.
+The frame log of the after build shows 483 frames in 15 s (32 a second).
+
+The CPU falls by less than the frames: about 0.3 % for each frame a
+second. MyGo logs about 0.5 ms of it; `sample` shows the threads waiting
+in the kernel (`__psynch_cvwait`, `mach_msg2_trap`, `__workq_kernreturn`)
+and almost no contr code. So most of the cost of a frame is likely in the
+system's present path (not profiled further). With a working item on
+screen, idle shown cannot meet 0.5 % at any rate that still spins; with
+nothing working, idle shown is 0.0 %.
+
+Memory at idle shown (`footprint`, 204 MB): IOSurface 59 MB in 4 regions
+(the window's drawables: one at 2628×1645 pixels is 17 MB), graphics
+memory 56 MB and IOAccelerator 8 MB (GPU textures, likely the glyph atlases
+and scene buffers), untagged VM 54 MB (likely the Go heap), malloc 12 MB.
+Hidden, the surfaces go and the footprint is about 81 MB. Likely, not
+profiled further.
 
 Screenshots (`tmp/bench/start.png`, `busy.png`) show the sidebar, the grid
 with the shell prompt, the board, and the busy pane scrolling.
@@ -153,8 +198,11 @@ runs only against the dev herdr, with a scratch repo and a scratch board.
     scripts/dev-herdr.sh stop
 
 One heavy job at a time: run nothing else (e2e, app, build) at the same
-time. The test writes `tmp/bench/start.png`, `tmp/bench/busy.png` and
-`tmp/bench/result.md`, and lists each target as met or MISS. A miss is
+time. The test writes `tmp/bench/start.png`, `tmp/bench/busy.png`,
+`tmp/bench/result.md` and the app's log `tmp/bench/app.log`, and lists
+each target as met or MISS. To count frames, set `MYGO_FRAME_STATS=all`
+and `-count=1`: the log then has one line a frame, and the test marks
+where the samples of each phase start and end. A miss is
 reported only; it does not fail the run. The measured build has the
 automation plugin (`-tags e2e`); it only listens on a socket. The app pane
 is smaller than 200x60 cells, so the numbers are not the grid test load.
