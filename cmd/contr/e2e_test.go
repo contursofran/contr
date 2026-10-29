@@ -179,7 +179,8 @@ func TestBoardPanelCapture(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 	c.capture(t, filepath.Join(out, "board.png"))
 
-	if !c.labels(t)["answer card"] {
+	// The card of an item is named after the item (ItemCardLabel).
+	if !c.hasPrefix(t, "T12 Test the bag drag,") {
 		t.Errorf("no answer card under the sections")
 	}
 
