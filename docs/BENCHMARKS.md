@@ -89,3 +89,25 @@ selection, cursor). Build it with `-tags bench,e2e` to capture the window with
 MyGo's automation plugin.
 
 The earlier MyGo, Gio and GPUI programs are not in this repository.
+
+## How to run the app test
+
+The app test (M13) measures the whole app in six phases: idle shown, busy
+pane shown, flood pane shown, board updates shown, idle hidden, busy pane
+hidden. Each phase has a 6 s warm-up and 15 samples, one per second. It
+runs only against the dev herdr, with a scratch repo and a scratch board.
+
+    eval "$(scripts/dev-herdr.sh)"
+    go test -tags e2e,bench -run AppBench -v -timeout 15m ./cmd/contr
+    scripts/dev-herdr.sh stop
+
+One heavy job at a time: run nothing else (e2e, app, build) at the same
+time. The test writes `tmp/bench/start.png`, `tmp/bench/busy.png` and
+`tmp/bench/result.md`, and lists each target as met or MISS. A miss is
+reported only; it does not fail the run. The measured build has the
+automation plugin (`-tags e2e`); it only listens on a socket. The app pane
+is smaller than 200x60 cells, so the numbers are not the grid test load.
+The test logs the pane size in points, not cells. In phase 6 the loop also
+writes a counter file. herdr starts and stops it, because window input does
+not reach a hidden window. If the counter is too low, the test fails (the
+loop did not run, so the reading is not valid).

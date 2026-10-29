@@ -73,7 +73,7 @@ func TestRead(t *testing.T) {
 	if s != (Sample{CPU: 1.5, RSSKB: 2048, FootprintKB: 65536}) {
 		t.Fatalf("got %+v", s)
 	}
-	if len(calls) != 2 || !strings.HasSuffix(calls[0], "-p 42") || calls[1] != "footprint 42" {
+	if len(calls) != 2 || calls[0] != "ps -o %cpu= -o rss= -p 42" || calls[1] != "footprint 42" {
 		t.Fatalf("calls %q", calls)
 	}
 }
