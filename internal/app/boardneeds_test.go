@@ -171,11 +171,13 @@ func TestAPickedItemKeepsItsRowSize(t *testing.T) {
 func TestOnlyTheResolvedRowHasTheResolvedMarker(t *testing.T) {
 	h := &needsHost{items: cardFixture(t).Items, count: 3}
 	tt := h.tester()
+	img := tt.Image()
 	for _, item := range h.items {
 		title := findRect(t, tt, item.Title)
-		run := strikeRun(tt, title)
+		run := strikeRun(img, title)
 		// A struck title has a line across its whole text, longer than
-		// any run in plain letters.
+		// any run in plain letters. The 5 DIPs per letter hold for the
+		// pinned font at scale 1.
 		if struck := run >= 5*len(item.Title); struck != !item.Open {
 			t.Errorf("%s: open %v, longest run %d of %v", item.Key, item.Open, run, title.W)
 		}
