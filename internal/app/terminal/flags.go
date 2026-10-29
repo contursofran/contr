@@ -1,5 +1,6 @@
-// Package terminal holds the pure parts of the terminal view: grid metrics,
-// program colors and box drawing. It has no window and no view code.
+// Package terminal holds the parts of the terminal view that need no window:
+// grid metrics, program colors, box drawing, underlines, keys and the
+// painter. The painter draws on a ui.Painter; its rules are pure functions.
 package terminal
 
 // herdr's modifier bits in endpoint.Cell.Attrs (ratatui's Modifier bits).
