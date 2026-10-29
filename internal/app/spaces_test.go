@@ -117,6 +117,7 @@ type spacesHarness struct {
 	tt      *ui.Tester
 	hidden  bool
 	clock   time.Time
+	timers  []*spaceTimer
 	focused []string
 }
 
@@ -133,6 +134,7 @@ func (h *spacesHarness) makeList(b *Board) *SpacesList {
 	l := NewSpacesList(h.live, b, h.host, h.sel, nil, func() bool { return !h.hidden }, nil)
 	l.start = func(f func()) { f() }
 	l.now = func() time.Time { return h.clock }
+	l.afterFunc = h.afterFunc
 	l.focus = func(id string, _ func(string)) { h.focused = append(h.focused, id) }
 	l.Sync()
 	return l
@@ -150,7 +152,52 @@ func (h *spacesHarness) send(l herdr.LiveHerdr) SpacesChange {
 	return change
 }
 
-func (h *spacesHarness) advance(d time.Duration) { h.clock = h.clock.Add(d) }
+// advance moves the clock and runs the timers that fall due, in order.
+func (h *spacesHarness) advance(d time.Duration) {
+	end := h.clock.Add(d)
+	for {
+		var next *spaceTimer
+		for _, tm := range h.timers {
+			if !tm.stopped && !tm.at.After(end) && (next == nil || tm.at.Before(next.at)) {
+				next = tm
+			}
+		}
+		if next == nil {
+			break
+		}
+		next.stopped = true
+		if next.at.After(h.clock) {
+			h.clock = next.at
+		}
+		next.f()
+	}
+	h.clock = end
+}
+
+type spaceTimer struct {
+	at      time.Time
+	f       func()
+	stopped bool
+}
+
+func (t *spaceTimer) Stop() bool { was := !t.stopped; t.stopped = true; return was }
+
+func (h *spacesHarness) afterFunc(d time.Duration, f func()) stopper {
+	tm := &spaceTimer{at: h.clock.Add(d), f: f}
+	h.timers = append(h.timers, tm)
+	return tm
+}
+
+// pending counts the timers that are armed.
+func (h *spacesHarness) pending() int {
+	n := 0
+	for _, tm := range h.timers {
+		if !tm.stopped {
+			n++
+		}
+	}
+	return n
+}
 
 func (h *spacesHarness) group(g int) spaces.RepoGroup {
 	h.t.Helper()
@@ -365,10 +412,9 @@ func TestAnAgentSelectionIsLeftAlone(t *testing.T) {
 	}
 }
 
-// ---- Rescans: Rust D15 replaces the timer with a check on herdr changes ----
+// ---- Rescans: the timer, and the check on herdr changes (D15) ----
 
-// Port of the_timer_rescans_while_the_window_is_shown, without the timer (D15):
-// a herdr change after the interval rescans.
+// A herdr change after the interval rescans, with no timer armed.
 func TestAHerdrChangeAfterTheIntervalRescansWhileShown(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
@@ -410,8 +456,7 @@ func TestARescanWaitsAFullIntervalAfterAFreshScan(t *testing.T) {
 	}
 }
 
-// Port of an_old_scan_is_not_refreshed_by_herdr_while_hidden, and of
-// the_timer_is_off_while_the_window_is_hidden: nothing is scheduled.
+// Port of an_old_scan_is_not_refreshed_by_herdr_while_hidden.
 func TestAnOldScanIsNotRefreshedByHerdrWhileHidden(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
@@ -988,9 +1033,186 @@ func TestAttachPutsTheSpacesColumnInTheSidebar(t *testing.T) {
 	if f.SpacesList == nil || f.Slots.Spaces == nil {
 		t.Fatal("Attach should make the spaces list")
 	}
+	if !f.SpacesList.timerShown {
+		t.Error("the window is shown, so the rescan timer should run")
+	}
+	w.visible = false
+	f.Visibility.Set(false)
+	if f.SpacesList.timerShown {
+		t.Error("the window is hidden, so the rescan timer should stop")
+	}
 	f.syncHerdr()
 	tt := ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)
 	if _, ok := tt.Find(LabelHostLocal); !ok {
 		t.Errorf("the host card is missing from the sidebar; texts %q", tt.Texts())
+	}
+}
+
+// ---- The rescan timer ----
+
+// shownList starts the timer the way Attach does: shown, with one scan done.
+func shownList(t *testing.T) (*spacesHarness, string, string) {
+	t.Helper()
+	base := canonicalTmp(t)
+	wt, admin := oneWorktree(t, base)
+	h := newSpaces(t, spacesOf(spTree(spPane("w1:p1", wt, nil))))
+	h.list.SetVisible(true)
+	return h, wt, admin
+}
+
+// Port of the_timer_rescans_while_the_window_is_shown.
+func TestTheTimerRescansWhileTheWindowIsShown(t *testing.T) {
+	h, _, _ := shownList(t)
+	if h.list.scans != 1 {
+		t.Fatalf("scans %d, want 1: a fresh scan is not redone when shown", h.list.scans)
+	}
+	h.advance(RescanAfter)
+	if h.list.scans != 2 {
+		t.Errorf("scans %d, want 2", h.list.scans)
+	}
+	h.advance(RescanAfter)
+	if h.list.scans != 3 {
+		t.Errorf("scans %d, want 3", h.list.scans)
+	}
+}
+
+// Port of the_timer_waits_a_full_interval_after_a_fresh_scan.
+func TestTheTimerWaitsAFullIntervalAfterAFreshScan(t *testing.T) {
+	h, wt, _ := shownList(t)
+	h.advance(RescanAfter / 2)
+	h.send(spacesOf(spTree(spPane("w1:p1", wt, nil), spPane("w1:p2", filepath.Join(filepath.Dir(wt), "repo"), nil))))
+	if h.list.scans != 2 {
+		t.Fatalf("scans %d, want 2 (the new cwd, at 5 s)", h.list.scans)
+	}
+	h.advance(RescanAfter / 2)
+	if h.list.scans != 2 {
+		t.Errorf("scans %d at 10 s: the scan at 5 s is fresh", h.list.scans)
+	}
+	h.advance(RescanAfter / 2)
+	if h.list.scans != 3 {
+		t.Errorf("scans %d at 15 s, want a full interval after 5 s", h.list.scans)
+	}
+}
+
+// Port of the_timer_is_off_while_the_window_is_hidden.
+func TestTheTimerIsOffWhileTheWindowIsHidden(t *testing.T) {
+	h, _, _ := shownList(t)
+	h.hidden = true
+	h.list.SetVisible(false)
+	if h.pending() != 0 {
+		t.Errorf("%d timers armed while hidden", h.pending())
+	}
+	h.advance(RescanAfter * 6)
+	if h.list.scans != 1 {
+		t.Errorf("scans %d: hidden, nothing scans", h.list.scans)
+	}
+}
+
+func TestAWindowThatStartsHiddenArmsNoTimer(t *testing.T) {
+	h, _, _ := shownList(t)
+	h.hidden = true
+	h.list.SetVisible(false)
+	h.list.SetVisible(false)
+	if h.pending() != 0 {
+		t.Errorf("%d timers armed", h.pending())
+	}
+}
+
+// Rescan on show: an old scan is redone when the window comes back, without
+// a herdr change.
+func TestShowingTheWindowRescansAnOldScan(t *testing.T) {
+	h, _, admin := shownList(t)
+	h.hidden = true
+	h.list.SetVisible(false)
+	h.advance(RescanAfter * 6)
+	writeFakeFile(t, filepath.Join(admin, "HEAD"), "ref: refs/heads/renamed\n")
+	h.hidden = false
+	h.list.SetVisible(true)
+	if h.list.scans != 2 {
+		t.Errorf("scans %d, want 2: shown with an old scan", h.list.scans)
+	}
+	if got := h.rowOf(0, 0).Branch; got != "renamed" {
+		t.Errorf("branch %q, want renamed", got)
+	}
+}
+
+func TestShowingTheWindowKeepsAFreshScan(t *testing.T) {
+	h, _, _ := shownList(t)
+	h.hidden = true
+	h.list.SetVisible(false)
+	h.advance(RescanAfter / 2)
+	h.hidden = false
+	h.list.SetVisible(true)
+	if h.list.scans != 1 {
+		t.Errorf("scans %d, want 1", h.list.scans)
+	}
+	h.advance(RescanAfter / 2)
+	if h.list.scans != 1 {
+		t.Errorf("scans %d: the wait counts from the show", h.list.scans)
+	}
+	h.advance(RescanAfter / 2)
+	if h.list.scans != 2 {
+		t.Errorf("scans %d, want 2", h.list.scans)
+	}
+}
+
+// Port of a_branch_change_shows_after_the_next_timer_rescan.
+func TestABranchChangeShowsAfterTheNextTimerRescan(t *testing.T) {
+	h, _, admin := shownList(t)
+	writeFakeFile(t, filepath.Join(admin, "HEAD"), "ref: refs/heads/renamed\n")
+	h.advance(RescanAfter / 2)
+	if got := h.rowOf(0, 0).Branch; got != "feature" {
+		t.Errorf("branch %q: not scanned yet", got)
+	}
+	h.advance(RescanAfter / 2)
+	if got := h.rowOf(0, 0).Branch; got != "renamed" {
+		t.Errorf("branch %q, want renamed", got)
+	}
+}
+
+// Port of no_tree_starts_no_scan_however_long_the_timer_runs.
+func TestTheTimerStartsNoScanWithoutATree(t *testing.T) {
+	h := newSpaces(t, herdr.LiveHerdr{State: connected()})
+	h.list.SetVisible(true)
+	h.advance(RescanAfter * 3)
+	if h.list.scans != 0 {
+		t.Errorf("scans %d, want 0", h.list.scans)
+	}
+	if h.pending() != 1 {
+		t.Errorf("%d timers armed, want 1 wake-up per interval", h.pending())
+	}
+}
+
+// Port of losing_the_tree_stops_the_timer_scans.
+func TestLosingTheTreeStopsTheTimerScans(t *testing.T) {
+	h, _, _ := shownList(t)
+	h.send(notRunningLive())
+	h.advance(RescanAfter * 3)
+	if h.list.scans != 1 {
+		t.Errorf("scans %d, want 1", h.list.scans)
+	}
+}
+
+func TestClosingTheListStopsTheTimer(t *testing.T) {
+	h, _, _ := shownList(t)
+	h.list.Close()
+	if h.pending() != 0 {
+		t.Errorf("%d timers armed after Close", h.pending())
+	}
+	h.list.SetVisible(false)
+	h.list.SetVisible(true)
+	if h.pending() != 0 {
+		t.Errorf("%d timers armed after Close and show", h.pending())
+	}
+}
+
+func TestAWakeOfAnEarlierShowIsDropped(t *testing.T) {
+	h, _, _ := shownList(t)
+	old := h.timers[len(h.timers)-1]
+	h.list.SetVisible(false)
+	h.list.SetVisible(true)
+	old.f() // a wake-up that was already queued
+	if h.list.scans != 1 || h.pending() != 1 {
+		t.Errorf("scans %d, timers %d: the stale wake-up must do nothing", h.list.scans, h.pending())
 	}
 }

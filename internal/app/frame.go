@@ -319,8 +319,10 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 		f.Host = host.NewSystem(w.Invalidate)
 	}
 	// The git scan runs on a goroutine and lands through Window.Update.
-	f.SpacesList = NewSpacesList(h, f.Board, f.Host, f.Selection, f.Status,
-		func() bool { return f.Visibility == nil || f.Visibility.Visible() }, w.Update)
+	if f.SpacesList == nil {
+		f.SpacesList = NewSpacesList(h, f.Board, f.Host, f.Selection, f.Status,
+			func() bool { return f.Visibility == nil || f.Visibility.Visible() }, w.Update)
+	}
 	f.Slots.Spaces = f.SpacesList.View
 	f.SpacesList.Sync()
 	if f.Usage == nil {
@@ -330,11 +332,13 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 		h.SetVisible(visible)
 		f.Host.SetVisible(visible)
 		f.Usage.SetVisible(visible)
+		f.SpacesList.SetVisible(visible)
 	})
 	// Visibility starts as visible, so a window that starts hidden is the only change that Watch
 	// reports. The samplers start hidden: tell them the window state now.
 	f.Host.SetVisible(w.IsVisible())
 	f.Usage.SetVisible(w.IsVisible())
+	f.SpacesList.SetVisible(w.IsVisible())
 	unwatch := f.Visibility.Watch(w)
 	return func() {
 		unwatch()
@@ -342,6 +346,7 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 		f.Outbox.ReleaseForQuit()
 		f.Outbox.Wait()
 		h.Close()
+		f.SpacesList.Close()
 		f.Host.Close()
 		f.Usage.Close()
 	}

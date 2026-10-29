@@ -28,9 +28,9 @@ import (
 	"github.com/contursofran/contr/internal/herdr"
 )
 
-// RescanAfter is the age at which a scan is old. An old scan is redone on the
-// next herdr change while the window is shown, so that a changed branch
-// appears. There is no timer (D15).
+// RescanAfter is the age at which a scan is old, and the time between rescans
+// while the window is shown, so that a changed branch appears (D15). An old
+// scan is also redone on the next herdr change and when the window is shown.
 const RescanAfter = 10 * time.Second
 
 // Element labels of the spaces column.
@@ -121,6 +121,8 @@ type SpacesList struct {
 	// post runs fn on the UI thread (Window.Update). Nil runs it at once.
 	post func(func())
 	now  func() time.Time
+	// afterFunc arms the rescan timer. Tests replace it with a fake clock.
+	afterFunc func(d time.Duration, f func()) stopper
 
 	groups []spaces.RepoGroup
 	online bool
@@ -135,6 +137,14 @@ type SpacesList struct {
 	// an older generation is dropped, so only the newest result lands.
 	gen   uint64
 	scans int
+
+	// The rescan timer (D15). It runs only while the window is shown.
+	timerShown bool
+	shownAt    time.Time
+	timer      stopper
+	// timerGen counts show and hide changes; a wake-up of an older cycle stops.
+	timerGen uint64
+	closed   bool
 	// builds counts the builds of each row by root. Tests read it.
 	builds map[string]int
 }
@@ -152,6 +162,7 @@ func NewSpacesList(src liveSource, b *Board, h hostSource, selection *state.Sele
 		src: src, board: b, host: h, selection: selection, status: status, focus: FocusInBackground,
 		visible: visible, post: post, scanFn: git.ScanCwds, start: func(f func()) { go f() },
 		now: time.Now, builds: map[string]int{},
+		afterFunc: func(d time.Duration, f func()) stopper { return time.AfterFunc(d, f) },
 	}
 	return l
 }
@@ -180,6 +191,71 @@ func (l *SpacesList) Sync() SpacesChange {
 		l.startScan(cwds)
 	}
 	return l.rebuild(tree)
+}
+
+// SetVisible follows the window. Shown: the list syncs at once, which rescans
+// an old scan, and the timer wakes one interval after the later of the last
+// scan and now. Hidden: the timer stops and nothing else is scheduled, as the
+// host sampler does (D11). Call it on the UI thread.
+func (l *SpacesList) SetVisible(visible bool) SpacesChange {
+	if l.closed || l.timerShown == visible {
+		return SpacesChange{}
+	}
+	l.timerShown = visible
+	l.timerGen++
+	l.stopTimer()
+	if !visible {
+		return SpacesChange{}
+	}
+	l.shownAt = l.now()
+	change := l.Sync()
+	l.armTimer()
+	return change
+}
+
+// Close stops the timer for good.
+func (l *SpacesList) Close() {
+	l.closed = true
+	l.timerGen++
+	l.stopTimer()
+}
+
+func (l *SpacesList) stopTimer() {
+	if l.timer != nil {
+		l.timer.Stop()
+		l.timer = nil
+	}
+}
+
+// wait is the time to the next wake-up: one interval after the later of the
+// last scan and the moment the window was shown. Without cwds nothing is
+// scanned, so it is one interval.
+func (l *SpacesList) wait() time.Duration {
+	if len(l.scanned) == 0 {
+		return RescanAfter
+	}
+	base := l.shownAt
+	if l.hasScan && l.lastScan.After(base) {
+		base = l.lastScan
+	}
+	return max(RescanAfter-l.now().Sub(base), 0)
+}
+
+func (l *SpacesList) armTimer() {
+	gen := l.timerGen
+	l.timer = l.afterFunc(l.wait(), func() { l.later(func() { l.wake(gen) }) })
+}
+
+// wake is a timer wake-up, on the UI thread: it rescans the same cwds when
+// the scan is old, then arms the next wake-up.
+func (l *SpacesList) wake(gen uint64) {
+	if gen != l.timerGen || !l.timerShown || l.closed {
+		return
+	}
+	if len(l.scanned) > 0 && l.stale() {
+		l.startScan(l.scanned)
+	}
+	l.armTimer()
 }
 
 func (l *SpacesList) tree() *herdr.HerdrTree {
@@ -266,10 +342,10 @@ func (l *SpacesList) diff(groups []spaces.RepoGroup, selected string) SpacesChan
 			return change
 		}
 	}
+	marked := func(id, sel string) bool { return sel != "" && id == sel }
 	for g := range groups {
 		for r, row := range groups[g].Rows {
 			old := l.groups[g].Rows[r]
-			marked := func(id, sel string) bool { return sel != "" && id == sel }
 			if !reflect.DeepEqual(old, row) || marked(old.ID(), l.shown) != marked(row.ID(), selected) {
 				change.Rows = append(change.Rows, RowRef{g, r})
 			}
