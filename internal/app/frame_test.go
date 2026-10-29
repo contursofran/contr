@@ -226,13 +226,18 @@ func TestAFrameRedrawDoesNotRenderTheTerminalAgain(t *testing.T) {
 	}
 }
 
-// fakeWindow is a Window the test drives.
+// fakeWindow is a Window the test drives. Update queues fn, as MyGo does:
+// the test runs the queue with flush on its own goroutine, so no herdr or
+// board goroutine runs view code.
 type fakeWindow struct {
 	visible, focused bool
 	focus, blur      func()
 	show, hide       func()
 	minimize, restor func()
 	invalidated      int
+
+	mu      sync.Mutex
+	updates []func()
 }
 
 func (w *fakeWindow) IsVisible() bool { return w.visible }
@@ -245,8 +250,32 @@ func (w *fakeWindow) OnBlur(fn func()) func() {
 	w.blur = fn
 	return func() { w.blur = nil }
 }
-func (w *fakeWindow) Invalidate()      { w.invalidated++ }
-func (w *fakeWindow) Update(fn func()) { fn() }
+func (w *fakeWindow) Invalidate() { w.invalidated++ }
+func (w *fakeWindow) Update(fn func()) {
+	w.mu.Lock()
+	w.updates = append(w.updates, fn)
+	w.mu.Unlock()
+}
+
+// queued is the number of funcs that wait in the Update queue.
+func (w *fakeWindow) queued() int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return len(w.updates)
+}
+
+// flush runs the queued funcs on the caller's goroutine, as the UI thread
+// runs Window.Update funcs.
+func (w *fakeWindow) flush() {
+	w.mu.Lock()
+	fns := w.updates
+	w.updates = nil
+	w.mu.Unlock()
+	for _, fn := range fns {
+		fn()
+	}
+}
+
 func (w *fakeWindow) OnShow(fn func()) func() {
 	w.show = fn
 	return func() { w.show = nil }
@@ -262,6 +291,30 @@ func (w *fakeWindow) OnMinimize(fn func()) func() {
 func (w *fakeWindow) OnRestore(fn func()) func() {
 	w.restor = fn
 	return func() { w.restor = nil }
+}
+
+// A herdr change reaches the views only through Window.Update: the herdr
+// goroutine queues the sync and does not run it. Before the fix the fake ran
+// the sync on the herdr goroutine, which raced SetVisible under -race.
+func TestAttachSendsHerdrChangesThroughWindowUpdate(t *testing.T) {
+	w := &fakeWindow{visible: true}
+	f := NewFrame(nil)
+	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
+	f.Usage = usage.NewSampler(usage.Unread, nil)
+	stop := f.Attach(context.Background(), w, herdr.SocketTarget(filepath.Join(t.TempDir(), "missing.sock")))
+	defer stop()
+	deadline := time.Now().Add(2 * time.Second)
+	for w.queued() == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("the herdr change should queue a sync with Window.Update")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	// The views stay on this goroutine while the queue runs.
+	w.hide()
+	w.flush()
+	w.show()
+	f.SpacesList.Sync()
 }
 
 func TestAttachWiresTheStateToTheWindow(t *testing.T) {
