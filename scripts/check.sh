@@ -16,4 +16,7 @@ go test -race ./...
 
 # MyGo needs no cgo, and contr must not add any.
 CGO_ENABLED=0 go build -o /dev/null ./cmd/contr
+# The bundle and install scripts, with dummy binaries. They write only under tmp/.
+scripts/test-bundle.sh
+scripts/test-install.sh
 echo "check: ok"

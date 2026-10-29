@@ -94,4 +94,5 @@ the control itself; it then becomes a view test or an e2e test.
 | M6 | Done (M6.1). The panel toggle sits right of split, as DESIGN.md orders them. |
 | M9 | In progress |
 | M11 | Done (M11). The usage text has no `dev` line (D5). The traffic-light inset is not set: MyGo v0.7.3 has no option for it. |
-| M12–M13 | Not started |
+| M12 | Done (M12). `go build` replaces cargo in `bundle.sh` (D17). `scripts/check.sh` runs both script tests in temp dirs. |
+| M13 | Not started |
