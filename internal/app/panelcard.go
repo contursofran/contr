@@ -1,4 +1,4 @@
-// Ported from the Rust contr module board_panel.
+// Ported from the Rust contr modules board_panel and board_card.
 
 package app
 
@@ -63,6 +63,8 @@ func (p *BoardPanel) syncPicks() {
 			key = shown.Key
 		}
 	}
+	// The return value only says if the pick changed. The caller redraws the
+	// panel in any case, so it is not needed here.
 	p.work.SetPicked(key)
 }
 
