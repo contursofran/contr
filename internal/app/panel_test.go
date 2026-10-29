@@ -589,3 +589,15 @@ func TestTheWrapLabelFollowsTheNextSnapshot(t *testing.T) {
 		t.Fatalf("queued = %v, %v", got, ok)
 	}
 }
+
+func TestWrapLabelColourFollowsClickAndHover(t *testing.T) {
+	if wrapColour(false, true) != theme.TextDim || wrapColour(false, false) != theme.TextDim {
+		t.Error("an inert wrap label must be dim")
+	}
+	if wrapColour(true, false) != theme.Text2 {
+		t.Error("a clickable wrap label must be Text2")
+	}
+	if wrapColour(true, true) != theme.Text {
+		t.Error("a hovered wrap label must be Text")
+	}
+}

@@ -352,13 +352,26 @@ func switchSegment(c *ui.Context, label, text string, on bool, click func()) {
 	el.Children(func() { ui.Text(c, text) })
 }
 
-// wrapLabel adds the wrap label on the right of the header. It is dim. It
-// is a button when click is set, else inert.
+// wrapColour is the colour of the wrap label: dim when inert, else Text2,
+// and Text under the pointer.
+func wrapColour(clickable, hovered bool) uint32 {
+	switch {
+	case !clickable:
+		return theme.TextDim
+	case hovered:
+		return theme.Text
+	}
+	return theme.Text2
+}
+
+// wrapLabel adds the wrap label on the right of the header. It is a button
+// when click is set (Text2, Text on hover), else inert and dim.
 func wrapLabel(c *ui.Context, wrapUp bool, click ActionClick) {
-	text := func() { ui.Text(c, WrapText(wrapUp)).TextColor(theme.Color(theme.TextDim)) }
+	text := func() { ui.Text(c, WrapText(wrapUp)) }
 	if click == nil {
-		ui.Row(c).Label(LabelBoardWrap).Children(text)
+		ui.Row(c).Label(LabelBoardWrap).TextColor(theme.Color(wrapColour(false, false))).Children(text)
 		return
 	}
-	ui.ButtonBase(c).Label(LabelBoardWrap).Cursor(ui.CursorPointer).OnClick(click).Children(text)
+	b := ui.ButtonBase(c).Label(LabelBoardWrap).Cursor(ui.CursorPointer).OnClick(click)
+	b.TextColor(theme.Color(wrapColour(true, b.Hovered()))).Children(text)
 }
