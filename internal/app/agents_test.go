@@ -625,7 +625,8 @@ func TestActivateGivesTheStatusMessageToTheFocus(t *testing.T) {
 }
 
 func TestAttachMakesTheBoardAndTheAgentsList(t *testing.T) {
-	w := &fakeWindow{visible: true}
+	// Update queues nothing here: the test runs the sync itself on this goroutine.
+	w := &queueWindow{fakeWindow: fakeWindow{visible: true}}
 	f := NewFrame(nil)
 	stop := f.Attach(context.Background(), w, herdr.SocketTarget(filepath.Join(t.TempDir(), "missing.sock")))
 	defer stop()
@@ -638,3 +639,9 @@ func TestAttachMakesTheBoardAndTheAgentsList(t *testing.T) {
 		t.Errorf("bridge %+v, want none without a tree", v.Bridge)
 	}
 }
+
+// queueWindow drops the funcs given to Update, so no other goroutine runs
+// view code during a test.
+type queueWindow struct{ fakeWindow }
+
+func (w *queueWindow) Update(func()) {}
