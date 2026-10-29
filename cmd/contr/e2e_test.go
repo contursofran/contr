@@ -52,7 +52,9 @@ func TestFrameWindowCapture(t *testing.T) {
 	defer os.RemoveAll(dir)
 	sock := filepath.Join(dir, "a.sock")
 	app := exec.Command(bin)
-	app.Env = append(os.Environ(), "MYGO_AUTOMATION="+sock)
+	// The app must not read the real usage files.
+	app.Env = append(os.Environ(), "MYGO_AUTOMATION="+sock,
+		"CONTR_STATE_DIR="+filepath.Join(dir, "state"), "CODEX_HOME="+filepath.Join(dir, "codex"))
 	if err := app.Start(); err != nil {
 		t.Fatal(err)
 	}
