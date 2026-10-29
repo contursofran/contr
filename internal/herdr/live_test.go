@@ -35,7 +35,7 @@ func liveSocket(t *testing.T) string {
 	t.Helper()
 	sock := os.Getenv("HERDR_SOCKET_PATH")
 	if sock == "" || os.Getenv("CONTR_SURFACE") == "" {
-		t.Skip("no dev herdr: run eval \"$(scripts/dev-herdr.sh)\" first")
+		t.Skip("no dev herdr (check TMPDIR too): run eval \"$(scripts/dev-herdr.sh)\" first")
 	}
 	base := os.Getenv("TMPDIR")
 	if base == "" {
@@ -93,39 +93,71 @@ func waitGone(t *testing.T, sock string) {
 	}
 }
 
-// firstPane returns the id of the first pane in the server's snapshot. It
-// creates a workspace first when the server has none.
-func firstPane(t *testing.T, sock string) string {
+// snapshotPaneIDs returns the pane ids in the server's snapshot.
+func snapshotPaneIDs(t *testing.T, sock string) []string {
 	t.Helper()
-	pane := func() string {
-		raw, err := liveCall(sock, "session.snapshot", map[string]any{})
-		if err != nil {
-			t.Fatalf("take a snapshot: %v", err)
-		}
-		var r struct {
-			Snapshot struct {
-				Panes []struct {
-					PaneID string `json:"pane_id"`
-				} `json:"panes"`
-			} `json:"snapshot"`
-		}
-		if err := json.Unmarshal(raw, &r); err != nil {
-			t.Fatalf("read the snapshot: %v: %s", err, raw)
-		}
-		if len(r.Snapshot.Panes) == 0 {
-			return ""
-		}
-		return r.Snapshot.Panes[0].PaneID
+	raw, err := liveCall(sock, "session.snapshot", map[string]any{})
+	if err != nil {
+		t.Fatalf("take a snapshot: %v", err)
 	}
-	if id := pane(); id != "" {
-		return id
+	var r struct {
+		Snapshot struct {
+			Panes []struct {
+				PaneID string `json:"pane_id"`
+			} `json:"panes"`
+		} `json:"snapshot"`
 	}
+	if err := json.Unmarshal(raw, &r); err != nil {
+		t.Fatalf("read the snapshot: %v: %s", err, raw)
+	}
+	ids := make([]string, 0, len(r.Snapshot.Panes))
+	for _, p := range r.Snapshot.Panes {
+		ids = append(ids, p.PaneID)
+	}
+	return ids
+}
+
+// newPane creates a workspace and returns the id of its pane: the one pane id
+// that the snapshot did not hold before. Each test uses its own pane, so that
+// agent states from other runs cannot satisfy a wait.
+func newPane(t *testing.T, sock string) string {
+	t.Helper()
+	before := snapshotPaneIDs(t, sock)
 	createWorkspace(t, sock)
-	id := pane()
-	if id == "" {
-		t.Fatal("no pane after workspace.create")
+	var fresh []string
+	for _, id := range snapshotPaneIDs(t, sock) {
+		if !contains(before, id) {
+			fresh = append(fresh, id)
+		}
 	}
-	return id
+	if len(fresh) != 1 {
+		t.Fatalf("workspace.create made %d new panes, want 1: %v", len(fresh), fresh)
+	}
+	return fresh[0]
+}
+
+// waitPlainPane waits for a tree with the pane and checks that the pane is
+// alone in its workspace and tab, and that no agent runs in it.
+func waitPlainPane(t *testing.T, ch <-chan Update, paneID string) {
+	t.Helper()
+	u := waitFor(t, ch, 10*time.Second, "a tree with the new pane", func(u Update) bool {
+		return u.Tree != nil && contains(u.Tree.PaneIDs(), paneID)
+	})
+	for _, w := range u.Tree.Workspaces {
+		for _, tab := range w.Tabs {
+			for _, p := range tab.Panes {
+				if p.ID != paneID {
+					continue
+				}
+				if len(w.Tabs) != 1 || len(tab.Panes) != 1 {
+					t.Errorf("new workspace has %d tabs and %d panes, want 1 and 1", len(w.Tabs), len(tab.Panes))
+				}
+			}
+		}
+	}
+	if a := agentOf(u.Tree, paneID); a != nil {
+		t.Errorf("a plain pane has the agent %+v, want none", *a)
+	}
 }
 
 func createWorkspace(t *testing.T, sock string) {
@@ -222,16 +254,14 @@ func TestIsolatedServerReportsTreeAgentStatusAndReconnects(t *testing.T) {
 	sock := liveSocket(t)
 	devHerdr(t) // start, or keep the running server
 	waitAnswering(t, sock)
-	paneID := firstPane(t, sock)
+	paneID := newPane(t, sock)
 
 	_, ch := startLiveReader(t, sock)
 	u := waitFor(t, ch, 10*time.Second, "Connected", isState(Connected))
 	if u.State.ServerVersion == "" {
 		t.Error("herdr reported no version")
 	}
-	waitFor(t, ch, 10*time.Second, "a tree with the pane", func(u Update) bool {
-		return u.Tree != nil && contains(u.Tree.PaneIDs(), paneID)
-	})
+	waitPlainPane(t, ch, paneID)
 
 	for _, state := range []AgentState{StateWorking, StateBlocked} {
 		reportAndWait(t, sock, ch, paneID, state, 3*time.Second)
@@ -265,11 +295,12 @@ func stopAndNewServerReachTheReader(t *testing.T, visible bool) {
 	sock := liveSocket(t)
 	devHerdr(t)
 	waitAnswering(t, sock)
-	paneID := firstPane(t, sock)
+	paneID := newPane(t, sock)
 
 	r, ch := startLiveReader(t, sock)
 	r.SetVisible(visible)
 	waitFor(t, ch, 10*time.Second, "Connected", isState(Connected))
+	waitPlainPane(t, ch, paneID)
 	reportAndWait(t, sock, ch, paneID, StateIdle, 5*time.Second)
 
 	devHerdr(t, "stop")
@@ -278,7 +309,8 @@ func stopAndNewServerReachTheReader(t *testing.T, visible bool) {
 	devHerdr(t)
 	waitAnswering(t, sock)
 	waitFor(t, ch, 15*time.Second, "Connected to the new server", isState(Connected))
-	paneID = firstPane(t, sock)
+	paneID = newPane(t, sock)
+	waitPlainPane(t, ch, paneID)
 	reportAndWait(t, sock, ch, paneID, StateWorking, 5*time.Second)
 }
 
