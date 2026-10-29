@@ -407,7 +407,7 @@ func TestTheReportTabFollowsAPickedRow(t *testing.T) {
 	}
 }
 
-func TestTheReportTabKeepsItsRowWhenAnItemIsPicked(t *testing.T) {
+func TestTheReportTabKeepsItsRowWhenAnItemPickIsSet(t *testing.T) {
 	r := newPanelRig(t, panelFixture(t), "", testBridge())
 	r.showReport(row640)
 	r.p.SetPick(ItemPick("D7"))
