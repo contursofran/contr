@@ -178,9 +178,12 @@ func TestTheNeedsSectionShowsTheSnapshotAndEndsWhereTheCardBegins(t *testing.T) 
 	if !r.has(NeedLabel(snap.Items[3])) {
 		t.Errorf("no resolved row in %v", r.tt.Texts())
 	}
-	section, card := r.rect(LabelNeedsSection), r.rect(LabelCard)
-	if got := section.Y + section.H; got != card.Y {
-		t.Errorf("the section ends at %v, the card begins at %v", got, card.Y)
+	// The item card shares its name with the item's row, so the card's top is
+	// found from the panel bottom: the card is a fixed height, one margin up.
+	section, host := r.rect(LabelNeedsSection), r.rect("panel host")
+	cardTop := host.Y + host.H - theme.AnswerMargin - theme.AnswerCardHeight
+	if got := section.Y + section.H; got != cardTop {
+		t.Errorf("the section ends at %v, the card begins at %v", got, cardTop)
 	}
 }
 

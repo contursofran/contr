@@ -42,6 +42,7 @@ type panelRig struct {
 	clock *fakeTimers
 	dir   string
 	tree  *herdr.HerdrTree
+	c     *ui.Context // the context of the last frame
 
 	mu      sync.Mutex
 	focused []string
@@ -127,6 +128,7 @@ func (r *panelRig) start() {
 // host holds the panel in a column of the frame's width, as the frame does, so
 // the panel's bounds are the real ones in a window of the reference size.
 func (r *panelRig) host(c *ui.Context) {
+	r.c = c
 	ui.Row(c).Fill().Children(func() {
 		ui.Box(c).Label("panel host").Width(theme.PanelWidth).FillHeight().Shrink(0).Children(func() {
 			r.p.View(c)
