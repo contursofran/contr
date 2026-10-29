@@ -92,6 +92,9 @@ func windowOptions(icons bool) mygo.WindowOptions {
 // last window closes. It returns the exit code.
 func openWindow(icons bool) int {
 	registerFonts(assets.Fonts, ui.RegisterFont)
+	if err := disablePressAndHold(); err != nil {
+		log.Printf("contr: press and hold stays on: %v", err)
+	}
 	app.InitActions()
 	var frame *app.Frame
 	opts := windowOptions(icons)
