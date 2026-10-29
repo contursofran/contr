@@ -1,4 +1,4 @@
-// Adapted from Herdr UI (Apache-2.0); changes: the pointer gesture and its order are adapted; ported to Go.
+// Adapted from Herdr UI (Apache-2.0); changes: one surface and one pane selection, no scrollback or copy on select; the pointer gesture and its order are adapted; ported to Go.
 
 package terminal
 
@@ -66,7 +66,8 @@ func (v *View) endDrag() {
 // gridPosition is the pointer in pixels from the top-left corner of cell
 // (0, 0), as the selection model takes it. ok is false before the first
 // layout and with no surface. Pointer coordinates are relative to the grid
-// box.
+// box. Rust needs only the origin here; Go also needs the surface, and every
+// caller checks it first.
 func (v *View) gridPosition(ev ui.InputEvent) (x, y float32, ok bool) {
 	if !v.hasMetrics || v.surface == nil {
 		return 0, 0, false
