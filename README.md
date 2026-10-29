@@ -1,8 +1,7 @@
-# contr (Go)
+# contr
 
-A minimal native client for herdr, with the herdr-agents board built in.
-This is the Go port of the Rust and GPUI contr. It uses MyGo's native UI.
-When it reaches parity, it replaces the Rust app.
+A minimal native macOS client for herdr, with the herdr-agents board built
+in. It is written in Go and uses MyGo's native UI.
 
 - **Left:** spaces, repos and worktrees, and the running agents, each with a
   status icon.
@@ -12,9 +11,19 @@ When it reaches parity, it replaces the Rust app.
   you, and a box to answer it.
 - **Bottom:** plan usage (Claude, Codex), CPU and memory.
 
-State: milestone 0, an empty window. See `docs/PORT-PLAN.md`.
+## Requirements
 
-## Build and run
+- macOS on Apple silicon (arm64).
+- herdr, installed and running.
+
+## Install
+
+```sh
+scripts/bundle.sh      # builds dist/bundle/contr.app
+scripts/install.sh     # installs to /Applications and links `contr` in ~/.local/bin
+```
+
+## Build and check
 
 Go downloads the toolchain that `go.mod` names.
 
@@ -23,10 +32,12 @@ go run ./cmd/contr     # opens the window
 scripts/check.sh       # gofmt, vet, tests with -race, build without cgo
 ```
 
+The Rust and GPUI app is at tag `rust-final`.
+
 ## Docs
 
 - `docs/DESIGN.md`: the UI
-- `docs/PORT-PLAN.md`: milestones and their state
 - `docs/DECISIONS.md`: decisions
+- `docs/PORT-PLAN.md`: how the Go port was built
 - `docs/BENCHMARKS.md`: the measurements behind the move to Go
 - `AGENTS.md`: rules for agents
