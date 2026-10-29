@@ -44,7 +44,7 @@ const (
 	sideRight
 )
 
-// edge is a pointer position on the cell grid. It orders by reading order, so
+// cellEdge is a pointer position on the cell grid. It orders by reading order, so
 // the two ends of a drag sort into a start and an end whichever way it was
 // made.
 type cellEdge struct {
@@ -76,14 +76,16 @@ type region struct {
 	rowStart, rowEnd int
 }
 
-// regionOf returns the region of r, or false for a rect with no cells.
+// regionOf returns the region of r, or false for a rect with no cells. The
+// ends saturate at 65535, so a rect past the wire's limit cannot wrap when a
+// row span is cast to uint16.
 func regionOf(r endpoint.Rect) (region, bool) {
 	if r.Width == 0 || r.Height == 0 {
 		return region{}, false
 	}
 	return region{
-		colStart: int(r.X), colEnd: int(r.X) + int(r.Width),
-		rowStart: int(r.Y), rowEnd: int(r.Y) + int(r.Height),
+		colStart: int(r.X), colEnd: min(int(r.X)+int(r.Width), math.MaxUint16),
+		rowStart: int(r.Y), rowEnd: min(int(r.Y)+int(r.Height), math.MaxUint16),
 	}, true
 }
 
@@ -331,6 +333,17 @@ func BeginSelection(s *endpoint.Surface, m Metrics, x, y float32, clicks int) *S
 		head:     last,
 		dragging: true,
 	}
+}
+
+// Equal reports whether s and o select the same cells in the same state. The
+// remembered text (seen) is left out: it is set only on release.
+func (s *Selection) Equal(o *Selection) bool {
+	if s == nil || o == nil {
+		return s == o
+	}
+	return s.paneID == o.paneID && s.rect == o.rect && s.unit == o.unit &&
+		s.origin == o.origin && s.anchor == o.anchor && s.head == o.head &&
+		s.dragging == o.dragging
 }
 
 // PaneID returns the pane the selection lies in.

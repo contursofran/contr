@@ -42,7 +42,7 @@ run in parallel.
 | M10 | Status bar: plan usage, host CPU and memory, `contr statusline` | `contr-usage/src/*` (1,754), `usage.rs` (517), `host.rs` (494), `status_bar.rs` (721) | ~100 | `internal/usage`, `internal/app` | M4 |
 | M11 | Command line: `contr`, `--icons`, `statusline`, `--help` | `main.rs` (520) | ~10 | `cmd/contr` | M1, M10 |
 | M12 | App bundle and install script | `scripts/bundle.sh`, `scripts/install.sh`, their tests | — | `scripts` | M11 |
-| M13 | Parity run, owner comparison, move to the contr repository | — | — | — | all |
+| M13 | Owner test and move to the contr repository (no side-by-side run, D25) | — | — | — | all |
 
 Not ported (decision D5): `dev_client.rs`, `dev_protocol.rs`,
 `dev_control/*` (about 3,900 lines, 93 tests). MyGo's automation plugin does
@@ -71,10 +71,9 @@ the control itself; it then becomes a view test or an e2e test.
 - **M10:** usage sources read Claude Code's status line input and Codex's
   rollout logs. Tests use fixtures only. They never read `~/.claude` or
   `~/.codex`.
-- **M13:** run the Rust and Go apps side by side against one
-  `scripts/dev-herdr.sh` server. Compare each view, then measure idle and
-  load CPU and memory as in `docs/BENCHMARKS.md`. Then the owner's one-day
-  test. If the owner finds the Go app better, the code moves into the
+- **M13:** measure idle and load CPU and memory of the Go app as in
+  `docs/BENCHMARKS.md`. Then the owner's one-day test. There is no
+  side-by-side run of the Rust and Go apps (D25). If the owner finds the Go app better, the code moves into the
   `contursofran/contr` repository in place of the Rust app, and CI starts
   there (decision D8).
 

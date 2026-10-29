@@ -513,3 +513,57 @@ func TestAUnitFollowsTheClickCount(t *testing.T) {
 		}
 	}
 }
+
+func TestSelectionEqualComparesTheCellsAndTheState(t *testing.T) {
+	s := selScreen([][]endpoint.Cell{selCells("abcdef")}, selPane("p", 0, 0, 6, 1))
+	a := selDrag(t, s, selLeft(1, 0), selRight(3, 0))
+	b := selDrag(t, s, selLeft(1, 0), selRight(3, 0))
+	if !a.Equal(b) {
+		t.Error("the same drag is not equal")
+	}
+	b.seen = nil
+	if !a.Equal(b) {
+		t.Error("the remembered text must not count")
+	}
+	if a.Equal(selDrag(t, s, selLeft(1, 0), selRight(4, 0))) {
+		t.Error("other cells are equal")
+	}
+	if a.Equal(selPress(t, s, selLeft(1, 0), 1)) {
+		t.Error("a drag in progress equals a released one")
+	}
+	if a.Equal(selPress(t, s, selLeft(1, 0), 2)) {
+		t.Error("another unit is equal")
+	}
+	other := selScreen([][]endpoint.Cell{selCells("abcdef")}, selPane("q", 0, 0, 6, 1))
+	if a.Equal(selDrag(t, other, selLeft(1, 0), selRight(3, 0))) {
+		t.Error("another pane is equal")
+	}
+	moved := selScreen([][]endpoint.Cell{selCells("abcdef")}, selPane("p", 0, 0, 5, 1))
+	if a.Equal(selDrag(t, moved, selLeft(1, 0), selRight(3, 0))) {
+		t.Error("another rect is equal")
+	}
+	var none *Selection
+	if !none.Equal(nil) || a.Equal(nil) || none.Equal(a) {
+		t.Error("nil is equal only to nil")
+	}
+}
+
+func TestARectPastTheWireLimitSaturatesInsteadOfWrapping(t *testing.T) {
+	r, ok := regionOf(endpoint.Rect{X: 65530, Y: 65530, Width: 100, Height: 100})
+	if !ok || r.colEnd != math.MaxUint16 || r.rowEnd != math.MaxUint16 {
+		t.Fatalf("region = %+v, %v; want ends of 65535", r, ok)
+	}
+	s := &Selection{
+		anchor: cellEdge{row: 65530, col: 65530, side: sideLeft},
+		head:   cellEdge{row: 70000, col: 70000, side: sideRight},
+	}
+	got := s.spans(r)
+	if len(got) != 5 {
+		t.Fatalf("spans = %v, want rows 65530 to 65534", got)
+	}
+	for i, sp := range got {
+		if want := uint16(65530 + i); sp.Row != want || sp.End != math.MaxUint16 {
+			t.Errorf("span %d = %v, want row %d ending at 65535", i, sp, want)
+		}
+	}
+}
