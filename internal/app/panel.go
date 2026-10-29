@@ -94,7 +94,8 @@ type BoardPanel struct {
 
 // NewBoardPanel returns a panel on the Board tab.
 func NewBoardPanel(d PanelDeps) *BoardPanel {
-	p := &BoardPanel{deps: d, work: NewWorkList(nil)}
+	p := &BoardPanel{deps: d}
+	p.work = NewWorkList(func(key string) { p.SetPick(RowPick(key)) })
 	p.report = NewReportView(d.Invalidate)
 	p.report.Open = d.OpenPath
 	p.report.OnBack = p.OpenBoardTab
@@ -127,6 +128,8 @@ func (p *BoardPanel) syncWork(s *board.Snapshot) {
 		rows = s.Rows
 	}
 	p.work.Sync(rows)
+	p.dropGonePick(s)
+	p.syncPicks()
 }
 
 func (p *BoardPanel) invalidate() {
@@ -190,13 +193,6 @@ func (p *BoardPanel) clearClick(rows bool) ActionClick {
 func (p *BoardPanel) ShowReport(rowKey string) {
 	p.reportRow = &rowKey
 	p.enterReportTab()
-}
-
-// SetPick picks pick. The pick is held here; the card and the sections that
-// show it come in a later slice.
-func (p *BoardPanel) SetPick(pick BoardPick) {
-	p.pick = &pick
-	p.invalidate()
 }
 
 // OpenReportTab is the Report tab's click. A picked work row becomes the row
@@ -307,7 +303,7 @@ func (p *BoardPanel) View(c *ui.Context) {
 }
 
 // boardTab adds the summary, the work section, the needs-you section and the
-// answer card. The card is inert in this slice.
+// answer card.
 func (p *BoardPanel) boardTab(c *ui.Context, s *board.Snapshot, problem string) {
 	colour := uint32(theme.Text2)
 	if problem != "" {
@@ -315,8 +311,9 @@ func (p *BoardPanel) boardTab(c *ui.Context, s *board.Snapshot, problem string) 
 	}
 	TextLine(c, LabelBoardSummary, SummaryText(s.Summary, problem), colour)
 	p.work.View(c, s.ClearRows, p.clearClick(true))
-	NeedsSection(c, s.Items, s.NeedCount, s.ClearItems, "", nil, p.clearClick(false))
-	AnswerCard(c, nil, nowMS())
+	NeedsSection(c, p.shownItems(s), s.NeedCount, s.ClearItems, p.pickedItemKey(s),
+		func(key string) { p.SetPick(ItemPick(key)) }, p.clearClick(false))
+	AnswerCard(c, p.currentFace(c), nowMS())
 }
 
 // header adds the Board | Report switch on the left and, with a snapshot, the
