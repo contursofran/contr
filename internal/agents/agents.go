@@ -202,8 +202,14 @@ type Manager struct {
 	cfg  Config
 }
 
-// New returns a manager on core with the profiles of cfg.
+// New returns a manager on core with the profiles of cfg. A relative kit
+// path is made absolute here, because the agent runs in its worktree.
 func New(core Core, cfg Config) *Manager {
+	if cfg.Kit != "" {
+		if abs, err := filepath.Abs(cfg.Kit); err == nil {
+			cfg.Kit = abs
+		}
+	}
 	return &Manager{core: core, cfg: cfg}
 }
 

@@ -251,3 +251,27 @@ func TestAgentsBrokenConfigBlocksOnlySpawn(t *testing.T) {
 		t.Errorf("spawn with a broken config: %d, want 1", code)
 	}
 }
+
+func TestAgentsKitFromTheEnvironment(t *testing.T) {
+	dir := t.TempDir()
+	for _, kit := range []string{"file-kit", "env-kit"} {
+		if err := os.MkdirAll(filepath.Join(dir, kit, "agents"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, kit, "agents", "builder.md"), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	path := filepath.Join(dir, "agents.json")
+	if err := os.WriteFile(path, []byte(`{"kit":"`+filepath.Join(dir, "file-kit")+`"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	core := &cliCore{reply: map[string]any{"terminal.run": worker("t4", "b", "live", nil)}}
+	env := map[string]string{"CONTR_AGENTS_CONFIG": path, "CONTR_KIT": filepath.Join(dir, "env-kit")}
+	if code, _, errs := run(t, core, env, "spawn", "--name", "b", "--profile", "builder"); code != 0 {
+		t.Fatalf("code %d: %s", code, errs)
+	}
+	if argv := core.params[0]["argv"].([]any); argv[2] != filepath.Join(dir, "env-kit") {
+		t.Errorf("argv = %v, want the CONTR_KIT folder", argv)
+	}
+}

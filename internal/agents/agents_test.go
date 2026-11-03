@@ -396,3 +396,21 @@ func TestLoadConfigReadsTheKit(t *testing.T) {
 		t.Errorf("cfg = %+v, %v", cfg, err)
 	}
 }
+
+func TestNewMakesARelativeKitAbsolute(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	if err := os.MkdirAll(filepath.Join("kit", "agents"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join("kit", "agents", "builder.md"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := DefaultConfig()
+	cfg.Kit = "kit"
+	got := New(&fakeCore{}, cfg).agentArgv("builder", []string{"claude"})
+	abs, _ := filepath.Abs("kit")
+	if len(got) < 3 || got[2] != abs || !filepath.IsAbs(got[2]) {
+		t.Errorf("argv = %v, want the kit as %s", got, abs)
+	}
+}
