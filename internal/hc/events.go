@@ -3,6 +3,7 @@ package hc
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 )
 
@@ -72,12 +73,13 @@ func (cl *Client) Subscribe(ctx context.Context, f Filter) (*Subscription, error
 
 // deliver runs on the reader goroutine. It waits for the receiver, so a slow
 // receiver slows the reader and the core sends "missed" when it falls behind.
-func (s *Subscription) deliver(m *message) {
+// An event that does not decode ends the connection: Events closes and Err
+// tells why.
+func (s *Subscription) deliver(m *message) error {
 	e := Event{Method: m.Method}
 	if m.Method == "event" && len(m.Params) > 0 {
 		if err := json.Unmarshal(m.Params, &e); err != nil {
-			s.c.fail(err)
-			return
+			return fmt.Errorf("hc: bad event: %w", err)
 		}
 		e.Method = m.Method
 	} else {
@@ -87,6 +89,7 @@ func (s *Subscription) deliver(m *message) {
 	case s.events <- e:
 	case <-s.stop:
 	}
+	return nil
 }
 
 // Events returns the event channel. It is closed when the connection ends.

@@ -253,3 +253,45 @@ func TestCallStopsOnContextAndAfterClose(t *testing.T) {
 		t.Fatalf("after Close: %v", err)
 	}
 }
+
+func TestABadLineEndsTheConnection(t *testing.T) {
+	cl, err := Dial(ctx(t), fakeDialer(t, func(f *fakeConn) {
+		f.hello(1)
+		if _, ok := f.next(); !ok {
+			return
+		}
+		_, _ = f.out.Write([]byte("not json\n"))
+		f.next()
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cl.Close()
+	if err := cl.Call(ctx(t), "terminal.list", nil, nil); !errors.Is(err, ErrClosed) {
+		t.Fatalf("err = %v, want ErrClosed", err)
+	}
+}
+
+func TestCloseTwice(t *testing.T) {
+	closes := 0
+	base := fakeDialer(t, func(f *fakeConn) { f.hello(1); f.next() })
+	dial := func(c context.Context) (Pipe, error) {
+		p, err := base(c)
+		inner := p.Close
+		p.Close = func() error { closes++; return inner() }
+		return p, err
+	}
+	cl, err := Dial(ctx(t), dial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cl.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := cl.Close(); err != nil {
+		t.Fatalf("second Close: %v", err)
+	}
+	if closes != 1 {
+		t.Errorf("pipe closed %d times, want 1", closes)
+	}
+}

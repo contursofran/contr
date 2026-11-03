@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"strings"
 	"sync"
 )
 
@@ -26,11 +27,38 @@ const Generation = 1
 var ErrClosed = errors.New("hc: connection closed")
 
 // Pipe is one connection to the core: the requests go to W, the replies and
-// events come from R. Close ends the connection and frees its resources.
+// events come from R. Close is required: it ends the connection, so that R
+// ends, and frees its resources. Stderr, when set, returns the last output of
+// the core's side for error messages.
 type Pipe struct {
-	W     io.Writer
-	R     io.Reader
-	Close func() error
+	W      io.Writer
+	R      io.Reader
+	Close  func() error
+	Stderr func() string
+}
+
+// tail keeps the last bytes written to it.
+type tail struct {
+	mu  sync.Mutex
+	buf []byte
+}
+
+const tailMax = 2048
+
+func (t *tail) Write(p []byte) (int, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.buf = append(t.buf, p...)
+	if len(t.buf) > tailMax {
+		t.buf = t.buf[len(t.buf)-tailMax:]
+	}
+	return len(p), nil
+}
+
+func (t *tail) String() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return strings.TrimSpace(string(t.buf))
 }
 
 // Dialer opens a new connection to the core.
@@ -55,6 +83,8 @@ func Command(path string, env []string) Dialer {
 		if err != nil {
 			return Pipe{}, err
 		}
+		errs := &tail{}
+		cmd.Stderr = errs
 		if err := cmd.Start(); err != nil {
 			return Pipe{}, fmt.Errorf("hc: start %s connect: %w", path, err)
 		}
@@ -67,7 +97,7 @@ func Command(path string, env []string) Dialer {
 				return nil
 			}
 			return err
-		}}, nil
+		}, Stderr: errs.String}, nil
 	}
 }
 
@@ -134,11 +164,13 @@ type conn struct {
 	closed  bool
 	readErr error
 
-	notify func(*message) // called on the reader goroutine
-	done   chan struct{}
+	notify    func(*message) error // called on the reader goroutine
+	done      chan struct{}
+	closeOnce sync.Once
+	closeErr  error
 }
 
-func newConn(pipe Pipe, notify func(*message)) *conn {
+func newConn(pipe Pipe, notify func(*message) error) *conn {
 	c := &conn{pipe: pipe, enc: json.NewEncoder(pipe.W), pending: map[uint64]chan *message{}, notify: notify, done: make(chan struct{})}
 	go c.read()
 	return c
@@ -156,7 +188,10 @@ func (c *conn) read() {
 		}
 		if m.ID == nil {
 			if m.Method != "" && c.notify != nil {
-				c.notify(&m)
+				if err := c.notify(&m); err != nil {
+					c.fail(err)
+					return
+				}
 			}
 			continue
 		}
@@ -171,6 +206,11 @@ func (c *conn) read() {
 	err := sc.Err()
 	if err == nil {
 		err = io.EOF
+	}
+	if c.pipe.Stderr != nil {
+		if msg := c.pipe.Stderr(); msg != "" {
+			err = fmt.Errorf("hc: connection ended: %s: %w", msg, err)
+		}
 	}
 	c.fail(err)
 }
@@ -235,16 +275,18 @@ func (c *conn) drop(id uint64) {
 	c.mu.Unlock()
 }
 
+// close ends the connection once; later calls return the same error.
 func (c *conn) close() error {
-	c.mu.Lock()
-	c.closed = true
-	c.mu.Unlock()
-	var err error
-	if c.pipe.Close != nil {
-		err = c.pipe.Close()
-	}
-	<-c.done
-	return err
+	c.closeOnce.Do(func() {
+		c.mu.Lock()
+		c.closed = true
+		c.mu.Unlock()
+		if c.pipe.Close != nil {
+			c.closeErr = c.pipe.Close()
+		}
+		<-c.done
+	})
+	return c.closeErr
 }
 
 // Hello is the reply to the handshake.
@@ -298,7 +340,8 @@ func (cl *Client) Call(ctx context.Context, method string, params, result any) e
 	return cl.c.call(ctx, method, params, result)
 }
 
-// Close ends the call connection. Pending calls end with ErrClosed.
+// Close ends the call connection. Pending calls end with ErrClosed. A second
+// Close returns the result of the first.
 func (cl *Client) Close() error {
 	return cl.c.close()
 }

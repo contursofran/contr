@@ -1,7 +1,9 @@
 package hc
 
 import (
+	"context"
 	"encoding/json"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -182,5 +184,72 @@ func TestCloseDoesNotWaitForAReceiver(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("Close blocked on a full event channel")
+	}
+}
+
+func TestABadEventEndsTheSubscription(t *testing.T) {
+	cl, err := Dial(ctx(t), fakeDialer(t, func(f *fakeConn) {
+		f.hello(1)
+		r, ok := f.next()
+		if !ok {
+			return
+		}
+		if r.Method != "events.subscribe" {
+			f.next()
+			return
+		}
+		f.reply(r.ID, map[string]any{"seq": 0, "terminals": []any{}})
+		f.notify("event", map[string]any{"seq": "not a number"})
+		f.notify("event", map[string]any{"seq": 2, "terminal": "t1", "type": "status"})
+		f.next()
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cl.Close()
+	s, err := cl.Subscribe(ctx(t), Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if e, ok := recv(t, s); ok {
+		t.Fatalf("got %+v after a bad event, want the channel closed", e)
+	}
+	if err := s.Err(); err == nil || !strings.Contains(err.Error(), "bad event") {
+		t.Errorf("Err = %v, want a bad event error", err)
+	}
+}
+
+func TestErrCarriesTheCoreSideOutput(t *testing.T) {
+	base := fakeDialer(t, func(f *fakeConn) {
+		f.hello(1)
+		r, ok := f.next()
+		if !ok {
+			return
+		}
+		if r.Method != "events.subscribe" {
+			f.next()
+			return
+		}
+		f.reply(r.ID, map[string]any{"seq": 0, "terminals": []any{}})
+	})
+	dial := func(c context.Context) (Pipe, error) {
+		p, err := base(c)
+		p.Stderr = func() string { return "core start failed" }
+		return p, err
+	}
+	cl, err := Dial(ctx(t), dial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cl.Close()
+	s, err := cl.Subscribe(ctx(t), Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	recv(t, s)
+	if err := s.Err(); err == nil || !strings.Contains(err.Error(), "core start failed") {
+		t.Errorf("Err = %v, want the core side output", err)
 	}
 }
