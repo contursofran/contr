@@ -65,6 +65,13 @@ func (l *lazySource) Read(name string, lines int) (string, error) {
 	return "", errNoAgents
 }
 
+func (l *lazySource) SendKeys(name string, keys []byte) error {
+	if m := l.model.Load(); m != nil {
+		return m.SendKeys(name, keys)
+	}
+	return errNoAgents
+}
+
 func (l *lazySource) Interrupt(name string) error {
 	if m := l.model.Load(); m != nil {
 		return m.Interrupt(name)

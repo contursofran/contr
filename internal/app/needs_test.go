@@ -65,6 +65,10 @@ type source struct {
 	text      string // what Read returns
 	readErr   error
 	read      []string // names read
+	texts     []string // what the next Reads return, before text
+	sent      [][]byte // keys sent
+	sentTo    []string
+	sendErr   error
 	signalled []string // names interrupted
 	stopped   []string
 }
@@ -81,7 +85,17 @@ func (s *source) Done(id string) error {
 func (s *source) ClearDone() { s.cleared++ }
 func (s *source) Read(name string, _ int) (string, error) {
 	s.read = append(s.read, name)
+	if len(s.texts) > 0 {
+		t := s.texts[0]
+		s.texts = s.texts[1:]
+		return t, s.readErr
+	}
 	return s.text, s.readErr
+}
+func (s *source) SendKeys(name string, keys []byte) error {
+	s.sentTo = append(s.sentTo, name)
+	s.sent = append(s.sent, keys)
+	return s.sendErr
 }
 func (s *source) Interrupt(name string) error {
 	s.signalled = append(s.signalled, name)

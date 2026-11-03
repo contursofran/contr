@@ -3,22 +3,25 @@ package app
 // The answer card: a card that floats over the bottom of the terminal area,
 // above the needs-you row, and opens when a tab of the row is clicked. A
 // question shows its options (the recommended one first and filled) and a
-// field for a free answer; a to-do shows Done; a blocked worker shows what it
-// says and a button that selects it. The owner's answer goes to the
+// field for a free answer; a to-do shows Done; a blocked worker shows its
+// question and one button for each choice of its menu (#148). The owner's answer goes to the
 // coordinator that asked, through [AgentSource.Answer] (#162, S5).
 
 import (
 	"slices"
+	"strconv"
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/owner"
+	"github.com/contursofran/contr/internal/prompt"
 )
 
 // keyOptions are the digit keys; the key at index i sends option place i.
-var keyOptions = []ui.Key{ui.Key1, ui.Key2, ui.Key3, ui.Key4}
+var keyOptions = []ui.Key{ui.Key1, ui.Key2, ui.Key3, ui.Key4, ui.Key5, ui.Key6, ui.Key7, ui.Key8, ui.Key9}
 
 // Labels of the answer card.
 const (
@@ -28,6 +31,9 @@ const (
 	CardClose        = "Close"
 	CardFocusWorker  = "Focus worker"
 	CardDoneButton   = "Done"
+	// CardPromptChanged shows when the worker's menu changed after the owner
+	// saw it; nothing was sent.
+	CardPromptChanged = "The prompt changed; look again."
 )
 
 // CardOption is one option of a question, in the order the card shows it.
@@ -66,11 +72,18 @@ type FloatCard struct {
 	busy   bool
 	handle ui.Handle
 	focus  bool // focus the card on the next build
+
+	// The menu of a blocked worker. seen is the prompt the owner sees; stamp
+	// is the worker's turn and message when it was read.
+	menu    *prompt.Prompt
+	stamp   string
+	reading bool
 }
 
 // Open shows the card for t.
 func (a *FloatCard) Open(t NeedTab) {
 	a.open, a.text, a.err, a.busy, a.focus = &t, "", "", false, true
+	a.menu, a.stamp, a.reading = nil, "", false
 	a.redraw()
 }
 
@@ -180,6 +193,12 @@ func (a *FloatCard) enter(snap agentstate.Snapshot) {
 
 // option is a digit key: the option at place pos (0 for "1").
 func (a *FloatCard) option(snap agentstate.Snapshot, pos int) {
+	if a.open != nil && a.open.Kind == NeedBlocked {
+		if a.menu != nil && pos < len(a.menu.Choices) {
+			a.choose(pos)
+		}
+		return
+	}
 	if q, ok := a.question(snap); ok {
 		if opts := CardOptions(q); pos < len(opts) {
 			a.send(opts[pos].Text)
@@ -206,7 +225,13 @@ func (a *FloatCard) View(c *ui.Context) {
 	root = root.OnShortcut(0, ui.KeyEscape, a.Close).
 		OnShortcut(0, ui.KeyEnter, func() { a.enter(snap) })
 	for pos, key := range keyOptions {
+		if pos >= 4 && t.Kind != NeedBlocked {
+			break
+		}
 		root = root.OnShortcut(0, key, func() { a.option(snap, pos) })
+	}
+	if t.Kind == NeedBlocked {
+		a.watchBlocked(snap, t)
 	}
 	if a.focus {
 		a.focus = false
@@ -229,6 +254,10 @@ func (a *FloatCard) View(c *ui.Context) {
 func (a *FloatCard) body(t NeedTab, snap agentstate.Snapshot, resolved bool) *string {
 	text := t.Title
 	switch t.Kind {
+	case NeedBlocked:
+		if a.menu != nil && a.menu.Question != "" {
+			text = a.menu.Question
+		}
 	case NeedQuestion:
 		if q, ok := a.question(snap); ok {
 			text = q.Question
@@ -266,12 +295,16 @@ func (a *FloatCard) actions(c *ui.Context, t NeedTab, snap agentstate.Snapshot, 
 	case t.Kind == NeedTodo:
 		cardButton(c, CardDoneButton, ButtonFilled, theme.Text, a.done)
 	case t.Kind == NeedBlocked:
-		cardButton(c, CardFocusWorker, ButtonFilled, theme.Text, func() {
-			if a.Select != nil {
-				a.Select(t.Address, t.Orchestrator)
+		if a.menu != nil {
+			for i, ch := range a.menu.Choices {
+				cardButton(c, ch.Label, OptionStyle(i == 0), theme.Text, func() { a.choose(i) })
 			}
-			a.Close()
-		})
+		}
+		style := ButtonFilled
+		if a.menu != nil {
+			style = ButtonPlain
+		}
+		cardButton(c, CardFocusWorker, style, theme.Text, func() { a.focusWorker(t) })
 	}
 	cardButton(c, CardClose, ButtonPlain, theme.TextDim, a.Close)
 }
@@ -285,4 +318,110 @@ func (a *FloatCard) input(c *ui.Context) {
 		}
 		cardButton(c, CardSend, ButtonOutlined, theme.Text, func() { a.send(a.text) })
 	})
+}
+
+// findBlocked finds the worker of a blocked card.
+func findBlocked(snap agentstate.Snapshot, name string) (agents.Worker, bool) {
+	for _, w := range append(append([]agents.Worker(nil), snap.Orchestrators...), snap.Workers...) {
+		if w.Name == name {
+			return w, true
+		}
+	}
+	return agents.Worker{}, false
+}
+
+// watchBlocked runs while the card of a blocked worker builds. It closes the
+// card when the worker is no longer blocked, and reads the worker's screen
+// again when its turn or message changed (event driven: it follows the
+// snapshot, with no timer).
+func (a *FloatCard) watchBlocked(snap agentstate.Snapshot, t NeedTab) {
+	w, ok := findBlocked(snap, t.Key)
+	if !ok || w.Status != "blocked" {
+		a.open = nil
+		return
+	}
+	stamp := strconv.FormatUint(w.Turn, 10) + "|" + w.Msg
+	if a.reading || stamp == a.stamp {
+		return
+	}
+	a.stamp, a.reading = stamp, true
+	a.Run.Do(func() func() {
+		p, ok, err := a.readMenu(t)
+		return func() {
+			a.reading = false
+			if a.open == nil || a.open.Key != t.Key {
+				return
+			}
+			a.menu = nil
+			if ok {
+				a.menu = &p
+			}
+			if err != nil {
+				a.err = err.Error()
+			}
+			a.redraw()
+		}
+	})
+}
+
+// readMenu reads the screen of the worker of t and parses its menu.
+func (a *FloatCard) readMenu(t NeedTab) (prompt.Prompt, bool, error) {
+	screen, err := a.Source.Read(t.Address, promptLines)
+	if err != nil {
+		return prompt.Prompt{}, false, err
+	}
+	p, ok := prompt.Parse(t.Command, t.BlockKind, screen)
+	return p, ok, nil
+}
+
+// promptLines is how many terminal lines the card reads to find the menu.
+const promptLines = 40
+
+// choose picks choice i of the menu. A choice that asks for typed text
+// focuses the worker. Otherwise the screen is read and parsed again, and the
+// keys go only when the menu is the one the owner saw.
+func (a *FloatCard) choose(i int) {
+	if a.open == nil || a.busy || a.menu == nil || i >= len(a.menu.Choices) {
+		return
+	}
+	t, seen := *a.open, *a.menu
+	ch := seen.Choices[i]
+	if ch.Text {
+		a.focusWorker(t)
+		return
+	}
+	a.busy = true
+	a.Run.Do(func() func() {
+		now, ok, err := a.readMenu(t)
+		changed := err == nil && !(ok && now.Equal(seen))
+		if err == nil && !changed {
+			err = a.Source.SendKeys(t.Address, ch.Keys)
+		}
+		return func() {
+			a.busy = false
+			if a.open == nil || a.open.Key != t.Key {
+				return
+			}
+			switch {
+			case err != nil:
+				a.err = err.Error()
+			case changed:
+				a.err = CardPromptChanged
+				a.menu = nil
+				if ok {
+					a.menu = &now
+				}
+			default:
+				a.err = ""
+			}
+			a.redraw()
+		}
+	})
+}
+
+func (a *FloatCard) focusWorker(t NeedTab) {
+	if a.Select != nil {
+		a.Select(t.Address, t.Orchestrator)
+	}
+	a.Close()
 }
