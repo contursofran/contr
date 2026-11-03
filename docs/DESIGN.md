@@ -14,14 +14,17 @@ Source of truth: the "herdr sidebar mockup" design canvas, artboards **G · cont
 │  ! bag-drag  │                                      │  rows                 │
 │ server main  │                                      │  Needs you N          │
 │ linux-pc     │ [ prompt ]                           │  rows                 │
-│ Agents N run │                                      │  [answer card 168]    │
-│  ○ principal │                                      │                       │
+│ Orchestrators│                                      │  [answer card 168]    │
+│  ○ lead      │                                      │                       │
+│ Agents N run │                                      │                       │
+│  ◐ b162      │                                      │                       │
 ├──────────────┴ status bar 26: claude ▬ 38% · codex ▬ 12% · CPU MEM                     ┤
 ```
 
 - The title bar has a "Review" button left of the panel toggle. It swaps the terminal area for the Review view (see Review below) and is white while the view shows (D37).
 - Sidebar spans the full height, title-bar area included. Panel toggles from the title bar; hidden, the terminal takes the width.
 - v0.1 status bar usage shows only claude and codex. There is no OpenCode Go segment.
+- The agents area has an Orchestrators section on top, whatever the state of its agents, then Agents N running. An agent row has the status icon, the name, and a second line `<command> · <age>` (age since the last output: `5s`, `3m`, `2h`; it moves on a state change or a repaint, with no timer). The Orchestrators section is hidden when there is none.
 - Selecting a worktree or agent in the sidebar highlights it as a rounded card and focuses that agent's tab; the terminal shows only that agent.
 
 ## Tokens

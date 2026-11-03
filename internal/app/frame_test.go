@@ -11,6 +11,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/terminal"
 	"github.com/contursofran/contr/internal/app/theme"
@@ -513,5 +515,33 @@ func TestFrameReviewReplacesTerminal(t *testing.T) {
 	box(t, tt, LabelReview)
 	if _, ok := tt.Find(LabelTerminal); ok {
 		t.Fatal("terminal area still shows with Review on")
+	}
+}
+
+func TestAttachStartsAndStopsTheAgentState(t *testing.T) {
+	w := &fakeWindow{visible: true}
+	f := NewFrame(nil)
+	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
+	f.Usage = usage.NewSampler(usage.Unread, nil)
+	var notify func()
+	stopped := 0
+	f.StartAgents = func(n func()) (func() agentstate.Snapshot, func()) {
+		notify = n
+		return func() agentstate.Snapshot {
+			return agentstate.Snapshot{Workers: []agents.Worker{{Name: "b1", Address: "a", Live: true}}}
+		}, func() { stopped++ }
+	}
+	stop := f.Attach(context.Background(), w, herdr.SocketTarget(filepath.Join(t.TempDir(), "missing.sock")))
+	if f.AgentsList == nil || len(f.AgentsList.snapshot().Workers) != 1 {
+		t.Fatal("the agents list should read the snapshot of StartAgents")
+	}
+	before := w.queued()
+	notify()
+	if w.queued() != before+1 {
+		t.Error("a notify should queue a sync with Window.Update")
+	}
+	stop()
+	if stopped != 1 {
+		t.Errorf("the agent state was stopped %d times, want 1", stopped)
 	}
 }
