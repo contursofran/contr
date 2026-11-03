@@ -12,6 +12,7 @@ package app
 // when it scans).
 
 import (
+	"context"
 	"reflect"
 	"slices"
 	"strconv"
@@ -20,6 +21,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/icons"
+	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
@@ -115,7 +117,10 @@ type SpacesList struct {
 	visible func() bool
 	// scanFn reads git. It runs on a goroutine, started by start.
 	scanFn func([]string) git.Scan
-	start  func(func())
+	// statsFn runs git diff for the worktrees of a scan (D52). It runs on the
+	// same goroutine as scanFn. Nil gives no stats.
+	statsFn func(git.Scan) map[string]git.DiffStat
+	start   func(func())
 	// post runs fn on the UI thread (Window.Update). Nil runs it at once.
 	post func(func())
 	now  func() time.Time
@@ -128,6 +133,7 @@ type SpacesList struct {
 	shown string
 
 	scan     git.Scan
+	stats    map[string]git.DiffStat
 	scanned  []string
 	lastScan time.Time
 	hasScan  bool
@@ -158,7 +164,7 @@ type SpacesList struct {
 func NewSpacesList(src liveSource, h hostSource, selection *state.Selection, status *state.StatusMessage, visible func() bool, post func(func())) *SpacesList {
 	l := &SpacesList{
 		src: src, host: h, selection: selection, status: status, focus: FocusInBackground,
-		visible: visible, post: post, scanFn: git.ScanCwds, start: func(f func()) { go f() },
+		visible: visible, post: post, scanFn: git.ScanCwds, statsFn: runStats, start: func(f func()) { go f() },
 		now: time.Now, builds: map[string]int{},
 		afterFunc: func(d time.Duration, f func()) stopper { return time.AfterFunc(d, f) },
 	}
@@ -267,7 +273,7 @@ func (l *SpacesList) stale() bool { return !l.hasScan || l.now().Sub(l.lastScan)
 
 func (l *SpacesList) forgetScan() {
 	l.gen++
-	l.scan, l.scanned, l.hasScan = git.Scan{}, nil, false
+	l.scan, l.stats, l.scanned, l.hasScan = git.Scan{}, nil, nil, false
 }
 
 func (l *SpacesList) startScan(cwds []string) {
@@ -275,18 +281,27 @@ func (l *SpacesList) startScan(cwds []string) {
 	gen := l.gen
 	l.lastScan, l.hasScan, l.scanned = l.now(), true, slices.Clone(cwds)
 	l.scans++
-	scanFn := l.scanFn
+	scanFn, statsFn := l.scanFn, l.statsFn
 	l.start(func() {
 		scan := scanFn(cwds)
+		var stats map[string]git.DiffStat
+		if statsFn != nil {
+			stats = statsFn(scan)
+		}
 		l.later(func() {
 			if gen != l.gen {
 				return
 			}
 			// Rebuild only: a slow scan must not start the next one.
-			l.scan = scan
+			l.scan, l.stats = scan, stats
 			l.rebuild(l.tree())
 		})
 	})
+}
+
+// runStats reads the diff stats of a scan with the git command.
+func runStats(scan git.Scan) map[string]git.DiffStat {
+	return git.Stats(context.Background(), git.ExecRunner{}, scan)
 }
 
 // later runs fn on the UI thread.
@@ -302,6 +317,7 @@ func (l *SpacesList) rebuild(tree *herdr.HerdrTree) SpacesChange {
 	var groups []spaces.RepoGroup
 	if tree != nil {
 		groups = spaces.Build(*tree, l.scan)
+		spaces.ApplyStats(groups, l.stats)
 	}
 	online := true
 	if l.src != nil {
@@ -490,6 +506,9 @@ func (l *SpacesList) row(c *ui.Context, row spaces.WorktreeRow, selected bool) {
 			ui.Text(c, row.Name).Height(theme.LineHeight).TextColor(theme.Color(nameColour(held))).SingleLine().Ellipsis("…").MinWidth(0)
 			l.holdLine(c, row)
 		})
+		if row.Diff != nil && (row.Diff.Added > 0 || row.Diff.Removed > 0) {
+			kit.Counts(c, row.Diff.Added, row.Diff.Removed)
+		}
 		if row.Badge != nil {
 			badgeChip(c, *row.Badge)
 		}

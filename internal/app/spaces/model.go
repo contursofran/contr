@@ -65,6 +65,8 @@ type WorktreeRow struct {
 	HoldYou bool
 	// Badge is the row's chip. Nil without one.
 	Badge *Badge
+	// Diff is the changed lines against the default branch. Nil when unknown.
+	Diff *git.DiffStat
 }
 
 // ID is the id that the selection carries: the canonical root path.
@@ -260,4 +262,15 @@ func withMore(line string, holderCount int) string {
 		return fmt.Sprintf("%s +%d", line, more)
 	}
 	return line
+}
+
+// ApplyStats sets the diff stat of each row whose root has one in stats.
+func ApplyStats(groups []RepoGroup, stats map[string]git.DiffStat) {
+	for g := range groups {
+		for r := range groups[g].Rows {
+			if s, ok := stats[groups[g].Rows[r].Root]; ok {
+				groups[g].Rows[r].Diff = &s
+			}
+		}
+	}
 }

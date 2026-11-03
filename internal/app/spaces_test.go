@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/icons"
+	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
@@ -118,6 +119,7 @@ type spacesHarness struct {
 	clock   time.Time
 	timers  []*spaceTimer
 	focused []string
+	stats   map[string]git.DiffStat
 }
 
 func newSpaces(t *testing.T, live herdr.LiveHerdr) *spacesHarness {
@@ -132,6 +134,7 @@ func newSpaces(t *testing.T, live herdr.LiveHerdr) *spacesHarness {
 func (h *spacesHarness) makeList() *SpacesList {
 	l := NewSpacesList(h.live, h.host, h.sel, nil, func() bool { return !h.hidden }, nil)
 	l.start = func(f func()) { f() }
+	l.statsFn = func(git.Scan) map[string]git.DiffStat { return h.stats }
 	l.now = func() time.Time { return h.clock }
 	l.afterFunc = h.afterFunc
 	l.focus = func(id string, _ func(string)) { h.focused = append(h.focused, id) }
@@ -1159,5 +1162,30 @@ func TestALongRepoAndWorktreeNameIsCutWithAnEllipsis(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// ---- Diff stats (D52) ----
+
+func TestWorktreeRowsShowDiffStats(t *testing.T) {
+	h, wt1, _ := heldWorktree(t)
+	h.stats = map[string]git.DiffStat{wt1: {Added: 12, Removed: 3}}
+	h.advance(RescanAfter)
+	h.send(h.live.live)
+	if !h.has(kit.CountsText(12, 3)) {
+		t.Errorf("no stats on the row; texts %q", h.tt.Texts())
+	}
+}
+
+func TestWorktreeRowsShowNoStatsAfterAnError(t *testing.T) {
+	h, wt1, _ := heldWorktree(t)
+	h.stats = map[string]git.DiffStat{wt1: {Added: 12, Removed: 3}}
+	h.advance(RescanAfter)
+	h.send(h.live.live)
+	h.stats = map[string]git.DiffStat{} // the next scan lost the stats
+	h.advance(RescanAfter)
+	h.send(h.live.live)
+	if h.has(kit.CountsText(12, 3)) {
+		t.Error("the row still shows stats")
 	}
 }
