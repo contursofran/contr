@@ -3,34 +3,37 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/hc"
 )
 
-// TestTerminalTypingAndPaste runs the built app against the dev herdr with
-// CONTR_SURFACE=1 and checks that the terminal grid shows the dev shell, that
-// typed text, Enter and Backspace reach it once, and that Cmd-V through the
-// Edit menu pastes once. The shell writes what it reads to a file in a
-// scratch folder, so the test counts bytes and not pixels. PNGs go to
+// TestTerminalOnHC runs the built app against the dev herdr and a scratch hc
+// core with one `sh` worker. A second viewer with input is attached first, so
+// the app must observe: the terminal keeps that viewer's size (D45). The test
+// selects the worker, checks that the grid shows, types `echo hi`, and checks
+// that the shell got it and that the size is now the window's. PNGs go to
 // tmp/e2e/. Start the dev herdr first:
 //
 //	eval "$(scripts/dev-herdr.sh)"
-//	go test -tags e2e -run Terminal ./cmd/contr
+//	go test -tags e2e -run TestTerminalOnHC ./cmd/contr
 //
-// It refuses to run against any herdr but the dev one. The test sets the
-// system clipboard for the paste check and restores its text afterwards.
-func TestTerminalTypingAndPaste(t *testing.T) {
-	herdrSock := os.Getenv("HERDR_SOCKET_PATH")
-	if !strings.Contains(herdrSock, "contr-go-dev-herdr") {
+// It never touches the owner's herdr or hc core.
+func TestTerminalOnHC(t *testing.T) {
+	if !strings.Contains(os.Getenv("HERDR_SOCKET_PATH"), "contr-go-dev-herdr") {
 		t.Skip("HERDR_SOCKET_PATH is not the dev herdr; run eval \"$(scripts/dev-herdr.sh)\" first")
 	}
-	if os.Getenv("CONTR_SURFACE") != "1" {
-		t.Skip("CONTR_SURFACE is not 1; run eval \"$(scripts/dev-herdr.sh)\" first")
+	if _, err := exec.LookPath("hc"); err != nil {
+		t.Skip("hc is not installed")
 	}
 	root, err := filepath.Abs("../..")
 	if err != nil {
@@ -47,17 +50,66 @@ func TestTerminalTypingAndPaste(t *testing.T) {
 	if msg, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, msg)
 	}
-
 	// A short path: macOS limits socket paths to 103 bytes.
-	dir, err := os.MkdirTemp("", "contr-e2e")
+	dir, err := os.MkdirTemp("/tmp", "contr-e2e")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
+	env := []string{fmt.Sprintf("HC_SESSION=e2e%d", os.Getpid())}
+	for _, v := range []string{"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR", "XDG_CACHE_HOME"} {
+		p := filepath.Join(dir, strings.ToLower(v[4:6]))
+		if err := os.MkdirAll(p, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		env = append(env, v+"="+p)
+	}
+	t.Cleanup(func() {
+		cmd := exec.Command("hc", "server", "stop")
+		cmd.Env = append(cmd.Environ(), env...)
+		_ = cmd.Run()
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	cl, err := hc.Dial(ctx, hc.Command("", env))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cl.Close()
+	cfg := agents.DefaultConfig()
+	cfg.Profiles["sh"] = agents.Profile{Argv: []string{"sh"}}
+	w, err := agents.New(agents.HC{Client: cl}, cfg).Spawn(ctx, agents.Spec{Name: "w1", Profile: "sh", Role: "builder", Project: "contr"})
+	if err != nil {
+		t.Fatalf("spawn: %v", err)
+	}
+	// The other viewer, at 80x24 with input.
+	fc, err := hc.DialFramed(ctx, hc.Command("", env))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fc.Close()
+	other, err := fc.Attach(ctx, hc.AttachParams{Terminal: w.Address, Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		for range other.Events() {
+		}
+	}()
+	size := func() string {
+		var tm struct{ Cols, Rows int }
+		if err := cl.Call(ctx, "terminal.get", map[string]any{"terminal": w.Address}, &tm); err != nil {
+			t.Fatal(err)
+		}
+		return fmt.Sprintf("%dx%d", tm.Cols, tm.Rows)
+	}
+
 	sock := filepath.Join(dir, "a.sock")
 	app := exec.Command(bin)
-	app.Env = append(os.Environ(), "MYGO_AUTOMATION="+sock,
-		"CONTR_STATE_DIR="+filepath.Join(dir, "state"), "CODEX_HOME="+filepath.Join(dir, "codex"))
+	app.Env = append(os.Environ(), append(env, "MYGO_AUTOMATION="+sock,
+		"CONTR_STATE_DIR="+filepath.Join(dir, "state"), "CODEX_HOME="+filepath.Join(dir, "codex"),
+		"CONTR_OWNER_FILE="+filepath.Join(dir, "owner.json"), "CONTR_AGENTS_CONFIG="+filepath.Join(dir, "agents.json"))...)
 	if err := app.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -66,75 +118,54 @@ func TestTerminalTypingAndPaste(t *testing.T) {
 	c := dial(t, sock)
 	defer c.conn.Close()
 	c.waitWindow(t)
-	c.call(t, "idle", map[string]any{"timeout": 10000})
+	row := ""
+	for deadline := time.Now().Add(20 * time.Second); row == "" && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+		c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "pointerMove", "x": 700, "y": 500}}}) // draws a frame
+		row = c.labelWithPrefix(t, "w1, ")
+	}
+	if row == "" {
+		t.Fatalf("no worker row; labels %v", keys(c.labels(t)))
+	}
+	b := c.boundsOf(t, row)
+	c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "click", "x": b.X + b.Width/2, "y": b.Y + b.Height/2}}})
+	time.Sleep(2 * time.Second)
+	c.capture(t, filepath.Join(out, "terminal-observe.png"))
+	if got := size(); got != "80x24" {
+		t.Errorf("size before typing = %s, want 80x24 (the app observes)", got)
+	}
 
-	// The grid is in the window once herdr is connected and the link is up.
-	deadline := time.Now().Add(20 * time.Second)
-	for !c.labels(t)["terminal grid"] && time.Now().Before(deadline) {
-		time.Sleep(100 * time.Millisecond)
-	}
-	if !c.labels(t)["terminal grid"] {
-		c.capture(t, filepath.Join(out, "terminal-nogrid.png"))
-		t.Fatalf("no terminal grid; labels %v", keys(c.labels(t)))
-	}
 	grid := c.boundsOf(t, "terminal grid")
-	x, y := grid.X+grid.Width/2, grid.Y+grid.Height/2
-	c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "click", "x": x, "y": y}}})
-	time.Sleep(time.Second)
-	c.capture(t, filepath.Join(out, "terminal-shell.png"))
-
-	// The shell cats what it reads into a file, so the file is what the
-	// shell got from the app.
-	capture := func(name string, send func()) string {
-		t.Helper()
-		file := filepath.Join(dir, name)
-		c.typeLine(t, "cat > "+file)
-		time.Sleep(500 * time.Millisecond)
-		send()
-		time.Sleep(300 * time.Millisecond)
-		c.key(t, "Enter")
-		c.key(t, "Ctrl+D")
-		deadline := time.Now().Add(5 * time.Second)
-		for time.Now().Before(deadline) {
-			if b, err := os.ReadFile(file); err == nil && len(b) > 0 {
-				time.Sleep(300 * time.Millisecond)
-				b, _ = os.ReadFile(file)
-				return string(b)
-			}
-			time.Sleep(100 * time.Millisecond)
+	c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "click", "x": grid.X + grid.Width/2, "y": grid.Y + grid.Height/2}}})
+	c.typeLine(t, "echo h''i")
+	var text string
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
+		var rd struct{ Text string }
+		if err := cl.Call(ctx, "terminal.read", map[string]any{"terminal": w.Address}, &rd); err != nil {
+			t.Fatal(err)
 		}
-		return ""
+		if text = rd.Text; strings.Contains(strings.ReplaceAll(text, "echo h''i", ""), "hi") {
+			break
+		}
 	}
-
-	if got := capture("typed", func() { c.text(t, "hi") }); got != "hi\n" {
-		t.Errorf("typed %q, want %q (text and Enter once)", got, "hi\n")
+	if !strings.Contains(strings.ReplaceAll(text, "echo h''i", ""), "hi") {
+		t.Errorf("the shell did not run echo: %q", text)
 	}
+	if got := size(); got == "80x24" {
+		t.Errorf("size after typing = %s, want the window's grid", got)
+	}
+	time.Sleep(500 * time.Millisecond)
 	c.capture(t, filepath.Join(out, "terminal-typed.png"))
+}
 
-	if got := capture("backspace", func() { c.text(t, "abc"); c.key(t, "Backspace") }); got != "ab\n" {
-		t.Errorf("backspace %q, want %q (Backspace once)", got, "ab\n")
+// labelWithPrefix returns the first label that starts with prefix, or "".
+func (c *client) labelWithPrefix(t *testing.T, prefix string) string {
+	t.Helper()
+	for _, nd := range c.nodes(t) {
+		if strings.HasPrefix(nd.Label, prefix) {
+			return nd.Label
+		}
 	}
-
-	old, err := exec.Command("pbpaste").Output()
-	if err != nil {
-		t.Fatalf("pbpaste: %v", err)
-	}
-	defer func() {
-		cmd := exec.Command("pbcopy")
-		cmd.Stdin = strings.NewReader(string(old))
-		_ = cmd.Run()
-	}()
-	cmd := exec.Command("pbcopy")
-	cmd.Stdin = strings.NewReader("pasted")
-	if err := cmd.Run(); err != nil {
-		t.Fatal(err)
-	}
-	if got := capture("paste", func() {
-		c.call(t, "menu", map[string]any{"path": []string{"Edit", "Paste"}})
-	}); got != "pasted\n" {
-		t.Errorf("paste %q, want %q (one paste)", got, "pasted\n")
-	}
-	c.capture(t, filepath.Join(out, "terminal-pasted.png"))
+	return ""
 }
 
 func (c *client) boundsOf(t *testing.T, label string) rect {

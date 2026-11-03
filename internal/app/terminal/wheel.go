@@ -12,9 +12,9 @@ import (
 	"github.com/contursofran/contr/internal/term"
 )
 
-// Wheel and trackpad motion to herdr input events. herdr keeps the scrollback:
-// contr sends only wheel steps, and the server decides whether they scroll its
-// history or reach the program.
+// Wheel and trackpad motion to input events. The hc link turns a wheel step
+// into a move of the local scrollback or, for a program that reports the mouse,
+// into mouse bytes (D41).
 //
 // Everything here works on plain numbers, so the mapping is unit tested
 // without a window.

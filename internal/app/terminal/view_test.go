@@ -432,7 +432,7 @@ func TestTheLinkUpdatesReachTheViewThroughPost(t *testing.T) {
 	f := &fakeLink{latest: surface(1, "a")}
 	v.link = f
 
-	v.notify(term.ScreenUpdate{})
+	v.notify(v.gen, term.ScreenUpdate{})
 	if v.surface != nil || len(posted) != 1 {
 		t.Fatal("the update was not posted")
 	}
@@ -478,5 +478,56 @@ func TestNoStarterMeansNotRunning(t *testing.T) {
 	_, _, err := v.opts.Start(term.GridSize{Cols: 1, Rows: 1}, term.CellPx{}, nil)
 	if err == nil {
 		t.Fatal("the default starter started a link")
+	}
+}
+
+// recordingStart is a starter that records how it was used.
+type recordingStart struct {
+	links   []*fakeLink
+	stops   int
+	notifys []func(term.LinkUpdate)
+}
+
+func (r *recordingStart) start(term.GridSize, term.CellPx, func(term.LinkUpdate)) (Link, func(), error) {
+	l := &fakeLink{}
+	r.links = append(r.links, l)
+	return l, func() { r.stops++ }, nil
+}
+
+func TestSetTerminalSwitchesTheLinkAndDropsTheOldOnes(t *testing.T) {
+	a, b := &recordingStart{}, &recordingStart{}
+	var notifyA func(term.LinkUpdate)
+	startA := func(s term.GridSize, c term.CellPx, n func(term.LinkUpdate)) (Link, func(), error) {
+		notifyA = n
+		return a.start(s, c, n)
+	}
+	v, tt, _ := newTestViewWith(t, Options{})
+	settle(tt, 800, 600)
+	if v.link != nil {
+		t.Fatal("a link runs with no terminal picked")
+	}
+	v.SetTerminal(startA)
+	if len(a.links) != 1 || v.link == nil {
+		t.Fatalf("picking a terminal started %d links", len(a.links))
+	}
+	v.acceptSurface(surface(1, "old"))
+
+	v.SetTerminal(b.start)
+	if a.stops != 1 || len(b.links) != 1 {
+		t.Errorf("old link stopped %d times, new links %d; want 1 and 1", a.stops, len(b.links))
+	}
+	if v.surface != nil {
+		t.Error("the old terminal's screen stays")
+	}
+	// The old link's late update must not change the new terminal's state.
+	notifyA(term.StateUpdate{State: stateNotRunning})
+	if v.state.Kind == term.LinkNotRunning {
+		t.Error("an update of the old link reached the view")
+	}
+
+	v.SetTerminal(nil)
+	tt.Frame()
+	if b.stops != 1 || v.link != nil || !tt.HasText(OffLine) {
+		t.Errorf("no terminal: stops %d, link %v, line shown %v", b.stops, v.link, tt.HasText(OffLine))
 	}
 }

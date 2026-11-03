@@ -21,6 +21,7 @@ type fakeStream struct {
 	mu      sync.Mutex
 	err     error
 	written []byte
+	onWrite func() // runs before the first Write is recorded, when set
 	resizes []hc.Size
 	focus   []bool
 }
@@ -34,6 +35,12 @@ func (s *fakeStream) Done() <-chan struct{}         { return s.done }
 func (s *fakeStream) Err() error                    { s.mu.Lock(); defer s.mu.Unlock(); return s.err }
 func (s *fakeStream) Write(p []byte) (int, error) {
 	s.mu.Lock()
+	if h := s.onWrite; h != nil {
+		s.onWrite = nil
+		s.mu.Unlock()
+		h()
+		s.mu.Lock()
+	}
 	defer s.mu.Unlock()
 	s.written = append(s.written, p...)
 	return len(p), nil
@@ -76,7 +83,9 @@ type fakeSource struct {
 	errs     []error // one per attach call, nil for success
 	watchCh  chan hc.Event
 	attached chan struct{}
-	block    chan struct{} // Watch waits for this to close, when set
+	block    chan struct{}              // Watch waits for this to close, when set
+	gate     chan struct{}              // attaches after the first wait for this to close, when set
+	hook     func(i int, s *fakeStream) // runs for each new stream, when set
 }
 
 func newFakeSource(errs ...error) *fakeSource {
@@ -84,6 +93,12 @@ func newFakeSource(errs ...error) *fakeSource {
 }
 
 func (f *fakeSource) Attach(_ context.Context, p hc.AttachParams) (HCStream, error) {
+	f.mu.Lock()
+	gate, n := f.gate, len(f.params)
+	f.mu.Unlock()
+	if gate != nil && n >= 1 {
+		<-gate
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	i := len(f.params)
@@ -93,6 +108,9 @@ func (f *fakeSource) Attach(_ context.Context, p hc.AttachParams) (HCStream, err
 		return nil, f.errs[i]
 	}
 	s := newFakeStream()
+	if f.hook != nil {
+		f.hook(i, s)
+	}
 	f.streams = append(f.streams, s)
 	return s, nil
 }
@@ -188,7 +206,7 @@ func rowText(s *term.Screen, y int) string {
 func startLink(t *testing.T, src *fakeSource) (*HCLink, *updates) {
 	t.Helper()
 	u := newUpdates()
-	l := NewHCLink(src, term.GridSize{Cols: 40, Rows: 10}, term.CellPx{}, u.notify)
+	l := newHCLink(src, term.GridSize{Cols: 40, Rows: 10}, term.CellPx{}, u.notify, false)
 	t.Cleanup(l.Stop)
 	return l, u
 }
@@ -473,7 +491,7 @@ func TestLinkNoGoroutineLeakOnStop(t *testing.T) {
 	before := runtime.NumGoroutine()
 	src := newFakeSource()
 	u := newUpdates()
-	l := NewHCLink(src, term.GridSize{Cols: 40, Rows: 10}, term.CellPx{}, u.notify)
+	l := newHCLink(src, term.GridSize{Cols: 40, Rows: 10}, term.CellPx{}, u.notify, false)
 	u.waitState(t, term.LinkLive)
 	src.stream(t, 0).data("abc")
 	l.Stop()
@@ -517,7 +535,7 @@ func TestLinkNewDoesNotBlockOnWatch(t *testing.T) {
 	done := make(chan *HCLink)
 	u := newUpdates()
 	go func() {
-		l := NewHCLink(src, term.GridSize{Cols: 40, Rows: 10}, term.CellPx{}, u.notify)
+		l := newHCLink(src, term.GridSize{Cols: 40, Rows: 10}, term.CellPx{}, u.notify, false)
 		done <- l
 	}()
 	select {
@@ -589,5 +607,192 @@ func TestRetryDelayCapped(t *testing.T) {
 	}
 	if retryDelay(50) != maxRetry {
 		t.Errorf("delay = %v, want %v", retryDelay(50), maxRetry)
+	}
+}
+
+// startObserver starts a link that attaches as an observer (D45).
+func startObserver(t *testing.T, src *fakeSource) (*HCLink, *updates) {
+	t.Helper()
+	u := newUpdates()
+	l := NewHCLink(src, term.GridSize{Cols: 40, Rows: 10}, term.CellPx{}, u.notify)
+	t.Cleanup(l.Stop)
+	return l, u
+}
+
+func TestLinkObservesFirstAndSendsNoSize(t *testing.T) {
+	src := newFakeSource()
+	l, u := startObserver(t, src)
+	u.waitState(t, term.LinkLive)
+	s := src.stream(t, 0)
+	if !src.params[0].Observe {
+		t.Fatal("the first attach has input: another viewer's size would change")
+	}
+	// A resize, a focus change and a wheel step reach no one.
+	_ = l.Resize(term.GridSize{Cols: 100, Rows: 30}, term.CellPx{})
+	_ = l.SetFocus(true)
+	_ = l.SendInput("", []term.InputEvent{term.WheelEvent{Dir: term.WheelUp, Lines: 3}})
+	s.mu.Lock()
+	resizes, focus, wrote := len(s.resizes), len(s.focus), len(s.written)
+	s.mu.Unlock()
+	if resizes != 0 || focus != 0 || wrote != 0 || src.attachCount() != 1 {
+		t.Errorf("observer sent %d resizes, %d focus, %d bytes, %d attaches", resizes, focus, wrote, src.attachCount())
+	}
+	// The core's size, not the grid's, sizes the screen.
+	s.events <- hc.StreamEvent{Resize: &hc.Size{Cols: 80, Rows: 24}}
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if scr := l.TakeLatest(); scr != nil && scr.Size == (term.GridSize{Cols: 80, Rows: 24}) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the screen does not follow the core's size")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestLinkFirstKeyAttachesWithInputAndTakesTheSize(t *testing.T) {
+	src := newFakeSource()
+	l, u := startObserver(t, src)
+	u.waitState(t, term.LinkLive)
+	first := src.stream(t, 0)
+	_ = l.Resize(term.GridSize{Cols: 100, Rows: 30}, term.CellPx{})
+	if err := l.SendInput("", []term.InputEvent{term.TextEvent{Text: "x"}}); err != nil {
+		t.Fatal(err)
+	}
+	second := src.stream(t, 1)
+	src.mu.Lock()
+	p := src.params[1]
+	src.mu.Unlock()
+	if p.Observe || p.Cols != 100 || p.Rows != 30 || !p.Resumed {
+		t.Errorf("second attach = %+v, want input at 100x30", p)
+	}
+	select {
+	case <-first.done:
+	default:
+		t.Error("the observer stream stays open")
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for second.wrote() != "x" {
+		if time.Now().After(deadline) {
+			t.Fatalf("the first key was lost: %q", second.wrote())
+		}
+		time.Sleep(time.Millisecond)
+	}
+	// Later keys go straight to the stream; there is no third attach.
+	_ = l.SendInput("", []term.InputEvent{term.TextEvent{Text: "y"}})
+	if got := second.wrote(); got != "xy" || src.attachCount() != 2 {
+		t.Errorf("written %q after %d attaches", got, src.attachCount())
+	}
+}
+
+func waitWrote(t *testing.T, s *fakeStream, want string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for s.wrote() != want {
+		if time.Now().After(deadline) {
+			t.Fatalf("written %q, want %q", s.wrote(), want)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func typeKey(t *testing.T, l *HCLink, k string) {
+	t.Helper()
+	if err := l.SendInput("", []term.InputEvent{term.TextEvent{Text: k}}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLinkKeysTypedDuringTakeoverArriveOnceInOrder(t *testing.T) {
+	src := newFakeSource()
+	src.gate = make(chan struct{})
+	l, u := startObserver(t, src)
+	u.waitState(t, term.LinkLive)
+	typeKey(t, l, "a") // ends the observer; the second attach waits on the gate
+	typeKey(t, l, "b") // typed during the attach
+	typeKey(t, l, "c")
+	close(src.gate)
+	waitWrote(t, src.stream(t, 1), "abc")
+	typeKey(t, l, "d")
+	waitWrote(t, src.stream(t, 1), "abcd")
+	if src.attachCount() != 2 {
+		t.Errorf("%d attaches, want 2", src.attachCount())
+	}
+}
+
+func TestLinkKeyDuringFlushWaitsForHeldKeys(t *testing.T) {
+	src := newFakeSource()
+	src.gate = make(chan struct{})
+	entered, release := make(chan struct{}), make(chan struct{})
+	src.hook = func(i int, s *fakeStream) {
+		if i == 1 {
+			s.onWrite = func() { close(entered); <-release } // the flush is stuck in its write
+		}
+	}
+	l, u := startObserver(t, src)
+	u.waitState(t, term.LinkLive)
+	typeKey(t, l, "a")
+	typeKey(t, l, "b")
+	close(src.gate)
+	select {
+	case <-entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the held keys were not written")
+	}
+	typeKey(t, l, "c") // typed while the held keys are being written
+	close(release)
+	waitWrote(t, src.stream(t, 1), "abc")
+}
+
+func TestLinkTakeoverAttachFailureDropsHeldKeys(t *testing.T) {
+	src := newFakeSource(nil, errors.New("down"))
+	l, u := startObserver(t, src)
+	u.waitState(t, term.LinkLive)
+	typeKey(t, l, "a")                                                // the second attach fails
+	_ = l.SendInput("", []term.InputEvent{term.TextEvent{Text: "b"}}) // held, or not connected
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		l.mu.Lock()
+		held, takeover := len(l.held), l.takeover
+		l.mu.Unlock()
+		if !takeover && held == 0 && src.attachCount() >= 2 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the held keys stay after the attach failed")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	// The next key retries and is sent, without the dropped ones.
+	for src.attachCount() < 3 {
+		_ = l.SendInput("", []term.InputEvent{term.TextEvent{Text: "z"}})
+		if time.Now().After(deadline) {
+			t.Fatal("a key does not retry the attach")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	s := src.stream(t, 1)
+	if got := s.wrote(); strings.ContainsAny(got, "ab") {
+		t.Errorf("dropped keys were sent: %q", got)
+	}
+}
+
+type closableSource struct {
+	*fakeSource
+	closed int
+}
+
+func (c *closableSource) Close() error { c.closed++; return nil }
+
+func TestHCStarterStopClosesTheSource(t *testing.T) {
+	src := &closableSource{fakeSource: newFakeSource()}
+	_, stop, err := HCStarter(src)(term.GridSize{Cols: 10, Rows: 5}, term.CellPx{}, func(term.LinkUpdate) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop()
+	if src.closed != 1 {
+		t.Errorf("source closed %d times, want 1", src.closed)
 	}
 }
