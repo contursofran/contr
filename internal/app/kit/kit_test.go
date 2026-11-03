@@ -140,3 +140,20 @@ func TestCodeViewFollowsLightAndDark(t *testing.T) {
 		t.Error("no added color")
 	}
 }
+
+func TestRowDrawsItsLeadAndHeightOfMatches(t *testing.T) {
+	led := 0
+	o := RowOpts{Label: "r", Text: "r", Sub: "s", Lead: func() { led++ }}
+	tt := ui.NewTester(func(c *ui.Context) {
+		ui.Column(c).Width(240).Children(func() { Row(c, o) })
+	}, 400, 200)
+	if led == 0 {
+		t.Error("the lead was not drawn")
+	}
+	if r, _ := tt.Find("r"); r.H != HeightOf(o) || r.H <= RowHeight {
+		t.Errorf("row is %v high, HeightOf says %v", r.H, HeightOf(o))
+	}
+	if HeightOf(RowOpts{Text: "x"}) != RowHeight {
+		t.Error("a one-line row should be RowHeight")
+	}
+}

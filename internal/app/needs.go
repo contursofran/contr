@@ -29,6 +29,10 @@ type AgentSource interface {
 	Answer(id, answer string) error
 	Done(id string) error
 	ClearDone()
+	// Read, Interrupt and Stop act on one worker's terminal (its address).
+	Read(name string, lines int) (string, error)
+	Interrupt(name string) error
+	Stop(name string) error
 }
 
 // NeedKind tells what a [NeedTab] is.
