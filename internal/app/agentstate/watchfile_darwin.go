@@ -8,7 +8,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// watchDir calls fn after each change in the folder dir, until ctx ends. It
+// watchDir calls fn once the watch is set and after each change in the folder dir, until ctx ends. It
 // watches the folder, not the file, because a rename replaces the file
 // (decision D32). It blocks on kqueue: no timer and no polling.
 func watchDir(ctx context.Context, dir string, fn func()) error {
@@ -41,6 +41,8 @@ func watchDir(ctx context.Context, dir string, fn func()) error {
 	})
 	defer stop()
 
+	// A change before the watch started has no event: read once now.
+	fn()
 	events := make([]unix.Kevent_t, 4)
 	for {
 		n, err := unix.Kevent(kq, nil, events, nil)
