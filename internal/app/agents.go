@@ -253,8 +253,8 @@ func (l *AgentsList) row(c *ui.Context, row herdr.AgentRow, selected bool) {
 	}
 	card.Children(func() {
 		icons.Icon(c, icons.FromAgentState(row.Status)).Shrink(0)
-		ui.Text(c, row.Name).TextColor(theme.Color(theme.Text)).NoWrap().Ellipsis("…").MinWidth(0)
-		ui.Text(c, row.Detail).TextColor(theme.Color(theme.TextDim2)).NoWrap().Ellipsis("…").MinWidth(0).Grow(1)
+		ui.Text(c, row.Name).TextColor(theme.Color(theme.Text)).SingleLine().Ellipsis("…").MinWidth(0)
+		ui.Text(c, row.Detail).TextColor(theme.Color(theme.TextDim2)).SingleLine().Ellipsis("…").MinWidth(0).Grow(1)
 		if row.Link != nil {
 			ui.Text(c, *row.Link).TextColor(theme.Color(theme.Text2)).NoWrap().Shrink(0)
 		}
