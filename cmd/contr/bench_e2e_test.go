@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -14,7 +15,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/bench"
+	"github.com/contursofran/contr/internal/hc"
 )
 
 const (
@@ -24,18 +27,19 @@ const (
 	benchFlood   = `i=0; while :; do i=$((i+1)); echo "bench line $i abcdefghij 0123456789 -_=+()[]{}<>"; done`
 )
 
-// TestAppBench measures the whole app (frames, CPU and memory) in seven phases against
-// the dev herdr. See docs/BENCHMARKS.md, "How to run the app test". It is a
+// TestAppBench measures the whole app (frames, CPU and memory) in seven phases
+// against the dev herdr and a scratch hc core with three agents: an
+// orchestrator, a "flag" worker whose status the test flips between idle and
+// working, and a "term" worker with a shell, which the app shows in its
+// terminal view. See docs/BENCHMARKS.md, "How to run the app test". It is a
 // heavy job: run nothing else at the same time. Files go to tmp/bench/:
 // start.png, busy.png, result.md and result.json.
 func TestAppBench(t *testing.T) {
-	t.Skip("the bench drove the herdr-agents board file, which contr no longer reads; it needs a rewrite on the agent state")
-	herdrSock := os.Getenv("HERDR_SOCKET_PATH")
-	if !strings.Contains(herdrSock, "contr-go-dev-herdr") {
+	if !strings.Contains(os.Getenv("HERDR_SOCKET_PATH"), "contr-go-dev-herdr") {
 		t.Skip("HERDR_SOCKET_PATH is not the dev herdr; run eval \"$(scripts/dev-herdr.sh)\" first")
 	}
-	if os.Getenv("CONTR_SURFACE") != "1" {
-		t.Skip("CONTR_SURFACE is not 1; run eval \"$(scripts/dev-herdr.sh)\" first")
+	if _, err := exec.LookPath("hc"); err != nil {
+		t.Skip("hc is not installed")
 	}
 	root, err := filepath.Abs("../..")
 	if err != nil {
@@ -54,128 +58,86 @@ func TestAppBench(t *testing.T) {
 	}
 
 	// A short path: macOS limits socket paths to 103 bytes.
-	dir, err := os.MkdirTemp("", "contr-bench")
+	dir, err := os.MkdirTemp("/tmp", "contr-bench")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
-	boardDir := filepath.Join(dir, "board")
 	proj := filepath.Join(dir, "proj")
-	for _, d := range []string{boardDir, proj} {
-		if err := os.MkdirAll(d, 0o755); err != nil {
+	if err := os.MkdirAll(proj, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// The scratch core: its own session and XDG folders. The owner's core is
+	// never used.
+	env := []string{fmt.Sprintf("HC_SESSION=b%d", os.Getpid())}
+	for _, v := range []string{"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR", "XDG_CACHE_HOME"} {
+		p := filepath.Join(dir, strings.ToLower(v[4:6]))
+		if err := os.MkdirAll(p, 0o700); err != nil {
 			t.Fatal(err)
 		}
+		env = append(env, v+"="+p)
 	}
-	git := func(args ...string) {
-		t.Helper()
-		full := append([]string{"-C", proj, "-c", "user.name=bench", "-c", "user.email=bench@invalid"}, args...)
-		if msg, err := exec.Command("git", full...).CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, msg)
+	t.Cleanup(func() {
+		cmd := exec.Command("hc", "server", "stop")
+		cmd.Env = append(cmd.Environ(), env...)
+		if msg, err := cmd.CombinedOutput(); err != nil {
+			t.Logf("stop the scratch core: %v: %s", err, msg)
 		}
-	}
-	git("init", "-q")
-	git("commit", "-q", "--allow-empty", "-m", "bench")
-
-	// The board: the fixture under session "bench", rewritten once per update.
-	const session = "bench"
-	fixture, err := os.ReadFile(filepath.Join(root, "internal", "board", "testdata", "board_fixture_v1.json"))
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	defer cancel()
+	cl, err := hc.Dial(ctx, hc.Command("", env))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var doc map[string]any
-	if err := json.Unmarshal(fixture, &doc); err != nil {
-		t.Fatal(err)
-	}
-	doc["session"] = session
-	boardFile := filepath.Join(boardDir, session+".json")
-	// The fixture has one working row (stage "run"). Phases that measure
-	// "nothing working" (owner decision D4) turn it to "done"; one phase
-	// turns it back on. mu guards doc and the revision, as the board updater
-	// runs on its own goroutine.
-	var (
-		mu      sync.Mutex
-		curRev  int
-		working = true
-	)
-	writeBoard := func(rev int) error {
-		mu.Lock()
-		defer mu.Unlock()
-		doc["bench_rev"] = rev // one field that changes on each update
-		stage := "done"
-		if working {
-			stage = "run"
-		}
-		rows, _ := doc["rows"].([]any)
-		if len(rows) == 0 {
-			return fmt.Errorf("fixture has no rows")
-		}
-		row, _ := rows[0].(map[string]any)
-		row["stages"] = []any{"done", stage, "none", "none", "none"}
-		curRev = rev
-		data, err := json.Marshal(doc)
+	defer cl.Close()
+	cfg := agents.DefaultConfig()
+	// "flag" reports its status as its program does (OSC 7501): each line it
+	// reads is the new status word.
+	cfg.Profiles["flag"] = agents.Profile{Argv: []string{"sh", "-c", `while read s; do printf '\033]7501;state=%s\007' "$s"; done`}}
+	cfg.Profiles["sleepy"] = agents.Profile{Argv: []string{"sleep", "3600"}}
+	cfg.Profiles["sh"] = agents.Profile{Argv: []string{"sh"}}
+	mgr := agents.New(agents.HC{Client: cl}, cfg)
+	spawned := map[string]agents.Worker{}
+	for _, s := range []agents.Spec{
+		{Name: "lead", Profile: "sleepy", Role: agents.RoleOrchestrator, Project: "bench", Worktree: proj},
+		{Name: "flag", Profile: "flag", Role: "builder", Project: "bench", Issue: "1", Worktree: proj},
+		{Name: "term", Profile: "sh", Role: "builder", Project: "bench", Issue: "2", Worktree: proj},
+	} {
+		w, err := mgr.Spawn(ctx, s)
 		if err != nil {
-			return err
+			t.Fatalf("spawn %s: %v", s.Name, err)
 		}
-		tmp := boardFile + ".tmp"
-		if err := os.WriteFile(tmp, data, 0o644); err != nil {
-			return err
-		}
-		return os.Rename(tmp, boardFile)
+		spawned[s.Name] = w
 	}
-	working = false
-	if err := writeBoard(1); err != nil {
-		t.Fatal(err)
-	}
-	// A fresh workspace in the scratch repo: its shell is live and focused.
-	// The dev herdr may hold dead panes from earlier runs.
-	var ws struct {
-		Result struct {
-			RootPane struct {
-				PaneID string `json:"pane_id"`
-			} `json:"root_pane"`
-			Workspace struct {
-				ID string `json:"workspace_id"`
-			} `json:"workspace"`
-		}
-	}
-	if err := json.Unmarshal(herdrCmd(t, "workspace", "create", "--cwd", proj, "--label", "bench", "--focus"), &ws); err != nil ||
-		ws.Result.RootPane.PaneID == "" {
-		t.Fatalf("workspace create: %v", err)
-	}
-	pane := ws.Result.RootPane.PaneID
-	defer func() { _ = exec.Command("herdr", "workspace", "close", ws.Result.Workspace.ID).Run() }()
-	token := func(rev int) {
-		t.Helper()
-		herdrCmd(t, "pane", "report-metadata", pane, "--source", "bench",
-			"--token", "contr_board=1 "+session+" "+strconv.Itoa(rev))
-	}
-	token(1)
-	// setWorking changes the working row and tells the app (new revision).
+	// setWorking flips the status of the "flag" worker and gives the app time
+	// to take the event. The worker starts with no status, so the first call
+	// always sends.
+	var working *bool
 	setWorking := func(w bool) {
 		t.Helper()
-		mu.Lock()
-		changed := working != w
-		working = w
-		rev := curRev + 1
-		mu.Unlock()
-		if !changed {
+		if working != nil && *working == w {
 			return
 		}
-		if err := writeBoard(rev); err != nil {
+		word := "idle"
+		if w {
+			word = "working"
+		}
+		if err := mgr.Send(ctx, "flag", word); err != nil {
 			t.Fatal(err)
 		}
-		token(rev)
+		working = &w
 		time.Sleep(time.Second)
 	}
-	defer func() {
-		_ = exec.Command("herdr", "pane", "report-metadata", pane, "--source", "bench", "--clear-token", "contr_board").Run()
-	}()
+	setWorking(false)
 
 	sock := filepath.Join(dir, "a.sock")
 	app := exec.Command(bin)
-	app.Env = append(os.Environ(), "MYGO_AUTOMATION="+sock, "CONTR_BOARD_DIR="+boardDir,
+	app.Env = append(os.Environ(), append(env, "MYGO_AUTOMATION="+sock,
 		"CONTR_STATE_DIR="+filepath.Join(dir, "state"), "CODEX_HOME="+filepath.Join(dir, "codex"),
-		"MYGO_FRAME_STATS=all") // the frame log gives the frames of each phase
+		"CONTR_OWNER_FILE="+filepath.Join(dir, "owner.json"), "CONTR_AGENTS_CONFIG="+filepath.Join(dir, "agents.json"),
+		"MYGO_FRAME_STATS=all")...) // the frame log gives the frames of each phase
 	// The app's log, with MyGo's frame log when MYGO_FRAME_STATS is set.
 	appLog, err := os.Create(filepath.Join(out, "app.log"))
 	if err != nil {
@@ -191,12 +153,21 @@ func TestAppBench(t *testing.T) {
 	c := dial(t, sock)
 	defer c.conn.Close()
 	c.waitWindow(t)
-	deadline := time.Now().Add(30 * time.Second)
-	for !(c.labels(t)["terminal grid"] && c.labels(t)["board header"]) {
+	// Select the "term" worker: the terminal view follows the selected agent.
+	row := ""
+	for deadline := time.Now().Add(30 * time.Second); row == "" && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+		c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "pointerMove", "x": 700, "y": 500}}}) // draws a frame
+		row = c.labelWithPrefix(t, "term, ")
+	}
+	if row == "" {
+		t.Fatalf("no row for the term worker; labels %v", keys(c.labels(t)))
+	}
+	rb := c.boundsOf(t, row)
+	c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "click", "x": rb.X + rb.Width/2, "y": rb.Y + rb.Height/2}}})
+	for deadline := time.Now().Add(30 * time.Second); !c.labels(t)["terminal grid"]; time.Sleep(100 * time.Millisecond) {
 		if time.Now().After(deadline) {
-			t.Fatalf("grid and board did not show; labels %v", keys(c.labels(t)))
+			t.Fatalf("grid did not show; labels %v", keys(c.labels(t)))
 		}
-		time.Sleep(100 * time.Millisecond)
 	}
 	grid := c.boundsOf(t, "terminal grid")
 	t.Logf("terminal grid bounds: %.0f x %.0f points (the pane is smaller than the 200x60 of the grid test)", grid.Width, grid.Height)
@@ -225,7 +196,8 @@ func TestAppBench(t *testing.T) {
 	table = append(table, bench.Header())
 	t.Log("\n" + bench.Header())
 	// phase runs one phase. isWorking tells whether a working item is on
-	// screen (the phase sets the board to that before it starts).
+	// screen (the phase sets the "flag" worker to that before it starts).
+	hidden := false // set once the window is hidden on purpose
 	phase := func(name string, isWorking bool, setup func(), teardown func()) {
 		t.Helper()
 		load := strings.TrimSpace(sysctlLoad(t))
@@ -251,6 +223,12 @@ func TestAppBench(t *testing.T) {
 		}
 		fmt.Fprintf(appLog, "%s\n", bench.EndMark(name))
 		secs := time.Since(t0).Seconds()
+		if !hidden {
+			var wins struct{ Windows []struct{ Visible bool } }
+			if err := json.Unmarshal(c.call(t, "windows", map[string]any{}), &wins); err == nil && len(wins.Windows) > 0 && !wins.Windows[0].Visible {
+				t.Errorf("phase %q: the window is not visible, so its numbers are not valid (another window may cover it)", name)
+			}
+		}
 		cpu1, err := bench.ReadCPUTime(app.Process.Pid)
 		if err != nil {
 			t.Fatalf("phase %q: %v", name, err)
@@ -280,44 +258,40 @@ func TestAppBench(t *testing.T) {
 	})
 	phase("flood pane shown", false, startLoop(benchFlood), stopLoop)
 
-	// Board updates: a ticker writes the file and bumps the bridge mark.
-	// herdrCmd fails the test, so the goroutine runs the command itself.
+	// Agent updates: a ticker changes a label of the "flag" worker through
+	// hc, once a second. Each change is an hc event, so the model builds a new
+	// snapshot and notifies the window. The ticker runs `hc label` itself
+	// because t.Fatal must not run on another goroutine.
 	done := make(chan struct{})
 	var wg sync.WaitGroup
 	var updErr error
-	phase("board updates shown", false, func() {
+	phase("agent updates shown", false, func() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			tick := time.NewTicker(time.Second)
 			defer tick.Stop()
-			for {
+			for n := 3; ; n++ {
 				select {
 				case <-done:
 					return
 				case <-tick.C:
 				}
-				mu.Lock()
-				rev := curRev + 1 // always above the revision of setWorking
-				mu.Unlock()
-				if err := writeBoard(rev); err != nil {
-					updErr = err
-					return
-				}
-				msg, err := exec.Command("herdr", "pane", "report-metadata", pane, "--source", "bench",
-					"--token", "contr_board=1 "+session+" "+strconv.Itoa(rev)).CombinedOutput()
-				if err != nil {
-					updErr = fmt.Errorf("report-metadata: %v: %s", err, msg)
+				cmd := exec.Command("hc", "label", spawned["flag"].Address, "issue="+strconv.Itoa(n))
+				cmd.Env = append(cmd.Environ(), env...)
+				if msg, err := cmd.CombinedOutput(); err != nil {
+					updErr = fmt.Errorf("hc label: %v: %s", err, msg)
 					return
 				}
 			}
 		}()
 	}, func() { close(done); wg.Wait() })
 	if updErr != nil {
-		t.Errorf("board updater: %v", updErr)
+		t.Errorf("agent updater: %v", updErr)
 	}
 
 	hide := func() {
+		hidden = true
 		c.call(t, "menu", map[string]any{"path": []string{"contr", "Hide contr"}})
 		time.Sleep(2 * time.Second)
 	}
@@ -331,11 +305,17 @@ func TestAppBench(t *testing.T) {
 	// not run and the reading is not a valid result (not a target miss).
 	counter := filepath.Join(dir, "n")
 	busyHidden := strings.Replace(benchBusy, `; sleep`, `; echo $i > '`+counter+`'; sleep`, 1)
-	// herdr starts and stops the loop: automation input does not reach a
+	// hc starts and stops the loop: automation input does not reach a
 	// hidden window.
-	phase("busy pane hidden", false, func() { herdrCmd(t, "pane", "run", pane, busyHidden) }, func() {
+	phase("busy pane hidden", false, func() {
+		if err := mgr.Send(ctx, "term", busyHidden); err != nil {
+			t.Fatal(err)
+		}
+	}, func() {
 		n := readCounter(counter)
-		herdrCmd(t, "pane", "send-keys", pane, "C-c")
+		if _, err := mgr.Interrupt(ctx, "term"); err != nil {
+			t.Errorf("stop the loop: %v", err)
+		}
 		t.Logf("busy loop counter while hidden: %d lines", n)
 		if min := benchSamples * 20; n < min {
 			t.Errorf("busy loop did not run while hidden: counter %d, want at least %d", n, min)
@@ -403,7 +383,7 @@ var benchTargets = []struct {
 	{"idle shown", 0.5, 150},
 	{"busy pane shown", 24, 230},
 	{"flood pane shown", 51, 230},
-	{"board updates shown", 2, 0},
+	{"agent updates shown", 2, 0},
 	{"idle hidden", 0, 0},
 	{"busy pane hidden", 2, 0},
 }
