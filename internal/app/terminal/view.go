@@ -14,10 +14,10 @@ import (
 	"github.com/contursofran/contr/internal/term"
 )
 
-// The terminal view: the focused herdr tab, painted from the surface link,
-// typed into and scrolled through it. The link starts only with
-// CONTR_SURFACE=1 (Rust D38). Without it the view shows a line and connects
-// to nothing.
+// The terminal view: the hc terminal of the selected agent tab, painted from
+// the link, typed into and scrolled through it (D12). The link starts when the
+// app picks a terminal with [View.SetTerminal]; with none picked the view shows
+// a line and connects to nothing.
 //
 // MyGo is immediate mode, so "notify" is a call to Options.Invalidate. The
 // view runs on the UI thread: Build, Draw, input handlers and onUpdate. The
@@ -31,10 +31,8 @@ const (
 	// LabelGrid is the label of the grid box (Rust debug selector
 	// "terminal-grid").
 	LabelGrid = "terminal grid"
-	// OffLine is shown while the link is off.
-	OffLine = "terminal off · set CONTR_SURFACE=1"
-	// SurfaceEnv is the variable that turns the link on (Rust D38).
-	SurfaceEnv = "CONTR_SURFACE"
+	// OffLine is shown while no terminal is picked.
+	OffLine = "select an agent to see its terminal"
 
 	// resizeWait is how long a size must hold before it is sent.
 	resizeWait = 150 * time.Millisecond
@@ -66,8 +64,8 @@ func noStarter(term.GridSize, term.CellPx, func(term.LinkUpdate)) (Link, func(),
 
 // Options are what the view needs from the app.
 type Options struct {
-	// Enabled starts the link: os.Getenv(SurfaceEnv) == "1". Tests leave it
-	// false, so no test connects to herdr.
+	// Enabled starts the link: a terminal is picked. [View.SetTerminal] sets
+	// it. Tests leave it false, so no test connects to a core.
 	Enabled bool
 	// Start starts the link. Nil starts none: the state is not running.
 	Start Starter
@@ -98,6 +96,9 @@ type View struct {
 	stop func()
 	// closed is set by Close. Updates that arrive afterwards are dropped.
 	closed bool
+	// gen counts the picked terminals. An update from a link of an older one
+	// is dropped.
+	gen int
 
 	state   term.LinkState
 	surface *term.Screen
@@ -161,6 +162,30 @@ func NewView(o Options) *View {
 	v := &View{opts: o, state: term.LinkState{Kind: term.LinkConnecting}}
 	v.ime.view = v
 	return v
+}
+
+// SetTerminal shows another terminal: it stops the link, drops the screen and
+// starts the link of start at the current grid. Nil shows no terminal. Call it
+// on the UI thread.
+func (v *View) SetTerminal(start Starter) {
+	if v.closed {
+		return
+	}
+	if v.stop != nil {
+		v.stop()
+	}
+	v.link, v.stop = nil, nil
+	v.gen++
+	v.opts.Start, v.opts.Enabled = start, start != nil
+	if start == nil {
+		v.opts.Start = noStarter
+	}
+	v.surface, v.selection, v.shellPane, v.hasSent = nil, nil, "", false
+	v.state = term.LinkState{Kind: term.LinkConnecting}
+	v.cache.Reset()
+	v.wheel.Clear()
+	v.ensureLink()
+	v.invalidate()
 }
 
 // invalidate asks for a new frame.
@@ -260,7 +285,8 @@ func (v *View) sendResize(want wanted) {
 // startLink starts the link at want. The hello carries that size, so it counts
 // as sent.
 func (v *View) startLink(want wanted) {
-	link, stop, err := v.opts.Start(want.size, want.cell, v.notify)
+	gen := v.gen
+	link, stop, err := v.opts.Start(want.size, want.cell, func(u term.LinkUpdate) { v.notify(gen, u) })
 	if err != nil {
 		v.setState(term.LinkState{Kind: term.LinkNotRunning, Message: err.Error()})
 		return
@@ -271,8 +297,12 @@ func (v *View) startLink(want wanted) {
 
 // notify receives the link's updates on the link goroutine and moves them to
 // the UI thread.
-func (v *View) notify(u term.LinkUpdate) {
-	run := func() { v.onUpdate(u) }
+func (v *View) notify(gen int, u term.LinkUpdate) {
+	run := func() {
+		if gen == v.gen {
+			v.onUpdate(u)
+		}
+	}
 	if v.opts.Post != nil {
 		v.opts.Post(run)
 		return

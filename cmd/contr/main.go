@@ -107,6 +107,7 @@ func openWindow(icons bool) int {
 	} else {
 		frame = app.NewFrame(nil)
 		frame.StartAgents = startAgents(os.Getenv)
+		frame.TerminalSource = terminalSource(os.Getenv)
 		opts.Content = ui.View(frame.View)
 	}
 	mygo.App.WhenReady(func() {

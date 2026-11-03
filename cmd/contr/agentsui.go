@@ -7,7 +7,18 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/terminal"
+	"github.com/contursofran/contr/internal/hc"
 )
+
+// terminalSource gives the terminal view the source of one hc terminal. It
+// dials the same core as the agents, on connections of its own, and only when
+// the view attaches (D12).
+func terminalSource(getenv func(string) string) func(address string) terminal.HCSource {
+	return func(address string) terminal.HCSource {
+		return terminal.NewCoreSource(hc.Command(getenv("CONTR_HC"), nil), address)
+	}
+}
 
 // startAgents gives the frame its agent state. The connection to the hc core
 // opens on a goroutine, so the window never waits for it; until it is up, or

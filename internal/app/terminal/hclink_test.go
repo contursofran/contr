@@ -188,7 +188,7 @@ func rowText(s *term.Screen, y int) string {
 func startLink(t *testing.T, src *fakeSource) (*HCLink, *updates) {
 	t.Helper()
 	u := newUpdates()
-	l := NewHCLink(src, term.GridSize{Cols: 40, Rows: 10}, term.CellPx{}, u.notify)
+	l := newHCLink(src, term.GridSize{Cols: 40, Rows: 10}, term.CellPx{}, u.notify, false)
 	t.Cleanup(l.Stop)
 	return l, u
 }
@@ -473,7 +473,7 @@ func TestLinkNoGoroutineLeakOnStop(t *testing.T) {
 	before := runtime.NumGoroutine()
 	src := newFakeSource()
 	u := newUpdates()
-	l := NewHCLink(src, term.GridSize{Cols: 40, Rows: 10}, term.CellPx{}, u.notify)
+	l := newHCLink(src, term.GridSize{Cols: 40, Rows: 10}, term.CellPx{}, u.notify, false)
 	u.waitState(t, term.LinkLive)
 	src.stream(t, 0).data("abc")
 	l.Stop()
@@ -517,7 +517,7 @@ func TestLinkNewDoesNotBlockOnWatch(t *testing.T) {
 	done := make(chan *HCLink)
 	u := newUpdates()
 	go func() {
-		l := NewHCLink(src, term.GridSize{Cols: 40, Rows: 10}, term.CellPx{}, u.notify)
+		l := newHCLink(src, term.GridSize{Cols: 40, Rows: 10}, term.CellPx{}, u.notify, false)
 		done <- l
 	}()
 	select {
@@ -589,5 +589,100 @@ func TestRetryDelayCapped(t *testing.T) {
 	}
 	if retryDelay(50) != maxRetry {
 		t.Errorf("delay = %v, want %v", retryDelay(50), maxRetry)
+	}
+}
+
+// startObserver starts a link that attaches as an observer (D45).
+func startObserver(t *testing.T, src *fakeSource) (*HCLink, *updates) {
+	t.Helper()
+	u := newUpdates()
+	l := NewHCLink(src, term.GridSize{Cols: 40, Rows: 10}, term.CellPx{}, u.notify)
+	t.Cleanup(l.Stop)
+	return l, u
+}
+
+func TestLinkObservesFirstAndSendsNoSize(t *testing.T) {
+	src := newFakeSource()
+	l, u := startObserver(t, src)
+	u.waitState(t, term.LinkLive)
+	s := src.stream(t, 0)
+	if !src.params[0].Observe {
+		t.Fatal("the first attach has input: another viewer's size would change")
+	}
+	// A resize, a focus change and a wheel step reach no one.
+	_ = l.Resize(term.GridSize{Cols: 100, Rows: 30}, term.CellPx{})
+	_ = l.SetFocus(true)
+	_ = l.SendInput("", []term.InputEvent{term.WheelEvent{Dir: term.WheelUp, Lines: 3}})
+	s.mu.Lock()
+	resizes, focus, wrote := len(s.resizes), len(s.focus), len(s.written)
+	s.mu.Unlock()
+	if resizes != 0 || focus != 0 || wrote != 0 || src.attachCount() != 1 {
+		t.Errorf("observer sent %d resizes, %d focus, %d bytes, %d attaches", resizes, focus, wrote, src.attachCount())
+	}
+	// The core's size, not the grid's, sizes the screen.
+	s.events <- hc.StreamEvent{Resize: &hc.Size{Cols: 80, Rows: 24}}
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if scr := l.TakeLatest(); scr != nil && scr.Size == (term.GridSize{Cols: 80, Rows: 24}) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the screen does not follow the core's size")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestLinkFirstKeyAttachesWithInputAndTakesTheSize(t *testing.T) {
+	src := newFakeSource()
+	l, u := startObserver(t, src)
+	u.waitState(t, term.LinkLive)
+	first := src.stream(t, 0)
+	_ = l.Resize(term.GridSize{Cols: 100, Rows: 30}, term.CellPx{})
+	if err := l.SendInput("", []term.InputEvent{term.TextEvent{Text: "x"}}); err != nil {
+		t.Fatal(err)
+	}
+	second := src.stream(t, 1)
+	src.mu.Lock()
+	p := src.params[1]
+	src.mu.Unlock()
+	if p.Observe || p.Cols != 100 || p.Rows != 30 || !p.Resumed {
+		t.Errorf("second attach = %+v, want input at 100x30", p)
+	}
+	select {
+	case <-first.done:
+	default:
+		t.Error("the observer stream stays open")
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for second.wrote() != "x" {
+		if time.Now().After(deadline) {
+			t.Fatalf("the first key was lost: %q", second.wrote())
+		}
+		time.Sleep(time.Millisecond)
+	}
+	// Later keys go straight to the stream; there is no third attach.
+	_ = l.SendInput("", []term.InputEvent{term.TextEvent{Text: "y"}})
+	if got := second.wrote(); got != "xy" || src.attachCount() != 2 {
+		t.Errorf("written %q after %d attaches", got, src.attachCount())
+	}
+}
+
+type closableSource struct {
+	*fakeSource
+	closed int
+}
+
+func (c *closableSource) Close() error { c.closed++; return nil }
+
+func TestHCStarterStopClosesTheSource(t *testing.T) {
+	src := &closableSource{fakeSource: newFakeSource()}
+	_, stop, err := HCStarter(src)(term.GridSize{Cols: 10, Rows: 5}, term.CellPx{}, func(term.LinkUpdate) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop()
+	if src.closed != 1 {
+		t.Errorf("source closed %d times, want 1", src.closed)
 	}
 }

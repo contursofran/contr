@@ -73,3 +73,65 @@ func TestRealCoreSecondViewerSize(t *testing.T) {
 	default:
 	}
 }
+
+// TestRealCoreObserverKeepsSize records D45: an observer attached after an
+// input viewer does not change the terminal size, its attach reply names the
+// current size, and a later attach with input takes the size.
+func TestRealCoreObserverKeepsSize(t *testing.T) {
+	env := isolatedCore(t)
+	c, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cl, err := Dial(c, Command("", env))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cl.Close()
+	var run struct {
+		Address string `json:"address"`
+	}
+	if err := cl.Call(c, "terminal.run", map[string]any{"argv": []string{"sh"}, "name": "w1", "wait": false, "no_parent": true}, &run); err != nil {
+		t.Fatal(err)
+	}
+	attach := func(p AttachParams) *Stream {
+		fc, err := DialFramed(c, Command("", env))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = fc.Close() })
+		p.Terminal = run.Address
+		s, err := fc.Attach(c, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		go func() {
+			for range s.Events() {
+			}
+		}()
+		return s
+	}
+	a := attach(AttachParams{Cols: 80, Rows: 24})
+	time.Sleep(300 * time.Millisecond)
+	_ = attach(AttachParams{Cols: 120, Rows: 40, Observe: true, ResizeNotifications: true})
+	time.Sleep(300 * time.Millisecond)
+	_, _ = a.Write([]byte("stty size\r"))
+	time.Sleep(500 * time.Millisecond)
+	read := func() string {
+		var rd struct {
+			Text string `json:"text"`
+		}
+		if err := cl.Call(c, "terminal.read", map[string]any{"terminal": run.Address}, &rd); err != nil {
+			t.Fatal(err)
+		}
+		return rd.Text
+	}
+	if got := read(); !strings.Contains(got, "24 80") {
+		t.Errorf("size with an observer = %q, want 24 80", got)
+	}
+	b := attach(AttachParams{Cols: 120, Rows: 40})
+	time.Sleep(300 * time.Millisecond)
+	_, _ = b.Write([]byte("stty size\r"))
+	time.Sleep(500 * time.Millisecond)
+	if got := read(); !strings.Contains(got, "40 120") {
+		t.Errorf("size after the takeover = %q, want 40 120", got)
+	}
+}
