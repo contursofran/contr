@@ -8,8 +8,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
+	"syscall"
 	"text/tabwriter"
 
 	"github.com/contursofran/contr/internal/agents"
@@ -19,13 +22,16 @@ import (
 const agentsUsage = `Usage:
   contr agents ls [--all] [--json]                 list the workers
   contr agents spawn --name N --profile P [--issue I] [--worktree DIR]
-                     [--role R] [--no-parent] [--json] [task…]
+                     [--role R] [--no-parent] [--json] [--] [task…]
                                                    start a worker
   contr agents send <name> <text…>                 type text and press Enter
   contr agents interrupt <name>                    press the stop key
   contr agents stop <name>                         end the worker's program
   contr agents read <name> [--lines N]             print the screen and history
   contr agents watch                               print the list as JSON on each change
+
+Flags can come before or after the other arguments. After --, every word is
+part of the task.
 
 Environment:
   CONTR_AGENTS_CONFIG   profiles file (default: the user config folder, contr/agents.json)
@@ -86,14 +92,29 @@ func runAgents(args []string, stdout, stderr io.Writer, dial func(context.Contex
 		noParent = fs.Bool("no-parent", false, "start without a parent terminal")
 		lines    = fs.Int("lines", 0, "only the last lines")
 	)
-	if err := fs.Parse(rest); err != nil {
-		return 2
-	}
-	pos := fs.Args()
 	need := map[string]int{"ls": 0, "watch": 0, "spawn": 0, "send": 2, "interrupt": 1, "stop": 1, "read": 1}
 	n, ok := need[sub]
 	if !ok {
 		fmt.Fprintf(stderr, "contr agents: unknown command %s\n%s", sub, agentsUsage)
+		return 2
+	}
+	pos, err := parseInterleaved(fs, rest)
+	if err != nil {
+		return 2
+	}
+	allowed := map[string][]string{
+		"ls":    {"all", "json"},
+		"spawn": {"name", "profile", "issue", "worktree", "role", "no-parent", "json"},
+		"read":  {"lines"},
+	}
+	var bad string
+	fs.Visit(func(f *flag.Flag) {
+		if bad == "" && !slices.Contains(allowed[sub], f.Name) {
+			bad = f.Name
+		}
+	})
+	if bad != "" {
+		fmt.Fprintf(stderr, "contr agents %s: flag --%s does not apply\n%s", sub, bad, agentsUsage)
 		return 2
 	}
 	if len(pos) < n || (n == 1 && len(pos) > 1) || (n == 0 && sub != "spawn" && len(pos) > 0) {
@@ -101,12 +122,16 @@ func runAgents(args []string, stdout, stderr io.Writer, dial func(context.Contex
 		return 2
 	}
 
-	cfg, err := agents.LoadConfig(configPath(getenv))
-	if err != nil {
-		fmt.Fprintf(stderr, "contr agents: %v\n", err)
-		return 1
+	// Only spawn needs the profiles, so a broken file does not block the rest.
+	cfg := agents.DefaultConfig()
+	if sub == "spawn" {
+		if cfg, err = agents.LoadConfig(configPath(getenv)); err != nil {
+			fmt.Fprintf(stderr, "contr agents: %v\n", err)
+			return 1
+		}
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	// Ctrl-C or SIGTERM ends a watch cleanly, so the connection closes.
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	core, err := dial(ctx, getenv)
 	if err != nil {
@@ -180,6 +205,26 @@ func runAgents(args []string, stdout, stderr io.Writer, dial func(context.Contex
 		return 1
 	}
 	return 0
+}
+
+// parseInterleaved parses flags before and after the other arguments, which
+// it returns in order. After "--" every word is an argument.
+func parseInterleaved(fs *flag.FlagSet, args []string) ([]string, error) {
+	var tail []string
+	if i := slices.Index(args, "--"); i >= 0 {
+		args, tail = args[:i], args[i+1:]
+	}
+	var pos []string
+	for {
+		if err := fs.Parse(args); err != nil {
+			return nil, err
+		}
+		args = fs.Args()
+		if len(args) == 0 {
+			return append(pos, tail...), nil
+		}
+		pos, args = append(pos, args[0]), args[1:]
+	}
 }
 
 func writeJSON(w io.Writer, v any) error {

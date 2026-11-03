@@ -43,9 +43,9 @@ type Command struct {
 }
 
 // parseArgs reads args, which hold the program name first. `statusline` and
-// `agents` must be the first argument. Otherwise the arguments are read in order: the first
-// `--help` or `-h` asks for the usage, and the first argument other than
-// `--icons` is unknown.
+// `agents` must be the first argument. Otherwise the arguments are read in
+// order: the first `--help` or `-h` asks for the usage, and the first
+// argument other than `--icons` is unknown.
 func parseArgs(args []string) Command {
 	if len(args) > 0 {
 		args = args[1:]

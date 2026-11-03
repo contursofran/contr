@@ -95,7 +95,7 @@ func TestAgentsUsageAndArgumentErrors(t *testing.T) {
 	if code, _, errs := run(t, &cliCore{}, nil); code != 2 || !strings.Contains(errs, "Usage") {
 		t.Errorf("no args: %d %q", code, errs)
 	}
-	for _, args := range [][]string{{"nope"}, {"send", "w1"}, {"stop"}, {"stop", "a", "b"}, {"ls", "x"}, {"ls", "--bad"}} {
+	for _, args := range [][]string{{"nope"}, {"send", "w1"}, {"stop"}, {"stop", "a", "b"}, {"ls", "x"}, {"ls", "--bad"}, {"stop", "x", "--profile", "y"}, {"ls", "--name", "z"}} {
 		if code, _, _ := run(t, &cliCore{}, nil, args...); code != 2 {
 			t.Errorf("%v: code %d, want 2", args, code)
 		}
@@ -163,6 +163,9 @@ func TestAgentsSendInterruptStopRead(t *testing.T) {
 	if code, out, _ := run(t, core, nil, "read", "--lines", "5", "w1"); code != 0 || out != "line\n" {
 		t.Errorf("read: %d %q", code, out)
 	}
+	if code, out, _ := run(t, core, nil, "read", "w1", "--lines", "5"); code != 0 || out != "line\n" || core.params[len(core.params)-1]["lines"] != float64(5) {
+		t.Errorf("read with the flag after the name: %d %q", code, out)
+	}
 	if code, _, errs := run(t, core, nil, "stop", "zz"); code != 1 || !strings.Contains(errs, "not_found") {
 		t.Errorf("stop: %d %q", code, errs)
 	}
@@ -189,7 +192,7 @@ func TestAgentsReportsConfigAndDialErrors(t *testing.T) {
 	if err := os.WriteFile(path, []byte("{bad"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if code, _, errs := run(t, &cliCore{}, map[string]string{"CONTR_AGENTS_CONFIG": path}, "ls"); code != 1 || !strings.Contains(errs, "agents.json") {
+	if code, _, errs := run(t, &cliCore{}, map[string]string{"CONTR_AGENTS_CONFIG": path}, "spawn", "--name", "b", "--profile", "builder"); code != 1 || !strings.Contains(errs, "agents.json") {
 		t.Errorf("bad config: %d %q", code, errs)
 	}
 	if code, _, errs := run(t, nil, nil, "ls"); code != 1 || !strings.Contains(errs, "no hc") {
@@ -213,5 +216,38 @@ func TestStateText(t *testing.T) {
 	}
 	if !reflect.DeepEqual(stateText(agents.Worker{Live: true, Status: "blocked"}), "blocked") {
 		t.Error("blocked without a kind")
+	}
+}
+
+func TestAgentsSpawnFlagsAfterTheTaskAndDoubleDash(t *testing.T) {
+	core := &cliCore{reply: map[string]any{"terminal.run": worker("t4", "b", "live", nil)}}
+	if code, out, _ := run(t, core, nil, "spawn", "--name", "b", "fix", "it", "--profile", "builder", "--json"); code != 0 || !strings.Contains(out, `"address": "t4"`) {
+		t.Fatalf("flags after the task: %d %q", code, out)
+	}
+	argv := core.params[0]["argv"].([]any)
+	if argv[len(argv)-1] != "fix it" {
+		t.Errorf("task = %v", argv[len(argv)-1])
+	}
+	core.params = nil
+	if code, _, _ := run(t, core, nil, "spawn", "--name", "b", "--profile", "builder", "--", "run", "--all", "tests"); code != 0 {
+		t.Fatalf("double dash: %d", code)
+	}
+	argv = core.params[0]["argv"].([]any)
+	if argv[len(argv)-1] != "run --all tests" {
+		t.Errorf("task after -- = %v", argv[len(argv)-1])
+	}
+}
+
+func TestAgentsBrokenConfigBlocksOnlySpawn(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agents.json")
+	if err := os.WriteFile(path, []byte("{bad"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	env := map[string]string{"CONTR_AGENTS_CONFIG": path}
+	if code, _, errs := run(t, &cliCore{}, env, "stop", "w1"); code != 0 {
+		t.Errorf("stop with a broken config: %d %q", code, errs)
+	}
+	if code, _, _ := run(t, &cliCore{}, env, "spawn", "--name", "b", "--profile", "builder"); code != 1 {
+		t.Errorf("spawn with a broken config: %d, want 1", code)
 	}
 }
