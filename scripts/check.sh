@@ -19,6 +19,9 @@ go vet -tags 'e2e bench hccore' ./...
 scripts/check-conflicts.sh
 scripts/check-decisions.sh
 go test -race ./...
+# The perf gate of the hc terminal hot path (#216): allocations for each MB of
+# a generated flood. Without -race, which changes the counts. About 2 s.
+CONTR_PERF_GATE=1 go test -count=1 -run 'TestFloodGate' ./internal/app/terminal
 # The patched terminal emulator is a module of its own (go.mod replaces it).
 (cd third_party/vt && go vet ./... && go test -race ./...)
 

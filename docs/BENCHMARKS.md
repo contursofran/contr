@@ -321,6 +321,23 @@ What is left (measured, not fixed here):
   collector's room for them, keep the footprint over 300 MB after a flood.
   Smaller cells or fewer lines would fix it.
 
+## Perf gate: flood hot path (#216)
+
+`internal/app/terminal/flood_bench_test.go` runs a generated flood (2 MB of
+colored ASCII lines in frames of 40 to 176 bytes, median about 108) through
+`hc.ReadFrame`, the emulator and one screen for each 256 frames, with no
+window and no hc. It does not run the link's goroutines, so the counts do not
+depend on timing. Run it with:
+
+    go test -run xxx -bench FloodHotPath ./internal/app/terminal
+
+Baseline on 2026-11-03, `main` 98ee03e, Apple M4: 15 MB/s, 21,548
+allocations for each MB and 22.8 MB allocated for each 2 MB pass. The count is
+the same on each run. `scripts/check.sh` runs `TestFloodGate` (without
+`-race`) and fails above 43,200 allocations for each MB (2x the baseline). A
+change that is meant to move the baseline changes `floodAllocsBaseline` and
+this paragraph.
+
 ## How to run the app test
 
 The app test measures the whole app in seven phases: idle shown, idle shown
