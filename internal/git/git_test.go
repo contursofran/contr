@@ -367,3 +367,17 @@ func TestDiscoverStopsAtACeilingDirectory(t *testing.T) {
 		t.Fatal("search went past the ceiling")
 	}
 }
+
+func TestDiscoverChecksAStartDirectoryThatIsACeiling(t *testing.T) {
+	base := tmp(t)
+	repo := filepath.Join(base, "repo")
+	mainRepo(t, repo, "ref: refs/heads/main\n")
+	t.Setenv("GIT_CEILING_DIRECTORIES", repo)
+	got, ok := Discover(repo)
+	if !ok {
+		t.Fatal("Discover(ceiling repo) = false")
+	}
+	if got.Root == "" {
+		t.Fatal("empty root")
+	}
+}

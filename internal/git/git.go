@@ -72,7 +72,8 @@ type Scan struct {
 // false, so such panes are not in Spaces.
 //
 // Like git, Discover reads GIT_CEILING_DIRECTORIES: the search stops before it
-// looks at a listed directory or any directory above it.
+// goes up into a listed directory. A start directory that is itself listed is
+// still checked.
 func Discover(path string) (Checkout, bool) {
 	start, err := canonical(path)
 	if err != nil {
@@ -80,7 +81,7 @@ func Discover(path string) (Checkout, bool) {
 	}
 	ceilings := ceilingDirs()
 	for root := start; ; {
-		if ceilings[root] {
+		if root != start && ceilings[root] {
 			return Checkout{}, false
 		}
 		dotGit := filepath.Join(root, ".git")
