@@ -5,7 +5,7 @@ package terminal
 import (
 	"math"
 
-	"github.com/contursofran/contr/internal/herdr/endpoint"
+	"github.com/contursofran/contr/internal/term"
 )
 
 // Underlines: which cells a style covers and the marks it paints. The rules
@@ -36,7 +36,7 @@ const (
 // underlineOf returns the underline of a cell. herdr keeps the style in bits
 // 12-15: 2 double, 3 curly, 4 dotted and 5 dashed. 0 and 1 are single, and so
 // is any other value, as herdr sends none. A hidden cell is not underlined.
-func underlineOf(cell endpoint.Cell) UnderlineKind {
+func underlineOf(cell term.Cell) UnderlineKind {
 	if cell.Attrs&Hidden != 0 || cell.Attrs&(Underline|UnderlineStyle) == 0 {
 		return UnderlineNone
 	}
@@ -65,7 +65,7 @@ type underlineRun struct {
 // underlineRuns returns the underline runs of a row, in column order. A cell
 // with no underline, or a hidden cell, ends a run. Blank cells and the tail of
 // a wide glyph are underlined like any other cell.
-func underlineRuns(row []endpoint.Cell) []underlineRun {
+func underlineRuns(row []term.Cell) []underlineRun {
 	var runs []underlineRun
 	for col, cell := range row {
 		kind := underlineOf(cell)

@@ -7,7 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/contursofran/contr/internal/herdr/endpoint"
+	"github.com/contursofran/contr/internal/term"
 )
 
 var (
@@ -18,31 +18,31 @@ var (
 // wheelCell has 8 pixels of padding.
 var wheelCell = Metrics{CellW: 10, CellH: 20, Pad: 8}
 
-func wheelPane(id string, mouse, alt bool) endpoint.SurfacePane {
-	return endpoint.SurfacePane{
+func wheelPane(id string, mouse, alt bool) term.Pane {
+	return term.Pane{
 		PaneID:          id,
-		Rect:            endpoint.Rect{X: 0, Y: 0, Width: 6, Height: 4},
-		InnerRect:       endpoint.Rect{X: 1, Y: 1, Width: 4, Height: 2},
+		Rect:            term.Rect{X: 0, Y: 0, Width: 6, Height: 4},
+		InnerRect:       term.Rect{X: 1, Y: 1, Width: 4, Height: 2},
 		MouseReporting:  mouse,
 		AlternateScreen: alt,
 	}
 }
 
-func wheelSurface() *endpoint.Surface {
+func wheelSurface() *term.Screen {
 	p2 := wheelPane("p2", false, false)
 	p2.Rect.X = 6
 	p2.InnerRect.X = 7
-	return &endpoint.Surface{
+	return &term.Screen{
 		BootID:             "boot",
 		ProjectionRevision: 1,
 		Revision:           1,
-		Size:               endpoint.GridSize{Cols: 12, Rows: 4},
-		Panes:              []endpoint.SurfacePane{wheelPane("p1", false, false), p2},
+		Size:               term.GridSize{Cols: 12, Rows: 4},
+		Panes:              []term.Pane{wheelPane("p1", false, false), p2},
 	}
 }
 
-func wheelEvent(dir endpoint.WheelDir, col, row, lines uint16) endpoint.InputEvent {
-	return endpoint.WheelEvent{Dir: dir, Column: col, Row: row, Lines: lines}
+func wheelEvent(dir term.WheelDir, col, row, lines uint16) term.InputEvent {
+	return term.WheelEvent{Dir: dir, Column: col, Row: row, Lines: lines}
 }
 
 func close32(a, b float32) bool { return math.Abs(float64(a-b)) < 1e-5 }
@@ -233,7 +233,7 @@ func TestClearDropsBothRemainders(t *testing.T) {
 }
 
 func cellAtGrid(x, y float32) (uint16, uint16, bool) {
-	return CellAt([2]float32{x, y}, [2]float32{100, 50}, wheelCell, endpoint.GridSize{Cols: 12, Rows: 4})
+	return CellAt([2]float32{x, y}, [2]float32{100, 50}, wheelCell, term.GridSize{Cols: 12, Rows: 4})
 }
 
 func TestCellAtTakesThePaddingOffThePoint(t *testing.T) {
@@ -266,7 +266,7 @@ func TestCellAtIsNoneInThePaddingAndOutsideTheGrid(t *testing.T) {
 }
 
 func TestCellAtWithoutACellSizeIsNone(t *testing.T) {
-	size := endpoint.GridSize{Cols: 12, Rows: 4}
+	size := term.GridSize{Cols: 12, Rows: 4}
 	noWidth := wheelCell
 	noWidth.CellW = 0
 	nanHeight := wheelCell
@@ -321,16 +321,16 @@ func TestPaneCellIsRelativeToTheInnerRectAndClamped(t *testing.T) {
 
 func TestAHistoryPaneGetsOneEventWithTheWholeCount(t *testing.T) {
 	p := wheelPane("p1", false, false)
-	want := []endpoint.InputEvent{endpoint.WheelEvent{Dir: endpoint.WheelUp, Column: 2, Row: 3, Mods: endpoint.ModShift, Lines: 4}}
-	if got := WheelEvents(&p, 2, 3, 4, endpoint.ModShift); !reflect.DeepEqual(got, want) {
+	want := []term.InputEvent{term.WheelEvent{Dir: term.WheelUp, Column: 2, Row: 3, Mods: term.ModShift, Lines: 4}}
+	if got := WheelEvents(&p, 2, 3, 4, term.ModShift); !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v", got)
 	}
 	// The event is capped well below herdr's batch limit; the excess is dropped.
-	want = []endpoint.InputEvent{wheelEvent(endpoint.WheelUp, 0, 0, MaxWheelLines)}
+	want = []term.InputEvent{wheelEvent(term.WheelUp, 0, 0, MaxWheelLines)}
 	if got := WheelEvents(&p, 0, 0, 700, 0); !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v", got)
 	}
-	want = []endpoint.InputEvent{wheelEvent(endpoint.WheelDown, 0, 0, 4)}
+	want = []term.InputEvent{wheelEvent(term.WheelDown, 0, 0, 4)}
 	if got := WheelEvents(&p, 0, 0, -4, 0); !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v", got)
 	}
@@ -340,13 +340,13 @@ func TestAHistoryPaneGetsOneEventWithTheWholeCount(t *testing.T) {
 }
 
 func TestAReportingPaneGetsOneEventPerNotch(t *testing.T) {
-	notch := endpoint.WheelEvent{Dir: endpoint.WheelUp, Column: 2, Row: 3, Mods: endpoint.ModControl, Lines: 3}
-	for _, p := range []endpoint.SurfacePane{wheelPane("p1", true, false), wheelPane("p1", false, true)} {
-		want := []endpoint.InputEvent{notch, notch}
-		if got := WheelEvents(&p, 2, 3, 2, endpoint.ModControl); !reflect.DeepEqual(got, want) {
+	notch := term.WheelEvent{Dir: term.WheelUp, Column: 2, Row: 3, Mods: term.ModControl, Lines: 3}
+	for _, p := range []term.Pane{wheelPane("p1", true, false), wheelPane("p1", false, true)} {
+		want := []term.InputEvent{notch, notch}
+		if got := WheelEvents(&p, 2, 3, 2, term.ModControl); !reflect.DeepEqual(got, want) {
 			t.Errorf("got %v", got)
 		}
-		want = []endpoint.InputEvent{wheelEvent(endpoint.WheelDown, 0, 0, 3)}
+		want = []term.InputEvent{wheelEvent(term.WheelDown, 0, 0, 3)}
 		if got := WheelEvents(&p, 0, 0, -1, 0); !reflect.DeepEqual(got, want) {
 			t.Errorf("got %v", got)
 		}
@@ -359,11 +359,11 @@ func TestAReportingPaneGetsOneEventPerNotch(t *testing.T) {
 
 func TestAHorizontalWheelNeedsAPaneThatReportsTheMouse(t *testing.T) {
 	reporting := wheelPane("p1", true, false)
-	want := []endpoint.InputEvent{wheelEvent(endpoint.WheelLeft, 2, 3, 3), wheelEvent(endpoint.WheelLeft, 2, 3, 3)}
+	want := []term.InputEvent{wheelEvent(term.WheelLeft, 2, 3, 3), wheelEvent(term.WheelLeft, 2, 3, 3)}
 	if got := WheelColumnEvents(&reporting, 2, 3, 2, 0); !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v", got)
 	}
-	want = []endpoint.InputEvent{wheelEvent(endpoint.WheelRight, 0, 0, 3), wheelEvent(endpoint.WheelRight, 0, 0, 3)}
+	want = []term.InputEvent{wheelEvent(term.WheelRight, 0, 0, 3), wheelEvent(term.WheelRight, 0, 0, 3)}
 	if got := WheelColumnEvents(&reporting, 0, 0, -2, 0); !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v", got)
 	}
@@ -380,10 +380,10 @@ func TestWheelModsCarriesShiftControlAndAlt(t *testing.T) {
 	if got := WheelMods(0); got != 0 {
 		t.Errorf("none: %d", got)
 	}
-	if got := WheelMods(ui.Shift); got != endpoint.ModShift {
+	if got := WheelMods(ui.Shift); got != term.ModShift {
 		t.Errorf("shift: %d", got)
 	}
-	if got := WheelMods(ui.Shift | ui.Ctrl | ui.Alt); got != endpoint.ModShift|endpoint.ModControl|endpoint.ModAlt {
+	if got := WheelMods(ui.Shift | ui.Ctrl | ui.Alt); got != term.ModShift|term.ModControl|term.ModAlt {
 		t.Errorf("all: %d", got)
 	}
 	// Super is not a wheel modifier.

@@ -16,6 +16,8 @@ import (
 	"slices"
 	"sync"
 	"time"
+
+	"github.com/contursofran/contr/internal/term"
 )
 
 const (
@@ -34,33 +36,19 @@ const (
 	refusedWait = 30 * time.Second
 )
 
-// LinkStateKind is the kind of a [LinkState].
-type LinkStateKind int
-
-const (
-	// LinkConnecting: connecting, or reconnecting.
-	LinkConnecting LinkStateKind = iota + 1
-	// LinkLive: connected.
-	LinkLive
-	// LinkNotRunning: herdr is not running or closed the connection. Message
-	// is for the log.
-	LinkNotRunning
-	// LinkIncompatible: herdr refused contr, or sent what contr cannot read.
-	// Message is for the user.
-	LinkIncompatible
+// LinkStateKind and LinkState are the shared [term] types.
+type (
+	LinkStateKind = term.LinkStateKind
+	LinkState     = term.LinkState
 )
 
-// LinkState is the connection state, as the UI shows it. Compare with ==.
-type LinkState struct {
-	Kind LinkStateKind
-	// ServerVersion is set for LinkLive.
-	ServerVersion string
-	// Untested is set for LinkLive when contr has not been tested with this
-	// herdr version.
-	Untested bool
-	// Message is set for LinkNotRunning and LinkIncompatible.
-	Message string
-}
+// Link states.
+const (
+	LinkConnecting   = term.LinkConnecting
+	LinkLive         = term.LinkLive
+	LinkNotRunning   = term.LinkNotRunning
+	LinkIncompatible = term.LinkIncompatible
+)
 
 // LinkUpdate is what the link tells the UI. The UI applies them in order.
 // It is one of [StateUpdate], [SurfaceUpdate], [SnapshotUpdate] and

@@ -3,6 +3,7 @@
 package terminal
 
 import (
+	"errors"
 	"log/slog"
 	"time"
 
@@ -10,7 +11,7 @@ import (
 
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/herdr"
-	"github.com/contursofran/contr/internal/herdr/endpoint"
+	"github.com/contursofran/contr/internal/term"
 )
 
 // The terminal view: the focused herdr tab, painted from the surface link,
@@ -45,24 +46,22 @@ const (
 	staleOpacity = 0.5
 )
 
-// Link is the part of [endpoint.Handle] that the view uses.
+// Link is what the view needs from a terminal source. It never blocks.
 type Link interface {
-	SendInput(paneID string, events []endpoint.InputEvent) error
-	Resize(size endpoint.GridSize, cell endpoint.CellPx) error
+	SendInput(paneID string, events []term.InputEvent) error
+	Resize(size term.GridSize, cell term.CellPx) error
 	SetFocus(focused bool) error
-	TakeLatest() *endpoint.Surface
+	TakeLatest() *term.Screen
 }
 
 // Starter starts a link at the given size. It returns the link and a function
 // that stops it. notify may run on any goroutine. An error means the link did
 // not start (D19).
-type Starter func(size endpoint.GridSize, cell endpoint.CellPx, notify func(endpoint.LinkUpdate)) (Link, func(), error)
+type Starter func(size term.GridSize, cell term.CellPx, notify func(term.LinkUpdate)) (Link, func(), error)
 
-// SpawnStarter is the app's [Starter]: it starts the surface link to the local
-// herdr. It never fails (D19).
-func SpawnStarter(size endpoint.GridSize, cell endpoint.CellPx, notify func(endpoint.LinkUpdate)) (Link, func(), error) {
-	l, h := endpoint.SpawnLink(endpoint.LinkTarget{}, size, cell, notify)
-	return h, l.Stop, nil
+// noStarter is the [Starter] when the app gives none: the link does not start.
+func noStarter(term.GridSize, term.CellPx, func(term.LinkUpdate)) (Link, func(), error) {
+	return nil, nil, errors.New("no terminal source")
 }
 
 // Options are what the view needs from the app.
@@ -70,7 +69,7 @@ type Options struct {
 	// Enabled starts the link: os.Getenv(SurfaceEnv) == "1". Tests leave it
 	// false, so no test connects to herdr.
 	Enabled bool
-	// Start starts the link. Nil means [SpawnStarter].
+	// Start starts the link. Nil starts none: the state is not running.
 	Start Starter
 	// Post runs fn on the UI thread (mygo.RunOnMain). Nil runs fn at once.
 	Post func(fn func())
@@ -83,8 +82,8 @@ type Options struct {
 
 // wanted is a grid and the cell size that go with it.
 type wanted struct {
-	size endpoint.GridSize
-	cell endpoint.CellPx
+	size term.GridSize
+	cell term.CellPx
 }
 
 // resizeSent is one resize the view sent. Tests read them.
@@ -100,8 +99,8 @@ type View struct {
 	// closed is set by Close. Updates that arrive afterwards are dropped.
 	closed bool
 
-	state   endpoint.LinkState
-	surface *endpoint.Surface
+	state   term.LinkState
+	surface *term.Screen
 	// shellPane is the pane the shell reported as focused. Keys go there when
 	// the surface names none.
 	shellPane string
@@ -157,9 +156,9 @@ type View struct {
 // when o.Enabled is set.
 func NewView(o Options) *View {
 	if o.Start == nil {
-		o.Start = SpawnStarter
+		o.Start = noStarter
 	}
-	v := &View{opts: o, state: endpoint.LinkState{Kind: endpoint.LinkConnecting}}
+	v := &View{opts: o, state: term.LinkState{Kind: term.LinkConnecting}}
 	v.ime.view = v
 	return v
 }
@@ -263,7 +262,7 @@ func (v *View) sendResize(want wanted) {
 func (v *View) startLink(want wanted) {
 	link, stop, err := v.opts.Start(want.size, want.cell, v.notify)
 	if err != nil {
-		v.setState(endpoint.LinkState{Kind: endpoint.LinkNotRunning, Message: err.Error()})
+		v.setState(term.LinkState{Kind: term.LinkNotRunning, Message: err.Error()})
 		return
 	}
 	v.sent, v.hasSent = want, true
@@ -272,7 +271,7 @@ func (v *View) startLink(want wanted) {
 
 // notify receives the link's updates on the link goroutine and moves them to
 // the UI thread.
-func (v *View) notify(u endpoint.LinkUpdate) {
+func (v *View) notify(u term.LinkUpdate) {
 	run := func() { v.onUpdate(u) }
 	if v.opts.Post != nil {
 		v.opts.Post(run)
@@ -282,14 +281,14 @@ func (v *View) notify(u endpoint.LinkUpdate) {
 }
 
 // onUpdate applies one update from the link, on the UI thread.
-func (v *View) onUpdate(u endpoint.LinkUpdate) {
+func (v *View) onUpdate(u term.LinkUpdate) {
 	if v.closed {
 		return
 	}
 	switch u := u.(type) {
-	case endpoint.StateUpdate:
+	case term.StateUpdate:
 		v.setState(u.State)
-	case endpoint.SurfaceUpdate:
+	case term.ScreenUpdate:
 		// The update says a surface is waiting. The newest one is taken from
 		// the link.
 		if v.link == nil {
@@ -298,12 +297,12 @@ func (v *View) onUpdate(u endpoint.LinkUpdate) {
 		if next := v.link.TakeLatest(); next != nil {
 			v.acceptSurface(next)
 		}
-	case endpoint.SnapshotUpdate:
+	case term.SnapshotUpdate:
 		v.shellPane = ""
 		if u.Snapshot != nil && u.Snapshot.FocusedPaneID != nil {
 			v.shellPane = *u.Snapshot.FocusedPaneID
 		}
-	case endpoint.ClipboardUpdate:
+	case term.ClipboardUpdate:
 		v.writeClipboard(u.Text)
 	}
 }
@@ -311,7 +310,7 @@ func (v *View) onUpdate(u endpoint.LinkUpdate) {
 // acceptSurface shows next unless it is the surface already shown. A new
 // revision invalidates once. A released selection whose rows the program wrote
 // over, or whose pane moved or went, goes with it.
-func (v *View) acceptSurface(next *endpoint.Surface) {
+func (v *View) acceptSurface(next *term.Screen) {
 	if held := v.surface; held != nil &&
 		held.BootID == next.BootID &&
 		held.ProjectionRevision == next.ProjectionRevision &&
@@ -329,21 +328,21 @@ func (v *View) acceptSurface(next *endpoint.Surface) {
 // shell's pane. A live one gets the focus state and the wanted size again: the
 // hello may have carried an older size, and herdr may not know the window is
 // active.
-func (v *View) setState(st endpoint.LinkState) {
+func (v *View) setState(st term.LinkState) {
 	if v.state == st {
 		return
 	}
 	v.state = st
-	if st.Kind == endpoint.LinkNotRunning || st.Kind == endpoint.LinkIncompatible {
+	if st.Kind == term.LinkNotRunning || st.Kind == term.LinkIncompatible {
 		v.surface = nil
 		v.selection = nil
 		v.cache.Reset()
 		v.wheel.Clear()
 	}
-	if st.Kind == endpoint.LinkNotRunning {
+	if st.Kind == term.LinkNotRunning {
 		v.shellPane = ""
 	}
-	if st.Kind == endpoint.LinkLive {
+	if st.Kind == term.LinkLive {
 		v.sendFocus()
 		if v.hasWant {
 			v.sendResize(v.want)
@@ -387,7 +386,7 @@ func (v *View) focusedPane() string {
 
 // sendTo queues events for pane on the link. It is false when they were not
 // queued: no link, or the link refused them.
-func (v *View) sendTo(pane string, events []endpoint.InputEvent) bool {
+func (v *View) sendTo(pane string, events []term.InputEvent) bool {
 	if v.link == nil {
 		return false
 	}
@@ -401,7 +400,7 @@ func (v *View) sendTo(pane string, events []endpoint.InputEvent) bool {
 // statusLine is the line the view shows instead of the grid, with its colour.
 // ok is false when the grid speaks for itself. With the link off the line says
 // so; with the link on it says what the link reports.
-func statusLine(enabled, hasSurface bool, st endpoint.LinkState) (line string, colour uint32, ok bool) {
+func statusLine(enabled, hasSurface bool, st term.LinkState) (line string, colour uint32, ok bool) {
 	if hasSurface {
 		return "", 0, false
 	}
@@ -409,9 +408,9 @@ func statusLine(enabled, hasSurface bool, st endpoint.LinkState) (line string, c
 		return OffLine, theme.TextDim, true
 	}
 	switch st.Kind {
-	case endpoint.LinkNotRunning:
+	case term.LinkNotRunning:
 		return herdr.NotRunningLine, theme.Text2, true
-	case endpoint.LinkIncompatible:
+	case term.LinkIncompatible:
 		return st.Message, theme.Text2, true
 	}
 	return "", 0, false
@@ -419,8 +418,8 @@ func statusLine(enabled, hasSurface bool, st endpoint.LinkState) (line string, c
 
 // isStale is true while the view shows a surface that the link no longer
 // confirms: the link is reconnecting.
-func isStale(hasSurface bool, st endpoint.LinkState) bool {
-	return hasSurface && st.Kind == endpoint.LinkConnecting
+func isStale(hasSurface bool, st term.LinkState) bool {
+	return hasSurface && st.Kind == term.LinkConnecting
 }
 
 // reassertDue reports whether a size may be sent again now: none was sent

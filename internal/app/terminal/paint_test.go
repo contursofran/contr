@@ -8,7 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/theme"
-	"github.com/contursofran/contr/internal/herdr/endpoint"
+	"github.com/contursofran/contr/internal/term"
 )
 
 const (
@@ -17,17 +17,17 @@ const (
 	plain uint32 = 0
 )
 
-func cellOf(text string, attrs uint16) endpoint.Cell {
-	return endpoint.Cell{Text: text, Fg: plain, Bg: plain, Attrs: attrs}
+func cellOf(text string, attrs uint16) term.Cell {
+	return term.Cell{Text: text, Fg: plain, Bg: plain, Attrs: attrs}
 }
 
-func coloured(text string, fg uint32) endpoint.Cell {
+func coloured(text string, fg uint32) term.Cell {
 	c := cellOf(text, 0)
 	c.Fg = fg
 	return c
 }
 
-func tail() endpoint.Cell {
+func tail() term.Cell {
 	c := cellOf("", 0)
 	c.WideTail = true
 	return c
@@ -38,7 +38,7 @@ type colText struct {
 	Text string
 }
 
-func texts(row []endpoint.Cell) []colText {
+func texts(row []term.Cell) []colText {
 	var out []colText
 	for _, s := range textSpans(row) {
 		out = append(out, colText{s.Col, s.Text})
@@ -54,33 +54,33 @@ func eq[T comparable](t *testing.T, got, want []T) {
 }
 
 func TestAsciiCellsWithOneStyleMakeOneSpan(t *testing.T) {
-	eq(t, texts([]endpoint.Cell{cellOf("a", 0), cellOf("b", 0), cellOf("c", 0)}), []colText{{0, "abc"}})
+	eq(t, texts([]term.Cell{cellOf("a", 0), cellOf("b", 0), cellOf("c", 0)}), []colText{{0, "abc"}})
 }
 
 func TestAStyleChangeStartsANewSpan(t *testing.T) {
-	eq(t, texts([]endpoint.Cell{coloured("a", red), coloured("b", green)}), []colText{{0, "a"}, {1, "b"}})
+	eq(t, texts([]term.Cell{coloured("a", red), coloured("b", green)}), []colText{{0, "a"}, {1, "b"}})
 }
 
 func TestSpacesInsideALineStayInTheSpanSoColumnsHold(t *testing.T) {
-	eq(t, texts([]endpoint.Cell{cellOf("a", 0), cellOf(" ", 0), cellOf("b", 0)}), []colText{{0, "a b"}})
+	eq(t, texts([]term.Cell{cellOf("a", 0), cellOf(" ", 0), cellOf("b", 0)}), []colText{{0, "a b"}})
 }
 
 func TestABlankRunMakesNoSpanEvenWhenUnderlined(t *testing.T) {
 	// An underline is drawn per cell, so a blank run needs no span for it.
-	if got := textSpans([]endpoint.Cell{cellOf(" ", 0), cellOf(" ", 0)}); len(got) != 0 {
+	if got := textSpans([]term.Cell{cellOf(" ", 0), cellOf(" ", 0)}); len(got) != 0 {
 		t.Errorf("plain blanks: %v", got)
 	}
-	if got := textSpans([]endpoint.Cell{cellOf(" ", Underline)}); len(got) != 0 {
+	if got := textSpans([]term.Cell{cellOf(" ", Underline)}); len(got) != 0 {
 		t.Errorf("underlined blank: %v", got)
 	}
 }
 
 func TestAStruckBlankRunStillMakesASpan(t *testing.T) {
-	eq(t, texts([]endpoint.Cell{cellOf(" ", Strikethrough)}), []colText{{0, " "}})
+	eq(t, texts([]term.Cell{cellOf(" ", Strikethrough)}), []colText{{0, " "}})
 }
 
 func TestAnItalicCellStartsANewSpanAndKeepsItsColumn(t *testing.T) {
-	row := []endpoint.Cell{cellOf("a", 0), cellOf("b", Italic), cellOf("c", Italic)}
+	row := []term.Cell{cellOf("a", 0), cellOf("b", Italic), cellOf("c", Italic)}
 	eq(t, texts(row), []colText{{0, "a"}, {1, "bc"}})
 }
 
@@ -103,22 +103,22 @@ func TestTheRunFontIsItalicOnlyWhenTheStyleAsks(t *testing.T) {
 }
 
 func TestANonAsciiCellIsItsOwnSpanAtItsColumn(t *testing.T) {
-	eq(t, texts([]endpoint.Cell{cellOf("a", 0), cellOf("é", 0), cellOf("b", 0)}), []colText{{0, "a"}, {1, "é"}, {2, "b"}})
+	eq(t, texts([]term.Cell{cellOf("a", 0), cellOf("é", 0), cellOf("b", 0)}), []colText{{0, "a"}, {1, "é"}, {2, "b"}})
 }
 
 func TestAnAsciiCellNeverJoinsANonAsciiSpanAcrossAGap(t *testing.T) {
 	// "é" is two bytes but one column, so byte length must not stand in for columns.
-	row := []endpoint.Cell{cellOf("é", 0), cellOf("h", Hidden), cellOf("a", 0)}
+	row := []term.Cell{cellOf("é", 0), cellOf("h", Hidden), cellOf("a", 0)}
 	eq(t, texts(row), []colText{{0, "é"}, {2, "a"}})
 }
 
 func TestAWideGlyphSkipsItsTailAndTheNextTextKeepsItsColumn(t *testing.T) {
-	eq(t, texts([]endpoint.Cell{cellOf("界", 0), tail(), cellOf("x", 0)}), []colText{{0, "界"}, {2, "x"}})
+	eq(t, texts([]term.Cell{cellOf("界", 0), tail(), cellOf("x", 0)}), []colText{{0, "界"}, {2, "x"}})
 }
 
 func TestHiddenCellsMakeNoSpanSoNothingIsShapedForThem(t *testing.T) {
-	eq(t, texts([]endpoint.Cell{cellOf("a", Hidden), cellOf("b", 0)}), []colText{{1, "b"}})
-	if got := textSpans([]endpoint.Cell{cellOf("a", Hidden), cellOf("é", Hidden)}); len(got) != 0 {
+	eq(t, texts([]term.Cell{cellOf("a", Hidden), cellOf("b", 0)}), []colText{{1, "b"}})
+	if got := textSpans([]term.Cell{cellOf("a", Hidden), cellOf("é", Hidden)}); len(got) != 0 {
 		t.Errorf("only hidden: %v", got)
 	}
 }
@@ -134,19 +134,19 @@ func TestBoldItalicAndStrikeAreReadFromAttrs(t *testing.T) {
 }
 
 func TestBackgroundRunsMergeEqualColoursAndSkipTheDefault(t *testing.T) {
-	bg := func(c uint32) endpoint.Cell {
+	bg := func(c uint32) term.Cell {
 		cell := cellOf(" ", 0)
 		cell.Bg = c
 		return cell
 	}
-	row := []endpoint.Cell{bg(0x0200FF00), bg(0x0200FF00), bg(plain), bg(0x0200FF00), bg(0x02000001)}
+	row := []term.Cell{bg(0x0200FF00), bg(0x0200FF00), bg(plain), bg(0x0200FF00), bg(0x02000001)}
 	want := []bgRun{{0, 2, 0x00FF00}, {3, 1, 0x00FF00}, {4, 1, 0x000001}}
 	eq(t, backgroundRuns(row), want)
 }
 
 func TestTheCursorIsClampedToTheGrid(t *testing.T) {
-	grid := endpoint.GridSize{Cols: 80, Rows: 24}
-	at := func(x, y uint16) endpoint.Cursor { return endpoint.Cursor{X: x, Y: y, Visible: true} }
+	grid := term.GridSize{Cols: 80, Rows: 24}
+	at := func(x, y uint16) term.Cursor { return term.Cursor{X: x, Y: y, Visible: true} }
 	for _, c := range []struct{ in, want [2]uint16 }{
 		{[2]uint16{10, 5}, [2]uint16{10, 5}},
 		// herdr may put it one past the last column or row.
@@ -174,50 +174,47 @@ func TestCursorShapesFillTheBlockTheBarOrTheUnderline(t *testing.T) {
 }
 
 // rows of one cell each, as herdr sends them: a new slice for a changed row.
-func oneCell(text string) endpoint.Row { return endpoint.Row{cellOf(text, 0)} }
+func oneCell(text string) term.Row { return term.Row{cellOf(text, 0)} }
 
 func TestARowHerdrSendsAgainIsShapedOnlyWhenItIsANewRow(t *testing.T) {
 	first, second := oneCell("a"), oneCell("b")
 	var cache []rowEntry[string]
 	var shaped []string
-	shapeRow := func(row []endpoint.Cell) []string {
+	shapeRow := func(row []term.Cell) []string {
 		shaped = append(shaped, row[0].Text)
 		return []string{row[0].Text}
 	}
 
-	cache = refreshRows(cache, []endpoint.Row{first, second}, shapeRow)
+	cache = refreshRows(cache, []term.Row{first, second}, shapeRow)
 	eq(t, shaped, []string{"a", "b"})
 
 	// The same rows again, as herdr sends them with a patch that leaves them
 	// alone: no shaping.
-	cache = refreshRows(cache, []endpoint.Row{first, second}, shapeRow)
+	cache = refreshRows(cache, []term.Row{first, second}, shapeRow)
 	eq(t, shaped, []string{"a", "b"})
 
 	// A patch that replaces the second row: only that row is shaped again.
-	cache = refreshRows(cache, []endpoint.Row{first, oneCell("c")}, shapeRow)
+	cache = refreshRows(cache, []term.Row{first, oneCell("c")}, shapeRow)
 	eq(t, shaped, []string{"a", "b", "c"})
 
 	// A shorter surface drops the rows below it: nothing is shaped.
-	cache = refreshRows(cache, []endpoint.Row{first}, shapeRow)
+	cache = refreshRows(cache, []term.Row{first}, shapeRow)
 	eq(t, shaped, []string{"a", "b", "c"})
 	if len(cache) != 1 {
 		t.Errorf("cache has %d rows", len(cache))
 	}
 }
 
-// A real patch puts a new row in the surface and leaves the others alone.
+// A changed row is a new slice; the screen puts a new row in the surface and leaves the others alone.
 func TestAPatchThatChangesOneRowShapesOneRow(t *testing.T) {
-	s := endpoint.Surface{BootID: "b", Revision: 1, Size: endpoint.GridSize{Cols: 1, Rows: 3},
-		Rows: []endpoint.Row{oneCell("a"), oneCell("b"), oneCell("c")}}
+	s := term.Screen{BootID: "b", Revision: 1, Size: term.GridSize{Cols: 1, Rows: 3},
+		Rows: []term.Row{oneCell("a"), oneCell("b"), oneCell("c")}}
 	var cache []rowEntry[string]
 	n := 0
-	shapeRow := func(row []endpoint.Cell) []string { n++; return []string{row[0].Text} }
+	shapeRow := func(row []term.Cell) []string { n++; return []string{row[0].Text} }
 	cache = refreshRows(cache, s.Rows, shapeRow)
-	patch := endpoint.SurfacePatch{BootID: "b", BaseRevision: 1, Revision: 2,
-		Spans: []endpoint.Span{{X: 0, Y: 1, Cells: []endpoint.Cell{cellOf("x", 0)}}}}
-	if err := s.ApplyPatch(patch); err != nil {
-		t.Fatal(err)
-	}
+	// A patch never changes a row in place: it puts a new slice in the screen.
+	s.Rows[1] = term.Row{cellOf("x", 0)}
 	cache = refreshRows(cache, s.Rows, shapeRow)
 	if n != 4 {
 		t.Errorf("shaped %d rows, want 3 then 1", n)
@@ -236,7 +233,7 @@ func TestANonAsciiOrEmptyTextIsNotAPlainChar(t *testing.T) {
 }
 
 func TestABoxGlyphMakesNoTextSpanSoItIsNotShaped(t *testing.T) {
-	eq(t, texts([]endpoint.Cell{cellOf("a", 0), cellOf("│", 0), cellOf("b", 0)}), []colText{{0, "a"}, {2, "b"}})
+	eq(t, texts([]term.Cell{cellOf("a", 0), cellOf("│", 0), cellOf("b", 0)}), []colText{{0, "a"}, {2, "b"}})
 }
 
 func TestABoxGlyphCellIsALineGlyphInItsColour(t *testing.T) {
@@ -257,7 +254,7 @@ func TestAHiddenBoxGlyphPaintsNothingAndAWideTailIsNotAGlyph(t *testing.T) {
 	if _, ok := quadGlyph(hidden); ok {
 		t.Error("hidden glyph paints")
 	}
-	if got := textSpans([]endpoint.Cell{hidden}); len(got) != 0 {
+	if got := textSpans([]term.Cell{hidden}); len(got) != 0 {
 		t.Errorf("hidden spans: %v", got)
 	}
 	wide := tail()
@@ -272,7 +269,7 @@ func TestATextOfMoreThanOneCharIsNotABoxGlyph(t *testing.T) {
 	if _, ok := quadGlyph(cell); ok {
 		t.Error("two chars are a box glyph")
 	}
-	eq(t, texts([]endpoint.Cell{cell}), []colText{{0, "│a"}})
+	eq(t, texts([]term.Cell{cell}), []colText{{0, "│a"}})
 }
 
 func TestTheTerminalFontKeepsItsFamilyAndTurnsTheLigatureFeaturesOff(t *testing.T) {

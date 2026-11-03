@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/contursofran/contr/internal/app/theme"
-	"github.com/contursofran/contr/internal/herdr/endpoint"
+	"github.com/contursofran/contr/internal/term"
 )
 
 const (
@@ -13,8 +13,8 @@ const (
 	bgTerminal   = uint32(theme.BgTerminal)
 )
 
-func colorCell(fg, bg uint32, attrs uint16) endpoint.Cell {
-	return endpoint.Cell{Text: "a", Fg: fg, Bg: bg, Attrs: attrs}
+func colorCell(fg, bg uint32, attrs uint16) term.Cell {
+	return term.Cell{Text: "a", Fg: fg, Bg: bg, Attrs: attrs}
 }
 
 func wantResolve(t *testing.T, v, def, want uint32) {
@@ -24,7 +24,7 @@ func wantResolve(t *testing.T, v, def, want uint32) {
 	}
 }
 
-func wantColors(t *testing.T, c endpoint.Cell, fg, bg uint32, hasBg bool) {
+func wantColors(t *testing.T, c term.Cell, fg, bg uint32, hasBg bool) {
 	t.Helper()
 	gf, gb, gh := CellColors(c)
 	if gf != fg || gh != hasBg || (hasBg && gb != bg) {

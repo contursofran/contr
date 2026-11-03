@@ -7,18 +7,18 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/contursofran/contr/internal/herdr/endpoint"
+	"github.com/contursofran/contr/internal/term"
 )
 
 // selM: cells of 10 by 20 pixels, with no padding. Cell (c, r) spans x from
 // 10c to 10c + 10.
 var selM = Metrics{CellW: 10, CellH: 20}
 
-func selCell(text string) endpoint.Cell { return endpoint.Cell{Text: text} }
+func selCell(text string) term.Cell { return term.Cell{Text: text} }
 
 // selCells is one cell per character.
-func selCells(text string) []endpoint.Cell {
-	var out []endpoint.Cell
+func selCells(text string) []term.Cell {
+	var out []term.Cell
 	for _, c := range text {
 		out = append(out, selCell(string(c)))
 	}
@@ -26,13 +26,13 @@ func selCells(text string) []endpoint.Cell {
 }
 
 // selWide is a wide glyph: the cell that draws it, then the cell it covers.
-func selWide(glyph string) []endpoint.Cell {
-	return []endpoint.Cell{selCell(glyph), {WideTail: true}}
+func selWide(glyph string) []term.Cell {
+	return []term.Cell{selCell(glyph), {WideTail: true}}
 }
 
 // selJoin joins runs of cells into one row.
-func selJoin(parts ...[]endpoint.Cell) []endpoint.Cell {
-	var out []endpoint.Cell
+func selJoin(parts ...[]term.Cell) []term.Cell {
+	var out []term.Cell
 	for _, p := range parts {
 		out = append(out, p...)
 	}
@@ -40,38 +40,38 @@ func selJoin(parts ...[]endpoint.Cell) []endpoint.Cell {
 }
 
 // selRowOf is a row of cells of the given byte lengths, each one text.
-func selRowOf(lengths ...int) []endpoint.Cell {
-	var out []endpoint.Cell
+func selRowOf(lengths ...int) []term.Cell {
+	var out []term.Cell
 	for _, n := range lengths {
 		out = append(out, selCell(strings.Repeat("x", n)))
 	}
 	return out
 }
 
-func selPane(id string, x, y, width, height uint16) endpoint.SurfacePane {
-	r := endpoint.Rect{X: x, Y: y, Width: width, Height: height}
-	return endpoint.SurfacePane{PaneID: id, Rect: r, InnerRect: r, Focused: true}
+func selPane(id string, x, y, width, height uint16) term.Pane {
+	r := term.Rect{X: x, Y: y, Width: width, Height: height}
+	return term.Pane{PaneID: id, Rect: r, InnerRect: r, Focused: true}
 }
 
 // selScreen is a surface of rows, each padded with blanks to the widest row.
-func selScreen(rows [][]endpoint.Cell, panes ...endpoint.SurfacePane) *endpoint.Surface {
+func selScreen(rows [][]term.Cell, panes ...term.Pane) *term.Screen {
 	cols := 0
 	for _, r := range rows {
 		cols = max(cols, len(r))
 	}
-	out := make([]endpoint.Row, len(rows))
+	out := make([]term.Row, len(rows))
 	for i, r := range rows {
-		row := append([]endpoint.Cell(nil), r...)
+		row := append([]term.Cell(nil), r...)
 		for len(row) < cols {
 			row = append(row, selCell(" "))
 		}
 		out[i] = row
 	}
-	return &endpoint.Surface{
+	return &term.Screen{
 		BootID:             "boot",
 		ProjectionRevision: 1,
 		Revision:           1,
-		Size:               endpoint.GridSize{Cols: uint16(cols), Rows: uint16(len(out))},
+		Size:               term.GridSize{Cols: uint16(cols), Rows: uint16(len(out))},
 		Rows:               out,
 		Panes:              panes,
 	}
@@ -92,7 +92,7 @@ func selLeft(col, row uint16) pt2  { return selAt(col, row, 0.2) }
 func selRight(col, row uint16) pt2 { return selAt(col, row, 0.8) }
 
 // selDrag presses at from, drags to to, and releases.
-func selDrag(t *testing.T, s *endpoint.Surface, from, to pt2) *Selection {
+func selDrag(t *testing.T, s *term.Screen, from, to pt2) *Selection {
 	t.Helper()
 	sel := BeginSelection(s, selM, from.x, from.y, 1)
 	if sel == nil {
@@ -104,7 +104,7 @@ func selDrag(t *testing.T, s *endpoint.Surface, from, to pt2) *Selection {
 }
 
 // selPress presses clicks times at p, with no drag.
-func selPress(t *testing.T, s *endpoint.Surface, p pt2, clicks int) *Selection {
+func selPress(t *testing.T, s *term.Screen, p pt2, clicks int) *Selection {
 	t.Helper()
 	sel := BeginSelection(s, selM, p.x, p.y, clicks)
 	if sel == nil {
@@ -113,7 +113,7 @@ func selPress(t *testing.T, s *endpoint.Surface, p pt2, clicks int) *Selection {
 	return sel
 }
 
-func copied(t *testing.T, sel *Selection, s *endpoint.Surface) string {
+func copied(t *testing.T, sel *Selection, s *term.Screen) string {
 	t.Helper()
 	text, err := sel.Text(s)
 	if err != nil {
@@ -122,7 +122,7 @@ func copied(t *testing.T, sel *Selection, s *endpoint.Surface) string {
 	return text
 }
 
-func wantText(t *testing.T, sel *Selection, s *endpoint.Surface, want string) {
+func wantText(t *testing.T, sel *Selection, s *term.Screen, want string) {
 	t.Helper()
 	if got := copied(t, sel, s); got != want {
 		t.Errorf("text = %q, want %q", got, want)
@@ -139,7 +139,7 @@ func wantSpans(t *testing.T, got []RowSpan, want ...RowSpan) {
 	}
 }
 
-func wantErr(t *testing.T, sel *Selection, s *endpoint.Surface, want error) {
+func wantErr(t *testing.T, sel *Selection, s *term.Screen, want error) {
 	t.Helper()
 	if _, err := sel.Text(s); !errors.Is(err, want) {
 		t.Errorf("err = %v, want %v", err, want)
@@ -147,7 +147,7 @@ func wantErr(t *testing.T, sel *Selection, s *endpoint.Surface, want error) {
 }
 
 func regionAt(x, y, width, height uint16) region {
-	r, ok := regionOf(endpoint.Rect{X: x, Y: y, Width: width, Height: height})
+	r, ok := regionOf(term.Rect{X: x, Y: y, Width: width, Height: height})
 	if !ok {
 		panic("region without cells")
 	}
@@ -195,7 +195,7 @@ func TestAnEdgeNeedsAFinitePointAndACellWithASize(t *testing.T) {
 }
 
 func TestAPressSelectsInThePaneUnderThePointerOnly(t *testing.T) {
-	s := selScreen([][]endpoint.Cell{selCells("abcdefghijkl")},
+	s := selScreen([][]term.Cell{selCells("abcdefghijkl")},
 		selPane("left", 0, 0, 5, 1), selPane("right", 7, 0, 5, 1))
 	if got := selPress(t, s, selLeft(1, 0), 1).PaneID(); got != "left" {
 		t.Errorf("left press: %q", got)
@@ -217,14 +217,14 @@ func TestAPressSelectsInThePaneUnderThePointerOnly(t *testing.T) {
 }
 
 func TestAPaneWithNoCellsTakesNoPress(t *testing.T) {
-	s := selScreen([][]endpoint.Cell{selCells("abc")}, selPane("empty", 0, 0, 0, 1))
+	s := selScreen([][]term.Cell{selCells("abc")}, selPane("empty", 0, 0, 0, 1))
 	if BeginSelection(s, selM, 5, 5, 1) != nil {
 		t.Error("press on an empty pane selected")
 	}
 }
 
 func TestAClickWithoutADragSelectsNoCell(t *testing.T) {
-	s := selScreen([][]endpoint.Cell{selCells("abcdef")}, selPane("p", 0, 0, 6, 1))
+	s := selScreen([][]term.Cell{selCells("abcdef")}, selPane("p", 0, 0, 6, 1))
 	sel := selPress(t, s, selRight(3, 0), 1)
 	if !sel.Dragging() {
 		t.Error("not dragging after press")
@@ -243,19 +243,19 @@ func TestAClickWithoutADragSelectsNoCell(t *testing.T) {
 }
 
 func TestADragSelectsFromTheFirstCellToTheOneUnderThePointer(t *testing.T) {
-	s := selScreen([][]endpoint.Cell{selCells("abcdef")}, selPane("p", 0, 0, 6, 1))
+	s := selScreen([][]term.Cell{selCells("abcdef")}, selPane("p", 0, 0, 6, 1))
 	sel := selDrag(t, s, selLeft(1, 0), selRight(3, 0))
 	wantSpans(t, sel.Rows(s), RowSpan{0, 1, 4})
 	wantText(t, sel, s, "bcd")
 }
 
 func TestADragBackToTheLeftSelectsTheSameCells(t *testing.T) {
-	s := selScreen([][]endpoint.Cell{selCells("abcdef")}, selPane("p", 0, 0, 6, 1))
+	s := selScreen([][]term.Cell{selCells("abcdef")}, selPane("p", 0, 0, 6, 1))
 	wantText(t, selDrag(t, s, selRight(3, 0), selLeft(1, 0)), s, "bcd")
 }
 
 func TestADragOverSeveralRowsCutsTheFirstAndLastRowsAndKeepsTheMiddleFull(t *testing.T) {
-	s := selScreen([][]endpoint.Cell{selCells("abcd"), selCells("efgh"), selCells("ijkl")},
+	s := selScreen([][]term.Cell{selCells("abcd"), selCells("efgh"), selCells("ijkl")},
 		selPane("p", 0, 0, 4, 3))
 	sel := selDrag(t, s, selLeft(2, 0), selRight(1, 2))
 	wantSpans(t, sel.Rows(s), RowSpan{0, 2, 4}, RowSpan{1, 0, 4}, RowSpan{2, 0, 2})
@@ -263,21 +263,21 @@ func TestADragOverSeveralRowsCutsTheFirstAndLastRowsAndKeepsTheMiddleFull(t *tes
 }
 
 func TestEachLineLosesItsTrailingSpacesAndABlankRowStaysALine(t *testing.T) {
-	s := selScreen([][]endpoint.Cell{selCells("ab  "), selCells("    "), selCells("cd  ")},
+	s := selScreen([][]term.Cell{selCells("ab  "), selCells("    "), selCells("cd  ")},
 		selPane("p", 0, 0, 4, 3))
 	wantText(t, selDrag(t, s, selLeft(0, 0), selRight(3, 2)), s, "ab\n\ncd")
 }
 
 func TestAWideGlyphIsWrittenOnceFromItsFirstCell(t *testing.T) {
-	row := selJoin([]endpoint.Cell{selCell("a")}, selWide("漢"), selCells("b"))
-	s := selScreen([][]endpoint.Cell{row}, selPane("p", 0, 0, 4, 1))
+	row := selJoin([]term.Cell{selCell("a")}, selWide("漢"), selCells("b"))
+	s := selScreen([][]term.Cell{row}, selPane("p", 0, 0, 4, 1))
 	wantText(t, selDrag(t, s, selLeft(0, 0), selRight(3, 0)), s, "a漢b")
 	wantText(t, selDrag(t, s, selLeft(0, 0), selRight(1, 0)), s, "a漢")
 }
 
 func TestAWideGlyphWhoseFirstCellIsBeforeTheSelectionIsLeftOut(t *testing.T) {
-	row := selJoin([]endpoint.Cell{selCell("a")}, selWide("漢"), selCells("b"))
-	s := selScreen([][]endpoint.Cell{row}, selPane("p", 0, 0, 4, 1))
+	row := selJoin([]term.Cell{selCell("a")}, selWide("漢"), selCells("b"))
+	s := selScreen([][]term.Cell{row}, selPane("p", 0, 0, 4, 1))
 	// The drag starts on the glyph's second cell, so the glyph is not in the
 	// selection.
 	wantText(t, selDrag(t, s, selLeft(2, 0), selRight(3, 0)), s, "b")
@@ -285,52 +285,52 @@ func TestAWideGlyphWhoseFirstCellIsBeforeTheSelectionIsLeftOut(t *testing.T) {
 
 func TestAConcealedCellIsCopiedAsABlank(t *testing.T) {
 	row := selJoin(selCells("ab"),
-		[]endpoint.Cell{{Text: "c", Attrs: Hidden}, {Text: "d", Attrs: Hidden}},
+		[]term.Cell{{Text: "c", Attrs: Hidden}, {Text: "d", Attrs: Hidden}},
 		selCells("ef"))
-	s := selScreen([][]endpoint.Cell{row}, selPane("p", 0, 0, 6, 1))
+	s := selScreen([][]term.Cell{row}, selPane("p", 0, 0, 6, 1))
 	wantText(t, selDrag(t, s, selLeft(0, 0), selRight(5, 0)), s, "ab  ef")
 }
 
 func TestAnEmptyCellIsCopiedAsABlank(t *testing.T) {
-	row := []endpoint.Cell{selCell("a"), selCell(""), selCell("b")}
-	s := selScreen([][]endpoint.Cell{row}, selPane("p", 0, 0, 3, 1))
+	row := []term.Cell{selCell("a"), selCell(""), selCell("b")}
+	s := selScreen([][]term.Cell{row}, selPane("p", 0, 0, 3, 1))
 	wantText(t, selDrag(t, s, selLeft(0, 0), selRight(2, 0)), s, "a b")
 }
 
 func TestADoubleClickSelectsTheWordUnderThePointer(t *testing.T) {
 	// The word src/main.rs:12 has no separator in it.
-	s := selScreen([][]endpoint.Cell{selCells("ls -la src/main.rs:12 ok")}, selPane("p", 0, 0, 24, 1))
+	s := selScreen([][]term.Cell{selCells("ls -la src/main.rs:12 ok")}, selPane("p", 0, 0, 24, 1))
 	sel := selPress(t, s, selRight(12, 0), 2)
 	wantSpans(t, sel.Rows(s), RowSpan{0, 7, 21})
 	wantText(t, sel, s, "src/main.rs:12")
 }
 
 func TestAWordEndsBeforeAFullStopThatClosesASentence(t *testing.T) {
-	s := selScreen([][]endpoint.Cell{selCells("see foo.bar. ok")}, selPane("p", 0, 0, 15, 1))
+	s := selScreen([][]term.Cell{selCells("see foo.bar. ok")}, selPane("p", 0, 0, 15, 1))
 	wantText(t, selPress(t, s, selRight(5, 0), 2), s, "foo.bar")
 	// A click on the full stop keeps it.
 	wantText(t, selPress(t, s, selRight(11, 0), 2), s, "foo.bar.")
 }
 
 func TestAWordStopsAtQuotesAndBrackets(t *testing.T) {
-	s := selScreen([][]endpoint.Cell{selCells(`call("x")`)}, selPane("p", 0, 0, 9, 1))
+	s := selScreen([][]term.Cell{selCells(`call("x")`)}, selPane("p", 0, 0, 9, 1))
 	wantText(t, selPress(t, s, selRight(6, 0), 2), s, "x")
 }
 
 func TestADoubleClickOnASeparatorSelectsThatOneCell(t *testing.T) {
-	s := selScreen([][]endpoint.Cell{selCells("ab cd")}, selPane("p", 0, 0, 5, 1))
+	s := selScreen([][]term.Cell{selCells("ab cd")}, selPane("p", 0, 0, 5, 1))
 	wantSpans(t, selPress(t, s, selRight(2, 0), 2).Rows(s), RowSpan{0, 2, 3})
 }
 
 func TestAWideGlyphBelongsToTheWordItIsIn(t *testing.T) {
 	row := selJoin(selWide("漢"), selWide("字"), selCells(" ok"))
-	s := selScreen([][]endpoint.Cell{row}, selPane("p", 0, 0, 7, 1))
+	s := selScreen([][]term.Cell{row}, selPane("p", 0, 0, 7, 1))
 	// Column 3 is the second cell of 字.
 	wantText(t, selPress(t, s, selRight(3, 0), 2), s, "漢字")
 }
 
 func TestATripleClickSelectsTheWholeRowAndADragTakesWholeRows(t *testing.T) {
-	s := selScreen([][]endpoint.Cell{selCells("ab  cd"), selCells("xyz")}, selPane("p", 0, 0, 6, 2))
+	s := selScreen([][]term.Cell{selCells("ab  cd"), selCells("xyz")}, selPane("p", 0, 0, 6, 2))
 	sel := selPress(t, s, selRight(1, 0), 3)
 	wantSpans(t, sel.Rows(s), RowSpan{0, 0, 6})
 	wantText(t, sel, s, "ab  cd")
@@ -341,7 +341,7 @@ func TestATripleClickSelectsTheWholeRowAndADragTakesWholeRows(t *testing.T) {
 }
 
 func TestAWordDragTakesWholeWordsForwards(t *testing.T) {
-	s := selScreen([][]endpoint.Cell{selCells("one two three")}, selPane("p", 0, 0, 13, 1))
+	s := selScreen([][]term.Cell{selCells("one two three")}, selPane("p", 0, 0, 13, 1))
 	sel := selPress(t, s, selRight(0, 0), 2)
 	p := selRight(9, 0)
 	sel.Extend(s, selM, p.x, p.y)
@@ -349,7 +349,7 @@ func TestAWordDragTakesWholeWordsForwards(t *testing.T) {
 }
 
 func TestAWordDragBackKeepsTheFarEndOfTheWordThePressTook(t *testing.T) {
-	s := selScreen([][]endpoint.Cell{selCells("one two three")}, selPane("p", 0, 0, 13, 1))
+	s := selScreen([][]term.Cell{selCells("one two three")}, selPane("p", 0, 0, 13, 1))
 	sel := selPress(t, s, selRight(5, 0), 2)
 	p := selLeft(0, 0)
 	sel.Extend(s, selM, p.x, p.y)
@@ -358,7 +358,7 @@ func TestAWordDragBackKeepsTheFarEndOfTheWordThePressTook(t *testing.T) {
 }
 
 func TestExtendReportsOnlyAChangeInTheSelectedCells(t *testing.T) {
-	s := selScreen([][]endpoint.Cell{selCells("abcdef")}, selPane("p", 0, 0, 6, 1))
+	s := selScreen([][]term.Cell{selCells("abcdef")}, selPane("p", 0, 0, 6, 1))
 	sel := selPress(t, s, selLeft(1, 0), 1)
 	p3, p4 := selRight(3, 0), selRight(4, 0)
 	if !sel.Extend(s, selM, p3.x, p3.y) {
@@ -373,7 +373,7 @@ func TestExtendReportsOnlyAChangeInTheSelectedCells(t *testing.T) {
 }
 
 func TestADragAfterReleaseDoesNotMoveTheSelection(t *testing.T) {
-	s := selScreen([][]endpoint.Cell{selCells("abcdef")}, selPane("p", 0, 0, 6, 1))
+	s := selScreen([][]term.Cell{selCells("abcdef")}, selPane("p", 0, 0, 6, 1))
 	sel := selPress(t, s, selLeft(1, 0), 1)
 	p3, p5 := selRight(3, 0), selRight(5, 0)
 	sel.Extend(s, selM, p3.x, p3.y)
@@ -385,7 +385,7 @@ func TestADragAfterReleaseDoesNotMoveTheSelection(t *testing.T) {
 }
 
 func TestADragStaysInsideThePaneWhereItStarted(t *testing.T) {
-	s := selScreen([][]endpoint.Cell{selCells("abcdXefgh")},
+	s := selScreen([][]term.Cell{selCells("abcdXefgh")},
 		selPane("a", 0, 0, 4, 1), selPane("b", 5, 0, 4, 1))
 	sel := selPress(t, s, selLeft(1, 0), 1)
 	p := selRight(7, 0)
@@ -398,7 +398,7 @@ func TestADragStaysInsideThePaneWhereItStarted(t *testing.T) {
 }
 
 func TestASelectionGivesNoTextOnceItsPaneIsGone(t *testing.T) {
-	s := selScreen([][]endpoint.Cell{selCells("abcdef")}, selPane("p", 0, 0, 6, 1))
+	s := selScreen([][]term.Cell{selCells("abcdef")}, selPane("p", 0, 0, 6, 1))
 	sel := selDrag(t, s, selLeft(1, 0), selRight(3, 0))
 	s.Panes = nil
 	wantSpans(t, sel.Rows(s))
@@ -406,101 +406,101 @@ func TestASelectionGivesNoTextOnceItsPaneIsGone(t *testing.T) {
 }
 
 func TestASelectionGivesNoTextOnceItsPaneMoves(t *testing.T) {
-	before := selScreen([][]endpoint.Cell{selCells("abcdef")}, selPane("p", 0, 0, 6, 1))
+	before := selScreen([][]term.Cell{selCells("abcdef")}, selPane("p", 0, 0, 6, 1))
 	sel := selDrag(t, before, selLeft(1, 0), selRight(3, 0))
 	wantText(t, sel, before, "bcd")
 
 	// The pane shows the same text, one row down: the cells the pointer chose
 	// are not under the selection any more, so the text alone would not tell.
-	moved := selScreen([][]endpoint.Cell{selCells("abcdef"), selCells("abcdef")}, selPane("p", 0, 1, 6, 1))
+	moved := selScreen([][]term.Cell{selCells("abcdef"), selCells("abcdef")}, selPane("p", 0, 1, 6, 1))
 	wantSpans(t, sel.Rows(moved))
 	wantErr(t, sel, moved, ErrStale)
 }
 
 func TestASelectionGivesNoTextOnceItsPaneShrinks(t *testing.T) {
-	before := selScreen([][]endpoint.Cell{selCells("ab"), selCells("cd")}, selPane("p", 0, 0, 2, 2))
+	before := selScreen([][]term.Cell{selCells("ab"), selCells("cd")}, selPane("p", 0, 0, 2, 2))
 	sel := selDrag(t, before, selLeft(0, 0), selRight(1, 1))
 	wantText(t, sel, before, "ab\ncd")
 
 	// One row is gone: a copy would be part of the selection, so there is none.
-	shrunk := selScreen([][]endpoint.Cell{selCells("ab")}, selPane("p", 0, 0, 2, 1))
+	shrunk := selScreen([][]term.Cell{selCells("ab")}, selPane("p", 0, 0, 2, 1))
 	wantSpans(t, sel.Rows(shrunk))
 	wantErr(t, sel, shrunk, ErrStale)
 }
 
 func TestASelectionGivesNoTextWhenTheSurfaceLacksOneOfItsRows(t *testing.T) {
-	s := selScreen([][]endpoint.Cell{selCells("abc")}, selPane("p", 0, 0, 3, 3))
+	s := selScreen([][]term.Cell{selCells("abc")}, selPane("p", 0, 0, 3, 3))
 	sel := selDrag(t, s, selLeft(0, 0), selRight(0, 2))
 	wantErr(t, sel, s, ErrStale)
 }
 
 func TestACopyOfFourMebibytesIsTakenAndOneByteMoreIsRefused(t *testing.T) {
 	mib := 1 << 20
-	atLimit := selScreen([][]endpoint.Cell{selRowOf(mib, mib, mib, mib)}, selPane("p", 0, 0, 4, 1))
+	atLimit := selScreen([][]term.Cell{selRowOf(mib, mib, mib, mib)}, selPane("p", 0, 0, 4, 1))
 	taken := selDrag(t, atLimit, selLeft(0, 0), selRight(3, 0))
 	if got := len(copied(t, taken, atLimit)); got != MaxSelectionBytes {
 		t.Errorf("len = %d, want %d", got, MaxSelectionBytes)
 	}
 
-	over := selScreen([][]endpoint.Cell{selRowOf(mib, mib, mib, mib+1)}, selPane("p", 0, 0, 4, 1))
+	over := selScreen([][]term.Cell{selRowOf(mib, mib, mib, mib+1)}, selPane("p", 0, 0, 4, 1))
 	refused := selDrag(t, over, selLeft(0, 0), selRight(3, 0))
 	wantErr(t, refused, over, ErrTooLarge)
 }
 
 func TestTheLineBreakBetweenRowsCountsTowardTheLimit(t *testing.T) {
 	mib := 1 << 20
-	fits := selScreen([][]endpoint.Cell{selRowOf(mib, mib), selRowOf(mib, mib-1)}, selPane("p", 0, 0, 2, 2))
+	fits := selScreen([][]term.Cell{selRowOf(mib, mib), selRowOf(mib, mib-1)}, selPane("p", 0, 0, 2, 2))
 	taken := selDrag(t, fits, selLeft(0, 0), selRight(1, 1))
 	if got := len(copied(t, taken, fits)); got != MaxSelectionBytes {
 		t.Errorf("len = %d, want %d", got, MaxSelectionBytes)
 	}
 
-	over := selScreen([][]endpoint.Cell{selRowOf(mib, mib), selRowOf(mib, mib)}, selPane("p", 0, 0, 2, 2))
+	over := selScreen([][]term.Cell{selRowOf(mib, mib), selRowOf(mib, mib)}, selPane("p", 0, 0, 2, 2))
 	refused := selDrag(t, over, selLeft(0, 0), selRight(1, 1))
 	wantErr(t, refused, over, ErrTooLarge)
 }
 
 func TestTextUnchangedHoldsWhileTheSelectedTextReadsTheSame(t *testing.T) {
-	before := selScreen([][]endpoint.Cell{selCells("abcdef")}, selPane("p", 0, 0, 6, 1))
+	before := selScreen([][]term.Cell{selCells("abcdef")}, selPane("p", 0, 0, 6, 1))
 	sel := selDrag(t, before, selLeft(1, 0), selRight(3, 0))
 
 	recoloured := selCells("abcdef")
 	for i := range recoloured {
 		recoloured[i].Fg = 1
 	}
-	sameText := selScreen([][]endpoint.Cell{recoloured}, selPane("p", 0, 0, 6, 1))
+	sameText := selScreen([][]term.Cell{recoloured}, selPane("p", 0, 0, 6, 1))
 	if !sel.TextUnchanged(sameText) {
 		t.Error("a recolour counted as a change")
 	}
 }
 
 func TestTextUnchangedFailsOnceASelectedRowIsWrittenOver(t *testing.T) {
-	before := selScreen([][]endpoint.Cell{selCells("abcdef")}, selPane("p", 0, 0, 6, 1))
+	before := selScreen([][]term.Cell{selCells("abcdef")}, selPane("p", 0, 0, 6, 1))
 	sel := selDrag(t, before, selLeft(1, 0), selRight(3, 0))
 
-	written := selScreen([][]endpoint.Cell{selCells("axcdef")}, selPane("p", 0, 0, 6, 1))
+	written := selScreen([][]term.Cell{selCells("axcdef")}, selPane("p", 0, 0, 6, 1))
 	if sel.TextUnchanged(written) {
 		t.Error("written-over text counted as unchanged")
 	}
 }
 
 func TestTextUnchangedIgnoresAChangeOutsideTheSelectedCells(t *testing.T) {
-	before := selScreen([][]endpoint.Cell{selCells("abcdef")}, selPane("p", 0, 0, 6, 1))
+	before := selScreen([][]term.Cell{selCells("abcdef")}, selPane("p", 0, 0, 6, 1))
 	sel := selDrag(t, before, selLeft(1, 0), selRight(3, 0))
 
-	written := selScreen([][]endpoint.Cell{selCells("abcdez")}, selPane("p", 0, 0, 6, 1))
+	written := selScreen([][]term.Cell{selCells("abcdez")}, selPane("p", 0, 0, 6, 1))
 	if !sel.TextUnchanged(written) {
 		t.Error("a change outside the selection counted as a change")
 	}
 }
 
 func TestADragStillInProgressRemembersNoText(t *testing.T) {
-	before := selScreen([][]endpoint.Cell{selCells("abcdef")}, selPane("p", 0, 0, 6, 1))
+	before := selScreen([][]term.Cell{selCells("abcdef")}, selPane("p", 0, 0, 6, 1))
 	sel := selPress(t, before, selLeft(1, 0), 1)
 	p := selRight(3, 0)
 	sel.Extend(before, selM, p.x, p.y)
 
-	written := selScreen([][]endpoint.Cell{selCells("xxxxxx")}, selPane("p", 0, 0, 6, 1))
+	written := selScreen([][]term.Cell{selCells("xxxxxx")}, selPane("p", 0, 0, 6, 1))
 	if !sel.TextUnchanged(written) {
 		t.Error("a drag in progress remembered text")
 	}
@@ -515,7 +515,7 @@ func TestAUnitFollowsTheClickCount(t *testing.T) {
 }
 
 func TestSelectionEqualComparesTheCellsAndTheState(t *testing.T) {
-	s := selScreen([][]endpoint.Cell{selCells("abcdef")}, selPane("p", 0, 0, 6, 1))
+	s := selScreen([][]term.Cell{selCells("abcdef")}, selPane("p", 0, 0, 6, 1))
 	a := selDrag(t, s, selLeft(1, 0), selRight(3, 0))
 	b := selDrag(t, s, selLeft(1, 0), selRight(3, 0))
 	if !a.Equal(b) {
@@ -534,11 +534,11 @@ func TestSelectionEqualComparesTheCellsAndTheState(t *testing.T) {
 	if a.Equal(selPress(t, s, selLeft(1, 0), 2)) {
 		t.Error("another unit is equal")
 	}
-	other := selScreen([][]endpoint.Cell{selCells("abcdef")}, selPane("q", 0, 0, 6, 1))
+	other := selScreen([][]term.Cell{selCells("abcdef")}, selPane("q", 0, 0, 6, 1))
 	if a.Equal(selDrag(t, other, selLeft(1, 0), selRight(3, 0))) {
 		t.Error("another pane is equal")
 	}
-	moved := selScreen([][]endpoint.Cell{selCells("abcdef")}, selPane("p", 0, 0, 5, 1))
+	moved := selScreen([][]term.Cell{selCells("abcdef")}, selPane("p", 0, 0, 5, 1))
 	if a.Equal(selDrag(t, moved, selLeft(1, 0), selRight(3, 0))) {
 		t.Error("another rect is equal")
 	}
@@ -549,7 +549,7 @@ func TestSelectionEqualComparesTheCellsAndTheState(t *testing.T) {
 }
 
 func TestARectPastTheWireLimitSaturatesInsteadOfWrapping(t *testing.T) {
-	r, ok := regionOf(endpoint.Rect{X: 65530, Y: 65530, Width: 100, Height: 100})
+	r, ok := regionOf(term.Rect{X: 65530, Y: 65530, Width: 100, Height: 100})
 	if !ok || r.colEnd != math.MaxUint16 || r.rowEnd != math.MaxUint16 {
 		t.Fatalf("region = %+v, %v; want ends of 65535", r, ok)
 	}

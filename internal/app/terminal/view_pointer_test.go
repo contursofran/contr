@@ -6,7 +6,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/contursofran/contr/internal/herdr/endpoint"
+	"github.com/contursofran/contr/internal/term"
 )
 
 // pointerView is a settled 800 x 600 view with a recording FocusPane.
@@ -322,7 +322,7 @@ func TestAPaneThatMovesOrShrinksDropsTheSelection(t *testing.T) {
 
 	// The same text, one row down: the cells the pointer chose are not in the
 	// pane any more.
-	v.acceptSurface(page(v, 3, []string{"abcdef"}, endpoint.Rect{Y: 1, Width: size.Cols, Height: size.Rows - 1}))
+	v.acceptSurface(page(v, 3, []string{"abcdef"}, term.Rect{Y: 1, Width: size.Cols, Height: size.Rows - 1}))
 	if v.selection != nil {
 		t.Error("a pane that moved kept the selection")
 	}
@@ -334,7 +334,7 @@ func TestAPaneThatMovesOrShrinksDropsTheSelection(t *testing.T) {
 	if v.selection == nil {
 		t.Fatal("no selection after the second drag")
 	}
-	v.acceptSurface(page(v, 5, []string{"abcdef"}, endpoint.Rect{Width: size.Cols, Height: size.Rows - 1}))
+	v.acceptSurface(page(v, 5, []string{"abcdef"}, term.Rect{Width: size.Cols, Height: size.Rows - 1}))
 	if v.selection != nil {
 		t.Error("a pane that shrank kept the selection")
 	}

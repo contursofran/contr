@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/contursofran/contr/internal/herdr/endpoint"
+	"github.com/contursofran/contr/internal/term"
 )
 
 const (
@@ -18,11 +18,11 @@ const (
 	decCellH float32 = 20
 )
 
-func decCell(text string, attrs uint16) endpoint.Cell {
-	return endpoint.Cell{Text: text, Attrs: attrs}
+func decCell(text string, attrs uint16) term.Cell {
+	return term.Cell{Text: text, Attrs: attrs}
 }
 
-func decColored(text string, attrs uint16, fg uint32) endpoint.Cell {
+func decColored(text string, attrs uint16, fg uint32) term.Cell {
 	c := decCell(text, attrs)
 	c.Fg = fg
 	return c
@@ -99,7 +99,7 @@ func TestAHiddenCellIsNotUnderlined(t *testing.T) {
 }
 
 func TestCellsWithOneStyleAndColourMakeOneRun(t *testing.T) {
-	row := []endpoint.Cell{
+	row := []term.Cell{
 		decColored("a", Underline, redFg),
 		decColored("b", Underline, redFg),
 		decColored(" ", Underline, redFg),
@@ -108,7 +108,7 @@ func TestCellsWithOneStyleAndColourMakeOneRun(t *testing.T) {
 }
 
 func TestAChangeOfStyleOrColourStartsARun(t *testing.T) {
-	row := []endpoint.Cell{
+	row := []term.Cell{
 		decColored("a", Underline, redFg),
 		decColored("b", Underline|0x3000, redFg),
 		decColored("c", Underline|0x3000, greenFg),
@@ -122,11 +122,11 @@ func TestAChangeOfStyleOrColourStartsARun(t *testing.T) {
 
 func TestAPlainOrHiddenCellEndsARun(t *testing.T) {
 	want := [][2]int{{0, 1}, {2, 1}}
-	plain := []endpoint.Cell{decCell("a", Underline), decCell("b", 0), decCell("c", Underline)}
+	plain := []term.Cell{decCell("a", Underline), decCell("b", 0), decCell("c", Underline)}
 	if got := spans(underlineRuns(plain)); !reflect.DeepEqual(got, want) {
 		t.Errorf("plain spans = %v, want %v", got, want)
 	}
-	hidden := []endpoint.Cell{decCell("a", Underline), decCell("b", Hidden|Underline), decCell("c", Underline)}
+	hidden := []term.Cell{decCell("a", Underline), decCell("b", Hidden|Underline), decCell("c", Underline)}
 	if got := spans(underlineRuns(hidden)); !reflect.DeepEqual(got, want) {
 		t.Errorf("hidden spans = %v, want %v", got, want)
 	}
@@ -135,7 +135,7 @@ func TestAPlainOrHiddenCellEndsARun(t *testing.T) {
 func TestABlankCellAndTheTailOfAWideGlyphAreUnderlined(t *testing.T) {
 	tail := decCell("", Underline)
 	tail.WideTail = true
-	row := []endpoint.Cell{decCell(" ", Underline), decCell("界", Underline), tail}
+	row := []term.Cell{decCell(" ", Underline), decCell("界", Underline), tail}
 	fg, _, _ := CellColors(row[0])
 	wantRuns(t, underlineRuns(row), []underlineRun{{0, 3, UnderlineSingle, fg}})
 }

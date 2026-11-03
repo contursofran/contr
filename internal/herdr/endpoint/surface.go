@@ -5,43 +5,19 @@
 
 package endpoint
 
-import "errors"
+import (
+	"errors"
 
-// Cell is one cell. Fg and Bg are herdr's packed colours: the top byte is the
-// kind (0 named, 1 indexed, 2 RGB) and the low bits are the value.
-type Cell struct {
-	Text string
-	Fg   uint32
-	Bg   uint32
-	// Attrs holds style bits: herdr's modifier mask (BOLD 1 … STRIKETHROUGH
-	// 256) and the underline style.
-	Attrs uint16
-	// WideTail is the second column of a wide glyph. The cell before it
-	// draws the glyph.
-	WideTail bool
-}
+	"github.com/contursofran/contr/internal/term"
+)
 
-// Cursor is the cursor position and shape inside the surface.
-type Cursor struct {
-	X       uint16
-	Y       uint16
-	Visible bool
-	// Shape is the DECSCUSR parameter: 0–2 block, 3–4 underline, 5–6 bar.
-	Shape uint8
-}
-
-// Rect is a rectangle in surface cells.
-type Rect struct {
-	X, Y, Width, Height uint16
-}
-
-// ScrollMetrics is herdr's scroll position of a pane: rows above the bottom,
-// the most that can be scrolled up, and the rows shown.
-type ScrollMetrics struct {
-	OffsetFromBottom    uint64
-	MaxOffsetFromBottom uint64
-	ViewportRows        uint64
-}
+// Cell, Cursor, Rect and ScrollMetrics are the shared [term] types.
+type (
+	Cell          = term.Cell
+	Cursor        = term.Cursor
+	Rect          = term.Rect
+	ScrollMetrics = term.ScrollMetrics
+)
 
 // SurfacePane is one pane of the shown tab, in surface coordinates.
 type SurfacePane struct {
@@ -59,7 +35,7 @@ type SurfacePane struct {
 
 // Row is one row of cells. A patch never changes a Row in place: it puts a
 // new slice in the surface, so a view can keep the old one.
-type Row = []Cell
+type Row = term.Row
 
 // Surface is the rendered surface of the focused tab: what the terminal view
 // paints.

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/contursofran/contr/internal/herdr/endpoint"
+	"github.com/contursofran/contr/internal/term"
 )
 
 // The selection model: the cells a pointer chooses in one pane, and the text a
@@ -79,7 +79,7 @@ type region struct {
 // regionOf returns the region of r, or false for a rect with no cells. The
 // ends saturate at 65535, so a rect past the wire's limit cannot wrap when a
 // row span is cast to uint16.
-func regionOf(r endpoint.Rect) (region, bool) {
+func regionOf(r term.Rect) (region, bool) {
 	if r.Width == 0 || r.Height == 0 {
 		return region{}, false
 	}
@@ -160,7 +160,7 @@ func unitFor(clicks int) unit {
 }
 
 // span returns the first and last edge of the unit around e, in r.
-func (u unit) span(s *endpoint.Surface, r region, e cellEdge) (first, last cellEdge) {
+func (u unit) span(s *term.Screen, r region, e cellEdge) (first, last cellEdge) {
 	var cols [2]int
 	switch u {
 	case unitCell:
@@ -180,7 +180,7 @@ func (u unit) span(s *endpoint.Surface, r region, e cellEdge) (first, last cellE
 
 // cellsOf returns the cells of surface row row in [start, end), or false when
 // the surface does not hold them.
-func cellsOf(s *endpoint.Surface, row, start, end int) ([]endpoint.Cell, bool) {
+func cellsOf(s *term.Screen, row, start, end int) ([]term.Cell, bool) {
 	if row < 0 || row >= len(s.Rows) {
 		return nil, false
 	}
@@ -207,7 +207,7 @@ func separates(c rune) bool {
 
 // shown is what a cell reads as. A concealed cell reads as a blank, and so
 // does an empty cell.
-func shown(c *endpoint.Cell) string {
+func shown(c *term.Cell) string {
 	if c.Attrs&Hidden != 0 || c.Text == "" {
 		return " "
 	}
@@ -216,7 +216,7 @@ func shown(c *endpoint.Cell) string {
 
 // lineText is the text of one row span: each cell's text, with a wide glyph's
 // second cell skipped and the trailing spaces removed.
-func lineText(cells []endpoint.Cell) string {
+func lineText(cells []term.Cell) string {
 	var b strings.Builder
 	for i := range cells {
 		if !cells[i].WideTail {
@@ -230,7 +230,7 @@ func lineText(cells []endpoint.Cell) string {
 // or false when that cell is a separator. A word runs to the nearest
 // separator, so src/main.rs:12 comes out whole, without the full stop that
 // closes a sentence after it.
-func word(s *endpoint.Surface, r region, row, col int) (start, end int, ok bool) {
+func word(s *term.Screen, r region, row, col int) (start, end int, ok bool) {
 	if !r.contains(col, row) {
 		return 0, 0, false
 	}
@@ -292,7 +292,7 @@ type Selection struct {
 	paneID string
 	// rect is the pane's inner rect when the press landed. A pane whose rect
 	// changed no longer holds these cells, so the selection is stale.
-	rect endpoint.Rect
+	rect term.Rect
 	unit unit
 	// origin is the unit the press chose. A drag never gives it up.
 	origin   [2]cellEdge
@@ -309,7 +309,7 @@ type Selection struct {
 // click count: a double click starts on the word under the pointer, and a
 // triple click on its row. It returns nil when no pane holds the pointer, so a
 // click on a border or in the padding selects nothing.
-func BeginSelection(s *endpoint.Surface, m Metrics, x, y float32, clicks int) *Selection {
+func BeginSelection(s *term.Screen, m Metrics, x, y float32, clicks int) *Selection {
 	pane := PaneAt(s, m, x, y)
 	if pane == nil {
 		return nil
@@ -354,7 +354,7 @@ func (s *Selection) Dragging() bool { return s.dragging }
 
 // Extend follows the pointer, clamped to the pane. It does nothing once the
 // drag has ended. It returns true when the selected cells changed.
-func (s *Selection) Extend(surface *endpoint.Surface, m Metrics, x, y float32) bool {
+func (s *Selection) Extend(surface *term.Screen, m Metrics, x, y float32) bool {
 	if !s.dragging {
 		return false
 	}
@@ -384,7 +384,7 @@ func (s *Selection) Extend(surface *endpoint.Surface, m Metrics, x, y float32) b
 // TextUnchanged can tell later whether the program has written over them. It
 // returns true when this call ended the drag, and false when it had already
 // ended.
-func (s *Selection) Release(surface *endpoint.Surface) bool {
+func (s *Selection) Release(surface *term.Screen) bool {
 	if !s.dragging {
 		return false
 	}
@@ -396,7 +396,7 @@ func (s *Selection) Release(surface *endpoint.Surface) bool {
 // Rows returns the selected columns of each row the pane shows, as surface
 // rows. It is empty for a click that did not leave its half-cell, and for a
 // pane that moved, changed size or is no longer on screen.
-func (s *Selection) Rows(surface *endpoint.Surface) []RowSpan {
+func (s *Selection) Rows(surface *term.Screen) []RowSpan {
 	r, ok := s.region(surface)
 	if !ok {
 		return nil
@@ -409,7 +409,7 @@ func (s *Selection) Rows(surface *endpoint.Surface) []RowSpan {
 // written as a space. It returns ErrStale when the pane moved, changed size or
 // one of its rows is gone, so a selection never copies part of a pane. It
 // returns ErrTooLarge past MaxSelectionBytes.
-func (s *Selection) Text(surface *endpoint.Surface) (string, error) {
+func (s *Selection) Text(surface *term.Screen) (string, error) {
 	r, ok := s.region(surface)
 	if !ok {
 		return "", ErrStale
@@ -438,14 +438,14 @@ func (s *Selection) Text(surface *endpoint.Surface) (string, error) {
 
 // RememberText remembers the text of the selected rows. Release calls this, so
 // a view does not have to.
-func (s *Selection) RememberText(surface *endpoint.Surface) {
+func (s *Selection) RememberText(surface *term.Screen) {
 	s.seen = s.rowHashes(surface)
 }
 
 // TextUnchanged is false once a remembered row shows other text: the program
 // wrote over the selected rows, and the highlight would mark cells the user did
 // not choose. A row that is no longer on screen is no evidence either way.
-func (s *Selection) TextUnchanged(surface *endpoint.Surface) bool {
+func (s *Selection) TextUnchanged(surface *term.Screen) bool {
 	for _, now := range s.rowHashes(surface) {
 		i, found := slices.BinarySearchFunc(s.seen, now.row, func(h rowHash, row int) int {
 			return h.row - row
@@ -459,7 +459,7 @@ func (s *Selection) TextUnchanged(surface *endpoint.Surface) bool {
 
 // rowHashes returns a hash of the text in each selected row, by row. It hashes
 // text only: a recolour, or the cursor passing, leaves the choice valid.
-func (s *Selection) rowHashes(surface *endpoint.Surface) []rowHash {
+func (s *Selection) rowHashes(surface *term.Screen) []rowHash {
 	r, ok := s.region(surface)
 	if !ok {
 		return nil
@@ -477,7 +477,7 @@ func (s *Selection) rowHashes(surface *endpoint.Surface) []rowHash {
 
 // region returns the pane's region, or false once the surface no longer shows
 // the pane, or shows it with another rect.
-func (s *Selection) region(surface *endpoint.Surface) (region, bool) {
+func (s *Selection) region(surface *term.Screen) (region, bool) {
 	for i := range surface.Panes {
 		p := &surface.Panes[i]
 		if p.PaneID != s.paneID {

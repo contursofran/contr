@@ -10,14 +10,14 @@ import (
 
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/herdr"
-	"github.com/contursofran/contr/internal/herdr/endpoint"
+	"github.com/contursofran/contr/internal/term"
 )
 
 const notRunning = "gone"
 
 var (
-	stateNotRunning = endpoint.LinkState{Kind: endpoint.LinkNotRunning, Message: notRunning}
-	stateConnecting = endpoint.LinkState{Kind: endpoint.LinkConnecting}
+	stateNotRunning = term.LinkState{Kind: term.LinkNotRunning, Message: notRunning}
+	stateConnecting = term.LinkState{Kind: term.LinkConnecting}
 )
 
 func TestTheStatusLineFollowsTheLinkAndTheSurface(t *testing.T) {
@@ -29,7 +29,7 @@ func TestTheStatusLineFollowsTheLinkAndTheSurface(t *testing.T) {
 	tests := []struct {
 		name                string
 		enabled, hasSurface bool
-		state               endpoint.LinkState
+		state               term.LinkState
 		want                line
 	}{
 		{"surface speaks, enabled", true, true, stateNotRunning, line{}},
@@ -38,7 +38,7 @@ func TestTheStatusLineFollowsTheLinkAndTheSurface(t *testing.T) {
 		{"connecting", true, false, stateConnecting, line{}},
 		{"live", true, false, liveState, line{}},
 		{"not running", true, false, stateNotRunning, line{herdr.NotRunningLine, theme.Text2, true}},
-		{"incompatible", true, false, endpoint.LinkState{Kind: endpoint.LinkIncompatible, Message: "update contr"}, line{"update contr", theme.Text2, true}},
+		{"incompatible", true, false, term.LinkState{Kind: term.LinkIncompatible, Message: "update contr"}, line{"update contr", theme.Text2, true}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -168,12 +168,12 @@ func TestAStateChangeNotifiesOnceAndALostLinkDropsTheSurface(t *testing.T) {
 	base := *n
 
 	// Connecting is the state it already has.
-	v.onUpdate(endpoint.StateUpdate{State: stateConnecting})
+	v.onUpdate(term.StateUpdate{State: stateConnecting})
 	if *n != base {
 		t.Errorf("same state invalidated: %d", *n-base)
 	}
 
-	v.onUpdate(endpoint.StateUpdate{State: stateNotRunning})
+	v.onUpdate(term.StateUpdate{State: stateNotRunning})
 	if *n != base+1 {
 		t.Errorf("a lost link invalidated %d times, want 1", *n-base)
 	}
@@ -185,7 +185,7 @@ func TestAStateChangeNotifiesOnceAndALostLinkDropsTheSurface(t *testing.T) {
 		t.Errorf("no line after the surface went: %q", tt.Texts())
 	}
 
-	v.onUpdate(endpoint.StateUpdate{State: stateNotRunning})
+	v.onUpdate(term.StateUpdate{State: stateNotRunning})
 	if *n != base+1 {
 		t.Errorf("the same lost link invalidated again: %d", *n-base)
 	}
@@ -221,7 +221,7 @@ func TestTwoSizeChangesWithinTheWaitSendOneResize(t *testing.T) {
 }
 
 // gridAt is the grid that a w x h view gets.
-func gridAt(t *testing.T, v *View, w, h float32) endpoint.GridSize {
+func gridAt(t *testing.T, v *View, w, h float32) term.GridSize {
 	t.Helper()
 	size, ok := GridFor(w, h, v.metrics)
 	if !ok {
@@ -249,7 +249,7 @@ func TestALiveLinkGetsTheWantedSizeAgain(t *testing.T) {
 	v, tt, _ := newTestView(t)
 	settle(tt, 800, 600)
 	before := append([]resizeSent(nil), v.sends...)
-	v.onUpdate(endpoint.StateUpdate{State: liveState})
+	v.onUpdate(term.StateUpdate{State: liveState})
 	if len(v.sends) != len(before)+1 {
 		t.Fatalf("sends = %d, want %d", len(v.sends), len(before)+1)
 	}
@@ -263,11 +263,11 @@ func TestALiveLinkIsToldTheFocusStateAndTheSize(t *testing.T) {
 	settle(tt, 800, 600)
 	f := &fakeLink{}
 	v.link = f
-	v.onUpdate(endpoint.StateUpdate{State: liveState})
+	v.onUpdate(term.StateUpdate{State: liveState})
 
-	want := []endpoint.ClientMsg{
-		endpoint.FocusMsg{Focused: v.windowActive},
-		endpoint.ResizeMsg{Size: v.sent.size, Cell: v.sent.cell},
+	want := []ClientMsg{
+		FocusMsg{Focused: v.windowActive},
+		ResizeMsg{Size: v.sent.size, Cell: v.sent.cell},
 	}
 	if got := f.queued(); !reflect.DeepEqual(got, want) {
 		t.Errorf("queued %v, want %v", got, want)
@@ -286,7 +286,7 @@ func TestAViewTooSmallForAGridSendsNoSize(t *testing.T) {
 
 // failingStart is a starter that fails the way a link that cannot start does.
 func failingStart(starts *int) Starter {
-	return func(endpoint.GridSize, endpoint.CellPx, func(endpoint.LinkUpdate)) (Link, func(), error) {
+	return func(term.GridSize, term.CellPx, func(term.LinkUpdate)) (Link, func(), error) {
 		*starts++
 		return nil, nil, errors.New("no thread")
 	}
@@ -299,7 +299,7 @@ func TestAFailedStartIsTriedAgainOnAClick(t *testing.T) {
 	if v.link != nil {
 		t.Fatal("a failed start left a link")
 	}
-	if v.state.Kind != endpoint.LinkNotRunning {
+	if v.state.Kind != term.LinkNotRunning {
 		t.Fatalf("state = %+v, want not running", v.state)
 	}
 	base, startsBefore := *n, starts
@@ -319,7 +319,7 @@ func TestAFailedStartIsTriedAgainOnAClick(t *testing.T) {
 	// When the start works, the next click starts the link.
 	f := &fakeLink{}
 	stopped := 0
-	v.opts.Start = func(endpoint.GridSize, endpoint.CellPx, func(endpoint.LinkUpdate)) (Link, func(), error) {
+	v.opts.Start = func(term.GridSize, term.CellPx, func(term.LinkUpdate)) (Link, func(), error) {
 		return f, func() { stopped++ }, nil
 	}
 	tt.ClickAt(400, 300)
@@ -365,11 +365,11 @@ func TestTheWindowFocusStateGoesToHerdr(t *testing.T) {
 		t.Errorf("the same state queued %v", got)
 	}
 	v.SetWindowActive(false)
-	if got, want := f.queued(), []endpoint.ClientMsg{endpoint.FocusMsg{Focused: false}}; !reflect.DeepEqual(got, want) {
+	if got, want := f.queued(), []ClientMsg{FocusMsg{Focused: false}}; !reflect.DeepEqual(got, want) {
 		t.Errorf("queued %v, want %v", got, want)
 	}
 	v.SetWindowActive(true)
-	if got, want := f.queued(), []endpoint.ClientMsg{endpoint.FocusMsg{Focused: true}}; !reflect.DeepEqual(got, want) {
+	if got, want := f.queued(), []ClientMsg{FocusMsg{Focused: true}}; !reflect.DeepEqual(got, want) {
 		t.Errorf("queued %v, want %v", got, want)
 	}
 }
@@ -403,7 +403,7 @@ func TestTheTerminalHasTheKeyboardOnOpenAndAClickTakesItBack(t *testing.T) {
 func TestClosedViewDropsLateUpdates(t *testing.T) {
 	v, _, n := newTestView(t)
 	v.Close()
-	v.onUpdate(endpoint.StateUpdate{State: stateNotRunning})
+	v.onUpdate(term.StateUpdate{State: stateNotRunning})
 	if *n != 0 || v.state != stateConnecting {
 		t.Errorf("a closed view applied an update: %d, %+v", *n, v.state)
 	}
@@ -432,7 +432,7 @@ func TestTheLinkUpdatesReachTheViewThroughPost(t *testing.T) {
 	f := &fakeLink{latest: surface(1, "a")}
 	v.link = f
 
-	v.notify(endpoint.SurfaceUpdate{})
+	v.notify(term.ScreenUpdate{})
 	if v.surface != nil || len(posted) != 1 {
 		t.Fatal("the update was not posted")
 	}
@@ -442,11 +442,11 @@ func TestTheLinkUpdatesReachTheViewThroughPost(t *testing.T) {
 	}
 
 	pane := "p9"
-	v.onUpdate(endpoint.SnapshotUpdate{Snapshot: &endpoint.ShellSnapshot{FocusedPaneID: &pane}})
+	v.onUpdate(term.SnapshotUpdate{Snapshot: &term.Snapshot{FocusedPaneID: &pane}})
 	if got := v.focusedPane(); got != "p9" {
 		t.Errorf("focusedPane = %q, want the shell's p9", got)
 	}
-	v.onUpdate(endpoint.StateUpdate{State: stateNotRunning})
+	v.onUpdate(term.StateUpdate{State: stateNotRunning})
 	if got := v.focusedPane(); got != "" {
 		t.Errorf("a lost link keeps the shell pane %q", got)
 	}
@@ -454,7 +454,7 @@ func TestTheLinkUpdatesReachTheViewThroughPost(t *testing.T) {
 
 func TestSendToQueuesOnTheLinkAndReportsARefusal(t *testing.T) {
 	v, tt, _ := newTestView(t)
-	events := []endpoint.InputEvent{endpoint.TextEvent{Text: "a"}}
+	events := []term.InputEvent{term.TextEvent{Text: "a"}}
 	if v.sendTo("p1", events) {
 		t.Error("sent with no link")
 	}
@@ -462,11 +462,21 @@ func TestSendToQueuesOnTheLinkAndReportsARefusal(t *testing.T) {
 	if !v.sendTo("p1", events) {
 		t.Fatal("not sent")
 	}
-	if got, want := f.queued(), []endpoint.ClientMsg{endpoint.InputMsg{PaneID: "p1", Events: events}}; !reflect.DeepEqual(got, want) {
+	if got, want := f.queued(), []ClientMsg{InputMsg{PaneID: "p1", Events: events}}; !reflect.DeepEqual(got, want) {
 		t.Errorf("queued %v, want %v", got, want)
 	}
-	f.refuse = endpoint.ErrLinkNotConnected
+	f.refuse = term.ErrNotConnected
 	if v.sendTo("p1", events) {
 		t.Error("a refused frame counts as sent")
+	}
+}
+
+// Without a starter from the app, the link does not start: the state is not
+// running and no test or build connects to herdr by itself.
+func TestNoStarterMeansNotRunning(t *testing.T) {
+	v := NewView(Options{Enabled: true})
+	_, _, err := v.opts.Start(term.GridSize{Cols: 1, Rows: 1}, term.CellPx{}, nil)
+	if err == nil {
+		t.Fatal("the default starter started a link")
 	}
 }

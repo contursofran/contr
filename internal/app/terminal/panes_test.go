@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/contursofran/contr/internal/herdr/endpoint"
+	"github.com/contursofran/contr/internal/term"
 )
 
 // cellPx: cells are 10 x 20 pixels, with no padding.
@@ -12,25 +12,25 @@ var cellPx = Metrics{CellW: 10, CellH: 20}
 
 // twoPanes is two panes side by side in a 12 x 4 surface. p1 holds cols 1-4
 // and p2 holds cols 7-10, rows 1-2.
-func twoPanes() *endpoint.Surface {
-	pane := func(id string, x uint16) endpoint.SurfacePane {
-		return endpoint.SurfacePane{
+func twoPanes() *term.Screen {
+	pane := func(id string, x uint16) term.Pane {
+		return term.Pane{
 			PaneID:    id,
-			Rect:      endpoint.Rect{X: x, Y: 0, Width: 6, Height: 4},
-			InnerRect: endpoint.Rect{X: x + 1, Y: 1, Width: 4, Height: 2},
+			Rect:      term.Rect{X: x, Y: 0, Width: 6, Height: 4},
+			InnerRect: term.Rect{X: x + 1, Y: 1, Width: 4, Height: 2},
 		}
 	}
-	return &endpoint.Surface{
+	return &term.Screen{
 		BootID:             "boot",
 		ProjectionRevision: 1,
 		Revision:           1,
-		Size:               endpoint.GridSize{Cols: 12, Rows: 4},
-		Panes:              []endpoint.SurfacePane{pane("p1", 0), pane("p2", 6)},
+		Size:               term.GridSize{Cols: 12, Rows: 4},
+		Panes:              []term.Pane{pane("p1", 0), pane("p2", 6)},
 	}
 }
 
 // idAt returns the pane id at (x, y), or "" when no pane holds that point.
-func idAt(s *endpoint.Surface, x, y float32) string {
+func idAt(s *term.Screen, x, y float32) string {
 	if p := PaneAt(s, cellPx, x, y); p != nil {
 		return p.PaneID
 	}
