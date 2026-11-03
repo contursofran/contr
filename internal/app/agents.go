@@ -1,26 +1,27 @@
 package app
 
-// The agents section at the bottom of the sidebar: an "Agents" header with
-// the running count, then one row per agent in herdr's order. A click selects
-// the row and focuses its pane in herdr. Ported from the Rust contr module
-// agents_list.
-//
-// MyGo rebuilds a view on every redraw, so the Rust "one cached view per
-// row" becomes: the working icon draws its own turn (no view runs for it),
-// every row is a cached layer (its paint is reused while it looks the same),
-// and [AgentsList.Sync] tells what changed so that nothing redraws for a
-// tree that shows the same rows.
+// The agents sections at the bottom of the sidebar, on the agent state: an
+// "Orchestrators" section on top, whatever the state of its agents, then
+// "Agents N running". A row has the status icon and the name, and a second
+// line "<command> · <age>". A click selects the row. The age is the time since
+// the last output as of the last build: it moves on a state change or a
+// repaint, never on a timer (decision D40).
 
 import (
+	"fmt"
 	"log/slog"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/icons"
+	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
-	"github.com/contursofran/contr/internal/board"
 	"github.com/contursofran/contr/internal/herdr"
 )
 
@@ -53,210 +54,190 @@ func focusPane(socket func() (string, bool), paneID string, report func(string))
 	}
 }
 
-// Element labels of the agents section.
+// Element labels of the agents sections.
 const (
-	LabelAgents       = "sidebar agents"
-	LabelAgentsHeader = "agents header"
+	LabelAgents              = "sidebar agents"
+	LabelAgentsHeader        = "agents header"
+	LabelOrchestratorsHeader = "orchestrators header"
 )
 
-// AgentRowLabel is the row's label, which is also its accessible label:
-// "{name}, {status}, {detail}", then ", {link}" when there is one, then
-// ", selected" on the selected row.
-func AgentRowLabel(row herdr.AgentRow, selected bool) string {
-	label := row.Name + ", " + icons.FromAgentState(row.Status).Label() + ", " + row.Detail
-	if row.Link != nil {
-		label += ", " + *row.Link
-	}
-	if selected {
-		label += ", selected"
-	}
-	return label
-}
-
-// AgentsChange tells what [AgentsList.Sync] changed.
-type AgentsChange struct {
-	// Rebuilt: the panes changed (added, removed, reordered, or the tree
-	// came or went), so the whole list changes.
-	Rebuilt bool
-	// Rows are the indexes of the rows that show other data, when the panes
-	// are the same.
-	Rows []int
-}
-
-// Any tells whether the list needs a redraw.
-func (c AgentsChange) Any() bool { return c.Rebuilt || len(c.Rows) > 0 }
-
-// AgentsList is the agents section. It is empty, with no height, until herdr
-// has a tree. Methods run on the UI thread.
+// AgentsList is the agents sections. It has no height while there is no
+// agent. Methods run on the UI thread.
 type AgentsList struct {
-	src       liveSource
-	board     *Board // nil in views built without one
+	snap      func() agentstate.Snapshot
+	now       func() time.Time // the clock; tests replace it
 	selection *state.Selection
-	status    *state.StatusMessage
-	focus     FocusFn
-
-	hasTree bool
-	rows    []herdr.AgentRow
-	// builds counts the builds of each row by pane id. Tests read it.
-	builds map[string]int
 }
 
-// NewAgentsList returns the list. src gives the tree, b (may be nil) the
-// agents' names, selection the card. status (may be nil) shows focus
-// errors. A click focuses the pane with [FocusInBackground]. Call
-// [AgentsList.Sync] when the tree or the board changed.
-func NewAgentsList(src liveSource, b *Board, selection *state.Selection, status *state.StatusMessage) *AgentsList {
-	l := &AgentsList{src: src, board: b, selection: selection, status: status, focus: FocusInBackground, builds: map[string]int{}}
-	l.Sync()
-	return l
+// NewAgentsList returns the list on snap, the state's snapshot (may be nil:
+// then there is nothing to show). A click sets selection (may be nil).
+func NewAgentsList(snap func() agentstate.Snapshot, selection *state.Selection) *AgentsList {
+	return &AgentsList{snap: snap, now: time.Now, selection: selection}
 }
 
-// Rows returns the rows shown, in order. Empty without a tree.
-func (l *AgentsList) Rows() []herdr.AgentRow { return l.rows }
-
-// Sync brings the rows up to the tree and the board. A selected agent that
-// the new tree no longer has leaves the selection; another kind of
-// selection is kept, and so is the agent's while there is no tree.
-func (l *AgentsList) Sync() AgentsChange {
-	var tree *herdr.HerdrTree
-	if l.src != nil {
-		tree = l.src.Live().Tree
+func (l *AgentsList) snapshot() agentstate.Snapshot {
+	if l.snap == nil {
+		return agentstate.Snapshot{}
 	}
-	var rows []herdr.AgentRow
-	if tree != nil {
-		rows = herdr.AgentRows(*tree, l.metaFor())
-		l.dropMissingSelection(rows)
-	}
-	change := AgentsChange{Rebuilt: l.hasTree != (tree != nil) || !samePanes(l.rows, rows)}
-	if !change.Rebuilt {
-		for i := range rows {
-			if !sameRow(l.rows[i], rows[i]) {
-				change.Rows = append(change.Rows, i)
-			}
-		}
-	}
-	l.hasTree, l.rows = tree != nil, rows
-	return change
+	return l.snap()
 }
 
-func (l *AgentsList) metaFor() func(string) *herdr.AgentMeta {
-	if l.board == nil {
-		return nil
-	}
-	snap := l.board.View().Snapshot
-	if snap == nil {
-		return nil
-	}
-	meta := board.AgentMeta(snap)
-	return func(paneID string) *herdr.AgentMeta {
-		if m, ok := meta[paneID]; ok {
-			return &m
-		}
-		return nil
-	}
-}
-
-func (l *AgentsList) dropMissingSelection(rows []herdr.AgentRow) {
-	pane, ok := l.selectedPane()
-	if !ok {
+// Sync follows a change of the state: a selected agent that is gone leaves
+// the selection. Other kinds of selection stay.
+func (l *AgentsList) Sync() {
+	if l.selection == nil {
 		return
 	}
-	for _, r := range rows {
-		if r.PaneID == pane {
+	sel, ok := l.selection.Current()
+	if !ok || (sel.Kind != state.KindOrchestrator && sel.Kind != state.KindWorker) {
+		return
+	}
+	s := l.snapshot()
+	list := s.Workers
+	if sel.Kind == state.KindOrchestrator {
+		list = s.Orchestrators
+	}
+	for _, w := range list {
+		if w.Address == sel.ID {
 			return
 		}
 	}
 	l.selection.Clear()
 }
 
-// selectedPane is the pane of the selected agent, if an agent is selected.
-func (l *AgentsList) selectedPane() (string, bool) {
-	if l.selection == nil {
-		return "", false
-	}
-	if sel, ok := l.selection.Current(); ok && sel.Kind == state.KindAgent {
-		return sel.ID, true
-	}
-	return "", false
-}
-
-func samePanes(a, b []herdr.AgentRow) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i].PaneID != b[i].PaneID {
-			return false
-		}
-	}
-	return true
-}
-
-func sameRow(a, b herdr.AgentRow) bool {
-	if (a.Link == nil) != (b.Link == nil) || (a.Link != nil && *a.Link != *b.Link) {
-		return false
-	}
-	a.Link, b.Link = nil, nil
-	return a == b
-}
-
-// Activate is a click on a row: it becomes the selection, and herdr focuses
-// its pane. A second click on the same row focuses it again.
-func (l *AgentsList) Activate(paneID string) {
+// Activate is a click on a row: it becomes the selection.
+func (l *AgentsList) Activate(kind state.SelectedKind, address string) {
 	if l.selection != nil {
-		l.selection.Select(state.Selected{Kind: state.KindAgent, ID: paneID})
-	}
-	if l.focus != nil {
-		var report func(string)
-		if l.status != nil {
-			report = l.status.Show
-		}
-		l.focus(paneID, report)
+		l.selection.Select(state.Selected{Kind: kind, ID: address})
 	}
 }
 
-// View builds the section: nothing without a tree.
+// AgeText is the time since t as "5s", "3m" or "2h"; days go on as hours.
+// A time in the future, or the zero time, gives "".
+func AgeText(now, t time.Time) string {
+	if t.IsZero() || t.After(now) {
+		return ""
+	}
+	d := now.Sub(t)
+	switch {
+	case d < time.Minute:
+		return strconv.Itoa(int(d/time.Second)) + "s"
+	case d < time.Hour:
+		return strconv.Itoa(int(d/time.Minute)) + "m"
+	}
+	return strconv.Itoa(int(d/time.Hour)) + "h"
+}
+
+// workerIcon is the icon for a worker. A program that ended shows done.
+func workerIcon(w agents.Worker) icons.Status {
+	switch {
+	case !w.Live:
+		return icons.Done
+	case w.Status == "working":
+		return icons.Working
+	case w.Status == "blocked" || w.Status == "error":
+		return icons.Blocked
+	case w.Status == "done":
+		return icons.Done
+	}
+	return icons.Idle
+}
+
+// workerSub is the second line: the command, how it ended when it ended,
+// and the age of the last output.
+func workerSub(w agents.Worker, now time.Time) string {
+	var parts []string
+	if w.Command != "" {
+		parts = append(parts, w.Command)
+	}
+	if !w.Live && w.ExitCode != nil {
+		parts = append(parts, fmt.Sprintf("exit %d", *w.ExitCode))
+	}
+	if age := AgeText(now, w.LastOutput); age != "" {
+		parts = append(parts, age)
+	}
+	return strings.Join(parts, " · ")
+}
+
+func (l *AgentsList) opts(w agents.Worker, kind state.SelectedKind, now time.Time, c *ui.Context) kit.RowOpts {
+	sel, ok := state.Selected{}, false
+	if l.selection != nil {
+		sel, ok = l.selection.Current()
+	}
+	sub := workerSub(w, now)
+	icon := workerIcon(w)
+	label := w.Name + ", " + icon.Label()
+	if sub != "" {
+		label += ", " + sub
+	}
+	return kit.RowOpts{
+		Label: label, Text: w.Name, Sub: sub,
+		Selected: ok && sel.Kind == kind && sel.ID == w.Address,
+		OnClick:  func() { l.Activate(kind, w.Address) },
+		Lead:     func() { icons.Icon(c, icon).Shrink(0) },
+	}
+}
+
+// View builds the sections: nothing while there is no agent.
 func (l *AgentsList) View(c *ui.Context) {
-	if !l.hasTree {
+	s := l.snapshot()
+	if len(s.Orchestrators) == 0 && len(s.Workers) == 0 {
 		return
 	}
-	selected, _ := l.selectedPane()
-	ui.Column(c).Label(LabelAgents).FillWidth().MinHeight(0).
-		BorderWidth(1, 0, 0, 0).BorderColor(theme.Color(theme.Line)).Children(func() {
-		l.header(c)
-		ui.Scroll(c).FillWidth().Height(float32(len(l.rows) * theme.AgentRowHeight)).MinHeight(0).PaddingX(theme.CardInsetX).Children(func() {
-			for _, row := range l.rows {
-				l.row(c, row, row.PaneID == selected)
-			}
-		})
-	})
-}
-
-func (l *AgentsList) header(c *ui.Context) {
-	ui.Row(c).Label(LabelAgentsHeader).FillWidth().Height(theme.AgentsHeaderHeight).Shrink(0).
-		AlignItems(ui.Center).PaddingX(theme.SidebarPadX).TextColor(theme.Color(theme.TextDim)).Children(func() {
-		ui.Text(c, "Agents")
-		ui.Spacer(c)
-		ui.Text(c, herdr.RunningLine(len(l.rows)))
-	})
-}
-
-// row builds one agent row: the status icon, the name, the detail and, when
-// there is one, the link. The selected row shows the card.
-func (l *AgentsList) row(c *ui.Context, row herdr.AgentRow, selected bool) {
-	l.builds[row.PaneID]++
-	card := ui.ButtonBase(c).Label(AgentRowLabel(row, selected)).FillWidth().Height(theme.AgentRowHeight).Shrink(0).
-		AlignItems(ui.Center).Gap(theme.AgentGap).PaddingX(theme.AgentRowPadX).Radius(theme.CardRadius).
-		Cursor(ui.CursorPointer).Cache().OnClick(func() { l.Activate(row.PaneID) })
-	if selected {
-		card = card.Background(theme.Color(theme.BgCard)).Border(1, theme.Color(theme.CardBorder))
+	now := l.now()
+	section := func(ws []agents.Worker, kind state.SelectedKind) (rows []kit.RowOpts, height float32) {
+		for _, w := range ws {
+			r := l.opts(w, kind, now, c)
+			rows, height = append(rows, r), height+kit.HeightOf(r)
+		}
+		if len(ws) > 0 {
+			height += theme.AgentsHeaderHeight
+		}
+		return rows, height
 	}
-	card.Children(func() {
-		icons.Icon(c, icons.FromAgentState(row.Status)).Shrink(0)
-		ui.Text(c, row.Name).TextColor(theme.Color(theme.Text)).SingleLine().Ellipsis("…").MinWidth(0)
-		ui.Text(c, row.Detail).TextColor(theme.Color(theme.TextDim2)).SingleLine().Ellipsis("…").MinWidth(0).Grow(1)
-		if row.Link != nil {
-			ui.Text(c, *row.Link).TextColor(theme.Color(theme.Text2)).NoWrap().Shrink(0)
+	orch, h1 := section(s.Orchestrators, state.KindOrchestrator)
+	work, h2 := section(s.Workers, state.KindWorker)
+	ui.Scroll(c).Label(LabelAgents).FillWidth().Height(h1+h2+1).MinHeight(0).
+		BorderWidth(1, 0, 0, 0).BorderColor(theme.Color(theme.Line)).Children(func() {
+		if len(orch) > 0 {
+			header(c, LabelOrchestratorsHeader, "Orchestrators", "")
+			for _, r := range orch {
+				agentRow(c, r)
+			}
+		}
+		if len(work) > 0 {
+			header(c, LabelAgentsHeader, "Agents", herdr.RunningLine(running(s.Workers)))
+			for _, r := range work {
+				agentRow(c, r)
+			}
 		}
 	})
+}
+
+// running counts the workers whose program still runs.
+func running(ws []agents.Worker) int {
+	n := 0
+	for _, w := range ws {
+		if w.Live {
+			n++
+		}
+	}
+	return n
+}
+
+func header(c *ui.Context, label, title, right string) {
+	ui.Row(c).Label(label).FillWidth().Height(theme.AgentsHeaderHeight).Shrink(0).
+		AlignItems(ui.Center).PaddingX(theme.SidebarPadX).TextColor(theme.Color(theme.TextDim)).Children(func() {
+		ui.Text(c, title)
+		ui.Spacer(c)
+		if right != "" {
+			ui.Text(c, right)
+		}
+	})
+}
+
+// agentRow wraps the row in a full-width column, so that the row's side
+// margins count in its width.
+func agentRow(c *ui.Context, r kit.RowOpts) {
+	ui.Column(c.Key(r.Label)).FillWidth().Shrink(0).Children(func() { kit.Row(c, r) })
 }
