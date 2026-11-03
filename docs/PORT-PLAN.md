@@ -36,7 +36,7 @@ run in parallel.
 | M0 | Module, empty MyGo window, checks, CI file for later | `contr/src/main.rs` (window part) | — | `cmd/contr`, `internal/app` | — |
 | M1 | Theme tokens, status icons, `--icons` legend | `theme.rs` (169), `status_icon.rs` (297), `legend.rs` (147) | ~10 | `internal/app/theme`, `internal/app/icons` | M0 |
 | M2 | herdr JSON API: wire, model, reader, commands, tabs, agents | `contr-herdr/src/{wire,model,reader,command,tabs,agents}.rs` (4,623) | ~137 | `internal/herdr` | M0 |
-| M3 | herdr endpoint socket: codec, messages, surface, conn, link, OSC 52 | `contr-herdr/src/endpoint/*` (4,789) | ~137 | `internal/herdr/endpoint` | M0 |
+| M3 | herdr endpoint socket: codec, messages, surface, conn, link, OSC 52 | `contr-herdr/src/endpoint/*` (4,789) | ~137 | `internal/herdr/endpoint` (removed in #163) | M0 |
 | M4 | Frame: three columns, visibility, menus and actions, herdr glue, selection, status message | `frame.rs` (580), `visibility.rs` (99), `menus.rs` (125), `actions.rs` (176), `herdr.rs` (338), `selection.rs` (109), `status_message.rs` (159) | ~40 | `internal/app` | M1, M2 |
 | M5 | Terminal view: grid metrics, colors, paint, box drawing, decorations, keys and IME, wheel, selection and copy, panes | `contr/src/terminal/*` (7,256) | ~215 | `internal/app/terminal` | M3, M4 |
 | M6 | Title bar: agent tabs, "+", split, panel toggle, tab commands | `title_bar.rs` (787), `tab_commands.rs` (151) | ~25 | `internal/app` | M4 |

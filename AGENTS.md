@@ -33,7 +33,6 @@ contr is a native macOS client for herdr, with an agent board built in. It is wr
 | `internal/app/kit` | shared view parts: list row, +/− counts, switch, code view |
 | `internal/herdr` | herdr's JSON API: wire, model, reader, command, tabs, agents |
 | `internal/term` | terminal view types: cells, screen, input events, link updates; no UI and no wire format |
-| `internal/herdr/endpoint` | herdr's binary endpoint socket: codec, messages, surface, conn, link, osc52 |
 | `internal/usage` | plan usage: Claude status line, Codex logs |
 | `internal/review` | git reads for the Review view: branches ahead of main, files, commits, texts |
 | `internal/hc` | herdr-core's JSON-RPC API over `hc connect`: calls and event subscriptions |
@@ -68,8 +67,8 @@ Add packages under `internal/` when a change needs them.
 - Adapted code: `NOTICE` credits the projects that code comes from. When you
   port a Rust file that starts with `// Adapted from Herdr UI (Apache-2.0);
   changes: …`, keep that comment in the Go file and add "ported to Go" to
-  the changes. Endpoint code keeps its note "Written from herdr's wire
-  layout; see NOTICE." To adapt code from MyGo's examples or plugins (MIT),
+  the changes. Code for herdr-core's framed mode
+  keeps its note "Written from herdr-core's wire layout; see NOTICE." To adapt code from MyGo's examples or plugins (MIT),
   add the same kind of header comment and a `NOTICE` entry.
 - Do not name or link other GitHub users or repositories anywhere except
   `NOTICE`, and do not @-mention people. Import paths and `go.mod` are
@@ -91,8 +90,7 @@ Add packages under `internal/` when a change needs them.
 - For a live herdr, use only `scripts/dev-herdr.sh`. It starts an isolated
   server with its own home and sockets: `eval "$(scripts/dev-herdr.sh)"`,
   then `scripts/dev-herdr.sh stop` when you are done.
-- Tests use fakes: fake servers on sockets in temporary folders, as the Rust
-  `endpoint/testing.rs` does. No test touches the owner's herdr, `~/.claude`,
+- Tests use fakes: fake servers on sockets in temporary folders. No test touches the owner's herdr, `~/.claude`,
   `~/.codex` or a real repository.
 - Do not read `~/.claude` or `~/.codex`. Do not install the app.
 
