@@ -62,7 +62,6 @@ func TestAppBench(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(dir)
 	proj := filepath.Join(dir, "proj")
 	if err := os.MkdirAll(proj, 0o755); err != nil {
 		t.Fatal(err)
@@ -84,6 +83,7 @@ func TestAppBench(t *testing.T) {
 		if msg, err := cmd.CombinedOutput(); err != nil {
 			t.Logf("stop the scratch core: %v: %s", err, msg)
 		}
+		_ = os.RemoveAll(dir)
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
