@@ -39,6 +39,11 @@ const AnswerBorder = 0x262626
 const AnswerRadius = 10
 const Line = 0x222222 // dividers
 
+// Diff colors: changes in a code view (D34). The only colors outside the
+// greyscale, because a diff needs them; from the approved Review design.
+const DiffAdded = 0xA6D189
+const DiffDeleted = 0xF07178
+
 // Text
 const Text = 0xEDEDED     // primary
 const Text2 = 0xBDBDBD    // secondary

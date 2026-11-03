@@ -38,8 +38,10 @@ Source of truth: the "herdr sidebar mockup" design canvas, artboards **G · cont
 | text.2 | #BDBDBD | secondary |
 | text.dim | #7A7A7A / #6A6A6A | labels, meta |
 | you | #EDEDED bg + #111111 bold text | anything waiting on the owner (badges, "your test") |
+| diff.added | #A6D189 | added lines and + counts in code views (D34) |
+| diff.deleted | #F07178 | deleted lines and − counts in code views (D34) |
 
-No hue anywhere: white means the owner acts, greys mean everything else.
+No hue anywhere, except the two diff colors in code views and +/− counts: white means the owner acts, greys mean everything else.
 The terminal shows program colours as they are; greyscale applies to contr's own UI only.
 
 ## Status icons (16px viewBox, drawn at 12–14px)
