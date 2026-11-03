@@ -71,7 +71,7 @@ func needLine(c *ui.Context, t NeedTab, onOpen func(NeedTab)) {
 	if t.Resolved {
 		text = theme.TextDim
 	}
-	ui.ButtonBase(c).Label(t.Label()+", "+NeedKindLabel(t)).FillWidth().Height(theme.BoardLineHeight).Shrink(0).
+	ui.ButtonBase(c).Label(t.Label() + ", " + NeedKindLabel(t)).FillWidth().Height(theme.BoardLineHeight).Shrink(0).
 		AlignItems(ui.Center).Gap(theme.NeedGap).PaddingX(theme.PanelPadX).Radius(theme.CardRadius).
 		Cursor(ui.CursorPointer).OnClick(func() {
 		if onOpen != nil {

@@ -72,7 +72,7 @@ One icon set for sidebar, tabs, board stages and needs-you rows. Each has an acc
 - **Needs you (panel list):** the same tabs as the row, in the same order, one line each: icon, id (`D7`, `T12`), title, kind (`decide`, `do`, `fyi`, `done`). Rows never move on their own; resolved ones strike through until "clear done".
 - **Answer card:** floats over the bottom of the terminal area, above the needs-you row; fixed 168px. A question shows its options, the recommended one first as the filled button, and a field for a free answer. Enter sends the typed text, else the recommended option; `1`–`4` send an option in the card's order; Escape or Close closes it. The answer goes to the coordinator that asked as `Owner answered <ID>: <answer>`. If the send fails, the answer stays saved and the card shows the failure. A to-do shows Done; a blocked worker shows what it says and a button that selects it. A resolved item shows no options.
 - **Panel follows the selected tab:** an orchestrator (or nothing) selected shows the board; a worker selected shows that worker: name, role and issue, worktree, status, the last 40 lines of its terminal in a code view, and Interrupt and Stop. Stop needs a second click.
-- **No Wrap up or Keep going button** (D10): the owner types "wrap up" in the orchestrator terminal. The Report tab is gone.
+- **No Wrap up or Keep going button** (owner, 2026-11-03): the owner types "wrap up" in the orchestrator terminal. The Report tab is gone.
 
 ## Review
 

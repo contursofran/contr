@@ -4,7 +4,7 @@ package app
 // project of the selected orchestrator (all projects when none is selected).
 // It reads the agent state on every build and keeps nothing of its own, so
 // it needs no sync (#162, S6). There is no Wrap up or Keep going control
-// (D10): the owner types "wrap up" in the orchestrator terminal.
+// (owner, 2026-11-03): the owner types "wrap up" in the orchestrator terminal.
 
 import (
 	"github.com/egoist/mygo/ui"
