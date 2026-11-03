@@ -8,10 +8,6 @@ text is in assets/fonts/OFL.txt.
 MyGo (https://github.com/egoist/mygo) is used as a dependency under the MIT
 License.
 
-herdr (Apache License, Version 2.0) is the terminal multiplexer contr talks
-to. The endpoint protocol code in internal/herdr/endpoint/ is our own code,
-written from herdr's source to match its wire format.
-
 The framed mode of internal/hc is our own code, written from the wire layout
 of herdr-core (https://github.com/herdrdev/herdr-core), which is published
 without a license. No code was copied from it.
