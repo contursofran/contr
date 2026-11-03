@@ -341,6 +341,8 @@ func TestLosingTheTreeEmptiesTheGroups(t *testing.T) {
 // Port of a_cwd_outside_git_gives_no_group.
 func TestACwdOutsideGitGivesNoGroup(t *testing.T) {
 	base := canonicalTmp(t)
+	// TMPDIR may lie inside a git worktree; do not look above the temp folder.
+	t.Setenv("GIT_CEILING_DIRECTORIES", base)
 	plain := filepath.Join(base, "plain")
 	if err := os.MkdirAll(plain, 0o755); err != nil {
 		t.Fatal(err)
