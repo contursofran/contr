@@ -181,3 +181,20 @@ func TestASCIICellNoAlloc(t *testing.T) {
 		t.Errorf("line: got %q", got)
 	}
 }
+
+// TestScrollbackTrimsBlankCells checks that trailing blank cells are dropped
+// and that a blank cell with a background stays.
+func TestScrollbackTrimsBlankCells(t *testing.T) {
+	sb := NewScrollback(4)
+	l := line("ab   ")
+	sb.Push(l)
+	l[3].Style.Bg = ansi.IndexedColor(1)
+	sb.Push(l)
+	l[3] = uv.Cell{} // a zero cell counts as blank too
+	sb.Push(l)
+	for i, want := range []int{2, 4, 2} {
+		if got := len(sb.Line(i)); got != want {
+			t.Errorf("line %d: %d cells, want %d", i, got, want)
+		}
+	}
+}

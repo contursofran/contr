@@ -1,7 +1,7 @@
 // Changed for contr from the x/vt module v0.1.0 (MIT, see LICENSE): the
 // scrollback is a ring. When it is full, a new line takes the place and the
 // memory of the oldest line, instead of moving all lines and copying the new
-// one.
+// one. Push finds the trailing blank cells with a plain compare first.
 
 package vt
 
@@ -45,6 +45,9 @@ func (s *Scrollback) Push(line uv.Line) {
 	lastNonEmpty := -1
 	for i := len(line) - 1; i >= 0; i-- {
 		c := &line[i]
+		if *c == uv.EmptyCell {
+			continue // the usual blank cell, without the color compares of Equal
+		}
 		if !c.IsZero() && !c.Equal(&uv.EmptyCell) {
 			lastNonEmpty = i
 			break
