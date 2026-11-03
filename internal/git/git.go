@@ -70,12 +70,20 @@ type Scan struct {
 // past it). A linked worktree whose common dir is not `<main>/.git` (a
 // submodule, a separate git dir, or a worktree of a bare repository) also gives
 // false, so such panes are not in Spaces.
+//
+// Like git, Discover reads GIT_CEILING_DIRECTORIES: the search stops before it
+// goes up into a listed directory. A start directory that is itself listed is
+// still checked.
 func Discover(path string) (Checkout, bool) {
 	start, err := canonical(path)
 	if err != nil {
 		return Checkout{}, false
 	}
+	ceilings := ceilingDirs()
 	for root := start; ; {
+		if root != start && ceilings[root] {
+			return Checkout{}, false
+		}
 		dotGit := filepath.Join(root, ".git")
 		if info, err := os.Stat(dotGit); err == nil {
 			if info.IsDir() {
@@ -293,6 +301,25 @@ func linkedRoot(admin string) (string, bool) {
 
 // canonical returns the absolute path with symlinks resolved. The path must
 // exist.
+// ceilingDirs returns the canonical directories of GIT_CEILING_DIRECTORIES.
+// Entries that do not exist or are not absolute are skipped.
+func ceilingDirs() map[string]bool {
+	list := os.Getenv("GIT_CEILING_DIRECTORIES")
+	if list == "" {
+		return nil
+	}
+	out := map[string]bool{}
+	for _, d := range filepath.SplitList(list) {
+		if !filepath.IsAbs(d) {
+			continue
+		}
+		if c, err := canonical(d); err == nil {
+			out[c] = true
+		}
+	}
+	return out
+}
+
 func canonical(path string) (string, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {

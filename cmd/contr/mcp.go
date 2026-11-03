@@ -130,6 +130,7 @@ func agentTools(m *managers, parent string) []mcp.Tool {
 		Task     string `json:"task"`
 		Issue    string `json:"issue"`
 		Worktree string `json:"worktree"`
+		Project  string `json:"project"`
 		Role     string `json:"role"`
 		Text     string `json:"text"`
 		Lines    int    `json:"lines"`
@@ -153,9 +154,9 @@ func agentTools(m *managers, parent string) []mcp.Tool {
 		{Name: "spawn", Description: "Start a worker agent in a new hc terminal, in its worktree. It reports back with hc send when its turn ends.",
 			Schema: schema([]string{"name", "profile", "task"}, map[string]prop{
 				"name": str("Unique worker name: 1-32 of a-z 0-9 - _ (for example b-158)."), "profile": str("builder, planner, reviewer or debugger, or a profile from the profiles file."),
-				"task": str("The self-contained brief: the first message."), "issue": str("Issue number."), "worktree": str("The worker's working folder (its git worktree)."), "role": str("Role label; the profile name by default.")}),
+				"task": str("The self-contained brief: the first message."), "issue": str("Issue number."), "worktree": str("The worker's working folder (its git worktree)."), "role": str("Role label; the profile name by default."), "project": str("Project name; groups the worker with its project's questions.")}),
 			Run: run(func(ctx context.Context, mgr *agents.Manager, a args) (string, error) {
-				w, err := mgr.Spawn(ctx, agents.Spec{Name: a.Name, Profile: a.Profile, Task: a.Task, Issue: a.Issue, Worktree: a.Worktree, Role: a.Role, Parent: parent})
+				w, err := mgr.Spawn(ctx, agents.Spec{Name: a.Name, Profile: a.Profile, Task: a.Task, Issue: a.Issue, Worktree: a.Worktree, Role: a.Role, Project: a.Project, Parent: parent})
 				if err != nil {
 					return "", err
 				}

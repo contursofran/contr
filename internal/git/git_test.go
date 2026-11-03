@@ -52,13 +52,15 @@ func linked(t *testing.T, common, name, root, head string) string {
 	return admin
 }
 
-// tmp returns the canonical path of a temporary directory.
+// tmp returns the canonical path of a temporary directory. TMPDIR may lie
+// inside a git worktree, so it also makes Discover stop at that directory.
 func tmp(t *testing.T) string {
 	t.Helper()
 	p, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Setenv("GIT_CEILING_DIRECTORIES", p)
 	return p
 }
 
@@ -349,5 +351,33 @@ func TestScanDropsCheckoutsOfARepoThatCannotBeRead(t *testing.T) {
 	got := ScanCwds([]string{filepath.Join(base, "repo")})
 	if len(got.Repos) != 0 || len(got.Checkouts) != 0 {
 		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestDiscoverStopsAtACeilingDirectory(t *testing.T) {
+	base := tmp(t)
+	mainRepo(t, filepath.Join(base, "repo"), "ref: refs/heads/main\n")
+	deep := filepath.Join(base, "repo", "a", "b")
+	mkdir(t, deep)
+	if _, ok := Discover(deep); !ok {
+		t.Fatal("repo not found without a ceiling")
+	}
+	t.Setenv("GIT_CEILING_DIRECTORIES", filepath.Join(base, "repo"))
+	if _, ok := Discover(deep); ok {
+		t.Fatal("search went past the ceiling")
+	}
+}
+
+func TestDiscoverChecksAStartDirectoryThatIsACeiling(t *testing.T) {
+	base := tmp(t)
+	repo := filepath.Join(base, "repo")
+	mainRepo(t, repo, "ref: refs/heads/main\n")
+	t.Setenv("GIT_CEILING_DIRECTORIES", repo)
+	got, ok := Discover(repo)
+	if !ok {
+		t.Fatal("Discover(ceiling repo) = false")
+	}
+	if got.Root == "" {
+		t.Fatal("empty root")
 	}
 }
