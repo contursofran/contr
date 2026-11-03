@@ -141,25 +141,54 @@ func TestTheLineShowsWhileTheLinkIsOff(t *testing.T) {
 	}
 }
 
-func TestASurfaceNotifiesOncePerRevision(t *testing.T) {
-	v, _, n := newTestView(t)
+func TestASurfaceIsKeptPerRevision(t *testing.T) {
+	v, _, _ := newTestView(t)
 	shown := surface(1, "a")
 	v.acceptSurface(shown)
-	if *n != 1 {
-		t.Fatalf("invalidations = %d, want 1", *n)
-	}
-	v.acceptSurface(shown)
-	if *n != 1 {
-		t.Errorf("the same surface is shown again: %d", *n)
-	}
 	v.acceptSurface(surface(1, "a"))
-	if *n != 1 {
-		t.Errorf("an equal revision is shown again: %d", *n)
+	if v.surface != shown {
+		t.Error("an equal revision replaced the surface")
 	}
-	v.acceptSurface(surface(2, "x"))
-	if *n != 2 {
-		t.Errorf("a new revision: %d, want 2", *n)
+	next := surface(2, "x")
+	v.acceptSurface(next)
+	if v.surface != next {
+		t.Error("a new revision did not replace the surface")
 	}
+}
+
+// TestScreenUpdatesAreTakenOnceAFrame checks that updates that come between
+// two frames ask for one frame each, and that the frame takes the screen from
+// the link once.
+func TestScreenUpdatesAreTakenOnceAFrame(t *testing.T) {
+	v, tt, n := newTestView(t)
+	tt.Frame()
+	f := &countingLink{fakeLink: fakeLink{latest: surface(1, "a")}}
+	v.link = f
+	base := *n
+	for range 3 {
+		v.onUpdate(term.ScreenUpdate{})
+	}
+	if f.takes != 0 || *n-base != 3 {
+		t.Fatalf("before the frame: takes = %d, invalidations = %d; want 0 and 3", f.takes, *n-base)
+	}
+	tt.Frame()
+	if f.takes != 1 || v.surface == nil {
+		t.Fatalf("after the frame: takes = %d, surface = %v; want 1 take and a surface", f.takes, v.surface)
+	}
+	tt.Frame()
+	if f.takes != 1 {
+		t.Errorf("a frame with no update took a screen: takes = %d", f.takes)
+	}
+}
+
+type countingLink struct {
+	fakeLink
+	takes int
+}
+
+func (c *countingLink) TakeLatest() *term.Screen {
+	c.takes++
+	return c.fakeLink.TakeLatest()
 }
 
 func TestAStateChangeNotifiesOnceAndALostLinkDropsTheSurface(t *testing.T) {
@@ -437,6 +466,10 @@ func TestTheLinkUpdatesReachTheViewThroughPost(t *testing.T) {
 		t.Fatal("the update was not posted")
 	}
 	posted[0]()
+	if !v.screenWaits || invalidations != 1 {
+		t.Errorf("screenWaits = %v, invalidations = %d", v.screenWaits, invalidations)
+	}
+	v.takeScreen() // the next Build
 	if v.surface == nil || invalidations != 1 {
 		t.Errorf("surface = %v, invalidations = %d", v.surface, invalidations)
 	}
