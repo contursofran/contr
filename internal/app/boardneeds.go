@@ -79,7 +79,9 @@ func needLine(c *ui.Context, t NeedTab, onOpen func(NeedTab)) {
 		}
 	}).Children(func() {
 		icons.Sized(c, t.Icon, theme.IconSizeSmall)
-		ui.Text(c, t.Key).Width(theme.NeedKeyWidth).Shrink(0).TextColor(theme.Color(text))
+		// The key keeps at least four characters so the titles line up. A long
+		// worker name takes the free width and clips on one line (#207).
+		ui.Text(c, t.Key).MinWidth(theme.NeedKeyWidth).SingleLine().Ellipsis("…").TextColor(theme.Color(text))
 		title := ui.Text(c, t.Title).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").TextColor(theme.Color(text))
 		if t.Resolved {
 			title.Strikethrough()

@@ -249,3 +249,26 @@ func TestFrameWithoutNeedsSlotHasNoRow(t *testing.T) {
 		t.Error("row shows without a slot")
 	}
 }
+
+func TestNeedsSectionLongNameStaysOnOneLine(t *testing.T) {
+	name := "b148-s3-card-with-a-very-long-worker-name"
+	tabs := []NeedTab{{Kind: NeedBlocked, Key: name, Icon: icons.Blocked}}
+	tt := ui.NewTester(func(c *ui.Context) { NeedsSection(c, tabs, nil) }, 400, 200)
+	row, ok := tt.Find(name + " , blocked")
+	if !ok {
+		t.Fatal("no needs line")
+	}
+	if row.H != theme.BoardLineHeight {
+		t.Fatalf("line height %v, want %v", row.H, theme.BoardLineHeight)
+	}
+	key, ok := tt.Find(name)
+	if !ok {
+		t.Fatal("no name text")
+	}
+	if key.H > theme.BoardLineHeight {
+		t.Errorf("name height %v: it wrapped", key.H)
+	}
+	if key.W < 100 {
+		t.Errorf("name width %v: it is squeezed", key.W)
+	}
+}
