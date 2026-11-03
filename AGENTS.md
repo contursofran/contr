@@ -35,6 +35,7 @@ in. It is written in Go with MyGo's native UI.
 | `internal/herdr/endpoint` | herdr's binary endpoint socket: codec, messages, surface, conn, link, osc52 |
 | `internal/usage` | plan usage: Claude status line, Codex logs |
 | `internal/hc` | herdr-core's JSON-RPC API over `hc connect`: calls and event subscriptions |
+| `internal/agents` | worker agents in hc terminals: profiles, spawn, list, send, interrupt, stop, read, watch |
 | `assets` | fonts, status icons, app icon |
 | `scripts` | `check.sh`, `bundle.sh`, `install.sh`, `dev-herdr.sh` |
 
