@@ -2,6 +2,7 @@ package main
 
 import (
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -24,5 +25,29 @@ func TestStartAgentsWithoutACoreShowsNoAgentsAndStops(t *testing.T) {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		t.Fatal("stop did not return")
+	}
+}
+
+func TestStartAgentsShowsWhyTheCoreFailed(t *testing.T) {
+	env := map[string]string{
+		"CONTR_HC":            filepath.Join(t.TempDir(), "no-such-hc"),
+		"CONTR_AGENTS_CONFIG": filepath.Join(t.TempDir(), "agents.json"),
+		"CONTR_OWNER_FILE":    filepath.Join(t.TempDir(), "owner.json"),
+	}
+	var notified atomic.Int32
+	src, stop := startAgents(func(k string) string { return env[k] })(func() { notified.Add(1) })
+	defer stop()
+	deadline := time.Now().Add(5 * time.Second)
+	for src.Snapshot().Problem == "" {
+		if time.Now().After(deadline) {
+			t.Fatal("no problem shown")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if p := src.Snapshot().Problem; !strings.Contains(p, "no-such-hc") {
+		t.Errorf("problem %q does not name the program", p)
+	}
+	if notified.Load() == 0 {
+		t.Error("the window was not told")
 	}
 }
