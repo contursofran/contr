@@ -273,9 +273,7 @@ func (l *HCLink) run(resumed bool, size term.GridSize, cell term.CellPx) {
 		return
 	}
 	l.stream, l.attaching, l.resumed, l.noRetry = s, false, true, false
-	focused, now, observing, held := l.focused, l.size, l.observing, l.held
-	l.held = nil
-	l.takeover = false
+	focused, now, observing := l.focused, l.size, l.observing
 	l.mu.Unlock()
 	l.setState(term.LinkState{Kind: term.LinkLive})
 	if !observing { // an observer sends no size, focus or input
@@ -285,9 +283,7 @@ func (l *HCLink) run(resumed bool, size term.GridSize, cell term.CellPx) {
 		if focused {
 			_ = s.Focus(true)
 		}
-		if len(held) > 0 {
-			_, _ = s.Write(held)
-		}
+		l.flushHeld(s)
 	}
 	l.read(s)
 
@@ -328,6 +324,31 @@ func (l *HCLink) run(resumed bool, size term.GridSize, cell term.CellPx) {
 	l.setState(term.LinkState{Kind: term.LinkNotRunning, Message: msg})
 	if !final {
 		l.scheduleRetry() // a lost connection
+	}
+}
+
+// flushHeld writes the keys typed during the take-over, in order, before any
+// later key: takeover stays set (and SendInput keeps holding) until held is
+// empty, and that check and the clear happen under one lock. It runs on the
+// run goroutine, the only writer until takeover is clear.
+func (l *HCLink) flushHeld(s HCStream) {
+	for {
+		l.mu.Lock()
+		b := l.held
+		l.held = nil
+		if len(b) == 0 || l.stopped {
+			l.takeover = false
+			l.mu.Unlock()
+			return
+		}
+		l.mu.Unlock()
+		if _, err := s.Write(b); err != nil {
+			slog.Debug("held input not written", "err", err)
+			l.mu.Lock()
+			l.held, l.takeover = nil, false
+			l.mu.Unlock()
+			return
+		}
 	}
 }
 
@@ -443,11 +464,14 @@ func (l *HCLink) TakeLatest() *term.Screen {
 // stream it starts an attach and returns [term.ErrNotConnected].
 func (l *HCLink) SendInput(_ string, events []term.InputEvent) error {
 	l.mu.Lock()
-	s, takeover := l.stream, l.takeover
+	takeover := l.takeover
 	l.mu.Unlock()
-	if takeover { // the attach with input is under way: keep what is typed
-		return l.holdInput(events)
+	if takeover && l.holdInput(events) { // the attach with input is under way: keep what is typed
+		return nil
 	}
+	l.mu.Lock()
+	s := l.stream
+	l.mu.Unlock()
 	if s == nil {
 		l.retry(false)
 		return term.ErrNotConnected
@@ -497,7 +521,9 @@ func (l *HCLink) SendInput(_ string, events []term.InputEvent) error {
 }
 
 // holdInput keeps the bytes of events typed while the attach with input runs.
-func (l *HCLink) holdInput(events []term.InputEvent) error {
+// It returns false when the take-over has ended meanwhile: the caller then
+// sends the events itself.
+func (l *HCLink) holdInput(events []term.InputEvent) bool {
 	var out []byte
 	for _, ev := range events {
 		if _, ok := ev.(term.WheelEvent); !ok {
@@ -505,9 +531,12 @@ func (l *HCLink) holdInput(events []term.InputEvent) error {
 		}
 	}
 	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !l.takeover {
+		return false
+	}
 	l.held = append(l.held, out...)
-	l.mu.Unlock()
-	return nil
+	return true
 }
 
 // Resize sets the grid. The core owns the size (D43): the new size goes to

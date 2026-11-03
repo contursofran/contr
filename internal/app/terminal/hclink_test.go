@@ -21,6 +21,7 @@ type fakeStream struct {
 	mu      sync.Mutex
 	err     error
 	written []byte
+	onWrite func() // runs before the first Write is recorded, when set
 	resizes []hc.Size
 	focus   []bool
 }
@@ -34,6 +35,12 @@ func (s *fakeStream) Done() <-chan struct{}         { return s.done }
 func (s *fakeStream) Err() error                    { s.mu.Lock(); defer s.mu.Unlock(); return s.err }
 func (s *fakeStream) Write(p []byte) (int, error) {
 	s.mu.Lock()
+	if h := s.onWrite; h != nil {
+		s.onWrite = nil
+		s.mu.Unlock()
+		h()
+		s.mu.Lock()
+	}
 	defer s.mu.Unlock()
 	s.written = append(s.written, p...)
 	return len(p), nil
@@ -76,7 +83,9 @@ type fakeSource struct {
 	errs     []error // one per attach call, nil for success
 	watchCh  chan hc.Event
 	attached chan struct{}
-	block    chan struct{} // Watch waits for this to close, when set
+	block    chan struct{}              // Watch waits for this to close, when set
+	gate     chan struct{}              // attaches after the first wait for this to close, when set
+	hook     func(i int, s *fakeStream) // runs for each new stream, when set
 }
 
 func newFakeSource(errs ...error) *fakeSource {
@@ -84,6 +93,12 @@ func newFakeSource(errs ...error) *fakeSource {
 }
 
 func (f *fakeSource) Attach(_ context.Context, p hc.AttachParams) (HCStream, error) {
+	f.mu.Lock()
+	gate, n := f.gate, len(f.params)
+	f.mu.Unlock()
+	if gate != nil && n >= 1 {
+		<-gate
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	i := len(f.params)
@@ -93,6 +108,9 @@ func (f *fakeSource) Attach(_ context.Context, p hc.AttachParams) (HCStream, err
 		return nil, f.errs[i]
 	}
 	s := newFakeStream()
+	if f.hook != nil {
+		f.hook(i, s)
+	}
 	f.streams = append(f.streams, s)
 	return s, nil
 }
@@ -665,6 +683,98 @@ func TestLinkFirstKeyAttachesWithInputAndTakesTheSize(t *testing.T) {
 	_ = l.SendInput("", []term.InputEvent{term.TextEvent{Text: "y"}})
 	if got := second.wrote(); got != "xy" || src.attachCount() != 2 {
 		t.Errorf("written %q after %d attaches", got, src.attachCount())
+	}
+}
+
+func waitWrote(t *testing.T, s *fakeStream, want string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for s.wrote() != want {
+		if time.Now().After(deadline) {
+			t.Fatalf("written %q, want %q", s.wrote(), want)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func typeKey(t *testing.T, l *HCLink, k string) {
+	t.Helper()
+	if err := l.SendInput("", []term.InputEvent{term.TextEvent{Text: k}}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLinkKeysTypedDuringTakeoverArriveOnceInOrder(t *testing.T) {
+	src := newFakeSource()
+	src.gate = make(chan struct{})
+	l, u := startObserver(t, src)
+	u.waitState(t, term.LinkLive)
+	typeKey(t, l, "a") // ends the observer; the second attach waits on the gate
+	typeKey(t, l, "b") // typed during the attach
+	typeKey(t, l, "c")
+	close(src.gate)
+	waitWrote(t, src.stream(t, 1), "abc")
+	typeKey(t, l, "d")
+	waitWrote(t, src.stream(t, 1), "abcd")
+	if src.attachCount() != 2 {
+		t.Errorf("%d attaches, want 2", src.attachCount())
+	}
+}
+
+func TestLinkKeyDuringFlushWaitsForHeldKeys(t *testing.T) {
+	src := newFakeSource()
+	src.gate = make(chan struct{})
+	entered, release := make(chan struct{}), make(chan struct{})
+	src.hook = func(i int, s *fakeStream) {
+		if i == 1 {
+			s.onWrite = func() { close(entered); <-release } // the flush is stuck in its write
+		}
+	}
+	l, u := startObserver(t, src)
+	u.waitState(t, term.LinkLive)
+	typeKey(t, l, "a")
+	typeKey(t, l, "b")
+	close(src.gate)
+	select {
+	case <-entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the held keys were not written")
+	}
+	typeKey(t, l, "c") // typed while the held keys are being written
+	close(release)
+	waitWrote(t, src.stream(t, 1), "abc")
+}
+
+func TestLinkTakeoverAttachFailureDropsHeldKeys(t *testing.T) {
+	src := newFakeSource(nil, errors.New("down"))
+	l, u := startObserver(t, src)
+	u.waitState(t, term.LinkLive)
+	typeKey(t, l, "a")                                                // the second attach fails
+	_ = l.SendInput("", []term.InputEvent{term.TextEvent{Text: "b"}}) // held, or not connected
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		l.mu.Lock()
+		held, takeover := len(l.held), l.takeover
+		l.mu.Unlock()
+		if !takeover && held == 0 && src.attachCount() >= 2 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the held keys stay after the attach failed")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	// The next key retries and is sent, without the dropped ones.
+	for src.attachCount() < 3 {
+		_ = l.SendInput("", []term.InputEvent{term.TextEvent{Text: "z"}})
+		if time.Now().After(deadline) {
+			t.Fatal("a key does not retry the attach")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	s := src.stream(t, 1)
+	if got := s.wrote(); strings.ContainsAny(got, "ab") {
+		t.Errorf("dropped keys were sent: %q", got)
 	}
 }
 
