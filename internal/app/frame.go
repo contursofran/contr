@@ -391,7 +391,6 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	return func() {
 		unwatch()
 		term()
-		stopAgents()
 		// Held actions are written now, so quit loses none.
 		f.Outbox.ReleaseForQuit()
 		f.Outbox.Wait()
