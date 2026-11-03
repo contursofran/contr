@@ -146,7 +146,7 @@ func TestSpawn(t *testing.T) {
 		t.Errorf("worker\n got %+v\nwant %+v", w, want)
 	}
 	p := f.last().Params
-	if got := p["argv"]; !reflect.DeepEqual(got, []any{"claude", "--model", "sonnet", "--effort", "medium", "read TASK.md"}) {
+	if got := p["argv"]; !reflect.DeepEqual(got, []any{"claude", "--model", "sonnet", "--effort", "medium", "--permission-mode", "auto", "read TASK.md"}) {
 		t.Errorf("argv = %v", got)
 	}
 	if p["cwd"] != "/w/a" || p["no_parent"] != true || p["outlive_parent"] != true || p["wait"] != false || p["parent"] != nil {
@@ -157,13 +157,13 @@ func TestSpawn(t *testing.T) {
 		t.Fatal(err)
 	}
 	p = f.last().Params
-	if p["parent"] != "t1" || p["no_parent"] != nil || p["cwd"] != nil {
+	if p["parent"] != "t1" || p["no_parent"] != nil || p["cwd"] != nil || !reflect.DeepEqual(p["env"], map[string]any{EnvCoordinator: "t1"}) {
 		t.Errorf("parent params = %v", p)
 	}
 	if l := p["labels"].(map[string]any); l[LabelRole] != "reviewer" || l[LabelIssue] != nil {
 		t.Errorf("labels = %v", l)
 	}
-	if got := len(p["argv"].([]any)); got != 5 {
+	if got := len(p["argv"].([]any)); got != 7 {
 		t.Errorf("argv without a task has %d words", got)
 	}
 
@@ -346,5 +346,71 @@ func TestWatchDropsATerminalThatIsNoLongerAWorker(t *testing.T) {
 	}
 	if !reflect.DeepEqual(lists, []int{1, 0}) {
 		t.Errorf("list sizes = %v, want [1 0]", lists)
+	}
+}
+
+func TestSpawnStartsTheKitAgent(t *testing.T) {
+	kit := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(kit, "agents"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(kit, "agents", "builder.md"), []byte("---\nname: builder\n---\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f := &fakeCore{handle: map[string]func(map[string]any) (any, error){
+		"terminal.run": func(map[string]any) (any, error) { return term("t1", "w", "live", builderLabels, nil), nil },
+	}}
+	cfg := DefaultConfig()
+	cfg.Kit = kit
+	cfg.Profiles["shell"] = Profile{Argv: []string{"sh"}}
+	m := New(f, cfg)
+	argvOf := func(profile string) []any {
+		t.Helper()
+		if _, err := m.Spawn(context.Background(), Spec{Name: "w", Profile: profile}); err != nil {
+			t.Fatal(err)
+		}
+		return f.last().Params["argv"].([]any)
+	}
+	want := []any{"claude", "--plugin-dir", kit, "--agent", "contr:builder", "--model", "sonnet", "--effort", "medium", "--permission-mode", "auto"}
+	if got := argvOf("builder"); !reflect.DeepEqual(got, want) {
+		t.Errorf("builder argv\n got %v\nwant %v", got, want)
+	}
+	if got := argvOf("reviewer"); got[1] != "--model" {
+		t.Errorf("a profile with no agent file gets the kit: %v", got)
+	}
+	if got := argvOf("shell"); !reflect.DeepEqual(got, []any{"sh"}) {
+		t.Errorf("a non-claude profile changed: %v", got)
+	}
+	if got := New(f, DefaultConfig()).agentArgv("builder", []string{"claude"}); !reflect.DeepEqual(got, []string{"claude"}) {
+		t.Errorf("no kit: %v", got)
+	}
+}
+
+func TestLoadConfigReadsTheKit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agents.json")
+	if err := os.WriteFile(path, []byte(`{"kit":"/k"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(path)
+	if err != nil || cfg.Kit != "/k" || len(cfg.Profiles) != 4 {
+		t.Errorf("cfg = %+v, %v", cfg, err)
+	}
+}
+
+func TestNewMakesARelativeKitAbsolute(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	if err := os.MkdirAll(filepath.Join("kit", "agents"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join("kit", "agents", "builder.md"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := DefaultConfig()
+	cfg.Kit = "kit"
+	got := New(&fakeCore{}, cfg).agentArgv("builder", []string{"claude"})
+	abs, _ := filepath.Abs("kit")
+	if len(got) < 3 || got[2] != abs || !filepath.IsAbs(got[2]) {
+		t.Errorf("argv = %v, want the kit as %s", got, abs)
 	}
 }
