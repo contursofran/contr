@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/contursofran/contr/internal/app"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/mcp"
+	"github.com/contursofran/contr/internal/owner"
 )
 
 // managers gives the agents manager for a tool call. It connects to the core
@@ -78,7 +80,13 @@ func runMCP(stdin io.Reader, stdout, stderr io.Writer, dial func(context.Context
 	defer m.close()
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	srv := mcp.New("contr", app.Version, agentTools(m, getenv("HC_TERMINAL_ID")))
+	store, err := ownerStore(getenv)
+	if err != nil {
+		fmt.Fprintf(stderr, "contr mcp: %v\n", err)
+		return 1
+	}
+	tools := append(agentTools(m, getenv("HC_TERMINAL_ID")), ownerTools(store, projectName(getenv), getenv("HC_TERMINAL_ID"))...)
+	srv := mcp.New("contr", app.Version, tools)
 	if err := srv.Serve(ctx, stdin, stdout); err != nil && !errors.Is(err, context.Canceled) {
 		fmt.Fprintf(stderr, "contr mcp: %v\n", err)
 		return 1
@@ -94,6 +102,10 @@ func str(desc string) prop { return prop{"string", desc} }
 func schema(required []string, props map[string]prop) json.RawMessage {
 	p := map[string]any{}
 	for name, pr := range props {
+		if pr.typ == "string[]" {
+			p[name] = map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": pr.desc}
+			continue
+		}
 		p[name] = map[string]any{"type": pr.typ, "description": pr.desc}
 	}
 	s := map[string]any{"type": "object", "properties": p}
@@ -177,6 +189,98 @@ func agentTools(m *managers, parent string) []mcp.Tool {
 					return "", err
 				}
 				return toJSON(ws)
+			})},
+	}
+}
+
+// ownerStore is the owner file: CONTR_OWNER_FILE, or owner.json in contr's
+// user config folder.
+func ownerStore(getenv func(string) string) (*owner.Store, error) {
+	if p := getenv("CONTR_OWNER_FILE"); p != "" {
+		return &owner.Store{Path: p}, nil
+	}
+	p, err := owner.DefaultPath()
+	if err != nil {
+		return nil, err
+	}
+	return &owner.Store{Path: p}, nil
+}
+
+// projectName is CONTR_PROJECT, or the name of the folder the session runs in.
+func projectName(getenv func(string) string) string {
+	if p := getenv("CONTR_PROJECT"); p != "" {
+		return p
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	return filepath.Base(wd)
+}
+
+// ownerTools keep questions and to-dos for the owner in the owner file, for
+// project. coordinator is the asking terminal: the UI sends answers there.
+func ownerTools(store *owner.Store, project, coordinator string) []mcp.Tool {
+	type args struct {
+		Question    string   `json:"question"`
+		Options     []string `json:"options"`
+		Recommended *int     `json:"recommended"`
+		Title       string   `json:"title"`
+		From        string   `json:"from"`
+		Text        string   `json:"text"`
+		Kind        string   `json:"kind"`
+		IDs         []string `json:"ids"`
+		Answer      string   `json:"answer"`
+		By          string   `json:"by"`
+		All         bool     `json:"all"`
+	}
+	run := func(f func(args) (string, error)) func(context.Context, json.RawMessage) (string, error) {
+		return func(_ context.Context, raw json.RawMessage) (string, error) {
+			var a args
+			if err := json.Unmarshal(raw, &a); err != nil {
+				return "", fmt.Errorf("bad arguments: %w", err)
+			}
+			return f(a)
+		}
+	}
+	return []mcp.Tool{
+		{Name: "ask_owner", Description: "Ask the owner a question only they can answer (a product rule, a design choice, an approval). It is kept until it is decided. Returns its id (D1, D2, …). Until contr shows these items (#162), also ask the question in your reply: the owner answers in chat, and you close it with decided.",
+			Schema: schema([]string{"question"}, map[string]prop{
+				"question": str("The question, with enough context to answer it from there alone."), "options": {"string[]", "Short answers to pick from (2-4)."},
+				"recommended": {"integer", "Index in options of your recommendation."}, "title": str("A 2-4 word name."), "from": str("The worker, issue or PR it is about.")}),
+			Run: run(func(a args) (string, error) {
+				q, err := store.Ask(owner.Question{Project: project, Coordinator: coordinator, From: a.From, Title: a.Title, Question: a.Question, Options: a.Options, Recommended: a.Recommended})
+				return q.ID, err
+			})},
+		{Name: "decided", Description: "Close questions: ones the owner answered in chat (by owner), or ones you settled yourself because they are not the owner's (by coordinator).",
+			Schema: schema([]string{"ids", "answer", "by"}, map[string]prop{"ids": {"string[]", "Question ids, such as D3."}, "answer": str("The answer, short."), "by": str("owner or coordinator.")}),
+			Run: run(func(a args) (string, error) {
+				return "decided", store.Decide(a.IDs, a.Answer, a.By)
+			})},
+		{Name: "pin_for_owner", Description: "Pin one line for the owner: something to do (kind do: test a build, merge a PR that waits for them) or to know (kind know). Returns its id (T1, T2, …).",
+			Schema: schema([]string{"text"}, map[string]prop{"text": str("One short line with all it takes to act."), "kind": str("do (the default) or know."), "from": str("The worker, issue or PR it is about.")}),
+			Run: run(func(a args) (string, error) {
+				t, err := store.Pin(owner.Todo{Project: project, Coordinator: coordinator, From: a.From, Kind: a.Kind, Text: a.Text})
+				return t.ID, err
+			})},
+		{Name: "unpin_for_owner", Description: "Remove pinned items once they are done or no longer needed.",
+			Schema: schema([]string{"ids"}, map[string]prop{"ids": {"string[]", "Ids such as T3."}}),
+			Run: run(func(a args) (string, error) {
+				return "unpinned", store.Unpin(a.IDs)
+			})},
+		{Name: "owner_items", Description: "List the open questions and pinned items of this project (all projects with all).",
+			Schema: schema(nil, map[string]prop{"all": {"boolean", "All projects."}}),
+			Run: run(func(a args) (string, error) {
+				st, err := store.Read()
+				if err != nil {
+					return "", err
+				}
+				p := project
+				if a.All {
+					p = ""
+				}
+				qs, ts := st.Open(p)
+				return toJSON(map[string]any{"questions": qs, "todos": ts})
 			})},
 	}
 }

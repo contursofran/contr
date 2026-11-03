@@ -37,6 +37,7 @@ in. It is written in Go with MyGo's native UI.
 | `internal/hc` | herdr-core's JSON-RPC API over `hc connect`: calls and event subscriptions |
 | `internal/agents` | worker agents in hc terminals: profiles, spawn, list, send, interrupt, stop, read, watch |
 | `internal/mcp` | a small MCP server over stdio: tools only |
+| `internal/owner` | questions and to-dos for the owner, in one locked JSON file |
 | `assets` | fonts, status icons, app icon |
 | `kit` | Claude Code plugin for agent work: agent definitions and the coordinator playbook |
 | `scripts` | `check.sh`, `bundle.sh`, `install.sh`, `dev-herdr.sh`, `agent-metrics.py` |

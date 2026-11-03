@@ -21,6 +21,9 @@ func mcpRun(t *testing.T, dial func(context.Context, func(string) string) (agent
 	if _, ok := env["CONTR_AGENTS_CONFIG"]; !ok {
 		env["CONTR_AGENTS_CONFIG"] = filepath.Join(t.TempDir(), "none.json")
 	}
+	if _, ok := env["CONTR_OWNER_FILE"]; !ok {
+		env["CONTR_OWNER_FILE"] = filepath.Join(t.TempDir(), "owner.json")
+	}
 	var out, errb bytes.Buffer
 	code := runMCP(strings.NewReader(strings.Join(lines, "\n")+"\n"), &out, &errb, dial, func(k string) string { return env[k] })
 	replies := map[string]map[string]any{}
@@ -81,7 +84,7 @@ func TestMCPListsAndRunsTheAgentTools(t *testing.T) {
 	for _, tool := range r["2"]["result"].(map[string]any)["tools"].([]any) {
 		names = append(names, tool.(map[string]any)["name"].(string))
 	}
-	if strings.Join(names, " ") != "spawn message interrupt stop read list" {
+	if !strings.HasPrefix(strings.Join(names, " "), "spawn message interrupt stop read list ") {
 		t.Errorf("tools = %v", names)
 	}
 	if got, isErr := toolText(t, r["3"]); isErr || !strings.Contains(got, `"address": "t4"`) {
@@ -180,5 +183,85 @@ func TestMCPCheckClosesOnlyTheConnectionItUsed(t *testing.T) {
 	}
 	if !old.closed {
 		t.Error("the old connection is not closed")
+	}
+}
+
+func TestMCPOwnerTools(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "owner.json")
+	env := map[string]string{"CONTR_OWNER_FILE": file, "CONTR_PROJECT": "contr", "HC_TERMINAL_ID": "t1"}
+	dial := func(context.Context, func(string) string) (agentsCore, error) { return &cliCore{}, nil }
+	// Calls run at the same time, so each step is its own server run.
+	step := func(line string) (string, bool) {
+		t.Helper()
+		_, r := mcpRun(t, dial, env, line)
+		for _, reply := range r {
+			return toolText(t, reply)
+		}
+		t.Fatal("no reply")
+		return "", false
+	}
+	if id, isErr := step(callLine(1, "ask_owner", map[string]any{"question": "Which layout?", "options": []string{"A", "B"}, "recommended": 1, "title": "Layout"})); id != "D1" || isErr {
+		t.Fatalf("ask = %q, %v", id, isErr)
+	}
+	if id, _ := step(callLine(2, "pin_for_owner", map[string]any{"text": "Test the build", "from": "#160"})); id != "T1" {
+		t.Fatalf("pin = %q", id)
+	}
+	if got, isErr := step(callLine(3, "pin_for_owner", map[string]any{"text": "x", "kind": "maybe"})); !isErr || !strings.Contains(got, "kind") {
+		t.Errorf("bad kind = %q, %v", got, isErr)
+	}
+	items, _ := step(callLine(4, "owner_items", map[string]any{}))
+	var open struct {
+		Questions []map[string]any `json:"questions"`
+		Todos     []map[string]any `json:"todos"`
+	}
+	if err := json.Unmarshal([]byte(items), &open); err != nil || len(open.Questions) != 1 || len(open.Todos) != 1 {
+		t.Fatalf("items = %s (%v)", items, err)
+	}
+	q := open.Questions[0]
+	if q["coordinator"] != "t1" || q["project"] != "contr" || q["recommended"] != float64(1) {
+		t.Errorf("question = %v", q)
+	}
+	if got, isErr := step(callLine(5, "decided", map[string]any{"ids": []string{"D1"}, "answer": "B", "by": "owner"})); got != "decided" || isErr {
+		t.Errorf("decided = %q, %v", got, isErr)
+	}
+	if got, isErr := step(callLine(6, "decided", map[string]any{"ids": []string{"D1"}, "answer": "A", "by": "owner"})); !isErr {
+		t.Errorf("deciding twice = %q", got)
+	}
+	if got, _ := step(callLine(7, "unpin_for_owner", map[string]any{"ids": []string{"T1"}})); got != "unpinned" {
+		t.Errorf("unpin = %q", got)
+	}
+	items, _ = step(callLine(8, "owner_items", map[string]any{}))
+	if !strings.Contains(items, `"questions": null`) || !strings.Contains(items, `"todos": null`) {
+		t.Errorf("items after closing = %s", items)
+	}
+	// Another project's item shows only with all.
+	env["CONTR_PROJECT"] = "aerum"
+	step(callLine(9, "pin_for_owner", map[string]any{"text": "other"}))
+	env["CONTR_PROJECT"] = "contr"
+	if items, _ := step(callLine(10, "owner_items", map[string]any{})); strings.Contains(items, "other") {
+		t.Errorf("another project's item shows: %s", items)
+	}
+	if items, _ := step(callLine(11, "owner_items", map[string]any{"all": true})); !strings.Contains(items, "other") {
+		t.Errorf("all misses another project's item: %s", items)
+	}
+}
+
+func TestMCPListsTheOwnerTools(t *testing.T) {
+	env := map[string]string{"CONTR_OWNER_FILE": filepath.Join(t.TempDir(), "o.json")}
+	_, r := mcpRun(t, func(context.Context, func(string) string) (agentsCore, error) { return &cliCore{}, nil }, env,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
+	var names []string
+	for _, tool := range r["1"]["result"].(map[string]any)["tools"].([]any) {
+		tm := tool.(map[string]any)
+		names = append(names, tm["name"].(string))
+		if tm["name"] == "ask_owner" {
+			opts := tm["inputSchema"].(map[string]any)["properties"].(map[string]any)["options"].(map[string]any)
+			if opts["type"] != "array" || opts["items"].(map[string]any)["type"] != "string" {
+				t.Errorf("options schema = %v", opts)
+			}
+		}
+	}
+	if strings.Join(names, " ") != "spawn message interrupt stop read list ask_owner decided pin_for_owner unpin_for_owner owner_items" {
+		t.Errorf("tools = %v", names)
 	}
 }
