@@ -11,6 +11,7 @@ const usageText = `Usage:
   contr                                       open the window
   contr --icons                               open the window with the status icon legend
   contr statusline [-- <command> [args…]]     print the Claude Code status line
+  contr agents <command> [args…]              start and follow worker agents (contr agents help)
   contr --help, -h                            print this text
 `
 
@@ -24,6 +25,8 @@ const (
 	kindHelp
 	// kindStatusline is `statusline`. Command.Then is the command after `--`.
 	kindStatusline
+	// kindAgents is `agents`. Command.Then holds the words after it.
+	kindAgents
 	// kindUnknown is an argument that is not part of the command line.
 	kindUnknown
 )
@@ -39,16 +42,19 @@ type Command struct {
 	Unknown string
 }
 
-// parseArgs reads args, which hold the program name first. `statusline` must be
-// the first argument. Otherwise the arguments are read in order: the first
-// `--help` or `-h` asks for the usage, and the first argument other than
-// `--icons` is unknown.
+// parseArgs reads args, which hold the program name first. `statusline` and
+// `agents` must be the first argument. Otherwise the arguments are read in
+// order: the first `--help` or `-h` asks for the usage, and the first
+// argument other than `--icons` is unknown.
 func parseArgs(args []string) Command {
 	if len(args) > 0 {
 		args = args[1:]
 	}
 	if len(args) > 0 && args[0] == "statusline" {
 		return Command{Kind: kindStatusline, Then: statuslineCommand(args[1:])}
+	}
+	if len(args) > 0 && args[0] == "agents" {
+		return Command{Kind: kindAgents, Then: args[1:]}
 	}
 	icons := false
 	for _, arg := range args {
