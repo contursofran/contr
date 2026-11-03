@@ -59,7 +59,7 @@ waited on cargo's shared package cache lock.
 Measured on 2026-10-29, same machine, one run at a time, 15 samples of `ps`
 CPU over 15 s after a 6 s warm-up. The earlier MyGo test was run again in the
 same session, so both columns share the machine load. The painter draws the
-same 200×60 workload from an `endpoint.Surface`, with the bundled JetBrains
+same 200×60 workload from a `term.Screen`, with the bundled JetBrains
 Mono (the earlier test used the system UI font). Cell size 7.2×15.8 so the
 grid fits the same window.
 
