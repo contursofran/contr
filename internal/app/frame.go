@@ -107,7 +107,7 @@ type Frame struct {
 	status statusBar
 	bar    titleBar
 	// agentSnap gives the agents; nil before Attach or without agents. openProject is the
-	// project the title bar shows (D49).
+	// project the title bar shows (D50).
 	agentSnap   func() agentstate.Snapshot
 	openProject string
 	sidebarOpen bool

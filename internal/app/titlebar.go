@@ -2,7 +2,7 @@
 
 package app
 
-// The title bar: one tab for each hc terminal of the open project (#138, D49), the Review
+// The title bar: one tab for each hc terminal of the open project (#138, D50), the Review
 // button and the panel toggle. A click on a tab selects its agent. Its methods run on the UI
 // thread.
 
