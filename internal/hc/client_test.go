@@ -367,3 +367,25 @@ func TestFindSkipsANonExecutable(t *testing.T) {
 		t.Errorf("err %v, want ErrNotFound", err)
 	}
 }
+
+// Building a Dialer must not look for hc: that work runs on the UI thread.
+// The lookup happens when the Dialer runs, so an hc that appears on PATH
+// after Command is found, and a missing hc is an error of the Dialer.
+func TestCommandLooksUpHcOnlyWhenDialing(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	t.Setenv("PATH", dir)
+	dial := Command("", nil) // hc is not there yet
+	if _, err := dial(context.Background()); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("dial without hc = %v, want ErrNotFound", err)
+	}
+	script := filepath.Join(dir, "hc")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nexec cat\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	p, err := dial(context.Background())
+	if err != nil {
+		t.Fatalf("dial after hc appeared: %v", err)
+	}
+	_ = p.Close()
+}

@@ -96,18 +96,20 @@ func Find(path, home string, dirs []string) (string, error) {
 }
 
 // Command returns a Dialer that starts `<path> connect` with env added to the
-// environment of this process. An empty path means hc, found with Find; when
-// it is not found, the Dialer returns that error.
+// environment of this process. An empty path means hc, found with Find when
+// the Dialer runs, so building the Dialer does no file work; when hc is not
+// found, the Dialer returns that error.
 func Command(path string, env []string) Dialer {
-	if path == "" {
-		home, _ := os.UserHomeDir()
-		found, err := Find("", home, nil)
-		if err != nil {
-			return func(context.Context) (Pipe, error) { return Pipe{}, err }
-		}
-		path = found
-	}
 	return func(ctx context.Context) (Pipe, error) {
+		path := path
+		if path == "" {
+			home, _ := os.UserHomeDir()
+			found, err := Find("", home, nil)
+			if err != nil {
+				return Pipe{}, err
+			}
+			path = found
+		}
 		cmd := exec.Command(path, "connect")
 		if len(env) > 0 {
 			cmd.Env = append(cmd.Environ(), env...)
