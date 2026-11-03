@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -14,6 +15,7 @@ import (
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/board"
 	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/herdr"
 	"github.com/contursofran/contr/internal/host"
@@ -1247,4 +1249,20 @@ func TestALongRepoAndWorktreeNameIsCutWithAnEllipsis(t *testing.T) {
 			}
 		}
 	}
+}
+
+// putBoard puts the v1 board json in b as a finished read would.
+func putBoard(t *testing.T, b *Board, json string) {
+	t.Helper()
+	snap, err := board.Parse([]byte(json))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.mu.Lock()
+	b.snap = snap
+	b.mu.Unlock()
+}
+
+func boardJSON(agents, rows string) string {
+	return fmt.Sprintf(`{"version": 1, "session": "s", "rev": 1, "agents": %s, "rows": %s}`, agents, rows)
 }
