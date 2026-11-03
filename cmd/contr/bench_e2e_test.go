@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -182,8 +183,14 @@ func TestAppBench(t *testing.T) {
 	// phase runs one phase. isWorking tells whether a working item is on
 	// screen (the phase sets the "flag" worker to that before it starts).
 	hidden := false // set once the window is hidden on purpose
+	// BENCH_PHASES, when set, names the phases to run. BENCH_PROFILE_PHASE
+	// names a phase to profile, with CONTR_PROFILE set (docs/BENCHMARKS.md).
 	phase := func(name string, isWorking bool, setup func(), teardown func()) {
 		t.Helper()
+		if only := os.Getenv("BENCH_PHASES"); only != "" && !strings.Contains(only, name) {
+			return
+		}
+		prof := os.Getenv("BENCH_PROFILE_PHASE") == name
 		load := strings.TrimSpace(sysctlLoad(t))
 		setWorking(isWorking)
 		if setup != nil {
@@ -196,6 +203,11 @@ func TestAppBench(t *testing.T) {
 		}
 		t0 := time.Now()
 		fmt.Fprintf(appLog, "%s\n", bench.StartMark(name))
+		if prof { // start a CPU profile (cmd/contr/profile_e2e.go)
+			if err := app.Process.Signal(syscall.SIGUSR1); err != nil {
+				t.Logf("start the profile: %v", err)
+			}
+		}
 		var samples []bench.Sample
 		for i := 0; i < benchSamples; i++ {
 			s, err := bench.Read(app.Process.Pid)
@@ -216,6 +228,12 @@ func TestAppBench(t *testing.T) {
 		cpu1, err := bench.ReadCPUTime(app.Process.Pid)
 		if err != nil {
 			t.Fatalf("phase %q: %v", name, err)
+		}
+		if prof { // stop it and write a heap profile, after the CPU time was read
+			if err := app.Process.Signal(syscall.SIGUSR2); err != nil {
+				t.Logf("stop the profile: %v", err)
+			}
+			time.Sleep(2 * time.Second)
 		}
 		timings[name] = timing{seconds: secs, cpuSeconds: cpu1 - cpu0, working: isWorking}
 		order = append(order, name)
@@ -335,7 +353,10 @@ func TestAppBench(t *testing.T) {
 	// A miss is reported, never a failure (owner answer to Q6).
 	res := strings.Join(table, "\n") + "\n\nTargets (a miss is reported only):\n"
 	for _, tg := range benchTargets {
-		st := stats[tg.phase]
+		st, ran := stats[tg.phase]
+		if !ran { // BENCH_PHASES left it out
+			continue
+		}
 		verdict := "met"
 		if st.CPUMed > tg.cpuMed {
 			verdict = "MISS"

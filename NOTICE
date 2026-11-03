@@ -18,5 +18,7 @@ Each file with adapted code has a header comment that says so and names the
 changes.
 
 The terminal emulator in internal/term/vt wraps charmbracelet/x/vt (MIT
-License, Copyright 2024 Charmbracelet, Inc.) and its dependencies
-(ultraviolet, x/ansi, MIT).
+License, Copyright 2023 Charmbracelet, Inc.) and its dependencies
+(ultraviolet, x/ansi, MIT). third_party/vt is a copy of x/vt v0.1.0 with
+changes for speed; its LICENSE has the full text, and each changed file has a
+header comment that names the changes.

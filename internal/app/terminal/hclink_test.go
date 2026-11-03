@@ -254,6 +254,56 @@ func TestLinkCoalescesNotify(t *testing.T) {
 	u.waitScreen(t) // taking re-arms the notify
 }
 
+func (l *HCLink) buildCount() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.builds
+}
+
+// TestLinkBuildsOnlyWhenTaken checks that output that comes while an update
+// waits for TakeLatest builds no screen, and that TakeLatest asks for the
+// newest one.
+func TestLinkBuildsOnlyWhenTaken(t *testing.T) {
+	src := newFakeSource()
+	l, u := startLink(t, src)
+	u.waitState(t, term.LinkLive)
+	s := src.stream(t, 0)
+	s.data("first\r\n")
+	u.waitScreen(t)
+	before := l.buildCount()
+	for i := 0; i < 50; i++ {
+		s.data("x\r\n") // one batch each: the reader waits between them
+		time.Sleep(time.Millisecond)
+	}
+	s.data("last")
+	for deadline := time.Now().Add(2 * time.Second); len(s.events) > 0; time.Sleep(time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the reader did not take the output")
+		}
+	}
+	time.Sleep(20 * time.Millisecond) // the last batch is applied
+	if n := l.buildCount() - before; n != 0 {
+		t.Fatalf("screens built while an update waits = %d, want 0", n)
+	}
+	if scr := l.TakeLatest(); scr == nil || !strings.HasPrefix(rowText(scr, 0), "first") {
+		t.Fatalf("TakeLatest = %v, want the screen built first", scr)
+	}
+	u.waitScreen(t) // TakeLatest asked for the newest screen
+	scr := l.TakeLatest()
+	if got := rowText(scr, int(scr.Size.Rows)-1); !strings.HasPrefix(got, "last") {
+		t.Fatalf("bottom row = %q, want the last output", got)
+	}
+	if n := l.buildCount() - before; n != 1 {
+		t.Fatalf("screens built = %d, want 1", n)
+	}
+	// Nothing changed since: taking again asks for no build.
+	l.TakeLatest()
+	time.Sleep(20 * time.Millisecond)
+	if n := l.buildCount() - before; n != 1 || u.count() != 0 {
+		t.Fatalf("screens built after a take with no change = %d, want 1", n)
+	}
+}
+
 func TestLinkResizeSendsFrame(t *testing.T) {
 	src := newFakeSource()
 	l, u := startLink(t, src)
