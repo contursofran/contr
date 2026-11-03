@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/contursofran/contr/internal/agents"
@@ -17,6 +18,7 @@ import (
 
 // cliCore is a fake core for the command.
 type cliCore struct {
+	mu     sync.Mutex
 	calls  []string
 	params []map[string]any
 	reply  map[string]any
@@ -29,6 +31,8 @@ func (c *cliCore) Call(ctx context.Context, method string, params, result any) e
 	b, _ := json.Marshal(params)
 	var p map[string]any
 	_ = json.Unmarshal(b, &p)
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.calls = append(c.calls, method)
 	c.params = append(c.params, p)
 	if err := c.errs[method]; err != nil {
@@ -45,7 +49,7 @@ func (c *cliCore) Subscribe(ctx context.Context, f hc.Filter) (agents.Stream, er
 	return c.stream, nil
 }
 
-func (c *cliCore) Close() error { c.closed = true; return nil }
+func (c *cliCore) Close() error { c.mu.Lock(); defer c.mu.Unlock(); c.closed = true; return nil }
 
 type cliStream struct {
 	snap   hc.Snapshot

@@ -4,6 +4,8 @@ A Claude Code plugin for agent work with `contr agents`:
 
 - `agents/`: the builder, planner and reviewer agent definitions.
 - `commands/orchestrate.md`: the coordinator playbook, as `/contr:orchestrate <goal>`.
+- `.mcp.json`: starts `contr mcp`, which gives the session the agent tools (spawn, message,
+  interrupt, stop, read, list). `contr` must be on the PATH; `scripts/install.sh` links it.
 
 ## Use
 
