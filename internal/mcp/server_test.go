@@ -75,8 +75,9 @@ func TestInitializeListAndPing(t *testing.T) {
 		`{"jsonrpc":"2.0","id":2,"method":"tools/list"}`,
 		`{"jsonrpc":"2.0","id":"p","method":"ping"}`,
 		`{"jsonrpc":"2.0","id":3,"method":"initialize"}`,
+		`{"jsonrpc":"2.0","id":4,"method":"initialize","params":{"protocolVersion":"2099-01-01"}}`,
 	)
-	if len(r) != 4 {
+	if len(r) != 5 {
 		t.Errorf("replies = %d, want 4 (no reply to the notification)", len(r))
 	}
 	init := result(t, r["1"])
@@ -85,6 +86,9 @@ func TestInitializeListAndPing(t *testing.T) {
 	}
 	if _, ok := init["capabilities"].(map[string]any)["tools"]; !ok {
 		t.Errorf("no tools capability: %v", init)
+	}
+	if result(t, r["4"])["protocolVersion"] != ProtocolVersion {
+		t.Errorf("unknown version answered with %v", result(t, r["4"])["protocolVersion"])
 	}
 	if result(t, r["3"])["protocolVersion"] != ProtocolVersion {
 		t.Errorf("default version = %v", result(t, r["3"]))
