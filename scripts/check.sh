@@ -4,7 +4,8 @@ set -eu
 cd "$(dirname "$0")/.."
 
 # gofmt of the toolchain that go.mod selects, so every machine formats alike.
-unformatted=$("$(go env GOROOT)/bin/gofmt" -l .)
+# Only tracked files: job folders in the worktree hold untracked Go files.
+unformatted=$(git ls-files -z '*.go' | xargs -0 "$(go env GOROOT)/bin/gofmt" -l)
 if [ -n "$unformatted" ]; then
 	echo "gofmt: these files need formatting:"
 	echo "$unformatted"
