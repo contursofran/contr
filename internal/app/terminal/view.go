@@ -69,7 +69,9 @@ type Options struct {
 	Enabled bool
 	// Start starts the link. Nil starts none: the state is not running.
 	Start Starter
-	// Post runs fn on the UI thread (mygo.RunOnMain). Nil runs fn at once.
+	// Post runs fn on the UI thread later and does not wait (Window.Update).
+	// It must not wait: Stop waits for the link goroutines that post. Nil
+	// runs fn at once.
 	Post func(fn func())
 	// Invalidate asks for a new frame. Nil does nothing.
 	Invalidate func()
@@ -102,6 +104,9 @@ type View struct {
 
 	state   term.LinkState
 	surface *term.Screen
+	// screenWaits: the link said a screen waits. The next Build takes it, so
+	// the view takes at most one screen a frame.
+	screenWaits bool
 	// shellPane is the pane the shell reported as focused. Keys go there when
 	// the surface names none.
 	shellPane string
@@ -319,14 +324,14 @@ func (v *View) onUpdate(u term.LinkUpdate) {
 	case term.StateUpdate:
 		v.setState(u.State)
 	case term.ScreenUpdate:
-		// The update says a surface is waiting. The newest one is taken from
-		// the link.
+		// The update says a surface is waiting. The next frame takes the
+		// newest one from the link (takeScreen), not this update: under a
+		// flood the link then builds one screen a frame, not one an update.
 		if v.link == nil {
 			return
 		}
-		if next := v.link.TakeLatest(); next != nil {
-			v.acceptSurface(next)
-		}
+		v.screenWaits = true
+		v.invalidate()
 	case term.SnapshotUpdate:
 		v.shellPane = ""
 		if u.Snapshot != nil && u.Snapshot.FocusedPaneID != nil {
@@ -337,9 +342,22 @@ func (v *View) onUpdate(u term.LinkUpdate) {
 	}
 }
 
-// acceptSurface shows next unless it is the surface already shown. A new
-// revision invalidates once. A released selection whose rows the program wrote
-// over, or whose pane moved or went, goes with it.
+// takeScreen takes the newest screen from the link when an update said one
+// waits. Build calls it, so it runs once a frame at most, and not while the
+// window is hidden.
+func (v *View) takeScreen() {
+	if !v.screenWaits || v.link == nil {
+		return
+	}
+	v.screenWaits = false
+	if next := v.link.TakeLatest(); next != nil {
+		v.acceptSurface(next)
+	}
+}
+
+// acceptSurface shows next unless it is the surface already shown. It runs
+// in Build, so the frame that builds shows it. A released selection whose
+// rows the program wrote over, or whose pane moved or went, goes with it.
 func (v *View) acceptSurface(next *term.Screen) {
 	if held := v.surface; held != nil &&
 		held.BootID == next.BootID &&
@@ -350,7 +368,6 @@ func (v *View) acceptSurface(next *term.Screen) {
 	}
 	v.surface = next
 	v.retireSelection()
-	v.invalidate()
 }
 
 // setState sets the link state. A state that changes invalidates once. A lost
@@ -461,6 +478,7 @@ func reassertDue(last, now time.Time) bool {
 // Build builds the view. It is the frame's terminal slot.
 func (v *View) Build(c *ui.Context) {
 	v.services, v.hasServices, v.now = c.Services(), true, c.Now()
+	v.takeScreen()
 	if v.hasPending {
 		v.services.WriteClipboard(v.pendingClip)
 		v.pendingClip, v.hasPending = "", false

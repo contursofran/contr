@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestHelloFramedParams(t *testing.T) {
@@ -118,10 +119,7 @@ func TestStreamEventsCreditAndInput(t *testing.T) {
 	if ev := recvEv(t, s); string(ev.Data) != "hello" {
 		t.Fatalf("second event %+v, want data", ev)
 	}
-	// Credit goes back for the bytes that were consumed.
-	if fr := f.next(); fr.Channel != 1 || fr.Kind != KindCredit || binary.LittleEndian.Uint32(fr.Payload) != 5 {
-		t.Fatalf("credit frame %+v", fr)
-	}
+	// No credit yet: it goes back once creditBatch bytes are consumed.
 	if _, err := s.Write([]byte("echo hi\r")); err != nil {
 		t.Fatal(err)
 	}
@@ -280,5 +278,80 @@ func TestAttachCancelledClosesStream(t *testing.T) {
 	cl.mu.Unlock()
 	if n != 0 {
 		t.Fatalf("%d streams left", n)
+	}
+}
+
+// queued waits until the stream holds n events that the consumer has not
+// taken.
+func queued(t *testing.T, s *Stream, n int) {
+	t.Helper()
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(time.Millisecond) {
+		s.mu.Lock()
+		got := len(s.queue)
+		s.mu.Unlock()
+		if got >= n {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%d events queued, want %d", got, n)
+		}
+	}
+}
+
+// TestStreamJoinsWaitingOutput checks that output frames that wait for a busy
+// consumer come as one event and one credit, and that a size change between
+// them keeps its place.
+func TestStreamJoinsWaitingOutput(t *testing.T) {
+	f, _, s := attached(t, goodHello)
+	f.send(1, KindData, []byte("first"))
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(time.Millisecond) {
+		s.mu.Lock()
+		taken := s.outstanding == 5 && len(s.queue) == 0 // the pump holds "first"
+		s.mu.Unlock()
+		if taken {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the pump did not take the first frame")
+		}
+	}
+	for _, p := range []string{"a", "bb", "ccc"} {
+		f.send(1, KindData, []byte(p))
+	}
+	f.send(1, KindResize, []byte{90, 0, 30, 0})
+	f.send(1, KindData, []byte("d"))
+	f.send(1, KindData, []byte("ee"))
+	queued(t, s, 6)
+	for i, w := range []string{"first", "abbccc", "resize", "dee"} {
+		ev := recvEv(t, s)
+		got := string(ev.Data)
+		if ev.Resize != nil {
+			got = "resize"
+		}
+		if got != w {
+			t.Fatalf("event %d: %q, want %q", i, got, w)
+		}
+	}
+}
+
+// TestStreamCreditsInBatches checks that credit goes back once creditBatch
+// bytes are consumed, for all of them, and not for each frame.
+func TestStreamCreditsInBatches(t *testing.T) {
+	f, _, s := attached(t, goodHello)
+	chunk := make([]byte, creditBatch/4)
+	total := 0
+	for range 5 {
+		f.send(1, KindData, chunk)
+		total += len(recvEv(t, s).Data)
+	}
+	if fr := f.next(); fr.Kind != KindCredit || binary.LittleEndian.Uint32(fr.Payload) != creditBatch {
+		t.Fatalf("frame %+v, want one credit of %d", fr, creditBatch)
+	}
+	// The fifth chunk is not acknowledged yet: input is the next frame.
+	if _, err := s.Write([]byte("x")); err != nil {
+		t.Fatal(err)
+	}
+	if fr := f.next(); fr.Kind != KindData || string(fr.Payload) != "x" {
+		t.Fatalf("frame %+v, want the input (consumed %d)", fr, total)
 	}
 }

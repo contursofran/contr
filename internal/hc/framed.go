@@ -411,7 +411,7 @@ type Stream struct {
 
 	mu          sync.Mutex
 	queue       []StreamEvent
-	outstanding int // bytes received and not yet acknowledged
+	outstanding int // bytes received that the consumer did not take; the core counts at least these
 	ended       bool
 	err         error
 	stopOnce    sync.Once
@@ -424,9 +424,11 @@ func newStream(cl *FramedClient, channel uint32) *Stream {
 }
 
 // Events delivers the output and the size changes of the terminal, in
-// order. It closes when the stream is over, after the output that the core
-// sent before it ended. The consumer must read it: the core stops sending
-// when it has Window bytes that are not acknowledged.
+// order. Output frames that wait for the consumer come as one event. Credit
+// goes back once creditBatch bytes are taken. It closes when the stream is
+// over, after the output that the core sent before it ended. The consumer must
+// read it: the core stops sending when it has Window bytes that are not
+// acknowledged.
 func (s *Stream) Events() <-chan StreamEvent { return s.events }
 
 // Done closes when the stream is over and Events has closed.
@@ -520,6 +522,7 @@ func (s *Stream) pump() {
 		close(s.events)
 		close(s.done)
 	}()
+	unacked := 0 // bytes consumed and not yet acknowledged
 	for {
 		s.mu.Lock()
 		if len(s.queue) == 0 {
@@ -535,9 +538,9 @@ func (s *Stream) pump() {
 			}
 			continue
 		}
-		ev := s.queue[0]
-		s.queue[0] = StreamEvent{}
-		s.queue = s.queue[1:]
+		ev, n := joinData(s.queue)
+		clear(s.queue[:n])
+		s.queue = s.queue[n:]
 		s.mu.Unlock()
 		select {
 		case s.events <- ev:
@@ -549,13 +552,38 @@ func (s *Stream) pump() {
 			s.outstanding -= n
 			live := !s.ended
 			s.mu.Unlock()
-			if live {
+			unacked += n
+			if live && unacked >= creditBatch {
 				var b [4]byte
-				binary.LittleEndian.PutUint32(b[:], uint32(n))
+				binary.LittleEndian.PutUint32(b[:], uint32(unacked))
 				_ = s.cl.send(s.channel, KindCredit, b[:])
+				unacked = 0
 			}
 		}
 	}
+}
+
+// joinData returns the first event of the queue and how many events it takes.
+// Output frames that wait one after the other go out as one event: under a
+// flood the core sends many small frames, and a hand-off for each costs more
+// than the bytes. A size change is never joined, so the order stays.
+func joinData(queue []StreamEvent) (StreamEvent, int) {
+	if queue[0].Resize != nil {
+		return queue[0], 1
+	}
+	n, size := 1, len(queue[0].Data)
+	for n < len(queue) && queue[n].Resize == nil {
+		size += len(queue[n].Data)
+		n++
+	}
+	if n == 1 {
+		return queue[0], 1
+	}
+	data := make([]byte, 0, size)
+	for _, ev := range queue[:n] {
+		data = append(data, ev.Data...)
+	}
+	return StreamEvent{Data: data}, n
 }
 
 // Write sends bytes to the terminal as input.

@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/contursofran/contr/internal/hc"
@@ -53,7 +52,8 @@ type HCSource interface {
 
 // HCLink is a [Link] to an hc terminal. A goroutine reads the stream into an
 // emulator and publishes the newest screen. Updates coalesce: at most one
-// [term.ScreenUpdate] waits for the UI (D43).
+// [term.ScreenUpdate] waits for the UI, and the next screen is built only
+// after TakeLatest took the last one (D43).
 type HCLink struct {
 	src    HCSource
 	notify func(term.LinkUpdate)
@@ -62,7 +62,6 @@ type HCLink struct {
 	wg     sync.WaitGroup
 	emu    *vt.Terminal
 
-	pending atomic.Bool // a ScreenUpdate was sent and TakeLatest has not run
 	rebuild chan struct{}
 
 	mu     sync.Mutex
@@ -85,6 +84,9 @@ type HCLink struct {
 	cell      term.CellPx
 	offset    int // lines scrolled up into the history
 	latest    *term.Screen
+	pending   bool // a ScreenUpdate was sent and TakeLatest has not run
+	dirty     bool // the screen changed while pending; TakeLatest asks for a build
+	builds    int  // screens built, for tests
 	state     term.LinkState
 }
 
@@ -425,23 +427,28 @@ func (l *HCLink) apply(ev hc.StreamEvent) {
 	}
 }
 
-// publish builds the screen and tells the UI, unless an update waits.
+// publish builds the screen and tells the UI. While an update waits for
+// TakeLatest it only marks the screen as changed, and TakeLatest asks for the
+// build. So a flood builds one screen for each screen that the view takes (one
+// a frame), not one for each batch of output.
 func (l *HCLink) publish() {
 	l.mu.Lock()
+	if l.pending {
+		l.dirty = true
+		l.mu.Unlock()
+		return
+	}
 	off := l.offset
 	l.mu.Unlock()
 	scr := l.emu.Screen(off)
-	if p := scr.FocusedPane(); p != nil && p.Scroll != nil {
-		l.mu.Lock()
-		l.offset = int(p.Scroll.OffsetFromBottom) // clamped to the history
-		l.mu.Unlock()
-	}
 	l.mu.Lock()
-	l.latest = &scr
-	l.mu.Unlock()
-	if l.pending.CompareAndSwap(false, true) {
-		l.notify(term.ScreenUpdate{Screen: &scr})
+	if p := scr.FocusedPane(); p != nil && p.Scroll != nil {
+		l.offset = int(p.Scroll.OffsetFromBottom) // clamped to the history
 	}
+	l.latest, l.pending = &scr, true
+	l.builds++
+	l.mu.Unlock()
+	l.notify(term.ScreenUpdate{Screen: &scr})
 }
 
 func (l *HCLink) requestRebuild() {
@@ -451,12 +458,17 @@ func (l *HCLink) requestRebuild() {
 	}
 }
 
-// TakeLatest returns the newest screen. The next screen sends a new update.
+// TakeLatest returns the newest screen that was built. If the emulator changed
+// since, it asks for a new screen, which comes with the next update.
 func (l *HCLink) TakeLatest() *term.Screen {
-	l.pending.Store(false)
 	l.mu.Lock()
-	defer l.mu.Unlock()
-	return l.latest
+	scr, again := l.latest, l.dirty
+	l.pending, l.dirty = false, false
+	l.mu.Unlock()
+	if again {
+		l.requestRebuild()
+	}
+	return scr
 }
 
 // SendInput encodes the events with the emulator modes and sends them. A

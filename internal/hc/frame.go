@@ -21,6 +21,10 @@ const (
 	// Window is the credit that a stream starts with: the bytes that the
 	// core may send before the viewer acknowledges any.
 	Window = 256 * 1024
+	// creditBatch is the least credit that a stream sends at once. A flood
+	// comes as many small frames, and a credit for each costs a write. The
+	// core can still send Window-creditBatch bytes before it must wait.
+	creditBatch = 16 * 1024
 	// writeChunk is the longest DATA payload that this client sends.
 	writeChunk = 16 * 1024
 )
