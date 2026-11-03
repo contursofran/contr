@@ -41,6 +41,8 @@ func main() {
 		os.Exit(rejectArgument(cmd.Unknown, os.Stderr))
 	case kindStatusline:
 		os.Exit(statusline(os.Stdin, os.Stdout, os.Stderr, cmd.Then))
+	case kindAgents:
+		os.Exit(runAgents(cmd.Then, os.Stdout, os.Stderr, dialAgents, os.Getenv))
 	}
 	os.Exit(openWindow(cmd.Icons))
 }
