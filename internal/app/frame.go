@@ -6,7 +6,6 @@ package app
 import (
 	"context"
 
-	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/agentstate"
@@ -519,7 +518,9 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 // hidden, as in the Rust app; MyGo holds the frames (D9).
 func (f *Frame) attachTerminal(w Window) (stop func()) {
 	view := terminal.NewView(terminal.Options{
-		Post:       mygo.RunOnMain,
+		// Update posts and returns: a link goroutine never waits for the
+		// main thread, which may be in HCLink.Stop waiting for it (#204).
+		Post:       w.Update,
 		Invalidate: w.Invalidate,
 	})
 	f.termView = view

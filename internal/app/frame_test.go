@@ -19,6 +19,7 @@ import (
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/herdr"
 	"github.com/contursofran/contr/internal/host"
+	"github.com/contursofran/contr/internal/term"
 	"github.com/contursofran/contr/internal/usage"
 )
 
@@ -587,5 +588,49 @@ func TestTheTerminalFollowsTheSelectedAgent(t *testing.T) {
 	f.syncTerminal() // the same terminal: no new source, no restart
 	if len(asked) != 3 {
 		t.Errorf("a sync with the same terminal asked for a new source: %v", asked)
+	}
+}
+
+// quietLink is a terminal link that does nothing.
+type quietLink struct{}
+
+func (quietLink) SendInput(string, []term.InputEvent) error { return nil }
+func (quietLink) Resize(term.GridSize, term.CellPx) error   { return nil }
+func (quietLink) SetFocus(bool) error                       { return nil }
+func (quietLink) TakeLatest() *term.Screen                  { return nil }
+
+// TestTerminalLinkUpdatesArePostedWithoutWaiting checks that a link update
+// goes to the UI thread with Window.Update, which queues it and returns. With
+// a post that waits for the UI thread (mygo.RunOnMain), the app hung in a
+// flood (#204): the UI thread stopped the link and waited for its reader,
+// which waited for the UI thread.
+func TestTerminalLinkUpdatesArePostedWithoutWaiting(t *testing.T) {
+	w := &fakeWindow{visible: true}
+	f := NewFrame(nil)
+	stop := f.attachTerminal(w)
+	defer stop()
+	notify := make(chan func(term.LinkUpdate), 1)
+	f.termView.SetTerminal(func(_ term.GridSize, _ term.CellPx, n func(term.LinkUpdate)) (terminal.Link, func(), error) {
+		notify <- n
+		return quietLink{}, func() {}, nil
+	})
+	tt := ui.NewTester(f.termView.Build, 400, 300)
+	tt.Frame() // the layout gives the grid size, and the link starts
+	var n func(term.LinkUpdate)
+	select {
+	case n = <-notify:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the link did not start")
+	}
+	before := w.queued()
+	done := make(chan struct{})
+	go func() { n(term.ScreenUpdate{}); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the link update waits for the UI thread")
+	}
+	if w.queued() != before+1 {
+		t.Errorf("queued updates = %d, want %d: the update did not go through Window.Update", w.queued(), before+1)
 	}
 }
