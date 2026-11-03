@@ -53,6 +53,9 @@ type NeedTab struct {
 	Icon     icons.Status
 	Project  string
 	Resolved bool
+	// Address and Orchestrator name the worker of a blocked tab.
+	Address      string
+	Orchestrator bool
 }
 
 // Label is the accessible name: "{key} {title}".
@@ -63,7 +66,7 @@ type NeedsRow struct {
 	Source AgentSource
 	// Scope returns the project to show, or "" for all projects.
 	Scope func() string
-	// Open runs when a tab is clicked. S5 shows the answer card here.
+	// Open runs when a tab is clicked. The frame opens the answer card here.
 	Open func(NeedTab)
 
 	picked string
@@ -88,7 +91,8 @@ func (n *NeedsRow) Tabs() []NeedTab {
 	var tabs []NeedTab
 	for _, w := range append(append([]agents.Worker(nil), snap.Orchestrators...), snap.Workers...) {
 		if w.Status == "blocked" && in(w.Project) {
-			tabs = append(tabs, NeedTab{Kind: NeedBlocked, Key: w.Name, Title: w.Msg, Icon: icons.Blocked, Project: w.Project})
+			tabs = append(tabs, NeedTab{Kind: NeedBlocked, Key: w.Name, Title: w.Msg, Icon: icons.Blocked,
+				Project: w.Project, Address: w.Address, Orchestrator: w.Orchestrator()})
 		}
 	}
 	for _, q := range snap.Questions {

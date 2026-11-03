@@ -14,7 +14,9 @@ import (
 // lazySource is the frame's agent source. The connection to the hc core opens
 // on a goroutine, so the window never waits for it; until the model is up, or
 // when it fails, the snapshot is empty and the actions return errNoAgents.
-type lazySource struct{ model atomic.Pointer[agentstate.Model] }
+type lazySource struct {
+	model atomic.Pointer[agentstate.Model]
+}
 
 var errNoAgents = errors.New("agents not connected")
 
