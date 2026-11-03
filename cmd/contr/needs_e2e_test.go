@@ -4,7 +4,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"github.com/contursofran/contr/internal/hc/hctest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -44,11 +44,8 @@ func TestNeedsRowCapture(t *testing.T) {
 	if _, err := exec.LookPath("hc"); err != nil {
 		t.Skip("hc is not installed")
 	}
-	dir, err := os.MkdirTemp("/tmp", "contr-e2e")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	core := hctest.New(t, "contr-e2e", hctest.Session("e2e"))
+	dir := core.Dir
 	ownerFile := filepath.Join(dir, "owner.json")
 	const doc = `{"questions":[
 {"id":"D1","project":"demo","title":"Which database for the cache?","question":"Which database?","options":["sqlite","redis"],"asked":"2026-11-03T10:00:00Z"},
@@ -60,21 +57,7 @@ func TestNeedsRowCapture(t *testing.T) {
 	}
 
 	// The scratch core: its own session and XDG folders.
-	env := []string{fmt.Sprintf("HC_SESSION=e2e%d", os.Getpid())}
-	for _, v := range []string{"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR", "XDG_CACHE_HOME"} {
-		p := filepath.Join(dir, strings.ToLower(v[4:6]))
-		if err := os.MkdirAll(p, 0o700); err != nil {
-			t.Fatal(err)
-		}
-		env = append(env, v+"="+p)
-	}
-	t.Cleanup(func() {
-		cmd := exec.Command("hc", "server", "stop")
-		cmd.Env = append(cmd.Environ(), env...)
-		if msg, err := cmd.CombinedOutput(); err != nil {
-			t.Logf("stop the scratch core: %v: %s", err, msg)
-		}
-	})
+	env := core.Env
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	cl, err := hc.Dial(ctx, hc.Command("", env))

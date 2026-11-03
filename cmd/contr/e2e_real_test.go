@@ -4,7 +4,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"github.com/contursofran/contr/internal/hc/hctest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -58,11 +58,8 @@ func startReal(t *testing.T) *realApp {
 		t.Fatal(err)
 	}
 	// A short path: macOS limits socket paths to 103 bytes.
-	dir, err := os.MkdirTemp("/tmp", "contr-e2e")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	core := hctest.New(t, "contr-e2e", hctest.Session("e2e"))
+	dir := core.Dir
 
 	bin := filepath.Join(dir, "contr-e2e")
 	build := exec.Command("go", "build", "-tags", "e2e", "-o", bin, "./cmd/contr")
@@ -91,22 +88,9 @@ func startReal(t *testing.T) *realApp {
 	// The scratch core: its own session and XDG folders. HERDR_SOCKET_PATH
 	// names a socket that does not exist, so the app cannot reach the
 	// owner's herdr.
-	env := []string{fmt.Sprintf("HC_SESSION=e2e%d", os.Getpid()), "HOME=" + home,
-		"HERDR_SOCKET_PATH=" + filepath.Join(dir, "no-herdr.sock")}
-	for _, v := range []string{"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR", "XDG_CACHE_HOME"} {
-		p := filepath.Join(dir, strings.ToLower(v[4:6]))
-		if err := os.MkdirAll(p, 0o700); err != nil {
-			t.Fatal(err)
-		}
-		env = append(env, v+"="+p)
-	}
-	t.Cleanup(func() {
-		cmd := exec.Command("hc", "server", "stop")
-		cmd.Env = append(cmd.Environ(), env...)
-		if msg, err := cmd.CombinedOutput(); err != nil {
-			t.Logf("stop the scratch core: %v: %s", err, msg)
-		}
-	})
+	env := append(core.Env, "HOME="+home,
+		"HERDR_SOCKET_PATH="+filepath.Join(dir, "no-herdr.sock"))
+	core.Env = env
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	t.Cleanup(cancel)
