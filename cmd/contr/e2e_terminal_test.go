@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/contursofran/contr/internal/hc/hctest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -51,24 +52,9 @@ func TestTerminalOnHC(t *testing.T) {
 		t.Fatalf("build: %v\n%s", err, msg)
 	}
 	// A short path: macOS limits socket paths to 103 bytes.
-	dir, err := os.MkdirTemp("/tmp", "contr-e2e")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-	env := []string{fmt.Sprintf("HC_SESSION=e2e%d", os.Getpid())}
-	for _, v := range []string{"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR", "XDG_CACHE_HOME"} {
-		p := filepath.Join(dir, strings.ToLower(v[4:6]))
-		if err := os.MkdirAll(p, 0o700); err != nil {
-			t.Fatal(err)
-		}
-		env = append(env, v+"="+p)
-	}
-	t.Cleanup(func() {
-		cmd := exec.Command("hc", "server", "stop")
-		cmd.Env = append(cmd.Environ(), env...)
-		_ = cmd.Run()
-	})
+	core := hctest.New(t, "contr-e2e", hctest.Session("e2e"))
+	dir := core.Dir
+	env := core.Env
 
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()

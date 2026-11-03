@@ -9,8 +9,7 @@ package hc
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"os"
+	"github.com/contursofran/contr/internal/hc/hctest"
 	"os/exec"
 	"strings"
 	"testing"
@@ -25,27 +24,7 @@ func isolatedCore(t *testing.T) []string {
 	if _, err := exec.LookPath("hc"); err != nil {
 		t.Skip("hc is not installed")
 	}
-	dir, err := os.MkdirTemp("/tmp", "hc")
-	if err != nil {
-		t.Fatal(err)
-	}
-	env := []string{"HC_SESSION=" + fmt.Sprintf("t%d", os.Getpid())}
-	for _, v := range []string{"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR", "XDG_CACHE_HOME"} {
-		p := dir + "/" + strings.ToLower(v[4:6])
-		if err := os.MkdirAll(p, 0o700); err != nil {
-			t.Fatal(err)
-		}
-		env = append(env, v+"="+p)
-	}
-	t.Cleanup(func() {
-		cmd := exec.Command("hc", "server", "stop")
-		cmd.Env = append(cmd.Environ(), env...)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Logf("stop the scratch core: %v: %s", err, out)
-		}
-		_ = os.RemoveAll(dir)
-	})
-	return env
+	return hctest.New(t, "hc", hctest.Session("t")).Env
 }
 
 func TestRealCoreRunSendAndEvents(t *testing.T) {
