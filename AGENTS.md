@@ -38,7 +38,7 @@ in. It is written in Go with MyGo's native UI.
 | `internal/agents` | worker agents in hc terminals: profiles, spawn, list, send, interrupt, stop, read, watch |
 | `assets` | fonts, status icons, app icon |
 | `kit` | Claude Code plugin for agent work: agent definitions and the coordinator playbook |
-| `scripts` | `check.sh`, `bundle.sh`, `install.sh`, `dev-herdr.sh` |
+| `scripts` | `check.sh`, `bundle.sh`, `install.sh`, `dev-herdr.sh`, `agent-metrics.py` |
 
 Add packages under `internal/` when a change needs them.
 

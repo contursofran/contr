@@ -16,3 +16,9 @@ A Claude Code plugin for agent work with `contr agents`:
    `/contr:orchestrate <goal>`.
 3. Workers that the coordinator starts get its address in
    `CONTR_COORDINATOR` and report with `hc send`.
+
+## Metrics
+
+`scripts/agent-metrics.py --days 7` reports the tokens and cost of coordinator
+and worker sessions per model, and CI and PR flow from GitHub. Run it from the
+repository folder; `--help` lists the options.

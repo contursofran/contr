@@ -19,4 +19,6 @@ CGO_ENABLED=0 go build -o /dev/null ./cmd/contr
 # The bundle and install scripts, with dummy binaries. They write only under tmp/.
 scripts/test-bundle.sh
 scripts/test-install.sh
+# The agent metrics script, on made-up transcripts.
+scripts/test-agent-metrics.sh
 echo "check: ok"
