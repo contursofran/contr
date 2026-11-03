@@ -36,6 +36,7 @@ in. It is written in Go with MyGo's native UI.
 | `internal/usage` | plan usage: Claude status line, Codex logs |
 | `internal/hc` | herdr-core's JSON-RPC API over `hc connect`: calls and event subscriptions |
 | `internal/agents` | worker agents in hc terminals: profiles, spawn, list, send, interrupt, stop, read, watch |
+| `internal/mcp` | a small MCP server over stdio: tools only |
 | `assets` | fonts, status icons, app icon |
 | `kit` | Claude Code plugin for agent work: agent definitions and the coordinator playbook |
 | `scripts` | `check.sh`, `bundle.sh`, `install.sh`, `dev-herdr.sh`, `agent-metrics.py` |
