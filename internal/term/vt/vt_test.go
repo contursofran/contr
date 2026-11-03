@@ -265,3 +265,25 @@ func BenchmarkFlood200x60(b *testing.B) {
 		v.Write(d)
 	}
 }
+
+func TestOnClipboard(t *testing.T) {
+	tm := New(20, 5, nil)
+	defer tm.Close()
+	var got []string
+	tm.OnClipboard(func(s string) { got = append(got, s) })
+	for _, in := range []string{
+		"\x1b]52;c;aGVsbG8=\x07", // hello
+		"\x1b]52;c;aGk\x1b\\",    // hi, no padding, ST end
+		"\x1b]52;c;?\x07",        // query: dropped
+		"\x1b]52;c;!!!\x07",      // not base64: dropped
+		"\x1b]52;c;/w==\x07",     // invalid UTF-8: dropped
+		"\x1b]52;c\x07",          // no payload field: dropped
+	} {
+		if _, err := tm.Write([]byte(in)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(got) != 2 || got[0] != "hello" || got[1] != "hi" {
+		t.Errorf("clipboard = %q, want [hello hi]", got)
+	}
+}

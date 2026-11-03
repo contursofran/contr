@@ -286,6 +286,9 @@ func (cl *FramedClient) call(ctx context.Context, method string, params, result 
 	}
 }
 
+// Done closes when the connection is over.
+func (cl *FramedClient) Done() <-chan struct{} { return cl.done }
+
 // Close ends the connection and every stream on it. A second Close returns
 // the result of the first.
 func (cl *FramedClient) Close() error {
