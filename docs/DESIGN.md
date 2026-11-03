@@ -64,6 +64,7 @@ One icon set for sidebar, tabs, board stages and needs-you rows. Each has an acc
 ## Board panel
 
 - **Work rows:** `#640` label, title, second line saying who/what holds it (`b-1151 building`, `CI on linux-pc`, `your test` in the "you" style), then five 44px stage columns headed `plan build review CI you`.
+- **Needs-you row:** one line under the terminal. Tabs: blocked workers first, then questions (`D7`), then to-dos (`T12`; kind `know` shows the fyi icon). It shows the selected orchestrator's project, or all projects when none is selected. Hidden when empty. Resolved items strike through until "clear done". A click picks a tab; the answer card that opens it comes with #162 S5. There is no pin bar.
 - **Needs you:** icon, id (`D7`, `T12`), title, kind (`decide`, `do`, `fyi`, `done`). Rows never move on their own; resolved ones strike through until "clear done".
 - **Answer card:** fixed 168px. A decision shows its options, recommended first as the filled button; a to-do shows Done plus its link; resolved shows the answer, undo and "Next: D8". A selected work row shows its state with Focus tab, Report, Open PR.
 - **Report tab:** the selected row's RESULT.md.

@@ -30,6 +30,7 @@ type Slots struct {
 	Spaces    Slot // sidebar, under its header
 	Agents    Slot // sidebar, at the bottom
 	Terminal  Slot // shown only while herdr is connected
+	Needs     Slot // needs-you row, under the terminal; draws nothing when empty
 	Panel     Slot // board panel, shown while it is open
 	StatusBar Slot
 }
@@ -71,6 +72,13 @@ type Frame struct {
 	// Send takes the title bar's herdr commands. [Frame.Attach] sets it. When it is nil, the
 	// commands are dropped.
 	Send func(TabCommand)
+	// StartAgents starts the agent state for the needs-you row. It gets the
+	// function that redraws the window and returns the state and its stop
+	// function. [Frame.Attach] calls it when it is set (cmd/contr sets it).
+	StartAgents func(notify func()) (AgentSource, func())
+	// Needs is the needs-you row. [Frame.Attach] makes it and puts its view
+	// in Slots.Needs.
+	Needs *NeedsRow
 	// Board is the coordinator's board. [Frame.Attach] sets it. Views read
 	// it with Board.View.
 	Board *Board
@@ -197,7 +205,11 @@ func (f *Frame) main(c *ui.Context) {
 	ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 		f.titleBar(c)
 		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-			f.terminal(c)
+			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
+				f.terminal(c)
+				f.run(c, f.Slots.Needs)
+
+			})
 			if f.panelOpen {
 				ui.Box(c).Label(LabelPanel).Width(theme.PanelWidth).Shrink(0).
 					Background(color(theme.BgWindow)).BorderStartWidth(1).BorderColor(color(theme.Line)).
@@ -348,6 +360,13 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	}
 	f.Slots.Spaces = f.SpacesList.View
 	f.SpacesList.Sync()
+	stopAgents := func() {}
+	if f.StartAgents != nil {
+		var src AgentSource
+		src, stopAgents = f.StartAgents(w.Invalidate)
+		f.Needs = &NeedsRow{Source: src}
+		f.Slots.Needs = f.Needs.View
+	}
 	if f.Usage == nil {
 		f.Usage = usage.NewFileSampler(w.Invalidate)
 	}
@@ -367,6 +386,7 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	return func() {
 		unwatch()
 		term()
+		stopAgents()
 		// Held actions are written now, so quit loses none.
 		f.Outbox.ReleaseForQuit()
 		f.Outbox.Wait()
