@@ -92,12 +92,9 @@ func WorkRows(snap agentstate.Snapshot, project string) []WorkRow {
 		if project != "" && w.Project != project {
 			continue
 		}
-		row := WorkRow{Address: w.Address, Label: w.Name, Title: w.Title, Role: w.Role, Status: StatusWord(w)}
+		row := WorkRow{Address: w.Address, Label: w.Name, Title: w.Name, Role: w.Role, Status: StatusWord(w)}
 		if w.Issue != "" {
 			row.Label = "#" + strings.TrimPrefix(w.Issue, "#")
-		}
-		if row.Title == "" {
-			row.Title = w.Name
 		}
 		own := RoleStage(w.Role)
 		for i := range own {
