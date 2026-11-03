@@ -121,6 +121,6 @@ func TestAgentsSidebarCapture(t *testing.T) {
 }
 
 const (
-	labelOrch = "orchestrators header"
-	labelAgents     = "agents header"
+	labelOrch   = "orchestrators header"
+	labelAgents = "agents header"
 )
