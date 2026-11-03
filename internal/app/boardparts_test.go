@@ -21,7 +21,7 @@ func pixelAt(img *image.RGBA, x, y float32) stdcolor.RGBA {
 // text.
 func rowFill(t *testing.T, tt *ui.Tester, label string) uint32 {
 	t.Helper()
-	r := findRect(t, tt, label)
+	r := box(t, tt, label)
 	p := pixelAt(tt.Image(), r.X+4, r.Y+r.H/2)
 	return uint32(p.R)<<16 | uint32(p.G)<<8 | uint32(p.B)
 }
