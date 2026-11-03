@@ -254,3 +254,31 @@ func TestBadResizeFrame(t *testing.T) {
 		t.Fatal("want an error for a short resize frame")
 	}
 }
+
+// A context that ends while the attach reply is on its way must not leave a
+// stream attached: the client sends CLOSE for the channel.
+func TestAttachCancelledClosesStream(t *testing.T) {
+	f, dial := newFake(t, goodHello)
+	ctx, cancel := context.WithCancel(context.Background())
+	f.attach = func(map[string]any) (string, string) {
+		cancel()
+		return `{"channel":7,"terminal":{"id":"t1"}}`, ""
+	}
+	cl, err := DialFramed(context.Background(), dial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cl.Close()
+	if _, err := cl.Attach(ctx, AttachParams{Terminal: "t1", Cols: 80, Rows: 24}); err == nil {
+		t.Fatal("want the context error")
+	}
+	if fr := f.next(); fr.Channel != 7 || fr.Kind != KindClose {
+		t.Fatalf("frame %+v, want CLOSE on channel 7", fr)
+	}
+	cl.mu.Lock()
+	n := len(cl.streams)
+	cl.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("%d streams left", n)
+	}
+}

@@ -275,9 +275,13 @@ func (cl *FramedClient) call(ctx context.Context, method string, params, result 
 		}
 		return nil
 	case <-ctx.Done():
-		cl.mu.Lock()
-		delete(cl.pending, id)
-		cl.mu.Unlock()
+		// A call with a hook keeps its entry: the reply can still come,
+		// and the hook must see it (Attach closes the stream then).
+		if hook == nil {
+			cl.mu.Lock()
+			delete(cl.pending, id)
+			cl.mu.Unlock()
+		}
 		return ctx.Err()
 	}
 }
@@ -324,7 +328,11 @@ func (cl *FramedClient) Attach(ctx context.Context, p AttachParams) (*Stream, er
 		Channel  uint32          `json:"channel"`
 		Terminal json.RawMessage `json:"terminal"`
 	}
-	var s *Stream
+	var (
+		mu        sync.Mutex
+		s         *Stream
+		abandoned bool
+	)
 	err := cl.call(ctx, "terminal.attach", p, &res, func(raw json.RawMessage) error {
 		var r struct {
 			Channel uint32 `json:"channel"`
@@ -334,6 +342,13 @@ func (cl *FramedClient) Attach(ctx context.Context, p AttachParams) (*Stream, er
 		}
 		if r.Channel == 0 {
 			return errors.New("attach reply has no channel")
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		if abandoned {
+			// The caller is gone; the core has attached anyway.
+			_ = cl.send(r.Channel, KindClose, nil)
+			return ctx.Err()
 		}
 		s = newStream(cl, r.Channel)
 		cl.mu.Lock()
@@ -345,6 +360,13 @@ func (cl *FramedClient) Attach(ctx context.Context, p AttachParams) (*Stream, er
 		return nil
 	})
 	if err != nil {
+		mu.Lock()
+		abandoned = true
+		st := s
+		mu.Unlock()
+		if st != nil {
+			_ = st.Close() // the hook ran: the core has a live stream
+		}
 		return nil, err
 	}
 	s.Terminal = res.Terminal
