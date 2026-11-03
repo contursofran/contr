@@ -76,6 +76,7 @@ type fakeSource struct {
 	errs     []error // one per attach call, nil for success
 	watchCh  chan hc.Event
 	attached chan struct{}
+	block    chan struct{} // Watch waits for this to close, when set
 }
 
 func newFakeSource(errs ...error) *fakeSource {
@@ -97,6 +98,9 @@ func (f *fakeSource) Attach(_ context.Context, p hc.AttachParams) (HCStream, err
 }
 
 func (f *fakeSource) Watch(context.Context) (<-chan hc.Event, func(), error) {
+	if f.block != nil {
+		<-f.block
+	}
 	return f.watchCh, func() {}, nil
 }
 
@@ -487,4 +491,103 @@ func TestLinkNoGoroutineLeakOnStop(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	l.Stop() // a second Stop is fine
+}
+
+func fastRetry(t *testing.T) {
+	t.Helper()
+	b, m := baseRetry, maxRetry
+	baseRetry, maxRetry = 5*time.Millisecond, 20*time.Millisecond
+	t.Cleanup(func() { baseRetry, maxRetry = b, m })
+}
+
+func waitAttaches(t *testing.T, src *fakeSource, n int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for src.attachCount() < n {
+		if time.Now().After(deadline) {
+			t.Fatalf("attaches = %d, want %d", src.attachCount(), n)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestLinkNewDoesNotBlockOnWatch(t *testing.T) {
+	src := newFakeSource()
+	src.block = make(chan struct{})
+	done := make(chan *HCLink)
+	u := newUpdates()
+	go func() {
+		l := NewHCLink(src, term.GridSize{Cols: 40, Rows: 10}, term.CellPx{}, u.notify)
+		done <- l
+	}()
+	select {
+	case l := <-done:
+		t.Cleanup(l.Stop)
+	case <-time.After(time.Second):
+		close(src.block)
+		t.Fatal("NewHCLink waits for Watch")
+	}
+	u.waitState(t, term.LinkLive)
+	close(src.block)
+}
+
+func TestLinkLostConnectionReconnects(t *testing.T) {
+	fastRetry(t)
+	src := newFakeSource()
+	_, u := startLink(t, src)
+	u.waitState(t, term.LinkLive)
+	src.stream(t, 0).end(errors.New("connection lost"))
+	u.waitState(t, term.LinkNotRunning)
+	waitAttaches(t, src, 2) // no input: the backoff timer attaches
+	u.waitState(t, term.LinkLive)
+}
+
+func TestLinkAttachFailureBacksOff(t *testing.T) {
+	fastRetry(t)
+	src := newFakeSource(&hc.Error{Kind: "unavailable"}, &hc.Error{Kind: "unavailable"})
+	_, u := startLink(t, src)
+	u.waitState(t, term.LinkNotRunning)
+	waitAttaches(t, src, 3)
+	u.waitState(t, term.LinkLive)
+}
+
+func TestLinkNoRetryWhileHidden(t *testing.T) {
+	fastRetry(t)
+	src := newFakeSource()
+	l, u := startLink(t, src)
+	u.waitState(t, term.LinkLive)
+	l.SetVisible(false)
+	src.stream(t, 0).end(errors.New("connection lost"))
+	u.waitState(t, term.LinkNotRunning)
+	time.Sleep(100 * time.Millisecond)
+	if n := src.attachCount(); n != 1 {
+		t.Fatalf("attaches while hidden = %d, want 1", n)
+	}
+	l.SetVisible(true)
+	waitAttaches(t, src, 2)
+	u.waitState(t, term.LinkLive)
+}
+
+func TestLinkHideCancelsPendingRetry(t *testing.T) {
+	fastRetry(t)
+	baseRetry = 50 * time.Millisecond
+	src := newFakeSource()
+	l, u := startLink(t, src)
+	u.waitState(t, term.LinkLive)
+	src.stream(t, 0).end(errors.New("connection lost"))
+	u.waitState(t, term.LinkNotRunning)
+	l.SetVisible(false) // the timer is pending
+	time.Sleep(150 * time.Millisecond)
+	if n := src.attachCount(); n != 1 {
+		t.Fatalf("attaches = %d, want 1", n)
+	}
+}
+
+func TestRetryDelayCapped(t *testing.T) {
+	if retryDelay(0) != baseRetry || retryDelay(1) != 2*baseRetry {
+		t.Error("delay does not double")
+	}
+	if retryDelay(50) != maxRetry {
+		t.Errorf("delay = %v, want %v", retryDelay(50), maxRetry)
+	}
 }

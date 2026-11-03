@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/term"
@@ -19,6 +20,14 @@ const HistoryLines = 1000
 // maxBatch is the most stream events the reader applies before it publishes a
 // screen. Under a flood the screen is built once per batch, not per event.
 const maxBatch = 64
+
+// The wait after a lost connection is baseRetry, doubled by each further
+// failure up to maxRetry, as for the herdr endpoint link. They are variables
+// so tests can shorten them.
+var (
+	baseRetry = 500 * time.Millisecond
+	maxRetry  = 5 * time.Second
+)
 
 // HCStream is one attached hc terminal. *hc.Stream is one.
 type HCStream interface {
@@ -60,6 +69,9 @@ type HCLink struct {
 	attaching bool
 	resumed   bool
 	noRetry   bool // the last attach failed for good: only an event retries
+	visible   bool // the window shows: only then a timer may retry
+	failures  uint // lost connections in a row, for the backoff
+	timer     *time.Timer
 	stopped   bool
 	focused   bool
 	size      term.GridSize
@@ -69,16 +81,21 @@ type HCLink struct {
 	state     term.LinkState
 }
 
-// NewHCLink starts a link at size. It never blocks: the attach runs on a
-// goroutine, and notify gets the states and screens. Stop ends the link.
+// NewHCLink starts a link at size. It never blocks: the watch and the attach
+// run on goroutines, and notify gets the states and screens. Stop ends the
+// link. The link starts visible; [HCLink.SetVisible] changes that.
 func NewHCLink(src HCSource, size term.GridSize, cell term.CellPx, notify func(term.LinkUpdate)) *HCLink {
 	ctx, cancel := context.WithCancel(context.Background())
-	l := &HCLink{src: src, notify: notify, ctx: ctx, cancel: cancel, size: size, cell: cell, rebuild: make(chan struct{}, 1)}
+	l := &HCLink{src: src, notify: notify, ctx: ctx, cancel: cancel, size: size, cell: cell, visible: true, rebuild: make(chan struct{}, 1)}
 	l.emu = vt.New(max(int(size.Cols), 1), max(int(size.Rows), 1), l.respond)
 	l.emu.OnClipboard(func(text string) { notify(term.ClipboardUpdate{Text: text}) })
 	l.setState(term.LinkState{Kind: term.LinkConnecting})
 	l.retry(false)
-	l.watch()
+	l.wg.Add(1)
+	go func() {
+		defer l.wg.Done()
+		l.watch()
+	}()
 	return l
 }
 
@@ -111,7 +128,8 @@ func (l *HCLink) respond(b []byte) {
 	}
 }
 
-// watch follows the terminal's events: "restarted" attaches again.
+// watch follows the terminal's events until the link stops: "restarted"
+// attaches again. It dials, so it runs on its own goroutine.
 func (l *HCLink) watch() {
 	events, stop, err := l.src.Watch(l.ctx)
 	if err != nil {
@@ -121,29 +139,77 @@ func (l *HCLink) watch() {
 	if events == nil {
 		return
 	}
-	l.wg.Add(1)
-	go func() {
-		defer l.wg.Done()
-		defer stop()
-		for {
-			select {
-			case e, ok := <-events:
-				if !ok {
-					return
-				}
-				if e.Method == "event" && e.Type == "restarted" {
-					l.retry(true)
-				}
-			case <-l.ctx.Done():
+	defer stop()
+	for {
+		select {
+		case e, ok := <-events:
+			if !ok {
 				return
 			}
+			if e.Method == "event" && e.Type == "restarted" {
+				l.retry(true)
+			}
+		case <-l.ctx.Done():
+			return
 		}
-	}()
+	}
+}
+
+// SetVisible tells the link whether the window shows. While it is hidden no
+// retry timer runs. Showing the window tries at once if the link is down and
+// the failure was not final.
+func (l *HCLink) SetVisible(visible bool) {
+	l.mu.Lock()
+	if l.visible == visible {
+		l.mu.Unlock()
+		return
+	}
+	l.visible = visible
+	if !visible && l.timer != nil {
+		l.timer.Stop()
+		l.timer = nil
+	}
+	l.mu.Unlock()
+	if visible {
+		l.retry(false)
+	}
+}
+
+// scheduleRetry waits with the backoff, then attaches again. It does nothing
+// while the window is hidden: SetVisible retries when it shows.
+func (l *HCLink) scheduleRetry() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.stopped || !l.visible || l.timer != nil {
+		return
+	}
+	wait := retryDelay(l.failures)
+	l.failures++
+	l.timer = time.AfterFunc(wait, func() {
+		l.mu.Lock()
+		l.timer = nil
+		l.mu.Unlock()
+		l.retry(false)
+	})
+}
+
+// retryDelay is the wait after failures lost connections in a row: baseRetry,
+// doubled each time, at most maxRetry.
+func retryDelay(failures uint) time.Duration {
+	wait := baseRetry
+	for range failures {
+		wait *= 2
+		if wait >= maxRetry {
+			return maxRetry
+		}
+	}
+	return min(wait, maxRetry)
 }
 
 // retry starts an attach if none runs and none is live. force also tries
 // after a failure that is final until the terminal restarts. There is no
-// timer: an event, an input or a grid change calls it.
+// timer except the backoff after a lost connection, which runs only while
+// the window shows. An event, an input or a grid change also calls it.
 func (l *HCLink) retry(force bool) {
 	l.mu.Lock()
 	if l.stopped || l.attaching || l.stream != nil || (l.noRetry && !force) {
@@ -152,8 +218,8 @@ func (l *HCLink) retry(force bool) {
 	}
 	l.attaching = true
 	resumed, size, cell := l.resumed, l.size, l.cell
+	l.wg.Add(1) // under the lock: Stop sets stopped there, then waits
 	l.mu.Unlock()
-	l.wg.Add(1)
 	go func() {
 		defer l.wg.Done()
 		l.run(resumed, size, cell)
@@ -215,10 +281,14 @@ func (l *HCLink) run(resumed bool, size term.GridSize, cell term.CellPx) {
 		}
 	}
 	_ = s.Close()
+	final := end != nil // the program ended; "restarted" attaches again
 	l.mu.Lock()
-	l.noRetry = true // the program ended; "restarted" attaches again
+	l.noRetry = final
 	l.mu.Unlock()
 	l.setState(term.LinkState{Kind: term.LinkNotRunning, Message: msg})
+	if !final {
+		l.scheduleRetry() // a lost connection
+	}
 }
 
 func (l *HCLink) attachFailed(err error) {
@@ -238,6 +308,7 @@ func (l *HCLink) attachFailed(err error) {
 		l.setState(term.LinkState{Kind: term.LinkNotRunning, Message: err.Error()})
 	default: // "unavailable", a lost connection: an input or a grid change tries again
 		l.setState(term.LinkState{Kind: term.LinkNotRunning, Message: err.Error()})
+		l.scheduleRetry()
 	}
 }
 
@@ -276,6 +347,9 @@ func (l *HCLink) read(s HCStream) {
 }
 
 func (l *HCLink) apply(ev hc.StreamEvent) {
+	l.mu.Lock()
+	l.failures = 0 // data came: the connection works
+	l.mu.Unlock()
 	if ev.Resize != nil {
 		if ev.Resize.Cols > 0 && ev.Resize.Rows > 0 {
 			l.emu.Resize(int(ev.Resize.Cols), int(ev.Resize.Rows))
@@ -420,6 +494,10 @@ func (l *HCLink) Stop() {
 	}
 	l.stopped = true
 	s := l.stream
+	if l.timer != nil {
+		l.timer.Stop()
+		l.timer = nil
+	}
 	l.mu.Unlock()
 	l.cancel()
 	if s != nil {
