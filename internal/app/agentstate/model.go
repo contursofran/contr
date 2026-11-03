@@ -214,3 +214,19 @@ func (m *Model) ClearDone() {
 	m.mu.Unlock()
 	m.notify()
 }
+
+// Read returns the last lines of a worker's terminal.
+func (m *Model) Read(name string, lines int) (string, error) {
+	return m.mgr.Read(context.Background(), name, lines)
+}
+
+// Interrupt sends the interrupt key to a worker's terminal.
+func (m *Model) Interrupt(name string) error {
+	_, err := m.mgr.Interrupt(context.Background(), name)
+	return err
+}
+
+// Stop closes a worker's terminal.
+func (m *Model) Stop(name string) error {
+	return m.mgr.Stop(context.Background(), name)
+}

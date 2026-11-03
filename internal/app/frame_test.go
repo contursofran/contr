@@ -526,13 +526,14 @@ func TestAttachStartsAndStopsTheAgentState(t *testing.T) {
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	var notify func()
 	stopped := 0
-	f.StartAgents = func(n func()) (func() agentstate.Snapshot, func()) {
+	f.StartAgents = func(n func()) (AgentSource, func()) {
 		notify = n
-		return func() agentstate.Snapshot {
-			return agentstate.Snapshot{Workers: []agents.Worker{{Name: "b1", Address: "a", Live: true}}}
-		}, func() { stopped++ }
+		return &source{snap: agentstate.Snapshot{Workers: []agents.Worker{{Name: "b1", Address: "a", Live: true}}}}, func() { stopped++ }
 	}
 	stop := f.Attach(context.Background(), w, herdr.SocketTarget(filepath.Join(t.TempDir(), "missing.sock")))
+	if f.Card == nil || f.Worker == nil || f.Needs == nil || f.Needs.Open == nil || f.Slots.Card == nil {
+		t.Error("Attach should wire the needs row, the answer card and the worker view")
+	}
 	if f.AgentsList == nil || len(f.AgentsList.snapshot().Workers) != 1 {
 		t.Fatal("the agents list should read the snapshot of StartAgents")
 	}

@@ -3,8 +3,8 @@ package app
 // The needs-you row under the terminal: one line of tabs for what waits on
 // the owner. Blocked workers come first, then questions (D7), then to-dos
 // (T12). Resolved items stay, struck through, until "clear done". The row is
-// hidden when nothing waits. A click on a tab picks it; the answer card that
-// opens it comes later (#162, S5).
+// hidden when nothing waits. A click on a tab picks it; it opens the
+// answer card (#162, S5).
 
 import (
 	"strings"
@@ -22,6 +22,18 @@ const (
 	LabelNeedsRow       = "needs row"
 	LabelNeedsClearDone = "clear done"
 )
+
+// AgentSource is the part of agentstate.Model that the views read and act on.
+type AgentSource interface {
+	Snapshot() agentstate.Snapshot
+	Answer(id, answer string) error
+	Done(id string) error
+	ClearDone()
+	// Read, Interrupt and Stop act on one worker's terminal (its address).
+	Read(name string, lines int) (string, error)
+	Interrupt(name string) error
+	Stop(name string) error
+}
 
 // NeedKind tells what a [NeedTab] is.
 type NeedKind uint8
@@ -41,6 +53,9 @@ type NeedTab struct {
 	Icon     icons.Status
 	Project  string
 	Resolved bool
+	// Address and Orchestrator name the worker of a blocked tab.
+	Address      string
+	Orchestrator bool
 }
 
 // Label is the accessible name: "{key} {title}".
@@ -56,7 +71,7 @@ type NeedsRow struct {
 	ClearDone func()
 	// Scope returns the project to show, or "" for all projects.
 	Scope func() string
-	// Open runs when a tab is clicked. S5 shows the answer card here.
+	// Open runs when a tab is clicked. The frame opens the answer card here.
 	Open func(NeedTab)
 
 	picked string
@@ -81,7 +96,8 @@ func (n *NeedsRow) Tabs() []NeedTab {
 	var tabs []NeedTab
 	for _, w := range append(append([]agents.Worker(nil), snap.Orchestrators...), snap.Workers...) {
 		if w.Status == "blocked" && in(w.Project) {
-			tabs = append(tabs, NeedTab{Kind: NeedBlocked, Key: w.Name, Title: w.Msg, Icon: icons.Blocked, Project: w.Project})
+			tabs = append(tabs, NeedTab{Kind: NeedBlocked, Key: w.Name, Title: w.Msg, Icon: icons.Blocked,
+				Project: w.Project, Address: w.Address, Orchestrator: w.Orchestrator()})
 		}
 	}
 	for _, q := range snap.Questions {

@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"sync/atomic"
 
 	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/app"
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/terminal"
 	"github.com/contursofran/contr/internal/hc"
@@ -20,12 +22,67 @@ func terminalSource(getenv func(string) string) func(address string) terminal.HC
 	}
 }
 
-// startAgents gives the frame its agent state. The connection to the hc core
-// opens on a goroutine, so the window never waits for it; until it is up, or
-// when it fails, the snapshot is empty and the sidebar shows no agents.
-func startAgents(getenv func(string) string) func(notify func()) (func() agentstate.Snapshot, func()) {
-	return func(notify func()) (func() agentstate.Snapshot, func()) {
-		var model atomic.Pointer[agentstate.Model]
+// lazySource is the frame's agent source. The connection to the hc core opens
+// on a goroutine, so the window never waits for it; until the model is up, or
+// when it fails, the snapshot is empty and the actions return errNoAgents.
+type lazySource struct {
+	model atomic.Pointer[agentstate.Model]
+}
+
+var errNoAgents = errors.New("agents not connected")
+
+func (l *lazySource) Snapshot() agentstate.Snapshot {
+	if m := l.model.Load(); m != nil {
+		return m.Snapshot()
+	}
+	return agentstate.Snapshot{}
+}
+
+func (l *lazySource) Answer(id, answer string) error {
+	if m := l.model.Load(); m != nil {
+		return m.Answer(id, answer)
+	}
+	return errNoAgents
+}
+
+func (l *lazySource) Done(id string) error {
+	if m := l.model.Load(); m != nil {
+		return m.Done(id)
+	}
+	return errNoAgents
+}
+
+func (l *lazySource) ClearDone() {
+	if m := l.model.Load(); m != nil {
+		m.ClearDone()
+	}
+}
+
+func (l *lazySource) Read(name string, lines int) (string, error) {
+	if m := l.model.Load(); m != nil {
+		return m.Read(name, lines)
+	}
+	return "", errNoAgents
+}
+
+func (l *lazySource) Interrupt(name string) error {
+	if m := l.model.Load(); m != nil {
+		return m.Interrupt(name)
+	}
+	return errNoAgents
+}
+
+func (l *lazySource) Stop(name string) error {
+	if m := l.model.Load(); m != nil {
+		return m.Stop(name)
+	}
+	return errNoAgents
+}
+
+// startAgents gives the frame its agent state.
+func startAgents(getenv func(string) string) func(notify func()) (app.AgentSource, func()) {
+	return func(notify func()) (app.AgentSource, func()) {
+		src := &lazySource{}
 		ctx, cancel := context.WithCancel(context.Background())
 		done := make(chan struct{})
 		go func() {
@@ -36,19 +93,13 @@ func startAgents(getenv func(string) string) func(notify func()) (func() agentst
 				return
 			}
 			defer closeCore()
-			model.Store(m)
+			src.model.Store(m)
 			m.Start(ctx)
 			notify()
 			<-ctx.Done()
 			m.Wait()
 		}()
-		snap := func() agentstate.Snapshot {
-			if m := model.Load(); m != nil {
-				return m.Snapshot()
-			}
-			return agentstate.Snapshot{}
-		}
-		return snap, func() { cancel(); <-done }
+		return src, func() { cancel(); <-done }
 	}
 }
 
