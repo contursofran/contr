@@ -10,10 +10,8 @@ import (
 )
 
 const (
-	paneInfo      = `{"id":"contr-focus","result":{"type":"pane_info","pane":{"pane_id":"w1:p1"}}}`
-	tabInfo       = `{"id":"contr-tab-focus","result":{"type":"tab_info","tab":{"tab_id":"w1:t1"}}}`
-	tabCreated    = `{"id":"contr-tab-create","result":{"type":"tab_created","tab":{"tab_id":"w1:t2"},"root_pane":{"pane_id":"w1:p3"}}}`
-	splitPaneInfo = `{"id":"contr-split","result":{"type":"pane_info","pane":{"pane_id":"w1:p3"}}}`
+	paneInfo = `{"id":"contr-focus","result":{"type":"pane_info","pane":{"pane_id":"w1:p1"}}}`
+	tabInfo  = `{"id":"contr-tab-focus","result":{"type":"tab_info","tab":{"tab_id":"w1:t1"}}}`
 )
 
 func serverReply(id, code, message string) string {
@@ -87,85 +85,4 @@ func TestFocusPaneMissingSocketIsNotRunning(t *testing.T) {
 	if we := wireErr(t, err); !we.IsNotRunning() {
 		t.Fatalf("%v", err)
 	}
-}
-
-func TestFocusTabParamsIsTheTabTarget(t *testing.T) {
-	want := map[string]any{"tab_id": "w1:t2"}
-	if got := focusTabParams("w1:t2"); !reflect.DeepEqual(got, want) {
-		t.Fatalf("%v", got)
-	}
-}
-
-func TestCreateTabParamsIsTheWorkspaceAndFocus(t *testing.T) {
-	want := map[string]any{"workspace_id": "w1", "focus": true}
-	if got := createTabParams("w1"); !reflect.DeepEqual(got, want) {
-		t.Fatalf("%v", got)
-	}
-}
-
-func TestSplitRightParamsIsThePaneToTheRightFocused(t *testing.T) {
-	want := map[string]any{"target_pane_id": "w1:p2", "direction": "right", "focus": true}
-	if got := splitRightParams("w1:p2"); !reflect.DeepEqual(got, want) {
-		t.Fatalf("%v", got)
-	}
-}
-
-func TestFocusTabSendsTabFocusAndAcceptsTabInfo(t *testing.T) {
-	path, server := serve(t, tempDir(t), []string{tabInfo}, 0)
-	if err := FocusTab(path, "w1:t1", tLong); err != nil {
-		t.Fatal(err)
-	}
-	wantRequest(t, server, "contr-tab-focus", "tab.focus", map[string]any{"tab_id": "w1:t1"})
-}
-
-func TestFocusTabMapsTabNotFoundToAServerError(t *testing.T) {
-	reply := serverReply("contr-tab-focus", "tab_not_found", "no such tab")
-	path, server := serve(t, tempDir(t), []string{reply}, 0)
-	wantServerCode(t, FocusTab(path, "w9:t9", tLong), "tab_not_found")
-	server.Request(t)
-}
-
-func TestFocusTabMissingSocketIsNotRunning(t *testing.T) {
-	err := FocusTab(filepath.Join(tempDir(t), "missing.sock"), "w1:t1", tLong)
-	if we := wireErr(t, err); !we.IsNotRunning() {
-		t.Fatalf("%v", err)
-	}
-}
-
-func TestCreateTabSendsTabCreateFocusedAndAcceptsTabCreated(t *testing.T) {
-	path, server := serve(t, tempDir(t), []string{tabCreated}, 0)
-	if err := CreateTab(path, "w1", tLong); err != nil {
-		t.Fatal(err)
-	}
-	wantRequest(t, server, "contr-tab-create", "tab.create",
-		map[string]any{"workspace_id": "w1", "focus": true})
-}
-
-func TestCreateTabMapsWorkspaceNotFoundToAServerError(t *testing.T) {
-	reply := serverReply("contr-tab-create", "workspace_not_found", "no such workspace")
-	path, server := serve(t, tempDir(t), []string{reply}, 0)
-	wantServerCode(t, CreateTab(path, "w9", tLong), "workspace_not_found")
-	server.Request(t)
-}
-
-func TestCreateTabRejectsAResultOfAnotherType(t *testing.T) {
-	path, server := serve(t, tempDir(t), []string{tabInfo}, 0)
-	wantKind(t, CreateTab(path, "w1", tLong), ErrUnexpected)
-	server.Request(t)
-}
-
-func TestSplitRightSendsPaneSplitRightAndAcceptsPaneInfo(t *testing.T) {
-	path, server := serve(t, tempDir(t), []string{splitPaneInfo}, 0)
-	if err := SplitRight(path, "w1:p2", tLong); err != nil {
-		t.Fatal(err)
-	}
-	wantRequest(t, server, "contr-split", "pane.split",
-		map[string]any{"target_pane_id": "w1:p2", "direction": "right", "focus": true})
-}
-
-func TestSplitRightMapsPaneNotFoundToAServerError(t *testing.T) {
-	reply := serverReply("contr-split", "pane_not_found", "no such pane")
-	path, server := serve(t, tempDir(t), []string{reply}, 0)
-	wantServerCode(t, SplitRight(path, "w9:p9", tLong), "pane_not_found")
-	server.Request(t)
 }

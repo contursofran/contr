@@ -67,9 +67,6 @@ type Frame struct {
 	Visibility *state.Visibility
 	Selection  *state.Selection
 	Status     *state.StatusMessage
-	// Send takes the title bar's herdr commands. [Frame.Attach] sets it. When it is nil, the
-	// commands are dropped.
-	Send func(TabCommand)
 	// Needs is the needs-you row. [Frame.Attach] makes it and puts its view
 	// in Slots.Needs.
 	Needs *NeedsRow
@@ -382,12 +379,6 @@ func (f *Frame) selectTab(t AgentTab) {
 	f.Selection.Select(state.Selected{Kind: kind, ID: t.Address})
 }
 
-func (f *Frame) send(cmd TabCommand) {
-	if f.Send != nil {
-		f.Send(cmd)
-	}
-}
-
 func panelToggle(c *ui.Context, open bool, onClick func()) {
 	toggleButton(c, LabelPanelToggle, open, onClick)
 }
@@ -464,7 +455,6 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	f.Selection = state.NewSelection(func() { w.Invalidate(); f.syncReview(); f.syncTerminal() })
 	f.Review = NewReview(w.Update, w.Invalidate)
 	f.Status = state.NewStatusMessage(w.Invalidate)
-	f.Send = newCommander(f.Status.Show).Send
 	// An onChange func can run on any goroutine or on the UI thread. It only
 	// queues the sync with Window.Update, which is safe from both.
 	h := NewHerdr(ctx, target, w.IsVisible(), func() { w.Update(f.syncHerdr) })
