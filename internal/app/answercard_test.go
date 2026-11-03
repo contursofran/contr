@@ -267,7 +267,7 @@ func TestFrameOpensTheCardFromTheNeedsRow(t *testing.T) {
 	f := NewFrame(nil)
 	f.Selection = stateSelection()
 	f.Card = &FloatCard{Source: src, Run: Runner{Go: func(f func()) { f() }}}
-	f.Needs = &NeedsRow{Source: src, Open: f.Card.Open}
+	f.Needs = &NeedsRow{Snapshot: src.Snapshot, Open: f.Card.Open}
 	f.Slots.Needs, f.Slots.Card = f.Needs.View, f.Card.View
 	tt := ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)
 	if err := tt.Click("D1 Which db?"); err != nil {

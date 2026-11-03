@@ -3,8 +3,8 @@ package app
 // The needs-you row under the terminal: one line of tabs for what waits on
 // the owner. Blocked workers come first, then questions (D7), then to-dos
 // (T12). Resolved items stay, struck through, until "clear done". The row is
-// hidden when nothing waits. A click on a tab picks it; the answer card that
-// opens it comes later (#162, S5).
+// hidden when nothing waits. A click on a tab picks it; it opens the
+// answer card (#162, S5).
 
 import (
 	"strings"
@@ -61,9 +61,14 @@ type NeedTab struct {
 // Label is the accessible name: "{key} {title}".
 func (t NeedTab) Label() string { return t.Key + " " + t.Title }
 
-// NeedsRow is the row's state. Build it with its fields set; Scope may be nil.
+// NeedsRow is the row's state. Build it with its fields set; Scope,
+// ClearDone and Open may be nil.
 type NeedsRow struct {
-	Source AgentSource
+	// Snapshot reads the agent state; nil means nothing waits.
+	Snapshot func() agentstate.Snapshot
+	// ClearDone forgets the resolved items. The "clear done" control shows
+	// only when it is set.
+	ClearDone func()
 	// Scope returns the project to show, or "" for all projects.
 	Scope func() string
 	// Open runs when a tab is clicked. The frame opens the answer card here.
@@ -75,10 +80,10 @@ type NeedsRow struct {
 // Tabs returns the tabs for the scope: blocked workers, then questions, then
 // to-dos.
 func (n *NeedsRow) Tabs() []NeedTab {
-	if n.Source == nil {
+	if n.Snapshot == nil {
 		return nil
 	}
-	snap := n.Source.Snapshot()
+	snap := n.Snapshot()
 	project := ""
 	if n.Scope != nil {
 		project = n.Scope()
@@ -134,9 +139,9 @@ func (n *NeedsRow) View(c *ui.Context) {
 				n.tab(c, t)
 			}
 			ui.Box(c).Grow(1)
-			if anyDone {
+			if anyDone && n.ClearDone != nil {
 				ui.ButtonBase(c).Label(LabelNeedsClearDone).Shrink(0).Cursor(ui.CursorPointer).
-					OnClick(n.Source.ClearDone).Children(func() {
+					OnClick(n.ClearDone).Children(func() {
 					ui.Text(c, LabelNeedsClearDone).TextColor(theme.Color(theme.TextDim)).NoWrap()
 				})
 			}

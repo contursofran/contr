@@ -123,7 +123,7 @@ func sampleSource() *source {
 }
 
 func TestNeedsOrderBlockedThenQuestionsThenTodos(t *testing.T) {
-	n := &NeedsRow{Source: sampleSource()}
+	n := &NeedsRow{Snapshot: sampleSource().Snapshot}
 	got := keys(n.Tabs())
 	want := []string{"b-2", "b-3", "D1", "D2", "T1", "T2"}
 	if !slices.Equal(got, want) {
@@ -140,7 +140,7 @@ func TestNeedsOrderBlockedThenQuestionsThenTodos(t *testing.T) {
 
 func TestNeedsProjectFilter(t *testing.T) {
 	proj := "a"
-	n := &NeedsRow{Source: sampleSource(), Scope: func() string { return proj }}
+	n := &NeedsRow{Snapshot: sampleSource().Snapshot, Scope: func() string { return proj }}
 	if got, want := keys(n.Tabs()), []string{"b-2", "D1", "T1"}; !slices.Equal(got, want) {
 		t.Fatalf("project a: %v, want %v", got, want)
 	}
@@ -151,7 +151,7 @@ func TestNeedsProjectFilter(t *testing.T) {
 }
 
 func TestNeedsEmptyRowIsHidden(t *testing.T) {
-	n := &NeedsRow{Source: &source{}}
+	n := &NeedsRow{Snapshot: (&source{}).Snapshot}
 	tt := ui.NewTester(n.View, 800, 200)
 	if _, ok := tt.Find(LabelNeedsRow); ok {
 		t.Error("an empty row must not show")
@@ -164,7 +164,7 @@ func TestNeedsEmptyRowIsHidden(t *testing.T) {
 
 func TestNeedsClickOpensTab(t *testing.T) {
 	var opened []NeedTab
-	n := &NeedsRow{Source: sampleSource(), Open: func(t NeedTab) { opened = append(opened, t) }}
+	n := &NeedsRow{Snapshot: sampleSource().Snapshot, Open: func(t NeedTab) { opened = append(opened, t) }}
 	tt := ui.NewTester(n.View, 1200, 200)
 	if err := tt.Click("D1 Which db?"); err != nil {
 		t.Fatal(err)
@@ -175,7 +175,7 @@ func TestNeedsClickOpensTab(t *testing.T) {
 }
 
 func TestNeedsRowSitsInOneLine(t *testing.T) {
-	n := &NeedsRow{Source: sampleSource()}
+	n := &NeedsRow{Snapshot: sampleSource().Snapshot}
 	tt := ui.NewTester(n.View, 1200, 200)
 	r, ok := tt.Find(LabelNeedsRow)
 	if !ok {
@@ -196,7 +196,7 @@ func TestNeedsStrikeThroughUntilClearDone(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.Start(ctx)
 	defer func() { cancel(); m.Wait() }()
-	n := &NeedsRow{Source: m}
+	n := &NeedsRow{Snapshot: m.Snapshot, ClearDone: m.ClearDone}
 	if tabs := n.Tabs(); len(tabs) != 1 || tabs[0].Resolved {
 		t.Fatalf("before: %+v", tabs)
 	}
@@ -217,7 +217,7 @@ func TestNeedsStrikeThroughUntilClearDone(t *testing.T) {
 
 func TestNeedsClearDoneOnlyWithResolved(t *testing.T) {
 	s := sampleSource()
-	n := &NeedsRow{Source: s}
+	n := &NeedsRow{Snapshot: s.Snapshot, ClearDone: s.ClearDone}
 	tt := ui.NewTester(n.View, 1200, 200)
 	if _, ok := tt.Find(LabelNeedsClearDone); ok {
 		t.Error("clear done shows with nothing resolved")
@@ -231,7 +231,7 @@ func TestNeedsClearDoneOnlyWithResolved(t *testing.T) {
 
 func TestNeedsRowSitsUnderTheTerminal(t *testing.T) {
 	f := NewFrame(nil)
-	f.Needs = &NeedsRow{Source: sampleSource()}
+	f.Needs = &NeedsRow{Snapshot: sampleSource().Snapshot}
 	f.Slots.Needs = f.Needs.View
 	tt := ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)
 	term, row := box(t, tt, LabelTerminal), box(t, tt, LabelNeedsRow)

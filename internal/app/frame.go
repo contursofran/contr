@@ -74,10 +74,6 @@ type Frame struct {
 	// Send takes the title bar's herdr commands. [Frame.Attach] sets it. When it is nil, the
 	// commands are dropped.
 	Send func(TabCommand)
-	// StartAgents starts the agent state. [Frame.Attach] calls it once, with a
-	// notify function that is safe from any goroutine, and uses the state and
-	// the stop function it returns. Nil means no agents. cmd/contr sets it.
-	StartAgents func(notify func()) (AgentSource, func())
 	// Needs is the needs-you row. [Frame.Attach] makes it and puts its view
 	// in Slots.Needs.
 	Needs *NeedsRow
@@ -96,9 +92,16 @@ type Frame struct {
 	// AgentsList is the agents section. [Frame.Attach] makes it and puts
 	// its view in Slots.Agents.
 	AgentsList *AgentsList
+	// StartAgents follows the agents. [Frame.Attach] calls it once, with a
+	// notify function that is safe from any goroutine, and uses the source
+	// and the stop function it returns. Nil means no agents.
+	StartAgents func(notify func()) (src AgentSource, stop func())
 	// Panel is the board panel. [Frame.Attach] makes it and puts its view in
 	// Slots.Panel.
 	Panel *BoardPanel
+	// Review is the Review view. [Frame.Attach] makes it. While the Review toggle is on, it
+	// replaces the terminal area, and it follows the selected project.
+	Review *Review
 	// SpacesList is the spaces column body. [Frame.Attach] makes it and puts
 	// its view in Slots.Spaces.
 	SpacesList *SpacesList
@@ -111,6 +114,10 @@ type Frame struct {
 	bar         titleBar
 	sidebarOpen bool
 	panelOpen   bool
+	reviewOpen  bool
+	// reviewDir is the repo that Review shows now. Empty: none.
+	reviewDir string
+	reviewSet bool
 }
 
 // NewFrame returns a frame with the sidebar and the panel open and
@@ -131,6 +138,72 @@ func (f *Frame) ToggleSidebar() { f.sidebarOpen = !f.sidebarOpen }
 // TogglePanel shows or hides the board panel. It sends no herdr command.
 func (f *Frame) TogglePanel() { f.panelOpen = !f.panelOpen }
 
+// ReviewOpen tells whether the Review view replaces the terminal area.
+func (f *Frame) ReviewOpen() bool { return f.reviewOpen }
+
+// ToggleReview shows or hides the Review view. Showing it reads the selected project's repo.
+func (f *Frame) ToggleReview() {
+	f.reviewOpen = !f.reviewOpen
+	f.syncReview()
+}
+
+// reviewTarget is the folder that Review should show: the selected worktree's root, the
+// selected agent's folder, or "" with no selection.
+func (f *Frame) reviewTarget() string {
+	if f.Selection == nil {
+		return ""
+	}
+	sel, ok := f.Selection.Current()
+	if !ok {
+		return ""
+	}
+	switch sel.Kind {
+	case state.KindWorktree:
+		return sel.ID
+	case state.KindAgent:
+		if f.Herdr == nil {
+			return ""
+		}
+		return paneCwd(f.Herdr.Live().Tree, sel.ID)
+	}
+	return ""
+}
+
+// paneCwd is the folder of a pane, or "" when the pane or its folder is unknown. git finds the
+// repo from any folder inside it.
+func paneCwd(tree *herdr.HerdrTree, id string) string {
+	if tree == nil {
+		return ""
+	}
+	for _, ws := range tree.Workspaces {
+		for _, tab := range ws.Tabs {
+			for _, p := range tab.Panes {
+				if p.ID == id && p.Cwd != nil {
+					return *p.Cwd
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// syncReview points Review at the selected project. It does nothing while the view is hidden or
+// the window is hidden, so no git runs then; it runs again when either shows. UI thread.
+func (f *Frame) syncReview() {
+	if f.Review == nil || !f.reviewOpen {
+		return
+	}
+	if f.Visibility != nil && !f.Visibility.Visible() {
+		return
+	}
+	dir := f.reviewTarget()
+	if dir == f.reviewDir && f.reviewSet {
+		return
+	}
+	f.reviewDir, f.reviewSet = dir, true
+	f.Review.SetRepo(dir)
+}
+
 func (f *Frame) connectionLine() (string, bool) {
 	if f.Herdr == nil {
 		return "", false
@@ -146,6 +219,7 @@ const (
 	LabelSidebarReopen = "Show sidebar"
 	LabelTitleBar      = "title bar"
 	LabelTerminal      = "terminal area"
+	LabelReview        = "review area"
 	LabelPanel         = "board panel"
 	LabelPanelToggle   = "Toggle panel"
 	LabelStatusBar     = "status bar"
@@ -216,7 +290,6 @@ func (f *Frame) main(c *ui.Context) {
 			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 				f.terminal(c)
 				f.run(c, f.Slots.Needs)
-
 			})
 			if f.panelOpen {
 				ui.Box(c).Label(LabelPanel).Width(theme.PanelWidth).Shrink(0).
@@ -253,6 +326,7 @@ func (f *Frame) titleBar(c *ui.Context) {
 		}
 		f.bar.setStrip(strip)
 		f.bar.send = f.send
+		f.bar.toggleReview, f.bar.reviewOpen = f.ToggleReview, f.reviewOpen
 		f.bar.build(c, f.panelOpen, f.TogglePanel)
 	})
 }
@@ -260,6 +334,11 @@ func (f *Frame) titleBar(c *ui.Context) {
 // terminal shows herdr's line while herdr is not connected, centred in the
 // area, and the terminal slot otherwise.
 func (f *Frame) terminal(c *ui.Context) {
+	if f.reviewOpen && f.Review != nil {
+		ui.Box(c).Label(LabelReview).Grow(1).MinWidth(0).FillHeight().
+			Background(color(theme.BgWindow)).Children(func() { f.Review.View(c) })
+		return
+	}
 	line, down := f.connectionLine()
 	ui.Column(c).Label(LabelTerminal).Grow(1).MinWidth(0).Center().
 		Background(color(theme.BgTerminal)).Children(func() {
@@ -319,6 +398,7 @@ func (f *Frame) syncHerdr() {
 		f.Board.Sync(f.Herdr.Live().Tree)
 	}
 	f.syncAgents()
+	f.syncReview()
 }
 
 // syncBoard follows a change of the board: the outbox reads its report, and
@@ -366,7 +446,8 @@ func (f *Frame) syncAgents() {
 // and tells herdr. Call it once, on the UI thread, after the window exists.
 // The returned function ends the connection and the watching.
 func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop func()) {
-	f.Selection = state.NewSelection(w.Invalidate)
+	f.Selection = state.NewSelection(func() { w.Invalidate(); f.syncReview() })
+	f.Review = NewReview(w.Update, w.Invalidate)
 	f.Status = state.NewStatusMessage(w.Invalidate)
 	f.Send = newCommander(f.Status.Show).Send
 	// An onChange func can run on any goroutine or on the UI thread. It only
@@ -376,12 +457,12 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	f.Outbox = NewBoardOutbox(dir, hasDir, w.Invalidate, f.Status.Show)
 	h := NewHerdr(ctx, target, w.IsVisible(), func() { w.Update(f.syncHerdr) })
 	f.Herdr = h
+	var agentSnap func() agentstate.Snapshot
 	var src AgentSource
 	stopAgents := func() {}
 	if f.StartAgents != nil {
 		src, stopAgents = f.StartAgents(func() { w.Update(f.syncAgents) })
 	}
-	var agentSnap func() agentstate.Snapshot
 	if src != nil {
 		agentSnap = src.Snapshot
 		run := Runner{Post: w.Update}
@@ -393,9 +474,8 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 				}
 				f.Selection.Select(state.Selected{Kind: kind, ID: address})
 			}}
-		f.Needs = &NeedsRow{Source: src, Scope: func() string { return f.scope(src) }, Open: f.Card.Open}
 		f.Worker = &WorkerPanel{Source: src, Selection: f.Selection, Run: run, Status: f.Status.Show, Invalidate: w.Invalidate}
-		f.Slots.Needs, f.Slots.Card = f.Needs.View, f.Card.View
+		f.Slots.Card = f.Card.View
 	}
 	f.AgentsList = NewAgentsList(agentSnap, f.Selection)
 	f.Slots.Agents = f.AgentsList.View
@@ -418,6 +498,12 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	}
 	f.Slots.Spaces = f.SpacesList.View
 	f.SpacesList.Sync()
+	f.Needs = &NeedsRow{Snapshot: agentSnap}
+	if src != nil {
+		f.Needs.Scope = func() string { return f.scope(src) }
+		f.Needs.Open = f.Card.Open
+	}
+	f.Slots.Needs = f.Needs.View
 	if f.Usage == nil {
 		f.Usage = usage.NewFileSampler(w.Invalidate)
 	}
@@ -426,6 +512,9 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 		f.Host.SetVisible(visible)
 		f.Usage.SetVisible(visible)
 		f.SpacesList.SetVisible(visible)
+		if visible {
+			w.Update(f.syncReview)
+		}
 	})
 	// Visibility starts as visible, so a window that starts hidden is the only change that Watch
 	// reports. The samplers start hidden: tell them the window state now.

@@ -437,6 +437,87 @@ func TestTheTerminalGridIsInsideTheTerminalArea(t *testing.T) {
 	}
 }
 
+// reviewFrame returns a frame whose Review runs reads at once, with a selection and the
+// number of reads started.
+func reviewFrame(t *testing.T) (*Frame, *int) {
+	t.Helper()
+	f, _, _ := newTester(t, notRunning())
+	r, reads := newTestReview()
+	f.Review = r
+	f.Selection = state.NewSelection(f.syncReview)
+	return f, reads
+}
+
+func TestFrameReviewFollowsSelection(t *testing.T) {
+	a, b := reviewScratch(t), reviewScratch(t)
+	f, _ := reviewFrame(t)
+	f.ToggleReview()
+	f.Selection.Select(state.Selected{Kind: state.KindWorktree, ID: a.dir})
+	if f.Review.repo.Dir != a.dir {
+		t.Fatalf("repo %q, want %q", f.Review.repo.Dir, a.dir)
+	}
+	f.Selection.Select(state.Selected{Kind: state.KindWorktree, ID: b.dir})
+	if f.Review.repo.Dir != b.dir {
+		t.Fatalf("repo %q, want %q", f.Review.repo.Dir, b.dir)
+	}
+	f.Selection.Clear()
+	if f.Review.repo.Dir != "" {
+		t.Fatalf("repo %q after clear, want none", f.Review.repo.Dir)
+	}
+}
+
+func TestFrameReviewFollowsAgentFolder(t *testing.T) {
+	a := reviewScratch(t)
+	f, live, _ := newTester(t, notRunning())
+	r, _ := newTestReview()
+	f.Review = r
+	f.Selection = state.NewSelection(f.syncReview)
+	live.mu.Lock()
+	live.live.Tree = &herdr.HerdrTree{Workspaces: []herdr.Workspace{{Tabs: []herdr.Tab{{
+		Panes: []herdr.Pane{{ID: "p1", Cwd: &a.dir}}}}}}}
+	live.mu.Unlock()
+	f.ToggleReview()
+	f.Selection.Select(state.Selected{Kind: state.KindAgent, ID: "p1"})
+	if f.Review.repo.Dir != a.dir {
+		t.Fatalf("repo %q, want %q", f.Review.repo.Dir, a.dir)
+	}
+}
+
+func TestFrameReviewHiddenNoReads(t *testing.T) {
+	a := reviewScratch(t)
+	f, reads := reviewFrame(t)
+	f.Selection.Select(state.Selected{Kind: state.KindWorktree, ID: a.dir})
+	if *reads != 0 {
+		t.Fatalf("%d reads while the view is hidden", *reads)
+	}
+	f.ToggleReview()
+	if *reads == 0 || f.Review.repo.Dir != a.dir {
+		t.Fatalf("showing the view did not read; reads %d, repo %q", *reads, f.Review.repo.Dir)
+	}
+	f.ToggleReview()
+	n := *reads
+	f.Selection.Clear()
+	if *reads != n {
+		t.Fatal("a read ran after the view was hidden again")
+	}
+}
+
+func TestFrameReviewReplacesTerminal(t *testing.T) {
+	live := &fakeLive{}
+	live.set(herdr.ConnState{Kind: herdr.Connected})
+	f := NewFrame(live)
+	f.Review, _ = newTestReview()
+	tt := ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)
+	if _, ok := tt.Find(LabelReview); ok {
+		t.Fatal("review area shows before the toggle")
+	}
+	tt.Click(LabelReviewToggle)
+	box(t, tt, LabelReview)
+	if _, ok := tt.Find(LabelTerminal); ok {
+		t.Fatal("terminal area still shows with Review on")
+	}
+}
+
 func TestAttachStartsAndStopsTheAgentState(t *testing.T) {
 	w := &fakeWindow{visible: true}
 	f := NewFrame(nil)
