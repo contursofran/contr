@@ -12,6 +12,9 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
+	"time"
+	"unicode"
 
 	"github.com/contursofran/contr/internal/hc"
 )
@@ -24,7 +27,11 @@ const (
 	LabelIssue    = "issue"
 	LabelProfile  = "profile"
 	LabelWorktree = "worktree"
+	LabelProject  = "project"
 )
+
+// RoleOrchestrator is the role label of an orchestrator agent.
+const RoleOrchestrator = "orchestrator"
 
 // Core is the part of the hc client that the manager uses.
 type Core interface {
@@ -123,6 +130,7 @@ type Spec struct {
 	Worktree string // the working folder
 	Task     string // the first message, if any
 	Parent   string // hc terminal that gets notes about the worker; empty for none
+	Project  string // the project name; no control characters
 }
 
 // Worker is one worker as hc reports it.
@@ -133,6 +141,13 @@ type Worker struct {
 	Issue    string `json:"issue,omitempty"`
 	Profile  string `json:"profile"`
 	Worktree string `json:"worktree"`
+	Project  string `json:"project,omitempty"`
+	// Command is the program that runs in the terminal now: hc's foreground
+	// name, else the base name of the spawn command.
+	Command string `json:"command,omitempty"`
+	// LastOutput is the time of the last hc event for the terminal, as Watch
+	// saw it. hc has no output time (decision D35). Zero when none was seen.
+	LastOutput time.Time `json:"last_output,omitzero"`
 	// Live is false once the program ended.
 	Live bool `json:"live"`
 	// Status is the program's own word: idle, working, done, blocked or
@@ -154,7 +169,12 @@ type terminal struct {
 	Turn     uint64            `json:"turn"`
 	Title    string            `json:"title"`
 	ExitCode *int              `json:"exit_code"`
-	Status   *struct {
+	Argv     []string          `json:"argv"`
+	// Foreground is null once the terminal finished.
+	Foreground *struct {
+		Name string `json:"name"`
+	} `json:"foreground"`
+	Status *struct {
 		State string  `json:"state"`
 		Kind  *string `json:"kind"`
 		Msg   string  `json:"msg"`
@@ -168,6 +188,8 @@ func (t terminal) worker() Worker {
 		Issue:    t.Labels[LabelIssue],
 		Profile:  t.Labels[LabelProfile],
 		Worktree: t.Labels[LabelWorktree],
+		Project:  t.Labels[LabelProject],
+		Command:  t.command(),
 		Live:     t.State != "finished",
 		Turn:     t.Turn,
 		Title:    t.Title,
@@ -185,6 +207,20 @@ func (t terminal) worker() Worker {
 	return w
 }
 
+// command is the foreground program's name, else the base of argv[0].
+func (t terminal) command() string {
+	if t.Foreground != nil && t.Foreground.Name != "" {
+		return t.Foreground.Name
+	}
+	if len(t.Argv) > 0 {
+		return filepath.Base(t.Argv[0])
+	}
+	return ""
+}
+
+// Orchestrator tells if the worker is an orchestrator.
+func (w Worker) Orchestrator() bool { return w.Role == RoleOrchestrator }
+
 func decodeWorker(raw json.RawMessage) (Worker, error) {
 	var t terminal
 	if err := json.Unmarshal(raw, &t); err != nil {
@@ -200,6 +236,7 @@ var filter = map[string]string{LabelApp: AppAgent}
 type Manager struct {
 	core Core
 	cfg  Config
+	now  func() time.Time // the clock; tests replace it
 }
 
 // New returns a manager on core with the profiles of cfg. A relative kit
@@ -210,7 +247,7 @@ func New(core Core, cfg Config) *Manager {
 			cfg.Kit = abs
 		}
 	}
-	return &Manager{core: core, cfg: cfg}
+	return &Manager{core: core, cfg: cfg, now: time.Now}
 }
 
 // Spawn starts a worker and returns it.
@@ -222,11 +259,17 @@ func (m *Manager) Spawn(ctx context.Context, s Spec) (Worker, error) {
 	if s.Name == "" {
 		return Worker{}, errors.New("agents: a worker needs a name")
 	}
+	if strings.ContainsFunc(s.Project, unicode.IsControl) {
+		return Worker{}, errors.New("agents: the project name has a control character")
+	}
 	role := s.Role
 	if role == "" {
 		role = s.Profile
 	}
 	labels := map[string]string{LabelApp: AppAgent, LabelRole: role, LabelProfile: s.Profile, LabelWorktree: s.Worktree}
+	if s.Project != "" {
+		labels[LabelProject] = s.Project
+	}
 	if s.Issue != "" {
 		labels[LabelIssue] = s.Issue
 	}
