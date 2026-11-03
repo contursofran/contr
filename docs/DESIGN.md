@@ -19,6 +19,7 @@ Source of truth: the "herdr sidebar mockup" design canvas, artboards **G · cont
 ├──────────────┴ status bar 26: claude ▬ 38% · codex ▬ 12% · CPU MEM                     ┤
 ```
 
+- The title bar has a "Review" button left of the panel toggle. It swaps the terminal area for the Review view (see Review below) and is white while the view shows (D37).
 - Sidebar spans the full height, title-bar area included. Panel toggles from the title bar; hidden, the terminal takes the width.
 - v0.1 status bar usage shows only claude and codex. There is no OpenCode Go segment.
 - Selecting a worktree or agent in the sidebar highlights it as a rounded card and focuses that agent's tab; the terminal shows only that agent.
@@ -68,3 +69,12 @@ One icon set for sidebar, tabs, board stages and needs-you rows. Each has an acc
 - **Answer card:** fixed 168px. A decision shows its options, recommended first as the filled button; a to-do shows Done plus its link; resolved shows the answer, undo and "Next: D8". A selected work row shows its state with Focus tab, Report, Open PR.
 - **Report tab:** the selected row's RESULT.md.
 - **Wrap up / keep going** in the panel header.
+
+## Review
+
+Shown in the terminal area while the title bar's "Review" button is on. The repo is the selected worktree's root, or the folder of the selected agent. With no selection it shows "Select a project".
+
+- Three columns: branches (260), files or commits (260), code (grows). Branches are all local branches ahead of `main`.
+- Labels: `branch <name>`, `file <path>`, `commit <short>`; the switch `review mode` has `Whole branch` and `By commit`.
+- Rows and the code view come from `internal/app/kit`; the only colors are the two diff colors (D34).
+- No git runs while the view or the window is hidden.

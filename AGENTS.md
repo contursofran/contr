@@ -36,6 +36,7 @@ in. It is written in Go with MyGo's native UI.
 | `internal/term` | terminal view types: cells, screen, input events, link updates; no UI and no wire format |
 | `internal/herdr/endpoint` | herdr's binary endpoint socket: codec, messages, surface, conn, link, osc52 |
 | `internal/usage` | plan usage: Claude status line, Codex logs |
+| `internal/review` | git reads for the Review view: branches ahead of main, files, commits, texts |
 | `internal/hc` | herdr-core's JSON-RPC API over `hc connect`: calls and event subscriptions |
 | `internal/agents` | worker agents in hc terminals: profiles, spawn, list, send, interrupt, stop, read, watch |
 | `internal/mcp` | a small MCP server over stdio: tools only |
