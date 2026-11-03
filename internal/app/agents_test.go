@@ -90,7 +90,7 @@ func TestOrchestratorsSectionOnTopWhateverState(t *testing.T) {
 	if !h.has(LabelOrchestratorsHeader) || !h.has(LabelAgentsHeader) {
 		t.Fatalf("headers missing; texts %q", h.tt.Texts())
 	}
-	lead, b1 := h.y("lead, done, claude · 3m"), h.y("b1, working, claude · 3m")
+	lead, b1 := h.y("lead, done, orchestrator · done · 3m"), h.y("b1, working, claude · working · 3m")
 	if !(h.y(LabelOrchestratorsHeader) < lead && lead < h.y(LabelAgentsHeader) && h.y(LabelAgentsHeader) < b1) {
 		t.Errorf("order: orch header %v, lead %v, agents header %v, b1 %v",
 			h.y(LabelOrchestratorsHeader), lead, h.y(LabelAgentsHeader), b1)
@@ -117,10 +117,10 @@ func TestNoAgentsShowsNothing(t *testing.T) {
 
 func TestRowShowsCommandAndAge(t *testing.T) {
 	h := newAgents(t, agentstate.Snapshot{Workers: []agents.Worker{worker("b1", "working")}})
-	if !h.has("b1, working, claude · 3m") {
+	if !h.has("b1, working, claude · working · 3m") {
 		t.Errorf("texts %q", h.tt.Texts())
 	}
-	if !strings.Contains(strings.Join(h.tt.Texts(), "|"), "claude · 3m") {
+	if !strings.Contains(strings.Join(h.tt.Texts(), "|"), "claude · working · 3m") {
 		t.Errorf("no sub line in %q", h.tt.Texts())
 	}
 	if !h.has("1 running") {
@@ -157,11 +157,11 @@ func TestRowWithoutCommandOrOutputHasOneLine(t *testing.T) {
 func TestLongNameEllipsis(t *testing.T) {
 	long := strings.Repeat("very-long-worker-name-", 6)
 	h := newAgents(t, agentstate.Snapshot{Workers: []agents.Worker{worker(long, "working")}})
-	row := box(t, h.tt, long+", working, claude · 3m")
+	row := box(t, h.tt, long+", working, claude · working · 3m")
 	if row.W != theme.SidebarWidth-2*theme.CardInsetX {
 		t.Errorf("row %+v wide, want %d", row, theme.SidebarWidth-2*theme.CardInsetX)
 	}
-	text := box(t, h.tt, long+", working, claude · 3m text")
+	text := box(t, h.tt, long+", working, claude · working · 3m text")
 	if text.X+text.W > row.X+row.W {
 		t.Errorf("name overflows the row: text %+v row %+v", text, row)
 	}
@@ -194,21 +194,21 @@ func TestStatusIcons(t *testing.T) {
 
 func TestClickSelectsWorker(t *testing.T) {
 	h := newAgents(t, agentstate.Snapshot{Workers: []agents.Worker{worker("b1", "idle")}})
-	if err := h.tt.Click("b1, idle, claude · 3m"); err != nil {
+	if err := h.tt.Click("b1, idle, claude · idle · 3m"); err != nil {
 		t.Fatal(err)
 	}
 	if got, ok := h.sel.Current(); !ok || got != (state.Selected{Kind: state.KindWorker, ID: "t-b1"}) {
 		t.Errorf("selection %+v %v", got, ok)
 	}
 	h.tt.Frame()
-	if !h.has("b1, idle, claude · 3m") {
+	if !h.has("b1, idle, claude · idle · 3m") {
 		t.Error("row is gone")
 	}
 }
 
 func TestClickSelectsOrchestrator(t *testing.T) {
 	h := newAgents(t, agentstate.Snapshot{Orchestrators: []agents.Worker{orchestrator("lead", "idle")}})
-	if err := h.tt.Click("lead, idle, claude · 3m"); err != nil {
+	if err := h.tt.Click("lead, idle, orchestrator · idle · 3m"); err != nil {
 		t.Fatal(err)
 	}
 	if got, ok := h.sel.Current(); !ok || got != (state.Selected{Kind: state.KindOrchestrator, ID: "t-lead"}) {
@@ -241,3 +241,17 @@ func TestSyncClearsAGoneSelectionOnly(t *testing.T) {
 }
 
 func notRunningLive() herdr.LiveHerdr { return herdr.LiveHerdr{State: notRunning()} }
+
+// #212: the second line shows the role and state from the labels, not the
+// command, which Claude Code sets to its version.
+func TestRowShowsRoleAndStateNotTheVersion(t *testing.T) {
+	w := worker("b212", "working")
+	w.Role, w.Command = "builder", "2.1.317"
+	h := newAgents(t, agentstate.Snapshot{Workers: []agents.Worker{w}})
+	if !h.has("b212, working, builder · working · 3m") {
+		t.Errorf("texts %q", h.tt.Texts())
+	}
+	if strings.Contains(strings.Join(h.tt.Texts(), "|"), "2.1.317") {
+		t.Errorf("the version shows in %q", h.tt.Texts())
+	}
+}
