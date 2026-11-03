@@ -34,6 +34,7 @@ contr is a native macOS client for herdr, with an agent board built in. It is wr
 | `internal/herdr` | herdr's JSON API: wire, model, reader, command, tabs, agents |
 | `internal/term` | terminal view types: cells, screen, input events, link updates; no UI and no wire format |
 | `internal/usage` | plan usage: Claude status line, Codex logs |
+| `internal/prompt` | reads a blocked worker's menu from terminal text: question and choices |
 | `internal/review` | git reads for the Review view: branches ahead of main, files, commits, texts |
 | `internal/hc` | herdr-core's JSON-RPC API over `hc connect`: calls and event subscriptions |
 | `internal/agents` | worker agents in hc terminals: profiles, spawn, list, send, interrupt, stop, read, watch |
