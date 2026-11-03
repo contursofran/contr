@@ -16,6 +16,7 @@ import (
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/terminal"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/herdr"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/usage"
@@ -544,5 +545,47 @@ func TestAttachStartsAndStopsTheAgentState(t *testing.T) {
 	stop()
 	if stopped != 1 {
 		t.Errorf("the agent state was stopped %d times, want 1", stopped)
+	}
+}
+
+// idleSource is a terminal source that never answers, so no link finishes an attach.
+type idleSource struct{ addr string }
+
+func (idleSource) Attach(ctx context.Context, _ hc.AttachParams) (terminal.HCStream, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+func (idleSource) Watch(context.Context) (<-chan hc.Event, func(), error) { return nil, func() {}, nil }
+
+func TestTheTerminalFollowsTheSelectedAgent(t *testing.T) {
+	w := &fakeWindow{visible: true}
+	f := NewFrame(nil)
+	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
+	f.Usage = usage.NewSampler(usage.Unread, nil)
+	var asked []string
+	f.TerminalSource = func(addr string) terminal.HCSource {
+		asked = append(asked, addr)
+		return idleSource{addr}
+	}
+	stop := f.Attach(context.Background(), w, herdr.SocketTarget(filepath.Join(t.TempDir(), "missing.sock")))
+	defer stop()
+	if len(asked) != 0 {
+		t.Fatalf("a terminal was asked for before a selection: %v", asked)
+	}
+	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t2"})
+	f.Selection.Select(state.Selected{Kind: state.KindOrchestrator, ID: "t1"})
+	if len(asked) != 2 || asked[0] != "t2" || asked[1] != "t1" {
+		t.Errorf("terminals asked = %v, want t2 then t1", asked)
+	}
+	// A herdr pane or a worktree has no hc terminal; the same terminal again does not restart.
+	f.Selection.Select(state.Selected{Kind: state.KindWorktree, ID: "/repo"})
+	f.syncTerminal()
+	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t1"})
+	if len(asked) != 3 || asked[2] != "t1" {
+		t.Errorf("terminals asked = %v, want t1 asked again once after a worktree", asked)
+	}
+	f.syncTerminal() // the same terminal: no new source, no restart
+	if len(asked) != 3 {
+		t.Errorf("a sync with the same terminal asked for a new source: %v", asked)
 	}
 }

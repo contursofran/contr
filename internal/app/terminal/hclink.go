@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"sync"
 	"sync/atomic"
@@ -64,8 +65,14 @@ type HCLink struct {
 	pending atomic.Bool // a ScreenUpdate was sent and TakeLatest has not run
 	rebuild chan struct{}
 
-	mu        sync.Mutex
-	stream    HCStream // nil unless live
+	mu     sync.Mutex
+	stream HCStream // nil unless live
+	// observing: the link watches and keeps the terminal's own size until the
+	// first key is typed (D45). takeover: that key ended the observer; the
+	// attach with input is under way and held keeps the typed bytes.
+	observing bool
+	takeover  bool
+	held      []byte
 	attaching bool
 	resumed   bool
 	noRetry   bool // the last attach failed for good: only an event retries
@@ -85,8 +92,13 @@ type HCLink struct {
 // run on goroutines, and notify gets the states and screens. Stop ends the
 // link. The link starts visible; [HCLink.SetVisible] changes that.
 func NewHCLink(src HCSource, size term.GridSize, cell term.CellPx, notify func(term.LinkUpdate)) *HCLink {
+	return newHCLink(src, size, cell, notify, true)
+}
+
+// newHCLink is NewHCLink; observe false attaches with input at once.
+func newHCLink(src HCSource, size term.GridSize, cell term.CellPx, notify func(term.LinkUpdate), observe bool) *HCLink {
 	ctx, cancel := context.WithCancel(context.Background())
-	l := &HCLink{src: src, notify: notify, ctx: ctx, cancel: cancel, size: size, cell: cell, visible: true, rebuild: make(chan struct{}, 1)}
+	l := &HCLink{src: src, notify: notify, ctx: ctx, cancel: cancel, size: size, cell: cell, visible: true, observing: observe, rebuild: make(chan struct{}, 1)}
 	l.emu = vt.New(max(int(size.Cols), 1), max(int(size.Rows), 1), l.respond)
 	l.emu.OnClipboard(func(text string) { notify(term.ClipboardUpdate{Text: text}) })
 	l.setState(term.LinkState{Kind: term.LinkConnecting})
@@ -99,11 +111,18 @@ func NewHCLink(src HCSource, size term.GridSize, cell term.CellPx, notify func(t
 	return l
 }
 
-// HCStarter returns a [Starter] that links to the terminal of src.
+// HCStarter returns a [Starter] that links to the terminal of src. Stopping
+// the link also closes src when it has a Close method, so a link that goes
+// leaves no connection behind.
 func HCStarter(src HCSource) Starter {
 	return func(size term.GridSize, cell term.CellPx, notify func(term.LinkUpdate)) (Link, func(), error) {
 		l := NewHCLink(src, size, cell, notify)
-		return l, l.Stop, nil
+		return l, func() {
+			l.Stop()
+			if c, ok := src.(io.Closer); ok {
+				_ = c.Close()
+			}
+		}, nil
 	}
 }
 
@@ -228,8 +247,11 @@ func (l *HCLink) retry(force bool) {
 
 // run attaches, then reads the stream until it ends.
 func (l *HCLink) run(resumed bool, size term.GridSize, cell term.CellPx) {
+	l.mu.Lock()
+	observe := l.observing
+	l.mu.Unlock()
 	p := hc.AttachParams{
-		Cols: size.Cols, Rows: size.Rows,
+		Cols: size.Cols, Rows: size.Rows, Observe: observe,
 		History: HistoryLines, ResizeNotifications: true, Resumed: resumed,
 	}
 	if cell.Width > 0 && cell.Height > 0 {
@@ -251,14 +273,17 @@ func (l *HCLink) run(resumed bool, size term.GridSize, cell term.CellPx) {
 		return
 	}
 	l.stream, l.attaching, l.resumed, l.noRetry = s, false, true, false
-	focused, now := l.focused, l.size
+	focused, now, observing := l.focused, l.size, l.observing
 	l.mu.Unlock()
 	l.setState(term.LinkState{Kind: term.LinkLive})
-	if now != size {
-		_ = s.Resize(now.Cols, now.Rows) // the grid changed during the attach
-	}
-	if focused {
-		_ = s.Focus(true)
+	if !observing { // an observer sends no size, focus or input
+		if now != size {
+			_ = s.Resize(now.Cols, now.Rows) // the grid changed during the attach
+		}
+		if focused {
+			_ = s.Focus(true)
+		}
+		l.flushHeld(s)
 	}
 	l.read(s)
 
@@ -266,10 +291,21 @@ func (l *HCLink) run(resumed bool, size term.GridSize, cell term.CellPx) {
 	if l.stream == s {
 		l.stream = nil
 	}
-	stopped := l.stopped
+	stopped, again := l.stopped, l.takeover
+	if again && !stopped {
+		l.attaching = true
+		size, cell = l.size, l.cell
+	}
 	l.mu.Unlock()
 	if stopped {
 		_ = s.Close()
+		return
+	}
+	if again { // the first key: attach again with input and the grid's size
+		_ = s.Close()
+		l.emu.Resize(int(size.Cols), int(size.Rows))
+		l.requestRebuild()
+		l.run(true, size, cell)
 		return
 	}
 	var end *hc.StreamEnd
@@ -291,10 +327,38 @@ func (l *HCLink) run(resumed bool, size term.GridSize, cell term.CellPx) {
 	}
 }
 
+// flushHeld writes the keys typed during the take-over, in order, before any
+// later key: takeover stays set (and SendInput keeps holding) until held is
+// empty, and that check and the clear happen under one lock. It runs on the
+// run goroutine, the only writer until takeover is clear.
+func (l *HCLink) flushHeld(s HCStream) {
+	for {
+		l.mu.Lock()
+		b := l.held
+		l.held = nil
+		if len(b) == 0 || l.stopped {
+			l.takeover = false
+			l.mu.Unlock()
+			return
+		}
+		l.mu.Unlock()
+		if _, err := s.Write(b); err != nil {
+			slog.Debug("held input not written", "err", err)
+			l.mu.Lock()
+			l.held, l.takeover = nil, false
+			l.mu.Unlock()
+			return
+		}
+	}
+}
+
 func (l *HCLink) attachFailed(err error) {
 	if l.ctx.Err() != nil {
 		return
 	}
+	l.mu.Lock()
+	l.takeover, l.held = false, nil // the typed bytes are lost with the attach
+	l.mu.Unlock()
 	switch {
 	case hc.IsKind(err, hc.KindIncompatible), hc.IsKind(err, "needs_framed"):
 		l.mu.Lock()
@@ -400,6 +464,12 @@ func (l *HCLink) TakeLatest() *term.Screen {
 // stream it starts an attach and returns [term.ErrNotConnected].
 func (l *HCLink) SendInput(_ string, events []term.InputEvent) error {
 	l.mu.Lock()
+	takeover := l.takeover
+	l.mu.Unlock()
+	if takeover && l.holdInput(events) { // the attach with input is under way: keep what is typed
+		return nil
+	}
+	l.mu.Lock()
 	s := l.stream
 	l.mu.Unlock()
 	if s == nil {
@@ -432,14 +502,46 @@ func (l *HCLink) SendInput(_ string, events []term.InputEvent) error {
 	if len(out) == 0 {
 		return nil
 	}
+	if typed {
+		l.mu.Lock()
+		first := l.observing
+		if first { // the first key: take the input and the size (D45)
+			l.observing, l.takeover = false, true
+			l.held = append(l.held, out...)
+		}
+		l.mu.Unlock()
+		if first {
+			return s.Close() // run attaches again
+		}
+	}
 	if _, err := s.Write(out); err != nil {
 		return fmt.Errorf("terminal input: %w", err)
 	}
 	return nil
 }
 
+// holdInput keeps the bytes of events typed while the attach with input runs.
+// It returns false when the take-over has ended meanwhile: the caller then
+// sends the events itself.
+func (l *HCLink) holdInput(events []term.InputEvent) bool {
+	var out []byte
+	for _, ev := range events {
+		if _, ok := ev.(term.WheelEvent); !ok {
+			out = append(out, vt.Encode(ev, l.emu.Modes())...)
+		}
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !l.takeover {
+		return false
+	}
+	l.held = append(l.held, out...)
+	return true
+}
+
 // Resize sets the grid. The core owns the size (D43): the new size goes to
-// it, and the emulator follows at once.
+// it, and the emulator follows at once. An observer keeps the terminal's size
+// and only remembers the grid for the attach with input (D45).
 func (l *HCLink) Resize(size term.GridSize, cell term.CellPx) error {
 	if size.Cols == 0 || size.Rows == 0 {
 		return nil
@@ -447,9 +549,9 @@ func (l *HCLink) Resize(size term.GridSize, cell term.CellPx) error {
 	l.mu.Lock()
 	changed := l.size != size
 	l.size, l.cell = size, cell
-	s := l.stream
+	s, observing := l.stream, l.observing
 	l.mu.Unlock()
-	if !changed {
+	if !changed || observing {
 		return nil
 	}
 	l.emu.Resize(int(size.Cols), int(size.Rows))
@@ -465,10 +567,13 @@ func (l *HCLink) Resize(size term.GridSize, cell term.CellPx) error {
 func (l *HCLink) SetFocus(focused bool) error {
 	l.mu.Lock()
 	l.focused = focused
-	s := l.stream
+	s, observing := l.stream, l.observing
 	l.mu.Unlock()
 	if s == nil {
 		return term.ErrNotConnected
+	}
+	if observing { // an observer sends nothing; the attach with input does
+		return nil
 	}
 	if err := s.Focus(focused); err != nil {
 		return err

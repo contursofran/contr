@@ -5,7 +5,6 @@ package app
 
 import (
 	"context"
-	"os"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -16,9 +15,7 @@ import (
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/board"
 	"github.com/contursofran/contr/internal/herdr"
-	"github.com/contursofran/contr/internal/herdr/endpoint"
 	"github.com/contursofran/contr/internal/host"
-	"github.com/contursofran/contr/internal/term"
 	"github.com/contursofran/contr/internal/usage"
 )
 
@@ -96,6 +93,10 @@ type Frame struct {
 	// notify function that is safe from any goroutine, and uses the source
 	// and the stop function it returns. Nil means no agents.
 	StartAgents func(notify func()) (src AgentSource, stop func())
+	// TerminalSource gives the source of the hc terminal with an address.
+	// The terminal view attaches to the selected agent's terminal through it.
+	// Nil shows no terminal.
+	TerminalSource func(address string) terminal.HCSource
 	// Panel is the board panel. [Frame.Attach] makes it and puts its view in
 	// Slots.Panel.
 	Panel *BoardPanel
@@ -115,6 +116,11 @@ type Frame struct {
 	sidebarOpen bool
 	panelOpen   bool
 	reviewOpen  bool
+	// termView is the terminal view. termAddr is the hc terminal it shows;
+	// termSet is false before the first sync.
+	termView *terminal.View
+	termAddr string
+	termSet  bool
 	// reviewDir is the repo that Review shows now. Empty: none.
 	reviewDir string
 	reviewSet bool
@@ -442,7 +448,7 @@ func (f *Frame) syncAgents() {
 // and tells herdr. Call it once, on the UI thread, after the window exists.
 // The returned function ends the connection and the watching.
 func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop func()) {
-	f.Selection = state.NewSelection(func() { w.Invalidate(); f.syncReview() })
+	f.Selection = state.NewSelection(func() { w.Invalidate(); f.syncReview(); f.syncTerminal() })
 	f.Review = NewReview(w.Update, w.Invalidate)
 	f.Status = state.NewStatusMessage(w.Invalidate)
 	f.Send = newCommander(f.Status.Show).Send
@@ -539,12 +545,11 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 // hidden, as in the Rust app; MyGo holds the frames (D9).
 func (f *Frame) attachTerminal(w Window) (stop func()) {
 	view := terminal.NewView(terminal.Options{
-		Enabled:    os.Getenv(terminal.SurfaceEnv) == "1",
-		Start:      startHerdrTerminal,
 		Post:       mygo.RunOnMain,
 		Invalidate: w.Invalidate,
-		FocusPane:  func(id string) { FocusInBackground(id, f.Status.Show) },
 	})
+	f.termView = view
+	f.syncTerminal()
 	f.Slots.Terminal = view.Build
 	view.SetWindowActive(w.IsFocused())
 	offFocus := w.OnFocus(func() { view.SetWindowActive(true) })
@@ -556,9 +561,26 @@ func (f *Frame) attachTerminal(w Window) (stop func()) {
 	}
 }
 
-// startHerdrTerminal is the terminal view's starter: the surface link to the
-// local herdr. It never fails (D19).
-func startHerdrTerminal(size term.GridSize, cell term.CellPx, notify func(term.LinkUpdate)) (terminal.Link, func(), error) {
-	l, stop, err := endpoint.SpawnTermLink(size, cell, notify)
-	return l, stop, err
+// syncTerminal points the terminal view at the hc terminal of the selected
+// agent row (D12). Any other selection, or no source, shows no terminal. It
+// does nothing when the terminal stays the same. UI thread.
+func (f *Frame) syncTerminal() {
+	if f.termView == nil {
+		return
+	}
+	addr := ""
+	if f.Selection != nil && f.TerminalSource != nil {
+		if sel, ok := f.Selection.Current(); ok && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker) {
+			addr = sel.ID
+		}
+	}
+	if addr == f.termAddr && f.termSet {
+		return
+	}
+	f.termAddr, f.termSet = addr, true
+	if addr == "" {
+		f.termView.SetTerminal(nil)
+		return
+	}
+	f.termView.SetTerminal(terminal.HCStarter(f.TerminalSource(addr)))
 }
