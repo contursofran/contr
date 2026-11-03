@@ -94,7 +94,7 @@ the control itself; it then becomes a view test or an e2e test.
 | M7 | Done (M7.1–M7.4). Rows redraw one by one through cached layers (D12). The spaces column rescans git every 10 s while the window is shown, as Rust does (D15). |
 | M8 | Done (M8.1–M8.6). The panel keys run as shortcuts on the focusable panel root (D23). |
 | M10 | Done (M10.1–M10.5). Host stats use purego Mach calls (D11). The `contr statusline` command line comes in M11. |
-| M6 | Done (M6.1). The panel toggle sits right of split, as DESIGN.md orders them. |
+| M6 | Done (M6.1). The panel toggle sits right of split, as DESIGN.md orders them. | Title bar tabs moved to hc (#138); the herdr tab commands are removed.
 | M9 | Done (M9.1–M9.3). The board panel sends item actions through the outbox (M8.6c2). |
 | M11 | Done (M11). The usage text has no `dev` line (D5). The traffic-light inset is not set: MyGo v0.7.3 has no option for it. |
 | M12 | Done (M12). `go build` replaces cargo in `bundle.sh` (D17). `scripts/check.sh` runs both script tests in temp dirs. |
