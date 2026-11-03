@@ -1,7 +1,6 @@
 # contr
 
-A minimal native macOS client for herdr, with the herdr-agents board built
-in. It is written in Go and uses MyGo's native UI.
+A minimal native macOS client for herdr, with an agent board built in. It is written in Go and uses MyGo's native UI.
 
 - **Left:** spaces, repos and worktrees, and the running agents, each with a
   status icon.

@@ -23,7 +23,6 @@ import (
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
-	"github.com/contursofran/contr/internal/board"
 	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/herdr"
 )
@@ -107,7 +106,6 @@ func (c SpacesChange) Any() bool { return c.Rebuilt || c.Online || len(c.Rows) >
 // SpacesList is the spaces column body. Methods run on the UI thread.
 type SpacesList struct {
 	src       liveSource
-	board     *Board // nil in views built without one
 	host      hostSource
 	selection *state.Selection
 	status    *state.StatusMessage
@@ -155,11 +153,11 @@ type SpacesList struct {
 // nil) tells whether the window is shown; post (may be nil) runs a func on
 // the UI thread, as Window.Update does. A click focuses the pane with
 // [FocusInBackground]. The list is empty until [SpacesList.Sync], which the
-// owner calls at the start and when the tree, the board or the connection
+// owner calls at the start and when the tree or the connection
 // changed.
-func NewSpacesList(src liveSource, b *Board, h hostSource, selection *state.Selection, status *state.StatusMessage, visible func() bool, post func(func())) *SpacesList {
+func NewSpacesList(src liveSource, h hostSource, selection *state.Selection, status *state.StatusMessage, visible func() bool, post func(func())) *SpacesList {
 	l := &SpacesList{
-		src: src, board: b, host: h, selection: selection, status: status, focus: FocusInBackground,
+		src: src, host: h, selection: selection, status: status, focus: FocusInBackground,
 		visible: visible, post: post, scanFn: git.ScanCwds, start: func(f func()) { go f() },
 		now: time.Now, builds: map[string]int{},
 		afterFunc: func(d time.Duration, f func()) stopper { return time.AfterFunc(d, f) },
@@ -172,7 +170,7 @@ func (l *SpacesList) Groups() []spaces.RepoGroup { return l.groups }
 
 func (l *SpacesList) shownNow() bool { return l.visible == nil || l.visible() }
 
-// Sync brings the column up to the tree, the board and the connection. It
+// Sync brings the column up to the tree and the connection. It
 // starts a scan when a pane sits in another directory, or when the last scan
 // is old and the window is shown (D15). With no pane cwd there is nothing to
 // scan, and the scan is dropped. It then rebuilds the groups from the scan
@@ -300,22 +298,10 @@ func (l *SpacesList) later(fn func()) {
 	fn()
 }
 
-func (l *SpacesList) marks() map[string]board.PaneMark {
-	if l.board == nil {
-		return nil
-	}
-	snap := l.board.View().Snapshot
-	if snap == nil {
-		return nil
-	}
-	return board.PaneMarks(snap)
-}
-
 func (l *SpacesList) rebuild(tree *herdr.HerdrTree) SpacesChange {
 	var groups []spaces.RepoGroup
 	if tree != nil {
 		groups = spaces.Build(*tree, l.scan)
-		spaces.ApplyMarks(groups, l.marks())
 	}
 	online := true
 	if l.src != nil {

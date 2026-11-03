@@ -7,11 +7,8 @@ package spaces
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
 
 	"github.com/contursofran/contr/internal/app/icons"
-	"github.com/contursofran/contr/internal/board"
 	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/herdr"
 )
@@ -66,7 +63,7 @@ type WorktreeRow struct {
 	Hold *string
 	// HoldYou is true when the second line is the owner's turn.
 	HoldYou bool
-	// Badge comes from the board bridge. Nil without it.
+	// Badge is the row's chip. Nil without one.
 	Badge *Badge
 }
 
@@ -111,29 +108,6 @@ func Build(tree herdr.HerdrTree, scan git.Scan) []RepoGroup {
 		}
 	}
 	return groups
-}
-
-// ApplyMarks applies the board's marks (from [board.PaneMarks]) to the rows.
-// A row takes the mark of its holder's pane: the top holder first, then the
-// other holders in tree order. Its second line becomes the mark's who with
-// " +N" (D49), unless the who text is blank; the row keeps the herdr line
-// then. A row without a mark keeps what [Build] made of it.
-func ApplyMarks(groups []RepoGroup, marks map[string]board.PaneMark) {
-	for g := range groups {
-		for i := range groups[g].Rows {
-			row := &groups[g].Rows[i]
-			mark, ok := markFor(row, marks)
-			if !ok {
-				continue
-			}
-			if strings.TrimSpace(mark.Who.Text) != "" {
-				line := withMore(mark.Who.Text, len(row.Holders))
-				row.Hold = &line
-				row.HoldYou = mark.Who.Kind == board.WhoYou
-			}
-			row.Badge = badgeOf(mark)
-		}
-	}
 }
 
 // PaneCwds gives the cwd of every pane in the tree, in tree order, each once.
@@ -286,47 +260,4 @@ func withMore(line string, holderCount int) string {
 		return fmt.Sprintf("%s +%d", line, more)
 	}
 	return line
-}
-
-// markFor gives the mark of the row's holder: the top holder's pane first,
-// then the other holders in tree order. The first pane that has a mark gives
-// it.
-func markFor(row *WorktreeRow, marks map[string]board.PaneMark) (board.PaneMark, bool) {
-	if row.FocusPane != nil {
-		if m, ok := marks[*row.FocusPane]; ok {
-			return m, true
-		}
-	}
-	for _, h := range row.Holders {
-		if m, ok := marks[h.PaneID]; ok {
-			return m, true
-		}
-	}
-	return board.PaneMark{}, false
-}
-
-// badgeOf gives the row's badge for a mark, in this order: the open
-// needs-you item's key (T12, D8), then "blocked", then the work row's "#<n>"
-// label. Any other label gives no badge.
-func badgeOf(mark board.PaneMark) *Badge {
-	if mark.OpenItem != nil {
-		return &Badge{Kind: BadgeYou, You: *mark.OpenItem}
-	}
-	if mark.Blocked {
-		return &Badge{Kind: BadgeYou, You: "blocked"}
-	}
-	digits, ok := strings.CutPrefix(mark.Label, "#")
-	if !ok || digits == "" {
-		return nil
-	}
-	for i := 0; i < len(digits); i++ {
-		if digits[i] < '0' || digits[i] > '9' {
-			return nil
-		}
-	}
-	n, err := strconv.ParseUint(digits, 10, 32)
-	if err != nil {
-		return nil
-	}
-	return &Badge{Kind: BadgePR, PR: uint32(n)}
 }

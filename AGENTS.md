@@ -1,7 +1,6 @@
 # Working on contr
 
-contr is a native macOS client for herdr, with the herdr-agents board built
-in. It is written in Go with MyGo's native UI.
+contr is a native macOS client for herdr, with an agent board built in. It is written in Go with MyGo's native UI.
 
 ## Goal and reference
 

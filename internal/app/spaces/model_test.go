@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/contursofran/contr/internal/app/icons"
-	"github.com/contursofran/contr/internal/board"
 	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/herdr"
 )
@@ -273,90 +272,4 @@ func TestPaneCwdsAreListedOnceInTreeOrderAndSkipMissingCwds(t *testing.T) {
 	))
 	eq(t, cwds, []string{w1Root, mainWT})
 	eq(t, len(PaneCwds(tree())), 0)
-}
-
-// mark is a mark with the given label and who, no open item, not blocked.
-func mark(label, text string, kind board.WhoKind) board.PaneMark {
-	return board.PaneMark{Label: label, Who: board.Who{Text: text, Kind: kind}}
-}
-
-func marksOn(paneID string, m board.PaneMark) map[string]board.PaneMark {
-	return map[string]board.PaneMark{paneID: m}
-}
-
-func TestNoMarkKeepsTheHerdrFallback(t *testing.T) {
-	groups := built(tab("t1", "b-3s2", pane("w1:p2", w1Root, st(working))))
-	ApplyMarks(groups, map[string]board.PaneMark{})
-	w1 := row(t, groups, "w1")
-	eq(t, *w1.Hold, "b-3s2 working")
-	if w1.Badge != nil || w1.HoldYou {
-		t.Error("badge or hold-you set without a mark")
-	}
-}
-
-func TestAMarkReplacesTheSecondLineAndKeepsPlusN(t *testing.T) {
-	groups := built(
-		tab("t1", "p-6", pane("w1:p1", w1Root, st(done))),
-		tab("t2", "b-3s2", pane("w1:p2", w1Root, st(working))),
-	)
-	ApplyMarks(groups, marksOn("w1:p2", mark("#640", "b-1151 5m", board.WhoText)))
-	w1 := row(t, groups, "w1")
-	eq(t, *w1.Hold, "b-1151 5m +1")
-	eq(t, w1.HoldYou, false)
-	eq(t, *w1.Badge, Badge{Kind: BadgePR, PR: 640})
-}
-
-func TestAYouWhoSetsHoldYou(t *testing.T) {
-	groups := built(tab("t1", "b-3s2", pane("w1:p2", w1Root, st(working))))
-	ApplyMarks(groups, marksOn("w1:p2", mark("#640", "your test", board.WhoYou)))
-	w1 := row(t, groups, "w1")
-	eq(t, *w1.Hold, "your test")
-	eq(t, w1.HoldYou, true)
-}
-
-func TestABlankWhoKeepsTheFallbackLine(t *testing.T) {
-	for _, text := range []string{"", "   "} {
-		groups := built(tab("t1", "b-3s2", pane("w1:p2", w1Root, st(working))))
-		ApplyMarks(groups, marksOn("w1:p2", mark("#640", text, board.WhoYou)))
-		w1 := row(t, groups, "w1")
-		eq(t, *w1.Hold, "b-3s2 working")
-		eq(t, w1.HoldYou, false)
-		eq(t, *w1.Badge, Badge{Kind: BadgePR, PR: 640})
-	}
-}
-
-func TestBadgeOrderItemThenBlockedThenPR(t *testing.T) {
-	with := func(item *string, blocked bool, label string) board.PaneMark {
-		return board.PaneMark{Label: label, OpenItem: item, Blocked: blocked}
-	}
-	eq(t, *badgeOf(with(sp("D7"), true, "#640")), Badge{Kind: BadgeYou, You: "D7"})
-	eq(t, *badgeOf(with(nil, true, "#640")), Badge{Kind: BadgeYou, You: "blocked"})
-	eq(t, *badgeOf(with(nil, false, "#640")), Badge{Kind: BadgePR, PR: 640})
-	for _, label := range []string{"fix", "#", "#12a", "#+5", "640", "#99999999999"} {
-		if b := badgeOf(with(nil, false, label)); b != nil {
-			t.Errorf("label %q gave badge %v", label, *b)
-		}
-	}
-}
-
-func TestAMarkOnALowerHolderIsUsedWhenTheTopHasNone(t *testing.T) {
-	groups := built(
-		tab("t1", "p-6", pane("w1:p1", w1Root, st(done))),
-		tab("t2", "b-3s2", pane("w1:p2", w1Root, st(working))),
-	)
-	// The top holder is w1:p2, which has no mark. The mark is on w1:p1.
-	ApplyMarks(groups, marksOn("w1:p1", mark("#641", "r-1152 2m", board.WhoText)))
-	w1 := row(t, groups, "w1")
-	eq(t, *w1.FocusPane, "w1:p2")
-	eq(t, *w1.Hold, "r-1152 2m +1")
-	eq(t, *w1.Badge, Badge{Kind: BadgePR, PR: 641})
-}
-
-func TestAnUnheldRowGetsNoMark(t *testing.T) {
-	groups := built(tab("t1", "a", pane("w1:p1", w1Root, st(working))))
-	ApplyMarks(groups, marksOn("w1:p1", mark("#640", "b-1151 5m", board.WhoYou)))
-	w2 := row(t, groups, "w2")
-	if w2.Hold != nil || w2.Badge != nil || w2.HoldYou {
-		t.Error("unheld row got a mark")
-	}
 }
