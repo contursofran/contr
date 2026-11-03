@@ -196,3 +196,19 @@ func TestFramePanelRowClickShowsTheWorker(t *testing.T) {
 	tt.Frame()
 	box(t, tt, LabelWorkerPanel)
 }
+
+func TestPanelShowsTheProblemOfTheState(t *testing.T) {
+	p, _ := newBoardPanel(agentstate.Snapshot{Problem: "agents: hc: program not found"}, "")
+	tt := boardTester(p)
+	tt.Frame()
+	box(t, tt, LabelBoardProblem)
+	if !slices.Contains(tt.Texts(), "agents: hc: program not found") {
+		t.Errorf("no problem text in %q", tt.Texts())
+	}
+	p2, _ := newBoardPanel(agentstate.Snapshot{}, "")
+	tt = boardTester(p2)
+	tt.Frame()
+	if slices.Contains(tt.Texts(), "agents: hc: program not found") {
+		t.Error("problem shows with none")
+	}
+}

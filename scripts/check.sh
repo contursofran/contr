@@ -13,6 +13,11 @@ if [ -n "$unformatted" ]; then
 fi
 
 go vet ./...
+# Compile the files behind build tags (no hc or herdr is needed to vet).
+go vet -tags 'e2e bench hccore' ./...
+# Merge-conflict markers and duplicate decision ids.
+scripts/check-conflicts.sh
+scripts/check-decisions.sh
 go test -race ./...
 # The patched terminal emulator is a module of its own (go.mod replaces it).
 (cd third_party/vt && go vet ./... && go test -race ./...)
@@ -24,4 +29,6 @@ scripts/test-bundle.sh
 scripts/test-install.sh
 # The agent metrics script, on made-up transcripts.
 scripts/test-agent-metrics.sh
+# The two checks above, on small temporary repos.
+scripts/test-checks.sh
 echo "check: ok"

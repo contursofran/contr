@@ -283,3 +283,191 @@ func TestFrameOpensTheCardFromTheNeedsRow(t *testing.T) {
 		t.Errorf("the card (%v) overlaps the needs row (%v)", card, needs)
 	}
 }
+
+const claudeMenu = `
+ Bash command
+   rm -rf build
+
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. Yes, and don't ask again
+   3. No, and tell Claude what to do differently
+`
+
+const claudeMenuOther = `
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. No
+`
+
+func menuRig(t *testing.T, texts ...string) *cardRig {
+	src := askSource()
+	src.snap.Workers[0].Turn = 1
+	src.text = claudeMenu
+	src.texts = texts
+	r := newCardRig(t, src)
+	return r
+}
+
+var tabMenu = NeedTab{Kind: NeedBlocked, Key: "b-2", Title: "Allow rm?", Icon: icons.Blocked, Address: "t9", Command: "claude", BlockKind: "permission"}
+
+func TestBlockedCardShowsChoices(t *testing.T) {
+	r := menuRig(t)
+	r.open(tabMenu)
+	y, ok1 := r.tt.Find("Yes")
+	n, ok2 := r.tt.Find("Yes, and don't ask again")
+	f, ok3 := r.tt.Find(CardFocusWorker)
+	if !ok1 || !ok2 || !ok3 || y.X >= n.X || n.X >= f.X {
+		t.Fatalf("choices then Focus worker expected: %q", r.tt.Texts())
+	}
+	if !r.tt.HasText("Do you want to proceed?") {
+		t.Errorf("question missing: %q", r.tt.Texts())
+	}
+}
+
+func TestBlockedCardClickSendsKeys(t *testing.T) {
+	r := menuRig(t)
+	r.open(tabMenu)
+	if err := r.tt.Click("Yes"); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.src.sent) != 1 || string(r.src.sent[0]) != "1" || r.src.sentTo[0] != "t9" {
+		t.Errorf("sent %q to %v", r.src.sent, r.src.sentTo)
+	}
+	if _, open := r.card.Opened(); !open {
+		t.Error("the card stays open until the worker leaves blocked")
+	}
+}
+
+func TestBlockedCardDigitKey(t *testing.T) {
+	r := menuRig(t)
+	r.open(tabMenu)
+	r.tt.Key(0, ui.Key2)
+	if len(r.src.sent) != 1 || string(r.src.sent[0]) != "2" {
+		t.Errorf("sent %q", r.src.sent)
+	}
+}
+
+func TestBlockedCardEnterDoesNothing(t *testing.T) {
+	r := menuRig(t)
+	r.open(tabMenu)
+	r.tt.Key(0, ui.KeyEnter)
+	if len(r.src.sent) != 0 {
+		t.Errorf("Enter sent %q", r.src.sent)
+	}
+}
+
+func TestBlockedCardPromptChanged(t *testing.T) {
+	r := menuRig(t, claudeMenu, claudeMenuOther)
+	r.open(tabMenu)
+	if err := r.tt.Click("Yes"); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.src.sent) != 0 {
+		t.Fatalf("sent %q on a changed prompt", r.src.sent)
+	}
+	r.tt.Frame()
+	if !r.tt.HasText(CardPromptChanged) {
+		t.Errorf("notice missing: %q", r.tt.Texts())
+	}
+	if !r.tt.HasText("No") {
+		t.Errorf("the new menu should show: %q", r.tt.Texts())
+	}
+}
+
+func TestBlockedCardUnknownForm(t *testing.T) {
+	r := menuRig(t)
+	r.src.text = "nothing to see"
+	r.open(tabMenu)
+	if !r.tt.HasText("Allow rm?") || !r.tt.HasText(CardFocusWorker) || !r.tt.HasText(CardClose) || r.tt.HasText("Yes") {
+		t.Errorf("texts %q", r.tt.Texts())
+	}
+}
+
+func TestBlockedCardAuthShowsNoChoices(t *testing.T) {
+	r := menuRig(t)
+	tab := tabMenu
+	tab.BlockKind = "auth"
+	r.open(tab)
+	if r.tt.HasText("Yes") || !r.tt.HasText(CardFocusWorker) {
+		t.Errorf("texts %q", r.tt.Texts())
+	}
+}
+
+func TestBlockedCardReadError(t *testing.T) {
+	r := menuRig(t)
+	r.src.readErr = errors.New("core gone")
+	r.open(tabMenu)
+	if !r.tt.HasText("core gone") || r.tt.HasText("Yes") || !r.tt.HasText(CardFocusWorker) {
+		t.Errorf("texts %q", r.tt.Texts())
+	}
+}
+
+func TestBlockedCardSendError(t *testing.T) {
+	r := menuRig(t)
+	r.src.sendErr = errors.New("keys failed")
+	r.open(tabMenu)
+	if err := r.tt.Click("Yes"); err != nil {
+		t.Fatal(err)
+	}
+	r.tt.Frame()
+	if _, open := r.card.Opened(); !open || !r.tt.HasText("keys failed") {
+		t.Errorf("open=%v texts %q", open, r.tt.Texts())
+	}
+}
+
+func TestBlockedCardBusyIgnoresClicks(t *testing.T) {
+	r := menuRig(t)
+	var queued []func()
+	r.card.Run = Runner{Go: func(f func()) { queued = append(queued, f) }}
+	r.open(tabMenu)
+	queued[0]() // the first read
+	r.tt.Frame()
+	_ = r.tt.Click("Yes")
+	_ = r.tt.Click("Yes")
+	if len(queued) != 2 {
+		t.Fatalf("%d jobs queued, want read + one send", len(queued))
+	}
+	queued[1]()
+	if len(r.src.sent) != 1 {
+		t.Errorf("sent %d times", len(r.src.sent))
+	}
+}
+
+func TestBlockedCardTextChoiceFocusesWorker(t *testing.T) {
+	r := menuRig(t)
+	var got string
+	r.card.Select = func(a string, _ bool) { got = a }
+	r.open(tabMenu)
+	if err := r.tt.Click("No, and tell Claude what to do differently"); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.src.sent) != 0 || got != "t9" {
+		t.Errorf("sent %q, selected %q", r.src.sent, got)
+	}
+}
+
+func TestBlockedCardRereadOnTurn(t *testing.T) {
+	r := menuRig(t)
+	r.open(tabMenu)
+	r.tt.Frame()
+	n := len(r.src.read)
+	if n != 1 {
+		t.Fatalf("%d reads after open, want 1", n)
+	}
+	r.src.snap.Workers[0].Turn = 2
+	r.tt.Frame()
+	if len(r.src.read) != n+1 {
+		t.Errorf("%d reads after a new turn, want %d", len(r.src.read), n+1)
+	}
+}
+
+func TestBlockedCardClosesWhenNoLongerBlocked(t *testing.T) {
+	r := menuRig(t)
+	r.open(tabMenu)
+	r.src.snap.Workers[0].Status = "working"
+	r.tt.Frame()
+	if _, open := r.card.Opened(); open {
+		t.Error("the card should close")
+	}
+}

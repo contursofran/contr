@@ -297,7 +297,7 @@ times more output for each CPU second. Before, the app could not keep up and
 the core skipped about 70 % of the output for it. A harness that reads the
 same flood from a scratch core through the link, with no window: before,
 2.5 MB/s taken at 110–158 % CPU (45–63 % for each MB/s); after, 6.9–7.3 MB/s
-at 141 % (about 20 % for each MB/s). The fixes (D50):
+at 141 % (about 20 % for each MB/s). The fixes (D53):
 
 - The emulator wrote 2.7 MB/s at 100×52 (`BenchmarkFlood200x60`: 2.66 MB/s);
   now 19 MB/s (22 MB/s), with no allocation for a line of ASCII.

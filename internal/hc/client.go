@@ -14,7 +14,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 )
@@ -64,13 +66,50 @@ func (t *tail) String() string {
 // Dialer opens a new connection to the core.
 type Dialer func(ctx context.Context) (Pipe, error)
 
-// Command returns a Dialer that starts `<path> connect` with env added to the
-// environment of this process. An empty path means "hc" from PATH.
-func Command(path string, env []string) Dialer {
-	if path == "" {
-		path = "hc"
+// ErrNotFound is the error of Find when hc is on no searched path.
+var ErrNotFound = errors.New("hc: program not found on PATH or in ~/.local/bin, /opt/homebrew/bin, /usr/local/bin; set CONTR_HC")
+
+// Find returns the hc program: path when set, else "hc" from PATH, else the
+// first hc in the usual places. An app opened from Finder has only the short
+// launchd PATH, which lacks them. home is the home folder; dirs, when not
+// nil, replaces the usual places.
+func Find(path, home string, dirs []string) (string, error) {
+	if path != "" {
+		return path, nil
 	}
+	if p, err := exec.LookPath("hc"); err == nil {
+		return p, nil
+	}
+	if dirs == nil {
+		dirs = []string{"/opt/homebrew/bin", "/usr/local/bin"}
+		if home != "" {
+			dirs = append([]string{filepath.Join(home, ".local", "bin")}, dirs...)
+		}
+	}
+	for _, d := range dirs {
+		p := filepath.Join(d, "hc")
+		if fi, err := os.Stat(p); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
+			return p, nil
+		}
+	}
+	return "", ErrNotFound
+}
+
+// Command returns a Dialer that starts `<path> connect` with env added to the
+// environment of this process. An empty path means hc, found with Find when
+// the Dialer runs, so building the Dialer does no file work; when hc is not
+// found, the Dialer returns that error.
+func Command(path string, env []string) Dialer {
 	return func(ctx context.Context) (Pipe, error) {
+		path := path
+		if path == "" {
+			home, _ := os.UserHomeDir()
+			found, err := Find("", home, nil)
+			if err != nil {
+				return Pipe{}, err
+			}
+			path = found
+		}
 		cmd := exec.Command(path, "connect")
 		if len(env) > 0 {
 			cmd.Env = append(cmd.Environ(), env...)

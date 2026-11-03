@@ -66,9 +66,6 @@ type Frame struct {
 	Visibility *state.Visibility
 	Selection  *state.Selection
 	Status     *state.StatusMessage
-	// Send takes the title bar's herdr commands. [Frame.Attach] sets it. When it is nil, the
-	// commands are dropped.
-	Send func(TabCommand)
 	// Needs is the needs-you row. [Frame.Attach] makes it and puts its view
 	// in Slots.Needs.
 	Needs *NeedsRow
@@ -103,8 +100,12 @@ type Frame struct {
 	Host  *host.Host
 	Usage *usage.Sampler
 
-	status      statusBar
-	bar         titleBar
+	status statusBar
+	bar    titleBar
+	// agentSnap gives the agents; nil before Attach or without agents. openProject is the
+	// project the title bar shows (D50).
+	agentSnap   func() agentstate.Snapshot
+	openProject string
 	sidebarOpen bool
 	panelOpen   bool
 	reviewOpen  bool
@@ -318,12 +319,8 @@ func (f *Frame) titleBar(c *ui.Context) {
 			ui.Box(c).Width(theme.TrafficLightInset).Shrink(0)
 			toggleButton(c, LabelSidebarReopen, false, f.ToggleSidebar)
 		}
-		var strip herdr.TabStrip
-		if f.Herdr != nil {
-			strip = herdr.TabStripFromTree(f.Herdr.Live().Tree)
-		}
-		f.bar.setStrip(strip)
-		f.bar.send = f.send
+		f.bar.setTabs(f.agentTabs())
+		f.bar.selectTab = f.selectTab
 		f.bar.toggleReview, f.bar.reviewOpen = f.ToggleReview, f.reviewOpen
 		f.bar.build(c, f.panelOpen, f.TogglePanel)
 	})
@@ -349,10 +346,36 @@ func (f *Frame) terminal(c *ui.Context) {
 	})
 }
 
-func (f *Frame) send(cmd TabCommand) {
-	if f.Send != nil {
-		f.Send(cmd)
+// agentTabs returns the tabs of the open project. The open project follows the selected
+// orchestrator or worker, and keeps its last value for any other selection.
+func (f *Frame) agentTabs() []AgentTab {
+	if f.agentSnap == nil {
+		return nil
 	}
+	snap := f.agentSnap()
+	var sel state.Selected
+	var ok bool
+	if f.Selection != nil {
+		sel, ok = f.Selection.Current()
+	}
+	f.openProject = OpenProject(snap, sel, ok, f.openProject)
+	selected := ""
+	if ok && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker) {
+		selected = sel.ID
+	}
+	return AgentTabs(snap, f.openProject, selected)
+}
+
+// selectTab selects the agent of a title bar tab.
+func (f *Frame) selectTab(t AgentTab) {
+	if f.Selection == nil {
+		return
+	}
+	kind := state.KindWorker
+	if t.Orchestrator {
+		kind = state.KindOrchestrator
+	}
+	f.Selection.Select(state.Selected{Kind: kind, ID: t.Address})
 }
 
 func panelToggle(c *ui.Context, open bool, onClick func()) {
@@ -431,7 +454,6 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	f.Selection = state.NewSelection(func() { w.Invalidate(); f.syncReview(); f.syncTerminal() })
 	f.Review = NewReview(w.Update, w.Invalidate)
 	f.Status = state.NewStatusMessage(w.Invalidate)
-	f.Send = newCommander(f.Status.Show).Send
 	// An onChange func can run on any goroutine or on the UI thread. It only
 	// queues the sync with Window.Update, which is safe from both.
 	h := NewHerdr(ctx, target, w.IsVisible(), func() { w.Update(f.syncHerdr) })
@@ -444,6 +466,7 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	}
 	if src != nil {
 		agentSnap = src.Snapshot
+		f.agentSnap = agentSnap
 		run := Runner{Post: w.Update}
 		f.Card = &FloatCard{Source: src, Run: run, Invalidate: w.Invalidate,
 			Select: func(address string, orchestrator bool) {

@@ -65,6 +65,10 @@ type source struct {
 	text      string // what Read returns
 	readErr   error
 	read      []string // names read
+	texts     []string // what the next Reads return, before text
+	sent      [][]byte // keys sent
+	sentTo    []string
+	sendErr   error
 	signalled []string // names interrupted
 	stopped   []string
 }
@@ -81,7 +85,17 @@ func (s *source) Done(id string) error {
 func (s *source) ClearDone() { s.cleared++ }
 func (s *source) Read(name string, _ int) (string, error) {
 	s.read = append(s.read, name)
+	if len(s.texts) > 0 {
+		t := s.texts[0]
+		s.texts = s.texts[1:]
+		return t, s.readErr
+	}
 	return s.text, s.readErr
+}
+func (s *source) SendKeys(name string, keys []byte) error {
+	s.sentTo = append(s.sentTo, name)
+	s.sent = append(s.sent, keys)
+	return s.sendErr
 }
 func (s *source) Interrupt(name string) error {
 	s.signalled = append(s.signalled, name)
@@ -247,5 +261,28 @@ func TestFrameWithoutNeedsSlotHasNoRow(t *testing.T) {
 	tt := ui.NewTester(NewFrame(nil).View, theme.WindowWidth, theme.WindowHeight)
 	if _, ok := tt.Find(LabelNeedsRow); ok {
 		t.Error("row shows without a slot")
+	}
+}
+
+func TestNeedsSectionLongNameStaysOnOneLine(t *testing.T) {
+	name := "b148-s3-card-with-a-very-long-worker-name"
+	tabs := []NeedTab{{Kind: NeedBlocked, Key: name, Icon: icons.Blocked}}
+	tt := ui.NewTester(func(c *ui.Context) { NeedsSection(c, tabs, nil) }, 400, 200)
+	row, ok := tt.Find(name + " , blocked")
+	if !ok {
+		t.Fatal("no needs line")
+	}
+	if row.H != theme.BoardLineHeight {
+		t.Fatalf("line height %v, want %v", row.H, theme.BoardLineHeight)
+	}
+	key, ok := tt.Find(name)
+	if !ok {
+		t.Fatal("no name text")
+	}
+	if key.H > theme.BoardLineHeight {
+		t.Errorf("name height %v: it wrapped", key.H)
+	}
+	if key.W < 100 {
+		t.Errorf("name width %v: it is squeezed", key.W)
 	}
 }

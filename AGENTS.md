@@ -31,7 +31,7 @@ contr is a native macOS client for herdr, with an agent board built in. It is wr
 | `cmd/contr` | `main` and the command line |
 | `internal/app` | the window content: frame and views |
 | `internal/app/kit` | shared view parts: list row, +/− counts, switch, code view |
-| `internal/herdr` | herdr's JSON API: wire, model, reader, command, tabs, agents |
+| `internal/herdr` | herdr's JSON API: wire, model, reader, command, agents |
 | `internal/term` | terminal view types: cells, screen, input events, link updates; no UI and no wire format |
 | `internal/usage` | plan usage: Claude status line, Codex logs |
 | `internal/prompt` | reads a blocked worker's menu from terminal text: question and choices |
@@ -40,7 +40,7 @@ contr is a native macOS client for herdr, with an agent board built in. It is wr
 | `internal/agents` | worker agents in hc terminals: profiles, spawn, list, send, interrupt, stop, read, watch |
 | `internal/mcp` | a small MCP server over stdio: tools only |
 | `internal/owner` | questions and to-dos for the owner, in one locked JSON file |
-| `third_party/vt` | a patched copy of the x/vt terminal emulator module (D50); `go.mod` replaces the module with it |
+| `third_party/vt` | a patched copy of the x/vt terminal emulator module (D53); `go.mod` replaces the module with it |
 | `assets` | fonts, status icons, app icon |
 | `kit` | Claude Code plugin for agent work: agent definitions and the coordinator playbook |
 | `scripts` | `check.sh`, `bundle.sh`, `install.sh`, `dev-herdr.sh`, `agent-metrics.py` |
