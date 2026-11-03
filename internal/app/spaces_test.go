@@ -1216,3 +1216,33 @@ func TestAWakeOfAnEarlierShowIsDropped(t *testing.T) {
 		t.Errorf("scans %d, timers %d: the stale wake-up must do nothing", h.list.scans, h.pending())
 	}
 }
+
+// A name longer than its column is cut with an ellipsis (issue 173): NoWrap
+// keeps the line whole, SingleLine cuts it.
+func TestALongRepoAndWorktreeNameIsCutWithAnEllipsis(t *testing.T) {
+	base := canonicalTmp(t)
+	long := strings.Repeat("verylongname", 8)
+	gitDir := mainRepo(t, filepath.Join(base, long+"-repo"), "ref: refs/heads/main\n")
+	wt := filepath.Join(base, long+"-worktree")
+	linkedWorktree(t, gitDir, "w1", wt, "ref: refs/heads/"+long+"-branch\n")
+	h := newSpaces(t, spacesOf(spTree(spPane("w1:p1", wt, nil))))
+	h.tt.Frame()
+	// The texts keep the full name, and the box is as wide as the column
+	// either way. The cut shows in the pixels: an uncut name paints into
+	// the gap after its box.
+	img := h.tt.Image()
+	for _, name := range []string{long + "-repo", long + "-worktree"} {
+		r, ok := h.tt.Find(name)
+		if !ok {
+			t.Fatalf("no text %q in %q", name, h.tt.Texts())
+		}
+		for y := int(r.Y); y < int(r.Y+r.H); y++ {
+			bg := img.At(theme.SidebarWidth-1, y)
+			for x := int(r.X + r.W + 1); x < int(r.X+r.W)+4; x++ {
+				if img.At(x, y) != bg {
+					t.Fatalf("text %q paints into the gap after its box at (%d,%d)", name, x, y)
+				}
+			}
+		}
+	}
+}

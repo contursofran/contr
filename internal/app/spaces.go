@@ -473,9 +473,9 @@ func nameColour(held bool) uint32 {
 func (l *SpacesList) repoLine(c *ui.Context, g spaces.RepoGroup) {
 	ui.Row(c).Label(RepoLabel(g)).FillWidth().Height(theme.SpacesRowHeight).Shrink(0).
 		AlignItems(ui.Center).Gap(theme.SpacesGap).PaddingX(theme.SidebarPadX).Children(func() {
-		ui.Text(c, g.Name).TextColor(theme.Color(theme.Text)).NoWrap().Ellipsis("…").MinWidth(0)
+		ui.Text(c, g.Name).TextColor(theme.Color(theme.Text)).SingleLine().Ellipsis("…").MinWidth(0)
 		if g.Branch != "" {
-			ui.Text(c, g.Branch).TextColor(theme.Color(theme.TextDim)).NoWrap().Ellipsis("…").MinWidth(0)
+			ui.Text(c, g.Branch).TextColor(theme.Color(theme.TextDim)).SingleLine().Ellipsis("…").MinWidth(0)
 		}
 	})
 }
@@ -501,7 +501,7 @@ func (l *SpacesList) row(c *ui.Context, row spaces.WorktreeRow, selected bool) {
 	card.Children(func() {
 		icons.Sized(c, row.Status, theme.IconSizeSmall).Shrink(0)
 		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-			ui.Text(c, row.Name).Height(theme.LineHeight).TextColor(theme.Color(nameColour(held))).NoWrap().Ellipsis("…").MinWidth(0)
+			ui.Text(c, row.Name).Height(theme.LineHeight).TextColor(theme.Color(nameColour(held))).SingleLine().Ellipsis("…").MinWidth(0)
 			l.holdLine(c, row)
 		})
 		if row.Badge != nil {
@@ -520,7 +520,7 @@ func (l *SpacesList) holdLine(c *ui.Context, row spaces.WorktreeRow) {
 		case row.HoldYou:
 			youChip(c, LabelHoldYou, *row.Hold)
 		default:
-			ui.Text(c, *row.Hold).NoWrap().Ellipsis("…").MinWidth(0)
+			ui.Text(c, *row.Hold).SingleLine().Ellipsis("…").MinWidth(0)
 		}
 	})
 }
