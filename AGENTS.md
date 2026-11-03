@@ -54,9 +54,9 @@ Add packages under `internal/` when a change needs them.
 - Never block the UI thread. MyGo runs views and handlers on the main
   thread. herdr I/O, file reads and git scans run on goroutines, and their
   results reach the views through `Window.Update` or `Invalidate`.
-- Performance is a requirement: no polling, no timers in the hot path, and
-  no work while the window is hidden. Read MyGo's `ui/performance.md` before
-  you add a loop, a timer, an animation or a goroutine that runs forever.
+- Performance is not a goal by itself (owner, 2026-11-03, D55). Keep the
+  app responsive and do not use CPU while it is idle. Fix a slow part when
+  someone sees it. Do not add benchmarks, perf gates or tuning work.
 - No `panic` in non-test code: return errors. Do not drop errors silently:
   log them or show them.
 - The UI follows `docs/DESIGN.md` exactly: mono font, greyscale (the two
