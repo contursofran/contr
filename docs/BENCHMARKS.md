@@ -268,7 +268,7 @@ from the herdr surface; now it is an hc terminal on the framed stream, and a
 flood of lines is not coalesced the same way. This is likely, not profiled.
 The footprint does not fall back after the flood (237 MB hidden, against
 80 MB in M13). It is a finding for its own issue, not a result of this
-change. The numbers are not comparable with M13 for the terminal phases
+change. The flood pane regression is tracked in #204. The numbers are not comparable with M13 for the terminal phases
 (another source) and not for the working phase (30 frames a second since
 M13.4). Compare later runs of this test with this table, by frames and CPU
 seconds.

@@ -103,3 +103,54 @@ func TestRealCoreSpawnWatchSend(t *testing.T) {
 		t.Errorf("list = %+v, %v", ws, err)
 	}
 }
+
+// TestRealCoreSendKeysNoEnter checks that SendKeys presses the keys and no
+// Enter: the program reads one raw byte and prints it.
+func TestRealCoreSendKeysNoEnter(t *testing.T) {
+	env := isolatedCore(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cl, err := hc.Dial(ctx, hc.Command("", env))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cl.Close()
+
+	cfg := Config{Profiles: map[string]Profile{"one": {Argv: []string{"sh", "-c", "stty raw -echo; dd bs=1 count=2 2>/dev/null | od -An -c"}}}}
+	m := New(HC{cl}, cfg)
+	if _, err := m.Spawn(ctx, Spec{Name: "k1", Profile: "one", Issue: "148", Worktree: t.TempDir()}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	if err := m.SendKeys(ctx, "k1", []byte("1")); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	out, err := m.Read(ctx, "k1", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, `\r`) || strings.Contains(out, `\n  `) {
+		t.Errorf("screen has an Enter: %q", out)
+	}
+	// One byte is in; the program still waits for the second.
+	if strings.Contains(out, "1") && strings.Contains(out, "0000") {
+		t.Errorf("program finished after one key: %q", out)
+	}
+	if err := m.SendKeys(ctx, "k1", []byte("\x1b[B")); err != nil {
+		t.Fatal(err)
+	}
+	var seen string
+	for i := 0; i < 20; i++ {
+		time.Sleep(100 * time.Millisecond)
+		seen, _ = m.Read(ctx, "k1", 0)
+		if strings.Contains(seen, `1`) && strings.Contains(seen, `033`) {
+			break
+		}
+	}
+	// "1" then ESC: two bytes, no CR. Arrow sequences go as ESC [ B, so the
+	// reader got "1" and the first byte of the sequence.
+	if !strings.Contains(seen, "1") || !strings.Contains(seen, "033") || strings.Contains(seen, `\r`) {
+		t.Errorf("screen = %q, want bytes 1 and ESC and no CR", seen)
+	}
+}
