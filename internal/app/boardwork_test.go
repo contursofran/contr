@@ -67,7 +67,7 @@ func TestRowsAreThePerProjectWorkersWithoutOrchestrators(t *testing.T) {
 	for _, r := range WorkRows(boardSnap(), "a") {
 		got = append(got, r.Label+"|"+r.Title+"|"+r.Role+" "+r.Status)
 	}
-	want := []string{"#162|Plan the board|planner done", "#162|b-1|builder working", "#170|r-1|reviewer blocked"}
+	want := []string{"#162|p-1|planner done", "#162|b-1|builder working", "#170|r-1|reviewer blocked"}
 	if !slices.Equal(got, want) {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -210,5 +210,14 @@ func TestPanelShowsTheProblemOfTheState(t *testing.T) {
 	tt.Frame()
 	if slices.Contains(tt.Texts(), "agents: hc: program not found") {
 		t.Error("problem shows with none")
+	}
+}
+
+// #212: the work row names the worker, not the terminal title.
+func TestWorkRowNameIsTheWorkerNotTheTitle(t *testing.T) {
+	w := agents.Worker{Name: "b212", Address: "t1", Role: "builder", Issue: "212", Live: true, Status: "working", Title: "contr:builder"}
+	rows := WorkRows(agentstate.Snapshot{Workers: []agents.Worker{w}}, "")
+	if len(rows) != 1 || rows[0].Title != "b212" {
+		t.Errorf("rows %+v", rows)
 	}
 }
