@@ -32,6 +32,7 @@ type Slots struct {
 	Agents    Slot // sidebar, at the bottom
 	Terminal  Slot // shown only while herdr is connected
 	Needs     Slot // needs-you row, under the terminal; draws nothing when empty
+	Card      Slot // answer card, floating at the bottom of the terminal area
 	Panel     Slot // board panel, shown while it is open
 	StatusBar Slot
 }
@@ -76,6 +77,12 @@ type Frame struct {
 	// Needs is the needs-you row. [Frame.Attach] makes it and puts its view
 	// in Slots.Needs.
 	Needs *NeedsRow
+	// Card is the answer card that the needs-you row opens. [Frame.Attach]
+	// makes it and puts its view in Slots.Card.
+	Card *FloatCard
+	// Worker is the panel's worker view. [Frame.Attach] makes it. The panel
+	// shows it while a worker is selected.
+	Worker *WorkerPanel
 	// Board is the coordinator's board. [Frame.Attach] sets it. Views read
 	// it with Board.View.
 	Board *Board
@@ -86,9 +93,9 @@ type Frame struct {
 	// its view in Slots.Agents.
 	AgentsList *AgentsList
 	// StartAgents follows the agents. [Frame.Attach] calls it once, with a
-	// notify function that is safe from any goroutine, and uses the snapshot
-	// function and the stop function it returns. Nil means no agents.
-	StartAgents func(notify func()) (snap func() agentstate.Snapshot, stop func())
+	// notify function that is safe from any goroutine, and uses the source
+	// and the stop function it returns. Nil means no agents.
+	StartAgents func(notify func()) (src AgentSource, stop func())
 	// Panel is the board panel. [Frame.Attach] makes it and puts its view in
 	// Slots.Panel.
 	Panel *BoardPanel
@@ -283,15 +290,24 @@ func (f *Frame) main(c *ui.Context) {
 			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 				f.terminal(c)
 				f.run(c, f.Slots.Needs)
-
 			})
 			if f.panelOpen {
 				ui.Box(c).Label(LabelPanel).Width(theme.PanelWidth).Shrink(0).
 					Background(color(theme.BgWindow)).BorderStartWidth(1).BorderColor(color(theme.Line)).
-					Children(func() { f.run(c, f.Slots.Panel) })
+					Children(func() { f.panel(c) })
 			}
 		})
 	})
+}
+
+// panel draws the worker view while a worker is selected, and the slot (the
+// board) otherwise: the panel follows the selected tab.
+func (f *Frame) panel(c *ui.Context) {
+	if f.Worker != nil && f.Worker.Following() {
+		f.Worker.View(c)
+		return
+	}
+	f.run(c, f.Slots.Panel)
 }
 
 func (f *Frame) titleBar(c *ui.Context) {
@@ -331,6 +347,7 @@ func (f *Frame) terminal(c *ui.Context) {
 			return
 		}
 		f.run(c, f.Slots.Terminal)
+		f.run(c, f.Slots.Card)
 	})
 }
 
@@ -397,7 +414,25 @@ func (f *Frame) syncBoard() {
 	f.syncAgents()
 }
 
+// scope is the project the needs-you row shows: the selected orchestrator's,
+// or "" (all projects) when none is selected.
+func (f *Frame) scope(src AgentSource) string {
+	sel, ok := f.Selection.Current()
+	if !ok || sel.Kind != state.KindOrchestrator {
+		return ""
+	}
+	for _, o := range src.Snapshot().Orchestrators {
+		if o.Address == sel.ID {
+			return o.Project
+		}
+	}
+	return ""
+}
+
 func (f *Frame) syncAgents() {
+	if f.Worker != nil {
+		f.Worker.Sync()
+	}
 	if f.AgentsList != nil {
 		f.AgentsList.Sync()
 	}
@@ -423,9 +458,24 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	h := NewHerdr(ctx, target, w.IsVisible(), func() { w.Update(f.syncHerdr) })
 	f.Herdr = h
 	var agentSnap func() agentstate.Snapshot
+	var src AgentSource
 	stopAgents := func() {}
 	if f.StartAgents != nil {
-		agentSnap, stopAgents = f.StartAgents(func() { w.Update(f.syncAgents) })
+		src, stopAgents = f.StartAgents(func() { w.Update(f.syncAgents) })
+	}
+	if src != nil {
+		agentSnap = src.Snapshot
+		run := Runner{Post: w.Update}
+		f.Card = &FloatCard{Source: src, Run: run, Invalidate: w.Invalidate,
+			Select: func(address string, orchestrator bool) {
+				kind := state.KindWorker
+				if orchestrator {
+					kind = state.KindOrchestrator
+				}
+				f.Selection.Select(state.Selected{Kind: kind, ID: address})
+			}}
+		f.Worker = &WorkerPanel{Source: src, Selection: f.Selection, Run: run, Status: f.Status.Show, Invalidate: w.Invalidate}
+		f.Slots.Card = f.Card.View
 	}
 	f.AgentsList = NewAgentsList(agentSnap, f.Selection)
 	f.Slots.Agents = f.AgentsList.View
@@ -449,6 +499,10 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	f.Slots.Spaces = f.SpacesList.View
 	f.SpacesList.Sync()
 	f.Needs = &NeedsRow{Snapshot: agentSnap}
+	if src != nil {
+		f.Needs.Scope = func() string { return f.scope(src) }
+		f.Needs.Open = f.Card.Open
+	}
 	f.Slots.Needs = f.Needs.View
 	if f.Usage == nil {
 		f.Usage = usage.NewFileSampler(w.Invalidate)

@@ -54,14 +54,43 @@ func needsTerm(addr, name, project, status, msg string) json.RawMessage {
 	return b
 }
 
-// source is a stub that lets a test set the snapshot.
+// source is a stub AgentSource that lets a test set the snapshot and records
+// the actions.
 type source struct {
-	snap    agentstate.Snapshot
-	cleared int
+	snap      agentstate.Snapshot
+	cleared   int
+	answers   [][2]string // id, answer
+	dones     []string
+	actionErr error
+	text      string // what Read returns
+	readErr   error
+	read      []string // names read
+	signalled []string // names interrupted
+	stopped   []string
 }
 
 func (s *source) Snapshot() agentstate.Snapshot { return s.snap }
-func (s *source) ClearDone()                    { s.cleared++ }
+func (s *source) Answer(id, a string) error {
+	s.answers = append(s.answers, [2]string{id, a})
+	return s.actionErr
+}
+func (s *source) Done(id string) error {
+	s.dones = append(s.dones, id)
+	return s.actionErr
+}
+func (s *source) ClearDone() { s.cleared++ }
+func (s *source) Read(name string, _ int) (string, error) {
+	s.read = append(s.read, name)
+	return s.text, s.readErr
+}
+func (s *source) Interrupt(name string) error {
+	s.signalled = append(s.signalled, name)
+	return s.actionErr
+}
+func (s *source) Stop(name string) error {
+	s.stopped = append(s.stopped, name)
+	return s.actionErr
+}
 
 func blockedWorker(name, project, msg string) agents.Worker {
 	return agents.Worker{Name: name, Project: project, Status: "blocked", Msg: msg}

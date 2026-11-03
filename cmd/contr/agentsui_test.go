@@ -14,8 +14,8 @@ func TestStartAgentsWithoutACoreShowsNoAgentsAndStops(t *testing.T) {
 		"CONTR_OWNER_FILE":    filepath.Join(t.TempDir(), "owner.json"),
 	}
 	var notified atomic.Int32
-	snap, stop := startAgents(func(k string) string { return env[k] })(func() { notified.Add(1) })
-	if s := snap(); len(s.Workers)+len(s.Orchestrators) != 0 {
+	src, stop := startAgents(func(k string) string { return env[k] })(func() { notified.Add(1) })
+	if s := src.Snapshot(); len(s.Workers)+len(s.Orchestrators) != 0 {
 		t.Errorf("snapshot %+v, want empty", s)
 	}
 	done := make(chan struct{})
