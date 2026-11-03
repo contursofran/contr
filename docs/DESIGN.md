@@ -22,6 +22,7 @@ Source of truth: the "herdr sidebar mockup" design canvas, artboards **G · cont
 ```
 
 - **Title bar tabs (D50):** one tab for each hc terminal of the open project: its orchestrators first (`◆ name`, terminal background), then its workers (`<issue> · <worktree>`, or the name when it has no issue). Each tab has the status icon. The first orchestrator tab has a white badge with the number of open needs-you items (blocked workers, questions, to-dos); it is hidden at 0. The open project is the project of the selected orchestrator or worker, and stays as it was for any other selection. A click on a tab selects that agent; the selected tab has the terminal background and a white underline. There are no "+" or split buttons until hc has actions for them.
+- A worktree row shows `+N −N` (diff colors, D52) at its right, the changes against the default branch with uncommitted ones. It is hidden for 0 and 0 or when git fails.
 - The title bar has a "Review" button left of the panel toggle. It swaps the terminal area for the Review view (see Review below) and is white while the view shows (D37).
 - Sidebar spans the full height, title-bar area included. Panel toggles from the title bar; hidden, the terminal takes the width.
 - v0.1 status bar usage shows only claude and codex. There is no OpenCode Go segment.

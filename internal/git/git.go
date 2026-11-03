@@ -1,7 +1,8 @@
 // Package git finds git checkouts for the sidebar: which checkout holds a
 // directory, and which worktrees a repository has. It reads plain files only
-// (`.git` entries, `commondir`, `gitdir`, `worktrees/<name>/`, `HEAD`). It never
-// runs `git`.
+// (`.git` entries, `commondir`, `gitdir`, `worktrees/<name>/`, `HEAD`). Those
+// reads never run `git`. Only diffstat.go runs `git`, for the diff stats of
+// worktree rows (D52).
 package git
 
 import (
