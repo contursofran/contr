@@ -94,6 +94,12 @@ func TestDecideAndUnpin(t *testing.T) {
 	if err := s.Decide([]string{"D9"}, "C", "coordinator"); err == nil {
 		t.Error("unknown id: no error")
 	}
+	if err := s.Decide(nil, "x", "owner"); err == nil {
+		t.Error("no ids: no error")
+	}
+	if err := s.Unpin(nil); err == nil {
+		t.Error("unpin with no ids: no error")
+	}
 	if err := s.Decide([]string{"D2"}, "", "owner"); err == nil {
 		t.Error("empty answer: no error")
 	}

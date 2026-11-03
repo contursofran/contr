@@ -174,6 +174,9 @@ func (s *Store) Pin(t Todo) (Todo, error) {
 // "coordinator". An id that is not an open question is an error, and then
 // nothing changes.
 func (s *Store) Decide(ids []string, answer, by string) error {
+	if len(ids) == 0 {
+		return errors.New("owner: no question ids")
+	}
 	if answer == "" {
 		return errors.New("owner: an answer needs text")
 	}
@@ -198,6 +201,9 @@ func (s *Store) Decide(ids []string, answer, by string) error {
 // Unpin marks open to-dos done. An id that is not an open to-do is an error,
 // and then nothing changes.
 func (s *Store) Unpin(ids []string) error {
+	if len(ids) == 0 {
+		return errors.New("owner: no to-do ids")
+	}
 	return s.update(func(st *State) error {
 		for _, id := range ids {
 			if !slices.ContainsFunc(st.Todos, func(t Todo) bool { return t.ID == id && t.Done.IsZero() }) {

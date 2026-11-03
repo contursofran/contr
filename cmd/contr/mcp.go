@@ -244,7 +244,7 @@ func ownerTools(store *owner.Store, project, coordinator string) []mcp.Tool {
 		}
 	}
 	return []mcp.Tool{
-		{Name: "ask_owner", Description: "Ask the owner a question only they can answer (a product rule, a design choice, an approval). It shows in contr until it is decided. Returns its id (D1, D2, …). The answer comes back as a message.",
+		{Name: "ask_owner", Description: "Ask the owner a question only they can answer (a product rule, a design choice, an approval). It is kept until it is decided. Returns its id (D1, D2, …). Until contr shows these items (#162), also ask the question in your reply: the owner answers in chat, and you close it with decided.",
 			Schema: schema([]string{"question"}, map[string]prop{
 				"question": str("The question, with enough context to answer it from there alone."), "options": {"string[]", "Short answers to pick from (2-4)."},
 				"recommended": {"integer", "Index in options of your recommendation."}, "title": str("A 2-4 word name."), "from": str("The worker, issue or PR it is about.")}),
