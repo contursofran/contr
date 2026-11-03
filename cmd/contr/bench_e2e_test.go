@@ -29,6 +29,7 @@ const (
 // heavy job: run nothing else at the same time. Files go to tmp/bench/:
 // start.png, busy.png, result.md and result.json.
 func TestAppBench(t *testing.T) {
+	t.Skip("the bench drove the herdr-agents board file, which contr no longer reads; it needs a rewrite on the agent state")
 	herdrSock := os.Getenv("HERDR_SOCKET_PATH")
 	if !strings.Contains(herdrSock, "contr-go-dev-herdr") {
 		t.Skip("HERDR_SOCKET_PATH is not the dev herdr; run eval \"$(scripts/dev-herdr.sh)\" first")

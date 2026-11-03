@@ -125,17 +125,13 @@ const TitleGlyphFill = 4 // panel glyph: filled right part when the panel is ope
 // Board panel (planner defaults; docs/DESIGN.md has no sizes for these). The "you" chip reuses
 // BADGE_PAD_X and BADGE_RADIUS.
 const PanelPadX = 12
-const PanelHeaderHeight = 36 // Board | Report switch and the wrap label
+const PanelHeaderHeight = 36 // worker panel header
 const BoardLineHeight = 28   // summary, section heads, needs-you rows
 const NeedKeyWidth = 29      // four characters of JetBrains Mono 12 px
 const NeedGap = 8            // needs-you head and rows: between their parts
 const WorkRowHeight = 42     // two text lines (18 + 18) + 6
 const StageColWidth = 44     // DESIGN.md: five 44 px stage columns
 const WorkLabelWidth = 52    // "#123456"
-const SegmentPadX = 8        // Board | Report segment
-const SegmentPadY = 4
-const SegmentRadius = 5
-const BoardGap = 8 // "Work" to "clear done"
 
 // Answer card (DESIGN.md fixes the height at 168; the rest are planner defaults)
 const AnswerCardHeight = 168

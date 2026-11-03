@@ -1,5 +1,9 @@
 # Port plan: Rust contr to Go with MyGo
 
+> Replaced by #162 for M8 and M9: the code that read the herdr-agents mod
+> (`internal/board`, the outbox, the Report tab) is deleted (D47). The rows
+> below stay as history.
+
 Reference: Rust contr at `fae6154` (2026-10-24), about 43,600 lines of Rust
 and about 1,240 tests. The port is done when the owner runs the coordinator
 in the Go contr instead of a terminal for a day: answering decisions,

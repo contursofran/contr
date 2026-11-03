@@ -14,7 +14,6 @@ import (
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/terminal"
 	"github.com/contursofran/contr/internal/app/theme"
-	"github.com/contursofran/contr/internal/board"
 	"github.com/contursofran/contr/internal/herdr"
 	"github.com/contursofran/contr/internal/herdr/endpoint"
 	"github.com/contursofran/contr/internal/host"
@@ -83,12 +82,6 @@ type Frame struct {
 	// Worker is the panel's worker view. [Frame.Attach] makes it. The panel
 	// shows it while a worker is selected.
 	Worker *WorkerPanel
-	// Board is the coordinator's board. [Frame.Attach] sets it. Views read
-	// it with Board.View.
-	Board *Board
-	// Outbox queues the actions that contr sends to the coordinator mod.
-	// [Frame.Attach] sets it.
-	Outbox *BoardOutbox
 	// AgentsList is the agents section. [Frame.Attach] makes it and puts
 	// its view in Slots.Agents.
 	AgentsList *AgentsList
@@ -391,23 +384,11 @@ type Window interface {
 	Update(fn func())
 }
 
-// syncHerdr follows a change of the herdr tree: the board looks at the bridge
-// again, and the agents list takes the new rows. UI thread.
+// syncHerdr follows a change of the herdr tree: the agents list takes the
+// new rows. UI thread.
 func (f *Frame) syncHerdr() {
-	if f.Herdr != nil && f.Board != nil {
-		f.Board.Sync(f.Herdr.Live().Tree)
-	}
 	f.syncAgents()
 	f.syncReview()
-}
-
-// syncBoard follows a change of the board: the outbox reads its report, and
-// the agents list takes the new rows. UI thread.
-func (f *Frame) syncBoard() {
-	if f.Outbox != nil && f.Board != nil {
-		f.Outbox.Sync(f.Board.View().Snapshot)
-	}
-	f.syncAgents()
 }
 
 // scope is the project the needs-you row shows: the selected orchestrator's,
@@ -448,9 +429,6 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	f.Send = newCommander(f.Status.Show).Send
 	// An onChange func can run on any goroutine or on the UI thread. It only
 	// queues the sync with Window.Update, which is safe from both.
-	dir, hasDir := board.Dir()
-	f.Board = NewBoard(dir, hasDir, func() { w.Update(f.syncBoard) })
-	f.Outbox = NewBoardOutbox(dir, hasDir, w.Invalidate, f.Status.Show)
 	h := NewHerdr(ctx, target, w.IsVisible(), func() { w.Update(f.syncHerdr) })
 	f.Herdr = h
 	var agentSnap func() agentstate.Snapshot
@@ -475,13 +453,12 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	}
 	f.AgentsList = NewAgentsList(agentSnap, f.Selection)
 	f.Slots.Agents = f.AgentsList.View
-	f.Board.Sync(h.Live().Tree)
 	if f.Host == nil {
 		f.Host = host.NewSystem(w.Invalidate)
 	}
 	// The git scan runs on a goroutine and lands through Window.Update.
 	if f.SpacesList == nil {
-		f.SpacesList = NewSpacesList(h, f.Board, f.Host, f.Selection, f.Status,
+		f.SpacesList = NewSpacesList(h, f.Host, f.Selection, f.Status,
 			func() bool { return f.Visibility == nil || f.Visibility.Visible() }, w.Update)
 	}
 	f.Slots.Spaces = f.SpacesList.View
@@ -523,9 +500,6 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	return func() {
 		unwatch()
 		term()
-		// Held actions are written now, so quit loses none.
-		f.Outbox.ReleaseForQuit()
-		f.Outbox.Wait()
 		stopAgents()
 		h.Close()
 		f.SpacesList.Close()

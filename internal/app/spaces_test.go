@@ -1,7 +1,6 @@
 package app
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -15,7 +14,6 @@ import (
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
-	"github.com/contursofran/contr/internal/board"
 	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/herdr"
 	"github.com/contursofran/contr/internal/host"
@@ -114,7 +112,6 @@ type spacesHarness struct {
 	live    *fakeLive
 	sel     *state.Selection
 	list    *SpacesList
-	board   *Board
 	host    *fakeHost
 	tt      *ui.Tester
 	hidden  bool
@@ -125,15 +122,15 @@ type spacesHarness struct {
 
 func newSpaces(t *testing.T, live herdr.LiveHerdr) *spacesHarness {
 	t.Helper()
-	h := &spacesHarness{t: t, live: &fakeLive{live: live}, sel: state.NewSelection(nil), board: NewDetachedBoard(),
+	h := &spacesHarness{t: t, live: &fakeLive{live: live}, sel: state.NewSelection(nil),
 		host: &fakeHost{}, clock: time.Unix(1_000_000, 0)}
-	h.list = h.makeList(h.board)
+	h.list = h.makeList()
 	h.tt = ui.NewTester(h.list.View, theme.SidebarWidth, theme.WindowHeight)
 	return h
 }
 
-func (h *spacesHarness) makeList(b *Board) *SpacesList {
-	l := NewSpacesList(h.live, b, h.host, h.sel, nil, func() bool { return !h.hidden }, nil)
+func (h *spacesHarness) makeList() *SpacesList {
+	l := NewSpacesList(h.live, h.host, h.sel, nil, func() bool { return !h.hidden }, nil)
 	l.start = func(f func()) { f() }
 	l.now = func() time.Time { return h.clock }
 	l.afterFunc = h.afterFunc
@@ -570,7 +567,7 @@ func TestAScanLandsThroughThePostFunc(t *testing.T) {
 	wt, _ := oneWorktree(t, base)
 	live := &fakeLive{live: spacesOf(spTree(spPane("w1:p1", wt, nil)))}
 	var started, posted []func()
-	l := NewSpacesList(live, nil, nil, state.NewSelection(nil), nil, nil, func(f func()) { posted = append(posted, f) })
+	l := NewSpacesList(live, nil, state.NewSelection(nil), nil, nil, func(f func()) { posted = append(posted, f) })
 	l.start = func(f func()) { started = append(started, f) }
 	l.Sync()
 	if len(l.Groups()) != 0 || len(started) != 1 {
@@ -591,7 +588,7 @@ func TestAScanThatLostTheTreeIsDropped(t *testing.T) {
 	wt, _ := oneWorktree(t, base)
 	live := &fakeLive{live: spacesOf(spTree(spPane("w1:p1", wt, nil)))}
 	var started []func()
-	l := NewSpacesList(live, nil, nil, state.NewSelection(nil), nil, nil, nil)
+	l := NewSpacesList(live, nil, state.NewSelection(nil), nil, nil, nil)
 	l.start = func(f func()) { started = append(started, f) }
 	l.Sync()
 	live.setLive(notRunningLive())
@@ -609,7 +606,7 @@ func TestOnlyTheNewestScanLands(t *testing.T) {
 	repo := filepath.Join(base, "repo")
 	live := &fakeLive{live: spacesOf(spTree(spPane("w1:p1", wt, nil)))}
 	var started []func()
-	l := NewSpacesList(live, nil, nil, state.NewSelection(nil), nil, nil, nil)
+	l := NewSpacesList(live, nil, state.NewSelection(nil), nil, nil, nil)
 	l.start = func(f func()) { started = append(started, f) }
 	l.Sync()
 	live.setLive(spacesOf(spTree(spPane("w1:p1", wt, nil), spPane("w1:p2", repo, nil))))
@@ -624,7 +621,7 @@ func TestOnlyTheNewestScanLands(t *testing.T) {
 func TestTheScanFuncGetsTheCwdsInTreeOrder(t *testing.T) {
 	live := &fakeLive{live: spacesOf(spTree(spPane("w1:p1", "/x/b", nil), spPane("w1:p2", "/x/a", nil), spPane("w1:p3", "/x/b", nil)))}
 	var got []string
-	l := NewSpacesList(live, nil, nil, nil, nil, nil, nil)
+	l := NewSpacesList(live, nil, nil, nil, nil, nil)
 	l.scanFn = func(cwds []string) git.Scan { got = cwds; return git.Scan{} }
 	l.start = func(f func()) { f() }
 	l.Sync()
@@ -886,92 +883,6 @@ func TestASelectedRowKeepsItsCardWhenTheRowsAreRebuilt(t *testing.T) {
 	}
 }
 
-// ---- Board ----
-
-func rowJSON(who string) string {
-	return `[{"key": "k", "label": "#640", "pane_id": "w1:p2", "who": ` + who + `}]`
-}
-
-func (h *spacesHarness) putBoard(rows string) SpacesChange {
-	h.t.Helper()
-	putBoard(h.t, h.board, boardJSON("[]", rows))
-	change := h.list.Sync()
-	h.tt.Frame()
-	return change
-}
-
-// Port of the_board_sets_the_second_line_and_badge.
-func TestTheBoardSetsTheSecondLineAndBadge(t *testing.T) {
-	h, _, _ := heldWorktree(t)
-	h.putBoard(rowJSON(`{"text": "b-1151 5m", "kind": "text"}`))
-	row := h.rowOf(0, 0)
-	if row.Hold == nil || *row.Hold != "b-1151 5m" {
-		t.Errorf("hold %v", row.Hold)
-	}
-	if row.Badge == nil || *row.Badge != (spaces.Badge{Kind: spaces.BadgePR, PR: 640}) {
-		t.Errorf("badge %+v", row.Badge)
-	}
-	if !h.tt.HasText("#640") || !h.tt.HasText("b-1151 5m") {
-		t.Errorf("texts %q", h.tt.Texts())
-	}
-	if h.has(LabelHoldYou) {
-		t.Error("a text who is not the you style")
-	}
-}
-
-// Port of a_you_line_draws_the_you_chip.
-func TestAYouLineDrawsTheYouChip(t *testing.T) {
-	h, _, _ := heldWorktree(t)
-	h.putBoard(rowJSON(`{"text": "your test", "kind": "you"}`))
-	if !h.tt.HasText("your test") || !h.has(LabelHoldYou) {
-		t.Errorf("the you chip is missing; texts %q", h.tt.Texts())
-	}
-}
-
-// Port of without_a_board_the_row_keeps_the_herdr_fallback.
-func TestWithoutABoardTheRowKeepsTheHerdrFallback(t *testing.T) {
-	h, _, _ := heldWorktree(t)
-	row := h.rowOf(0, 0)
-	if row.Hold == nil || *row.Hold != "a done" || row.Badge != nil {
-		t.Errorf("row %+v", row)
-	}
-	if h.has(LabelBadge) || h.has(LabelHoldYou) {
-		t.Error("a badge or you chip shows without a board")
-	}
-	bare := h.makeList(nil)
-	if r := bare.Groups()[0].Rows[0]; r.Hold == nil || *r.Hold != "a done" {
-		t.Errorf("a list with no board shows %+v", r)
-	}
-}
-
-// Port of a_board_that_drops_the_pane_restores_the_fallback.
-func TestABoardThatDropsThePaneRestoresTheFallback(t *testing.T) {
-	h, _, _ := heldWorktree(t)
-	h.putBoard(rowJSON(`{"text": "your test", "kind": "you"}`))
-	if !h.has(LabelHoldYou) {
-		t.Fatal("the you chip is missing")
-	}
-	h.putBoard("[]")
-	row := h.rowOf(0, 0)
-	if row.Hold == nil || *row.Hold != "a done" || row.Badge != nil {
-		t.Errorf("row %+v", row)
-	}
-	if h.has(LabelHoldYou) {
-		t.Error("the you chip stayed")
-	}
-}
-
-// Port of a_board_change_redraws_only_the_row_it_changes.
-func TestABoardChangeRedrawsOnlyTheRowItChanges(t *testing.T) {
-	base := canonicalTmp(t)
-	wt1, wt2 := twoWorktrees(t, base)
-	h := newSpaces(t, spacesOf(spTree(spPane("w1:p2", wt1, st(herdr.StateDone)), spPane("w1:p3", wt2, st(herdr.StateDone)))))
-	change := h.putBoard(rowJSON(`{"text": "b-1151 5m", "kind": "text"}`))
-	if change.Rebuilt || !reflect.DeepEqual(change.Rows, []RowRef{{0, 0}}) {
-		t.Errorf("change %+v, want the marked row only", change)
-	}
-}
-
 // ---- Not in Rust: labels, activation and the wiring ----
 
 func TestWorktreeRowLabelHasItsParts(t *testing.T) {
@@ -999,7 +910,7 @@ func TestBadgeTextIsThePRNumberOrTheOwnersValue(t *testing.T) {
 
 func TestActivateGivesTheWorktreeFocusTheStatusMessage(t *testing.T) {
 	status := state.NewStatusMessage(nil)
-	l := NewSpacesList(nil, nil, nil, state.NewSelection(nil), status, nil, nil)
+	l := NewSpacesList(nil, nil, state.NewSelection(nil), status, nil, nil)
 	l.focus = func(_ string, report func(string)) { report("herdr is not running") }
 	pane := "p1"
 	l.Activate(spaces.WorktreeRow{Root: "/x", FocusPane: &pane})
@@ -1010,7 +921,7 @@ func TestActivateGivesTheWorktreeFocusTheStatusMessage(t *testing.T) {
 
 func TestAnUnheldRowIsSelectedAndFocusesNothing(t *testing.T) {
 	sel := state.NewSelection(nil)
-	l := NewSpacesList(nil, nil, nil, sel, nil, nil, nil)
+	l := NewSpacesList(nil, nil, sel, nil, nil, nil)
 	l.focus = func(id string, _ func(string)) { t.Errorf("focused %q", id) }
 	l.Activate(spaces.WorktreeRow{Root: "/x"})
 	if got, ok := sel.Current(); !ok || got != worktreeSel("/x") {
@@ -1249,20 +1160,4 @@ func TestALongRepoAndWorktreeNameIsCutWithAnEllipsis(t *testing.T) {
 			}
 		}
 	}
-}
-
-// putBoard puts the v1 board json in b as a finished read would.
-func putBoard(t *testing.T, b *Board, json string) {
-	t.Helper()
-	snap, err := board.Parse([]byte(json))
-	if err != nil {
-		t.Fatal(err)
-	}
-	b.mu.Lock()
-	b.snap = snap
-	b.mu.Unlock()
-}
-
-func boardJSON(agents, rows string) string {
-	return fmt.Sprintf(`{"version": 1, "session": "s", "rev": 1, "agents": %s, "rows": %s}`, agents, rows)
 }
