@@ -1,0 +1,5 @@
+{
+  "name": "contr",
+  "description": "Worker agents and the coordinator playbook for contr: builder, planner and reviewer, started with contr agents.",
+  "version": "0.1.0"
+}

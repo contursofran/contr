@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 
 	"github.com/contursofran/contr/internal/hc"
@@ -61,15 +62,22 @@ type Profile struct {
 	Argv []string `json:"argv"`
 }
 
-// Config maps profile names to profiles.
+// Config maps profile names to profiles. Kit, when set, is the folder of
+// contr's Claude Code plugin (the repository's kit folder): a claude profile
+// whose name has an agent definition there starts as that agent.
 type Config struct {
 	Profiles map[string]Profile `json:"profiles"`
+	Kit      string             `json:"kit,omitempty"`
 }
+
+// EnvCoordinator holds the address of the terminal that started a worker, so
+// the worker can report with `hc send "$CONTR_COORDINATOR" …`.
+const EnvCoordinator = "CONTR_COORDINATOR"
 
 // DefaultConfig holds the owner's standard profiles.
 func DefaultConfig() Config {
 	claude := func(model, effort string) Profile {
-		return Profile{Argv: []string{"claude", "--model", model, "--effort", effort}}
+		return Profile{Argv: []string{"claude", "--model", model, "--effort", effort, "--permission-mode", "auto"}}
 	}
 	return Config{Profiles: map[string]Profile{
 		"builder":  claude("sonnet", "medium"),
@@ -93,6 +101,9 @@ func LoadConfig(path string) (Config, error) {
 	var file Config
 	if err := json.Unmarshal(data, &file); err != nil {
 		return cfg, fmt.Errorf("agents: %s: %w", path, err)
+	}
+	if file.Kit != "" {
+		cfg.Kit = file.Kit
 	}
 	for name, p := range file.Profiles {
 		if len(p.Argv) == 0 {
@@ -213,7 +224,7 @@ func (m *Manager) Spawn(ctx context.Context, s Spec) (Worker, error) {
 	if s.Issue != "" {
 		labels[LabelIssue] = s.Issue
 	}
-	argv := append([]string(nil), p.Argv...)
+	argv := m.agentArgv(s.Profile, p.Argv)
 	if s.Task != "" {
 		argv = append(argv, s.Task)
 	}
@@ -223,6 +234,7 @@ func (m *Manager) Spawn(ctx context.Context, s Spec) (Worker, error) {
 	}
 	if s.Parent != "" {
 		params["parent"] = s.Parent
+		params["env"] = map[string]string{EnvCoordinator: s.Parent}
 	} else {
 		params["no_parent"] = true
 	}
@@ -231,6 +243,20 @@ func (m *Manager) Spawn(ctx context.Context, s Spec) (Worker, error) {
 		return Worker{}, err
 	}
 	return decodeWorker(raw)
+}
+
+// agentArgv returns the profile's command. A claude command for a profile
+// that has an agent definition in the kit gets `--plugin-dir <kit> --agent
+// contr:<profile>` after the program name.
+func (m *Manager) agentArgv(profile string, argv []string) []string {
+	out := append([]string(nil), argv...)
+	if m.cfg.Kit == "" || len(out) == 0 || filepath.Base(out[0]) != "claude" {
+		return out
+	}
+	if _, err := os.Stat(filepath.Join(m.cfg.Kit, "agents", profile+".md")); err != nil {
+		return out
+	}
+	return append([]string{out[0], "--plugin-dir", m.cfg.Kit, "--agent", "contr:" + profile}, out[1:]...)
 }
 
 // List returns the workers, sorted by name. With all, finished ones too.

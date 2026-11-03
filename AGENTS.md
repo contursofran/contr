@@ -37,6 +37,7 @@ in. It is written in Go with MyGo's native UI.
 | `internal/hc` | herdr-core's JSON-RPC API over `hc connect`: calls and event subscriptions |
 | `internal/agents` | worker agents in hc terminals: profiles, spawn, list, send, interrupt, stop, read, watch |
 | `assets` | fonts, status icons, app icon |
+| `kit` | Claude Code plugin for agent work: agent definitions and the coordinator playbook |
 | `scripts` | `check.sh`, `bundle.sh`, `install.sh`, `dev-herdr.sh` |
 
 Add packages under `internal/` when a change needs them.
@@ -115,8 +116,9 @@ Work is tracked in GitHub issues and pull requests.
   rewrite commits that a reviewer has seen.
 - Commit with clear messages. No `Co-Authored-By`, AI attribution or
   generated-by lines. Temporary files go in `tmp/`, which git ignores.
-- Squash merge is the default. A reviewer approves the exact head. Do not
-  merge your own PR.
+- Squash merge is the default. A reviewer approves the exact head. The
+  coordinator merges that head once CI passes on it (owner, 2026-11-03).
+  A builder does not merge its own PR.
 - When your change makes a doc wrong (`docs/DECISIONS.md`, `docs/DESIGN.md`),
   update it in the same PR. A new decision gets a new row in
   `docs/DECISIONS.md`. Do not delete old rows; mark them "Replaced by Dn".

@@ -36,6 +36,8 @@ part of the task.
 Environment:
   CONTR_AGENTS_CONFIG   profiles file (default: the user config folder, contr/agents.json)
   CONTR_HC              the hc program (default: hc)
+  CONTR_KIT             contr's Claude Code plugin folder (the repository's kit);
+                        claude profiles with an agent there start as that agent
   HC_TERMINAL_ID        set inside hc: spawn makes that terminal the parent
 `
 
@@ -128,6 +130,9 @@ func runAgents(args []string, stdout, stderr io.Writer, dial func(context.Contex
 		if cfg, err = agents.LoadConfig(configPath(getenv)); err != nil {
 			fmt.Fprintf(stderr, "contr agents: %v\n", err)
 			return 1
+		}
+		if kit := getenv("CONTR_KIT"); kit != "" {
+			cfg.Kit = kit
 		}
 	}
 	// Ctrl-C or SIGTERM ends a watch cleanly, so the connection closes.
