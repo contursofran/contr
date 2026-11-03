@@ -10,6 +10,11 @@ const (
 	KindWorktree SelectedKind = iota + 1
 	// KindAgent is an agent row. Its ID is the herdr pane id.
 	KindAgent
+	// KindOrchestrator is an orchestrator row. Its ID is the hc terminal
+	// address.
+	KindOrchestrator
+	// KindWorker is a worker row. Its ID is the hc terminal address.
+	KindWorker
 )
 
 // Selected is the selected sidebar row.

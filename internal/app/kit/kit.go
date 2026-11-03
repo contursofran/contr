@@ -31,6 +31,16 @@ type RowOpts struct {
 	Added, Removed int
 	Selected       bool
 	OnClick        func()
+	// Lead draws a leading part, such as a status icon, before Mark.
+	Lead func()
+}
+
+// HeightOf is the height Row gives to a row with these options.
+func HeightOf(o RowOpts) float32 {
+	if o.Sub != "" {
+		return 2*theme.LineHeight + 6
+	}
+	return RowHeight
 }
 
 // Row builds a selectable list row, as the sidebar's rows look: a card
@@ -41,15 +51,12 @@ func Row(c *ui.Context, o RowOpts) {
 	if label == "" {
 		label = o.Text
 	}
-	height := float32(RowHeight)
-	if o.Sub != "" {
-		height = 2*theme.LineHeight + 6
-	}
+	height := HeightOf(o)
 	border := uint32(theme.BgWindow)
 	if o.Selected {
 		border = theme.CardBorder
 	}
-	row := ui.ButtonBase(c).Label(label).Height(height).Shrink(0).FillWidth().
+	row := ui.ButtonBase(c).Label(label).Height(height).Shrink(0).
 		AlignItems(ui.Center).Gap(theme.SpacesGap).PaddingX(theme.SidebarPadX-theme.CardInsetX-1).
 		MarginX(theme.CardInsetX).Radius(theme.CardRadius).Border(1, theme.Color(border)).
 		Cursor(ui.CursorPointer).Selected(o.Selected)
@@ -60,6 +67,9 @@ func Row(c *ui.Context, o RowOpts) {
 		row = row.Background(theme.Color(theme.BgCard))
 	}
 	row.Children(func() {
+		if o.Lead != nil {
+			o.Lead()
+		}
 		if o.Mark != "" {
 			color := o.MarkColor
 			if color == 0 {

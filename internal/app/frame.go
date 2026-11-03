@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/terminal"
 	"github.com/contursofran/contr/internal/app/theme"
@@ -72,10 +73,6 @@ type Frame struct {
 	// Send takes the title bar's herdr commands. [Frame.Attach] sets it. When it is nil, the
 	// commands are dropped.
 	Send func(TabCommand)
-	// StartAgents starts the agent state for the needs-you row. It gets the
-	// function that redraws the window and returns the state and its stop
-	// function. [Frame.Attach] calls it when it is set (cmd/contr sets it).
-	StartAgents func(notify func()) (AgentSource, func())
 	// Needs is the needs-you row. [Frame.Attach] makes it and puts its view
 	// in Slots.Needs.
 	Needs *NeedsRow
@@ -88,6 +85,10 @@ type Frame struct {
 	// AgentsList is the agents section. [Frame.Attach] makes it and puts
 	// its view in Slots.Agents.
 	AgentsList *AgentsList
+	// StartAgents follows the agents. [Frame.Attach] calls it once, with a
+	// notify function that is safe from any goroutine, and uses the snapshot
+	// function and the stop function it returns. Nil means no agents.
+	StartAgents func(notify func()) (snap func() agentstate.Snapshot, stop func())
 	// Panel is the board panel. [Frame.Attach] makes it and puts its view in
 	// Slots.Panel.
 	Panel *BoardPanel
@@ -339,7 +340,12 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	f.Outbox = NewBoardOutbox(dir, hasDir, w.Invalidate, f.Status.Show)
 	h := NewHerdr(ctx, target, w.IsVisible(), func() { w.Update(f.syncHerdr) })
 	f.Herdr = h
-	f.AgentsList = NewAgentsList(h, f.Board, f.Selection, f.Status)
+	var agentSnap func() agentstate.Snapshot
+	stopAgents := func() {}
+	if f.StartAgents != nil {
+		agentSnap, stopAgents = f.StartAgents(func() { w.Update(f.syncAgents) })
+	}
+	f.AgentsList = NewAgentsList(agentSnap, f.Selection)
 	f.Slots.Agents = f.AgentsList.View
 	f.Board.Sync(h.Live().Tree)
 	f.Panel = NewBoardPanel(PanelDeps{
@@ -360,13 +366,8 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	}
 	f.Slots.Spaces = f.SpacesList.View
 	f.SpacesList.Sync()
-	stopAgents := func() {}
-	if f.StartAgents != nil {
-		var src AgentSource
-		src, stopAgents = f.StartAgents(w.Invalidate)
-		f.Needs = &NeedsRow{Source: src}
-		f.Slots.Needs = f.Needs.View
-	}
+	f.Needs = &NeedsRow{Snapshot: agentSnap}
+	f.Slots.Needs = f.Needs.View
 	if f.Usage == nil {
 		f.Usage = usage.NewFileSampler(w.Invalidate)
 	}
@@ -386,10 +387,10 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	return func() {
 		unwatch()
 		term()
-		stopAgents()
 		// Held actions are written now, so quit loses none.
 		f.Outbox.ReleaseForQuit()
 		f.Outbox.Wait()
+		stopAgents()
 		h.Close()
 		f.SpacesList.Close()
 		f.Host.Close()

@@ -23,14 +23,6 @@ const (
 	LabelNeedsClearDone = "clear done"
 )
 
-// AgentSource is the part of agentstate.Model that the views read and act on.
-type AgentSource interface {
-	Snapshot() agentstate.Snapshot
-	Answer(id, answer string) error
-	Done(id string) error
-	ClearDone()
-}
-
 // NeedKind tells what a [NeedTab] is.
 type NeedKind uint8
 
@@ -54,9 +46,14 @@ type NeedTab struct {
 // Label is the accessible name: "{key} {title}".
 func (t NeedTab) Label() string { return t.Key + " " + t.Title }
 
-// NeedsRow is the row's state. Build it with its fields set; Scope may be nil.
+// NeedsRow is the row's state. Build it with its fields set; Scope,
+// ClearDone and Open may be nil.
 type NeedsRow struct {
-	Source AgentSource
+	// Snapshot reads the agent state; nil means nothing waits.
+	Snapshot func() agentstate.Snapshot
+	// ClearDone forgets the resolved items. The "clear done" control shows
+	// only when it is set.
+	ClearDone func()
 	// Scope returns the project to show, or "" for all projects.
 	Scope func() string
 	// Open runs when a tab is clicked. S5 shows the answer card here.
@@ -68,10 +65,10 @@ type NeedsRow struct {
 // Tabs returns the tabs for the scope: blocked workers, then questions, then
 // to-dos.
 func (n *NeedsRow) Tabs() []NeedTab {
-	if n.Source == nil {
+	if n.Snapshot == nil {
 		return nil
 	}
-	snap := n.Source.Snapshot()
+	snap := n.Snapshot()
 	project := ""
 	if n.Scope != nil {
 		project = n.Scope()
@@ -126,9 +123,9 @@ func (n *NeedsRow) View(c *ui.Context) {
 				n.tab(c, t)
 			}
 			ui.Box(c).Grow(1)
-			if anyDone {
+			if anyDone && n.ClearDone != nil {
 				ui.ButtonBase(c).Label(LabelNeedsClearDone).Shrink(0).Cursor(ui.CursorPointer).
-					OnClick(n.Source.ClearDone).Children(func() {
+					OnClick(n.ClearDone).Children(func() {
 					ui.Text(c, LabelNeedsClearDone).TextColor(theme.Color(theme.TextDim)).NoWrap()
 				})
 			}
