@@ -20,3 +20,7 @@ Some code is adapted from Herdr UI (https://github.com/penso/herdr-gpui),
 Copyright 2026 Fabien Penso, licensed under the Apache License, Version 2.0.
 Each file with adapted code has a header comment that says so and names the
 changes.
+
+The terminal emulator in internal/term/vt wraps charmbracelet/x/vt (MIT
+License, Copyright 2024 Charmbracelet, Inc.) and its dependencies
+(ultraviolet, x/ansi, MIT).
