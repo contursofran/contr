@@ -4,9 +4,12 @@
 package vt
 
 import (
+	"bytes"
+	"encoding/base64"
 	"image/color"
 	"io"
 	"sync"
+	"unicode/utf8"
 
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
@@ -251,4 +254,34 @@ func packColor(c color.Color) uint32 {
 	}
 	r, g, b, _ := c.RGBA()
 	return 2<<24 | (r>>8)<<16 | (g>>8)<<8 | b>>8
+}
+
+// MaxClipboardBytes is the largest text from OSC 52 that OnClipboard passes on.
+const MaxClipboardBytes = 2 * 1024 * 1024
+
+// OnClipboard sets fn to receive the text that a program writes with OSC 52
+// (`ESC ] 52 ; <target> ; <base64> ST`). A payload that is not base64, not
+// UTF-8 or past MaxClipboardBytes is dropped. A query (`?`) is dropped too:
+// contr never reads the clipboard for a program. fn runs during Write, so it
+// must not call the terminal. Call OnClipboard before the first Write.
+func (t *Terminal) OnClipboard(fn func(text string)) {
+	t.e.RegisterOscHandler(52, func(data []byte) bool {
+		parts := bytes.SplitN(data, []byte{';'}, 3)
+		if len(parts) != 3 || fn == nil {
+			return true
+		}
+		payload := parts[2]
+		if len(payload) > (MaxClipboardBytes+2)/3*4+4 {
+			return true
+		}
+		b, err := base64.StdEncoding.DecodeString(string(payload))
+		if err != nil {
+			b, err = base64.RawStdEncoding.DecodeString(string(payload))
+		}
+		if err != nil || len(b) > MaxClipboardBytes || !utf8.Valid(b) {
+			return true
+		}
+		fn(string(b))
+		return true
+	})
 }
