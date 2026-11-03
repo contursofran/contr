@@ -15,9 +15,10 @@ import (
 
 // LabelBoardRoot and LabelBoardEmpty name the panel and its empty line.
 const (
-	LabelBoardRoot  = "board root"
-	LabelBoardEmpty = "board empty"
-	emptyNoAgents   = "no agents"
+	LabelBoardRoot    = "board root"
+	LabelBoardEmpty   = "board empty"
+	LabelBoardProblem = "board problem"
+	emptyNoAgents     = "no agents"
 )
 
 // BoardPanel is the board. Build it with its fields set; all may be nil.
@@ -55,6 +56,9 @@ func (p *BoardPanel) View(c *ui.Context) {
 			return
 		}
 		WorkSection(c, p.Rows(), p.Select)
+		if prob := p.Snapshot().Problem; prob != "" {
+			TextLine(c, LabelBoardProblem, prob, theme.TextDim)
+		}
 		var tabs []NeedTab
 		if p.Needs != nil {
 			tabs = p.Needs()

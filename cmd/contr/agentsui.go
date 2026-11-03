@@ -27,6 +27,7 @@ func terminalSource(getenv func(string) string) func(address string) terminal.HC
 // when it fails, the snapshot is empty and the actions return errNoAgents.
 type lazySource struct {
 	model atomic.Pointer[agentstate.Model]
+	fail  atomic.Pointer[string] // why the connection failed
 }
 
 var errNoAgents = errors.New("agents not connected")
@@ -34,6 +35,9 @@ var errNoAgents = errors.New("agents not connected")
 func (l *lazySource) Snapshot() agentstate.Snapshot {
 	if m := l.model.Load(); m != nil {
 		return m.Snapshot()
+	}
+	if f := l.fail.Load(); f != nil {
+		return agentstate.Snapshot{Problem: *f}
 	}
 	return agentstate.Snapshot{}
 }
@@ -97,6 +101,9 @@ func startAgents(getenv func(string) string) func(notify func()) (app.AgentSourc
 			m, closeCore, err := openAgentState(ctx, getenv, notify)
 			if err != nil {
 				log.Printf("contr: agents: %v", err)
+				msg := "agents: " + err.Error()
+				src.fail.Store(&msg)
+				notify()
 				return
 			}
 			defer closeCore()

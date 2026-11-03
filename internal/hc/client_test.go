@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -294,4 +296,96 @@ func TestCloseTwice(t *testing.T) {
 	if closes != 1 {
 		t.Errorf("pipe closed %d times, want 1", closes)
 	}
+}
+
+func fakeHC(t *testing.T, dir string) string {
+	t.Helper()
+	p := filepath.Join(dir, "hc")
+	if err := os.WriteFile(p, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func TestFindExplicitPathWins(t *testing.T) {
+	if got, err := Find("/x/hc", t.TempDir(), nil); err != nil || got != "/x/hc" {
+		t.Errorf("got %q, %v", got, err)
+	}
+}
+
+func TestFindOnPath(t *testing.T) {
+	dir := t.TempDir()
+	want := fakeHC(t, dir)
+	t.Setenv("PATH", dir)
+	got, err := Find("", t.TempDir(), []string{})
+	if err != nil || got != want {
+		t.Errorf("got %q, %v; want %q", got, err, want)
+	}
+}
+
+func TestFindInFallbackDir(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	home := t.TempDir()
+	bin := filepath.Join(home, ".local", "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	want := fakeHC(t, bin)
+	got, err := Find("", home, []string{"/no/such/dir", bin})
+	if err != nil || got != want {
+		t.Errorf("got %q, %v; want %q", got, err, want)
+	}
+}
+
+func TestFindDefaultDirsIncludeLocalBin(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	home := t.TempDir()
+	bin := filepath.Join(home, ".local", "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	want := fakeHC(t, bin)
+	if got, err := Find("", home, nil); err != nil || got != want {
+		t.Errorf("got %q, %v; want %q", got, err, want)
+	}
+}
+
+func TestFindNotFound(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	if _, err := Find("", t.TempDir(), []string{t.TempDir()}); !errors.Is(err, ErrNotFound) {
+		t.Errorf("err %v, want ErrNotFound", err)
+	}
+}
+
+func TestFindSkipsANonExecutable(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "hc"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Find("", t.TempDir(), []string{dir}); !errors.Is(err, ErrNotFound) {
+		t.Errorf("err %v, want ErrNotFound", err)
+	}
+}
+
+// Building a Dialer must not look for hc: that work runs on the UI thread.
+// The lookup happens when the Dialer runs, so an hc that appears on PATH
+// after Command is found, and a missing hc is an error of the Dialer.
+func TestCommandLooksUpHcOnlyWhenDialing(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	t.Setenv("PATH", dir)
+	dial := Command("", nil) // hc is not there yet
+	if _, err := dial(context.Background()); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("dial without hc = %v, want ErrNotFound", err)
+	}
+	script := filepath.Join(dir, "hc")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nexec cat\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	p, err := dial(context.Background())
+	if err != nil {
+		t.Fatalf("dial after hc appeared: %v", err)
+	}
+	_ = p.Close()
 }
