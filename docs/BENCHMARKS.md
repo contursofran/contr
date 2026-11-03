@@ -228,27 +228,76 @@ MyGo's automation plugin.
 
 The earlier MyGo, Gio and GPUI programs are not in this repository.
 
+### Whole app on the agent state (#197)
+
+Measured on 2026-11-03, same machine, one run, on the branch of #197 (after
+#194: the terminal view is an hc terminal). The earlier bench drove a board
+file, which contr no longer reads. It now drives the agent state with a
+scratch hc core (its own session and folders, never the owner's core):
+
+- `lead`: an orchestrator that sleeps.
+- `flag`: a worker whose program reports its status with OSC 7501. The test
+  types `idle` or `working` into it. "Working" means this worker's icon is
+  the spinning arc.
+- `term`: a worker with a shell. The test selects it, so the terminal view
+  shows it, and types the busy and flood loops into it.
+
+Phases and their names are the same, with one change: "board updates shown"
+is now "agent updates shown". It changes a label of `flag` through hc once a
+second, which gives an hc event, a new snapshot and a window update. The
+window must be visible during a shown phase; the test fails the phase if
+another window covers it. The terminal pane is 720×834 points.
+
+| Phase | Frames (a second) | CPU s | CPU min / med / max | Footprint max | Load avg |
+|---|---|---|---|---|---|
+| idle shown | 10 (0.6) | 0.07 | 0.0 / 0.0 / 2.6 % | 208 MB | 2.55 2.81 2.87 |
+| idle shown, one item working | 475 (30.1) | 0.72 | 2.5 / 3.9 / 7.8 % | 211 MB | 2.76 2.84 2.88 |
+| busy pane shown | 638 (40.7) | 1.92 | 7.4 / 9.6 / 17.4 % | 197 MB | 3.24 2.98 2.93 |
+| flood pane shown | 949 (60.0) | 23.68 | 121.1 / 152.7 / 166.6 % | 326 MB | 3.53 3.06 2.96 |
+| agent updates shown | 41 (2.6) | 0.18 | 0.1 / 0.6 / 2.6 % | 320 MB | 5.91 3.66 3.18 |
+| idle hidden | 0 (0.0) | 0.01 | 0.0 / 0.0 / 0.1 % | 242 MB | 4.80 3.55 3.15 |
+| busy pane hidden | 0 (0.0) | 0.27 | 0.7 / 1.5 / 3.3 % | 237 MB | 4.57 3.60 3.18 |
+
+Targets (a miss is reported only): idle shown CPU met, footprint 208 MB
+against the 150 MB flag; busy pane shown met; flood pane shown **not met**
+(CPU 152.7 % against 51 %, footprint 326 MB against 230 MB); agent updates
+shown met; idle hidden met; busy pane hidden met (1.5 % against 2 %).
+
+The flood phase is much heavier than in M13 (10.7 %). In M13 the pane came
+from the herdr surface; now it is an hc terminal on the framed stream, and a
+flood of lines is not coalesced the same way. This is likely, not profiled.
+The footprint does not fall back after the flood (237 MB hidden, against
+80 MB in M13). It is a finding for its own issue, not a result of this
+change. The flood pane regression is tracked in #204. The numbers are not comparable with M13 for the terminal phases
+(another source) and not for the working phase (30 frames a second since
+M13.4). Compare later runs of this test with this table, by frames and CPU
+seconds.
+
 ## How to run the app test
 
-The app test (M13) measures the whole app in seven phases: idle shown, idle
-shown with one item working (M13.6), busy pane shown, flood pane shown, board updates shown, idle hidden, busy pane
-hidden. Each phase has a 6 s warm-up and 15 samples, one per second. It
-runs only against the dev herdr, with a scratch repo and a scratch board.
+The app test measures the whole app in seven phases: idle shown, idle shown
+with one item working, busy pane shown, flood pane shown, agent updates
+shown, idle hidden, busy pane hidden. Each phase has a 6 s warm-up and 15
+samples, one per second. It needs `hc` on the PATH. It runs only against the
+dev herdr (the app attaches to it) and a scratch hc core that the test starts
+and stops, with a scratch folder under `/tmp`. It never touches the owner's
+herdr or core. Keep `TMPDIR` short: the dev herdr socket path must stay
+under 103 bytes.
 
     eval "$(scripts/dev-herdr.sh)"
-    go test -tags e2e,bench -run AppBench -v -timeout 15m ./cmd/contr
+    go test -tags e2e,bench -run AppBench -v -count=1 -timeout 15m ./cmd/contr
     scripts/dev-herdr.sh stop
 
 One heavy job at a time: run nothing else (e2e, app, build) at the same
-time. The test writes `tmp/bench/start.png`, `tmp/bench/busy.png`,
-`tmp/bench/result.md`, `tmp/bench/result.json` and the app's log `tmp/bench/app.log`, and lists
-each target as met or MISS. The test sets `MYGO_FRAME_STATS=all` for the app, so the log has one line
-a frame, and the test marks where the samples of each phase start and end.
-Use `-count=1`. A miss is
+time, and keep other windows off the app's window (a covered window stops
+drawing, and the test fails the phase). The test writes `tmp/bench/start.png`,
+`tmp/bench/busy.png`, `tmp/bench/result.md`, `tmp/bench/result.json` and the
+app's log `tmp/bench/app.log`, and lists each target as met or MISS. The test
+sets `MYGO_FRAME_STATS=all` for the app, so the log has one line a frame, and
+the test marks where the samples of each phase start and end. A miss is
 reported only; it does not fail the run. The measured build has the
-automation plugin (`-tags e2e`); it only listens on a socket. The app pane
-is smaller than 200x60 cells, so the numbers are not the grid test load.
-The test logs the pane size in points, not cells. In phase 6 the loop also
-writes a counter file. herdr starts and stops it, because window input does
-not reach a hidden window. If the counter is too low, the test fails (the
-loop did not run, so the reading is not valid).
+automation plugin (`-tags e2e`); it only listens on a socket. The test logs
+the pane size in points, not cells. In the last phase `hc` starts and stops
+a loop that also writes a counter file, because window input does not reach a
+hidden window. If the counter is too low, the test fails (the loop did not
+run, so the reading is not valid).
