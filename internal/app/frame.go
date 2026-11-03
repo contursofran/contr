@@ -15,7 +15,9 @@ import (
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/board"
 	"github.com/contursofran/contr/internal/herdr"
+	"github.com/contursofran/contr/internal/herdr/endpoint"
 	"github.com/contursofran/contr/internal/host"
+	"github.com/contursofran/contr/internal/term"
 	"github.com/contursofran/contr/internal/usage"
 )
 
@@ -381,6 +383,7 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 func (f *Frame) attachTerminal(w Window) (stop func()) {
 	view := terminal.NewView(terminal.Options{
 		Enabled:    os.Getenv(terminal.SurfaceEnv) == "1",
+		Start:      startHerdrTerminal,
 		Post:       mygo.RunOnMain,
 		Invalidate: w.Invalidate,
 		FocusPane:  func(id string) { FocusInBackground(id, f.Status.Show) },
@@ -394,4 +397,11 @@ func (f *Frame) attachTerminal(w Window) (stop func()) {
 		offBlur()
 		view.Close()
 	}
+}
+
+// startHerdrTerminal is the terminal view's starter: the surface link to the
+// local herdr. It never fails (D19).
+func startHerdrTerminal(size term.GridSize, cell term.CellPx, notify func(term.LinkUpdate)) (terminal.Link, func(), error) {
+	l, stop, err := endpoint.SpawnTermLink(size, cell, notify)
+	return l, stop, err
 }

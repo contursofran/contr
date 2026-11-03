@@ -5,14 +5,14 @@ package terminal
 import (
 	"math"
 
-	"github.com/contursofran/contr/internal/herdr/endpoint"
+	"github.com/contursofran/contr/internal/term"
 )
 
 // PaneAt returns the pane whose inner rect holds the cell under the point
 // (x, y), or nil. Both are in pixels from the top-left corner of cell (0, 0),
 // so a negative value lies in the padding. A point on a pane's border, or in a
 // cell that no pane holds, gives nil. So does a point outside the surface.
-func PaneAt(s *endpoint.Surface, m Metrics, x, y float32) *endpoint.SurfacePane {
+func PaneAt(s *term.Screen, m Metrics, x, y float32) *term.Pane {
 	col := math.Floor(float64(x / m.CellW))
 	row := math.Floor(float64(y / m.CellH))
 	// A NaN or infinite point, or a zero cell size, fails these checks too.
@@ -28,7 +28,7 @@ func PaneAt(s *endpoint.Surface, m Metrics, x, y float32) *endpoint.SurfacePane 
 }
 
 // holds reports whether cell (col, row) lies inside r.
-func holds(r endpoint.Rect, col, row uint16) bool {
+func holds(r term.Rect, col, row uint16) bool {
 	c, rw := uint32(col), uint32(row)
 	return c >= uint32(r.X) && c < uint32(r.X)+uint32(r.Width) &&
 		rw >= uint32(r.Y) && rw < uint32(r.Y)+uint32(r.Height)

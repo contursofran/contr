@@ -8,7 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/theme"
-	"github.com/contursofran/contr/internal/herdr/endpoint"
+	"github.com/contursofran/contr/internal/term"
 )
 
 // Paints a surface: cell backgrounds, the selection tint, box glyphs as quads,
@@ -45,11 +45,11 @@ type Typing struct {
 // a row in place (a patch puts a new slice in the surface), so the same key
 // means the same cells. An empty row has no key and is never kept.
 type rowKey struct {
-	first *endpoint.Cell
+	first *term.Cell
 	n     int
 }
 
-func keyOf(row endpoint.Row) rowKey {
+func keyOf(row term.Row) rowKey {
 	if len(row) == 0 {
 		return rowKey{}
 	}
@@ -65,7 +65,7 @@ type rowEntry[L any] struct {
 // refreshRows brings cache to rows, one entry per row, and truncates it to the
 // row count. A row with the key of its cached entry keeps its lines. Any other
 // row is shaped by shapeRow.
-func refreshRows[L any](cache []rowEntry[L], rows []endpoint.Row, shapeRow func([]endpoint.Cell) []L) []rowEntry[L] {
+func refreshRows[L any](cache []rowEntry[L], rows []term.Row, shapeRow func([]term.Cell) []L) []rowEntry[L] {
 	if len(cache) > len(rows) {
 		clear(cache[len(rows):])
 		cache = cache[:len(rows)]
@@ -158,7 +158,7 @@ type Span struct {
 
 // quadGlyph returns the box or block glyph that a cell paints as quads, if
 // any. A wide tail or a hidden cell paints nothing.
-func quadGlyph(cell endpoint.Cell) (BoxGlyph, bool) {
+func quadGlyph(cell term.Cell) (BoxGlyph, bool) {
 	if cell.WideTail || cell.Attrs&Hidden != 0 {
 		return BoxGlyph{}, false
 	}
@@ -172,7 +172,7 @@ func quadGlyph(cell endpoint.Cell) (BoxGlyph, bool) {
 // textSpans returns the spans of a row, in column order. Wide glyph tails, hidden
 // cells and box glyphs make no span: box glyphs are drawn as quads. A span of
 // blanks makes none either, unless it is struck through.
-func textSpans(row []endpoint.Cell) []Span {
+func textSpans(row []term.Cell) []Span {
 	var out []Span
 	for col, cell := range row {
 		if cell.WideTail || cell.Attrs&Hidden != 0 {
@@ -214,7 +214,7 @@ type bgRun struct {
 
 // backgroundRuns returns the runs of one background color in a row. Cells with
 // the default background make no run.
-func backgroundRuns(row []endpoint.Cell) []bgRun {
+func backgroundRuns(row []term.Cell) []bgRun {
 	var runs []bgRun
 	for col, cell := range row {
 		_, color, ok := CellColors(cell)
@@ -235,7 +235,7 @@ func backgroundRuns(row []endpoint.Cell) []bgRun {
 
 // cursorCell returns the cell the cursor is in, clamped to the grid. herdr
 // may place it one past the last column.
-func cursorCell(c endpoint.Cursor, size endpoint.GridSize) (x, y uint16) {
+func cursorCell(c term.Cursor, size term.GridSize) (x, y uint16) {
 	return min(c.X, max(size.Cols, 1)-1), min(c.Y, max(size.Rows, 1)-1)
 }
 
@@ -271,7 +271,7 @@ func highlightRect(origin ui.Point, m Metrics, h Highlight, rows int) (ui.Rect, 
 // cells, tinted between the backgrounds and the glyphs. typing.Focused draws
 // the cursor solid; without it the cursor is an outline. The caller paints the
 // terminal background first.
-func Paint(p *ui.Painter, origin ui.Point, m Metrics, s *endpoint.Surface, highlights []Highlight, typing Typing, cache *Cache) {
+func Paint(p *ui.Painter, origin ui.Point, m Metrics, s *term.Screen, highlights []Highlight, typing Typing, cache *Cache) {
 	if cache.cellW != m.CellW || cache.scale != p.Scale() {
 		cache.Reset()
 		cache.cellW, cache.scale = m.CellW, p.Scale()
@@ -302,7 +302,7 @@ func Paint(p *ui.Painter, origin ui.Point, m Metrics, s *endpoint.Surface, highl
 		fm := terminalFont(Style{}).Metrics()
 		cache.ascent, cache.height = fm.Ascent, fm.Ascent+fm.Descent
 	}
-	cache.rows = refreshRows(cache.rows, s.Rows, func(row []endpoint.Cell) []line {
+	cache.rows = refreshRows(cache.rows, s.Rows, func(row []term.Cell) []line {
 		var out []line
 		for _, sp := range textSpans(row) {
 			g := cache.memo.get(shapeKey{sp.Text, sp.Style.Bold, sp.Style.Italic}, func() []ui.Glyph {
@@ -342,7 +342,7 @@ func Paint(p *ui.Painter, origin ui.Point, m Metrics, s *endpoint.Surface, highl
 // each in its own cell. Every edge is computed from the cell's row or column
 // index, so neighbouring cells share it exactly. Shades are translucent. The
 // quads paint before the text, which has no span for these cells.
-func paintQuadGlyphs(p *ui.Painter, origin ui.Point, m Metrics, s *endpoint.Surface, shown func(int) bool) {
+func paintQuadGlyphs(p *ui.Painter, origin ui.Point, m Metrics, s *term.Screen, shown func(int) bool) {
 	scale := p.Scale()
 	for y, row := range s.Rows {
 		if !shown(y) {
@@ -367,7 +367,7 @@ func paintQuadGlyphs(p *ui.Painter, origin ui.Point, m Metrics, s *endpoint.Surf
 // paintMarked paints the text the IME is composing, underlined, at the cursor
 // cell. Its background is the terminal's, so the glyphs under it do not show
 // through.
-func paintMarked(p *ui.Painter, origin ui.Point, m Metrics, c endpoint.Cursor, grid endpoint.GridSize, text string, cache *Cache) {
+func paintMarked(p *ui.Painter, origin ui.Point, m Metrics, c term.Cursor, grid term.GridSize, text string, cache *Cache) {
 	x, y := cursorCell(c, grid)
 	at := ui.Point{X: origin.X + float32(x)*m.CellW, Y: origin.Y + float32(y)*m.CellH}
 	glyphs := shape(text, Style{Fg: theme.Text}, m.CellW)
@@ -383,7 +383,7 @@ func paintMarked(p *ui.Painter, origin ui.Point, m Metrics, c endpoint.Cursor, g
 
 // paintUnderlines paints the underlines of s over its text, one run of cells
 // at a time.
-func paintUnderlines(p *ui.Painter, origin ui.Point, m Metrics, s *endpoint.Surface, shown func(int) bool) {
+func paintUnderlines(p *ui.Painter, origin ui.Point, m Metrics, s *term.Screen, shown func(int) bool) {
 	for y, row := range s.Rows {
 		if !shown(y) {
 			continue
@@ -428,7 +428,7 @@ func paintMark(p *ui.Painter, origin ui.Point, rowTop float32, mk mark, color ui
 	p.StrokePath(&path, 1, c)
 }
 
-func paintCursor(p *ui.Painter, origin ui.Point, m Metrics, c endpoint.Cursor, grid endpoint.GridSize, focused bool) {
+func paintCursor(p *ui.Painter, origin ui.Point, m Metrics, c term.Cursor, grid term.GridSize, focused bool) {
 	x, y := cursorCell(c, grid)
 	cell := ui.Rect{X: origin.X + float32(x)*m.CellW, Y: origin.Y + float32(y)*m.CellH, W: m.CellW, H: m.CellH}
 	color := rgbaColor(cursorRGBA)
@@ -478,7 +478,7 @@ func extent(glyphs []ui.Glyph) float32 {
 	return 0
 }
 
-func styleOf(cell endpoint.Cell) Style {
+func styleOf(cell term.Cell) Style {
 	fg, _, _ := CellColors(cell)
 	return Style{
 		Fg:     fg,

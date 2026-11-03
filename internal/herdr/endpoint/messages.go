@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+
+	"github.com/contursofran/contr/internal/term"
 )
 
 // Names and limits of endpoint generation 1.
@@ -29,9 +31,9 @@ const MaxFrame = 32 * 1024 * 1024
 // their product at most MaxGridCells, and a cell side at most MaxCellPx
 // device pixels.
 const (
-	MaxGridSide  = 4096
-	MaxGridCells = 1_000_000
-	MaxCellPx    = 4096
+	MaxGridSide  = term.MaxGridSide
+	MaxGridCells = term.MaxGridCells
+	MaxCellPx    = term.MaxCellPx
 )
 
 // TestedHerdrVersions lists the herdr versions whose wire layout was checked
@@ -58,71 +60,56 @@ const (
 	SPatch         = 19
 )
 
-// GridSize is a size in terminal cells.
-type GridSize struct {
-	Cols uint16
-	Rows uint16
-}
-
-// CellPx is the size of one cell in pixels.
-type CellPx struct {
-	Width  uint32
-	Height uint32
-}
-
-// KeyKind is the variant of a key code. The values are herdr's tags.
-type KeyKind uint8
+// Geometry and key types are the shared [term] types. The values are herdr's
+// tags and modifier bits.
+type (
+	GridSize = term.GridSize
+	CellPx   = term.CellPx
+	KeyKind  = term.KeyKind
+	KeyCode  = term.KeyCode
+	WheelDir = term.WheelDir
+)
 
 // Key kinds, in herdr's tag order.
 const (
-	KeyBackspace KeyKind = iota
-	KeyEnter
-	KeyLeft
-	KeyRight
-	KeyUp
-	KeyDown
-	KeyHome
-	KeyEnd
-	KeyPageUp
-	KeyPageDown
-	KeyTab
-	KeyBackTab
-	KeyDelete
-	KeyInsert
-	KeyEsc
-	KeyChar
-	KeyF
+	KeyBackspace = term.KeyBackspace
+	KeyEnter     = term.KeyEnter
+	KeyLeft      = term.KeyLeft
+	KeyRight     = term.KeyRight
+	KeyUp        = term.KeyUp
+	KeyDown      = term.KeyDown
+	KeyHome      = term.KeyHome
+	KeyEnd       = term.KeyEnd
+	KeyPageUp    = term.KeyPageUp
+	KeyPageDown  = term.KeyPageDown
+	KeyTab       = term.KeyTab
+	KeyBackTab   = term.KeyBackTab
+	KeyDelete    = term.KeyDelete
+	KeyInsert    = term.KeyInsert
+	KeyEsc       = term.KeyEsc
+	KeyChar      = term.KeyChar
+	KeyF         = term.KeyF
 )
 
-// KeyCode is a key. Char is set for KeyChar and N (the F number) for KeyF.
-type KeyCode struct {
-	Kind KeyKind
-	Char rune
-	N    uint8
-}
-
 // CharKey returns the key code of a character.
-func CharKey(c rune) KeyCode { return KeyCode{Kind: KeyChar, Char: c} }
+func CharKey(c rune) KeyCode { return term.CharKey(c) }
 
 // FKey returns the key code of function key n.
-func FKey(n uint8) KeyCode { return KeyCode{Kind: KeyF, N: n} }
+func FKey(n uint8) KeyCode { return term.FKey(n) }
 
 // Key modifier bits, as herdr reads them.
 const (
-	ModShift   uint8 = 1
-	ModControl uint8 = 2
-	ModAlt     uint8 = 4
+	ModShift   = term.ModShift
+	ModControl = term.ModControl
+	ModAlt     = term.ModAlt
 )
-
-// WheelDir is the direction of one wheel step. Left and Right are horizontal.
-type WheelDir uint8
 
 // Wheel directions.
 const (
-	WheelUp WheelDir = iota
-	WheelDown
-	WheelLeft
-	WheelRight
+	WheelUp    = term.WheelUp
+	WheelDown  = term.WheelDown
+	WheelLeft  = term.WheelLeft
+	WheelRight = term.WheelRight
 )
 
 // InputEvent is one event for a pane: KeyEvent, TextEvent, PasteEvent or

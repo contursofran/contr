@@ -23,7 +23,7 @@ import (
 
 	"github.com/contursofran/contr/internal/app/terminal"
 	"github.com/contursofran/contr/internal/app/theme"
-	"github.com/contursofran/contr/internal/herdr/endpoint"
+	"github.com/contursofran/contr/internal/term"
 )
 
 const cols, rows = 200, 60
@@ -38,7 +38,7 @@ var palette = []uint32{
 const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789 -_=+()[]{}<>/\\:;.,"
 
 type state struct {
-	surface    endpoint.Surface
+	surface    term.Screen
 	r          *rand.Rand
 	mode       string
 	cache      terminal.Cache
@@ -49,8 +49,8 @@ type state struct {
 
 // randomRow makes a row of runs of 4-25 characters, one color each, and a
 // background on one run in eight.
-func (s *state) randomRow() endpoint.Row {
-	row := make(endpoint.Row, 0, cols)
+func (s *state) randomRow() term.Row {
+	row := make(term.Row, 0, cols)
 	for len(row) < cols {
 		n := min(4+s.r.Intn(22), cols-len(row))
 		fg := 0x02000000 | palette[s.r.Intn(len(palette))]
@@ -59,7 +59,7 @@ func (s *state) randomRow() endpoint.Row {
 			bg = 0x022c313a
 		}
 		for i := 0; i < n; i++ {
-			row = append(row, endpoint.Cell{Text: string(alphabet[s.r.Intn(len(alphabet))]), Fg: fg, Bg: bg})
+			row = append(row, term.Cell{Text: string(alphabet[s.r.Intn(len(alphabet))]), Fg: fg, Bg: bg})
 		}
 	}
 	return row
@@ -92,7 +92,7 @@ func main() {
 	mode := flag.String("mode", "idle", "idle | scroll | churn | sample")
 	flag.Parse()
 	s := &state{r: rand.New(rand.NewSource(1)), mode: *mode, start: time.Now()}
-	s.surface = endpoint.Surface{Size: endpoint.GridSize{Cols: cols, Rows: rows}}
+	s.surface = term.Screen{Size: term.GridSize{Cols: cols, Rows: rows}}
 	width, height := 1500, 950
 	if *mode == "sample" {
 		s.sample()

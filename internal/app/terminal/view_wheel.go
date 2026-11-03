@@ -5,7 +5,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/contursofran/contr/internal/herdr/endpoint"
+	"github.com/contursofran/contr/internal/term"
 )
 
 // Wheel and trackpad.
@@ -66,7 +66,7 @@ func (v *View) onScroll(ev ui.InputEvent) bool {
 
 	pc, pr := PaneCell(pane, col, row)
 	mods := WheelMods(ev.Mods)
-	var events []endpoint.InputEvent
+	var events []term.InputEvent
 	events = append(events, WheelEvents(pane, pc, pr, lines, mods)...)
 	events = append(events, WheelColumnEvents(pane, pc, pr, columns, mods)...)
 	if len(events) > 0 {

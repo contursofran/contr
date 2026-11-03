@@ -2,7 +2,7 @@ package terminal
 
 import (
 	"github.com/contursofran/contr/internal/app/theme"
-	"github.com/contursofran/contr/internal/herdr/endpoint"
+	"github.com/contursofran/contr/internal/term"
 )
 
 // Program colors for the terminal. The terminal shows the colors a program
@@ -79,14 +79,14 @@ func dim(fg, bg uint32) uint32 {
 	return channel(16)<<16 | channel(8)<<8 | channel(0)
 }
 
-func has(cell endpoint.Cell, flag uint16) bool { return cell.Attrs&flag != 0 }
+func has(cell term.Cell, flag uint16) bool { return cell.Attrs&flag != 0 }
 
 // CellColors returns the foreground (0xRRGGBB) and background to paint a cell
 // with. hasBg is false for the default background, which the view paints as
 // theme.BgTerminal. Reversed swaps the two colors, Dim halves the foreground
 // toward the background, and Hidden paints the foreground in the background
 // color, so the glyph does not show.
-func CellColors(cell endpoint.Cell) (fg uint32, bg uint32, hasBg bool) {
+func CellColors(cell term.Cell) (fg uint32, bg uint32, hasBg bool) {
 	f, fOK := resolveExplicit(cell.Fg)
 	b, bOK := resolveExplicit(cell.Bg)
 	if has(cell, Reversed) {

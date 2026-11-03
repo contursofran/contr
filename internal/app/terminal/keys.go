@@ -4,24 +4,24 @@ package terminal
 import (
 	"github.com/egoist/mygo/ui"
 
-	"github.com/contursofran/contr/internal/herdr/endpoint"
+	"github.com/contursofran/contr/internal/term"
 )
 
-var namedKeys = map[ui.Key]endpoint.KeyKind{
-	ui.KeyEnter:     endpoint.KeyEnter,
-	ui.KeyBackspace: endpoint.KeyBackspace,
-	ui.KeyDelete:    endpoint.KeyDelete,
-	ui.KeyEscape:    endpoint.KeyEsc,
-	ui.KeyTab:       endpoint.KeyTab,
-	ui.KeyLeft:      endpoint.KeyLeft,
-	ui.KeyRight:     endpoint.KeyRight,
-	ui.KeyUp:        endpoint.KeyUp,
-	ui.KeyDown:      endpoint.KeyDown,
-	ui.KeyHome:      endpoint.KeyHome,
-	ui.KeyEnd:       endpoint.KeyEnd,
-	ui.KeyPageUp:    endpoint.KeyPageUp,
-	ui.KeyPageDown:  endpoint.KeyPageDown,
-	ui.KeyInsert:    endpoint.KeyInsert,
+var namedKeys = map[ui.Key]term.KeyKind{
+	ui.KeyEnter:     term.KeyEnter,
+	ui.KeyBackspace: term.KeyBackspace,
+	ui.KeyDelete:    term.KeyDelete,
+	ui.KeyEscape:    term.KeyEsc,
+	ui.KeyTab:       term.KeyTab,
+	ui.KeyLeft:      term.KeyLeft,
+	ui.KeyRight:     term.KeyRight,
+	ui.KeyUp:        term.KeyUp,
+	ui.KeyDown:      term.KeyDown,
+	ui.KeyHome:      term.KeyHome,
+	ui.KeyEnd:       term.KeyEnd,
+	ui.KeyPageUp:    term.KeyPageUp,
+	ui.KeyPageDown:  term.KeyPageDown,
+	ui.KeyInsert:    term.KeyInsert,
 }
 
 var functionKeys = map[ui.Key]uint8{
@@ -51,44 +51,44 @@ var shiftedControlChars = map[ui.Key]rune{
 // it, so Option types characters (D11) and dead keys work. Cmd chords are the
 // app's. Named keys, function keys and Ctrl chords become key events.
 // Repeat is always false: the view does not send repeat events yet.
-func KeyEvent(key ui.Key, m ui.Modifiers) (endpoint.KeyEvent, bool) {
+func KeyEvent(key ui.Key, m ui.Modifiers) (term.KeyEvent, bool) {
 	if m&ui.Super != 0 {
-		return endpoint.KeyEvent{}, false
+		return term.KeyEvent{}, false
 	}
 	var flags uint8
 	if m&ui.Shift != 0 {
-		flags |= endpoint.ModShift
+		flags |= term.ModShift
 	}
 	if m&ui.Ctrl != 0 {
-		flags |= endpoint.ModControl
+		flags |= term.ModControl
 	}
 	if m&ui.Alt != 0 {
-		flags |= endpoint.ModAlt
+		flags |= term.ModAlt
 	}
 	if kind, ok := namedKeys[key]; ok {
 		if key == ui.KeyTab && m&ui.Shift != 0 {
-			kind = endpoint.KeyBackTab
+			kind = term.KeyBackTab
 		}
-		return endpoint.KeyEvent{Code: endpoint.KeyCode{Kind: kind}, Mods: flags}, true
+		return term.KeyEvent{Code: term.KeyCode{Kind: kind}, Mods: flags}, true
 	}
 	if n, ok := functionKeys[key]; ok {
-		return endpoint.KeyEvent{Code: endpoint.FKey(n), Mods: flags}, true
+		return term.KeyEvent{Code: term.FKey(n), Mods: flags}, true
 	}
 	// Option is not Alt for characters, so Alt with a character is text.
 	// Only Ctrl makes a key out of a character.
 	if m&ui.Alt != 0 || m&ui.Ctrl == 0 {
-		return endpoint.KeyEvent{}, false
+		return term.KeyEvent{}, false
 	}
 	if m&ui.Shift != 0 {
 		if c, ok := shiftedControlChars[key]; ok {
-			return endpoint.KeyEvent{Code: endpoint.CharKey(c), Mods: endpoint.ModControl}, true
+			return term.KeyEvent{Code: term.CharKey(c), Mods: term.ModControl}, true
 		}
 	}
 	if key >= ui.KeyA && key <= ui.KeyZ {
-		return endpoint.KeyEvent{Code: endpoint.CharKey('a' + rune(key-ui.KeyA)), Mods: flags}, true
+		return term.KeyEvent{Code: term.CharKey('a' + rune(key-ui.KeyA)), Mods: flags}, true
 	}
 	if c, ok := controlChars[key]; ok {
-		return endpoint.KeyEvent{Code: endpoint.CharKey(c), Mods: flags}, true
+		return term.KeyEvent{Code: term.CharKey(c), Mods: flags}, true
 	}
-	return endpoint.KeyEvent{}, false
+	return term.KeyEvent{}, false
 }

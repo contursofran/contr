@@ -3,7 +3,7 @@
 // painter. The painter draws on a ui.Painter; its rules are pure functions.
 package terminal
 
-// herdr's modifier bits in endpoint.Cell.Attrs (ratatui's Modifier bits).
+// herdr's modifier bits in term.Cell.Attrs (ratatui's Modifier bits).
 // Colors, decorations and the painter share them.
 const (
 	Bold          uint16 = 1

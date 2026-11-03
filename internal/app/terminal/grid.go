@@ -3,7 +3,7 @@ package terminal
 import (
 	"math"
 
-	"github.com/contursofran/contr/internal/herdr/endpoint"
+	"github.com/contursofran/contr/internal/term"
 )
 
 // Metrics is the cell size in logical pixels, and the padding kept on every
@@ -17,28 +17,28 @@ type Metrics struct {
 // or 2 rows fit, or when a cell has no size. The grid is clamped to herdr's
 // limits: at most MaxGridSide per side and MaxGridCells in all. Rows give way
 // first, so a very wide view keeps all its columns.
-func GridFor(widthPx, heightPx float32, m Metrics) (size endpoint.GridSize, ok bool) {
+func GridFor(widthPx, heightPx float32, m Metrics) (size term.GridSize, ok bool) {
 	if !hasSize(m.CellW) || !hasSize(m.CellH) {
-		return endpoint.GridSize{}, false
+		return term.GridSize{}, false
 	}
 	cols := floor32((widthPx - 2*m.Pad) / m.CellW)
 	rows := floor32((heightPx - 2*m.Pad) / m.CellH)
 	// NaN fails these tests too.
 	if !(cols >= 2) || !(rows >= 2) {
-		return endpoint.GridSize{}, false
+		return term.GridSize{}, false
 	}
 	// Both are at least 2 here. Clamped to the side limit they are finite, and
 	// cols is at most MaxGridSide, so the cell limit leaves at least 244 rows.
-	c := uint32(min(cols, float32(endpoint.MaxGridSide)))
-	r := min(uint32(min(rows, float32(endpoint.MaxGridSide))), endpoint.MaxGridCells/c)
-	return endpoint.GridSize{Cols: uint16(c), Rows: uint16(r)}, true
+	c := uint32(min(cols, float32(term.MaxGridSide)))
+	r := min(uint32(min(rows, float32(term.MaxGridSide))), term.MaxGridCells/c)
+	return term.GridSize{Cols: uint16(c), Rows: uint16(r)}, true
 }
 
 // CellPx returns the cell size in device pixels at scale, rounded to whole
 // pixels. herdr takes this at resize. Each side is at least 1 and at most
 // MaxCellPx.
-func CellPx(m Metrics, scale float32) endpoint.CellPx {
-	return endpoint.CellPx{
+func CellPx(m Metrics, scale float32) term.CellPx {
+	return term.CellPx{
 		Width:  devicePx(m.CellW * scale),
 		Height: devicePx(m.CellH * scale),
 	}
@@ -50,8 +50,8 @@ func devicePx(side float32) uint32 {
 	switch {
 	case r != r, r < 1:
 		return 1
-	case r > endpoint.MaxCellPx:
-		return endpoint.MaxCellPx
+	case r > term.MaxCellPx:
+		return term.MaxCellPx
 	}
 	return uint32(r)
 }

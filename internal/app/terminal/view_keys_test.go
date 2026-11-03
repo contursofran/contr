@@ -7,19 +7,19 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/contursofran/contr/internal/herdr/endpoint"
+	"github.com/contursofran/contr/internal/term"
 )
 
 // inputMsg is the message the view queues for events sent to pane.
-func inputMsg(pane string, events ...endpoint.InputEvent) endpoint.ClientMsg {
-	return endpoint.InputMsg{PaneID: pane, Events: events}
+func inputMsg(pane string, events ...term.InputEvent) ClientMsg {
+	return InputMsg{PaneID: pane, Events: events}
 }
 
-func keyEv(code endpoint.KeyCode, mods uint8) endpoint.InputEvent {
-	return endpoint.KeyEvent{Code: code, Mods: mods}
+func keyEv(code term.KeyCode, mods uint8) term.InputEvent {
+	return term.KeyEvent{Code: code, Mods: mods}
 }
 
-func textEv(s string) endpoint.InputEvent { return endpoint.TextEvent{Text: s} }
+func textEv(s string) term.InputEvent { return term.TextEvent{Text: s} }
 
 // keysView is a settled view with an attached fake link and a surface that
 // names paneID.
@@ -30,7 +30,7 @@ func keysView(t *testing.T) (*View, *ui.Tester, *fakeLink, *int) {
 	return v, tt, attach(v, tt), n
 }
 
-func wantQueued(t *testing.T, f *fakeLink, want ...endpoint.ClientMsg) {
+func wantQueued(t *testing.T, f *fakeLink, want ...ClientMsg) {
 	t.Helper()
 	if got := f.queued(); !reflect.DeepEqual(got, want) && (len(got) != 0 || len(want) != 0) {
 		t.Errorf("queued %v, want %v", got, want)
@@ -41,25 +41,25 @@ func TestTheKeysTheTerminalTakesAreSentToTheFocusedPane(t *testing.T) {
 	_, tt, f, _ := keysView(t)
 
 	tt.Key(ui.Ctrl, ui.KeyC)
-	wantQueued(t, f, inputMsg(paneID, keyEv(endpoint.CharKey('c'), endpoint.ModControl)))
+	wantQueued(t, f, inputMsg(paneID, keyEv(term.CharKey('c'), term.ModControl)))
 
 	cases := []struct {
 		name string
 		mods ui.Modifiers
 		key  ui.Key
-		want endpoint.InputEvent
+		want term.InputEvent
 	}{
-		{"enter", 0, ui.KeyEnter, keyEv(endpoint.KeyCode{Kind: endpoint.KeyEnter}, 0)},
-		{"shift-enter", ui.Shift, ui.KeyEnter, keyEv(endpoint.KeyCode{Kind: endpoint.KeyEnter}, endpoint.ModShift)},
-		{"escape", 0, ui.KeyEscape, keyEv(endpoint.KeyCode{Kind: endpoint.KeyEsc}, 0)},
-		{"up", 0, ui.KeyUp, keyEv(endpoint.KeyCode{Kind: endpoint.KeyUp}, 0)},
-		{"alt-backspace", ui.Alt, ui.KeyBackspace, keyEv(endpoint.KeyCode{Kind: endpoint.KeyBackspace}, endpoint.ModAlt)},
-		{"shift-tab", ui.Shift, ui.KeyTab, keyEv(endpoint.KeyCode{Kind: endpoint.KeyBackTab}, endpoint.ModShift)},
+		{"enter", 0, ui.KeyEnter, keyEv(term.KeyCode{Kind: term.KeyEnter}, 0)},
+		{"shift-enter", ui.Shift, ui.KeyEnter, keyEv(term.KeyCode{Kind: term.KeyEnter}, term.ModShift)},
+		{"escape", 0, ui.KeyEscape, keyEv(term.KeyCode{Kind: term.KeyEsc}, 0)},
+		{"up", 0, ui.KeyUp, keyEv(term.KeyCode{Kind: term.KeyUp}, 0)},
+		{"alt-backspace", ui.Alt, ui.KeyBackspace, keyEv(term.KeyCode{Kind: term.KeyBackspace}, term.ModAlt)},
+		{"shift-tab", ui.Shift, ui.KeyTab, keyEv(term.KeyCode{Kind: term.KeyBackTab}, term.ModShift)},
 	}
 	for _, c := range cases {
 		tt.Key(c.mods, c.key)
 		got := f.queued()
-		if want := []endpoint.ClientMsg{inputMsg(paneID, c.want)}; !reflect.DeepEqual(got, want) {
+		if want := []ClientMsg{inputMsg(paneID, c.want)}; !reflect.DeepEqual(got, want) {
 			t.Errorf("%s: queued %v, want %v", c.name, got, want)
 		}
 	}
@@ -98,7 +98,7 @@ func TestCmdVPastesTheClipboardTextAsOnePaste(t *testing.T) {
 
 	tt.SetClipboard("one\ntwo")
 	tt.Key(ui.Super, ui.KeyV)
-	wantQueued(t, f, inputMsg(paneID, endpoint.PasteEvent{Text: "one\ntwo"}))
+	wantQueued(t, f, inputMsg(paneID, term.PasteEvent{Text: "one\ntwo"}))
 }
 
 func TestCmdShiftVAndCmdAltVAreNotAPaste(t *testing.T) {
@@ -110,7 +110,7 @@ func TestCmdShiftVAndCmdAltVAreNotAPaste(t *testing.T) {
 	wantQueued(t, f) // only Cmd-V pastes
 
 	tt.Key(ui.Super, ui.KeyV)
-	wantQueued(t, f, inputMsg(paneID, endpoint.PasteEvent{Text: "one"}))
+	wantQueued(t, f, inputMsg(paneID, term.PasteEvent{Text: "one"}))
 }
 
 func TestAClipboardUpdateWritesTheClipboardOnce(t *testing.T) {
@@ -118,7 +118,7 @@ func TestAClipboardUpdateWritesTheClipboardOnce(t *testing.T) {
 	tt.Frame()
 	tt.SetClipboard("kept")
 
-	v.onUpdate(endpoint.ClipboardUpdate{Text: "one\ntwo"})
+	v.onUpdate(term.ClipboardUpdate{Text: "one\ntwo"})
 	if got := tt.Clipboard(); got != "one\ntwo" {
 		t.Errorf("clipboard = %q", got)
 	}
@@ -127,7 +127,7 @@ func TestAClipboardUpdateWritesTheClipboardOnce(t *testing.T) {
 func TestAClipboardUpdateBeforeTheFirstFrameIsWrittenByTheFirstFrame(t *testing.T) {
 	v := NewView(Options{})
 	t.Cleanup(v.Close)
-	v.onUpdate(endpoint.ClipboardUpdate{Text: "early"})
+	v.onUpdate(term.ClipboardUpdate{Text: "early"})
 	if v.hasServices {
 		t.Fatal("services before the first frame")
 	}
@@ -151,7 +151,7 @@ func TestThePasteActionPastesTheClipboardTextAsOnePaste(t *testing.T) {
 
 	tt.SetClipboard("one\ntwo")
 	tt.Command("paste")
-	wantQueued(t, f, inputMsg(paneID, endpoint.PasteEvent{Text: "one\ntwo"}))
+	wantQueued(t, f, inputMsg(paneID, term.PasteEvent{Text: "one\ntwo"}))
 }
 
 func TestThePasteActionWithNoLinkSendsNothing(t *testing.T) {
@@ -183,7 +183,7 @@ func TestCmdVKeyIsOnePasteAndCmdCAndCmdAKeysSendNothing(t *testing.T) {
 	tt.SetClipboard("one")
 
 	tt.Key(ui.Super, ui.KeyV)
-	wantQueued(t, f, inputMsg(paneID, endpoint.PasteEvent{Text: "one"}))
+	wantQueued(t, f, inputMsg(paneID, term.PasteEvent{Text: "one"}))
 
 	tt.Key(ui.Super, ui.KeyC)
 	tt.Key(ui.Super, ui.KeyA)
@@ -266,7 +266,7 @@ func TestTheImeWindowIsPlacedAtTheCursorCell(t *testing.T) {
 func TestImeBoundsNeedACursor(t *testing.T) {
 	v, tt, _ := newTestView(t)
 	settle(tt, 800, 600)
-	v.acceptSurface(shownSurface(1, endpoint.GridSize{Cols: 3, Rows: 2}, paneID))
+	v.acceptSurface(shownSurface(1, term.GridSize{Cols: 3, Rows: 2}, paneID))
 	if _, _, ok := v.ime.BoundsForRange(ui.TextInputRange{}); ok {
 		t.Error("bounds for a surface with no cursor")
 	}
@@ -278,7 +278,7 @@ func TestAKeyWithNoPaneSendsNothing(t *testing.T) {
 	f := &fakeLink{}
 	v.link = f
 	// A surface that names no pane, and no snapshot yet: nowhere to send.
-	v.acceptSurface(shownSurface(1, endpoint.GridSize{Cols: 3, Rows: 2}, ""))
+	v.acceptSurface(shownSurface(1, term.GridSize{Cols: 3, Rows: 2}, ""))
 	tt.Frame()
 
 	tt.Key(ui.Ctrl, ui.KeyC)
@@ -288,7 +288,7 @@ func TestAKeyWithNoPaneSendsNothing(t *testing.T) {
 func TestAKeyWithoutALinkIsDroppedAndTheViewKeepsRunning(t *testing.T) {
 	v, tt, _ := newTestView(t)
 	settle(tt, 800, 600)
-	v.acceptSurface(shownSurface(1, endpoint.GridSize{Cols: 3, Rows: 2}, paneID))
+	v.acceptSurface(shownSurface(1, term.GridSize{Cols: 3, Rows: 2}, paneID))
 	tt.Frame()
 
 	before := len(v.sends)
@@ -305,12 +305,12 @@ func TestTheShellPaneTakesKeysWhenTheSurfaceNamesNone(t *testing.T) {
 	f := &fakeLink{}
 	v.link = f
 	p9 := "p9"
-	v.onUpdate(endpoint.SnapshotUpdate{Snapshot: &endpoint.ShellSnapshot{FocusedPaneID: &p9}})
+	v.onUpdate(term.SnapshotUpdate{Snapshot: &term.Snapshot{FocusedPaneID: &p9}})
 	v.acceptSurface(shownSurface(1, v.sent.size, ""))
 	tt.Frame()
 
 	tt.Key(ui.Ctrl, ui.KeyC)
-	wantQueued(t, f, inputMsg("p9", keyEv(endpoint.CharKey('c'), endpoint.ModControl)))
+	wantQueued(t, f, inputMsg("p9", keyEv(term.CharKey('c'), term.ModControl)))
 }
 
 func TestInputThatIsNotQueuedDoesNotReSendTheSize(t *testing.T) {
@@ -319,12 +319,12 @@ func TestInputThatIsNotQueuedDoesNotReSendTheSize(t *testing.T) {
 	sent := v.sent
 
 	// The link refuses each call, as one that lost its connection does.
-	dead := &fakeLink{refuse: endpoint.ErrLinkNotConnected}
+	dead := &fakeLink{refuse: term.ErrNotConnected}
 	v.link = dead
 	// herdr shows another size: a re-send would be due if the input were queued.
-	v.acceptSurface(shownSurface(1, endpoint.GridSize{Cols: 3, Rows: 2}, paneID))
+	v.acceptSurface(shownSurface(1, term.GridSize{Cols: 3, Rows: 2}, paneID))
 	t0 := time.Now()
-	v.send([]endpoint.InputEvent{textEv("a")}, t0)
+	v.send([]term.InputEvent{textEv("a")}, t0)
 	if !v.reassertedAt.IsZero() {
 		t.Error("nothing was queued, but the size was marked as sent again")
 	}
@@ -332,20 +332,20 @@ func TestInputThatIsNotQueuedDoesNotReSendTheSize(t *testing.T) {
 	// The link works now. The failed input did not re-send the size, so the next one does.
 	f := &fakeLink{}
 	v.link = f
-	v.send([]endpoint.InputEvent{textEv("b")}, t0)
+	v.send([]term.InputEvent{textEv("b")}, t0)
 	wantQueued(t, f,
 		inputMsg(paneID, textEv("b")),
-		endpoint.ResizeMsg{Size: sent.size, Cell: sent.cell})
+		ResizeMsg{Size: sent.size, Cell: sent.cell})
 }
 
 func TestALostLinkForgetsTheShellPane(t *testing.T) {
 	v, _, _ := newTestView(t)
 	p9 := "p9"
-	v.onUpdate(endpoint.SnapshotUpdate{Snapshot: &endpoint.ShellSnapshot{FocusedPaneID: &p9}})
+	v.onUpdate(term.SnapshotUpdate{Snapshot: &term.Snapshot{FocusedPaneID: &p9}})
 	if v.shellPane != "p9" {
 		t.Fatalf("shellPane = %q", v.shellPane)
 	}
-	v.onUpdate(endpoint.StateUpdate{State: stateNotRunning})
+	v.onUpdate(term.StateUpdate{State: stateNotRunning})
 	if v.shellPane != "" {
 		t.Errorf("shellPane = %q after the link was lost", v.shellPane)
 	}
@@ -357,8 +357,8 @@ func TestTypingSendsTheSizeAgainOnlyWhenHerdrShowsAnotherSize(t *testing.T) {
 	f := &fakeLink{}
 	v.link = f
 	sent := v.sent
-	resize := endpoint.ResizeMsg{Size: sent.size, Cell: sent.cell}
-	send := func(s string, at time.Time) { v.send([]endpoint.InputEvent{textEv(s)}, at) }
+	resize := ResizeMsg{Size: sent.size, Cell: sent.cell}
+	send := func(s string, at time.Time) { v.send([]term.InputEvent{textEv(s)}, at) }
 
 	// herdr shows the size contr sent: typing sends the text only.
 	v.acceptSurface(shownSurface(1, sent.size, paneID))
@@ -368,7 +368,7 @@ func TestTypingSendsTheSizeAgainOnlyWhenHerdrShowsAnotherSize(t *testing.T) {
 
 	// herdr shows another size: the first key sends it again, and a key within
 	// a second does not.
-	v.acceptSurface(shownSurface(2, endpoint.GridSize{Cols: 3, Rows: 2}, paneID))
+	v.acceptSurface(shownSurface(2, term.GridSize{Cols: 3, Rows: 2}, paneID))
 	send("b", t0.Add(500*time.Millisecond))
 	wantQueued(t, f, inputMsg(paneID, textEv("b")), resize)
 	send("c", t0.Add(900*time.Millisecond))

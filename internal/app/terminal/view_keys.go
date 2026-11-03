@@ -6,7 +6,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/contursofran/contr/internal/herdr/endpoint"
+	"github.com/contursofran/contr/internal/term"
 )
 
 // Keys, paste and OSC 52.
@@ -20,7 +20,7 @@ func (v *View) onKey(ev ui.InputEvent) bool {
 		return false
 	}
 	if key, ok := KeyEvent(ev.Key, ev.Mods); ok {
-		v.send([]endpoint.InputEvent{key}, ev.Time)
+		v.send([]term.InputEvent{key}, ev.Time)
 	}
 	return true
 }
@@ -32,20 +32,20 @@ func (v *View) paste() {
 	if text == "" {
 		return
 	}
-	v.send([]endpoint.InputEvent{endpoint.PasteEvent{Text: text}}, v.now)
+	v.send([]term.InputEvent{term.PasteEvent{Text: text}}, v.now)
 }
 
 // commit sends text from the IME as text. Empty text sends nothing.
 func (v *View) commit(text string) {
 	v.ensureLink()
 	if text != "" {
-		v.send([]endpoint.InputEvent{endpoint.TextEvent{Text: text}}, v.now)
+		v.send([]term.InputEvent{term.TextEvent{Text: text}}, v.now)
 	}
 }
 
 // send sends events to the focused pane, then sends the size again when herdr
 // shows another one (Rust D12). Nothing is sent without a pane or a link.
-func (v *View) send(events []endpoint.InputEvent, now time.Time) {
+func (v *View) send(events []term.InputEvent, now time.Time) {
 	pane := v.focusedPane()
 	if pane == "" {
 		slog.Debug("terminal input not sent: no focused pane")

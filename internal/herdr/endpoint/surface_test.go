@@ -23,8 +23,8 @@ func tail() Cell { return Cell{WideTail: true} }
 func testPane(id string, focused bool) SurfacePane {
 	return SurfacePane{
 		PaneID:    id,
-		Rect:      Rect{0, 0, 3, 1},
-		InnerRect: Rect{0, 0, 2, 1},
+		Rect:      Rect{X: 0, Y: 0, Width: 3, Height: 1},
+		InnerRect: Rect{X: 0, Y: 0, Width: 2, Height: 1},
 		Focused:   focused,
 	}
 }
@@ -361,10 +361,10 @@ func TestPaneScrollMetricsAndMouseReportingAreRead(t *testing.T) {
 	e.Vu(1) // panes
 	e.Str("w1:p1")
 	e.Vu(4) // content_revision
-	putRect(&e, Rect{0, 0, 3, 1})
-	putRect(&e, Rect{0, 0, 2, 1})
+	putRect(&e, Rect{X: 0, Y: 0, Width: 3, Height: 1})
+	putRect(&e, Rect{X: 0, Y: 0, Width: 2, Height: 1})
 	e.Some()
-	putRect(&e, Rect{2, 0, 1, 1}) // scrollbar_rect
+	putRect(&e, Rect{X: 2, Y: 0, Width: 1, Height: 1}) // scrollbar_rect
 	e.Some()
 	e.Vu(5)       // offset_from_bottom
 	e.Vu(300)     // max_offset_from_bottom

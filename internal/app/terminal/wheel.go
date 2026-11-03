@@ -9,7 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/contursofran/contr/internal/herdr/endpoint"
+	"github.com/contursofran/contr/internal/term"
 )
 
 // Wheel and trackpad motion to herdr input events. herdr keeps the scrollback:
@@ -166,7 +166,7 @@ func takeRemainder(total *float32, unit float32) int {
 // CellAt returns the surface cell under pos, a window point, with origin the
 // grid's top-left corner in the same coordinates. ok is false in the padding,
 // outside the grid, or with a point or cell that has no size.
-func CellAt(pos, origin [2]float32, m Metrics, size endpoint.GridSize) (col, row uint16, ok bool) {
+func CellAt(pos, origin [2]float32, m Metrics, size term.GridSize) (col, row uint16, ok bool) {
 	if !finite(m.CellW) || !finite(m.CellH) || m.CellW <= 0 || m.CellH <= 0 {
 		return 0, 0, false
 	}
@@ -184,7 +184,7 @@ func CellAt(pos, origin [2]float32, m Metrics, size endpoint.GridSize) (col, row
 // PaneAtCell returns the pane whose rect holds the cell, or nil. The rect has
 // the pane's border and its scrollbar column, so the wheel over the scrollbar
 // scrolls the pane.
-func PaneAtCell(s *endpoint.Surface, col, row uint16) *endpoint.SurfacePane {
+func PaneAtCell(s *term.Screen, col, row uint16) *term.Pane {
 	for i := range s.Panes {
 		if holds(s.Panes[i].Rect, col, row) {
 			return &s.Panes[i]
@@ -196,7 +196,7 @@ func PaneAtCell(s *endpoint.Surface, col, row uint16) *endpoint.SurfacePane {
 // PaneCell returns the cell relative to the pane's inner rect, clamped into
 // it. The wheel event carries this position, which herdr reads as the cell
 // under the pointer inside the pane.
-func PaneCell(p *endpoint.SurfacePane, col, row uint16) (uint16, uint16) {
+func PaneCell(p *term.Pane, col, row uint16) (uint16, uint16) {
 	inside := func(v, start, width uint16) uint16 {
 		var rel uint16
 		if v > start {
@@ -215,28 +215,28 @@ func PaneCell(p *endpoint.SurfacePane, col, row uint16) (uint16, uint16) {
 // Reports reports whether the pane hands the wheel to its program: it reads
 // the mouse, or it is on the alternate screen, where herdr sends an arrow key.
 // Otherwise the wheel scrolls herdr's history.
-func Reports(p *endpoint.SurfacePane) bool {
+func Reports(p *term.Pane) bool {
 	return p.MouseReporting || p.AlternateScreen
 }
 
 // WheelEvents returns the wheel events for steps lines, up being positive. A
 // program that takes the wheel gets one event per notch, as herdr's own client
 // sends; the history gets one event with the whole count.
-func WheelEvents(p *endpoint.SurfacePane, col, row uint16, steps int, mods uint8) []endpoint.InputEvent {
-	return axisEvents(p, col, row, steps, mods, endpoint.WheelUp, endpoint.WheelDown)
+func WheelEvents(p *term.Pane, col, row uint16, steps int, mods uint8) []term.InputEvent {
+	return axisEvents(p, col, row, steps, mods, term.WheelUp, term.WheelDown)
 }
 
 // WheelColumnEvents returns the wheel events for steps columns, left being
 // positive. herdr turns a horizontal wheel into a mouse report only, so a pane
 // that does not read the mouse gets nothing.
-func WheelColumnEvents(p *endpoint.SurfacePane, col, row uint16, steps int, mods uint8) []endpoint.InputEvent {
+func WheelColumnEvents(p *term.Pane, col, row uint16, steps int, mods uint8) []term.InputEvent {
 	if !Reports(p) {
 		return nil
 	}
-	return axisEvents(p, col, row, steps, mods, endpoint.WheelLeft, endpoint.WheelRight)
+	return axisEvents(p, col, row, steps, mods, term.WheelLeft, term.WheelRight)
 }
 
-func axisEvents(p *endpoint.SurfacePane, col, row uint16, steps int, mods uint8, positive, negative endpoint.WheelDir) []endpoint.InputEvent {
+func axisEvents(p *term.Pane, col, row uint16, steps int, mods uint8, positive, negative term.WheelDir) []term.InputEvent {
 	if steps == 0 {
 		return nil
 	}
@@ -250,9 +250,9 @@ func axisEvents(p *endpoint.SurfacePane, col, row uint16, steps int, mods uint8,
 	if Reports(p) {
 		events, lines = int(min(count, MaxWheelEvents)), uint16(WheelLines)
 	}
-	out := make([]endpoint.InputEvent, events)
+	out := make([]term.InputEvent, events)
 	for i := range out {
-		out[i] = endpoint.WheelEvent{Dir: dir, Column: col, Row: row, Mods: mods, Lines: lines}
+		out[i] = term.WheelEvent{Dir: dir, Column: col, Row: row, Mods: mods, Lines: lines}
 	}
 	return out
 }
@@ -261,13 +261,13 @@ func axisEvents(p *endpoint.SurfacePane, col, row uint16, steps int, mods uint8,
 func WheelMods(m ui.Modifiers) uint8 {
 	var flags uint8
 	if m&ui.Shift != 0 {
-		flags |= endpoint.ModShift
+		flags |= term.ModShift
 	}
 	if m&ui.Ctrl != 0 {
-		flags |= endpoint.ModControl
+		flags |= term.ModControl
 	}
 	if m&ui.Alt != 0 {
-		flags |= endpoint.ModAlt
+		flags |= term.ModAlt
 	}
 	return flags
 }
