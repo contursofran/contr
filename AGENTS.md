@@ -34,6 +34,7 @@ in. It is written in Go with MyGo's native UI.
 | `internal/herdr` | herdr's JSON API: wire, model, reader, command, tabs, agents |
 | `internal/herdr/endpoint` | herdr's binary endpoint socket: codec, messages, surface, conn, link, osc52 |
 | `internal/usage` | plan usage: Claude status line, Codex logs |
+| `internal/hc` | herdr-core's JSON-RPC API over `hc connect`: calls and event subscriptions |
 | `assets` | fonts, status icons, app icon |
 | `scripts` | `check.sh`, `bundle.sh`, `install.sh`, `dev-herdr.sh` |
 
@@ -71,6 +72,10 @@ Add packages under `internal/` when a change needs them.
 
 ## herdr safety
 
+- The same rules apply to herdr-core (`hc`): never stop, restart or send
+  input to the owner's core. Tests that need a real core use a scratch core
+  with its own `HC_SESSION` and XDG folders, under the `hccore` build tag
+  (see `internal/hc/core_test.go`).
 - Never run the herdr command line against the owner's herdr, not even
   `--help` or `--version`. Never connect to the owner's herdr sockets or
   send input to them.
