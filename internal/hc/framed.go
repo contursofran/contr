@@ -332,9 +332,8 @@ func (cl *FramedClient) Attach(ctx context.Context, p AttachParams) (*Stream, er
 		Terminal json.RawMessage `json:"terminal"`
 	}
 	var (
-		mu        sync.Mutex
-		s         *Stream
-		abandoned bool
+		mu sync.Mutex
+		s  *Stream
 	)
 	err := cl.call(ctx, "terminal.attach", p, &res, func(raw json.RawMessage) error {
 		var r struct {
@@ -348,10 +347,14 @@ func (cl *FramedClient) Attach(ctx context.Context, p AttachParams) (*Stream, er
 		}
 		mu.Lock()
 		defer mu.Unlock()
-		if abandoned {
-			// The caller is gone; the core has attached anyway.
+		// The context ended before the reply came: the caller is gone, or
+		// call's select can still pick the reply. Fail either way, so the
+		// result does not depend on that pick (#226). The core has
+		// attached anyway, so close the channel. Only a call that ended on
+		// its context leaves the hook to run later.
+		if err := ctx.Err(); err != nil {
 			_ = cl.send(r.Channel, KindClose, nil)
-			return ctx.Err()
+			return err
 		}
 		s = newStream(cl, r.Channel)
 		cl.mu.Lock()
@@ -364,7 +367,6 @@ func (cl *FramedClient) Attach(ctx context.Context, p AttachParams) (*Stream, er
 	})
 	if err != nil {
 		mu.Lock()
-		abandoned = true
 		st := s
 		mu.Unlock()
 		if st != nil {

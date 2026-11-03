@@ -254,7 +254,9 @@ func TestBadResizeFrame(t *testing.T) {
 }
 
 // A context that ends while the attach reply is on its way must not leave a
-// stream attached: the client sends CLOSE for the channel.
+// stream attached: the client sends CLOSE for the channel. The reply and the
+// context are both ready when Attach waits, so this also checks that the
+// result does not depend on which one Attach sees first (#226).
 func TestAttachCancelledClosesStream(t *testing.T) {
 	f, dial := newFake(t, goodHello)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -267,9 +269,40 @@ func TestAttachCancelledClosesStream(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cl.Close()
-	if _, err := cl.Attach(ctx, AttachParams{Terminal: "t1", Cols: 80, Rows: 24}); err == nil {
-		t.Fatal("want the context error")
+	if _, err := cl.Attach(ctx, AttachParams{Terminal: "t1", Cols: 80, Rows: 24}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("err %v, want the context error", err)
 	}
+	wantAttachClosed(t, f, cl)
+}
+
+// A reply that comes after Attach has returned with the context error also
+// gets CLOSE.
+func TestAttachLateReplyClosesStream(t *testing.T) {
+	f, dial := newFake(t, goodHello)
+	ctx, cancel := context.WithCancel(context.Background())
+	release := make(chan struct{})
+	f.attach = func(map[string]any) (string, string) {
+		cancel()
+		<-release
+		return `{"channel":7,"terminal":{"id":"t1"}}`, ""
+	}
+	cl, err := DialFramed(context.Background(), dial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cl.Close()
+	_, err = cl.Attach(ctx, AttachParams{Terminal: "t1", Cols: 80, Rows: 24})
+	close(release)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err %v, want the context error", err)
+	}
+	wantAttachClosed(t, f, cl)
+}
+
+// wantAttachClosed checks that the client sent CLOSE on channel 7 and keeps
+// no stream.
+func wantAttachClosed(t *testing.T, f *fakeFramedCore, cl *FramedClient) {
+	t.Helper()
 	if fr := f.next(); fr.Channel != 7 || fr.Kind != KindClose {
 		t.Fatalf("frame %+v, want CLOSE on channel 7", fr)
 	}
