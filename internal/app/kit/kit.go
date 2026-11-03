@@ -69,7 +69,7 @@ func Row(c *ui.Context, o RowOpts) {
 		}
 		// SingleLine cuts with an ellipsis; NoWrap would keep the line whole.
 		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-			ui.Text(c, o.Text).Label(label+" text").Height(theme.LineHeight).TextColor(theme.Color(theme.Text)).SingleLine().MinWidth(0)
+			ui.Text(c, o.Text).Label(label + " text").Height(theme.LineHeight).TextColor(theme.Color(theme.Text)).SingleLine().MinWidth(0)
 			if o.Sub != "" {
 				ui.Text(c, o.Sub).Height(theme.LineHeight).TextColor(theme.Color(theme.TextDim2)).SingleLine().MinWidth(0)
 			}
