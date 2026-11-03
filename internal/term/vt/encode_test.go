@@ -90,6 +90,20 @@ func TestPasteBracketed(t *testing.T) {
 	}
 }
 
+func TestPasteEndMarkCannotRebuild(t *testing.T) {
+	cases := map[string]string{
+		"\x1b[20\x1b[201~1~":            "",
+		"a\x1b[\x1b[20\x1b[201~1~201~b": "ab",
+		"\x1b[2\x1b[2\x1b[201~01~01~":   "",
+	}
+	for in, want := range cases {
+		got := string(Encode(term.PasteEvent{Text: in}, Modes{BracketedPaste: true}))
+		if got != "\x1b[200~"+want+"\x1b[201~" {
+			t.Errorf("%q: got %q", in, got)
+		}
+	}
+}
+
 func TestPasteRaw(t *testing.T) {
 	got := string(Encode(term.PasteEvent{Text: "a\nb\r\nc"}, Modes{}))
 	if got != "a\rb\rc" {

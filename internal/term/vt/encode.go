@@ -166,11 +166,14 @@ var (
 
 // encodePaste wraps the text in the bracketed paste marks when the mode is
 // set, and removes any end mark inside it so the text cannot end the paste
-// early. Without the mode, line breaks become CR, as a terminal sends them.
+// early. It repeats the removal until none is left, because removing one
+// mark can join the bytes around it into a new one. Without the mode, line breaks become CR, as a terminal sends them.
 func encodePaste(s string, m Modes) []byte {
 	b := []byte(s)
 	if m.BracketedPaste {
-		b = bytes.ReplaceAll(b, pasteEnd, nil)
+		for bytes.Contains(b, pasteEnd) {
+			b = bytes.ReplaceAll(b, pasteEnd, nil)
+		}
 		out := make([]byte, 0, len(b)+len(pasteStart)+len(pasteEnd))
 		out = append(out, pasteStart...)
 		out = append(out, b...)
