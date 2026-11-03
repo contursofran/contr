@@ -273,6 +273,54 @@ change. The flood pane regression is tracked in #204. The numbers are not compar
 M13.4). Compare later runs of this test with this table, by frames and CPU
 seconds.
 
+### Flood pane on hc (#204)
+
+Measured on 2026-11-03 with the app test, on the branch of #204, one run of
+each, on an Apple M4 (as `go test -bench` reports it), load average 4–5. "Before" is the
+flood-only run on `main` 04e8184 (the table above has 152.7 % and 326 MB).
+
+| Phase | Before | After |
+|---|---|---|
+| flood pane shown: frames (a second) | 843 (47.4) | 940 (59.5) |
+| flood pane shown: CPU s | 27.66 | 25.09 |
+| flood pane shown: CPU min / med / max | 134.8 / 154.2 / 172.1 % | 120.2 / 156.9 / 179.9 % |
+| flood pane shown: footprint max | 340 MB | 323 MB |
+| agent updates shown: CPU med / footprint | 0.6 % / 320 MB (#197) | 1.4 % / 324 MB |
+| idle hidden: footprint max | 242 MB (#197) | 219 MB |
+| busy pane hidden: CPU med | 1.5 % (#197) | 0.4 % |
+
+The other phases of the after run: idle shown 0.0 % / 206 MB, one item
+working 6.1 %, busy pane shown 11.3 % / 198 MB.
+
+The CPU of the flood phase did not fall, but the app now takes in about three
+times more output for each CPU second. Before, the app could not keep up and
+the core skipped about 70 % of the output for it. A harness that reads the
+same flood from a scratch core through the link, with no window: before,
+2.5 MB/s taken at 110–158 % CPU (45–63 % for each MB/s); after, 6.9–7.3 MB/s
+at 141 % (about 20 % for each MB/s). The fixes (D50):
+
+- The emulator wrote 2.7 MB/s at 100×52 (`BenchmarkFlood200x60`: 2.66 MB/s);
+  now 19 MB/s (22 MB/s), with no allocation for a line of ASCII.
+- Screens built: one a frame, not one for each batch (about 10,000 a
+  second). Allocation in the flood: 10.4 GB before, 1.6 GB after, since the
+  app start.
+- Live heap after the flood: 86 MB before, 72 MB after; the scrollback is
+  most of it (50–63 MB of 112-byte cells).
+
+What is left (measured, not fixed here):
+
+- **The transport.** The core sends about 50,000 frames a second (median 108
+  bytes). The stream alone, with a consumer that does nothing, uses 90–97 %
+  CPU, most of it system time: a read, a netpoll wait and goroutine hand-offs
+  for each frame. A blocking read did not help. A wait of 1 ms before a read
+  that follows a short read cut the stream to 33 % and the link harness to
+  82 %, but it is a timer in the hot path, and in the app the terminal then
+  stopped getting output (not explained). Fewer hand-offs (the reader feeds
+  the emulator itself) are not measured.
+- **Memory.** 10000 scrollback lines of 112-byte cells, and the garbage
+  collector's room for them, keep the footprint over 300 MB after a flood.
+  Smaller cells or fewer lines would fix it.
+
 ## How to run the app test
 
 The app test measures the whole app in seven phases: idle shown, idle shown
@@ -301,3 +349,13 @@ the pane size in points, not cells. In the last phase `hc` starts and stops
 a loop that also writes a counter file, because window input does not reach a
 hidden window. If the counter is too low, the test fails (the loop did not
 run, so the reading is not valid).
+
+To run some phases only, set `BENCH_PHASES` to their names, for example
+`BENCH_PHASES="flood pane shown"`. To profile a phase, set
+`CONTR_PROFILE` to a folder and `BENCH_PROFILE_PHASE` to the phase name. The
+test then sends SIGUSR1 to the app when the samples start and SIGUSR2 when
+they end, and the app (e2e builds only, `cmd/contr/profile_e2e.go`) writes
+`cpu.pprof` and `heap.pprof` to that folder. Read them with
+`go tool pprof tmp/bench/contr-bench <file>`. On macOS the CPU profile puts
+many samples on threads that wait in `kevent` and `pthread_cond_wait`; check
+a result with the CPU time of the process (`getrusage`, `ps`).

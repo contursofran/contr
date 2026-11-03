@@ -424,10 +424,11 @@ func newStream(cl *FramedClient, channel uint32) *Stream {
 }
 
 // Events delivers the output and the size changes of the terminal, in
-// order. Output frames that wait for the consumer come as one event, with one
-// credit. It closes when the stream is over, after the output that the core
-// sent before it ended. The consumer must read it: the core stops sending
-// when it has Window bytes that are not acknowledged.
+// order. Output frames that wait for the consumer come as one event. Credit
+// goes back once creditBatch bytes are taken. It closes when the stream is
+// over, after the output that the core sent before it ended. The consumer must
+// read it: the core stops sending when it has Window bytes that are not
+// acknowledged.
 func (s *Stream) Events() <-chan StreamEvent { return s.events }
 
 // Done closes when the stream is over and Events has closed.
@@ -563,10 +564,9 @@ func (s *Stream) pump() {
 }
 
 // joinData returns the first event of the queue and how many events it takes.
-// Output frames that wait one after the other go out as one event, and so as
-// one credit: under a flood the core sends many small frames, and one hand-off
-// and one credit for each cost more than the bytes. A size change is never
-// joined, so the order stays.
+// Output frames that wait one after the other go out as one event: under a
+// flood the core sends many small frames, and a hand-off for each costs more
+// than the bytes. A size change is never joined, so the order stays.
 func joinData(queue []StreamEvent) (StreamEvent, int) {
 	if queue[0].Resize != nil {
 		return queue[0], 1
