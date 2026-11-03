@@ -1,0 +1,13 @@
+ ☐ Library
+
+Which library should the parser use?
+
+❯ 1. regexp
+     Standard library, no new dependency
+  2. strings only
+     Smaller, but harder to read
+  3. Type something.
+
+  4. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel

@@ -1,0 +1,10 @@
+ Do you want to create a.txt?
+ ❯ 1. Yes
+   2. No
+
+● Created a.txt.
+
+ Do you want to run make?
+ ❯ 1. Yes
+   2. Yes, and don't ask again
+   3. No
