@@ -24,7 +24,10 @@ msg() { # cwd time id model input output command; the tool call id is the messag
 	echo 'not json'
 } >"$dir/projects/p1/coord.jsonl"
 # A worker in a worktree of the project.
-msg /w/demo-wt/b-1 "$now" w1 claude-sonnet-5-5 1000 500 "go test ./..." >"$dir/projects/p2/worker.jsonl"
+{
+	msg /w/demo-wt/b-1 "$now" w1 claude-sonnet-5-5 1000 500 "go test ./..."
+	msg /w/demo-wt/b-1 "$now" w2 some-new-model 5 5 "ls"
+} >"$dir/projects/p2/worker.jsonl"
 # Another session: neither a worker nor a coordinator.
 msg /w/other "$now" o1 claude-sonnet-5-5 7 7 "ls" >"$dir/projects/p3/other.jsonl"
 
@@ -33,7 +36,7 @@ python3 - "$dir/out.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
 rows = {(r["role"], r["model"]): r for r in d["sessions"]}
-assert set(rows) == {("coordinator", "claude-opus-5-5"), ("worker", "claude-sonnet-5-5")}, rows
+assert set(rows) == {("coordinator", "claude-opus-5-5"), ("worker", "claude-sonnet-5-5"), ("worker", "some-new-model")}, rows
 c, w = rows[("coordinator", "claude-opus-5-5")], rows[("worker", "claude-sonnet-5-5")]
 assert c["turns"] == 3 and c["inp"] == 301 and c["out"] == 151 and c["sessions"] == 2, c
 assert d["spawned"] == 2, d["spawned"]  # the record written twice counts once
@@ -41,7 +44,13 @@ assert w["turns"] == 1 and w["inp"] == 1000, w
 want = (1000 * 2 + 500 * 10 + 1000 * 0.1) / 1e6
 assert abs(w["cost"] - want) < 1e-9, (w["cost"], want)
 assert d["github"] is None
+new = rows.get(("worker", "some-new-model"))
+assert new and new["unpriced"] == 1 and new["cost"] == 0, new
+assert w["unpriced"] == 0, w
 PY
-CLAUDE_CONFIG_DIR="$dir" python3 scripts/agent-metrics.py --project demo --no-github | grep -q "coordinators started 2 workers"
+CLAUDE_CONFIG_DIR="$dir" python3 scripts/agent-metrics.py --project demo --no-github >"$dir/out.txt"
+grep -q "coordinators started 2 workers" "$dir/out.txt"
+grep -q '\$0.00\*' "$dir/out.txt"
+grep -q "some turns use a model with no price here" "$dir/out.txt"
 python3 scripts/test_agent_metrics.py
 echo "test-agent-metrics.sh: ok"

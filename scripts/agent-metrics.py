@@ -132,7 +132,7 @@ def scan(root, start, project):
                     continue
                 n_spawn += n
                 # A message split over several records counts once, with the usage of its last record.
-                turns[msg.get("id") or id(r)] = (msg.get("model") or "?", usage(msg))
+                turns[msg.get("id") or f"no-id-{len(turns)}"] = (msg.get("model") or "?", usage(msg))
             kind = role(cwd, ever > 0, project)
             if kind is None or not turns:
                 continue

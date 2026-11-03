@@ -20,8 +20,8 @@ def test_prices():
     assert m.price("claude-opus-5-5", u(cw1h=1_000_000)) == 8
     assert m.price("claude-opus-5-5", u(cw5=1_000_000)) == 5
     # Haiku's higher tier applies above 100k context tokens.
-    assert m.price("claude-haiku-5-5", u(inp=1000)) == 1000 * 0.1 / 1e6
-    assert m.price("claude-haiku-5-5", u(inp=150_000)) == 150_000 * 0.5 / 1e6
+    assert abs(m.price("claude-haiku-5-5", u(inp=1000)) - 1000 * 0.1 / 1e6) < 1e-12
+    assert abs(m.price("claude-haiku-5-5", u(inp=150_000)) - 150_000 * 0.5 / 1e6) < 1e-12
     # The 5m and 1h parts come from cache_creation; with none, all cache writes are 5m.
     assert m.usage({"usage": {"cache_creation_input_tokens": 10}})["cw5"] == 10
     split = m.usage({"usage": {"cache_creation_input_tokens": 10, "cache_creation": {"ephemeral_1h_input_tokens": 4,
