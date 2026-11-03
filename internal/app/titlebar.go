@@ -2,93 +2,67 @@
 
 package app
 
-// The title bar: the agent tabs of herdr's current workspace, "+", the split button and the
-// panel toggle. The strip follows herdr's tree; a click becomes a [TabCommand] for the frame to
-// send. Its methods run on the UI thread.
+// The title bar: one tab for each hc terminal of the open project (#138, D49), the Review
+// button and the panel toggle. A click on a tab selects its agent. Its methods run on the UI
+// thread.
 
 import (
 	"slices"
+	"strconv"
 
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/theme"
-	"github.com/contursofran/contr/internal/herdr"
 )
 
-// Labels of the title bar parts. A tab's label is "<herdr label>, <status>".
+// Labels of the title bar parts. A worker tab's label is "<label>, <status>"; an orchestrator
+// tab's is "orchestrator <name>, <status>"; the badge's is "needs <N>".
 const (
 	LabelTabs      = "tabs"
-	LabelTabNew    = "New tab"
 	LabelTabActive = "active tab underline"
-	LabelSplit     = "Split pane"
 	LabelTitleDrag = "title drag"
 	// LabelReviewToggle is the title bar's Review button.
 	LabelReviewToggle = "Review"
+	// orchestratorMark comes before an orchestrator tab's name.
+	orchestratorMark = "◆ "
 )
 
-// titleBar is the strip the bar shows and where its clicks go.
+// LabelNeedsBadge is the accessible label of the needs badge on an orchestrator tab.
+func LabelNeedsBadge(n int) string { return "needs " + strconv.Itoa(n) }
+
+// titleBar holds the tabs the bar shows and where its clicks go.
 type titleBar struct {
-	strip herdr.TabStrip
-	// send takes a herdr command. It may be nil: the command is dropped.
-	send func(TabCommand)
+	tabs []AgentTab
+	// selectTab takes the tab that a click picked. It may be nil: the click is dropped.
+	selectTab func(AgentTab)
 	// toggleReview shows or hides the Review view. Nil: the bar has no Review button.
 	toggleReview func()
 	reviewOpen   bool
 }
 
-// setStrip takes in a strip and tells whether it differs from the last one. The frame builds the
-// bar again for any herdr change; this tells whether the bar's own content changed.
-func (b *titleBar) setStrip(s herdr.TabStrip) bool {
-	if b.strip.WorkspaceID == s.WorkspaceID && b.strip.SplitPaneID == s.SplitPaneID &&
-		slices.Equal(b.strip.Tabs, s.Tabs) {
+// setTabs takes in the tabs and tells whether they differ from the last ones.
+func (b *titleBar) setTabs(tabs []AgentTab) bool {
+	if slices.Equal(b.tabs, tabs) {
 		return false
 	}
-	b.strip = s
+	b.tabs = tabs
 	return true
 }
 
-func (b *titleBar) emit(cmd TabCommand) {
-	if b.send != nil {
-		b.send(cmd)
-	}
-}
-
-// clickTab: an inactive tab asks herdr to focus it, and the active tab does nothing.
+// clickTab: an unselected tab selects its agent, and the selected tab does nothing.
 func (b *titleBar) clickTab(i int) {
-	if i < 0 || i >= len(b.strip.Tabs) {
+	if i < 0 || i >= len(b.tabs) || b.tabs[i].Selected || b.selectTab == nil {
 		return
 	}
-	if tab := b.strip.Tabs[i]; !tab.Active {
-		b.emit(TabCommand{TabFocus, tab.ID})
-	}
+	b.selectTab(b.tabs[i])
 }
 
-// clickNew asks for a new focused tab in the strip's workspace.
-func (b *titleBar) clickNew() {
-	if b.strip.WorkspaceID != "" {
-		b.emit(TabCommand{TabCreate, b.strip.WorkspaceID})
-	}
-}
-
-// clickSplit splits the strip's pane to the right.
-func (b *titleBar) clickSplit() {
-	if b.strip.SplitPaneID != "" {
-		b.emit(TabCommand{TabSplitRight, b.strip.SplitPaneID})
-	}
-}
-
-// build adds the bar's parts to the title bar row: the tabs, "+", the drag stretch, then the
-// split button (when there is a pane to split) and the panel toggle at the right edge.
+// build adds the bar's parts to the title bar row: the tabs, the drag stretch, the Review
+// button and the panel toggle at the right edge.
 func (b *titleBar) build(c *ui.Context, panelOpen bool, togglePanel func()) {
-	b.tabs(c)
-	if b.strip.WorkspaceID != "" {
-		b.newButton(c)
-	}
+	b.tabRow(c)
 	ui.Box(c).Label(LabelTitleDrag).Grow(1).MinWidth(0).FillHeight().DragWindow()
-	if b.strip.SplitPaneID != "" {
-		b.splitButton(c)
-	}
 	if b.toggleReview != nil {
 		b.reviewButton(c)
 	}
@@ -107,28 +81,36 @@ func (b *titleBar) reviewButton(c *ui.Context) {
 	el.TextColor(theme.Color(color)).Children(func() { ui.Text(c, "Review") })
 }
 
-// tabs shows the tabs of the current workspace, in herdr's order. When they do not fit, each tab
+// tabRow shows the tabs of the open project in model order. When they do not fit, each tab
 // shrinks to TabMinWidth and its label ends in an ellipsis; the row clips what is left
 // (Rust D62).
-func (b *titleBar) tabs(c *ui.Context) {
+func (b *titleBar) tabRow(c *ui.Context) {
 	ui.Row(c).Label(LabelTabs).FillHeight().MinWidth(0).Shrink(1).Clip().Children(func() {
-		for i, item := range b.strip.Tabs {
-			b.tab(c, i, item)
+		for i, t := range b.tabs {
+			b.tab(c, i, t)
 		}
 	})
 }
 
-// tab shows the status icon, then herdr's label. The active tab has the terminal's background
-// and a white underline. Clicking an inactive tab asks herdr to focus it.
-func (b *titleBar) tab(c *ui.Context, i int, item herdr.TabItem) {
-	status := icons.FromAgentState(item.Status)
-	el := ui.ButtonBase(c).Label(item.Label + ", " + status.Label()).FillHeight().
+// tab shows the status icon, the label and, on the first orchestrator, the needs badge. The
+// selected tab has the terminal's background and a white underline. An orchestrator tab has
+// the terminal's background too, with its mark before the name.
+func (b *titleBar) tab(c *ui.Context, i int, t AgentTab) {
+	name := t.Label
+	label := name + ", " + t.Icon.Label()
+	if t.Orchestrator {
+		name = orchestratorMark + name
+		label = "orchestrator " + t.Label + ", " + t.Icon.Label()
+	}
+	el := ui.ButtonBase(c).Label(label).FillHeight().
 		MinWidth(theme.TabMinWidth).MaxWidth(theme.TabMaxWidth).Shrink(1).
 		PaddingX(theme.TabPaddingX).Gap(theme.TabGap).AlignItems(ui.Center)
 	color := uint32(theme.Text2)
-	if item.Active {
-		color = theme.Text
+	if t.Selected || t.Orchestrator {
 		el = el.Background(theme.Color(theme.BgTerminal))
+	}
+	if t.Selected {
+		color = theme.Text
 	} else {
 		el = el.Cursor(ui.CursorPointer).OnClick(func() { b.clickTab(i) })
 		if el.Hovered() {
@@ -136,39 +118,19 @@ func (b *titleBar) tab(c *ui.Context, i int, item herdr.TabItem) {
 		}
 	}
 	el.TextColor(theme.Color(color)).Children(func() {
-		ui.Box(c).Shrink(0).Children(func() { icons.Sized(c, status, theme.IconSizeSmall) })
-		ui.Text(c, item.Label).SingleLine().MinWidth(0).Shrink(1)
-		if item.Active {
+		ui.Box(c).Shrink(0).Children(func() { icons.Sized(c, t.Icon, theme.IconSizeSmall) })
+		ui.Text(c, name).SingleLine().MinWidth(0).Shrink(1)
+		if t.Needs > 0 {
+			// White: the badge is what needs the owner (DESIGN rule).
+			ui.Box(c).Label(LabelNeedsBadge(t.Needs)).Shrink(0).PaddingX(theme.BadgePadX).
+				Radius(theme.BadgeRadius).Background(theme.Color(theme.Text)).
+				TextColor(theme.Color(theme.BgTerminal)).Children(func() {
+				ui.Text(c, strconv.Itoa(t.Needs))
+			})
+		}
+		if t.Selected {
 			ui.Box(c).Label(LabelTabActive).Absolute().Bottom(0).Left(0).Right(0).
 				Height(theme.TabUnderline).Background(theme.Color(theme.Text))
 		}
-	})
-}
-
-// newButton is "+": a new focused tab in the workspace.
-func (b *titleBar) newButton(c *ui.Context) {
-	el := ui.ButtonBase(c).Label(LabelTabNew).Width(theme.TitleButtonSize).FillHeight().Shrink(0).
-		Cursor(ui.CursorPointer).Center().OnClick(b.clickNew)
-	color := uint32(theme.TextDim)
-	if el.Hovered() {
-		color = theme.Text
-	}
-	el.TextColor(theme.Color(color)).Children(func() { ui.Text(c, "+") })
-}
-
-// splitButton is an outline box with a vertical line in the middle. It splits the strip's pane
-// to the right (Rust D20).
-func (b *titleBar) splitButton(c *ui.Context) {
-	el := ui.ButtonBase(c).Label(LabelSplit).Size(theme.TitleButtonSize, theme.TitleButtonSize).Shrink(0).
-		Cursor(ui.CursorPointer).OnClick(b.clickSplit)
-	color := uint32(theme.TextDim)
-	if el.Hovered() {
-		color = theme.Text
-	}
-	el.Children(func() {
-		ui.Row(c).Size(theme.TitleGlyphWidth, theme.TitleGlyphHeight).
-			Border(1, theme.Color(color)).Radius(theme.SidebarToggleRadius).Center().Children(func() {
-			ui.Box(c).Width(1).FillHeight().Background(theme.Color(color))
-		})
 	})
 }
