@@ -104,8 +104,12 @@ type Frame struct {
 	Host  *host.Host
 	Usage *usage.Sampler
 
-	status      statusBar
-	bar         titleBar
+	status statusBar
+	bar    titleBar
+	// agentSnap gives the agents; nil before Attach or without agents. openProject is the
+	// project the title bar shows (D50).
+	agentSnap   func() agentstate.Snapshot
+	openProject string
 	sidebarOpen bool
 	panelOpen   bool
 	reviewOpen  bool
@@ -319,12 +323,8 @@ func (f *Frame) titleBar(c *ui.Context) {
 			ui.Box(c).Width(theme.TrafficLightInset).Shrink(0)
 			toggleButton(c, LabelSidebarReopen, false, f.ToggleSidebar)
 		}
-		var strip herdr.TabStrip
-		if f.Herdr != nil {
-			strip = herdr.TabStripFromTree(f.Herdr.Live().Tree)
-		}
-		f.bar.setStrip(strip)
-		f.bar.send = f.send
+		f.bar.setTabs(f.agentTabs())
+		f.bar.selectTab = f.selectTab
 		f.bar.toggleReview, f.bar.reviewOpen = f.ToggleReview, f.reviewOpen
 		f.bar.build(c, f.panelOpen, f.TogglePanel)
 	})
@@ -348,6 +348,38 @@ func (f *Frame) terminal(c *ui.Context) {
 		f.run(c, f.Slots.Terminal)
 		f.run(c, f.Slots.Card)
 	})
+}
+
+// agentTabs returns the tabs of the open project. The open project follows the selected
+// orchestrator or worker, and keeps its last value for any other selection.
+func (f *Frame) agentTabs() []AgentTab {
+	if f.agentSnap == nil {
+		return nil
+	}
+	snap := f.agentSnap()
+	var sel state.Selected
+	var ok bool
+	if f.Selection != nil {
+		sel, ok = f.Selection.Current()
+	}
+	f.openProject = OpenProject(snap, sel, ok, f.openProject)
+	selected := ""
+	if ok && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker) {
+		selected = sel.ID
+	}
+	return AgentTabs(snap, f.openProject, selected)
+}
+
+// selectTab selects the agent of a title bar tab.
+func (f *Frame) selectTab(t AgentTab) {
+	if f.Selection == nil {
+		return
+	}
+	kind := state.KindWorker
+	if t.Orchestrator {
+		kind = state.KindOrchestrator
+	}
+	f.Selection.Select(state.Selected{Kind: kind, ID: t.Address})
 }
 
 func (f *Frame) send(cmd TabCommand) {
@@ -445,6 +477,7 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	}
 	if src != nil {
 		agentSnap = src.Snapshot
+		f.agentSnap = agentSnap
 		run := Runner{Post: w.Update}
 		f.Card = &FloatCard{Source: src, Run: run, Invalidate: w.Invalidate,
 			Select: func(address string, orchestrator bool) {
