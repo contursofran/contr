@@ -524,3 +524,60 @@ func TestWatchStampsLastOutput(t *testing.T) {
 		t.Errorf("b.LastOutput = %v, want %v", last[1].LastOutput, t0.Add(time.Minute))
 	}
 }
+
+func TestSendKeysParams(t *testing.T) {
+	f := &fakeCore{}
+	m := New(f, DefaultConfig())
+	if err := m.SendKeys(context.Background(), "w1", []byte("1")); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.calls) != 1 || f.calls[0].Method != "terminal.keys" {
+		t.Fatalf("calls = %+v, want one terminal.keys", f.calls)
+	}
+	want := map[string]any{"terminal": "w1", "keys": []any{"1"}}
+	if !reflect.DeepEqual(f.calls[0].Params, want) {
+		t.Errorf("params = %v, want %v", f.calls[0].Params, want)
+	}
+}
+
+func TestSendKeysNames(t *testing.T) {
+	f := &fakeCore{}
+	m := New(f, DefaultConfig())
+	in := "2 \r\t\x1b\x1b[B\x1bOA\x7f\x03A"
+	if err := m.SendKeys(context.Background(), "w1", []byte(in)); err != nil {
+		t.Fatal(err)
+	}
+	want := []any{"2", "space", "enter", "tab", "esc", "down", "up", "backspace", "ctrl+c", "A"}
+	if got := f.calls[0].Params["keys"]; !reflect.DeepEqual(got, want) {
+		t.Errorf("keys = %v, want %v", got, want)
+	}
+}
+
+func TestSendKeysEmpty(t *testing.T) {
+	f := &fakeCore{}
+	if err := New(f, DefaultConfig()).SendKeys(context.Background(), "w1", nil); err == nil {
+		t.Error("no error for empty keys")
+	}
+	if len(f.calls) != 0 {
+		t.Errorf("calls = %+v, want none", f.calls)
+	}
+}
+
+func TestSendKeysUnnamedByte(t *testing.T) {
+	f := &fakeCore{}
+	if err := New(f, DefaultConfig()).SendKeys(context.Background(), "w1", []byte("1\x00")); err == nil {
+		t.Error("no error for a byte with no name")
+	}
+	if len(f.calls) != 0 {
+		t.Errorf("calls = %+v, want none: nothing is sent when a byte is bad", f.calls)
+	}
+}
+
+func TestSendKeysClosed(t *testing.T) {
+	f := &fakeCore{handle: map[string]func(map[string]any) (any, error){
+		"terminal.keys": func(map[string]any) (any, error) { return nil, hc.ErrClosed },
+	}}
+	if err := New(f, DefaultConfig()).SendKeys(context.Background(), "w1", []byte("1")); !errors.Is(err, hc.ErrClosed) {
+		t.Errorf("err = %v, want ErrClosed", err)
+	}
+}

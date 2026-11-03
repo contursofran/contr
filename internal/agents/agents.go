@@ -333,6 +333,54 @@ func (m *Manager) Send(ctx context.Context, name, text string) error {
 	return m.core.Call(ctx, "terminal.send", map[string]any{"terminal": name, "text": text}, nil)
 }
 
+// SendKeys presses raw keys in a worker and does not press Enter. hc's
+// terminal.keys method takes key names, so each byte becomes a name: printable
+// ASCII is itself, and CR, LF, tab, ESC, DEL, space, Ctrl+A..Z and the arrow
+// sequences ESC [ A..D have names. Any other byte is an error and nothing is
+// sent.
+func (m *Manager) SendKeys(ctx context.Context, name string, keys []byte) error {
+	if len(keys) == 0 {
+		return errors.New("agents: no keys to send")
+	}
+	names, err := keyNames(keys)
+	if err != nil {
+		return err
+	}
+	return m.core.Call(ctx, "terminal.keys", map[string]any{"terminal": name, "keys": names}, nil)
+}
+
+// keyNames turns raw bytes into hc key names.
+func keyNames(keys []byte) ([]string, error) {
+	var out []string
+	for i := 0; i < len(keys); i++ {
+		b := keys[i]
+		switch {
+		case b == 0x1b:
+			if i+2 < len(keys) && (keys[i+1] == '[' || keys[i+1] == 'O') && keys[i+2] >= 'A' && keys[i+2] <= 'D' {
+				out = append(out, [...]string{"up", "down", "right", "left"}[keys[i+2]-'A'])
+				i += 2
+			} else {
+				out = append(out, "esc")
+			}
+		case b == '\r' || b == '\n':
+			out = append(out, "enter")
+		case b == '\t':
+			out = append(out, "tab")
+		case b == 0x7f:
+			out = append(out, "backspace")
+		case b == ' ':
+			out = append(out, "space")
+		case b >= 1 && b <= 26:
+			out = append(out, "ctrl+"+string(rune('a'+b-1)))
+		case b > ' ' && b < 0x7f:
+			out = append(out, string(rune(b)))
+		default:
+			return nil, fmt.Errorf("agents: key byte 0x%02x has no hc name", b)
+		}
+	}
+	return out, nil
+}
+
 // Interrupt presses a worker's stop key. The outcome is hc's: stopped,
 // exited, still_working or unknown.
 func (m *Manager) Interrupt(ctx context.Context, name string) (string, error) {
