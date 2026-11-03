@@ -8,7 +8,7 @@ Sessions come from Claude Code transcripts: $CLAUDE_CONFIG_DIR/projects/*/*.json
   - a worker when its folder is a worktree of the project: <...>/<project>-wt/<branch>
   - a coordinator when it runs `contr agents spawn`, in the project folder or another one
 Other sessions are left out. The project defaults to the name of the repository in the current folder.
-Turns and tokens count from the window start, by record time. Cost uses the list prices below.
+Turns and tokens count from the window start, by record time. Cost is an estimate at the list prices below.
 
 From GitHub (gh, unless --no-github), for --repo (default: the current folder's repository):
   CI per workflow: runs, failures, median queue and run time, total run time
@@ -109,7 +109,7 @@ def role(cwd, spawned, project):
 def scan(root, start, project):
     """One row per (role, model): sessions, turns, tokens, cost, and how many workers coordinators spawned."""
     rows = collections.defaultdict(lambda: {"sessions": set(), "turns": 0, "inp": 0, "out": 0, "cr": 0, "cw": 0,
-                                            "cost": 0.0, "unpriced": 0})
+                                            "cw5": 0, "cw1h": 0, "cost": 0.0, "unpriced": 0})
     spawned_total = 0
     for folder in sorted(os.listdir(root)) if os.path.isdir(root) else []:
         d = os.path.join(root, folder)
@@ -118,27 +118,30 @@ def scan(root, start, project):
         for name in sorted(os.listdir(d)):
             if not name.endswith(".jsonl"):
                 continue
-            cwd, n_spawn, turns, seen, tools = "", 0, [], set(), set()
+            # The role uses spawns over the whole file, so a coordinator that started its workers
+            # before the window still counts; "workers started" counts only spawns in the window.
+            cwd, ever, n_spawn, turns, tools = "", 0, 0, {}, set()
             for r in records(os.path.join(d, name)):
                 cwd = cwd or r.get("cwd") or ""
-                if r["type"] != "assistant" or epoch(r["timestamp"]) < start:
+                if r["type"] != "assistant":
                     continue
                 msg = r.get("message") or {}
-                n_spawn += spawns(msg, tools)
-                mid = msg.get("id")
-                if mid in seen:  # a message split over several records counts once
+                n = spawns(msg, tools)
+                ever += n
+                if epoch(r["timestamp"]) < start:
                     continue
-                seen.add(mid)
-                turns.append((msg.get("model") or "?", usage(msg)))
-            kind = role(cwd, n_spawn > 0, project)
+                n_spawn += n
+                # A message split over several records counts once, with the usage of its last record.
+                turns[msg.get("id") or id(r)] = (msg.get("model") or "?", usage(msg))
+            kind = role(cwd, ever > 0, project)
             if kind is None or not turns:
                 continue
             spawned_total += n_spawn
-            for model, u in turns:
+            for model, u in turns.values():
                 row = rows[(kind, model)]
                 row["sessions"].add(name)
                 row["turns"] += 1
-                for k in ("inp", "out", "cr"):
+                for k in ("inp", "out", "cr", "cw5", "cw1h"):
                     row[k] += u[k]
                 row["cw"] += u["cw5"] + u["cw1h"]
                 cost = price(model, u)
@@ -224,7 +227,7 @@ def fmt_tok(n):
 
 
 def print_text(start, project, rows, spawned, flow):
-    since = datetime.fromtimestamp(start).strftime("%Y-%m-%d %H:%M")
+    since = datetime.fromtimestamp(start, timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     print(f"Agent sessions of {project} since {since}; coordinators started {spawned} workers")
     print(f"{'role':<12}{'model':<20}{'sessions':>9}{'turns':>7}{'input':>8}{'output':>8}{'c.read':>8}{'c.write':>8}"
           f"{'cost':>10}")
