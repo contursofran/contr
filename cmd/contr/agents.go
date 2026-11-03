@@ -21,7 +21,7 @@ import (
 
 const agentsUsage = `Usage:
   contr agents ls [--all] [--json]                 list the workers
-  contr agents spawn --name N --profile P [--issue I] [--worktree DIR]
+  contr agents spawn --name N --profile P [--issue I] [--worktree DIR] [--project P]
                      [--role R] [--no-parent] [--json] [--] [task…]
                                                    start a worker
   contr agents send <name> <text…>                 type text and press Enter
@@ -90,6 +90,7 @@ func runAgents(args []string, stdout, stderr io.Writer, dial func(context.Contex
 		profile  = fs.String("profile", "", "profile name")
 		issue    = fs.String("issue", "", "issue number")
 		worktree = fs.String("worktree", "", "working folder")
+		project  = fs.String("project", "", "project name")
 		role     = fs.String("role", "", "role (default: the profile)")
 		noParent = fs.Bool("no-parent", false, "start without a parent terminal")
 		lines    = fs.Int("lines", 0, "only the last lines")
@@ -106,7 +107,7 @@ func runAgents(args []string, stdout, stderr io.Writer, dial func(context.Contex
 	}
 	allowed := map[string][]string{
 		"ls":    {"all", "json"},
-		"spawn": {"name", "profile", "issue", "worktree", "role", "no-parent", "json"},
+		"spawn": {"name", "profile", "issue", "worktree", "project", "role", "no-parent", "json"},
 		"read":  {"lines"},
 	}
 	var bad string
@@ -158,7 +159,7 @@ func runAgents(args []string, stdout, stderr io.Writer, dial func(context.Contex
 			}
 			return writeTable(stdout, ws)
 		case "spawn":
-			spec := agents.Spec{Name: *name, Profile: *profile, Role: *role, Issue: *issue, Worktree: *worktree, Task: strings.Join(pos, " ")}
+			spec := agents.Spec{Name: *name, Profile: *profile, Role: *role, Issue: *issue, Worktree: *worktree, Project: *project, Task: strings.Join(pos, " ")}
 			if !*noParent {
 				spec.Parent = getenv("HC_TERMINAL_ID")
 			}

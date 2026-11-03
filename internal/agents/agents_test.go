@@ -414,3 +414,113 @@ func TestNewMakesARelativeKitAbsolute(t *testing.T) {
 		t.Errorf("argv = %v, want the kit as %s", got, abs)
 	}
 }
+
+func TestWorkerDecodesProjectLabel(t *testing.T) {
+	labels := map[string]string{LabelApp: AppAgent, LabelProject: "x"}
+	w, err := decodeWorker(raw(term("t1", "a", "live", labels, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Project != "x" {
+		t.Errorf("Project = %q, want x", w.Project)
+	}
+}
+
+func TestSpawnSetsProjectLabel(t *testing.T) {
+	f := &fakeCore{handle: map[string]func(map[string]any) (any, error){
+		"terminal.run": func(p map[string]any) (any, error) { return term("t1", "a", "live", nil, nil), nil },
+	}}
+	m := New(f, DefaultConfig())
+	if _, err := m.Spawn(context.Background(), Spec{Name: "a", Profile: "builder", Project: "contr"}); err != nil {
+		t.Fatal(err)
+	}
+	if l := f.last().Params["labels"].(map[string]any); l[LabelProject] != "contr" {
+		t.Errorf("labels = %v", l)
+	}
+	if _, err := m.Spawn(context.Background(), Spec{Name: "b", Profile: "builder"}); err != nil {
+		t.Fatal(err)
+	}
+	if l := f.last().Params["labels"].(map[string]any); l[LabelProject] != nil {
+		t.Errorf("empty project sets a label: %v", l)
+	}
+}
+
+func TestSpawnRejectsBadProject(t *testing.T) {
+	f := &fakeCore{}
+	m := New(f, DefaultConfig())
+	if _, err := m.Spawn(context.Background(), Spec{Name: "a", Profile: "builder", Project: "a\nb"}); err == nil {
+		t.Fatal("no error for a project with a newline")
+	}
+	if len(f.calls) != 0 {
+		t.Errorf("terminal.run called: %v", f.calls)
+	}
+}
+
+func TestOrchestratorByRole(t *testing.T) {
+	for role, want := range map[string]bool{RoleOrchestrator: true, "builder": false, "": false} {
+		if got := (Worker{Role: role}).Orchestrator(); got != want {
+			t.Errorf("role %q: Orchestrator() = %v, want %v", role, got, want)
+		}
+	}
+}
+
+func TestWorkerCommand(t *testing.T) {
+	labels := map[string]string{LabelApp: AppAgent}
+	cmd := func(extra map[string]any) string {
+		tm := term("t1", "a", "live", labels, nil)
+		for k, v := range extra {
+			tm[k] = v
+		}
+		w, err := decodeWorker(raw(tm))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return w.Command
+	}
+	argv := map[string]any{"argv": []string{"/usr/bin/claude", "--model", "x"}}
+	if got := cmd(argv); got != "claude" {
+		t.Errorf("argv fallback = %q, want claude", got)
+	}
+	withFg := map[string]any{"argv": argv["argv"], "foreground": map[string]any{"name": "node"}}
+	if got := cmd(withFg); got != "node" {
+		t.Errorf("foreground = %q, want node", got)
+	}
+	if got := cmd(map[string]any{"foreground": nil}); got != "" {
+		t.Errorf("nothing known = %q, want empty", got)
+	}
+}
+
+func TestWatchStampsLastOutput(t *testing.T) {
+	t0 := time.Date(2026, 11, 3, 10, 0, 0, 0, time.UTC)
+	gets := map[string]any{
+		"t1": term("t1", "a", "live", builderLabels, nil),
+		"t2": term("t2", "b", "live", builderLabels, nil),
+	}
+	s := &fakeStream{
+		snap:   hc.Snapshot{Seq: 1, Terminals: []json.RawMessage{raw(gets["t1"]), raw(gets["t2"])}},
+		events: make(chan hc.Event, 4),
+	}
+	f := &fakeCore{stream: s, handle: map[string]func(map[string]any) (any, error){
+		"terminal.get": func(p map[string]any) (any, error) { return gets[p["terminal"].(string)], nil },
+	}}
+	m := New(f, DefaultConfig())
+	ticks := 0
+	m.now = func() time.Time { ticks++; return t0.Add(time.Duration(ticks-1) * time.Minute) } // one minute per event
+
+	s.events <- hc.Event{Method: "event", Terminal: "t1", Type: "output"}
+	gets["t2"] = term("t2", "b", "live", builderLabels, map[string]any{"state": "working"})
+	s.events <- hc.Event{Method: "event", Terminal: "t2", Type: "status"}
+	close(s.events)
+
+	var last []Worker
+	_ = m.Watch(context.Background(), func(ws []Worker) { last = ws })
+	if len(last) != 2 {
+		t.Fatalf("workers = %v", last)
+	}
+	if !last[0].LastOutput.Equal(t0) {
+		t.Errorf("a.LastOutput = %v, want %v", last[0].LastOutput, t0)
+	}
+	if !last[1].LastOutput.Equal(t0.Add(time.Minute)) {
+		t.Errorf("b.LastOutput = %v, want %v", last[1].LastOutput, t0.Add(time.Minute))
+	}
+}

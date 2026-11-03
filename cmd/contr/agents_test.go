@@ -145,6 +145,14 @@ func TestAgentsSpawn(t *testing.T) {
 	}
 
 	core.params = nil
+	if code, _, errs := run(t, core, nil, "spawn", "--name", "o", "--profile", "builder", "--role", "orchestrator", "--project", "contr"); code != 0 {
+		t.Fatalf("--project: %d %q", code, errs)
+	}
+	if l := core.params[0]["labels"].(map[string]any); l["project"] != "contr" || l["role"] != "orchestrator" {
+		t.Errorf("labels = %v", l)
+	}
+
+	core.params = nil
 	if code, _, _ := run(t, core, env, "spawn", "--no-parent", "--name", "x", "--profile", "builder"); code != 0 || core.params[0]["no_parent"] != true {
 		t.Errorf("--no-parent: %d %v", code, core.params)
 	}

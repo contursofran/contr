@@ -64,6 +64,10 @@ func (m *Manager) apply(ctx context.Context, ws map[string]Worker, e hc.Event) (
 		if err != nil {
 			return false, err
 		}
+		for k, v := range fresh { // a snapshot has no output time: keep ours
+			v.LastOutput = ws[k].LastOutput
+			fresh[k] = v
+		}
 		changed := !reflect.DeepEqual(fresh, ws)
 		clear(ws)
 		for k, v := range fresh {
@@ -100,8 +104,15 @@ func (m *Manager) apply(ctx context.Context, ws map[string]Worker, e hc.Event) (
 		return had, nil
 	}
 	w := t.worker()
+	// hc has no output time: stamp the event (D35). The stamp alone is not a
+	// change, so a busy terminal does not repaint the UI; the next change
+	// carries the newest stamp.
+	stamp := m.now()
+	w.LastOutput = old.LastOutput
+	changed := !had || !reflect.DeepEqual(old, w)
+	w.LastOutput = stamp
 	ws[e.Terminal] = w
-	return !had || !reflect.DeepEqual(old, w), nil
+	return changed, nil
 }
 
 func fromSnapshot(snap hc.Snapshot) (map[string]Worker, error) {
