@@ -83,11 +83,16 @@ func (n *NeedsRow) Tabs() []NeedTab {
 	if n.Snapshot == nil {
 		return nil
 	}
-	snap := n.Snapshot()
 	project := ""
 	if n.Scope != nil {
 		project = n.Scope()
 	}
+	return needItems(n.Snapshot(), project)
+}
+
+// needItems returns the items of the needs-you row for project, or for all
+// projects when project is "": blocked workers, then questions, then to-dos.
+func needItems(snap agentstate.Snapshot, project string) []NeedTab {
 	in := func(p string) bool { return project == "" || p == project }
 	done := make(map[string]bool, len(snap.Resolved))
 	for _, id := range snap.Resolved {
