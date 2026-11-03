@@ -31,6 +31,7 @@ in. It is written in Go with MyGo's native UI.
 |---|---|
 | `cmd/contr` | `main` and the command line |
 | `internal/app` | the window content: frame and views |
+| `internal/app/kit` | shared view parts: list row, +/− counts, switch, code view |
 | `internal/herdr` | herdr's JSON API: wire, model, reader, command, tabs, agents |
 | `internal/herdr/endpoint` | herdr's binary endpoint socket: codec, messages, surface, conn, link, osc52 |
 | `internal/usage` | plan usage: Claude status line, Codex logs |
@@ -56,8 +57,11 @@ Add packages under `internal/` when a change needs them.
   you add a loop, a timer, an animation or a goroutine that runs forever.
 - No `panic` in non-test code: return errors. Do not drop errors silently:
   log them or show them.
-- The UI follows `docs/DESIGN.md` exactly: mono font, greyscale, and white
-  only for what needs the owner.
+- The UI follows `docs/DESIGN.md` exactly: mono font, greyscale (the two
+  diff colors are the only hues), and white only for what needs the owner.
+- Build views from `internal/app/kit` and MyGo's components (`ui.List`,
+  `ui.Segmented`, `editor.DiffView`, `Text.NoWrap().Ellipsis`); do not build
+  rows, clipping, scroll lists or code views by hand again.
 - Small changes: one issue, one branch, one PR, ideally under about 400
   changed lines. Test-heavy changes stay whole.
 - Adapted code: `NOTICE` credits the projects that code comes from. When you
