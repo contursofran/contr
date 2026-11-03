@@ -23,6 +23,8 @@ const (
 	LabelTabActive = "active tab underline"
 	LabelSplit     = "Split pane"
 	LabelTitleDrag = "title drag"
+	// LabelReviewToggle is the title bar's Review button.
+	LabelReviewToggle = "Review"
 )
 
 // titleBar is the strip the bar shows and where its clicks go.
@@ -30,6 +32,9 @@ type titleBar struct {
 	strip herdr.TabStrip
 	// send takes a herdr command. It may be nil: the command is dropped.
 	send func(TabCommand)
+	// toggleReview shows or hides the Review view. Nil: the bar has no Review button.
+	toggleReview func()
+	reviewOpen   bool
 }
 
 // setStrip takes in a strip and tells whether it differs from the last one. The frame builds the
@@ -84,7 +89,22 @@ func (b *titleBar) build(c *ui.Context, panelOpen bool, togglePanel func()) {
 	if b.strip.SplitPaneID != "" {
 		b.splitButton(c)
 	}
+	if b.toggleReview != nil {
+		b.reviewButton(c)
+	}
 	panelToggle(c, panelOpen, togglePanel)
+}
+
+// reviewButton is the "Review" toggle: it swaps the terminal area for the Review view. It is
+// white while the view shows (D37).
+func (b *titleBar) reviewButton(c *ui.Context) {
+	el := ui.ButtonBase(c).Label(LabelReviewToggle).FillHeight().PaddingX(theme.TabPaddingX).Shrink(0).
+		Cursor(ui.CursorPointer).Center().OnClick(b.toggleReview)
+	color := uint32(theme.TextDim)
+	if b.reviewOpen || el.Hovered() {
+		color = theme.Text
+	}
+	el.TextColor(theme.Color(color)).Children(func() { ui.Text(c, "Review") })
 }
 
 // tabs shows the tabs of the current workspace, in herdr's order. When they do not fit, each tab
