@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/contursofran/contr/internal/hc/hctest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -59,10 +60,8 @@ func TestAppBench(t *testing.T) {
 	}
 
 	// A short path: macOS limits socket paths to 103 bytes.
-	dir, err := os.MkdirTemp("/tmp", "contr-bench")
-	if err != nil {
-		t.Fatal(err)
-	}
+	core := hctest.New(t, "contr-bench", hctest.Session("b"))
+	dir := core.Dir
 	proj := filepath.Join(dir, "proj")
 	if err := os.MkdirAll(proj, 0o755); err != nil {
 		t.Fatal(err)
@@ -70,22 +69,7 @@ func TestAppBench(t *testing.T) {
 
 	// The scratch core: its own session and XDG folders. The owner's core is
 	// never used.
-	env := []string{fmt.Sprintf("HC_SESSION=b%d", os.Getpid())}
-	for _, v := range []string{"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR", "XDG_CACHE_HOME"} {
-		p := filepath.Join(dir, strings.ToLower(v[4:6]))
-		if err := os.MkdirAll(p, 0o700); err != nil {
-			t.Fatal(err)
-		}
-		env = append(env, v+"="+p)
-	}
-	t.Cleanup(func() {
-		cmd := exec.Command("hc", "server", "stop")
-		cmd.Env = append(cmd.Environ(), env...)
-		if msg, err := cmd.CombinedOutput(); err != nil {
-			t.Logf("stop the scratch core: %v: %s", err, msg)
-		}
-		_ = os.RemoveAll(dir)
-	})
+	env := core.Env
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
 	cl, err := hc.Dial(ctx, hc.Command("", env))

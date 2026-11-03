@@ -143,12 +143,19 @@ func workerIcon(w agents.Worker) icons.Status {
 	return icons.Idle
 }
 
-// workerSub is the second line: the command, how it ended when it ended,
-// and the age of the last output.
+// workerSub is the second line: the role and state from the hc labels, how
+// it ended when it ended, and the age of the last output. The command is the
+// terminal's foreground name, which Claude Code sets to its version, so it
+// shows only for a worker with no role (#212).
 func workerSub(w agents.Worker, now time.Time) string {
 	var parts []string
-	if w.Command != "" {
+	if w.Role != "" {
+		parts = append(parts, w.Role)
+	} else if w.Command != "" {
 		parts = append(parts, w.Command)
+	}
+	if s := StatusWord(w); s != "" && s != "ended" {
+		parts = append(parts, s)
 	}
 	if !w.Live && w.ExitCode != nil {
 		parts = append(parts, fmt.Sprintf("exit %d", *w.ExitCode))
