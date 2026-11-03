@@ -17,6 +17,9 @@ import (
 	"github.com/contursofran/contr/internal/owner"
 )
 
+// keyOptions are the digit keys; the key at index i sends option place i.
+var keyOptions = []ui.Key{ui.Key1, ui.Key2, ui.Key3, ui.Key4}
+
 // Labels of the answer card.
 const (
 	LabelAnswerCard  = "answer card"

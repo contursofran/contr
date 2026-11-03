@@ -413,10 +413,6 @@ func (f *Frame) syncBoard() {
 	if f.Outbox != nil && f.Board != nil {
 		f.Outbox.Sync(f.Board.View().Snapshot)
 	}
-	// After the outbox, so CanAct is current.
-	if f.Panel != nil {
-		f.Panel.Sync()
-	}
 	f.syncAgents()
 }
 
@@ -486,14 +482,6 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	f.AgentsList = NewAgentsList(agentSnap, f.Selection)
 	f.Slots.Agents = f.AgentsList.View
 	f.Board.Sync(h.Live().Tree)
-	f.Panel = NewBoardPanel(PanelDeps{
-		Board:      f.Board,
-		Outbox:     f.Outbox,
-		Tree:       func() *herdr.HerdrTree { return h.Live().Tree },
-		Status:     f.Status.Show,
-		Invalidate: w.Invalidate,
-	})
-	f.Slots.Panel = f.Panel.View
 	if f.Host == nil {
 		f.Host = host.NewSystem(w.Invalidate)
 	}
@@ -510,6 +498,15 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 		f.Needs.Open = f.Card.Open
 	}
 	f.Slots.Needs = f.Needs.View
+	f.Panel = &BoardPanel{Snapshot: agentSnap, Needs: f.Needs.Tabs}
+	if src != nil {
+		f.Panel.Scope = f.Needs.Scope
+		f.Panel.Open = f.Card.Open
+		f.Panel.Select = func(address string) {
+			f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: address})
+		}
+	}
+	f.Slots.Panel = f.Panel.View
 	if f.Usage == nil {
 		f.Usage = usage.NewFileSampler(w.Invalidate)
 	}

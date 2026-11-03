@@ -8,12 +8,12 @@ Source of truth: the "herdr sidebar mockup" design canvas, artboards **G · cont
 ┌ sidebar 280 ─┬ title bar 40: agent tabs ··················· [split] [panel] ┐
 │ ● ● ●  [◧] contr                                                          │
 │ Spaces  + new│ terminal (selected agent)            │ board panel 440       │
-│ [Local card] │                                      │  Board | Report  wrap │
-│ client main  │                                      │  summary line         │
-│  ◐ sort-bags │                                      │  Work  plan build …   │
+│ [Local card] │                                      │  Work  plan build …   │
+│ client main  │                                      │  rows                 │
+│  ◐ sort-bags │                                      │  Needs you N          │
 │  ! bag-drag  │                                      │  rows                 │
-│ server main  │                                      │  Needs you N          │
-│ linux-pc     │ [ prompt ]                           │  rows                 │
+│ server main  │                                      │                       │
+│ linux-pc     │ [ needs-you row ]                    │                       │
 │ Orchestrators│                                      │  [answer card 168]    │
 │  ○ lead      │                                      │                       │
 │ Agents N run │                                      │                       │
@@ -67,13 +67,12 @@ One icon set for sidebar, tabs, board stages and needs-you rows. Each has an acc
 
 ## Board panel
 
-- **Work rows:** `#640` label, title, second line saying who/what holds it (`b-1151 building`, `CI on linux-pc`, `your test` in the "you" style), then five 44px stage columns headed `plan build review CI you`.
+- **Work rows:** `#640` label, title, second line saying who/what holds it (`b-1151 building`, `CI on linux-pc`, `your test` in the "you" style), then four 44px stage columns headed `plan build review you`. The stage comes from the role (D46): planner is plan, builder is build, reviewer is review; earlier stages show done and later ones not started. The you column lights when the worker is blocked or an open question or to-do names it. A click on a row selects the worker. Rows are the workers of the selected orchestrator's project (all projects when none is selected).
 - **Needs-you row:** one line under the terminal. Tabs: blocked workers first, then questions (`D7`), then to-dos (`T12`; kind `know` shows the fyi icon). It shows the selected orchestrator's project, or all projects when none is selected. Hidden when empty. Resolved items strike through until "clear done". A click picks a tab and opens the answer card. There is no pin bar.
-- **Needs you:** icon, id (`D7`, `T12`), title, kind (`decide`, `do`, `fyi`, `done`). Rows never move on their own; resolved ones strike through until "clear done".
+- **Needs you (panel list):** the same tabs as the row, in the same order, one line each: icon, id (`D7`, `T12`), title, kind (`decide`, `do`, `fyi`, `done`). Rows never move on their own; resolved ones strike through until "clear done".
 - **Answer card:** floats over the bottom of the terminal area, above the needs-you row; fixed 168px. A question shows its options, the recommended one first as the filled button, and a field for a free answer. Enter sends the typed text, else the recommended option; `1`–`4` send an option in the card's order; Escape or Close closes it. The answer goes to the coordinator that asked as `Owner answered <ID>: <answer>`. If the send fails, the answer stays saved and the card shows the failure. A to-do shows Done; a blocked worker shows what it says and a button that selects it. A resolved item shows no options.
 - **Panel follows the selected tab:** an orchestrator (or nothing) selected shows the board; a worker selected shows that worker: name, role and issue, worktree, status, the last 40 lines of its terminal in a code view, and Interrupt and Stop. Stop needs a second click.
-- **Report tab:** the selected row's RESULT.md.
-- **Wrap up / keep going** in the panel header.
+- **No Wrap up or Keep going button** (owner, 2026-11-03): the owner types "wrap up" in the orchestrator terminal. The Report tab is gone.
 
 ## Review
 

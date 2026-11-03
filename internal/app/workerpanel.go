@@ -23,6 +23,7 @@ import (
 const (
 	LabelWorkerPanel  = "worker panel"
 	LabelWorkerOutput = "worker output"
+	LabelWorkerGone   = "worker gone"
 	WorkerInterrupt   = "Interrupt"
 	WorkerStop        = "Stop"
 	WorkerConfirmStop = "Stop? Click again"
@@ -162,7 +163,7 @@ func (p *WorkerPanel) View(c *ui.Context) {
 	w, ok := p.Selected()
 	ui.Column(c).Label(LabelWorkerPanel).Fill().Children(func() {
 		if !ok {
-			TextLine(c, LabelBoardEmpty, "worker gone", theme.TextDim)
+			TextLine(c, LabelWorkerGone, "worker gone", theme.TextDim)
 			return
 		}
 		p.follow(w.Address)
