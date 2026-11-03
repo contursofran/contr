@@ -3,6 +3,7 @@ package agents
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"reflect"
 
 	"github.com/contursofran/contr/internal/hc"
@@ -57,7 +58,7 @@ func (m *Manager) apply(ctx context.Context, ws map[string]Worker, e hc.Event) (
 	case "missed":
 		var snap hc.Snapshot
 		if err := json.Unmarshal(e.Data, &snap); err != nil {
-			return false, err
+			return false, fmt.Errorf("agents: bad missed snapshot: %w", err)
 		}
 		fresh, err := fromSnapshot(snap)
 		if err != nil {
@@ -90,10 +91,15 @@ func (m *Manager) apply(ctx context.Context, ws map[string]Worker, e hc.Event) (
 	if err != nil {
 		return false, err
 	}
-	w, err := decodeWorker(raw)
-	if err != nil {
-		return false, err
+	var t terminal
+	if err := json.Unmarshal(raw, &t); err != nil {
+		return false, fmt.Errorf("agents: bad terminal: %w", err)
 	}
+	if t.Labels[LabelApp] != AppAgent { // its labels changed: no longer a worker
+		delete(ws, e.Terminal)
+		return had, nil
+	}
+	w := t.worker()
 	ws[e.Terminal] = w
 	return !had || !reflect.DeepEqual(old, w), nil
 }

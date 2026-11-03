@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -316,5 +317,34 @@ func TestWatchStopsOnContextAndReportsErrors(t *testing.T) {
 	}}
 	if err := New(fc, DefaultConfig()).Watch(context.Background(), func([]Worker) {}); !hc.IsKind(err, "unavailable") {
 		t.Errorf("get err = %v, want unavailable", err)
+	}
+}
+
+func TestWatchDropsATerminalThatIsNoLongerAWorker(t *testing.T) {
+	agentLabels := true
+	s := &fakeStream{
+		snap:   hc.Snapshot{Terminals: []json.RawMessage{raw(term("t1", "alpha", "live", builderLabels, nil))}},
+		events: make(chan hc.Event, 4),
+	}
+	f := &fakeCore{stream: s, handle: map[string]func(map[string]any) (any, error){
+		"terminal.get": func(p map[string]any) (any, error) {
+			if p["terminal"] == "t3" || !agentLabels {
+				return term(p["terminal"].(string), "other", "live", map[string]string{LabelRole: "builder"}, nil), nil
+			}
+			return term("t1", "alpha", "live", builderLabels, nil), nil
+		},
+	}}
+	s.events <- hc.Event{Method: "event", Terminal: "t3", Type: "created"} // not a worker: no change
+	s.events <- hc.Event{Method: "event", Terminal: "t1", Type: "labels"}  // contr=agent removed
+	s.events <- hc.Event{Method: "missed", Data: json.RawMessage(`{"seq":"x"}`)}
+	agentLabels = false
+
+	var lists []int
+	err := New(f, DefaultConfig()).Watch(context.Background(), func(ws []Worker) { lists = append(lists, len(ws)) })
+	if err == nil || !strings.Contains(err.Error(), "agents: bad missed snapshot") {
+		t.Fatalf("err = %v, want a wrapped snapshot error", err)
+	}
+	if !reflect.DeepEqual(lists, []int{1, 0}) {
+		t.Errorf("list sizes = %v, want [1 0]", lists)
 	}
 }
