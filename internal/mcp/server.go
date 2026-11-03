@@ -10,12 +10,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
 	"sync"
 )
 
-// ProtocolVersion is the version this server answers when the client asks for
-// none.
+// ProtocolVersion is the newest version this server speaks. It answers a
+// client that asks for another known version with that version, and any other
+// client with this one.
 const ProtocolVersion = "2025-06-18"
+
+var knownVersions = []string{"2024-11-05", "2025-03-26", ProtocolVersion}
 
 // Tool is one tool. Schema is its JSON Schema for the arguments. Run returns
 // the text of the result; an error becomes a tool result with isError set, so
@@ -81,9 +85,17 @@ func (s *Server) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
+	failed := func() error {
+		mu.Lock()
+		defer mu.Unlock()
+		return writeErr
+	}
 	for sc.Scan() {
 		if ctx.Err() != nil {
 			return ctx.Err()
+		}
+		if err := failed(); err != nil {
+			return err
 		}
 		var req request
 		if err := json.Unmarshal(sc.Bytes(), &req); err != nil {
@@ -102,12 +114,9 @@ func (s *Server) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 			continue
 		}
 		reply(s.handle(req))
-		mu.Lock()
-		err := writeErr
-		mu.Unlock()
-		if err != nil {
-			return err
-		}
+	}
+	if err := failed(); err != nil {
+		return err
 	}
 	return sc.Err()
 }
@@ -121,7 +130,7 @@ func (s *Server) handle(req request) response {
 		}
 		_ = json.Unmarshal(req.Params, &p) // no params: answer the default version
 		v := p.ProtocolVersion
-		if v == "" {
+		if !slices.Contains(knownVersions, v) {
 			v = ProtocolVersion
 		}
 		resp.Result = map[string]any{

@@ -27,26 +27,27 @@ type managers struct {
 	core   agentsCore
 }
 
-func (m *managers) get(ctx context.Context) (*agents.Manager, error) {
+func (m *managers) get(ctx context.Context) (*agents.Manager, agentsCore, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.core == nil {
 		core, err := m.dial(ctx, m.getenv)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		m.core = core
 	}
-	return agents.New(m.core, m.cfg), nil
+	return agents.New(m.core, m.cfg), m.core, nil
 }
 
-// check drops the connection after err says that it ended, so the next call
-// connects again.
-func (m *managers) check(err error) error {
+// check drops used, the connection of a call, after err says that it ended,
+// so the next call connects again. A connection that another call already
+// replaced stays as it is.
+func (m *managers) check(used agentsCore, err error) error {
 	if errors.Is(err, hc.ErrClosed) {
 		m.mu.Lock()
-		if m.core != nil {
-			_ = m.core.Close()
+		if m.core == used && used != nil {
+			_ = used.Close()
 			m.core = nil
 		}
 		m.mu.Unlock()
@@ -85,17 +86,15 @@ func runMCP(stdin io.Reader, stdout, stderr io.Writer, dial func(context.Context
 	return 0
 }
 
-func schema(required []string, props map[string]string) json.RawMessage {
+// prop is one argument of a tool: its JSON type and description.
+type prop struct{ typ, desc string }
+
+func str(desc string) prop { return prop{"string", desc} }
+
+func schema(required []string, props map[string]prop) json.RawMessage {
 	p := map[string]any{}
-	for name, desc := range props {
-		typ := "string"
-		if name == "lines" {
-			typ = "integer"
-		}
-		if name == "all" {
-			typ = "boolean"
-		}
-		p[name] = map[string]any{"type": typ, "description": desc}
+	for name, pr := range props {
+		p[name] = map[string]any{"type": pr.typ, "description": pr.desc}
 	}
 	s := map[string]any{"type": "object", "properties": p}
 	if len(required) > 0 {
@@ -130,19 +129,19 @@ func agentTools(m *managers, parent string) []mcp.Tool {
 			if err := json.Unmarshal(raw, &a); err != nil {
 				return "", fmt.Errorf("bad arguments: %w", err)
 			}
-			mgr, err := m.get(ctx)
+			mgr, used, err := m.get(ctx)
 			if err != nil {
 				return "", err
 			}
 			out, err := f(ctx, mgr, a)
-			return out, m.check(err)
+			return out, m.check(used, err)
 		}
 	}
 	return []mcp.Tool{
 		{Name: "spawn", Description: "Start a worker agent in a new hc terminal, in its worktree. It reports back with hc send when its turn ends.",
-			Schema: schema([]string{"name", "profile", "task"}, map[string]string{
-				"name": "Unique worker name: 1-32 of a-z 0-9 - _ (for example b-158).", "profile": "builder, planner, reviewer or debugger, or a profile from the profiles file.",
-				"task": "The self-contained brief: the first message.", "issue": "Issue number.", "worktree": "The worker's working folder (its git worktree).", "role": "Role label; the profile name by default."}),
+			Schema: schema([]string{"name", "profile", "task"}, map[string]prop{
+				"name": str("Unique worker name: 1-32 of a-z 0-9 - _ (for example b-158)."), "profile": str("builder, planner, reviewer or debugger, or a profile from the profiles file."),
+				"task": str("The self-contained brief: the first message."), "issue": str("Issue number."), "worktree": str("The worker's working folder (its git worktree)."), "role": str("Role label; the profile name by default.")}),
 			Run: run(func(ctx context.Context, mgr *agents.Manager, a args) (string, error) {
 				w, err := mgr.Spawn(ctx, agents.Spec{Name: a.Name, Profile: a.Profile, Task: a.Task, Issue: a.Issue, Worktree: a.Worktree, Role: a.Role, Parent: parent})
 				if err != nil {
@@ -151,27 +150,27 @@ func agentTools(m *managers, parent string) []mcp.Tool {
 				return toJSON(w)
 			})},
 		{Name: "message", Description: "Type a message into a worker and press Enter. It keeps the worker's context.",
-			Schema: schema([]string{"name", "text"}, map[string]string{"name": "Worker name.", "text": "The message."}),
+			Schema: schema([]string{"name", "text"}, map[string]prop{"name": str("Worker name."), "text": str("The message.")}),
 			Run: run(func(ctx context.Context, mgr *agents.Manager, a args) (string, error) {
 				return "sent", mgr.Send(ctx, a.Name, a.Text)
 			})},
 		{Name: "interrupt", Description: "Press a worker's stop key to end its turn; it keeps its context. Returns hc's outcome.",
-			Schema: schema([]string{"name"}, map[string]string{"name": "Worker name."}),
+			Schema: schema([]string{"name"}, map[string]prop{"name": str("Worker name.")}),
 			Run: run(func(ctx context.Context, mgr *agents.Manager, a args) (string, error) {
 				return mgr.Interrupt(ctx, a.Name)
 			})},
 		{Name: "stop", Description: "End a worker's program. Its context is lost.",
-			Schema: schema([]string{"name"}, map[string]string{"name": "Worker name."}),
+			Schema: schema([]string{"name"}, map[string]prop{"name": str("Worker name.")}),
 			Run: run(func(ctx context.Context, mgr *agents.Manager, a args) (string, error) {
 				return "stopped", mgr.Stop(ctx, a.Name)
 			})},
 		{Name: "read", Description: "Read a worker's screen and history.",
-			Schema: schema([]string{"name"}, map[string]string{"name": "Worker name.", "lines": "Only the last lines."}),
+			Schema: schema([]string{"name"}, map[string]prop{"name": str("Worker name."), "lines": {"integer", "Only the last lines."}}),
 			Run: run(func(ctx context.Context, mgr *agents.Manager, a args) (string, error) {
 				return mgr.Read(ctx, a.Name, a.Lines)
 			})},
 		{Name: "list", Description: "List the workers with their role, issue, state and worktree.",
-			Schema: schema(nil, map[string]string{"all": "Include finished workers."}),
+			Schema: schema(nil, map[string]prop{"all": {"boolean", "Include finished workers."}}),
 			Run: run(func(ctx context.Context, mgr *agents.Manager, a args) (string, error) {
 				ws, err := mgr.List(ctx, a.All)
 				if err != nil {

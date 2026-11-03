@@ -157,3 +157,28 @@ func TestMCPConnectsAgainAfterTheCoreGoesAway(t *testing.T) {
 		t.Error("bad arguments: no error")
 	}
 }
+
+// A call that fails on an old connection must not close the new one that
+// another call made in the meantime.
+func TestMCPCheckClosesOnlyTheConnectionItUsed(t *testing.T) {
+	old, fresh := &cliCore{}, &cliCore{}
+	n := 0
+	m := &managers{getenv: func(string) string { return "" }, dial: func(context.Context, func(string) string) (agentsCore, error) {
+		n++
+		if n == 1 {
+			return old, nil
+		}
+		return fresh, nil
+	}}
+	_, usedA, _ := m.get(context.Background())
+	_, usedB, _ := m.get(context.Background()) // a parallel call on the same old connection
+	_ = m.check(usedA, hc.ErrClosed)           // the first failure drops old
+	_, usedC, _ := m.get(context.Background()) // a third call connects fresh
+	_ = m.check(usedB, hc.ErrClosed)           // the second failure comes late
+	if usedC != fresh || fresh.closed || m.core != fresh {
+		t.Errorf("the late failure closed the new connection: closed %v, core is fresh %v", fresh.closed, m.core == fresh)
+	}
+	if !old.closed {
+		t.Error("the old connection is not closed")
+	}
+}
