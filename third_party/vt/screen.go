@@ -1,3 +1,7 @@
+// Changed for contr from the x/vt module v0.1.0 (MIT, see LICENSE):
+// DeleteLine moves whole lines when the scroll region is as wide as the
+// screen, instead of copying each cell of each line below the cursor.
+
 package vt
 
 import (
@@ -366,9 +370,40 @@ func (s *Screen) DeleteLine(n int) bool {
 		s.scrollback.PushN(s.buf, y, linesToSave)
 	}
 
+	if scroll.Min.X == 0 && scroll.Max.X == s.buf.Width() {
+		s.deleteFullLines(y, n, scroll)
+		return true
+	}
 	s.buf.DeleteLineArea(y, n, s.blankCell(), scroll)
 
 	return true
+}
+
+// deleteFullLines is DeleteLineArea for a region of full lines: it moves the
+// lines, not their cells, and reuses the deleted lines as the blank ones.
+func (s *Screen) deleteFullLines(y, n int, scroll uv.Rectangle) {
+	lines := s.buf.Lines[y:scroll.Max.Y]
+	m := min(n, len(lines))
+	var stash [4]uv.Line
+	gone := append(stash[:0], lines[:m]...)
+	copy(lines, lines[m:])
+	copy(lines[len(lines)-m:], gone)
+	blank := uv.EmptyCell
+	if c := s.blankCell(); c != nil {
+		blank = *c
+	}
+	for _, line := range lines[len(lines)-m:] {
+		for x := range line {
+			line[x] = blank
+		}
+	}
+	// The touched lines are those of RenderBuffer.DeleteLineArea, which
+	// uses n as given.
+	w := scroll.Max.X - scroll.Min.X
+	for i := scroll.Min.Y; i < scroll.Max.Y; i++ {
+		s.buf.TouchLine(scroll.Min.X, i, w)
+		s.buf.TouchLine(scroll.Min.X, i+n, w)
+	}
 }
 
 // blankCell returns the cursor blank cell with the background color set to the

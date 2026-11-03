@@ -1,3 +1,6 @@
+// Changed for contr from the x/vt module v0.1.0 (MIT, see LICENSE): an
+// ASCII cell gets its text from a table, not a new string.
+
 package vt
 
 import (
@@ -15,6 +18,15 @@ import (
 func printableASCII(r rune) bool {
 	return r >= ansi.SP && r < ansi.DEL
 }
+
+// asciiString holds the string of each ASCII byte, so a cell of one ASCII
+// character needs no allocation.
+var asciiString = func() (t [utf8.RuneSelf]string) {
+	for i := range t {
+		t[i] = string(rune(i))
+	}
+	return t
+}()
 
 // handlePrint handles printable characters.
 //
@@ -37,7 +49,7 @@ func (e *Emulator) handlePrint(r rune) {
 		// Two printable ASCII characters in a row is the common case by a wide
 		// margin, and needs no segmenting at all.
 		if len(e.grapheme) == 1 && printableASCII(rune(e.grapheme[0])) {
-			e.handleGrapheme(string(e.grapheme[0]), 1)
+			e.handleGrapheme(asciiString[e.grapheme[0]], 1)
 			e.grapheme = utf8.AppendRune(e.grapheme[:0], r)
 			return
 		}

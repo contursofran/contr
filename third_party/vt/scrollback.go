@@ -1,3 +1,8 @@
+// Changed for contr from the x/vt module v0.1.0 (MIT, see LICENSE): the
+// scrollback is a ring. When it is full, a new line takes the place and the
+// memory of the oldest line, instead of moving all lines and copying the new
+// one.
+
 package vt
 
 import (
@@ -10,8 +15,10 @@ import (
 const DefaultScrollbackSize = 10000
 
 // Scrollback represents a scrollback buffer that stores lines scrolled off the screen.
+// It is a ring: when full, a new line takes the place of the oldest.
 type Scrollback struct {
 	lines    []uv.Line
+	head     int // index of the oldest line once the ring is full
 	maxLines int
 }
 
@@ -43,15 +50,17 @@ func (s *Scrollback) Push(line uv.Line) {
 			break
 		}
 	}
+	line = line[:lastNonEmpty+1]
 
-	// Clone the line content up to and including the last non-empty cell
-	cloned := slices.Clone(line[:lastNonEmpty+1])
-
-	if len(s.lines) >= s.maxLines {
-		// Remove oldest line and append new one
-		s.lines = slices.Delete(s.lines, 0, 1)
+	if len(s.lines) < s.maxLines {
+		s.lines = append(s.lines, slices.Clone(line))
+		return
 	}
-	s.lines = append(s.lines, cloned)
+	// Full: the new line takes the oldest line's place and memory.
+	old := s.lines[s.head]
+	clear(old)
+	s.lines[s.head] = append(old[:0], line...)
+	s.head = (s.head + 1) % len(s.lines)
 }
 
 // PushN adds n lines from the buffer starting at line y to the scrollback.
@@ -90,30 +99,34 @@ func (s *Scrollback) SetMaxLines(maxLines int) {
 		return
 	}
 
-	s.maxLines = maxLines
-	if len(s.lines) > maxLines {
+	lines := s.Lines()
+	if len(lines) > maxLines {
 		// Remove oldest lines
-		s.lines = s.lines[len(s.lines)-maxLines:]
+		lines = lines[len(lines)-maxLines:]
 	}
+	s.lines, s.head, s.maxLines = lines, 0, maxLines
 }
 
 // Line returns the line at the given index.
 // Index 0 is the oldest line, Len()-1 is the most recent.
-// Returns nil if index is out of bounds.
+// Returns nil if index is out of bounds. The line stays valid until a Push
+// takes its place.
 func (s *Scrollback) Line(index int) uv.Line {
 	if s == nil || index < 0 || index >= len(s.lines) {
 		return nil
 	}
-	return s.lines[index]
+	return s.lines[(s.head+index)%len(s.lines)]
 }
 
-// Lines returns all lines in the scrollback buffer.
-// Index 0 is the oldest line.
+// Lines returns all lines in the scrollback buffer, in a new slice.
+// Index 0 is the oldest line. A line stays valid until a Push takes its place.
 func (s *Scrollback) Lines() []uv.Line {
 	if s == nil {
 		return nil
 	}
-	return s.lines
+	out := make([]uv.Line, 0, len(s.lines))
+	out = append(out, s.lines[s.head:]...)
+	return append(out, s.lines[:s.head]...)
 }
 
 // Clear removes all lines from the scrollback buffer.
@@ -122,6 +135,7 @@ func (s *Scrollback) Clear() {
 		return
 	}
 	s.lines = s.lines[:0]
+	s.head = 0
 }
 
 // CellAt returns the cell at the given position in the scrollback buffer.

@@ -287,3 +287,22 @@ func TestOnClipboard(t *testing.T) {
 		t.Errorf("clipboard = %q, want [hello hi]", got)
 	}
 }
+
+// TestScrollAtBottomNoAlloc checks the patched emulator (third_party/vt): a
+// line of ASCII that scrolls the screen into a full scrollback allocates
+// nothing. The module's own code copies each line into the scrollback and
+// makes a string for each character.
+func TestScrollAtBottomNoAlloc(t *testing.T) {
+	v := New(100, 10, nil)
+	defer v.Close()
+	line := []byte("bench line 1 abcdefghij 0123456789 -_=+()[]{}<>\r\n")
+	for range MaxScrollback + 20 {
+		v.Write(line)
+	}
+	if got := v.Screen(0).Panes[0].Scroll.MaxOffsetFromBottom; got != MaxScrollback {
+		t.Fatalf("scrollback: %d lines, want %d", got, MaxScrollback)
+	}
+	if n := testing.AllocsPerRun(200, func() { v.Write(line) }); n != 0 {
+		t.Errorf("a line at the bottom: %v allocations, want 0", n)
+	}
+}
