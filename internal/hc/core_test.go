@@ -126,3 +126,51 @@ func TestRealCoreRunSendAndEvents(t *testing.T) {
 		t.Errorf("list = %d terminals, want 1", len(list.Terminals))
 	}
 }
+
+func TestRealCoreFramedAttach(t *testing.T) {
+	env := isolatedCore(t)
+	c, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cl, err := Dial(c, Command("", env))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cl.Close()
+	var run struct {
+		Address string `json:"address"`
+	}
+	err = cl.Call(c, "terminal.run", map[string]any{
+		"argv": []string{"sh"}, "name": "w1", "wait": false, "no_parent": true,
+	}, &run)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fc, err := DialFramed(c, Command("", env))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fc.Close()
+	s, err := fc.Attach(c, AttachParams{Terminal: run.Address, Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if _, err := s.Write([]byte("echo h''i\r")); err != nil {
+		t.Fatal(err)
+	}
+	var seen []byte
+	for !strings.Contains(strings.ReplaceAll(string(seen), "echo h''i", ""), "hi") {
+		select {
+		case ev, ok := <-s.Events():
+			if !ok {
+				t.Fatalf("stream ended: %v; output %q", s.Err(), seen)
+			}
+			seen = append(seen, ev.Data...)
+			t.Logf("event: data %q resize %v", ev.Data, ev.Resize)
+		case <-c.Done():
+			t.Fatalf("no output with hi; got %q", seen)
+		}
+	}
+}
