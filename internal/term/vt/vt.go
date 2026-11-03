@@ -1,6 +1,6 @@
 // Package vt is contr's terminal emulator. It reads the raw bytes of a
 // terminal and gives the screen as term types. It wraps a pure-Go VT library
-// (D36); no other package imports that library.
+// (D39); no other package imports that library.
 package vt
 
 import (

@@ -251,7 +251,7 @@ func TestWriteAfterCloseDoesNotBlock(t *testing.T) {
 }
 
 // BenchmarkFlood200x60 writes 3000 colored lines to a 200×60 screen
-// (D36 compared two libraries with this stream).
+// (D39 compared two libraries with this stream).
 func BenchmarkFlood200x60(b *testing.B) {
 	var buf strings.Builder
 	for i := 0; i < 3000; i++ {
