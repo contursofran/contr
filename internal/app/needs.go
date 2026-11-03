@@ -7,6 +7,7 @@ package app
 // answer card (#162, S5).
 
 import (
+	"cmp"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -31,6 +32,8 @@ type AgentSource interface {
 	ClearDone()
 	// Read, Interrupt and Stop act on one worker's terminal (its address).
 	Read(name string, lines int) (string, error)
+	// SendKeys presses raw keys in a worker's terminal, with no Enter.
+	SendKeys(name string, keys []byte) error
 	Interrupt(name string) error
 	Stop(name string) error
 }
@@ -56,6 +59,10 @@ type NeedTab struct {
 	// Address and Orchestrator name the worker of a blocked tab.
 	Address      string
 	Orchestrator bool
+	// Command and BlockKind (permission, question or auth) tell the card how
+	// to read the worker's prompt.
+	Command   string
+	BlockKind string
 }
 
 // Label is the accessible name: "{key} {title}".
@@ -102,7 +109,8 @@ func needItems(snap agentstate.Snapshot, project string) []NeedTab {
 	for _, w := range append(append([]agents.Worker(nil), snap.Orchestrators...), snap.Workers...) {
 		if w.Status == "blocked" && in(w.Project) {
 			tabs = append(tabs, NeedTab{Kind: NeedBlocked, Key: w.Name, Title: w.Msg, Icon: icons.Blocked,
-				Project: w.Project, Address: w.Address, Orchestrator: w.Orchestrator()})
+				Project: w.Project, Address: w.Address, Orchestrator: w.Orchestrator(),
+				Command: cmp.Or(w.Command, w.Profile), BlockKind: w.Kind})
 		}
 	}
 	for _, q := range snap.Questions {

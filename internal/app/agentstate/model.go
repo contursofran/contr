@@ -220,6 +220,11 @@ func (m *Model) Read(name string, lines int) (string, error) {
 	return m.mgr.Read(context.Background(), name, lines)
 }
 
+// SendKeys presses raw keys in a worker's terminal, with no Enter.
+func (m *Model) SendKeys(name string, keys []byte) error {
+	return m.mgr.SendKeys(context.Background(), name, keys)
+}
+
 // Interrupt sends the interrupt key to a worker's terminal.
 func (m *Model) Interrupt(name string) error {
 	_, err := m.mgr.Interrupt(context.Background(), name)
