@@ -240,3 +240,22 @@ func TestReviewSetRepoSwitches(t *testing.T) {
 		t.Errorf("file %q", r.File())
 	}
 }
+
+func TestReviewArrowKeysMoveFile(t *testing.T) {
+	s := reviewScratch(t)
+	s.branchWithTwoCommits()
+	r, _ := newTestReview()
+	r.SetRepo(s.dir)
+	tt := reviewTester(r)
+	if err := tt.Click("file a.txt"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Key(0, ui.KeyDown)
+	if r.File() != "b.txt" || r.Code() == nil || r.Code().New.String() != "b1\nb2\n" {
+		t.Fatalf("after Down: file %q", r.File())
+	}
+	tt.Key(0, ui.KeyUp)
+	if r.File() != "a.txt" || r.Code() == nil || r.Code().New.String() != "a1\n" {
+		t.Fatalf("after Up: file %q", r.File())
+	}
+}
