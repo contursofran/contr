@@ -381,3 +381,41 @@ func TestDiscoverChecksAStartDirectoryThatIsACeiling(t *testing.T) {
 		t.Fatal("empty root")
 	}
 }
+
+func TestDefaultBase(t *testing.T) {
+	cases := []struct {
+		name  string
+		files map[string]string
+		want  string
+	}{
+		{"origin head wins", map[string]string{"refs/remotes/origin/HEAD": "ref: refs/remotes/origin/trunk\n", "refs/heads/main": sha}, "origin/trunk"},
+		{"main", map[string]string{"refs/heads/main": sha, "refs/heads/master": sha}, "main"},
+		{"master", map[string]string{"refs/heads/master": sha}, "master"},
+		{"packed main", map[string]string{"packed-refs": "# pack-refs\n" + sha + " refs/heads/main\n"}, "main"},
+		{"fallback", map[string]string{"refs/heads/work": sha}, "work"},
+		{"bad origin head", map[string]string{"refs/remotes/origin/HEAD": "junk\n"}, "work"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := tmp(t)
+			for p, text := range tc.files {
+				write(t, filepath.Join(dir, p), text)
+			}
+			if got := DefaultBase(dir, "work"); got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestReadRepoSetsDefaultBranch(t *testing.T) {
+	git := mainRepo(t, filepath.Join(tmp(t), "repo"), "ref: refs/heads/feature\n")
+	write(t, filepath.Join(git, "refs", "heads", "main"), sha+"\n")
+	info, err := ReadRepo(git)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.MainBranch != "feature" || info.DefaultBranch != "main" {
+		t.Fatalf("got %q and %q", info.MainBranch, info.DefaultBranch)
+	}
+}

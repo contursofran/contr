@@ -104,6 +104,16 @@ func TestStatsLeavesOutFailedWorktrees(t *testing.T) {
 	}
 }
 
+func TestStatsDiffsAgainstTheDefaultBranch(t *testing.T) {
+	scan := Scan{Repos: map[string]RepoInfo{"c": {MainBranch: "feature", DefaultBranch: "origin/main",
+		Worktrees: []WorktreeEntry{{Root: "/r", Name: "r"}}}}}
+	r := &fakeRunner{out: map[string]string{"merge-base": "a", "diff": ""}}
+	Stats(context.Background(), r, scan)
+	if len(r.calls) == 0 || !strings.Contains(r.calls[0], "origin/main") {
+		t.Errorf("calls %v, want the default branch as base", r.calls)
+	}
+}
+
 func TestExecRunnerOnAScratchRepo(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is missing")

@@ -96,14 +96,18 @@ func ParseNumstat(text string) (DiffStat, error) {
 func Stats(ctx context.Context, r Runner, scan Scan) map[string]DiffStat {
 	out := map[string]DiffStat{}
 	for _, repo := range scan.Repos {
-		if repo.MainBranch == "" {
+		base := repo.DefaultBranch
+		if base == "" {
+			base = repo.MainBranch
+		}
+		if base == "" {
 			continue
 		}
 		for _, wt := range repo.Worktrees {
 			if ctx.Err() != nil {
 				return out
 			}
-			s, err := Diff(ctx, r, wt.Root, repo.MainBranch)
+			s, err := Diff(ctx, r, wt.Root, base)
 			if err != nil {
 				log.Printf("git diff stats for %s: %v", wt.Name, err)
 				continue

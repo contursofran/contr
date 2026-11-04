@@ -122,7 +122,7 @@ type SpacesList struct {
 	// scanFn reads git. It runs on a goroutine, started by start.
 	scanFn func([]string) git.Scan
 	// statsFn runs git diff for the worktrees of a scan (D52). It runs on the
-	// same goroutine as scanFn. Nil gives no stats.
+	// same goroutine as scanFn, after the scan has been posted. Nil gives no stats.
 	statsFn func(git.Scan) map[string]git.DiffStat
 	start   func(func())
 	// post runs fn on the UI thread (Window.Update). Nil runs it at once.
@@ -300,16 +300,25 @@ func (l *SpacesList) startScan(cwds []string) {
 	scanFn, statsFn := l.scanFn, l.statsFn
 	l.start(func() {
 		scan := scanFn(cwds)
-		var stats map[string]git.DiffStat
-		if statsFn != nil {
-			stats = statsFn(scan)
-		}
+		// Post the scan first: a slow git diff must not delay the rows.
 		l.later(func() {
 			if gen != l.gen {
 				return
 			}
-			// Rebuild only: a slow scan must not start the next one.
-			l.scan, l.stats = scan, stats
+			// Rebuild only: a slow scan must not start the next one. The old
+			// stats stay until the new ones land.
+			l.scan = scan
+			l.rebuild()
+		})
+		if statsFn == nil {
+			return
+		}
+		stats := statsFn(scan)
+		l.later(func() {
+			if gen != l.gen {
+				return
+			}
+			l.stats = stats
 			l.rebuild()
 		})
 	})
