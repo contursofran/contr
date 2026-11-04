@@ -24,6 +24,9 @@ type Snapshot struct {
 	Todos         []owner.Todo     // open only, in file order
 	Resolved      []string         // ids resolved in this run, until ClearDone
 	Problem       string           // last error of hc or owner.json; empty when fine
+	// CoreVersion is the hc core's version while the model follows it;
+	// empty after an hc error.
+	CoreVersion string
 }
 
 // Model holds the state. Its methods are safe from any goroutine.
@@ -37,6 +40,7 @@ type Model struct {
 	state    owner.State
 	resolved []string
 	hcProb   string // last hc error
+	version  string // the core's version, from SetCoreVersion
 	fileProb string // last owner.json error
 	actProb  string // last answer or done error
 	// resolvedItems keeps what was resolved, so the views can strike it
@@ -54,6 +58,13 @@ func New(m *agents.Manager, store *owner.Store, notify func()) *Model {
 		notify = func() {}
 	}
 	return &Model{mgr: m, store: store, notify: notify}
+}
+
+// SetCoreVersion sets the version of the hc core that the model follows.
+func (m *Model) SetCoreVersion(v string) {
+	m.mu.Lock()
+	m.version = v
+	m.mu.Unlock()
 }
 
 // Start follows hc and owner.json until ctx ends. Stop waits for both.
@@ -140,6 +151,9 @@ func (m *Model) Snapshot() Snapshot {
 		}
 	}
 	s.Resolved = slices.Clone(m.resolved)
+	if m.hcProb == "" {
+		s.CoreVersion = m.version
+	}
 	for _, p := range []string{m.actProb, m.hcProb, m.fileProb} {
 		if p != "" {
 			s.Problem = p

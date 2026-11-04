@@ -298,7 +298,7 @@ func (f *Frame) statusBar(c *ui.Context) {
 		f.Slots.StatusBar(c)
 		return
 	}
-	f.status.herdr = f.Herdr
+	f.status.core = f.coreVersion
 	if f.Host != nil {
 		f.status.host = f.Host
 	}
@@ -785,6 +785,19 @@ func (f *Frame) syncTerminal() {
 	f.setTerminalFocus(f.winFocused)
 }
 
+// TerminalNotRunningLine shows over the grid while the terminal's program is
+// not running, or the connection to hc is lost.
+const TerminalNotRunningLine = "not running"
+
+// coreVersion is the hc core's version while the agents follow the core.
+func (f *Frame) coreVersion() (string, bool) {
+	if f.agentSnap == nil {
+		return "", false
+	}
+	v := f.agentSnap().CoreVersion
+	return v, v != ""
+}
+
 // staleOpacity is the grid's opacity while the connection is not live and the
 // screen on show may be out of date.
 const staleOpacity = 0.5
@@ -800,7 +813,7 @@ func (f *Frame) terminalLine() (line string, colour uint32, ok bool) {
 	}
 	switch f.termState.Kind {
 	case ghostty.NotRunning:
-		return herdr.NotRunningLine, theme.Text2, true
+		return TerminalNotRunningLine, theme.Text2, true
 	case ghostty.Incompatible:
 		return f.termState.Message, theme.Text2, true
 	}

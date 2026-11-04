@@ -352,3 +352,19 @@ func TestCloseStopsThenRemoves(t *testing.T) {
 		t.Errorf("failed kill: err %v, calls %v", err, r.core.calls)
 	}
 }
+
+// The snapshot has the core's version while hc works, and none after an hc
+// error.
+func TestSnapshotCoreVersion(t *testing.T) {
+	r := newRig(t)
+	r.m.SetCoreVersion("0.1.18")
+	if v := r.m.Snapshot().CoreVersion; v != "0.1.18" {
+		t.Errorf("version %q", v)
+	}
+	r.m.mu.Lock()
+	r.m.hcProb = "hc: connection lost"
+	r.m.mu.Unlock()
+	if v := r.m.Snapshot().CoreVersion; v != "" {
+		t.Errorf("version %q after an hc error, want none", v)
+	}
+}

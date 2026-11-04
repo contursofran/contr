@@ -336,6 +336,7 @@ func (c *conn) close() error {
 // Hello is the reply to the handshake.
 type Hello struct {
 	Generation int      `json:"generation"`
+	Version    string   `json:"version"` // the core's version
 	Methods    []string `json:"methods"`
 	Features   []string `json:"features"`
 	Core       struct {
