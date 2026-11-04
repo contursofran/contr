@@ -1,8 +1,10 @@
 package owner
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -161,5 +163,42 @@ func TestReadReportsABadFile(t *testing.T) {
 	}
 	if _, err := s.Ask(Question{Question: "q"}); err == nil {
 		t.Error("ask over a bad file: no error")
+	}
+}
+
+func TestQuestionKeepsImpactsRefsAndSource(t *testing.T) {
+	s := store(t)
+	if _, err := s.Ask(Question{Project: "p", Question: "Which?", Options: []string{"a", "b"},
+		Impacts: []string{"fast", "safe"}, Refs: []string{"PR 12", "https://example.com"}, Source: "worker said: pick"}); err != nil {
+		t.Fatal(err)
+	}
+	st, err := s.Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := st.Questions[0]
+	if len(q.Impacts) != 2 || q.Impacts[1] != "safe" || len(q.Refs) != 2 || q.Refs[0] != "PR 12" || q.Source != "worker said: pick" {
+		t.Errorf("round trip: %+v", q)
+	}
+}
+
+func TestOldFileWithoutTheNewFieldsLoads(t *testing.T) {
+	s := store(t)
+	old := `{"questions":[{"id":"D1","project":"p","question":"Ship?","options":["yes"],"asked":"2026-11-03T12:00:00Z"}],"todos":[],"next_question":2,"next_todo":1}`
+	if err := os.MkdirAll(filepath.Dir(s.Path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(s.Path, []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	st, err := s.Read()
+	if err != nil || len(st.Questions) != 1 || st.Questions[0].Impacts != nil || st.Questions[0].Refs != nil || st.Questions[0].Source != "" {
+		t.Fatalf("old file: %+v, %v", st, err)
+	}
+	data, _ := json.Marshal(st.Questions[0])
+	for _, k := range []string{"impacts", "refs", "source"} {
+		if strings.Contains(string(data), k) {
+			t.Errorf("empty %s is written: %s", k, data)
+		}
 	}
 }

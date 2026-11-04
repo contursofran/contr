@@ -26,6 +26,9 @@ type Question struct {
 	Question    string    `json:"question"`
 	Options     []string  `json:"options,omitempty"`
 	Recommended *int      `json:"recommended,omitempty"` // index in Options
+	Impacts     []string  `json:"impacts,omitempty"`     // what each option means; Impacts[i] is for Options[i]
+	Refs        []string  `json:"refs,omitempty"`        // issue or PR numbers, file paths, URLs that help to decide
+	Source      string    `json:"source,omitempty"`      // a short excerpt of the text that raised the question
 	Asked       time.Time `json:"asked"`
 	Answer      string    `json:"answer,omitempty"`
 	AnsweredBy  string    `json:"answered_by,omitempty"` // owner or coordinator

@@ -30,6 +30,8 @@ const (
 	SheetOptions   = "Options"
 	SheetAnswer    = "Answer"
 	SheetRecommend = "recommended"
+	SheetRefs      = "References"
+	SheetSource    = "Source"
 )
 
 // Sheet is the context sheet. Its methods run on the UI thread.
@@ -40,6 +42,12 @@ type Sheet struct {
 	Scope func() string
 	// Invalidate redraws the window; may be nil.
 	Invalidate func()
+	// OpenPR shows pull request n of the repository in dir in the PR pane; OpenIssue opens
+	// issue n in the browser; OpenURL opens an http or https address in the browser. Each may
+	// be nil. OpenIssue and OpenURL must not block the UI thread.
+	OpenPR    func(dir string, n int)
+	OpenIssue func(dir string, n int)
+	OpenURL   func(u string)
 	// Anchor is a strip with no height at the top of the terminal area. The
 	// frame sets it before it builds the sheet.
 	Anchor ui.Element
@@ -190,7 +198,10 @@ func (s *Sheet) View(c *ui.Context) {
 				ui.Box(c).Grow(1).MinWidth(0).MinHeight(0).Clip().
 					Background(theme.Color(theme.BgSheetBox)).Border(1, theme.Color(theme.SheetBoxBorder)).
 					Radius(theme.SheetBoxRadius).Padding(theme.SheetBoxPadY, theme.SheetBoxPadX).Children(func() {
-					ui.Text(c, q.Question).TextColor(theme.Color(theme.Text2)).Wrap()
+					ui.Column(c).Gap(theme.SheetGap).Children(func() {
+						ui.Text(c, q.Question).TextColor(theme.Color(theme.Text2)).Wrap()
+						s.extras(c, q, snap)
+					})
 				})
 				s.options(c, q)
 			})
@@ -247,9 +258,12 @@ func (s *Sheet) pager(items []owner.Question, d int, ok bool) ClickFn {
 func (s *Sheet) options(c *ui.Context, q owner.Question) {
 	ui.Column(c).Width(theme.SheetOptionsWidth).Shrink(0).Gap(theme.SheetGap).Children(func() {
 		ui.Text(c, SheetOptions).Shrink(0).TextColor(theme.Color(theme.TextDim))
-		for _, o := range CardOptions(q) {
+		for _, o := range cardOptionsWithImpacts(q) {
 			ui.Column(c).Shrink(0).Gap(4).BorderWidth(1, 0, 0, 0).BorderColor(theme.Color(theme.Line)).PaddingY(theme.SheetOptionPadY).Children(func() {
 				ui.Text(c, o.Text).Wrap().TextColor(theme.Color(theme.Text))
+				if o.Impact != "" {
+					ui.Text(c, o.Impact).Wrap().TextColor(theme.Color(theme.TextDim))
+				}
 				if o.Recommended {
 					ui.Text(c, SheetRecommend).Shrink(0).TextColor(theme.Color(theme.TextDim))
 				}
@@ -257,4 +271,76 @@ func (s *Sheet) options(c *ui.Context, q owner.Question) {
 			})
 		}
 	})
+}
+
+// sheetOption is an option with its impact line.
+type sheetOption struct {
+	CardOption
+	Impact string
+}
+
+// cardOptionsWithImpacts are [CardOptions] with the impact line of each
+// option. An option with no impact has an empty line.
+func cardOptionsWithImpacts(q owner.Question) []sheetOption {
+	var out []sheetOption
+	for _, o := range CardOptions(q) {
+		i := slices.Index(q.Options, o.Text)
+		so := sheetOption{CardOption: o}
+		if i >= 0 && i < len(q.Impacts) {
+			so.Impact = q.Impacts[i]
+		}
+		out = append(out, so)
+	}
+	return out
+}
+
+// refDir is the folder to read a PR or an issue of q from: the worktree of
+// the worker it is from, else the folder of the orchestrator of its project.
+func refDir(q owner.Question, snap agentstate.Snapshot) string {
+	for _, w := range snap.Workers {
+		if w.Name == q.From && w.Worktree != "" {
+			return w.Worktree
+		}
+	}
+	for _, o := range snap.Orchestrators {
+		if o.Project == q.Project && o.Worktree != "" {
+			return o.Worktree
+		}
+	}
+	return ""
+}
+
+// extras are the source excerpt and the refs under the question.
+func (s *Sheet) extras(c *ui.Context, q owner.Question, snap agentstate.Snapshot) {
+	if q.Source != "" {
+		ui.Text(c, SheetSource).Shrink(0).TextColor(theme.Color(theme.TextDim))
+		ui.Text(c, q.Source).Wrap().TextColor(theme.Color(theme.TextDim))
+	}
+	if len(q.Refs) == 0 {
+		return
+	}
+	dir := refDir(q, snap)
+	ui.Text(c, SheetRefs).Shrink(0).TextColor(theme.Color(theme.TextDim))
+	for _, r := range q.Refs {
+		if click := s.refClick(r, dir); click != nil {
+			cardButton(c, r, ButtonPlain, theme.Text, click)
+		} else {
+			ui.Text(c, r).Wrap().TextColor(theme.Color(theme.TextDim))
+		}
+	}
+}
+
+// refClick is the click of a ref, or nil when the ref opens nothing: a file
+// path, or a number with no known folder or no opener.
+func (s *Sheet) refClick(ref, dir string) ClickFn {
+	r := ParseRef(ref)
+	switch {
+	case r.Kind == RefPR && dir != "" && s.OpenPR != nil:
+		return func() { s.OpenPR(dir, r.N) }
+	case r.Kind == RefIssue && dir != "" && s.OpenIssue != nil:
+		return func() { s.OpenIssue(dir, r.N) }
+	case r.Kind == RefURL && s.OpenURL != nil:
+		return func() { s.OpenURL(r.URL) }
+	}
+	return nil
 }
