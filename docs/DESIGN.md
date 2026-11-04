@@ -369,7 +369,7 @@ in, 0.22 s.
   name dimmer, and a primary `open`.
 - Footer (top border #262626, padding 12×18, gap 14): ghost `+ open folder…`,
   ghost `clone from GitHub…`, spacer, primary `Done`.
-- `close` hides the project in contr only (D70). Esc (with the focus in the
+- `close` hides the project in contr only (D70); the order, hidden and recent lists live in `projects.json` (D63). Esc (with the focus in the
   modal), `esc` or `Done` closes the modal.
 
 ## PR viewer (#151–#154) **(being built)**
