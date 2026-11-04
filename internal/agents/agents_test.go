@@ -137,11 +137,12 @@ func TestSpawn(t *testing.T) {
 		},
 	}}
 	m := New(f, DefaultConfig())
-	w, err := m.Spawn(context.Background(), Spec{Name: "b-158", Profile: "builder", Issue: "158", Worktree: "/w/a", Task: "read TASK.md"})
+	wt := t.TempDir()
+	w, err := m.Spawn(context.Background(), Spec{Name: "b-158", Profile: "builder", Issue: "158", Worktree: wt, Task: "read TASK.md"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := Worker{Name: "b-158", Address: "t7", Role: "builder", Issue: "158", Profile: "builder", Worktree: "/w/a", Live: true, Status: "blocked", Kind: "permission", Msg: "allow?", Turn: 2, Title: "t"}
+	want := Worker{Name: "b-158", Address: "t7", Role: "builder", Issue: "158", Profile: "builder", Worktree: wt, Live: true, Status: "blocked", Kind: "permission", Msg: "allow?", Turn: 2, Title: "t"}
 	if !reflect.DeepEqual(w, want) {
 		t.Errorf("worker\n got %+v\nwant %+v", w, want)
 	}
@@ -149,7 +150,7 @@ func TestSpawn(t *testing.T) {
 	if got := p["argv"]; !reflect.DeepEqual(got, []any{"claude", "--model", "sonnet", "--effort", "medium", "--permission-mode", "auto", "read TASK.md"}) {
 		t.Errorf("argv = %v", got)
 	}
-	if p["cwd"] != "/w/a" || p["no_parent"] != true || p["outlive_parent"] != true || p["wait"] != false || p["parent"] != nil {
+	if p["cwd"] != wt || p["env"] != nil || p["no_parent"] != true || p["outlive_parent"] != true || p["wait"] != false || p["parent"] != nil {
 		t.Errorf("params = %v", p)
 	}
 

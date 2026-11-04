@@ -68,10 +68,11 @@ func TestMCPListsAndRunsTheAgentTools(t *testing.T) {
 		errs: map[string]error{"terminal.kill": &hc.Error{Kind: "not_found", Message: `no terminal "zz"`}},
 	}
 	dial := func(context.Context, func(string) string) (agentsCore, error) { return core, nil }
+	wt := t.TempDir()
 	code, r := mcpRun(t, dial, map[string]string{"HC_TERMINAL_ID": "t1"},
 		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}`,
 		`{"jsonrpc":"2.0","id":2,"method":"tools/list"}`,
-		callLine(3, "spawn", map[string]any{"name": "b-160", "profile": "builder", "task": "read TASK.md", "issue": "160", "worktree": "/w/a"}),
+		callLine(3, "spawn", map[string]any{"name": "b-160", "profile": "builder", "task": "read TASK.md", "issue": "160", "worktree": wt}),
 		callLine(4, "message", map[string]any{"name": "b-160", "text": "fix it"}),
 		callLine(5, "interrupt", map[string]any{"name": "b-160"}),
 		callLine(6, "read", map[string]any{"name": "b-160", "lines": 20}),
@@ -96,7 +97,7 @@ func TestMCPListsAndRunsTheAgentTools(t *testing.T) {
 	for i, method := range core.calls {
 		byMethod[method] = core.params[i]
 	}
-	if p := byMethod["terminal.run"]; p["parent"] != "t1" || p["cwd"] != "/w/a" {
+	if p := byMethod["terminal.run"]; p["parent"] != "t1" || p["cwd"] != wt {
 		t.Errorf("run params = %v", p)
 	}
 	if p := byMethod["terminal.send"]; p["text"] != "fix it" {
