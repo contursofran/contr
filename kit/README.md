@@ -7,6 +7,16 @@ A Claude Code plugin for agent work with `contr agents`:
 - `.mcp.json`: starts `contr mcp`, which gives the session the agent tools (spawn, message,
   interrupt, stop, read, list). `contr` must be on the PATH; `scripts/install.sh` links it.
 
+## Install
+
+The repository root is a plugin marketplace (`.claude-plugin/marketplace.json`).
+Install the kit once, from the repository folder:
+`claude plugin marketplace add .`, then `claude plugin install contr@contr`.
+Every `claude` session then has
+`/contr:orchestrate`. Turn the plugin off or on in `/plugin`. The plugin
+reads this folder in place, so a change to the kit needs no update step.
+The `--plugin-dir` sessions below still work with the plugin installed.
+
 ## Use
 
 1. Point `contr agents` at this folder: set `CONTR_KIT` to its path, or put
