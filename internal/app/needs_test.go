@@ -66,6 +66,8 @@ type source struct {
 	answers   [][2]string // id, answer
 	dones     []string
 	actionErr error
+	told      [][2]string // name, text of Send
+	tellErr   error
 	text      string // what Read returns
 	readErr   error
 	read      []string // names read
@@ -106,6 +108,12 @@ func (s *source) Read(name string, _ int) (string, error) {
 		return t, s.readErr
 	}
 	return s.text, s.readErr
+}
+func (s *source) Send(name, text string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.told = append(s.told, [2]string{name, text})
+	return s.tellErr
 }
 func (s *source) SendKeys(name string, keys []byte) error {
 	s.sentTo = append(s.sentTo, name)

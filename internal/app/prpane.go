@@ -53,6 +53,12 @@ type PRPane struct {
 	OpenURL func(string)
 	// Now is the clock. Nil: time.Now.
 	Now func() time.Time
+	// Orchestrator gives the address of the orchestrator terminal of the project of the
+	// PR's folder, "" when there is none (D105). It runs on the UI thread. May be nil.
+	Orchestrator func(dir string) string
+	// Send types text into the terminal at an address and presses Enter. It runs off the UI
+	// thread. May be nil.
+	Send func(address, text string) error
 	// OnClose runs after the pane closes. May be nil.
 	OnClose func()
 	// Item is what the pull request is for, like "#268": the issue of the worker that opened it.
@@ -90,7 +96,7 @@ func (p *PRPane) Open(dir string, n int) {
 	}
 	client := mk(dir)
 	p.client, p.checks = client, prChecks{}
-	p.ft.text, p.ft.err, p.ft.busy = "", "", false
+	p.ft.text, p.ft.err, p.ft.busy, p.ft.after = "", "", false, ""
 	p.readViewer(client)
 	p.Run.Do(func() func() {
 		pr, err := client.PR(context.Background(), n)
