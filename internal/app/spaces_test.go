@@ -584,13 +584,14 @@ func TestAScanLandsThroughThePostFunc(t *testing.T) {
 	var started, posted []func()
 	l := NewSpacesList(live.get, nil, state.NewSelection(nil), nil, func(f func()) { posted = append(posted, f) })
 	l.start = func(f func()) { started = append(started, f) }
+	l.statsFn = func(git.Scan) map[string]git.DiffStat { return nil }
 	l.Sync()
 	if len(l.Groups()) != 0 || len(started) != 1 {
 		t.Fatalf("groups %+v, started %d: the scan has not run", l.Groups(), len(started))
 	}
 	started[0]()
-	if len(l.Groups()) != 0 || len(posted) != 1 {
-		t.Fatalf("groups %+v, posted %d: the result waits for the UI thread", l.Groups(), len(posted))
+	if len(l.Groups()) != 0 || len(posted) != 2 {
+		t.Fatalf("groups %+v, posted %d: the scan and the stats wait for the UI thread", l.Groups(), len(posted))
 	}
 	posted[0]()
 	if len(l.Groups()) != 1 {
@@ -1180,6 +1181,49 @@ func TestWorktreeRowsShowNoStatsAfterAnError(t *testing.T) {
 	h.send(h.live.get())
 	if h.has(kit.CountsText(12, 3)) {
 		t.Error("the row still shows stats")
+	}
+}
+
+func TestStatsLandAfterTheScan(t *testing.T) {
+	h, wt1, _ := heldWorktree(t)
+	var queue []func()
+	l := h.list
+	l.post = func(f func()) { queue = append(queue, f) }
+	l.statsFn = func(git.Scan) map[string]git.DiffStat {
+		return map[string]git.DiffStat{wt1: {Added: 12, Removed: 3}}
+	}
+	l.startScan(l.scanned)
+	if len(queue) != 2 {
+		t.Fatalf("%d updates posted, want the scan and the stats", len(queue))
+	}
+	queue[0]()
+	h.tt.Frame()
+	if h.has(kit.CountsText(12, 3)) {
+		t.Error("stats shown before their update")
+	}
+	queue[1]()
+	h.tt.Frame()
+	if !h.has(kit.CountsText(12, 3)) {
+		t.Errorf("no stats after their update; texts %q", h.tt.Texts())
+	}
+}
+
+func TestStatsOfAnOldScanAreDropped(t *testing.T) {
+	h, wt1, _ := heldWorktree(t)
+	var queue []func()
+	l := h.list
+	l.post = func(f func()) { queue = append(queue, f) }
+	l.statsFn = func(git.Scan) map[string]git.DiffStat {
+		return map[string]git.DiffStat{wt1: {Added: 12, Removed: 3}}
+	}
+	l.startScan(l.scanned)
+	l.gen++ // a newer scan started
+	for _, f := range queue {
+		f()
+	}
+	h.tt.Frame()
+	if h.has(kit.CountsText(12, 3)) {
+		t.Error("stats of an old scan landed")
 	}
 }
 

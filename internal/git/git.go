@@ -52,6 +52,9 @@ type RepoInfo struct {
 	Name       string
 	MainRoot   string
 	MainBranch string
+	// DefaultBranch is the ref that diff stats use as the base (D52): see
+	// [DefaultBase]. It is never empty when MainBranch is not.
+	DefaultBranch string
 	// Worktrees lists the main one first, then linked worktrees sorted by root
 	// path.
 	Worktrees []WorktreeEntry
@@ -152,6 +155,7 @@ func ReadRepo(commonDir string) (RepoInfo, error) {
 		return RepoInfo{}, ErrNoName
 	}
 	mainBranch, _ := HeadBranch(commonDir)
+	defaultBranch := DefaultBase(commonDir, mainBranch)
 	linked, err := linkedWorktrees(commonDir)
 	if err != nil {
 		return RepoInfo{}, err
@@ -159,11 +163,12 @@ func ReadRepo(commonDir string) (RepoInfo, error) {
 	slices.SortFunc(linked, func(a, b WorktreeEntry) int { return comparePaths(a.Root, b.Root) })
 	worktrees := append([]WorktreeEntry{{Root: mainRoot, Name: name, Branch: mainBranch, IsMain: true}}, linked...)
 	return RepoInfo{
-		CommonDir:  commonDir,
-		Name:       name,
-		MainRoot:   mainRoot,
-		MainBranch: mainBranch,
-		Worktrees:  worktrees,
+		CommonDir:     commonDir,
+		Name:          name,
+		MainRoot:      mainRoot,
+		MainBranch:    mainBranch,
+		DefaultBranch: defaultBranch,
+		Worktrees:     worktrees,
 	}, nil
 }
 
@@ -353,4 +358,39 @@ func comparePaths(a, b string) int {
 
 func isHex(b byte) bool {
 	return b >= '0' && b <= '9' || b >= 'a' && b <= 'f' || b >= 'A' && b <= 'F'
+}
+
+// DefaultBase returns the ref that a diff uses as its base, read from plain
+// files in commonDir: `origin/<x>` when `refs/remotes/origin/HEAD` names a
+// branch, else `main`, else `master` when that branch exists, else fallback
+// (the branch of the main checkout). It gives "" only when fallback is "".
+func DefaultBase(commonDir, fallback string) string {
+	if data, err := os.ReadFile(filepath.Join(commonDir, "refs", "remotes", "origin", "HEAD")); err == nil {
+		if ref, ok := strings.CutPrefix(strings.TrimSpace(string(data)), "ref: refs/remotes/"); ok && strings.HasPrefix(ref, "origin/") && len(ref) > len("origin/") {
+			return ref
+		}
+	}
+	for _, name := range []string{"main", "master"} {
+		if branchExists(commonDir, name) {
+			return name
+		}
+	}
+	return fallback
+}
+
+// branchExists tells whether refs/heads/<name> is a loose or a packed ref.
+func branchExists(commonDir, name string) bool {
+	if _, err := os.Stat(filepath.Join(commonDir, "refs", "heads", name)); err == nil {
+		return true
+	}
+	data, err := os.ReadFile(filepath.Join(commonDir, "packed-refs"))
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if f := strings.Fields(line); len(f) == 2 && f[1] == "refs/heads/"+name {
+			return true
+		}
+	}
+	return false
 }
