@@ -45,6 +45,8 @@ type titleBar struct {
 	collapsed bool
 	// newTab opens a plain terminal. Nil: the bar has no "+" button.
 	newTab func()
+	// choice is the index the tab list edits; model is the selected tab's index at the last build.
+	choice, model int
 }
 
 // setTabs takes in the tabs and tells whether they differ from the last ones.
@@ -56,12 +58,20 @@ func (b *titleBar) setTabs(tabs []AgentTab) bool {
 	return true
 }
 
-// clickTab: an unselected tab selects its agent, and the selected tab does nothing.
-func (b *titleBar) clickTab(i int) {
-	if i < 0 || i >= len(b.tabs) || b.tabs[i].Selected || b.selectTab == nil {
-		return
+// syncChoice turns a choice made on the tab list (a click, an arrow, Home or End) into a call
+// of selectTab, then sets the list to the model's selected tab. The selected tab does nothing.
+func (b *titleBar) syncChoice() {
+	if b.choice != b.model && b.choice >= 0 && b.choice < len(b.tabs) && b.selectTab != nil &&
+		!b.tabs[b.choice].Selected {
+		b.selectTab(b.tabs[b.choice])
 	}
-	b.selectTab(b.tabs[i])
+	b.model = 0
+	for i, t := range b.tabs {
+		if t.Selected {
+			b.model = i
+		}
+	}
+	b.choice = b.model
 }
 
 // build adds the bar's parts to the title bar row: the tabs, the drag stretch, the Review
@@ -105,9 +115,11 @@ func (b *titleBar) reviewButton(c *ui.Context) {
 // shrinks to TabMinWidth and its label ends in an ellipsis; the row clips what is left
 // (Rust D62).
 func (b *titleBar) tabRow(c *ui.Context) {
-	ui.Row(c).Label(LabelTabs).FillHeight().MinWidth(0).Shrink(1).Clip().Children(func() {
+	b.syncChoice()
+	tabs := ui.TabsBase(c.Key("agent tabs"), &b.choice, len(b.tabs))
+	tabs.List.Label(LabelTabs).FillHeight().MinWidth(0).Shrink(1).Clip().Children(func() {
 		for i, t := range b.tabs {
-			b.tab(c, i, t)
+			b.tab(c, tabs.Tab(i), t)
 		}
 	})
 }
@@ -115,7 +127,7 @@ func (b *titleBar) tabRow(c *ui.Context) {
 // tab shows the status icon, the label and, on the first orchestrator, the needs badge. The
 // selected tab has the terminal's background and a white underline. An orchestrator tab has
 // the terminal's background too, with its mark before the name.
-func (b *titleBar) tab(c *ui.Context, i int, t AgentTab) {
+func (b *titleBar) tab(c *ui.Context, tab ui.Element, t AgentTab) {
 	name := t.Label
 	label := name + ", " + t.Icon.Label()
 	if t.Orchestrator {
@@ -132,7 +144,7 @@ func (b *titleBar) tab(c *ui.Context, i int, t AgentTab) {
 	if b.collapsed {
 		minW = 0
 	}
-	el := ui.ButtonBase(c).Label(label).FillHeight().
+	el := tab.Label(label).FillHeight().
 		MinWidth(minW).MaxWidth(theme.TabMaxWidth).Shrink(1).
 		PaddingX(theme.TabPaddingX).Gap(theme.TabGap).AlignItems(ui.Center)
 	color := uint32(theme.Text2)
@@ -142,7 +154,7 @@ func (b *titleBar) tab(c *ui.Context, i int, t AgentTab) {
 	if t.Selected {
 		color = theme.Text
 	} else {
-		el = el.Cursor(ui.CursorPointer).OnClick(func() { b.clickTab(i) })
+		el = el.Cursor(ui.CursorPointer)
 		if el.Hovered() {
 			color = theme.Text
 		}

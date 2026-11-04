@@ -106,9 +106,6 @@ func TestClickingATabSelectsItsAgent(t *testing.T) {
 func TestClickingTheSelectedTabDoesNothing(t *testing.T) {
 	b := newBar(t, tabsOf(), true)
 	b.click(t, "orchestrator lead, idle")
-	b.bar.clickTab(0)
-	b.bar.clickTab(99)
-	b.bar.clickTab(-1)
 	if len(b.picked) != 0 {
 		t.Errorf("picked %+v", b.picked)
 	}
@@ -342,5 +339,14 @@ func TestNoAgentSourceShowsNoTabs(t *testing.T) {
 	}
 	if absent(tt, LabelPanelToggle) {
 		t.Error("the panel toggle should stay")
+	}
+}
+
+func TestArrowKeysChooseTheNextTabAndSelectItsAgent(t *testing.T) {
+	b := newBar(t, tabsOf(), true)
+	b.click(t, "orchestrator lead, idle")
+	b.tt.Key(0, ui.KeyRight)
+	if len(b.picked) != 1 || b.picked[0].Address != "w1" {
+		t.Errorf("picked %+v, want the next tab after the arrow key", b.picked)
 	}
 }
