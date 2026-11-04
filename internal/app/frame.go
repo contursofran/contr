@@ -5,6 +5,8 @@ package app
 
 import (
 	"context"
+	"log"
+	"os/exec"
 
 	"github.com/egoist/mygo/ui"
 
@@ -95,6 +97,9 @@ type Frame struct {
 	// SpacesList is the spaces column body. [Frame.Attach] makes it and puts
 	// its view in Slots.Spaces.
 	SpacesList *SpacesList
+	// PR is the pull request pane. [Frame.Attach] makes it. [Frame.OpenPR] opens it at the
+	// right of the terminal area, and the title bar tabs shrink to icon and id (D59).
+	PR *PRPane
 	// Host and Usage feed the status bar. [Frame.Attach] creates them when they are nil (tests set
 	// fakes first) and ends them with its stop function.
 	Host  *host.Host
@@ -136,6 +141,23 @@ func (f *Frame) ToggleSidebar() { f.sidebarOpen = !f.sidebarOpen }
 
 // TogglePanel shows or hides the board panel. It sends no herdr command.
 func (f *Frame) TogglePanel() { f.panelOpen = !f.panelOpen }
+
+// OpenPR shows pull request n of the repository in dir.
+func (f *Frame) OpenPR(dir string, n int) {
+	if f.PR != nil {
+		f.PR.Open(dir, n)
+	}
+}
+
+// ClosePR hides the pull request pane.
+func (f *Frame) ClosePR() {
+	if f.PR != nil {
+		f.PR.Close()
+	}
+}
+
+// PROpen tells whether the pull request pane shows.
+func (f *Frame) PROpen() bool { return f.PR != nil && f.PR.IsOpen() }
 
 // ReviewOpen tells whether the Review view replaces the terminal area.
 func (f *Frame) ReviewOpen() bool { return f.reviewOpen }
@@ -290,6 +312,9 @@ func (f *Frame) main(c *ui.Context) {
 				f.terminal(c)
 				f.run(c, f.Slots.Needs)
 			})
+			if f.PR != nil {
+				f.PR.View(c)
+			}
 			if f.panelOpen {
 				ui.Box(c).Label(LabelPanel).Width(theme.PanelWidth).Shrink(0).
 					Background(color(theme.BgWindow)).BorderStartWidth(1).BorderColor(color(theme.Line)).
@@ -322,6 +347,7 @@ func (f *Frame) titleBar(c *ui.Context) {
 		f.bar.setTabs(f.agentTabs())
 		f.bar.selectTab = f.selectTab
 		f.bar.toggleReview, f.bar.reviewOpen = f.ToggleReview, f.reviewOpen
+		f.bar.collapsed = f.PROpen()
 		f.bar.build(c, f.panelOpen, f.TogglePanel)
 	})
 }
@@ -454,6 +480,7 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	f.Selection = state.NewSelection(func() { w.Invalidate(); f.syncReview(); f.syncTerminal() })
 	f.Review = NewReview(w.Update, w.Invalidate)
 	f.Status = state.NewStatusMessage(w.Invalidate)
+	f.PR = &PRPane{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate, OpenURL: openURL}
 	// An onChange func can run on any goroutine or on the UI thread. It only
 	// queues the sync with Window.Update, which is safe from both.
 	h := NewHerdr(ctx, target, w.IsVisible(), func() { w.Update(f.syncHerdr) })
@@ -489,6 +516,7 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 		f.SpacesList = NewSpacesList(h, f.Host, f.Selection, f.Status,
 			func() bool { return f.Visibility == nil || f.Visibility.Visible() }, w.Update)
 	}
+	f.SpacesList.OpenPR = f.OpenPR
 	f.Slots.Spaces = f.SpacesList.View
 	f.SpacesList.Sync()
 	f.Needs = &NeedsRow{Snapshot: agentSnap}
@@ -498,6 +526,7 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	}
 	f.Slots.Needs = f.Needs.View
 	f.Panel = &BoardPanel{Snapshot: agentSnap, Needs: f.Needs.Tabs}
+	f.Panel.OpenPR = f.OpenPR
 	if src != nil {
 		f.Panel.Scope = f.Needs.Scope
 		f.Panel.Open = f.Card.Open
@@ -581,4 +610,13 @@ func (f *Frame) syncTerminal() {
 		return
 	}
 	f.termView.SetTerminal(terminal.HCStarter(f.TerminalSource(addr)))
+}
+
+// openURL opens a web address in the default browser, off the UI thread.
+func openURL(u string) {
+	go func() {
+		if err := exec.Command("open", u).Run(); err != nil {
+			log.Printf("open %s: %v", u, err)
+		}
+	}()
 }

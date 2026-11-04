@@ -71,6 +71,11 @@ const WindowHeight = 900
 const SidebarWidth = 280
 const TitleBarHeight = 40
 const PanelWidth = 440
+
+// PR pane (D59)
+const PRPaneWidth = 560
+const PRPanePad = 16
+const PRWhoWidth = 74 // timeline: who column
 const StatusBarHeight = 26
 
 // Sidebar spaces (planner defaults; docs/DESIGN.md has no sizes for these)

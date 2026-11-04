@@ -39,6 +39,8 @@ type titleBar struct {
 	// toggleReview shows or hides the Review view. Nil: the bar has no Review button.
 	toggleReview func()
 	reviewOpen   bool
+	// collapsed shows only the icon and the id of each tab (D59): the PR pane takes the room.
+	collapsed bool
 }
 
 // setTabs takes in the tabs and tells whether they differ from the last ones.
@@ -102,8 +104,18 @@ func (b *titleBar) tab(c *ui.Context, i int, t AgentTab) {
 		name = orchestratorMark + name
 		label = "orchestrator " + t.Label + ", " + t.Icon.Label()
 	}
+	if b.collapsed {
+		name = t.ID
+		if t.Orchestrator {
+			name = orchestratorMark + t.ID
+		}
+	}
+	minW := float32(theme.TabMinWidth)
+	if b.collapsed {
+		minW = 0
+	}
 	el := ui.ButtonBase(c).Label(label).FillHeight().
-		MinWidth(theme.TabMinWidth).MaxWidth(theme.TabMaxWidth).Shrink(1).
+		MinWidth(minW).MaxWidth(theme.TabMaxWidth).Shrink(1).
 		PaddingX(theme.TabPaddingX).Gap(theme.TabGap).AlignItems(ui.Center)
 	color := uint32(theme.Text2)
 	if t.Selected || t.Orchestrator {

@@ -84,3 +84,16 @@ Shown in the terminal area while the title bar's "Review" button is on. The repo
 - Labels: `branch <name>`, `file <path>`, `commit <short>`; the switch `review mode` has `Whole branch` and `By commit`.
 - Rows and the code view come from `internal/app/kit`; the only colors are the two diff colors (D34).
 - No git runs while the view or the window is hidden.
+
+## PR viewer
+
+A pull request pane at the right of the terminal area, from the v0.2 artboard (owner, 2026-11-03). The `#N` badge on a sidebar worktree row and the `#N` label of a board work row open it (D59). Slice 1 builds the header and the Overview tab; Files and Checks follow in later slices.
+
+- **Size and place:** 560px wide, fixed, between the terminal area and the board panel. It pushes the terminal narrower. Border on its left side, window background.
+- **Title bar tabs:** while the pane is open each agent tab shows only its icon and its id (`#151` for a worker with an issue, the name otherwise), so the pane has room.
+- **Header** (16px padding, a divider under it): row 1 is `#N`, the title (bold, one line, ellipsis), `GitHub ↗` (opens the PR in the browser) and `×` (closes). Row 2, in dim text: repository name, `head → base`, author, `+A −D · N files`. Row 3: a state chip (`open`, `draft`, `merged`, `closed`; grey, no hue), the CI icon with one line (`CI green · 3 checks`, `CI running`, `CI failing · 1 of 3`, `no checks`).
+- **Tabs:** a switch `Overview`, `Files N`, `Checks N`. Files and Checks show `Not built yet.` until their slices.
+- **Overview:** the PR text first, in secondary text (headings bold, list items with a `•`, code blocks as plain lines), then `Timeline`: one row per event with a divider above it: status icon, who (bold, 74px), what happened, age (`now`, `14m`, `3h`, `2d`). Events are comments, reviews, commits, and merge or close, oldest first.
+- **Loading and errors:** `Loading…` while gh runs. A failed read shows the error text, `gh: <stderr>`. Only the newest read lands.
+- **Close:** `×`, or Escape while the pane has focus. Opening a pane gives it focus.
+- Colors: mono font, greyscale. The only color in the pane is the status icons.
