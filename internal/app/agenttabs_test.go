@@ -160,3 +160,84 @@ func TestOpenProjectWithAnUnknownAddressKeeps(t *testing.T) {
 		t.Fatalf("project = %q, want q", got)
 	}
 }
+
+func termW(addr, name, project, worktree string) agents.Worker {
+	return agents.Worker{Address: addr, Name: name, Project: project, Worktree: worktree, Role: agents.RoleTerminal, Live: true}
+}
+
+func TestAgentTabsPlainLast(t *testing.T) {
+	s := agentstate.Snapshot{
+		Orchestrators: []agents.Worker{orchW("o", "orch", "p")},
+		Workers:       []agents.Worker{workW("a", "a", "p")},
+		Terminals: []agents.Worker{
+			termW("t1", "term-1", "p", "/work/repo"),
+			termW("tq", "term-q", "q", "/work/other"),
+		},
+	}
+	tabs := AgentTabs(s, "p", "t1")
+	got := addrs(tabs)
+	if len(got) != 3 || got[0] != "o" || got[1] != "a" || got[2] != "t1" {
+		t.Fatalf("order = %v, want [o a t1]", got)
+	}
+	p := tabs[2]
+	if !p.Plain || p.Orchestrator || !p.Selected || p.Label != "$ repo" {
+		t.Fatalf("plain tab = %+v", p)
+	}
+	if tabs[0].Plain || tabs[1].Plain {
+		t.Fatalf("agent tab marked plain: %+v", tabs[:2])
+	}
+}
+
+func TestAgentTabsPlainLabel(t *testing.T) {
+	titled := termW("t1", "term-1", "p", "/work/repo")
+	titled.Title = "vim main.go"
+	bare := termW("t2", "term-2", "p", "")
+	s := agentstate.Snapshot{Terminals: []agents.Worker{titled, bare}}
+	tabs := AgentTabs(s, "p", "")
+	if tabs[0].Label != "vim main.go" {
+		t.Errorf("titled label = %q, want the title", tabs[0].Label)
+	}
+	if tabs[1].Label != "term-2" {
+		t.Errorf("no title, no folder label = %q, want the name", tabs[1].Label)
+	}
+}
+
+func TestAgentTabsPlainNoBadge(t *testing.T) {
+	s := needsSnap()
+	s.Terminals = []agents.Worker{termW("t1", "term-1", "p", "/work/repo")}
+	for _, tab := range AgentTabs(s, "p", "") {
+		if tab.Plain && tab.Needs != 0 {
+			t.Fatalf("plain tab has badge %d", tab.Needs)
+		}
+	}
+	// With no orchestrator, a plain tab must not take the badge.
+	only := agentstate.Snapshot{
+		Terminals: []agents.Worker{termW("t1", "term-1", "p", "/r")},
+		Questions: []owner.Question{{ID: "D1", Project: "p", Title: "open"}},
+	}
+	if tabs := AgentTabs(only, "p", ""); tabs[0].Needs != 0 {
+		t.Fatalf("plain tab badge = %d, want 0", tabs[0].Needs)
+	}
+}
+
+func TestOpenProjectTerminal(t *testing.T) {
+	s := needsSnap()
+	s.Terminals = []agents.Worker{termW("t1", "term-1", "q", "/r")}
+	if got := OpenProject(s, state.Selected{Kind: state.KindTerminal, ID: "t1"}, true, "p"); got != "q" {
+		t.Fatalf("project = %q, want q", got)
+	}
+	if got := OpenProject(s, state.Selected{Kind: state.KindTerminal, ID: "gone"}, true, "p"); got != "p" {
+		t.Fatalf("unknown terminal: project = %q, want p", got)
+	}
+}
+
+func TestNeedsCountIgnoresTerminals(t *testing.T) {
+	s := needsSnap()
+	want := NeedsCount(s, "p")
+	blocked := termW("t1", "term-1", "p", "/r")
+	blocked.Status = "blocked"
+	s.Terminals = []agents.Worker{blocked}
+	if got := NeedsCount(s, "p"); got != want {
+		t.Fatalf("NeedsCount = %d, want %d", got, want)
+	}
+}

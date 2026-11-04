@@ -47,3 +47,16 @@ func TestClearingNotifiesOnlyWhenSomethingWasSelected(t *testing.T) {
 		t.Fatal("want no selection")
 	}
 }
+
+func TestTerminalKindIsNewAndKeepsTheOthers(t *testing.T) {
+	if KindTerminal != KindWorker+1 {
+		t.Fatalf("KindTerminal = %d, want after KindWorker (%d)", KindTerminal, KindWorker)
+	}
+	n := 0
+	s := NewSelection(func() { n++ })
+	s.Select(Selected{KindWorker, "t1"})
+	s.Select(Selected{KindTerminal, "t1"})
+	if n != 2 {
+		t.Fatalf("a worker and a terminal with one address are one selection (notified %d times, want 2)", n)
+	}
+}
