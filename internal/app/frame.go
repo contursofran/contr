@@ -20,6 +20,7 @@ import (
 	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/github"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/projects"
@@ -99,6 +100,11 @@ type Frame struct {
 	// OpenFolder asks the owner for a folder to add to the projects (D116). It
 	// blocks, so the modal calls it off the UI thread.
 	OpenFolder func() (string, error)
+	// CloneParent, PickCloneParent and CloneRun serve the clone part of the
+	// projects modal (D117); see ProjectsModal. An empty CloneParent hides it.
+	CloneParent     string
+	PickCloneParent func(def string) (string, error)
+	CloneRun        git.CloneRunner
 	// ProjectKey returns the project key of a folder (D116); nil uses the folder.
 	ProjectKey func(path string) string
 	// LoadProjects reads the projects store (D109). It runs on a goroutine.
@@ -850,6 +856,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 			}
 		},
 		PickFolder: f.OpenFolder, Resolve: f.ProjectKey,
+		CloneParent: f.CloneParent, PickParent: f.PickCloneParent, CloneRun: f.CloneRun,
 		Save: f.SaveProjects, Run: Runner{Post: w.Update}, Status: f.Status.Show, Invalidate: w.Invalidate,
 	}
 	f.SpacesList.OnProjects = f.ProjectsModal.Toggle

@@ -153,6 +153,9 @@ func openWindow(icons bool) int {
 		frame.PickFolder = pickFolder
 		frame.OpenFolder = openFolder
 		frame.ProjectKey = projectKey
+		home, _ := os.UserHomeDir()
+		frame.CloneParent = cloneParent(home)
+		frame.PickCloneParent = pickCloneParent
 		frame.SpawnOrchestrator = func(dir string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()

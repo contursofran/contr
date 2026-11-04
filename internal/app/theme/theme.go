@@ -68,6 +68,9 @@ const BadgeApprovedBorder = 0x5A5A5A
 const DiffAdded = 0xA6D189
 const DiffDeleted = 0xF07178
 
+// StatusFailed is the red of failed and blocked (D76); the clone error uses it.
+const StatusFailed = 0xF07178
+
 // Text
 const Text = 0xEDEDED     // primary
 const Text2 = 0xBDBDBD    // secondary
