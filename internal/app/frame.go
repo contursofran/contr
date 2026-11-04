@@ -36,6 +36,7 @@ type Slots struct {
 	Terminal  Slot // the selected hc terminal
 	Needs     Slot // needs-you row, under the terminal; draws nothing when empty
 	Card      Slot // answer card, floating at the bottom of the terminal area
+	Sheet     Slot // context sheet, floating at the top of the terminal area
 	Panel     Slot // board panel, shown while it is open
 	StatusBar Slot
 }
@@ -74,6 +75,8 @@ type Frame struct {
 	// Card is the answer card that the needs-you row opens. [Frame.Attach]
 	// makes it and puts its view in Slots.Card.
 	Card *FloatCard
+	// Sheet is the context sheet that ⌘J opens ([Frame.Attach] makes it).
+	Sheet *Sheet
 	// Worker is the panel's worker view. [Frame.Attach] makes it. The panel
 	// shows it while a worker is selected.
 	Worker *WorkerPanel
@@ -295,6 +298,9 @@ func color(rgb uint32) ui.Color { return theme.Color(rgb) }
 // View builds the frame: the sidebar over the full height, the title bar,
 // the terminal and the panel to its right, and the status bar below them.
 func (f *Frame) View(c *ui.Context) {
+	if f.Sheet != nil && c.Shortcut(ui.Cmd, ui.KeyJ) {
+		f.Sheet.Toggle()
+	}
 	ui.Column(c).Fill().Background(color(theme.BgWindow)).TextColor(color(theme.Text)).Children(func() {
 		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
 			if f.sidebarOpen {
@@ -410,6 +416,11 @@ func (f *Frame) terminal(c *ui.Context) {
 	col := ui.Column(c).Label(LabelTerminal).Grow(1).MinWidth(0).Center().
 		Background(color(theme.BgTerminal))
 	col.Children(func() {
+		// The sheet floats over the top edge of this strip (D67: no resize).
+		if f.Sheet != nil {
+			f.Sheet.Anchor = ui.Box(c).FillWidth().Height(0).Shrink(0)
+		}
+		f.run(c, f.Slots.Sheet)
 		f.run(c, f.Slots.Terminal)
 		// The card floats over the bottom edge of this strip. The strip has
 		// no height, so a press on the terminal is outside the card.
@@ -644,6 +655,8 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		setCloseTerminalHandler(func() { w.Update(f.closeSelectedTerminal) })
 		f.Worker = &WorkerPanel{Source: src, Selection: f.Selection, Run: run, Status: f.Status.Show, Invalidate: w.Invalidate}
 		f.Slots.Card = f.Card.View
+		f.Sheet = &Sheet{Source: src, Run: run, Invalidate: w.Invalidate}
+		f.Slots.Sheet = f.Sheet.View
 	}
 	f.AgentsList = NewAgentsList(agentSnap, f.Selection)
 	f.Slots.Agents = f.AgentsList.View
@@ -673,6 +686,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	if src != nil {
 		f.Needs.Scope = func() string { return f.scope(src) }
 		f.Needs.Open = f.Card.Open
+		f.Sheet.Scope = f.Needs.Scope
 	}
 	f.Needs.Collapsed = f.PROpen
 	f.Slots.Needs = f.Needs.View
