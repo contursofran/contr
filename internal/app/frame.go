@@ -92,7 +92,7 @@ type Frame struct {
 	// UI thread. Nil makes `+ new` do nothing.
 	PickFolder        func() (string, error)
 	SpawnOrchestrator func(dir string) error
-	// OpenTerminal serves "+" and Cmd-T (D81): it starts a shell in an hc
+	// OpenTerminal serves "+" and Cmd-T (D82): it starts a shell in an hc
 	// terminal for the open project, in dir, and returns its address. It
 	// blocks, so the frame runs it off the UI thread. Nil makes both do
 	// nothing.
@@ -390,7 +390,7 @@ func (f *Frame) agentTabs() []AgentTab {
 	return AgentTabs(snap, f.openProject, selected)
 }
 
-// newTerminal opens a plain terminal in the open project (D81). Its folder is
+// newTerminal opens a plain terminal in the open project (D82). Its folder is
 // the worktree of the project's first orchestrator, else the home folder.
 // UI thread.
 func (f *Frame) newTerminal() {

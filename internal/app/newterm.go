@@ -1,7 +1,7 @@
 package app
 
 // NewTerminal opens a plain hc terminal in the open project: the "+" in the
-// title bar and Cmd-T (#246, D81). Its methods run on the UI thread; Open runs
+// title bar and Cmd-T (#246, D82). Its methods run on the UI thread; Open runs
 // off it.
 type NewTerminal struct {
 	// Open starts a shell in an hc terminal and returns its address. project is

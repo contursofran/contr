@@ -19,7 +19,7 @@ func terminalName(now time.Time, n uint32) string {
 }
 
 // openTerminal starts a login shell in a plain hc terminal for project, in
-// dir, on a connection of its own (D81), and returns the terminal's address.
+// dir, on a connection of its own (D82), and returns the terminal's address.
 func openTerminal(ctx context.Context, getenv func(string) string, dial func(context.Context, func(string) string) (agentsCore, error), project, dir string, now time.Time) (string, error) {
 	core, err := dial(ctx, getenv)
 	if err != nil {

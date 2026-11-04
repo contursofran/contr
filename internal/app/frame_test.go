@@ -577,7 +577,11 @@ func newTermFrame(t *testing.T, snap *agentstate.Snapshot) *termFrame {
 func TestPlusTabStartsTerminal(t *testing.T) {
 	snap := tabSnap()
 	snap.Orchestrators[0].Worktree = "/work/p"
+	other := orchW("o2", "other-lead", "q") // another project's orchestrator, listed first
+	other.Worktree = "/work/q"
+	snap.Orchestrators = append([]agents.Worker{other}, snap.Orchestrators...)
 	tf := newTermFrame(t, &snap)
+	tf.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "w1"}) // opens project p
 	tf.tt.Frame()
 	if err := tf.tt.Click(LabelNewTab); err != nil {
 		t.Fatal(err)

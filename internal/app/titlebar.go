@@ -24,7 +24,7 @@ const (
 	LabelTitleDrag = "title drag"
 	// LabelReviewToggle is the title bar's Review button.
 	LabelReviewToggle = "Review"
-	// LabelNewTab is the "+" button after the tabs: it opens a plain terminal (D81).
+	// LabelNewTab is the "+" button after the tabs: it opens a plain terminal (D82).
 	LabelNewTab = "New terminal"
 	// orchestratorMark comes before an orchestrator tab's name.
 	orchestratorMark = "◆ "
