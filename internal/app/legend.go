@@ -29,7 +29,7 @@ func (l *Legend) View(c *ui.Context) {
 		for i, s := range icons.All {
 			l.rowBuilds[i]++
 			ui.Row(c.Key(s.Slug())).Height(legendRowHeight).AlignItems(ui.Center).Gap(12).Padding(0, 16).Children(func() {
-				icons.Icon(c, s)
+				icons.Icon(c, s).Tooltip(s.Label() + ": " + legendPlace(s))
 				ui.Text(c, s.Label())
 				ui.Text(c, legendPlace(s)).TextColor(theme.Color(theme.TextDim))
 			})

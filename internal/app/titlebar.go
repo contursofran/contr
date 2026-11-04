@@ -90,7 +90,7 @@ func (b *titleBar) build(c *ui.Context, panelOpen bool, togglePanel func()) {
 
 // newTabButton is the "+" after the tabs. It stays visible with no tabs.
 func (b *titleBar) newTabButton(c *ui.Context) {
-	el := ui.ButtonBase(c).Label(LabelNewTab).FillHeight().PaddingX(theme.TabPaddingX).Shrink(0).
+	el := ui.ButtonBase(c).Label(LabelNewTab).Tooltip("New terminal").FillHeight().PaddingX(theme.TabPaddingX).Shrink(0).
 		Cursor(ui.CursorPointer).Center().OnClick(b.newTab)
 	color := uint32(theme.TextDim)
 	if el.Hovered() {
@@ -102,7 +102,7 @@ func (b *titleBar) newTabButton(c *ui.Context) {
 // reviewButton is the "Review" toggle: it swaps the terminal area for the Review view. It is
 // white while the view shows (D37).
 func (b *titleBar) reviewButton(c *ui.Context) {
-	el := ui.ButtonBase(c).Label(LabelReviewToggle).FillHeight().PaddingX(theme.TabPaddingX).Shrink(0).
+	el := ui.ButtonBase(c).Label(LabelReviewToggle).Tooltip("Show or hide the Review view").FillHeight().PaddingX(theme.TabPaddingX).Shrink(0).
 		Cursor(ui.CursorPointer).Center().OnClick(b.toggleReview)
 	color := uint32(theme.TextDim)
 	if b.reviewOpen || el.Hovered() {
