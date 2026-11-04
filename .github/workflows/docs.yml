@@ -1,0 +1,30 @@
+name: Docs
+
+# The Markdown checks of scripts/check.sh, for PRs that change Markdown.
+# PRs that change only Markdown skip ci.yml and run only this.
+on:
+  pull_request:
+    paths:
+      - "**/*.md"
+
+permissions: {}
+
+concurrency:
+  group: docs-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Conflict markers and decision ids
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run the checks
+        run: |
+          scripts/check-conflicts.sh
+          scripts/check-decisions.sh
