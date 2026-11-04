@@ -32,9 +32,10 @@ jobs:
       contents: write # the tag, the release and its files
     env:
       GH_TOKEN: ${{ github.token }}
-      MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
     steps:
       - name: Check the signing secret
+        env:
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
         run: |
           if [ -z "$MYGO_UPDATER_PRIVATE_KEY" ]; then
             echo "::error::MYGO_UPDATER_PRIVATE_KEY is not set. Add the update secret key to the repository secrets (gh secret set MYGO_UPDATER_PRIVATE_KEY < mygo-update.key). A release without it could not be installed by the app." >&2
@@ -73,6 +74,9 @@ jobs:
           git push origin "refs/tags/v$VERSION_NEW"
           gh release create "v$VERSION_NEW" --draft --verify-tag --title "v$VERSION_NEW" --notes-file release-notes.md
       - name: Build, sign and upload
+        env:
+          # Only the build step sees the secret key.
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
         run: |
           scripts/mygo-config.sh > mygo.json
           go tool mygo build -platform darwin/arm64 -skip-dmg -upload
