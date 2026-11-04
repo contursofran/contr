@@ -364,6 +364,7 @@ func TestPRPaneStateBadge(t *testing.T) {
 	}
 	r.pane.Open("/w", 642)
 	r.flush()
+	r.tt.Advance(400 * time.Millisecond) // let the enter motion end
 	b, ok := r.tt.Find("state merged")
 	if !ok {
 		t.Fatalf("no merged badge; texts %v", r.tt.Texts())
@@ -444,5 +445,70 @@ func TestPRPaneDescriptionLinksOpenOnlyWeb(t *testing.T) {
 	h("file:///etc/passwd")
 	if len(r.opened) != 1 || r.opened[0] != "https://example.test/x" {
 		t.Errorf("opened %q", r.opened)
+	}
+}
+
+// idHeaderX is the x of the "#642" header text, after the pane settles.
+func idHeaderX(t *testing.T, r *prRig) float32 {
+	t.Helper()
+	rect, ok := r.tt.Find("#642")
+	if !ok {
+		t.Fatalf("no header in %q", r.tt.Texts())
+	}
+	return rect.X
+}
+
+func TestPRPaneEnterMotionOnOpen(t *testing.T) {
+	r := newPRRig(t)
+	r.tt.Frame()
+	r.pane.Open("/w", 642)
+	r.tt.Frame()
+	r.tt.Advance(40 * time.Millisecond)
+	moving := idHeaderX(t, r)
+	r.tt.Advance(400 * time.Millisecond)
+	rest := idHeaderX(t, r)
+	if moving >= rest-1 {
+		t.Errorf("header x %v while entering, %v at rest: want it left of rest", moving, rest)
+	}
+	if rest-moving > 24 {
+		t.Errorf("moved %v px, want at most 24", rest-moving)
+	}
+	if r.tt.FramePending() {
+		t.Error("frames still requested after the motion ended")
+	}
+}
+
+func TestPRPaneNoMotionWithReduceMotion(t *testing.T) {
+	r := newPRRig(t)
+	r.tt.SetPreferences(ui.Preferences{ReduceMotion: true})
+	r.tt.Frame()
+	r.pane.Open("/w", 642)
+	r.tt.Frame()
+	first := idHeaderX(t, r)
+	// No fade either: the pane background is opaque on the first frame.
+	img := r.tt.Image()
+	scale := float32(img.Bounds().Dx()) / 900
+	px := img.RGBAAt(int(100*scale), int(650*scale))
+	if got := uint32(px.R)<<16 | uint32(px.G)<<8 | uint32(px.B); got != theme.BgWindow {
+		t.Errorf("pane background = %06X on the first frame, want %06X", got, theme.BgWindow)
+	}
+	r.tt.Advance(400 * time.Millisecond)
+	if rest := idHeaderX(t, r); first != rest {
+		t.Errorf("header moved from %v to %v with Reduce Motion", first, rest)
+	}
+}
+
+func TestPRPaneReplaceDoesNotAnimate(t *testing.T) {
+	r := newPRRig(t)
+	r.tt.Frame()
+	r.pane.Open("/w", 642)
+	r.tt.Frame()
+	r.tt.Advance(400 * time.Millisecond)
+	rest := idHeaderX(t, r)
+	r.pane.Open("/w", 642)
+	r.tt.Frame()
+	r.tt.Advance(40 * time.Millisecond)
+	if x := idHeaderX(t, r); x != rest {
+		t.Errorf("header at %v after replacing, want %v (no motion)", x, rest)
 	}
 }

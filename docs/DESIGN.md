@@ -432,9 +432,9 @@ badge and the CI summary, the tabs and the Overview. The tab switch is
 `kit.Switch`, so the Review mode switch has the same look. It opens from the `#N` badge
 of a sidebar worktree row and the `#N` label of a board work row. While it
 is open, the needs-you tabs and the title bar tabs show icon and id only.
-Not built yet: the Files and Checks tabs (they show `Not built yet.`), the
-the other entry points, `for <item>`, and the enter
-motion. The bottom row has no `board ▴` yet, so there is nothing to hide.
+Not built yet: the Files and Checks tabs (they show `Not built yet.`),
+the other entry points, and `for <item>`. The bottom row has no
+`board ▴` yet, so there is nothing to hide.
 
 The footer (#154, D103) shows for an open PR: the comment field (Enter or
 `Comment` sends), `Approve` and `Squash and merge`. `Approve` is hidden on the
