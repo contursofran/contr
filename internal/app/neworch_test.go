@@ -24,7 +24,7 @@ type newOrchHarness struct {
 
 func newOrch(t *testing.T) *newOrchHarness {
 	t.Helper()
-	n := &newOrchHarness{h: newSpaces(t, spacesOf(spTree(spPane("w1:p1", t.TempDir(), nil))))}
+	n := &newOrchHarness{h: newSpaces(t, spTree(spPane("w1:p1", t.TempDir(), nil)))}
 	n.pickFn = func() (string, error) { return "/work/proj", nil }
 	n.no = &NewOrchestrator{
 		Pick:   func() (string, error) { n.picked++; return n.pickFn() },

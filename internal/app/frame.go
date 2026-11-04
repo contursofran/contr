@@ -14,6 +14,7 @@ import (
 	gterm "github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/app/state"
@@ -203,7 +204,7 @@ func (f *Frame) ToggleReview() {
 }
 
 // reviewTarget is the folder that Review should show: the selected worktree's root, the
-// selected agent's folder, or "" with no selection.
+// selected hc terminal's worktree, or "" with no selection.
 func (f *Frame) reviewTarget() string {
 	if f.Selection == nil {
 		return ""
@@ -215,6 +216,19 @@ func (f *Frame) reviewTarget() string {
 	switch sel.Kind {
 	case state.KindWorktree:
 		return sel.ID
+	case state.KindOrchestrator, state.KindWorker, state.KindTerminal:
+		if f.agentSnap == nil {
+			return ""
+		}
+		s := f.agentSnap()
+		for _, ws := range [][]agents.Worker{s.Orchestrators, s.Workers, s.Terminals} {
+			for _, w := range ws {
+				if w.Address == sel.ID {
+					return w.Worktree
+				}
+			}
+		}
+		return ""
 	case state.KindAgent:
 		if f.Herdr == nil {
 			return ""
@@ -601,7 +615,7 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	}
 	// The git scan runs on a goroutine and lands through Window.Update.
 	if f.SpacesList == nil {
-		f.SpacesList = NewSpacesList(h, f.Host, f.Selection, f.Status,
+		f.SpacesList = NewSpacesList(agentSnap, f.Host, f.Selection,
 			func() bool { return f.Visibility == nil || f.Visibility.Visible() }, w.Update)
 	}
 	f.SpacesList.OpenPR = f.OpenPR

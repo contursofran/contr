@@ -5,18 +5,20 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/git"
-	"github.com/contursofran/contr/internal/herdr"
 	"github.com/contursofran/contr/internal/host"
 )
 
@@ -85,24 +87,31 @@ func twoWorktrees(t *testing.T, base string) (string, string) {
 
 // ---- Trees ----
 
-func spPane(id, cwd string, agent *herdr.AgentState) herdr.Pane {
-	p := herdr.Pane{ID: id, Tokens: map[string]string{}}
-	if cwd != "" {
-		p.Cwd = &cwd
+// spPane is a live worker named id in the folder cwd, with an hc status
+// when status is not nil.
+func spPane(id, cwd string, status *string) agents.Worker {
+	w := agents.Worker{Name: id, Address: id, Role: "builder", Worktree: cwd, Live: true}
+	if status != nil {
+		w.Status = *status
 	}
-	if agent != nil {
-		p.Agent = &herdr.AgentInfo{Name: "claude", Status: *agent}
-	}
-	return p
+	return w
 }
 
-// spTree is one workspace with one tab, t1 labelled "a", holding panes.
-func spTree(panes ...herdr.Pane) herdr.HerdrTree {
-	return herdr.HerdrTree{Version: "0.9.3", Workspaces: []herdr.Workspace{{
-		ID: "w1", Label: "contr", Status: herdr.StateIdle,
-		Tabs: []herdr.Tab{{ID: "t1", Label: "a", Status: herdr.StateIdle, Panes: panes}},
-	}}}
+func hs(s string) *string { return &s }
+
+// spTree is the agent state of a followed core with the workers ws.
+func spTree(ws ...agents.Worker) agentstate.Snapshot {
+	return agentstate.Snapshot{Workers: ws, CoreVersion: "0.1.18"}
 }
+
+// spSnap is the agent state the list reads.
+type spSnap struct {
+	mu sync.Mutex
+	s  agentstate.Snapshot
+}
+
+func (f *spSnap) get() agentstate.Snapshot { f.mu.Lock(); defer f.mu.Unlock(); return f.s }
+func (f *spSnap) set(s agentstate.Snapshot) { f.mu.Lock(); f.s = s; f.mu.Unlock() }
 
 // ---- Harness ----
 
@@ -110,7 +119,7 @@ func spTree(panes ...herdr.Pane) herdr.HerdrTree {
 // The scan runs at once on this goroutine, so a test sees its result.
 type spacesHarness struct {
 	t       *testing.T
-	live    *fakeLive
+	live    *spSnap
 	sel     *state.Selection
 	list    *SpacesList
 	host    *fakeHost
@@ -122,9 +131,9 @@ type spacesHarness struct {
 	stats   map[string]git.DiffStat
 }
 
-func newSpaces(t *testing.T, live herdr.LiveHerdr) *spacesHarness {
+func newSpaces(t *testing.T, live agentstate.Snapshot) *spacesHarness {
 	t.Helper()
-	h := &spacesHarness{t: t, live: &fakeLive{live: live}, sel: state.NewSelection(nil),
+	h := &spacesHarness{t: t, live: &spSnap{s: live}, sel: state.NewSelection(nil),
 		host: &fakeHost{}, clock: time.Unix(1_000_000, 0)}
 	h.list = h.makeList()
 	h.tt = ui.NewTester(h.list.View, theme.SidebarWidth, theme.WindowHeight)
@@ -132,23 +141,21 @@ func newSpaces(t *testing.T, live herdr.LiveHerdr) *spacesHarness {
 }
 
 func (h *spacesHarness) makeList() *SpacesList {
-	l := NewSpacesList(h.live, h.host, h.sel, nil, func() bool { return !h.hidden }, nil)
+	l := NewSpacesList(h.live.get, h.host, h.sel, func() bool { return !h.hidden }, nil)
 	l.start = func(f func()) { f() }
 	l.statsFn = func(git.Scan) map[string]git.DiffStat { return h.stats }
 	l.now = func() time.Time { return h.clock }
 	l.afterFunc = h.afterFunc
-	l.focus = func(id string, _ func(string)) { h.focused = append(h.focused, id) }
 	l.Sync()
 	return l
 }
 
-func spacesOf(tree herdr.HerdrTree) herdr.LiveHerdr { return connectedWith(tree) }
 
 // send replaces the live state, as the reader would, and draws a frame. It
 // returns what the sync changed.
-func (h *spacesHarness) send(l herdr.LiveHerdr) SpacesChange {
+func (h *spacesHarness) send(l agentstate.Snapshot) SpacesChange {
 	h.t.Helper()
-	h.live.setLive(l)
+	h.live.set(l)
 	change := h.list.Sync()
 	h.tt.Frame()
 	return change
@@ -259,7 +266,7 @@ func heldWorktree(t *testing.T) (*spacesHarness, string, string) {
 	t.Helper()
 	base := canonicalTmp(t)
 	wt1, wt2 := twoWorktrees(t, base)
-	return newSpaces(t, spacesOf(spTree(spPane("w1:p2", wt1, st(herdr.StateDone))))), wt1, wt2
+	return newSpaces(t, spTree(spPane("w1:p2", wt1, hs("done")))), wt1, wt2
 }
 
 func worktreeSel(id string) state.Selected { return state.Selected{Kind: state.KindWorktree, ID: id} }
@@ -270,7 +277,7 @@ func worktreeSel(id string) state.Selected { return state.Selected{Kind: state.K
 func TestTheScanFillsTheGroupsOnceTheTreeIsKnown(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	h := newSpaces(t, spacesOf(spTree(spPane("w1:p1", wt, nil))))
+	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
 	if len(h.list.Groups()) != 1 || h.group(0).Name != "repo" {
 		t.Fatalf("groups %+v", h.list.Groups())
 	}
@@ -287,8 +294,8 @@ func TestTheScanFillsTheGroupsOnceTheTreeIsKnown(t *testing.T) {
 func TestAHerdrChangeWithTheSameCwdsRebuildsWithoutAScan(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	h := newSpaces(t, spacesOf(spTree(spPane("w1:p1", wt, nil))))
-	h.send(spacesOf(spTree(spPane("w1:p1", wt, st(herdr.StateWorking)))))
+	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
+	h.send(spTree(spPane("w1:p1", wt, hs("working"))))
 	if h.list.scans != 1 {
 		t.Errorf("scans %d: same cwds, last scan fresh, want no scan", h.list.scans)
 	}
@@ -301,8 +308,8 @@ func TestAHerdrChangeWithTheSameCwdsRebuildsWithoutAScan(t *testing.T) {
 func TestANewCwdStartsOneMoreScan(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	h := newSpaces(t, spacesOf(spTree(spPane("w1:p1", wt, nil))))
-	h.send(spacesOf(spTree(spPane("w1:p1", wt, nil), spPane("w1:p2", filepath.Join(base, "repo"), nil))))
+	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
+	h.send(spTree(spPane("w1:p1", wt, nil), spPane("w1:p2", filepath.Join(base, "repo"), nil)))
 	if h.list.scans != 2 {
 		t.Errorf("scans %d, want 2", h.list.scans)
 	}
@@ -317,11 +324,11 @@ func TestANewCwdStartsOneMoreScan(t *testing.T) {
 func TestAChangeThatMovesNoRowDoesNotNotifyTheView(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	h := newSpaces(t, spacesOf(spTree(spPane("w1:p1", wt, nil))))
-	// Only the focus flag differs: herdr notices, the rows do not change.
-	focused := spPane("w1:p1", wt, nil)
-	focused.Focused = true
-	if change := h.send(spacesOf(spTree(focused))); change.Any() {
+	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
+	// Only the title differs: the agent state changes, the rows do not.
+	titled := spPane("w1:p1", wt, nil)
+	titled.Title = "new title"
+	if change := h.send(spTree(titled)); change.Any() {
 		t.Errorf("change %+v, want none", change)
 	}
 }
@@ -330,7 +337,7 @@ func TestAChangeThatMovesNoRowDoesNotNotifyTheView(t *testing.T) {
 func TestLosingTheTreeEmptiesTheGroups(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	h := newSpaces(t, spacesOf(spTree(spPane("w1:p1", wt, nil))))
+	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
 	if len(h.list.Groups()) != 1 {
 		t.Fatal("want one group")
 	}
@@ -349,7 +356,7 @@ func TestACwdOutsideGitGivesNoGroup(t *testing.T) {
 	if err := os.MkdirAll(plain, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	h := newSpaces(t, spacesOf(spTree(spPane("w1:p1", plain, nil))))
+	h := newSpaces(t, spTree(spPane("w1:p1", plain, nil)))
 	if len(h.list.Groups()) != 0 {
 		t.Errorf("groups %+v", h.list.Groups())
 	}
@@ -362,9 +369,9 @@ func TestACwdOutsideGitGivesNoGroup(t *testing.T) {
 func TestASelectedWorktreeThatStaysListedStaysSelected(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	h := newSpaces(t, spacesOf(spTree(spPane("w1:p1", wt, nil))))
+	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
 	h.pick(worktreeSel(wt))
-	h.send(spacesOf(spTree(spPane("w1:p1", wt, st(herdr.StateDone)))))
+	h.send(spTree(spPane("w1:p1", wt, hs("done"))))
 	if got, ok := h.sel.Current(); !ok || got != worktreeSel(wt) {
 		t.Errorf("selection %+v, %v", got, ok)
 	}
@@ -375,14 +382,14 @@ func TestASelectedWorktreeThatIsPrunedIsCleared(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
 	repo := filepath.Join(base, "repo")
-	h := newSpaces(t, spacesOf(spTree(spPane("w1:p1", repo, nil), spPane("w1:p2", wt, nil))))
+	h := newSpaces(t, spTree(spPane("w1:p1", repo, nil), spPane("w1:p2", wt, nil)))
 	h.pick(worktreeSel(wt))
 	// The worktree's checkout is gone, so git no longer lists it. A new cwd
 	// forces a scan.
 	if err := os.Remove(filepath.Join(wt, ".git")); err != nil {
 		t.Fatal(err)
 	}
-	h.send(spacesOf(spTree(spPane("w1:p1", repo, nil), spPane("w1:p3", base, nil))))
+	h.send(spTree(spPane("w1:p1", repo, nil), spPane("w1:p3", base, nil)))
 	if rows := h.group(0).Rows; len(rows) != 1 || !rows[0].IsMain {
 		t.Errorf("rows %+v, want only the main checkout", rows)
 	}
@@ -395,7 +402,7 @@ func TestASelectedWorktreeThatIsPrunedIsCleared(t *testing.T) {
 func TestLosingTheTreeClearsAWorktreeSelection(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	h := newSpaces(t, spacesOf(spTree(spPane("w1:p1", wt, nil))))
+	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
 	h.pick(worktreeSel(wt))
 	h.send(notRunningLive())
 	if got, ok := h.sel.Current(); ok {
@@ -407,7 +414,7 @@ func TestLosingTheTreeClearsAWorktreeSelection(t *testing.T) {
 func TestAnAgentSelectionIsLeftAlone(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	h := newSpaces(t, spacesOf(spTree(spPane("w1:p1", wt, nil))))
+	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
 	agent := state.Selected{Kind: state.KindAgent, ID: "w1:p1"}
 	h.pick(agent)
 	h.send(notRunningLive())
@@ -422,7 +429,7 @@ func TestAnAgentSelectionIsLeftAlone(t *testing.T) {
 func TestAHerdrChangeAfterTheIntervalRescansWhileShown(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	live := spacesOf(spTree(spPane("w1:p1", wt, nil)))
+	live := spTree(spPane("w1:p1", wt, nil))
 	h := newSpaces(t, live)
 	h.advance(RescanAfter)
 	h.send(live)
@@ -440,10 +447,10 @@ func TestAHerdrChangeAfterTheIntervalRescansWhileShown(t *testing.T) {
 func TestARescanWaitsAFullIntervalAfterAFreshScan(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	live := spacesOf(spTree(spPane("w1:p1", wt, nil)))
+	live := spTree(spPane("w1:p1", wt, nil))
 	h := newSpaces(t, live)
 	h.advance(RescanAfter / 2)
-	grown := spacesOf(spTree(spPane("w1:p1", wt, nil), spPane("w1:p2", filepath.Join(base, "repo"), nil)))
+	grown := spTree(spPane("w1:p1", wt, nil), spPane("w1:p2", filepath.Join(base, "repo"), nil))
 	h.send(grown)
 	if h.list.scans != 2 {
 		t.Fatalf("scans %d, want 2 (the new cwd, at 5 s)", h.list.scans)
@@ -464,10 +471,10 @@ func TestARescanWaitsAFullIntervalAfterAFreshScan(t *testing.T) {
 func TestAnOldScanIsNotRefreshedByHerdrWhileHidden(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	h := newSpaces(t, spacesOf(spTree(spPane("w1:p1", wt, nil))))
+	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
 	h.hidden = true
 	h.advance(RescanAfter * 6)
-	h.send(spacesOf(spTree(spPane("w1:p1", wt, st(herdr.StateWorking)))))
+	h.send(spTree(spPane("w1:p1", wt, hs("working"))))
 	if h.list.scans != 1 {
 		t.Errorf("scans %d: hidden, herdr starts no rescan", h.list.scans)
 	}
@@ -475,7 +482,7 @@ func TestAnOldScanIsNotRefreshedByHerdrWhileHidden(t *testing.T) {
 		t.Errorf("status %v: the rows still follow herdr", got)
 	}
 	h.hidden = false
-	h.send(spacesOf(spTree(spPane("w1:p1", wt, st(herdr.StateWorking)))))
+	h.send(spTree(spPane("w1:p1", wt, hs("working"))))
 	if h.list.scans != 2 {
 		t.Errorf("scans %d: shown again, the next herdr change rescans", h.list.scans)
 	}
@@ -485,7 +492,7 @@ func TestAnOldScanIsNotRefreshedByHerdrWhileHidden(t *testing.T) {
 func TestABranchChangeShowsAfterTheNextRescan(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, admin := oneWorktree(t, base)
-	live := spacesOf(spTree(spPane("w1:p1", wt, nil)))
+	live := spTree(spPane("w1:p1", wt, nil))
 	h := newSpaces(t, live)
 	if got := h.rowOf(0, 0).Branch; got != "feature" {
 		t.Fatalf("branch %q", got)
@@ -506,9 +513,9 @@ func TestABranchChangeShowsAfterTheNextRescan(t *testing.T) {
 func TestAnOldScanStartsOneOnAHerdrChangeWhileShown(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	h := newSpaces(t, spacesOf(spTree(spPane("w1:p1", wt, nil))))
+	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
 	h.advance(RescanAfter)
-	h.send(spacesOf(spTree(spPane("w1:p1", wt, st(herdr.StateWorking)))))
+	h.send(spTree(spPane("w1:p1", wt, hs("working"))))
 	if h.list.scans != 2 {
 		t.Errorf("scans %d: shown, the old scan starts one", h.list.scans)
 	}
@@ -519,9 +526,9 @@ func TestAnOldScanStartsOneOnAHerdrChangeWhileShown(t *testing.T) {
 
 // Port of no_tree_starts_no_scan_however_long_the_timer_runs.
 func TestNoTreeStartsNoScanHoweverLongItIs(t *testing.T) {
-	h := newSpaces(t, herdr.LiveHerdr{State: connected()})
+	h := newSpaces(t, spTree())
 	h.advance(RescanAfter * 3)
-	h.send(herdr.LiveHerdr{State: connected()})
+	h.send(spTree())
 	if h.list.scans != 0 || len(h.list.Groups()) != 0 {
 		t.Errorf("scans %d, groups %+v", h.list.scans, h.list.Groups())
 	}
@@ -529,7 +536,7 @@ func TestNoTreeStartsNoScanHoweverLongItIs(t *testing.T) {
 
 // Port of a_pane_without_a_cwd_starts_no_scan.
 func TestAPaneWithoutACwdStartsNoScan(t *testing.T) {
-	live := spacesOf(spTree(spPane("w1:p1", "", nil)))
+	live := spTree(spPane("w1:p1", "", nil))
 	h := newSpaces(t, live)
 	h.advance(RescanAfter * 2)
 	h.send(live)
@@ -542,7 +549,7 @@ func TestAPaneWithoutACwdStartsNoScan(t *testing.T) {
 func TestLosingTheTreeStopsTheScans(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	h := newSpaces(t, spacesOf(spTree(spPane("w1:p1", wt, nil))))
+	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
 	h.send(notRunningLive())
 	h.advance(RescanAfter * 3)
 	h.send(notRunningLive())
@@ -553,7 +560,7 @@ func TestLosingTheTreeStopsTheScans(t *testing.T) {
 
 // Port of a_connection_change_alone_repaints_the_sidebar.
 func TestAConnectionChangeAloneRepaintsTheSidebar(t *testing.T) {
-	h := newSpaces(t, herdr.LiveHerdr{State: connected()})
+	h := newSpaces(t, spTree())
 	if !h.list.online {
 		t.Fatal("want online")
 	}
@@ -568,7 +575,7 @@ func TestAConnectionChangeAloneRepaintsTheSidebar(t *testing.T) {
 func TestAScanLandsThroughThePostFunc(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	live := &fakeLive{live: spacesOf(spTree(spPane("w1:p1", wt, nil)))}
+	live := &fakeLive{live: spTree(spPane("w1:p1", wt, nil))}
 	var started, posted []func()
 	l := NewSpacesList(live, nil, state.NewSelection(nil), nil, nil, func(f func()) { posted = append(posted, f) })
 	l.start = func(f func()) { started = append(started, f) }
@@ -589,7 +596,7 @@ func TestAScanLandsThroughThePostFunc(t *testing.T) {
 func TestAScanThatLostTheTreeIsDropped(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	live := &fakeLive{live: spacesOf(spTree(spPane("w1:p1", wt, nil)))}
+	live := &fakeLive{live: spTree(spPane("w1:p1", wt, nil))}
 	var started []func()
 	l := NewSpacesList(live, nil, state.NewSelection(nil), nil, nil, nil)
 	l.start = func(f func()) { started = append(started, f) }
@@ -597,7 +604,7 @@ func TestAScanThatLostTheTreeIsDropped(t *testing.T) {
 	live.setLive(notRunningLive())
 	l.Sync()
 	started[0]() // the old scan ends now; post is nil, so it lands at once
-	live.setLive(spacesOf(spTree(spPane("w1:p1", wt, nil))))
+	live.setLive(spTree(spPane("w1:p1", wt, nil)))
 	if got := len(l.Groups()); got != 0 {
 		t.Errorf("groups %d: a dropped scan came back", got)
 	}
@@ -607,12 +614,12 @@ func TestOnlyTheNewestScanLands(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
 	repo := filepath.Join(base, "repo")
-	live := &fakeLive{live: spacesOf(spTree(spPane("w1:p1", wt, nil)))}
+	live := &fakeLive{live: spTree(spPane("w1:p1", wt, nil))}
 	var started []func()
 	l := NewSpacesList(live, nil, state.NewSelection(nil), nil, nil, nil)
 	l.start = func(f func()) { started = append(started, f) }
 	l.Sync()
-	live.setLive(spacesOf(spTree(spPane("w1:p1", wt, nil), spPane("w1:p2", repo, nil))))
+	live.setLive(spTree(spPane("w1:p1", wt, nil), spPane("w1:p2", repo, nil)))
 	l.Sync()
 	started[1]()
 	started[0]() // the older scan ends last and is dropped
@@ -622,7 +629,7 @@ func TestOnlyTheNewestScanLands(t *testing.T) {
 }
 
 func TestTheScanFuncGetsTheCwdsInTreeOrder(t *testing.T) {
-	live := &fakeLive{live: spacesOf(spTree(spPane("w1:p1", "/x/b", nil), spPane("w1:p2", "/x/a", nil), spPane("w1:p3", "/x/b", nil)))}
+	live := &fakeLive{live: spTree(spPane("w1:p1", "/x/b", nil), spPane("w1:p2", "/x/a", nil), spPane("w1:p3", "/x/b", nil))}
 	var got []string
 	l := NewSpacesList(live, nil, nil, nil, nil, nil)
 	l.scanFn = func(cwds []string) git.Scan { got = cwds; return git.Scan{} }
@@ -698,7 +705,7 @@ func TestTheCPUTextRoundsOrShowsADash(t *testing.T) {
 
 // Port of the_host_card_fills_the_memory_bar_to_the_share.
 func TestTheHostCardFillsTheMemoryBarToTheShare(t *testing.T) {
-	h := newSpaces(t, herdr.LiveHerdr{State: connected()})
+	h := newSpaces(t, spTree())
 	h.host.set(stats(38, 50, 100))
 	h.tt.Frame()
 	card := box(t, h.tt, LabelHostLocal)
@@ -719,7 +726,7 @@ func TestTheHostCardFillsTheMemoryBarToTheShare(t *testing.T) {
 
 // Port of no_reading_leaves_the_bar_empty.
 func TestNoReadingLeavesTheBarEmpty(t *testing.T) {
-	h := newSpaces(t, herdr.LiveHerdr{State: connected()})
+	h := newSpaces(t, spTree())
 	if !h.has(LabelCardCPU) || !h.tt.HasText("CPU –") {
 		t.Errorf("the CPU dash is missing; texts %q", h.tt.Texts())
 	}
@@ -730,7 +737,7 @@ func TestNoReadingLeavesTheBarEmpty(t *testing.T) {
 
 // Port of a_new_reading_repaints_the_host_card.
 func TestANewReadingRepaintsTheHostCard(t *testing.T) {
-	h := newSpaces(t, herdr.LiveHerdr{State: connected()})
+	h := newSpaces(t, spTree())
 	h.host.set(stats(10, 75, 100))
 	h.tt.Frame()
 	if fill := box(t, h.tt, LabelCardMemFill); fill.W != 45 {
@@ -803,7 +810,7 @@ func TestABadgeInTheModelShowsOnItsRow(t *testing.T) {
 func TestASpinningWorktreeRowRedrawsOnlyItself(t *testing.T) {
 	base := canonicalTmp(t)
 	wt1, _ := twoWorktrees(t, base)
-	h := newSpaces(t, spacesOf(spTree(spPane("w1:p2", wt1, st(herdr.StateWorking)))))
+	h := newSpaces(t, spTree(spPane("w1:p2", wt1, hs("working"))))
 	before := h.builds()
 	for i := 0; i < 3; i++ {
 		h.tt.Advance(100 * time.Millisecond)
@@ -826,15 +833,15 @@ func TestASpinningWorktreeRowRedrawsOnlyItself(t *testing.T) {
 func TestAChangeToOneWorktreeRowRedrawsOnlyThatRow(t *testing.T) {
 	base := canonicalTmp(t)
 	wt1, _ := twoWorktrees(t, base)
-	h := newSpaces(t, spacesOf(spTree(spPane("w1:p2", wt1, st(herdr.StateIdle)))))
-	change := h.send(spacesOf(spTree(spPane("w1:p2", wt1, st(herdr.StateBlocked)))))
+	h := newSpaces(t, spTree(spPane("w1:p2", wt1, hs("idle"))))
+	change := h.send(spTree(spPane("w1:p2", wt1, hs("blocked"))))
 	if change.Rebuilt || !reflect.DeepEqual(change.Rows, []RowRef{{0, 0}}) {
 		t.Errorf("change %+v, want the held row only", change)
 	}
 	if !h.has("blocked") {
 		t.Error("the blocked icon is missing")
 	}
-	if again := h.send(spacesOf(spTree(spPane("w1:p2", wt1, st(herdr.StateBlocked))))); again.Any() {
+	if again := h.send(spTree(spPane("w1:p2", wt1, hs("blocked")))); again.Any() {
 		t.Errorf("the same tree changed %+v", again)
 	}
 }
@@ -857,7 +864,7 @@ func TestASelectionRedrawsOnlyTheRowsWhoseMarkChanged(t *testing.T) {
 func TestASelectedRowKeepsItsCardWhenTheRowsAreRebuilt(t *testing.T) {
 	base := canonicalTmp(t)
 	wt1, wt2 := twoWorktrees(t, base)
-	h := newSpaces(t, spacesOf(spTree(spPane("w1:p2", wt1, st(herdr.StateDone)))))
+	h := newSpaces(t, spTree(spPane("w1:p2", wt1, hs("done"))))
 	h.click(0, 0)
 	if !h.selected(0, 0) {
 		t.Fatal("the card is missing")
@@ -865,7 +872,7 @@ func TestASelectedRowKeepsItsCardWhenTheRowsAreRebuilt(t *testing.T) {
 	// The main checkout gains a pane: its group gets a row, so the rows are
 	// made anew. Git lists the main checkout first.
 	repo := filepath.Join(base, "repo")
-	h.send(spacesOf(spTree(spPane("w1:p1", repo, nil), spPane("w1:p2", wt1, st(herdr.StateDone)))))
+	h.send(spTree(spPane("w1:p1", repo, nil), spPane("w1:p2", wt1, hs("done"))))
 	var order []string
 	for _, r := range h.group(0).Rows {
 		order = append(order, r.Root)
@@ -973,7 +980,7 @@ func shownList(t *testing.T) (*spacesHarness, string, string) {
 	t.Helper()
 	base := canonicalTmp(t)
 	wt, admin := oneWorktree(t, base)
-	h := newSpaces(t, spacesOf(spTree(spPane("w1:p1", wt, nil))))
+	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
 	h.list.SetVisible(true)
 	return h, wt, admin
 }
@@ -998,7 +1005,7 @@ func TestTheTimerRescansWhileTheWindowIsShown(t *testing.T) {
 func TestTheTimerWaitsAFullIntervalAfterAFreshScan(t *testing.T) {
 	h, wt, _ := shownList(t)
 	h.advance(RescanAfter / 2)
-	h.send(spacesOf(spTree(spPane("w1:p1", wt, nil), spPane("w1:p2", filepath.Join(filepath.Dir(wt), "repo"), nil))))
+	h.send(spTree(spPane("w1:p1", wt, nil), spPane("w1:p2", filepath.Join(filepath.Dir(wt), "repo"), nil)))
 	if h.list.scans != 2 {
 		t.Fatalf("scans %d, want 2 (the new cwd, at 5 s)", h.list.scans)
 	}
@@ -1090,7 +1097,7 @@ func TestABranchChangeShowsAfterTheNextTimerRescan(t *testing.T) {
 
 // Port of no_tree_starts_no_scan_however_long_the_timer_runs.
 func TestTheTimerStartsNoScanWithoutATree(t *testing.T) {
-	h := newSpaces(t, herdr.LiveHerdr{State: connected()})
+	h := newSpaces(t, spTree())
 	h.list.SetVisible(true)
 	h.advance(RescanAfter * 3)
 	if h.list.scans != 0 {
@@ -1143,7 +1150,7 @@ func TestALongRepoAndWorktreeNameIsCutWithAnEllipsis(t *testing.T) {
 	gitDir := mainRepo(t, filepath.Join(base, long+"-repo"), "ref: refs/heads/main\n")
 	wt := filepath.Join(base, long+"-worktree")
 	linkedWorktree(t, gitDir, "w1", wt, "ref: refs/heads/"+long+"-branch\n")
-	h := newSpaces(t, spacesOf(spTree(spPane("w1:p1", wt, nil))))
+	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
 	h.tt.Frame()
 	// The texts keep the full name, and the box is as wide as the column
 	// either way. The cut shows in the pixels: an uncut name paints into
@@ -1196,7 +1203,7 @@ func TestSpacesShowHerdrLineWhenDown(t *testing.T) {
 	if !h.tt.HasText(line) {
 		t.Fatalf("texts %q, want the herdr line", h.tt.Texts())
 	}
-	h.send(spacesOf(spTree()))
+	h.send(spTree())
 	if h.tt.HasText(line) {
 		t.Errorf("the line stays while herdr is connected: %q", h.tt.Texts())
 	}
