@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -128,6 +129,7 @@ func agentTools(m *managers, parent string) []mcp.Tool {
 		Name     string `json:"name"`
 		Profile  string `json:"profile"`
 		Task     string `json:"task"`
+		TaskFile string `json:"task_file"`
 		Issue    string `json:"issue"`
 		Worktree string `json:"worktree"`
 		Project  string `json:"project"`
@@ -152,11 +154,18 @@ func agentTools(m *managers, parent string) []mcp.Tool {
 	}
 	return []mcp.Tool{
 		{Name: "spawn", Description: "Start a worker agent in a new hc terminal, in its worktree. It reports back with hc send when its turn ends.",
-			Schema: schema([]string{"name", "profile", "task"}, map[string]prop{
+			Schema: schema([]string{"name", "profile"}, map[string]prop{
 				"name": str("Unique worker name: 1-32 of a-z 0-9 - _ (for example b-158)."), "profile": str("builder, planner, reviewer or debugger, or a profile from the profiles file."),
-				"task": str("The self-contained brief: the first message."), "issue": str("Issue number."), "worktree": str("The worker's working folder (its git worktree)."), "role": str("Role label; the profile name by default."), "project": str("Project name; groups the worker with its project's questions.")}),
+				"task": str("The self-contained brief: the first message. Give task or task_file."), "task_file": str("An absolute path to a file that holds the brief, instead of task."), "issue": str("Issue number."), "worktree": str("The worker's working folder (its git worktree)."), "role": str("Role label; the profile name by default."), "project": str("Project name; groups the worker with its project's questions.")}),
 			Run: run(func(ctx context.Context, mgr *agents.Manager, a args) (string, error) {
-				w, err := mgr.Spawn(ctx, agents.Spec{Name: a.Name, Profile: a.Profile, Task: a.Task, Issue: a.Issue, Worktree: a.Worktree, Role: a.Role, Project: a.Project, Parent: parent})
+				task, err := spawnTask(a.Task, a.TaskFile)
+				if err != nil {
+					return "", err
+				}
+				if strings.TrimSpace(task) == "" {
+					return "", errors.New("give the brief as task or task_file")
+				}
+				w, err := mgr.Spawn(ctx, agents.Spec{Name: a.Name, Profile: a.Profile, Task: task, Issue: a.Issue, Worktree: a.Worktree, Role: a.Role, Project: a.Project, Parent: parent})
 				if err != nil {
 					return "", err
 				}
