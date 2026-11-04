@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/github"
 )
@@ -129,34 +130,51 @@ func TestPRChecksStaleDropped(t *testing.T) {
 	}
 }
 
-func TestPRChecksAgentsSyncRereads(t *testing.T) {
+func TestPRChecksRereadsOnWorkerEvent(t *testing.T) {
 	r, cr := newChecksRig(t)
-	now := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)
-	r.pane.Now = func() time.Time { return now }
-	r.pane.OnAgentsSync() // Overview tab: no read
+	w := agents.Worker{Worktree: "/w", Status: "working", Turn: 1, LastOutput: time.Unix(100, 0)}
+	other := agents.Worker{Worktree: "/other", Turn: 1, LastOutput: time.Unix(100, 0)}
+	r.pane.OnAgentsSync([]agents.Worker{w}) // Overview tab: no read
 	if cr.calls != 0 || len(r.queue) != 0 {
 		t.Fatal("read on the Overview tab")
 	}
 	openChecks(t, r)
 	r.flush()
-	r.pane.OnAgentsSync() // too soon
+	r.pane.OnAgentsSync([]agents.Worker{w}) // first sync takes the stamp
+	r.pane.OnAgentsSync([]agents.Worker{w}) // no new event
 	if len(r.queue) != 0 {
-		t.Error("re-read inside the minimum gap")
+		t.Fatal("re-read with no new event")
 	}
-	now = now.Add(checksMinGap)
-	r.pane.OnAgentsSync()
-	r.pane.OnAgentsSync() // one is in flight
+	o2 := other
+	o2.Turn = 2
+	r.pane.OnAgentsSync([]agents.Worker{o2}) // another worker's event
+	if len(r.queue) != 0 {
+		t.Fatal("re-read on another worker's event")
+	}
+	w.LastOutput = time.Unix(101, 0)
+	r.pane.OnAgentsSync([]agents.Worker{w})
+	r.pane.OnAgentsSync([]agents.Worker{w}) // same event, one read in flight
 	if len(r.queue) != 1 {
 		t.Fatalf("queued %d, want 1", len(r.queue))
 	}
 	r.flush()
-	if cr.calls != 2 {
-		t.Errorf("calls %d, want 2", cr.calls)
+	for name, mod := range map[string]func(*agents.Worker){
+		"turn":   func(w *agents.Worker) { w.Turn++ },
+		"status": func(w *agents.Worker) { w.Status = "done" },
+	} {
+		mod(&w)
+		r.pane.OnAgentsSync([]agents.Worker{w})
+		if len(r.queue) != 1 {
+			t.Errorf("%s change: queued %d, want 1", name, len(r.queue))
+		}
+		r.flush()
+	}
+	if cr.calls != 4 {
+		t.Errorf("calls %d, want 4", cr.calls)
 	}
 }
 
 func TestChecksDue(t *testing.T) {
-	now := time.Now()
 	cases := []struct {
 		name string
 		s    prChecks
@@ -165,13 +183,12 @@ func TestChecksDue(t *testing.T) {
 	}{
 		{"first open", prChecks{}, checksTabOpened, true},
 		{"open again", prChecks{started: true}, checksTabOpened, false},
-		{"in flight", prChecks{inflight: true, started: true, last: now.Add(-time.Minute)}, checksAgentsSync, false},
-		{"sync before first read", prChecks{}, checksAgentsSync, false},
-		{"sync too soon", prChecks{started: true, last: now}, checksAgentsSync, false},
-		{"sync later", prChecks{started: true, last: now.Add(-time.Minute)}, checksAgentsSync, true},
+		{"in flight", prChecks{inflight: true, started: true}, checksWorkerEvent, false},
+		{"event before first read", prChecks{}, checksWorkerEvent, false},
+		{"event after a read", prChecks{started: true}, checksWorkerEvent, true},
 	}
 	for _, c := range cases {
-		if got := checksDue(c.s, c.t, now); got != c.want {
+		if got := checksDue(c.s, c.t); got != c.want {
 			t.Errorf("%s: %v, want %v", c.name, got, c.want)
 		}
 	}

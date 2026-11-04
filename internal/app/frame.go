@@ -714,8 +714,8 @@ func (f *Frame) syncAgents() {
 	if f.SpacesList != nil {
 		f.SpacesList.Sync()
 	}
-	if f.PR != nil {
-		f.PR.OnAgentsSync()
+	if f.PR != nil && f.agentSnap != nil {
+		f.PR.OnAgentsSync(f.agentSnap().Workers)
 	}
 	f.syncWorkerPRs()
 }
