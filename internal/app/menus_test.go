@@ -105,7 +105,7 @@ func TestTheFileMenuHasNewTerminalOnCmdT(t *testing.T) {
 	if file.Label != "File" {
 		t.Fatalf("name = %q", file.Label)
 	}
-	if got := itemNames(file.Submenu); !slices.Equal(got, []string{"New Terminal"}) {
+	if got := itemNames(file.Submenu); !slices.Equal(got, []string{"New Terminal", "Close Terminal"}) {
 		t.Fatalf("items = %v", got)
 	}
 	it := find(t, file.Submenu, "New Terminal")
@@ -125,6 +125,30 @@ func TestNewTerminalItemCallsTheFramesHandlerAndDoesNothingWithoutOne(t *testing
 		t.Errorf("handler ran %d times, want 1", n)
 	}
 	setNewTerminalHandler(nil)
+	it.Click(it, nil)
+	if n != 1 {
+		t.Errorf("handler ran after it was cleared")
+	}
+}
+
+func TestTheFileMenuHasCloseTerminalOnCmdW(t *testing.T) {
+	it := find(t, BuildMenus().Items()[1].Submenu, "Close Terminal")
+	if it.Accelerator != "Cmd+W" || it.Click == nil {
+		t.Errorf("accelerator %q, click set %v", it.Accelerator, it.Click != nil)
+	}
+}
+
+func TestCloseTerminalItemCallsTheFramesHandlerAndDoesNothingWithoutOne(t *testing.T) {
+	it := find(t, BuildMenus().Items()[1].Submenu, "Close Terminal")
+	it.Click(it, nil) // no window: must not panic
+	n := 0
+	setCloseTerminalHandler(func() { n++ })
+	defer setCloseTerminalHandler(nil)
+	it.Click(it, nil)
+	if n != 1 {
+		t.Errorf("handler ran %d times, want 1", n)
+	}
+	setCloseTerminalHandler(nil)
 	it.Click(it, nil)
 	if n != 1 {
 		t.Errorf("handler ran after it was cleared")

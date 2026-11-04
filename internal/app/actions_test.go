@@ -42,6 +42,7 @@ func TestEachShortcutOfTheMenusIsBound(t *testing.T) {
 		{actionPaste, "Cmd+V"},
 		{actionSelectAll, "Cmd+A"},
 		{actionNewTerminal, "Cmd+T"},
+		{actionCloseTerminal, "Cmd+W"},
 	}
 	for _, c := range cases {
 		if got := c.a.item().Accelerator; got != c.want {
