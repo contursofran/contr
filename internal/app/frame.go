@@ -196,6 +196,29 @@ func (f *Frame) OpenPR(dir string, n int) {
 	}
 }
 
+// prOrchestrator gives the address of the orchestrator terminal of the project of a PR's
+// folder (D105): the project of the worker with that worktree, else the open project. "" when
+// the project has no orchestrator.
+func (f *Frame) prOrchestrator(dir string) string {
+	if f.agentSnap == nil {
+		return ""
+	}
+	snap := f.agentSnap()
+	project := f.openProject
+	for _, w := range snap.Workers {
+		if w.Worktree != "" && w.Worktree == dir {
+			project = w.Project
+			break
+		}
+	}
+	for _, o := range snap.Orchestrators {
+		if o.Project == project {
+			return o.Address
+		}
+	}
+	return ""
+}
+
 // OpenIssue opens issue n of the repository in dir in the browser, off the UI thread (D74). A
 // failure shows in the status message.
 func (f *Frame) OpenIssue(dir string, n int) {
@@ -662,6 +685,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		f.CloseTerm = &CloseTerminal{Stop: src.Close, Run: run, Status: f.Status.Show, Closed: f.terminalClosed}
 		setCloseTerminalHandler(func() { w.Update(f.closeSelectedTerminal) })
 		f.Worker = &WorkerPanel{Source: src, Selection: f.Selection, Run: run, Status: f.Status.Show, Invalidate: w.Invalidate}
+		f.PR.Orchestrator, f.PR.Send = f.prOrchestrator, src.Send
 		f.Slots.Card = f.Card.View
 		f.Sheet = &Sheet{Source: src, Run: run, Invalidate: w.Invalidate}
 		f.Slots.Sheet = f.Sheet.View
