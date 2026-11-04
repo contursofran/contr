@@ -75,7 +75,9 @@ func filesRig(t *testing.T, diff, threads string, fail map[string]bool) *prRig {
 
 type runnerFunc func(args ...string) ([]byte, error)
 
-func (f runnerFunc) Run(_ context.Context, _ string, args ...string) ([]byte, error) { return f(args...) }
+func (f runnerFunc) Run(_ context.Context, _ string, args ...string) ([]byte, error) {
+	return f(args...)
+}
 
 func TestPRFilesListCounts(t *testing.T) {
 	r := filesRig(t, prDiffText, prThreadsJSON, nil)
