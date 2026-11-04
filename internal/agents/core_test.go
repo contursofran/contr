@@ -246,3 +246,32 @@ func TestRealCoreSendTagsTheSender(t *testing.T) {
 		t.Errorf("coordinator screen = %q, want %q", screen, want)
 	}
 }
+
+// TestRealCoreStopAndRemove: a stopped terminal stays in hc as finished;
+// after Remove, a list with finished terminals no longer has it.
+func TestRealCoreStopAndRemove(t *testing.T) {
+	env := isolatedCore(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cl, err := hc.Dial(ctx, hc.Command("", env))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cl.Close()
+	m := New(HC{cl}, Config{Profiles: map[string]Profile{"sleep": {Argv: []string{"sleep", "60"}}}}).WithEnv(func(string) string { return "" })
+	if _, err := m.Spawn(ctx, Spec{Name: "term-1", Profile: "sleep", Role: RoleTerminal}); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Stop(ctx, "term-1"); err != nil {
+		t.Fatal(err)
+	}
+	if ws, err := m.List(ctx, true); err != nil || len(ws) != 1 || ws[0].Live {
+		t.Fatalf("after stop: %+v, %v; want one finished terminal", ws, err)
+	}
+	if err := m.Remove(ctx, "term-1"); err != nil {
+		t.Fatal(err)
+	}
+	if ws, err := m.List(ctx, true); err != nil || len(ws) != 0 {
+		t.Errorf("after remove: %+v, %v; want none", ws, err)
+	}
+}

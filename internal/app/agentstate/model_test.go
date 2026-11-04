@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -27,6 +28,7 @@ type fakeCore struct {
 	mu      sync.Mutex
 	calls   []call
 	sendErr error
+	errs    map[string]error // per method
 	snap    hc.Snapshot
 	events  chan hc.Event
 }
@@ -41,7 +43,7 @@ func (f *fakeCore) Call(_ context.Context, method string, params, _ any) error {
 	if method == "terminal.send" {
 		return f.sendErr
 	}
-	return nil
+	return f.errs[method]
 }
 
 func (f *fakeCore) sends() []call {
@@ -324,4 +326,29 @@ func TestStopEndsGoroutines(t *testing.T) {
 		t.Fatal("goroutines did not end")
 	}
 	waitFor(t, "goroutines", func() bool { return runtime.NumGoroutine() <= before })
+}
+
+// TestCloseStopsThenRemoves: Close kills the terminal, then removes it, so
+// the watch drops it. A failed kill removes nothing.
+func TestCloseStopsThenRemoves(t *testing.T) {
+	r := newRig(t)
+	if err := r.m.Close("tp"); err != nil {
+		t.Fatal(err)
+	}
+	var methods []string
+	for _, c := range r.core.calls {
+		methods = append(methods, c.Method)
+		if c.Params["terminal"] != "tp" {
+			t.Errorf("%s params = %v", c.Method, c.Params)
+		}
+	}
+	if !slices.Equal(methods, []string{"terminal.kill", "terminal.rm"}) {
+		t.Errorf("calls = %v, want kill then rm", methods)
+	}
+
+	r = newRig(t)
+	r.core.errs = map[string]error{"terminal.kill": errors.New("not_found")}
+	if err := r.m.Close("tp"); err == nil || len(r.core.calls) != 1 {
+		t.Errorf("failed kill: err %v, calls %v", err, r.core.calls)
+	}
 }

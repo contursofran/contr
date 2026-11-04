@@ -21,7 +21,7 @@ import (
 // and no herdr at all. It clicks "+", checks that a plain terminal opens as a
 // tab and shows its grid, types into it, then opens a second one from the File
 // menu. Cmd+T is not tested here: the automation sends keys to the view, not to
-// the menu's key equivalents. PNGs go to
+// the menu's key equivalents. Then it closes the second one from the File menu. PNGs go to
 // tmp/e2e/plain-*.png. It needs `hc` and never touches the owner's core or
 // herdr:
 //
@@ -144,4 +144,21 @@ func TestPlainTerminalWithoutHerdr(t *testing.T) {
 	waitTerminals(2)
 	time.Sleep(time.Second)
 	c.capture(t, filepath.Join(out, "plain-2-menu.png"))
+
+	// File > Close Terminal closes the selected (second) terminal. hc must
+	// drop it, finished ones included: a stop alone leaves it as finished,
+	// and its tab would stay (D85).
+	c.call(t, "menu", map[string]any{"path": []string{"File", "Close Terminal"}})
+	var left []agents.Worker
+	for deadline := time.Now().Add(20 * time.Second); time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
+		if left = terminals(); len(left) == 1 {
+			break
+		}
+	}
+	if len(left) != 1 || left[0].Name != first.Name {
+		t.Fatalf("after Close Terminal hc has %+v, want only %s", left, first.Name)
+	}
+	time.Sleep(time.Second)
+	wake()
+	c.capture(t, filepath.Join(out, "plain-3-closed.png"))
 }

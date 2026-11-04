@@ -90,6 +90,13 @@ func (l *lazySource) Stop(name string) error {
 	return errNoAgents
 }
 
+func (l *lazySource) Close(name string) error {
+	if m := l.model.Load(); m != nil {
+		return m.Close(name)
+	}
+	return errNoAgents
+}
+
 // startAgents gives the frame its agent state.
 func startAgents(getenv func(string) string) func(notify func()) (app.AgentSource, func()) {
 	return func(notify func()) (app.AgentSource, func()) {

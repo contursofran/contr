@@ -121,6 +121,9 @@ type Frame struct {
 	// NewTerm is the "+" and Cmd-T action. [Frame.Attach] makes it when
 	// OpenTerminal is set.
 	NewTerm *NewTerminal
+	// CloseTerm is the Cmd-W action. [Frame.Attach] makes it when there are
+	// agents.
+	CloseTerm *CloseTerminal
 
 	status statusBar
 	bar    titleBar
@@ -401,6 +404,34 @@ func (f *Frame) newTerminal() {
 	f.NewTerm.Start(project, f.terminalDir(project))
 }
 
+// closeSelectedTerminal stops the selected plain terminal (S4, D85). A worker
+// or orchestrator tab, or no selection, does nothing. UI thread.
+func (f *Frame) closeSelectedTerminal() {
+	if f.CloseTerm == nil || f.Selection == nil {
+		return
+	}
+	if sel, ok := f.Selection.Current(); ok && sel.Kind == state.KindTerminal {
+		f.CloseTerm.Start(sel.ID)
+	}
+}
+
+// terminalClosed moves the selection off a closed terminal: to the first other
+// tab of the open project, else to nothing. A selection that moved already
+// stays. UI thread.
+func (f *Frame) terminalClosed(addr string) {
+	sel, ok := f.Selection.Current()
+	if !ok || sel.Kind != state.KindTerminal || sel.ID != addr {
+		return
+	}
+	for _, t := range f.agentTabs() {
+		if t.Address != addr {
+			f.selectTab(t)
+			return
+		}
+	}
+	f.Selection.Clear()
+}
+
 // terminalDir is the start folder of a new terminal in project.
 func (f *Frame) terminalDir(project string) string {
 	if f.agentSnap != nil {
@@ -531,6 +562,8 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 				}
 				f.Selection.Select(state.Selected{Kind: kind, ID: address})
 			}}
+		f.CloseTerm = &CloseTerminal{Stop: src.Close, Run: run, Status: f.Status.Show, Closed: f.terminalClosed}
+		setCloseTerminalHandler(func() { w.Update(f.closeSelectedTerminal) })
 		f.Worker = &WorkerPanel{Source: src, Selection: f.Selection, Run: run, Status: f.Status.Show, Invalidate: w.Invalidate}
 		f.Slots.Card = f.Card.View
 	}
@@ -597,6 +630,7 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	term := f.attachTerminal(w)
 	return func() {
 		setNewTerminalHandler(nil)
+		setCloseTerminalHandler(nil)
 		unwatch()
 		term()
 		stopAgents()

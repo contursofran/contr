@@ -180,6 +180,8 @@ then Settings.
   the first orchestrator's folder, else the home folder. `⌘T` does the same.
   It is always shown, also with no tabs. The terminal area works while herdr
   is down; the Spaces column shows the herdr line then (D82).
+- `⌘W` closes the selected plain terminal and its tab (D85). The next tab is
+  selected. An orchestrator or worker tab ignores it.
 - Right side: `Review` (D37), then the panel toggle. There is no tab row in
   the panel.
 
@@ -457,6 +459,7 @@ connected.
 | Key | Does | Where |
 |---|---|---|
 | `⌘T` | open a plain terminal in the open project (D82) | window, File menu |
+| `⌘W` | close the selected plain terminal (D85); does nothing on an orchestrator or worker tab | window, File menu |
 | `⌥1`–`⌥6` | pick needs-you tab 1–6 and open its card (D75) | window |
 | `1`–`4` | send that option | card, with the focus |
 | Enter | send the typed answer, else the recommended option | card, with the focus |

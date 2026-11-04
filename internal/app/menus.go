@@ -16,6 +16,7 @@ func BuildMenus() *mygo.Menu {
 		}},
 		{Label: "File", Submenu: []*mygo.MenuItem{
 			newTerminalItem(),
+			closeTerminalItem(),
 		}},
 		{Label: "Edit", Submenu: []*mygo.MenuItem{
 			actionCopy.item(),

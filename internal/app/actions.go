@@ -1,5 +1,5 @@
 // Adapted from Herdr UI (Apache-2.0); changes: ported to Go; only the app menu's actions and
-// keys (Quit, Hide, Hide Others, Minimize, About, Copy, Paste, Select All, New Terminal); fixed macOS keystrokes
+// keys (Quit, Hide, Hide Others, Minimize, About, Copy, Paste, Select All, New Terminal, Close Terminal); fixed macOS keystrokes
 // instead of a keymap catalog; no config, palette, daemon or update actions.
 
 package app
@@ -13,14 +13,15 @@ import (
 // The shortcut of each menu item. The menus show these labels, so a menu and its key cannot
 // drift apart.
 const (
-	keyQuit        = "Cmd+Q"
-	keyHide        = "Cmd+H"
-	keyHideOthers  = "Alt+Cmd+H"
-	keyMinimize    = "Cmd+M"
-	keyCopy        = "Cmd+C"
-	keyPaste       = "Cmd+V"
-	keySelectAll   = "Cmd+A"
-	keyNewTerminal = "Cmd+T"
+	keyQuit          = "Cmd+Q"
+	keyHide          = "Cmd+H"
+	keyHideOthers    = "Alt+Cmd+H"
+	keyMinimize      = "Cmd+M"
+	keyCopy          = "Cmd+C"
+	keyPaste         = "Cmd+V"
+	keySelectAll     = "Cmd+A"
+	keyNewTerminal   = "Cmd+T"
+	keyCloseTerminal = "Cmd+W"
 )
 
 // action is one item of the app menus: the MyGo role that does the work, and its shortcut.
@@ -44,6 +45,8 @@ var (
 	actionSelectAll  = action{"Select All", mygo.RoleSelectAll, keySelectAll}
 	// New Terminal has no role: its Click runs the frame's handler.
 	actionNewTerminal = action{"New Terminal", "", keyNewTerminal}
+	// Close Terminal has no role either: it closes a plain terminal only.
+	actionCloseTerminal = action{"Close Terminal", "", keyCloseTerminal}
 )
 
 // item makes the menu item of the action.
@@ -69,6 +72,29 @@ func newTerminalItem() *mygo.MenuItem {
 	it := actionNewTerminal.item()
 	it.Click = func(*mygo.MenuItem, *mygo.Window) {
 		if fn := newTerminalHandler.Load(); fn != nil {
+			(*fn)()
+		}
+	}
+	return it
+}
+
+// closeTerminalHandler is the open window's "close terminal" action, set and
+// cleared like newTerminalHandler.
+var closeTerminalHandler atomic.Pointer[func()]
+
+func setCloseTerminalHandler(fn func()) {
+	if fn == nil {
+		closeTerminalHandler.Store(nil)
+		return
+	}
+	closeTerminalHandler.Store(&fn)
+}
+
+// closeTerminalItem is the Close Terminal item. Its Click runs on the main thread.
+func closeTerminalItem() *mygo.MenuItem {
+	it := actionCloseTerminal.item()
+	it.Click = func(*mygo.MenuItem, *mygo.Window) {
+		if fn := closeTerminalHandler.Load(); fn != nil {
 			(*fn)()
 		}
 	}
