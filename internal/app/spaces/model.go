@@ -1,5 +1,5 @@
 // Package spaces is the spaces model: the repo groups and worktree rows the
-// sidebar shows, built from the herdr tree and the git scan. It is pure: no
+// sidebar shows, built from the hc terminals and the git scan. It is pure: no
 // file reads and no UI, so tests use literal values.
 //
 // Ported from the Rust contr spaces_model module.
@@ -10,16 +10,22 @@ import (
 
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/git"
-	"github.com/contursofran/contr/internal/herdr"
 )
 
-// Holder is a tab that holds a worktree. Its state is the best of its panes
-// in that worktree.
+// Term is an hc terminal as the sidebar sees it: an agent, an orchestrator
+// or a plain terminal, with its folder (the worktree label) and its icon.
+type Term struct {
+	Name    string
+	Address string
+	Dir     string
+	Status  icons.Status
+}
+
+// Holder is a terminal whose folder is in a worktree.
 type Holder struct {
-	TabID    string
-	TabLabel string
-	PaneID   string
-	Status   herdr.AgentState
+	Name    string
+	Address string
+	Status  icons.Status
 }
 
 // BadgeKind says what a [Badge] is.
@@ -50,16 +56,13 @@ type WorktreeRow struct {
 	// Branch is empty when unknown.
 	Branch string
 	IsMain bool
-	// Holders has one entry per tab with a pane whose cwd is in this
-	// checkout, in tree order.
+	// Holders has one entry per terminal whose folder is in this checkout,
+	// in the order of the terminals.
 	Holders []Holder
-	// Status is the top holder's state as an icon. Idle without a holder.
+	// Status is the top holder's icon. Idle without a holder.
 	Status icons.Status
-	// FocusPane is the top holder's pane, or nil. `pane.focus` on it also
-	// moves the tab and the workspace.
-	FocusPane *string
-	// Hold is the second line: the top holder's tab and state. Nil without a
-	// holder.
+	// Hold is the second line: the top holder's name and state. Nil without
+	// a holder.
 	Hold *string
 	// HoldYou is true when the second line is the owner's turn.
 	HoldYou bool
@@ -81,23 +84,23 @@ type RepoGroup struct {
 	Rows   []WorktreeRow
 }
 
-// Build groups the panes that sit in a checkout of scan into repos and
-// worktree rows. Repos come in the order of their first pane in tree order.
-// Panes outside git are left out.
-func Build(tree herdr.HerdrTree, scan git.Scan) []RepoGroup {
+// Build groups the terminals that sit in a checkout of scan into repos and
+// worktree rows. Repos come in the order of their first terminal. Terminals
+// outside git are left out.
+func Build(terms []Term, scan git.Scan) []RepoGroup {
 	holders := map[string][]Holder{}
 	var repoOrder []string
 	seen := map[string]bool{}
-	for _, p := range panesInTreeOrder(tree) {
-		checkout, ok := checkoutOf(p.pane, scan)
-		if !ok {
+	for _, t := range terms {
+		checkout, ok := scan.Checkouts[t.Dir]
+		if t.Dir == "" || !ok {
 			continue
 		}
 		if !seen[checkout.CommonDir] {
 			seen[checkout.CommonDir] = true
 			repoOrder = append(repoOrder, checkout.CommonDir)
 		}
-		holders[checkout.Root] = addHolder(holders[checkout.Root], p.tab, p.pane)
+		holders[checkout.Root] = append(holders[checkout.Root], Holder{Name: t.Name, Address: t.Address, Status: t.Status})
 	}
 	var groups []RepoGroup
 	for _, commonDir := range repoOrder {
@@ -112,87 +115,35 @@ func Build(tree herdr.HerdrTree, scan git.Scan) []RepoGroup {
 	return groups
 }
 
-// PaneCwds gives the cwd of every pane in the tree, in tree order, each once.
-// Panes without a cwd are skipped. These are the directories the git scan
-// looks at.
-func PaneCwds(tree herdr.HerdrTree) []string {
+// Dirs gives the folder of every terminal, in order, each once. Terminals
+// without a folder are skipped. These are the folders the git scan looks at.
+func Dirs(terms []Term) []string {
 	seen := map[string]bool{}
 	var out []string
-	for _, p := range panesInTreeOrder(tree) {
-		if p.pane.Cwd == nil || seen[*p.pane.Cwd] {
+	for _, t := range terms {
+		if t.Dir == "" || seen[t.Dir] {
 			continue
 		}
-		seen[*p.pane.Cwd] = true
-		out = append(out, *p.pane.Cwd)
+		seen[t.Dir] = true
+		out = append(out, t.Dir)
 	}
 	return out
 }
 
-// Rank is the order of agent states for choosing a row's top holder: blocked
-// first, unknown last.
-func Rank(state herdr.AgentState) int {
-	switch state {
-	case herdr.StateBlocked:
+// Rank is the order of icons for choosing a row's top holder: blocked first,
+// then working, done and idle.
+func Rank(s icons.Status) int {
+	switch s {
+	case icons.Blocked:
 		return 4
-	case herdr.StateWorking:
+	case icons.Working:
 		return 3
-	case herdr.StateDone:
+	case icons.Done:
 		return 2
-	case herdr.StateIdle:
+	case icons.Idle:
 		return 1
 	}
 	return 0
-}
-
-type treePane struct {
-	tab  *herdr.Tab
-	pane *herdr.Pane
-}
-
-// panesInTreeOrder lists every pane with its tab, workspace by workspace, tab
-// by tab.
-func panesInTreeOrder(tree herdr.HerdrTree) []treePane {
-	var out []treePane
-	for w := range tree.Workspaces {
-		tabs := tree.Workspaces[w].Tabs
-		for t := range tabs {
-			for p := range tabs[t].Panes {
-				out = append(out, treePane{&tabs[t], &tabs[t].Panes[p]})
-			}
-		}
-	}
-	return out
-}
-
-// checkoutOf gives the checkout that the pane's cwd is in, if the scan has
-// one.
-func checkoutOf(pane *herdr.Pane, scan git.Scan) (git.Checkout, bool) {
-	if pane.Cwd == nil {
-		return git.Checkout{}, false
-	}
-	c, ok := scan.Checkouts[*pane.Cwd]
-	return c, ok
-}
-
-// addHolder records the pane for its tab in this checkout. A pane without an
-// agent counts as Unknown. A tab keeps its highest-ranked pane. On a tie the
-// first pane in tree order stays: only a strictly higher rank replaces it.
-func addHolder(holders []Holder, tab *herdr.Tab, pane *herdr.Pane) []Holder {
-	status := herdr.StateUnknown
-	if pane.Agent != nil {
-		status = pane.Agent.Status
-	}
-	for i := range holders {
-		if holders[i].TabID != tab.ID {
-			continue
-		}
-		if Rank(status) > Rank(holders[i].Status) {
-			holders[i].PaneID = pane.ID
-			holders[i].Status = status
-		}
-		return holders
-	}
-	return append(holders, Holder{TabID: tab.ID, TabLabel: tab.Label, PaneID: pane.ID, Status: status})
 }
 
 // repoGroup gives the repo's group, or false when it has no rows (its
@@ -212,8 +163,8 @@ func repoGroup(repo git.RepoInfo, holders map[string][]Holder) (RepoGroup, bool)
 }
 
 // worktreeRow builds a row. Settled (D48): every non-prunable linked worktree
-// shows, dimmed and idle when no tab holds it. The main checkout shows only
-// when a tab holds it, because the repo row already names it.
+// shows, dimmed and idle when no terminal holds it. The main checkout shows
+// only when a terminal holds it, because the repo row already names it.
 func worktreeRow(entry git.WorktreeEntry, held []Holder) WorktreeRow {
 	row := WorktreeRow{
 		Root:    entry.Root,
@@ -224,17 +175,15 @@ func worktreeRow(entry git.WorktreeEntry, held []Holder) WorktreeRow {
 		Status:  icons.Idle,
 	}
 	if top, ok := topHolder(held); ok {
-		row.Status = icons.FromAgentState(top.Status)
-		pane := top.PaneID
+		row.Status = top.Status
 		hold := holdText(top, len(held))
-		row.FocusPane = &pane
 		row.Hold = &hold
 	}
 	return row
 }
 
 // topHolder gives the holder that speaks for the row: the highest rank. On a
-// tie the last one wins, which is the newest tab in tree order.
+// tie the last one wins.
 func topHolder(holders []Holder) (Holder, bool) {
 	if len(holders) == 0 {
 		return Holder{}, false
@@ -248,15 +197,14 @@ func topHolder(holders []Holder) (Holder, bool) {
 	return top, true
 }
 
-// holdText is the herdr fallback for the second line (D49): "{tab label}
-// {state}", plus " +N" for the N other tabs that hold the worktree (for
-// example "b-3s2 working +1").
+// holdText is the second line (D49): "{name} {state}", plus " +N" for the
+// N other terminals that hold the worktree (for example "b-3 working +1").
 func holdText(top Holder, holderCount int) string {
-	return withMore(top.TabLabel+" "+top.Status.Label(), holderCount)
+	return withMore(top.Name+" "+top.Status.Label(), holderCount)
 }
 
-// withMore adds " +N" to line when holderCount tabs hold the worktree, N
-// being the others (D49).
+// withMore adds " +N" to line when holderCount terminals hold the worktree,
+// N being the others (D49).
 func withMore(line string, holderCount int) string {
 	if more := holderCount - 1; more > 0 {
 		return fmt.Sprintf("%s +%d", line, more)

@@ -6,7 +6,6 @@ import (
 
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/git"
-	"github.com/contursofran/contr/internal/herdr"
 )
 
 const (
@@ -16,38 +15,9 @@ const (
 	w2Root = "/work/app-wt/w2"
 )
 
-const (
-	blocked = herdr.StateBlocked
-	done    = herdr.StateDone
-	idle    = herdr.StateIdle
-	unknown = herdr.StateUnknown
-	working = herdr.StateWorking
-)
-
-func sp(s string) *string { return &s }
-
-// pane is a pane in cwd; state is its agent's state, nil for a plain shell.
-func pane(id, cwd string, state *herdr.AgentState) herdr.Pane {
-	p := herdr.Pane{ID: id, Cwd: sp(cwd), Tokens: map[string]string{}}
-	if state != nil {
-		p.Agent = &herdr.AgentInfo{Name: "claude", Status: *state}
-	}
-	return p
-}
-
-func st(s herdr.AgentState) *herdr.AgentState { return &s }
-
-func tab(id, label string, panes ...herdr.Pane) herdr.Tab {
-	return herdr.Tab{ID: id, Label: label, Status: idle, Panes: panes}
-}
-
-func tree(tabs ...herdr.Tab) herdr.HerdrTree {
-	return herdr.HerdrTree{
-		Version: "test",
-		Workspaces: []herdr.Workspace{
-			{ID: "w1", Label: "contr", Status: idle, Focused: true, Tabs: tabs},
-		},
-	}
+// term is a terminal named name, in dir, with icon s.
+func term(name, dir string, s icons.Status) Term {
+	return Term{Name: name, Address: "addr-" + name, Dir: dir, Status: s}
 }
 
 func checkout(root, common string, isMain bool) git.Checkout {
@@ -89,7 +59,7 @@ func withTool() git.Scan {
 	return scan
 }
 
-func built(tabs ...herdr.Tab) []RepoGroup { return Build(tree(tabs...), appScan()) }
+func built(terms ...Term) []RepoGroup { return Build(terms, appScan()) }
 
 func row(t *testing.T, groups []RepoGroup, name string) WorktreeRow {
 	t.Helper()
@@ -119,12 +89,12 @@ func eq[T any](t *testing.T, got, want T) {
 	}
 }
 
-func TestReposFollowTheirFirstPaneInTreeOrder(t *testing.T) {
-	groups := Build(tree(
-		tab("t1", "tool", pane("w1:p1", "/work/tool", st(idle))),
-		tab("t2", "app", pane("w1:p2", w1Root, st(working))),
-		tab("t3", "tool-2", pane("w1:p3", "/work/tool", nil)),
-	), withTool())
+func TestReposFollowTheirFirstTerminalInOrder(t *testing.T) {
+	groups := Build([]Term{
+		term("t1", "/work/tool", icons.Idle),
+		term("t2", w1Root, icons.Working),
+		term("t3", "/work/tool", icons.Idle),
+	}, withTool())
 	var order []string
 	for _, g := range groups {
 		order = append(order, g.Name)
@@ -134,102 +104,61 @@ func TestReposFollowTheirFirstPaneInTreeOrder(t *testing.T) {
 	eq(t, groups[1].CommonDir, common)
 }
 
-func TestWorkingBuilderTabBeatsDonePlannerTab(t *testing.T) {
-	groups := built(
-		tab("t1", "p-6", pane("w1:p1", w1Root, st(done))),
-		tab("t2", "b-3s2", pane("w1:p2", w1Root, st(working))),
-	)
+func TestWorkingTerminalBeatsDoneTerminal(t *testing.T) {
+	groups := built(term("p-6", w1Root, icons.Done), term("b-3s2", w1Root, icons.Working))
 	w1 := row(t, groups, "w1")
 	eq(t, w1.Status, icons.Working)
-	eq(t, *w1.FocusPane, "w1:p2")
 	eq(t, *w1.Hold, "b-3s2 working +1")
 	eq(t, len(w1.Holders), 2)
+	eq(t, w1.Holders[1].Address, "addr-b-3s2")
 }
 
-func TestEqualStatesTakeTheNewestTab(t *testing.T) {
-	groups := built(
-		tab("t1", "old", pane("w1:p1", w1Root, st(working))),
-		tab("t2", "new", pane("w1:p2", w1Root, st(working))),
-	)
-	w1 := row(t, groups, "w1")
-	eq(t, *w1.FocusPane, "w1:p2")
-	eq(t, *w1.Hold, "new working +1")
+func TestEqualStatesTakeTheNewestTerminal(t *testing.T) {
+	groups := built(term("old", w1Root, icons.Working), term("new", w1Root, icons.Working))
+	eq(t, *row(t, groups, "w1").Hold, "new working +1")
 }
 
 func TestBlockedBeatsWorking(t *testing.T) {
-	groups := built(
-		tab("t1", "a", pane("w1:p1", w1Root, st(working))),
-		tab("t2", "b", pane("w1:p2", w1Root, st(blocked))),
-	)
+	groups := built(term("a", w1Root, icons.Working), term("b", w1Root, icons.Blocked))
 	w1 := row(t, groups, "w1")
 	eq(t, w1.Status, icons.Blocked)
-	eq(t, *w1.FocusPane, "w1:p2")
 	eq(t, *w1.Hold, "b blocked +1")
 }
 
-func TestPaneWithoutAgentHoldsAsUnknownAndShowsIdle(t *testing.T) {
-	groups := built(
-		tab("t1", "shell", pane("w1:p1", w1Root, nil)),
-		tab("t2", "agent", pane("w1:p2", w2Root, st(unknown))),
-	)
-	w1 := row(t, groups, "w1")
-	eq(t, w1.Holders[0].Status, unknown)
-	eq(t, w1.Status, icons.Idle)
-	eq(t, *w1.Hold, "shell unknown")
-	w2 := row(t, groups, "w2")
-	eq(t, w2.Status, icons.Idle)
-	eq(t, *w2.FocusPane, "w1:p2")
+func TestOneHolderHasNoMoreCount(t *testing.T) {
+	groups := built(term("shell", w1Root, icons.Idle))
+	eq(t, *row(t, groups, "w1").Hold, "shell idle")
 }
 
-func TestATabKeepsItsBestPaneInEachWorktree(t *testing.T) {
-	groups := built(tab("t1", "multi",
-		pane("w1:p1", w1Root, st(idle)),
-		pane("w1:p2", w1Root, st(working)),
-		pane("w1:p3", w1Root, st(idle)),
-	))
-	w1 := row(t, groups, "w1")
-	eq(t, len(w1.Holders), 1)
-	eq(t, w1.Holders[0].PaneID, "w1:p2")
+func TestTerminalsHoldTheirOwnWorktrees(t *testing.T) {
+	groups := built(term("a", w1Root, icons.Working), term("b", w2Root, icons.Idle))
+	eq(t, row(t, groups, "w1").Holders[0].Name, "a")
+	eq(t, row(t, groups, "w2").Holders[0].Name, "b")
 }
 
-func TestOneTabHoldsEveryWorktreeItHasPanesIn(t *testing.T) {
-	groups := built(tab("t1", "multi",
-		pane("w1:p1", w1Root, st(working)),
-		pane("w1:p2", w2Root, st(idle)),
-	))
-	w1 := row(t, groups, "w1")
-	eq(t, w1.Holders[0].TabID, "t1")
-	eq(t, *w1.FocusPane, "w1:p1")
-	w2 := row(t, groups, "w2")
-	eq(t, w2.Holders[0].TabID, "t1")
-	eq(t, *w2.FocusPane, "w1:p2")
-}
-
-func TestMainCheckoutRowOnlyWhenATabHoldsIt(t *testing.T) {
-	unheld := built(tab("t1", "a", pane("w1:p1", w1Root, st(idle))))
+func TestMainCheckoutRowOnlyWhenATerminalHoldsIt(t *testing.T) {
+	unheld := built(term("a", w1Root, icons.Idle))
 	eq(t, names(unheld[0]), []string{"w1", "w2"})
-	held := built(tab("t1", "a", pane("w1:p1", mainWT, st(idle))))
+	held := built(term("a", mainWT, icons.Idle))
 	eq(t, names(held[0]), []string{"app", "w1", "w2"})
 	if !held[0].Rows[0].IsMain {
 		t.Error("first row is not main")
 	}
 }
 
-func TestUnheldLinkedWorktreeIsIdleWithNoFocusOrHold(t *testing.T) {
-	groups := built(tab("t1", "a", pane("w1:p1", w1Root, st(working))))
+func TestUnheldLinkedWorktreeIsIdleWithNoHold(t *testing.T) {
+	groups := built(term("a", w1Root, icons.Working))
 	w2 := row(t, groups, "w2")
 	eq(t, w2.Status, icons.Idle)
-	if w2.FocusPane != nil || w2.Hold != nil {
-		t.Error("unheld row has focus or hold")
+	if w2.Hold != nil {
+		t.Error("unheld row has a hold line")
 	}
 	eq(t, len(w2.Holders), 0)
 	eq(t, w2.Branch, "agent/6-y")
 }
 
-func TestPanesOutsideGitAndWithoutACwdAreLeftOut(t *testing.T) {
-	noCwd := pane("w1:p2", w1Root, st(working))
-	noCwd.Cwd = nil
-	groups := built(tab("t1", "scratch", pane("w1:p1", "/elsewhere", st(working)), noCwd))
+func TestTerminalsOutsideGitAndWithoutADirAreLeftOut(t *testing.T) {
+	groups := built(term("scratch", "/elsewhere", icons.Working), term("nodir", "", icons.Working))
 	eq(t, len(groups), 0)
 }
 
@@ -238,38 +167,36 @@ func TestACheckoutTheRepoDoesNotListGivesNoGroup(t *testing.T) {
 	const ghost = "/work/ghost/.git"
 	scan.Checkouts["/work/ghost"] = checkout("/work/ghost", ghost, true)
 	scan.Repos[ghost] = repo(ghost, "ghost")
-	groups := Build(tree(tab("t1", "a", pane("w1:p1", "/work/ghost", st(working)))), scan)
+	groups := Build([]Term{term("a", "/work/ghost", icons.Working)}, scan)
 	eq(t, len(groups), 0)
 }
 
 func TestACheckoutWhoseRepoIsMissingGivesNoGroup(t *testing.T) {
 	scan := appScan()
 	scan.Repos = map[string]git.RepoInfo{}
-	groups := Build(tree(tab("t1", "a", pane("w1:p1", w1Root, st(working)))), scan)
+	groups := Build([]Term{term("a", w1Root, icons.Working)}, scan)
 	eq(t, len(groups), 0)
 }
 
-func TestRankPutsBlockedFirstAndUnknownLast(t *testing.T) {
-	states := []herdr.AgentState{blocked, working, done, idle, unknown}
-	for i := 1; i < len(states); i++ {
-		if Rank(states[i-1]) <= Rank(states[i]) {
-			t.Errorf("rank(%d) <= rank(%d)", states[i-1], states[i])
+func TestRankPutsBlockedFirstAndNotStartedLast(t *testing.T) {
+	order := []icons.Status{icons.Blocked, icons.Working, icons.Done, icons.Idle, icons.NotStarted}
+	for i := 1; i < len(order); i++ {
+		if Rank(order[i-1]) <= Rank(order[i]) {
+			t.Errorf("rank(%v) <= rank(%v)", order[i-1], order[i])
 		}
 	}
 }
 
 func TestRowIDIsItsRootPath(t *testing.T) {
-	groups := built(tab("t1", "a", pane("w1:p1", w1Root, st(idle))))
+	groups := built(term("a", w1Root, icons.Idle))
 	eq(t, row(t, groups, "w1").ID(), w1Root)
 }
 
-func TestPaneCwdsAreListedOnceInTreeOrderAndSkipMissingCwds(t *testing.T) {
-	noCwd := pane("w1:p4", w2Root, st(idle))
-	noCwd.Cwd = nil
-	cwds := PaneCwds(tree(
-		tab("t1", "a", pane("w1:p1", w1Root, nil), pane("w1:p2", mainWT, nil)),
-		tab("t2", "b", pane("w1:p3", w1Root, nil), noCwd),
-	))
-	eq(t, cwds, []string{w1Root, mainWT})
-	eq(t, len(PaneCwds(tree())), 0)
+func TestDirsAreListedOnceInOrderAndSkipEmptyOnes(t *testing.T) {
+	dirs := Dirs([]Term{
+		term("a", w1Root, icons.Idle), term("b", mainWT, icons.Idle),
+		term("c", w1Root, icons.Idle), term("d", "", icons.Idle),
+	})
+	eq(t, dirs, []string{w1Root, mainWT})
+	eq(t, len(Dirs(nil)), 0)
 }

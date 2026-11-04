@@ -9,7 +9,6 @@ package app
 
 import (
 	"fmt"
-	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -22,37 +21,7 @@ import (
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
-	"github.com/contursofran/contr/internal/herdr"
 )
-
-// focusTimeout is how long a focus call may wait for herdr's socket.
-const focusTimeout = 2 * time.Second
-
-// FocusFn sends `pane.focus` for a pane id. report shows a failure to the
-// user. The app uses [FocusInBackground]; tests record the ids.
-type FocusFn func(paneID string, report func(string))
-
-// FocusInBackground focuses a pane through herdr's API socket on a
-// goroutine, so the UI thread never waits for the socket. With no socket
-// path nothing is sent. A failed call is logged and given to report, which
-// runs on that goroutine and should only set the status message.
-func FocusInBackground(paneID string, report func(string)) {
-	go focusPane(herdr.APISocketPath, paneID, report)
-}
-
-func focusPane(socket func() (string, bool), paneID string, report func(string)) {
-	path, ok := socket()
-	if !ok {
-		slog.Warn("no herdr socket path; pane not focused", "pane", paneID)
-		return
-	}
-	if err := herdr.FocusPane(path, paneID, focusTimeout); err != nil {
-		slog.Warn("focus pane failed", "pane", paneID, "err", err)
-		if report != nil {
-			report(failureLine(err))
-		}
-	}
-}
 
 // Element labels of the agents sections.
 const (
@@ -213,7 +182,7 @@ func (l *AgentsList) View(c *ui.Context) {
 			}
 		}
 		if len(work) > 0 {
-			header(c, LabelAgentsHeader, "Agents", herdr.RunningLine(running(s.Workers)))
+			header(c, LabelAgentsHeader, "Agents", strconv.Itoa(running(s.Workers))+" running")
 			for _, r := range work {
 				agentRow(c, r)
 			}

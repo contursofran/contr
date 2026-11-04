@@ -20,18 +20,19 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/git"
-	"github.com/contursofran/contr/internal/herdr"
 )
 
 // RescanAfter is the age at which a scan is old, and the time between rescans
 // while the window is shown, so that a changed branch appears (D15). An old
-// scan is also redone on the next herdr change and when the window is shown.
+// scan is also redone on the next agents change and when the window is shown.
 const RescanAfter = 10 * time.Second
 
 // Element labels of the spaces column.
@@ -98,7 +99,7 @@ type SpacesChange struct {
 	// Rows are the rows that show other data or another selection mark, when
 	// the shape is the same.
 	Rows []RowRef
-	// Online: the herdr connection came or went (the host card's dot).
+	// Online: the hc connection came or went (the host card's dot).
 	Online bool
 }
 
@@ -112,11 +113,9 @@ type SpacesList struct {
 	// OnNew runs when `+ new` is clicked. Nil: the button does nothing.
 	OnNew func()
 
-	src       liveSource
+	snap      func() agentstate.Snapshot
 	host      hostSource
 	selection *state.Selection
-	status    *state.StatusMessage
-	focus     FocusFn
 
 	// visible tells whether the window is shown. Nil counts as shown.
 	visible func() bool
@@ -134,7 +133,7 @@ type SpacesList struct {
 
 	groups []spaces.RepoGroup
 	online bool
-	// line is herdr's connection line while herdr is not connected, else "".
+	// line is the hc problem while contr does not follow the core, else "".
 	line string
 	// shown is the id of the selected worktree at the last rebuild.
 	shown string
@@ -160,17 +159,15 @@ type SpacesList struct {
 	builds map[string]int
 }
 
-// NewSpacesList returns the list. src gives the tree, b (may be nil) the
-// rows' second line and badge, h (may be nil) the host card's reading,
-// selection the card. status (may be nil) shows focus errors. visible (may be
+// NewSpacesList returns the list. snap (may be nil) gives the hc terminals,
+// h (may be nil) the host card's reading, selection the card. visible (may be
 // nil) tells whether the window is shown; post (may be nil) runs a func on
-// the UI thread, as Window.Update does. A click focuses the pane with
-// [FocusInBackground]. The list is empty until [SpacesList.Sync], which the
-// owner calls at the start and when the tree or the connection
+// the UI thread, as Window.Update does. The list is empty until
+// [SpacesList.Sync], which the owner calls at the start and when the agents
 // changed.
-func NewSpacesList(src liveSource, h hostSource, selection *state.Selection, status *state.StatusMessage, visible func() bool, post func(func())) *SpacesList {
+func NewSpacesList(snap func() agentstate.Snapshot, h hostSource, selection *state.Selection, visible func() bool, post func(func())) *SpacesList {
 	l := &SpacesList{
-		src: src, host: h, selection: selection, status: status, focus: FocusInBackground,
+		snap: snap, host: h, selection: selection,
 		visible: visible, post: post, scanFn: git.ScanCwds, statsFn: runStats, start: func(f func()) { go f() },
 		now: time.Now, builds: map[string]int{},
 		afterFunc: func(d time.Duration, f func()) stopper { return time.AfterFunc(d, f) },
@@ -178,30 +175,26 @@ func NewSpacesList(src liveSource, h hostSource, selection *state.Selection, sta
 	return l
 }
 
-// Groups returns the repo groups shown. Empty without a tree.
+// Groups returns the repo groups shown. Empty without terminals.
 func (l *SpacesList) Groups() []spaces.RepoGroup { return l.groups }
 
 func (l *SpacesList) shownNow() bool { return l.visible == nil || l.visible() }
 
-// Sync brings the column up to the tree and the connection. It
-// starts a scan when a pane sits in another directory, or when the last scan
-// is old and the window is shown (D15). With no pane cwd there is nothing to
+// Sync brings the column up to the hc terminals and the connection. It
+// starts a scan when a terminal sits in another folder, or when the last scan
+// is old and the window is shown (D15). With no folder there is nothing to
 // scan, and the scan is dropped. It then rebuilds the groups from the scan
 // that it has. A selected worktree that no row has any more leaves the
 // selection; an agent selection stays.
 func (l *SpacesList) Sync() SpacesChange {
-	tree := l.tree()
-	var cwds []string
-	if tree != nil {
-		cwds = spaces.PaneCwds(*tree)
-	}
+	cwds := spaces.Dirs(l.terms())
 	switch {
 	case len(cwds) == 0:
 		l.forgetScan()
 	case !slices.Equal(cwds, l.scanned) || (l.stale() && l.shownNow()):
 		l.startScan(cwds)
 	}
-	return l.rebuild(tree)
+	return l.rebuild()
 }
 
 // SetVisible follows the window. Shown: the list syncs at once, which rescans
@@ -269,11 +262,27 @@ func (l *SpacesList) wake(gen uint64) {
 	l.armTimer()
 }
 
-func (l *SpacesList) tree() *herdr.HerdrTree {
-	if l.src == nil {
-		return nil
+// snapshot is the agent state, empty without a source.
+func (l *SpacesList) snapshot() agentstate.Snapshot {
+	if l.snap == nil {
+		return agentstate.Snapshot{}
 	}
-	return l.src.Live().Tree
+	return l.snap()
+}
+
+// terms are the hc terminals: orchestrators, workers, then plain terminals.
+func (l *SpacesList) terms() []spaces.Term {
+	return spaceTerms(l.snapshot())
+}
+
+func spaceTerms(s agentstate.Snapshot) []spaces.Term {
+	var out []spaces.Term
+	for _, ws := range [][]agents.Worker{s.Orchestrators, s.Workers, s.Terminals} {
+		for _, w := range ws {
+			out = append(out, spaces.Term{Name: w.Name, Address: w.Address, Dir: w.Worktree, Status: workerIcon(w)})
+		}
+	}
+	return out
 }
 
 func (l *SpacesList) stale() bool { return !l.hasScan || l.now().Sub(l.lastScan) >= RescanAfter }
@@ -301,7 +310,7 @@ func (l *SpacesList) startScan(cwds []string) {
 			}
 			// Rebuild only: a slow scan must not start the next one.
 			l.scan, l.stats = scan, stats
-			l.rebuild(l.tree())
+			l.rebuild()
 		})
 	})
 }
@@ -320,17 +329,13 @@ func (l *SpacesList) later(fn func()) {
 	fn()
 }
 
-func (l *SpacesList) rebuild(tree *herdr.HerdrTree) SpacesChange {
-	var groups []spaces.RepoGroup
-	if tree != nil {
-		groups = spaces.Build(*tree, l.scan)
-		spaces.ApplyStats(groups, l.stats)
-	}
+func (l *SpacesList) rebuild() SpacesChange {
+	snap := l.snapshot()
+	groups := spaces.Build(spaceTerms(snap), l.scan)
+	spaces.ApplyStats(groups, l.stats)
 	online, line := true, ""
-	if l.src != nil {
-		var down bool
-		line, down = l.src.Live().State.Line()
-		online = !down
+	if l.snap != nil && snap.CoreVersion == "" {
+		online, line = false, snap.Problem
 	}
 	l.clearGoneSelection(groups)
 	selected, _ := l.selectedWorktree()
@@ -391,19 +396,11 @@ func (l *SpacesList) clearGoneSelection(groups []spaces.RepoGroup) {
 	l.selection.Clear()
 }
 
-// Activate is a click on a row: it becomes the selection, and herdr focuses
-// its top holder's pane. A row without a holder is selected and nothing is
-// focused. A second click focuses again.
+// Activate is a click on a row: it becomes the selection, and Review
+// follows it.
 func (l *SpacesList) Activate(row spaces.WorktreeRow) {
 	if l.selection != nil {
 		l.selection.Select(state.Selected{Kind: state.KindWorktree, ID: row.ID()})
-	}
-	if row.FocusPane != nil && l.focus != nil {
-		var report func(string)
-		if l.status != nil {
-			report = l.status.Show
-		}
-		l.focus(*row.FocusPane, report)
 	}
 }
 
@@ -419,7 +416,7 @@ func (l *SpacesList) View(c *ui.Context) {
 	ui.Scroll(c).Fill().Children(func() {
 		l.spacesHeader(c)
 		l.hostCard(c)
-		l.herdrLine(c)
+		l.coreLine(c)
 		for _, g := range l.groups {
 			l.repoLine(c, g)
 			for _, row := range g.Rows {
@@ -445,7 +442,7 @@ func (l *SpacesList) spacesHeader(c *ui.Context) {
 }
 
 // hostCard is `Local`, then the CPU reading, the memory bar and a dot that is
-// lit while herdr is connected. Without a reading the CPU shows a dash and
+// lit while contr follows the hc core. Without a reading the CPU shows a dash and
 // the bar stays empty.
 func (l *SpacesList) hostCard(c *ui.Context) {
 	var filled int
@@ -472,10 +469,9 @@ func (l *SpacesList) hostCard(c *ui.Context) {
 	})
 }
 
-// herdrLine is herdr's connection line, under the host card, while herdr is
-// not connected. The terminal area does not show it: hc terminals work
-// without herdr (#246).
-func (l *SpacesList) herdrLine(c *ui.Context) {
+// coreLine is the hc problem, under the host card, while contr does not
+// follow the core.
+func (l *SpacesList) coreLine(c *ui.Context) {
 	if l.online || l.line == "" {
 		return
 	}
@@ -483,8 +479,8 @@ func (l *SpacesList) herdrLine(c *ui.Context) {
 		PaddingX(theme.SidebarPadX).PaddingY(theme.SpacesGap)
 }
 
-// onlineColour is the dot's colour: Text2 while herdr is connected, the
-// faint icon grey otherwise.
+// onlineColour is the dot's colour: Text2 while contr follows the hc core,
+// the faint icon grey otherwise.
 func onlineColour(online bool) uint32 {
 	if online {
 		return theme.Text2
@@ -492,8 +488,8 @@ func onlineColour(online bool) uint32 {
 	return theme.IconFaint
 }
 
-// nameColour is a worktree's name colour: white when a tab holds it, dim
-// when it is only a checkout.
+// nameColour is a worktree's name colour: white when a terminal holds it,
+// dim when it is only a checkout.
 func nameColour(held bool) uint32 {
 	if held {
 		return theme.Text
@@ -545,7 +541,7 @@ func (l *SpacesList) row(c *ui.Context, row spaces.WorktreeRow, selected bool) {
 	})
 }
 
-// holdLine is the second line: the top holder's tab and state, or the
+// holdLine is the second line: the top holder's name and state, or the
 // board's who. A you line is drawn as the you chip. A row without a holder
 // keeps the line, empty.
 func (l *SpacesList) holdLine(c *ui.Context, row spaces.WorktreeRow) {

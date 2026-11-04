@@ -141,7 +141,11 @@ then Settings.
   (`↓N`, red) **(not built)**. The project of the selected tab has the
   `bg.card` style. Worktree rows sit under their project, as today: a row
   shows `+N −N` (diff colours, D52) at its right, hidden for 0 and 0 or when
-  git fails.
+  git fails. The projects and rows come from the hc terminals (orchestrators,
+  workers and plain terminals) and the git scan of their folders, not from
+  herdr panes or tabs. The second line of a row is `<name> <state>` of its top
+  terminal, plus `+N` for the others. A click on a row selects its worktree
+  and Review follows it; it does not focus any terminal (D92).
 - **Agents** section (12 px dim header), then sub-headers (11 px):
   `Orchestrators N` (dim) first, whatever the state of its agents, then
   `Blocked N` (red), then `Working N` (amber) **(groups by state not built:
@@ -179,7 +183,7 @@ then Settings.
 - A `+` after the last tab opens a plain terminal in the open project, in
   the first orchestrator's folder, else the home folder. `⌘T` does the same.
   It is always shown, also with no tabs. The terminal area works while herdr
-  is down; the Spaces column shows the herdr line then (D82).
+  is down; the Spaces column shows the hc problem then (D82, D92).
 - `⌘W` closes the selected plain terminal and its tab (D85). The next tab is
   selected. An orchestrator or worker tab ignores it.
 - Right side: `Review` (D37), then the panel toggle. There is no tab row in
