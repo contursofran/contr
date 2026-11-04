@@ -94,7 +94,7 @@ that code, move it to the MyGo part in its own small PR.
 | `internal/owner` | questions and to-dos for the owner, in one locked JSON file |
 | `assets` | fonts, status icons, app icon |
 | `kit` | Claude Code plugin for agent work: agent definitions and the coordinator playbook |
-| `scripts` | `check.sh`, `bundle.sh`, `install.sh`, `agent-metrics.py` |
+| `scripts` | `check.sh`, `bundle.sh`, `mygo-config.sh`, `install.sh`, `next-version.sh`, `release-notes.sh`, `agent-metrics.py` |
 
 Add packages under `internal/` when a change needs them.
 

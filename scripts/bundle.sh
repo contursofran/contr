@@ -1,17 +1,17 @@
 #!/bin/bash
-# Builds contr.app: the release binary, the app icon, Info.plist and an ad-hoc signature.
+# Builds contr.app with `go tool mygo build` (D115): the release binary, the app icon, Info.plist,
+# libghostty-vt in Contents/Resources (D93) and an ad-hoc signature.
 #
-#   scripts/bundle.sh [--bin PATH] [--out DIR] [--zip]
+#   scripts/bundle.sh [--out DIR] [--zip]
 #
-#   --bin PATH  use this binary instead of building (tests use a dummy); default:
-#               CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath ./cmd/contr
-#   --lib PATH  the libghostty-vt library to put in Contents/Resources; default: the path that
-#               `<binary> terminal-check` prints (it downloads the library into the user cache)
 #   --out DIR   output dir (default: <repo>/dist/bundle); contr.app inside is replaced.
 #               Refuses /, /Applications and $HOME.
 #   --zip       also write contr-<version>-macos-arm64.zip next to the .app
 #
-# The version is the first line of the VERSION file in the repository root.
+# The version is the first line of the VERSION file in the repository root. scripts/mygo-config.sh
+# writes mygo.json from it. With a public key in scripts/update.pub the build has updates; with
+# MYGO_UPDATER_PRIVATE_KEY in the environment, `mygo build` also signs the update files, which
+# stay in dist/mygo. The MyGo build downloads libghostty-vt into the user cache when needed.
 # On success prints the absolute path of contr.app, and the zip path with --zip.
 # Errors go to stderr as "bundle.sh: <message>" with exit 1.
 
@@ -19,7 +19,7 @@ set -euo pipefail
 unset CDPATH # with CDPATH set, cd prints the directory and breaks $(cd ... && pwd)
 
 usage() {
-    echo "usage: $0 [--bin PATH] [--lib PATH] [--out DIR] [--zip]" >&2
+    echo "usage: $0 [--out DIR] [--zip]" >&2
 }
 
 die() {
@@ -28,17 +28,13 @@ die() {
 }
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
-bin=""
-lib=""
 out=""
 zip=0
 app_tmp=""
-icon_dir=""
 build_dir=""
 
 cleanup() {
     if [ -n "$app_tmp" ]; then rm -rf "$app_tmp"; fi
-    if [ -n "$icon_dir" ]; then rm -rf "$icon_dir"; fi
     if [ -n "$build_dir" ]; then rm -rf "$build_dir"; fi
 }
 trap cleanup EXIT
@@ -46,18 +42,6 @@ trap 'echo "bundle.sh: a command failed at line $LINENO" >&2; exit 1' ERR
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --bin)
-            [ $# -ge 2 ] || die "--bin needs a path"
-            case "$2" in -*) die "--bin needs a path, not a flag: $2" ;; esac
-            bin="$2"
-            shift 2
-            ;;
-        --lib)
-            [ $# -ge 2 ] || die "--lib needs a path"
-            case "$2" in -*) die "--lib needs a path, not a flag: $2" ;; esac
-            lib="$2"
-            shift 2
-            ;;
         --out)
             [ $# -ge 2 ] || die "--out needs a dir"
             case "$2" in -*) die "--out needs a dir, not a flag: $2" ;; esac
@@ -96,37 +80,11 @@ check_out() {
     done
 }
 
-if [ -z "$bin" ]; then
-    build_dir="$(mktemp -d)"
-    bin="$build_dir/contr"
-    (cd "$repo" && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -o "$bin" ./cmd/contr) 1>&2 ||
-        die "go build failed"
-fi
-[ -f "$bin" ] || die "binary not found: $bin"
-
-arch="$(lipo -archs "$bin" 2>/dev/null)" || die "not a Mach-O binary: $bin"
-[ "$arch" = arm64 ] || die "expected an arm64 binary, got: $arch"
-
-min_macos="$(vtool -show-build "$bin" 2>/dev/null | awk '/minos/ && !v { v = $2 } END { print v }')" ||
-    die "cannot read the minimum macOS version of $bin"
-[ -n "$min_macos" ] || die "no minimum macOS version in $bin"
-
-# The terminal library: a packaged app never downloads it (D93), so it goes into Resources.
-if [ -z "$lib" ]; then
-    lib="$("$bin" terminal-check)" || die "terminal-check failed: cannot find the terminal library"
-fi
-[ -f "$lib" ] || die "terminal library not found: $lib"
-
 version="$(sed -n 1p "$repo/VERSION" 2>/dev/null)" || die "cannot read $repo/VERSION"
 case "$version" in
     [0-9]*.[0-9]*.[0-9]*) ;;
     *) die "no version in VERSION: '$version'" ;;
 esac
-
-commit="$(git -C "$repo" rev-parse --short HEAD 2>/dev/null)" || commit=unknown
-
-icon_src="$repo/assets/app/icon.svg"
-[ -f "$icon_src" ] || die "icon not found: $icon_src"
 
 if [ -z "$out" ]; then
     out="$repo/dist/bundle"
@@ -136,43 +94,23 @@ out="$(cd "$out" && pwd)"
 check_out "$out"
 app="$out/contr.app"
 app_tmp="$out/contr.app.tmp"
-zip_path="$out/contr-$version-macos-$arch.zip"
+zip_path="$out/contr-$version-macos-arm64.zip"
+
+# mygo.json is generated, so the version and the update key have one source each (D115).
+"$repo/scripts/mygo-config.sh" >"$repo/mygo.json" || die "cannot write mygo.json"
+
+build_dir="$(mktemp -d)"
+(cd "$repo" && go tool mygo build -platform darwin/arm64 -skip-dmg -o "$build_dir") 1>&2 ||
+    die "mygo build failed"
+built="$build_dir/darwin-arm64/contr.app"
+[ -d "$built" ] || die "mygo build made no app at $built"
+
+# The terminal library is in the app: a packaged app never downloads it (D93).
+lib="$built/Contents/Resources/libghostty-vt.dylib"
+[ -f "$lib" ] || die "the app has no libghostty-vt.dylib in Resources"
 
 rm -rf "$app_tmp"
-mkdir -p "$app_tmp/Contents/MacOS" "$app_tmp/Contents/Resources"
-cp "$bin" "$app_tmp/Contents/MacOS/contr"
-chmod 755 "$app_tmp/Contents/MacOS/contr"
-cp "$lib" "$app_tmp/Contents/Resources/libghostty-vt.dylib"
-codesign --force --sign - --timestamp=none "$app_tmp/Contents/Resources/libghostty-vt.dylib" ||
-    die "cannot sign the terminal library"
-
-# Icon: render the SVG once, resize it to the ten iconset sizes, pack them as .icns.
-icon_dir="$(mktemp -d)"
-sips -s format png "$icon_src" --out "$icon_dir/icon-1024.png" >/dev/null ||
-    die "cannot render $icon_src"
-iconset="$icon_dir/contr.iconset"
-mkdir "$iconset"
-for pair in 16:icon_16x16.png 32:icon_16x16@2x.png 32:icon_32x32.png \
-    64:icon_32x32@2x.png 128:icon_128x128.png 256:icon_128x128@2x.png \
-    256:icon_256x256.png 512:icon_256x256@2x.png 512:icon_512x512.png \
-    1024:icon_512x512@2x.png; do
-    size="${pair%%:*}"
-    name="${pair#*:}"
-    sips -z "$size" "$size" "$icon_dir/icon-1024.png" --out "$iconset/$name" >/dev/null ||
-        die "cannot resize the icon to $size"
-done
-iconutil -c icns "$iconset" -o "$app_tmp/Contents/Resources/contr.icns" ||
-    die "iconutil failed"
-
-sed -e "s|@VERSION@|$version|g" \
-    -e "s|@COMMIT@|$commit|g" \
-    -e "s|@MIN_MACOS@|$min_macos|g" \
-    "$repo/scripts/Info.plist.in" >"$app_tmp/Contents/Info.plist"
-plutil -lint "$app_tmp/Contents/Info.plist" >/dev/null ||
-    die "Info.plist is not valid"
-
-codesign --force --sign - --timestamp=none "$app_tmp" ||
-    die "codesign failed"
+ditto "$built" "$app_tmp" || die "cannot copy the app"
 codesign --verify --strict "$app_tmp" ||
     die "the signature does not verify"
 

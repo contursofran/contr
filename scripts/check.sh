@@ -25,6 +25,8 @@ CGO_ENABLED=0 go build -o /dev/null ./cmd/contr
 # The bundle and install scripts, with dummy binaries. They write only under tmp/.
 scripts/test-bundle.sh
 scripts/test-install.sh
+# The release scripts and the rules of the release workflow.
+scripts/test-release.sh
 # The agent metrics script, on made-up transcripts.
 scripts/test-agent-metrics.sh
 # The two checks above, on small temporary repos.

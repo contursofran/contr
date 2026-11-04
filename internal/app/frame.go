@@ -82,6 +82,12 @@ type Frame struct {
 	Sheet *Sheet
 	// ProjectsModal is the projects modal (D110), made in Attach.
 	ProjectsModal *ProjectsModal
+	// Updates is the update service of the Settings modal (D115). Nil shows "updates are off".
+	Updates Updates
+	// Relaunch restarts contr after an update installs.
+	Relaunch func()
+	// Settings is the Settings modal, made in Attach.
+	Settings *Settings
 	// Worker is the panel's worker view. [Frame.Attach] makes it. The panel
 	// shows it while a worker is selected.
 	Worker *WorkerPanel
@@ -375,6 +381,9 @@ func (f *Frame) View(c *ui.Context) {
 		if f.ProjectsModal != nil {
 			f.ProjectsModal.View(c)
 		}
+		if f.Settings != nil {
+			f.Settings.View(c)
+		}
 	})
 }
 
@@ -385,6 +394,9 @@ func (f *Frame) statusBar(c *ui.Context) {
 		return
 	}
 	f.status.core = f.coreVersion
+	if f.Settings != nil {
+		f.status.updateReady, f.status.install = f.Settings.Ready, f.Settings.Install
+	}
 	if f.Host != nil {
 		f.status.host = f.Host
 	}
@@ -860,6 +872,11 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		Save: f.SaveProjects, Run: Runner{Post: w.Update}, Status: f.Status.Show, Invalidate: w.Invalidate,
 	}
 	f.SpacesList.OnProjects = f.ProjectsModal.Toggle
+	f.Settings = &Settings{Updates: f.Updates, Version: Version, Run: Runner{Post: w.Update},
+		Relaunch: f.Relaunch, Invalidate: w.Invalidate, Visible: func() bool { return f.Visibility == nil || f.Visibility.Visible() },
+		Status: f.Status.Show}
+	setSettingsHandler(func() { w.Update(f.Settings.Toggle) })
+	stopChecks := f.Settings.StartChecks()
 	f.Slots.Spaces = f.SpacesList.View
 	f.SpacesList.Sync()
 	f.loadProjects(w)
@@ -911,6 +928,8 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	return func() {
 		setNewTerminalHandler(nil)
 		setCloseTerminalHandler(nil)
+		setSettingsHandler(nil)
+		stopChecks()
 		unwatch()
 		term()
 		stopAgents()

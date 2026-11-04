@@ -3,6 +3,7 @@ package app
 import (
 	"math"
 	"reflect"
+	"slices"
 	"sync"
 	"testing"
 
@@ -327,4 +328,25 @@ func strings20(s string) string {
 		out += s
 	}
 	return out
+}
+
+func TestAnUpdateReadyItemShowsAndAClickInstalls(t *testing.T) {
+	f, _, _, _, tt := barFrame(t, readingHost(stats(37.6, 62, 100)), "0.1.18", theme.WindowWidth)
+	u := &fakeUpdates{enabled: true}
+	f.Settings = &Settings{Updates: u, Run: Runner{Go: func(fn func()) { fn() }}}
+	if got := rightTexts(f, tt); slices.Contains(got, TextUpdateReady) {
+		t.Fatalf("the item shows without an update: %q", got)
+	}
+	f.Settings.found = &UpdateInfo{Version: "1.3.0"}
+	got := rightTexts(f, tt)
+	if len(got) == 0 || !slices.Contains(got, TextUpdateReady) {
+		t.Fatalf("no update item in %q", got)
+	}
+	if u.installs != 0 {
+		t.Fatal("contr installed without a click")
+	}
+	tt.Click(LabelUpdateReady)
+	if u.installs != 1 {
+		t.Errorf("a click ran %d installs, want 1", u.installs)
+	}
 }
