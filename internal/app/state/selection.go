@@ -15,6 +15,9 @@ const (
 	KindOrchestrator
 	// KindWorker is a worker row. Its ID is the hc terminal address.
 	KindWorker
+	// KindTerminal is a plain terminal tab. Its ID is the hc terminal
+	// address.
+	KindTerminal
 )
 
 // Selected is the selected sidebar row.
