@@ -198,3 +198,51 @@ func TestRealCoreStopNote(t *testing.T) {
 		}
 	}
 }
+
+// TestRealCoreSendTagsTheSender: a send from a worker to its coordinator
+// (both agents) names the worker as caller, so hc tags the text with it.
+// The kit's Stop hook reports a missed report this way.
+func TestRealCoreSendTagsTheSender(t *testing.T) {
+	env := isolatedCore(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cl, err := hc.Dial(ctx, hc.Command("", env))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cl.Close()
+
+	agent := []string{"sh", "-c", `printf '\033]7501;state=idle\033\134'; exec cat`}
+	var boss struct {
+		Address string `json:"address"`
+	}
+	if err := cl.Call(ctx, "terminal.run", map[string]any{"argv": agent, "name": "boss", "wait": false, "no_parent": true}, &boss); err != nil {
+		t.Fatal(err)
+	}
+	m := New(HC{cl}, Config{Profiles: map[string]Profile{"agent": {Argv: agent}}})
+	w, err := m.Spawn(ctx, Spec{Name: "w1", Profile: "agent", Parent: boss.Address})
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	m.WithEnv(func(k string) string {
+		if k == "HC_TERMINAL_ID" {
+			return w.Address
+		}
+		return ""
+	})
+	if err := m.Send(ctx, "boss", "ended its turn without a report"); err != nil {
+		t.Fatal(err)
+	}
+	want := `<hc from="` + w.Address + ` w1">ended its turn without a report</hc>`
+	var screen string
+	for i := 0; i < 50 && !strings.Contains(screen, want); i++ {
+		time.Sleep(100 * time.Millisecond)
+		if screen, err = m.Read(ctx, "boss", 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !strings.Contains(screen, want) {
+		t.Errorf("coordinator screen = %q, want %q", screen, want)
+	}
+}

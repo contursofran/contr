@@ -1,0 +1,16 @@
+{
+  "description": "Workers: a turn that ends without hc send still reports to the coordinator.",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -z \"$CONTR_COORDINATOR\" ] || contr hook stop || exit 1",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}
