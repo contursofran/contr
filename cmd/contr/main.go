@@ -18,6 +18,7 @@ import (
 	"github.com/contursofran/contr/assets"
 	"github.com/contursofran/contr/internal/app"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/projects"
 	"github.com/contursofran/contr/internal/usage"
 	"github.com/egoist/mygo/plugins/terminal"
 )
@@ -114,6 +115,13 @@ func openWindow(icons bool) int {
 	} else {
 		frame = app.NewFrame()
 		frame.StartAgents = startAgents(os.Getenv)
+		frame.LoadProjects = func() (*projects.Store, error) {
+			path, err := projects.Path()
+			if err != nil {
+				return nil, err
+			}
+			return projects.Load(path)
+		}
 		frame.TerminalSource = terminalSource(os.Getenv)
 		frame.OpenTerminal = func(project, dir string) (string, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
