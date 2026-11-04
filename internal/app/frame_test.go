@@ -58,8 +58,8 @@ func TestFrameMatchesDesignSizes(t *testing.T) {
 	if panel.W != theme.PanelWidth || panel.X+panel.W != theme.WindowWidth {
 		t.Errorf("panel %+v, want 440 wide at the right edge", panel)
 	}
-	if got := box(t, tt, LabelTerminal).W; got != 720 {
-		t.Errorf("terminal width %v, want 720", got)
+	if got := box(t, tt, LabelTerminal).W; got != 718 {
+		t.Errorf("terminal width %v, want 718 (two 1 px dividers)", got)
 	}
 	status := box(t, tt, LabelStatusBar)
 	if status.H != theme.StatusBarHeight || status.W != theme.WindowWidth {
@@ -89,8 +89,8 @@ func TestToggleHidesAndReopensTheSidebar(t *testing.T) {
 	if absent(tt, LabelSidebarReopen) {
 		t.Error("reopen button should show")
 	}
-	if term := box(t, tt, LabelTerminal); term.W != 1000 || term.X != 0 {
-		t.Errorf("terminal %+v, want 1000 wide from x 0", term)
+	if term := box(t, tt, LabelTerminal); term.W != 999 || term.X != 0 {
+		t.Errorf("terminal %+v, want 999 wide from x 0", term)
 	}
 
 	if err := tt.Click(LabelSidebarReopen); err != nil {
@@ -102,8 +102,8 @@ func TestToggleHidesAndReopensTheSidebar(t *testing.T) {
 	if got := box(t, tt, LabelSidebar).W; got != theme.SidebarWidth {
 		t.Errorf("sidebar width %v, want 280", got)
 	}
-	if got := box(t, tt, LabelTerminal).W; got != 720 {
-		t.Errorf("terminal width %v, want 720", got)
+	if got := box(t, tt, LabelTerminal).W; got != 718 {
+		t.Errorf("terminal width %v, want 718 (two 1 px dividers)", got)
 	}
 }
 
@@ -115,8 +115,8 @@ func TestPanelToggleHidesAndShowsThePanel(t *testing.T) {
 	if f.PanelOpen() || !absent(tt, LabelPanel) {
 		t.Error("the panel should be hidden")
 	}
-	if got := box(t, tt, LabelTerminal).W; got != 1160 {
-		t.Errorf("terminal width %v, want 1160", got)
+	if got := box(t, tt, LabelTerminal).W; got != 1159 {
+		t.Errorf("terminal width %v, want 1159", got)
 	}
 	if err := tt.Click(LabelPanelToggle); err != nil {
 		t.Fatal(err)
@@ -124,8 +124,8 @@ func TestPanelToggleHidesAndShowsThePanel(t *testing.T) {
 	if got := box(t, tt, LabelPanel).W; got != theme.PanelWidth {
 		t.Errorf("panel width %v, want 440", got)
 	}
-	if got := box(t, tt, LabelTerminal).W; got != 720 {
-		t.Errorf("terminal width %v, want 720", got)
+	if got := box(t, tt, LabelTerminal).W; got != 718 {
+		t.Errorf("terminal width %v, want 718 (two 1 px dividers)", got)
 	}
 }
 
