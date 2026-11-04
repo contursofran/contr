@@ -51,6 +51,17 @@ const BgAnswer = 0x1A1A1A // answer card
 const AnswerBorder = 0x262626
 const AnswerRadius = 10
 const Line = 0x222222 // dividers
+const LineStrong = 0x3A3A3A
+
+// Segmented control (DESIGN.md, PR viewer tabs): a track and the selected
+// segment.
+const SegmentTrack = 0x1A1A1A
+const SegmentSelected = 0x2A2A2A
+const SegmentRadius = 7
+const SegmentPad = 2
+
+// State badge of a PR (DESIGN.md, PR viewer header line 3).
+const BadgeApprovedBorder = 0x5A5A5A
 
 // Diff colors: changes in a code view (D34). The only colors outside the
 // greyscale, because a diff needs them; from the approved Review design.

@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/egoist/mygo/ui/editor"
 )
 
@@ -155,5 +157,33 @@ func TestRowDrawsItsLeadAndHeightOfMatches(t *testing.T) {
 	}
 	if HeightOf(RowOpts{Text: "x"}) != RowHeight {
 		t.Error("a one-line row should be RowHeight")
+	}
+}
+
+// TestSwitchLook: the chosen segment has the selected background (#2A2A2A),
+// the other one shows the track (#1A1A1A), as in DESIGN.md.
+func TestSwitchLook(t *testing.T) {
+	choice := 1
+	tt := ui.NewTester(func(c *ui.Context) {
+		ui.Box(c).Fill().Background(theme.Color(theme.BgWindow)).Children(func() {
+			Switch(c, "mode", &choice, "Whole branch", "By commit")
+		})
+	}, 400, 60)
+	tt.Frame()
+	img := tt.Image()
+	at := func(label string) uint32 {
+		r, ok := tt.Find(label)
+		if !ok {
+			t.Fatalf("no %q", label)
+		}
+		scale := float32(img.Bounds().Dx()) / 400
+		px := img.RGBAAt(int((r.X+2)*scale), int((r.Y+2)*scale))
+		return uint32(px.R)<<16 | uint32(px.G)<<8 | uint32(px.B)
+	}
+	if got := at("By commit"); got != theme.SegmentSelected {
+		t.Errorf("chosen segment = %06X, want %06X", got, theme.SegmentSelected)
+	}
+	if got := at("Whole branch"); got != theme.SegmentTrack {
+		t.Errorf("other segment = %06X, want %06X", got, theme.SegmentTrack)
 	}
 }

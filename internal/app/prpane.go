@@ -157,7 +157,7 @@ func prAge(now, at time.Time) string {
 	return strconv.Itoa(int(d/(24*time.Hour))) + "d"
 }
 
-// StateText is the word of the state chip.
+// StateText is the word of the state badge.
 func StateText(pr github.PR) string {
 	switch {
 	case pr.State == "MERGED":
@@ -166,8 +166,33 @@ func StateText(pr github.PR) string {
 		return "closed"
 	case pr.IsDraft:
 		return "draft"
+	case pr.ReviewDecision == "APPROVED":
+		return "approved"
 	}
 	return "open"
+}
+
+// stateBadge draws the state badge (DESIGN.md, PR viewer header line 3):
+// padding 1×8, radius 4; `merged` in the `you` style, `approved` with a
+// #5A5A5A border, other states with a #3A3A3A border and secondary text.
+func stateBadge(c *ui.Context, state string) {
+	b := ui.Row(c).PaddingY(1).PaddingX(8).Radius(theme.BadgeRadius).Shrink(0).Label("state " + state)
+	var t uint32 = theme.Text2
+	switch state {
+	case "merged":
+		b = b.Background(theme.Color(theme.YouBg))
+		t = theme.YouText
+	case "approved":
+		b = b.BorderWidth(1).BorderColor(theme.Color(theme.BadgeApprovedBorder))
+	default:
+		b = b.BorderWidth(1).BorderColor(theme.Color(theme.LineStrong))
+	}
+	b.Children(func() {
+		txt := ui.Text(c, state).TextColor(theme.Color(t)).NoWrap()
+		if state == "merged" {
+			txt.Bold()
+		}
+	})
 }
 
 // CIText is the one-line summary of the checks.
@@ -329,9 +354,7 @@ func (p *PRPane) header(c *ui.Context) {
 			}
 		})
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
-			ui.Row(c).PaddingX(8).Radius(theme.BadgeRadius).Background(theme.Color(theme.BgCard)).Children(func() {
-				ui.Text(c, StateText(*pr)).TextColor(theme.Color(theme.Text2)).NoWrap()
-			})
+			stateBadge(c, StateText(*pr))
 			icons.Sized(c, ciIcon(pr.ChecksSummary), theme.IconSizeSmall)
 			ui.Text(c, CIText(pr.ChecksSummary)).TextColor(theme.Color(theme.Text2)).NoWrap()
 		})

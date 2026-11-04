@@ -104,8 +104,23 @@ func Counts(c *ui.Context, added, removed int) {
 }
 
 // Switch is a segmented control: choice is the index of the chosen option.
+// Look (DESIGN.md): a #1A1A1A track, radius 7, padding 2; the chosen segment
+// has a #2A2A2A background and the primary text, the others secondary text.
+// Each segment is labelled with its option.
 func Switch(c *ui.Context, label string, choice *int, options ...string) ui.Element {
-	return ui.Segmented(c, choice, options...).Label(label)
+	seg := ui.SegmentedBase(c, choice, len(options))
+	seg.Track.Label(label).Row().Padding(theme.SegmentPad).Radius(theme.SegmentRadius).
+		Background(theme.Color(theme.SegmentTrack)).Children(func() {
+		for i, o := range options {
+			s := seg.Segment(i).Label(o).PaddingY(3).PaddingX(10).Radius(theme.SegmentRadius - theme.SegmentPad).
+				Cursor(ui.CursorPointer).TextColor(theme.Color(theme.Text2))
+			if choice != nil && i == *choice {
+				s = s.Background(theme.Color(theme.SegmentSelected)).TextColor(theme.Color(theme.Text))
+			}
+			s.Children(func() { ui.Text(c, o).NoWrap() })
+		}
+	})
+	return seg.Track
 }
 
 // NewCode returns the state of a code view of one file: the new text with

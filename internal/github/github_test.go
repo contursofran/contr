@@ -43,7 +43,7 @@ func TestPRParsesFixture(t *testing.T) {
 	if pr.Number != 640 || pr.Title != "Add the PR viewer client" || pr.State != "OPEN" ||
 		pr.Body != "Part of #151" || pr.Author != "alice" || pr.HeadRef != "agent/151-client" ||
 		pr.BaseRef != "main" || pr.HeadSHA != "abc123" || pr.Additions != 120 ||
-		pr.Deletions != 7 || pr.ChangedFiles != 4 || !pr.IsDraft || pr.Mergeable != "MERGEABLE" ||
+		pr.Deletions != 7 || pr.ChangedFiles != 4 || !pr.IsDraft || pr.Mergeable != "MERGEABLE" || pr.ReviewDecision != "APPROVED" ||
 		pr.URL != "https://example.test/o/r/pull/640" {
 		t.Errorf("header: %+v", pr)
 	}
