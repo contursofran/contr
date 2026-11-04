@@ -82,6 +82,12 @@ type Frame struct {
 	// notify function that is safe from any goroutine, and uses the source
 	// and the stop function it returns. Nil means no agents.
 	StartAgents func(notify func()) (src AgentSource, stop func())
+	// PickFolder and SpawnOrchestrator serve `+ new` (D57): the first asks the
+	// owner for a folder (ErrPickCancelled for none), the second starts the
+	// orchestrator profile there. Both block, so the frame runs them off the
+	// UI thread. Nil makes `+ new` do nothing.
+	PickFolder        func() (string, error)
+	SpawnOrchestrator func(dir string) error
 	// TerminalSource gives the source of the hc terminal with an address.
 	// The terminal view attaches to the selected agent's terminal through it.
 	// Nil shows no terminal.
@@ -99,6 +105,10 @@ type Frame struct {
 	// fakes first) and ends them with its stop function.
 	Host  *host.Host
 	Usage *usage.Sampler
+
+	// NewOrch is the `+ new` action. [Frame.Attach] makes it when PickFolder
+	// and SpawnOrchestrator are set.
+	NewOrch *NewOrchestrator
 
 	status statusBar
 	bar    titleBar
@@ -488,6 +498,11 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	if f.SpacesList == nil {
 		f.SpacesList = NewSpacesList(h, f.Host, f.Selection, f.Status,
 			func() bool { return f.Visibility == nil || f.Visibility.Visible() }, w.Update)
+	}
+	if f.PickFolder != nil && f.SpawnOrchestrator != nil {
+		f.NewOrch = &NewOrchestrator{Pick: f.PickFolder, Spawn: f.SpawnOrchestrator,
+			Run: Runner{Post: w.Update}, Status: f.Status.Show}
+		f.SpacesList.OnNew = f.NewOrch.Start
 	}
 	f.Slots.Spaces = f.SpacesList.View
 	f.SpacesList.Sync()
