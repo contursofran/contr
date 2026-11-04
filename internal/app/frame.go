@@ -208,6 +208,9 @@ func (f *Frame) TogglePanel() { f.panelOpen = !f.panelOpen }
 func (f *Frame) OpenPR(dir string, n int) {
 	if f.PR != nil {
 		f.PR.Open(dir, n)
+		if f.agentSnap != nil {
+			f.PR.Item = itemOf(f.agentSnap().Workers, dir)
+		}
 	}
 }
 
@@ -803,7 +806,9 @@ func (f *Frame) Attach(w Window) (stop func()) {
 			}}
 		f.CloseTerm = &CloseTerminal{Stop: src.Close, Run: run, Status: f.Status.Show, Closed: f.terminalClosed}
 		setCloseTerminalHandler(func() { w.Update(f.closeSelectedTerminal) })
-		f.Worker = &WorkerPanel{Source: src, Selection: f.Selection, Run: run, Status: f.Status.Show, Invalidate: w.Invalidate}
+		entry := WorkerEntry{PRs: f.WorkerPRs, OpenPR: f.OpenPR, OpenIssue: f.OpenIssue}
+		f.Card.Entry = entry
+		f.Worker = &WorkerPanel{Entry: entry, Source: src, Selection: f.Selection, Run: run, Status: f.Status.Show, Invalidate: w.Invalidate}
 		f.PR.Orchestrator, f.PR.Send = f.prOrchestrator, src.Send
 		f.Slots.Card = f.Card.View
 		f.Sheet = &Sheet{Source: src, Run: run, Invalidate: w.Invalidate}

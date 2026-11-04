@@ -61,6 +61,9 @@ type PRPane struct {
 	Send func(address, text string) error
 	// OnClose runs after the pane closes. May be nil.
 	OnClose func()
+	// Item is what the pull request is for, like "#268": the issue of the worker that opened it.
+	// [PRPane.Open] clears it; set it after. Empty: no line.
+	Item string
 
 	md      markdown.Options
 	open    bool
@@ -83,7 +86,7 @@ type PRPane struct {
 // Open shows pull request n of the repository in dir, and reads it.
 func (p *PRPane) Open(dir string, n int) {
 	p.open, p.number, p.dir = true, n, dir
-	p.pr, p.err, p.tab, p.refocus = nil, "", PRTabOverview, true
+	p.pr, p.err, p.tab, p.refocus, p.Item = nil, "", PRTabOverview, true, ""
 	p.filesState = prFiles{}
 	p.gen++
 	gen := p.gen
@@ -389,6 +392,9 @@ func (p *PRPane) header(c *ui.Context) {
 			stateBadge(c, StateText(*pr))
 			icons.Sized(c, ciIcon(pr.ChecksSummary), theme.IconSizeSmall)
 			ui.Text(c, CIText(pr.ChecksSummary)).TextColor(theme.Color(ciTextColor(pr.ChecksSummary))).NoWrap()
+			if p.Item != "" {
+				ui.Text(c, "for "+p.Item).TextColor(theme.Color(theme.TextDim)).NoWrap()
+			}
 		})
 	})
 }

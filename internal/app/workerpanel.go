@@ -32,6 +32,8 @@ const (
 
 // WorkerPanel is the worker view. Its methods run on the UI thread.
 type WorkerPanel struct {
+	// Entry opens the worker's pull request or issue (D106).
+	Entry     WorkerEntry
 	Source    AgentSource
 	Selection *state.Selection
 	Run       Runner
@@ -180,6 +182,11 @@ func (p *WorkerPanel) View(c *ui.Context) {
 		})
 		for _, line := range workerFacts(w) {
 			TextLine(c, "worker fact", line, theme.Text2)
+		}
+		if label, open := p.Entry.For(w); open != nil {
+			ui.Row(c).FillWidth().Shrink(0).PaddingX(theme.PanelPadX).Children(func() {
+				p.button(c, label, ButtonOutlined, open)
+			})
 		}
 		if p.err != "" {
 			TextLine(c, "worker error", p.err, theme.TextDim)
