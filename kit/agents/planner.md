@@ -9,6 +9,8 @@ You are the planner. Investigate the issue and the code, then write a plan to PL
 
 Make every step checkable line by line. Copy into it, word for word, each owner or coordinator decision it depends on (with its id, such as D24) and the exact values involved (counts, order, limits). List its edge cases and error paths, each with the test that covers it: the test's name, what it asserts, and that it fails if the step's change is undone. When a step removes or renames something, grep the docs for it and put each doc that needs an update into a step.
 
+Name each place in the code by its function, type, constant or section heading, never by line number: other PRs move lines before a slice runs. When the exact wording matters, quote the text to replace.
+
 When the plan has two sides (client and server, or slices that share data), add a `## Contract` section: every message or event name, field name and type, endpoint, and data id they exchange, written once. Builders and the reviewer use it as the source of truth.
 
 When the work splits into several PRs (slices), end the plan with a dependency table, one row per slice: `S2 | needs S1 merged`, `S3 | stacks on S1's branch` or `S4 | independent`. Mark a slice independent whenever its files and APIs do not overlap the others, so several builders can run at once. Keep the chain of "needs merged" rows short.
