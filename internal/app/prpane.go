@@ -383,12 +383,34 @@ func (p *PRPane) body(c *ui.Context) {
 	})
 }
 
+// mdTheme is the markdown look in contr's greys (D76): mono font, no hue,
+// headings near body size. Links are grey; ui.Link underlines them.
+func mdTheme() *markdown.Theme {
+	text, dim, line := theme.Color(theme.Text2), theme.Color(theme.TextDim), theme.Color(theme.Line)
+	th := &markdown.Theme{
+		FontSize: theme.FontSize, Font: theme.FontFamily, CodeFont: theme.FontFamily,
+		Text: text, Muted: dim, Link: theme.Color(theme.Text), Strong: theme.Color(theme.Text),
+		Code: text, CodeBackground: theme.Color(theme.Line),
+		QuoteBar: line, QuoteText: dim, Rule: line,
+		CodeBlockBackground: theme.Color(theme.Line), CodeBlockBorder: line,
+		TableBorder: line, TableHeader: theme.Color(theme.Line),
+		Mark: theme.Color(theme.Line), Checkbox: dim,
+	}
+	for i := range th.Headings {
+		th.Headings[i] = markdown.HeadingStyle{Size: 1.1 - 0.02*float32(i), Weight: 600, Color: theme.Color(theme.Text), Top: 1, Bottom: 0.4}
+	}
+	return th
+}
+
 // description draws the PR text as markdown. Links open through OpenURL,
 // only for http and https addresses. An empty text shows a dim note.
 func (p *PRPane) description(c *ui.Context) {
 	if strings.TrimSpace(p.pr.Body) == "" {
 		ui.Text(c, LabelPRNoDesc).TextColor(theme.Color(theme.TextDim))
 		return
+	}
+	if p.md.Theme == nil {
+		p.md.Theme = mdTheme()
 	}
 	p.md.OnLink = func(url string) {
 		u := strings.ToLower(url)

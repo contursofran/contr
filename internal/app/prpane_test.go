@@ -392,6 +392,32 @@ func TestPRPaneDescriptionRendersMarkdown(t *testing.T) {
 	}
 }
 
+func TestPRPaneMarkdownThemeIsGrey(t *testing.T) {
+	r := newPRRig(t)
+	r.pane.Open("/w", 642)
+	r.flush()
+	th := r.pane.md.Theme
+	if th == nil {
+		t.Fatal("pane passes no markdown theme")
+	}
+	if th.Font != theme.FontFamily || th.CodeFont != theme.FontFamily {
+		t.Errorf("fonts %q, %q", th.Font, th.CodeFont)
+	}
+	if th.Link != theme.Color(theme.Text) || th.Text != theme.Color(theme.Text2) {
+		t.Errorf("link %v text %v", th.Link, th.Text)
+	}
+	for _, c := range []ui.Color{th.Link, th.Text, th.Mark, th.Checkbox, th.Strong, th.Code} {
+		if c.R != c.G || c.G != c.B {
+			t.Errorf("colour %v has a hue", c)
+		}
+	}
+	for i, h := range th.Headings {
+		if h.Size > 1.2 {
+			t.Errorf("heading %d size %v", i+1, h.Size)
+		}
+	}
+}
+
 func TestPRPaneEmptyDescription(t *testing.T) {
 	r := newPRRig(t)
 	r.run.reply = func(string) ([]byte, error) {
