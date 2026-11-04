@@ -238,6 +238,9 @@ func TestControlCallsNameTheCaller(t *testing.T) {
 		f := &fakeCore{handle: map[string]func(map[string]any) (any, error){
 			"terminal.interrupt": func(map[string]any) (any, error) { return map[string]any{"outcome": "stopped"}, nil },
 			"terminal.read":      func(map[string]any) (any, error) { return map[string]any{"text": "screen"}, nil },
+			"terminal.get": func(map[string]any) (any, error) {
+				return term("t3", "alpha", "live", builderLabels, nil), nil
+			},
 		}}
 		m := New(f, DefaultConfig())
 		m.getenv = func(k string) string {
