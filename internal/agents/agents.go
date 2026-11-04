@@ -381,7 +381,16 @@ func (m *Manager) List(ctx context.Context, all bool) ([]Worker, error) {
 
 // Send types text into a worker and presses Enter.
 func (m *Manager) Send(ctx context.Context, name, text string) error {
-	return m.core.Call(ctx, "terminal.send", map[string]any{"terminal": name, "text": text}, nil)
+	params := m.looking(name)
+	params["text"] = text
+	return m.core.Call(ctx, "terminal.send", params, nil)
+}
+
+// WithEnv makes m read the environment with getenv (HC_TERMINAL_ID, SHELL)
+// and returns m.
+func (m *Manager) WithEnv(getenv func(string) string) *Manager {
+	m.getenv = getenv
+	return m
 }
 
 // SendKeys presses raw keys in a worker and does not press Enter. hc's
@@ -432,10 +441,11 @@ func keyNames(keys []byte) ([]string, error) {
 	return out, nil
 }
 
-// looking returns the params of a call that looks at or acts on a worker.
-// Inside hc they name this terminal as the caller. When it is the worker's
-// parent, hc then counts the worker's news as seen and types no note about
-// it into the parent: a coordinator that stops a worker gets no exit note.
+// looking returns the params of a call that looks at, acts on or sends to a
+// terminal. Inside hc they name this terminal as the caller. When it is the
+// worker's parent, hc then counts the worker's news as seen and types no note
+// about it into the parent: a coordinator that stops a worker gets no exit
+// note. On a send between two agents, hc tags the text with the sender.
 func (m *Manager) looking(name string) map[string]any {
 	params := map[string]any{"terminal": name}
 	if m.getenv != nil {
