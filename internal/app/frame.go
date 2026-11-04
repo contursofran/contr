@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 
 	gterm "github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
@@ -28,7 +29,7 @@ type Slot func(c *ui.Context)
 type Slots struct {
 	Spaces    Slot // sidebar, under its header
 	Agents    Slot // sidebar, at the bottom
-	Terminal  Slot // shown only while herdr is connected
+	Terminal  Slot // the selected hc terminal; it needs no herdr
 	Needs     Slot // needs-you row, under the terminal; draws nothing when empty
 	Card      Slot // answer card, floating at the bottom of the terminal area
 	Panel     Slot // board panel, shown while it is open
@@ -61,8 +62,8 @@ type liveSource interface {
 // to the window. Its methods run on the UI thread.
 type Frame struct {
 	Slots Slots
-	// Herdr tells the connection state. The terminal area shows the state's
-	// line while herdr is not connected.
+	// Herdr tells the connection state. The spaces column shows the state's
+	// line while herdr is not connected; the terminal area does not need it.
 	Herdr liveSource
 	// Visibility, Selection and Status are the app state. The frame holds
 	// them for the views in its slots.
@@ -91,6 +92,11 @@ type Frame struct {
 	// UI thread. Nil makes `+ new` do nothing.
 	PickFolder        func() (string, error)
 	SpawnOrchestrator func(dir string) error
+	// OpenTerminal serves "+" and Cmd-T (D82): it starts a shell in an hc
+	// terminal for the open project, in dir, and returns its address. It
+	// blocks, so the frame runs it off the UI thread. Nil makes both do
+	// nothing.
+	OpenTerminal func(project, dir string) (string, error)
 	// TerminalSource gives the source of the hc terminal with an address.
 	// The terminal view attaches to the selected agent's terminal through it.
 	// Nil shows no terminal.
@@ -112,6 +118,9 @@ type Frame struct {
 	// NewOrch is the `+ new` action. [Frame.Attach] makes it when PickFolder
 	// and SpawnOrchestrator are set.
 	NewOrch *NewOrchestrator
+	// NewTerm is the "+" and Cmd-T action. [Frame.Attach] makes it when
+	// OpenTerminal is set.
+	NewTerm *NewTerminal
 
 	status statusBar
 	bar    titleBar
@@ -223,13 +232,6 @@ func (f *Frame) syncReview() {
 	}
 	f.reviewDir, f.reviewSet = dir, true
 	f.Review.SetRepo(dir)
-}
-
-func (f *Frame) connectionLine() (string, bool) {
-	if f.Herdr == nil {
-		return "", false
-	}
-	return f.Herdr.Live().State.Line()
 }
 
 // Element labels. Tests and the e2e driver find the frame's parts by them.
@@ -345,32 +347,31 @@ func (f *Frame) titleBar(c *ui.Context) {
 		f.bar.setTabs(f.agentTabs())
 		f.bar.selectTab = f.selectTab
 		f.bar.toggleReview, f.bar.reviewOpen = f.ToggleReview, f.reviewOpen
+		f.bar.newTab = nil
+		if f.NewTerm != nil {
+			f.bar.newTab = f.newTerminal
+		}
 		f.bar.build(c, f.panelOpen, f.TogglePanel)
 	})
 }
 
-// terminal shows herdr's line while herdr is not connected, centred in the
-// area, and the terminal slot otherwise.
+// terminal shows the terminal slot and the answer card, or the Review view.
+// hc terminals work while herdr is down (#246).
 func (f *Frame) terminal(c *ui.Context) {
 	if f.reviewOpen && f.Review != nil {
 		ui.Box(c).Label(LabelReview).Grow(1).MinWidth(0).FillHeight().
 			Background(color(theme.BgWindow)).Children(func() { f.Review.View(c) })
 		return
 	}
-	line, down := f.connectionLine()
 	ui.Column(c).Label(LabelTerminal).Grow(1).MinWidth(0).Center().
 		Background(color(theme.BgTerminal)).Children(func() {
-		if down {
-			ui.Text(c, line).TextColor(color(theme.Text2))
-			return
-		}
 		f.run(c, f.Slots.Terminal)
 		f.run(c, f.Slots.Card)
 	})
 }
 
 // agentTabs returns the tabs of the open project. The open project follows the selected
-// orchestrator or worker, and keeps its last value for any other selection.
+// orchestrator, worker or plain terminal, and keeps its last value for any other selection.
 func (f *Frame) agentTabs() []AgentTab {
 	if f.agentSnap == nil {
 		return nil
@@ -383,20 +384,51 @@ func (f *Frame) agentTabs() []AgentTab {
 	}
 	f.openProject = OpenProject(snap, sel, ok, f.openProject)
 	selected := ""
-	if ok && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker) {
+	if ok && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker || sel.Kind == state.KindTerminal) {
 		selected = sel.ID
 	}
 	return AgentTabs(snap, f.openProject, selected)
 }
 
-// selectTab selects the agent of a title bar tab.
+// newTerminal opens a plain terminal in the open project (D82). Its folder is
+// the worktree of the project's first orchestrator, else the home folder.
+// UI thread.
+func (f *Frame) newTerminal() {
+	if f.NewTerm == nil {
+		return
+	}
+	project := f.openProject
+	f.NewTerm.Start(project, f.terminalDir(project))
+}
+
+// terminalDir is the start folder of a new terminal in project.
+func (f *Frame) terminalDir(project string) string {
+	if f.agentSnap != nil {
+		for _, o := range f.agentSnap().Orchestrators {
+			if o.Project == project && o.Worktree != "" {
+				return o.Worktree
+			}
+		}
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		slog.Debug("no home folder for the new terminal", "err", err)
+		return ""
+	}
+	return home
+}
+
+// selectTab selects the terminal of a title bar tab.
 func (f *Frame) selectTab(t AgentTab) {
 	if f.Selection == nil {
 		return
 	}
 	kind := state.KindWorker
-	if t.Orchestrator {
+	switch {
+	case t.Orchestrator:
 		kind = state.KindOrchestrator
+	case t.Plain:
+		kind = state.KindTerminal
 	}
 	f.Selection.Select(state.Selected{Kind: kind, ID: t.Address})
 }
@@ -517,6 +549,11 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 			Run: Runner{Post: w.Update}, Status: f.Status.Show}
 		f.SpacesList.OnNew = f.NewOrch.Start
 	}
+	if f.OpenTerminal != nil {
+		f.NewTerm = &NewTerminal{Open: f.OpenTerminal, Run: Runner{Post: w.Update}, Status: f.Status.Show,
+			Select: func(addr string) { f.Selection.Select(state.Selected{Kind: state.KindTerminal, ID: addr}) }}
+		setNewTerminalHandler(func() { w.Update(f.newTerminal) })
+	}
 	f.Slots.Spaces = f.SpacesList.View
 	f.SpacesList.Sync()
 	f.Needs = &NeedsRow{Snapshot: agentSnap}
@@ -559,6 +596,7 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	unwatch := f.Visibility.Watch(w)
 	term := f.attachTerminal(w)
 	return func() {
+		setNewTerminalHandler(nil)
 		unwatch()
 		term()
 		stopAgents()
@@ -641,7 +679,7 @@ func (f *Frame) syncTerminal() {
 	}
 	addr := ""
 	if f.Selection != nil && f.TerminalSource != nil {
-		if sel, ok := f.Selection.Current(); ok && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker) {
+		if sel, ok := f.Selection.Current(); ok && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker || sel.Kind == state.KindTerminal) {
 			addr = sel.ID
 		}
 	}

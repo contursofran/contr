@@ -168,12 +168,18 @@ then Settings.
 ## Top bar (40)
 
 - Tabs of the open project only (D50): the orchestrator first, then its
-  workers, then shell terminals. A tab is 28 high, padding 0×10, radius 7,
+  workers, then plain terminals (D82). A tab is 28 high, padding 0×10, radius 7,
   gap 7: the program icon (14), the label, and a 7 px dot: amber while the
   agent works, red while it is blocked. The red dot stays until the owner
   has seen that tab (D73) **(dots not built; today the status icon)**.
 - The selected tab has the `bg.card` style. The first orchestrator tab keeps
   its white needs badge (D50).
+- A plain terminal is a login shell in an hc terminal. Its tab shows the
+  terminal's title (set by the shell with OSC), else `$ <folder>`.
+- A `+` after the last tab opens a plain terminal in the open project, in
+  the first orchestrator's folder, else the home folder. `⌘T` does the same.
+  It is always shown, also with no tabs. The terminal area works while herdr
+  is down; the Spaces column shows the herdr line then (D82).
 - Right side: `Review` (D37), then the panel toggle. There is no tab row in
   the panel.
 
@@ -450,6 +456,7 @@ connected.
 
 | Key | Does | Where |
 |---|---|---|
+| `⌘T` | open a plain terminal in the open project (D82) | window, File menu |
 | `⌥1`–`⌥6` | pick needs-you tab 1–6 and open its card (D75) | window |
 | `1`–`4` | send that option | card, with the focus |
 | Enter | send the typed answer, else the recommended option | card, with the focus |
