@@ -5,6 +5,7 @@ package app
 
 import (
 	"path/filepath"
+	"strings"
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
@@ -17,7 +18,9 @@ type AgentTab struct {
 	// Address is the hc terminal address. It is the Selection ID.
 	Address string
 	// Label is the text shown, without the orchestrator mark.
-	Label        string
+	Label string
+	// ID is the short name shown while the PR pane is open: the issue, or the name.
+	ID           string
 	Orchestrator bool
 	// Plain is true for a plain terminal (a shell, not an agent).
 	Plain bool
@@ -37,7 +40,7 @@ func AgentTabs(s agentstate.Snapshot, project, selected string) []AgentTab {
 			return
 		}
 		t := AgentTab{
-			Address: w.Address, Label: tabLabel(w), Orchestrator: w.Orchestrator(), Plain: w.Plain(),
+			Address: w.Address, Label: tabLabel(w), ID: tabID(w), Orchestrator: w.Orchestrator(), Plain: w.Plain(),
 			Icon: workerIcon(w), Selected: selected != "" && w.Address == selected,
 		}
 		if t.Orchestrator && !hasOrchestratorTab(tabs) {
@@ -55,6 +58,15 @@ func AgentTabs(s agentstate.Snapshot, project, selected string) []AgentTab {
 		add(w)
 	}
 	return tabs
+}
+
+// tabID is the short text of a tab while the PR pane is open: "#<issue>" for a worker with
+// an issue, the name otherwise.
+func tabID(w agents.Worker) string {
+	if w.Orchestrator() || w.Issue == "" {
+		return w.Name
+	}
+	return "#" + strings.TrimPrefix(w.Issue, "#")
 }
 
 func hasOrchestratorTab(tabs []AgentTab) bool {

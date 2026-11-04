@@ -9,6 +9,7 @@ package app
 // S6).
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -27,6 +28,9 @@ const (
 	LabelWorkEmpty   = "No workers yet."
 )
 
+// LabelWorkPR is the label of a work row's issue button.
+func LabelWorkPR(label string) string { return "pr " + label }
+
 // StageHeads are the stage columns: plan, build, review, you.
 var StageHeads = [4]string{"plan", "build", "review", "you"}
 
@@ -41,11 +45,15 @@ const (
 // WorkRow is one worker on the board.
 type WorkRow struct {
 	Address string
-	Label   string // "#162", or the name when the worker has no issue
-	Title   string
-	Role    string
-	Status  string // the word shown: working, blocked, done, ended …
-	Stages  [4]icons.Status
+	// Dir and PR open the pull request pane from the label. PR is 0 when the worker has no
+	// issue number or no worktree.
+	Dir    string
+	PR     int
+	Label  string // "#162", or the name when the worker has no issue
+	Title  string
+	Role   string
+	Status string // the word shown: working, blocked, done, ended …
+	Stages [4]icons.Status
 }
 
 // RoleStage is the column of a role. A role the board does not know counts
@@ -95,6 +103,9 @@ func WorkRows(snap agentstate.Snapshot, project string) []WorkRow {
 		row := WorkRow{Address: w.Address, Label: w.Name, Title: w.Name, Role: w.Role, Status: StatusWord(w)}
 		if w.Issue != "" {
 			row.Label = "#" + strings.TrimPrefix(w.Issue, "#")
+			if n, err := strconv.Atoi(strings.TrimPrefix(w.Issue, "#")); err == nil && w.Worktree != "" {
+				row.Dir, row.PR = w.Worktree, n
+			}
 		}
 		own := RoleStage(w.Role)
 		for i := range own {
@@ -143,7 +154,7 @@ func WorkRowLabel(row WorkRow) string {
 
 // WorkSection adds the section: the head with the stage heads, then the rows
 // or the empty line. onPick gets the address of a clicked row.
-func WorkSection(c *ui.Context, rows []WorkRow, onPick func(address string)) {
+func WorkSection(c *ui.Context, rows []WorkRow, onPick func(address string), onPR func(dir string, n int)) {
 	ui.Column(c).Label(LabelWorkSection).FillWidth().Shrink(0).MaxHeightPercent(60).Children(func() {
 		ui.Row(c).Label(LabelWorkHeader).FillWidth().Height(theme.BoardLineHeight).Shrink(0).
 			AlignItems(ui.Center).PaddingX(theme.PanelPadX).Children(func() {
@@ -160,22 +171,22 @@ func WorkSection(c *ui.Context, rows []WorkRow, onPick func(address string)) {
 		}
 		ui.Scroll(c).Label(LabelWorkRows).FillWidth().MinHeight(0).Children(func() {
 			for _, row := range rows {
-				workRow(c, row, onPick)
+				workRow(c, row, onPick, onPR)
 			}
 		})
 	})
 }
 
-func workRow(c *ui.Context, row WorkRow, onPick func(address string)) {
-	ui.ButtonBase(c).Label(WorkRowLabel(row)).FillWidth().Height(theme.WorkRowHeight).Shrink(0).
-		AlignItems(ui.Center).PaddingX(theme.PanelPadX).Radius(theme.CardRadius).
-		Cursor(ui.CursorPointer).OnClick(func() {
+func workRow(c *ui.Context, row WorkRow, onPick func(address string), onPR func(dir string, n int)) {
+	pick := func() {
 		if onPick != nil {
 			onPick(row.Address)
 		}
-	}).Children(func() {
-		ui.Text(c, row.Label).Width(theme.WorkLabelWidth).Shrink(0).SingleLine().Ellipsis("…").
-			TextColor(theme.Color(theme.TextDim))
+	}
+	label := func() {
+		ui.Text(c, row.Label).SingleLine().Ellipsis("…").TextColor(theme.Color(theme.TextDim))
+	}
+	rest := func() {
 		ui.Column(c).Grow(1).MinWidth(0).Justify(ui.Center).Children(func() {
 			ui.Text(c, row.Title).Height(theme.LineHeight).SingleLine().Ellipsis("…").MinWidth(0).
 				TextColor(theme.Color(theme.Text))
@@ -187,5 +198,24 @@ func workRow(c *ui.Context, row WorkRow, onPick func(address string)) {
 				icons.Sized(c, st, theme.IconSizeSmall)
 			})
 		}
+	}
+	if row.PR > 0 && onPR != nil {
+		// The number opens the pull request pane (D59). Its button sits beside the row's
+		// button, not inside it, so both are separate elements.
+		ui.Row(c).FillWidth().Height(theme.WorkRowHeight).Shrink(0).PaddingStart(theme.PanelPadX).Children(func() {
+			ui.ButtonBase(c).Label(LabelWorkPR(row.Label)).Width(theme.WorkLabelWidth).FillHeight().Shrink(0).
+				AlignItems(ui.Center).Cursor(ui.CursorPointer).OnClick(func() { onPR(row.Dir, row.PR) }).Children(label)
+			ui.ButtonBase(c).Label(WorkRowLabel(row)).Grow(1).MinWidth(0).FillHeight().
+				AlignItems(ui.Center).PaddingEnd(theme.PanelPadX).Radius(theme.CardRadius).
+				Cursor(ui.CursorPointer).OnClick(pick).Children(rest)
+		})
+		return
+	}
+	ui.ButtonBase(c).Label(WorkRowLabel(row)).FillWidth().Height(theme.WorkRowHeight).Shrink(0).
+		AlignItems(ui.Center).PaddingX(theme.PanelPadX).Radius(theme.CardRadius).
+		Cursor(ui.CursorPointer).OnClick(pick).Children(func() {
+		ui.Text(c, row.Label).Width(theme.WorkLabelWidth).Shrink(0).SingleLine().Ellipsis("…").
+			TextColor(theme.Color(theme.TextDim))
+		rest()
 	})
 }

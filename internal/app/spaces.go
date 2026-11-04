@@ -107,6 +107,8 @@ func (c SpacesChange) Any() bool { return c.Rebuilt || c.Online || len(c.Rows) >
 
 // SpacesList is the spaces column body. Methods run on the UI thread.
 type SpacesList struct {
+	// OpenPR runs when a pull request badge is clicked, with the row's folder and the number.
+	OpenPR func(dir string, n int)
 	// OnNew runs when `+ new` is clicked. Nil: the button does nothing.
 	OnNew func()
 
@@ -405,6 +407,12 @@ func (l *SpacesList) Activate(row spaces.WorktreeRow) {
 	}
 }
 
+func (l *SpacesList) openPR(dir string, n uint32) {
+	if l.OpenPR != nil {
+		l.OpenPR(dir, int(n))
+	}
+}
+
 // View builds the body: the `Spaces` label, the host card, and the groups.
 func (l *SpacesList) View(c *ui.Context) {
 	selected, _ := l.selectedWorktree()
@@ -532,7 +540,7 @@ func (l *SpacesList) row(c *ui.Context, row spaces.WorktreeRow, selected bool) {
 			kit.Counts(c, row.Diff.Added, row.Diff.Removed)
 		}
 		if row.Badge != nil {
-			badgeChip(c, *row.Badge)
+			badgeChip(c, *row.Badge, func(n uint32) { l.openPR(row.Root, n) })
 		}
 	})
 }
@@ -562,12 +570,14 @@ func youChip(c *ui.Context, label, text string) {
 
 // badgeChip is the row's mark: `#640` for a pull request, or a white chip
 // for a value that waits on the owner.
-func badgeChip(c *ui.Context, b spaces.Badge) {
+// A click on a pull request chip runs open with its number.
+func badgeChip(c *ui.Context, b spaces.Badge, open func(uint32)) {
 	if b.Kind == spaces.BadgeYou {
 		youChip(c, LabelBadge, BadgeText(b))
 		return
 	}
-	ui.Row(c).Label(LabelBadge).PaddingX(theme.BadgePadX).Shrink(0).Children(func() {
+	ui.ButtonBase(c).Label(LabelBadge).PaddingX(theme.BadgePadX).Shrink(0).Cursor(ui.CursorPointer).
+		OnClick(func() { open(b.PR) }).Children(func() {
 		ui.Text(c, BadgeText(b)).TextColor(theme.Color(theme.TextDim)).NoWrap()
 	})
 }

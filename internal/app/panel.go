@@ -34,6 +34,8 @@ type BoardPanel struct {
 	Select func(address string)
 	// Open runs when a needs-you line is clicked.
 	Open func(NeedTab)
+	// OpenPR runs when a work row's number is clicked, with the worktree and the number.
+	OpenPR func(dir string, n int)
 }
 
 // Rows returns the work rows now.
@@ -55,7 +57,7 @@ func (p *BoardPanel) View(c *ui.Context) {
 			TextLine(c, LabelBoardEmpty, emptyNoAgents, theme.TextDim)
 			return
 		}
-		WorkSection(c, p.Rows(), p.Select)
+		WorkSection(c, p.Rows(), p.Select, p.OpenPR)
 		if prob := p.Snapshot().Problem; prob != "" {
 			TextLine(c, LabelBoardProblem, prob, theme.TextDim)
 		}

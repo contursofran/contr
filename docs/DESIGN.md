@@ -420,6 +420,14 @@ needs-you tabs show only the icon and the id, and the bottom row hides
   message.
 - Keys while it has the focus: Esc closes, `c` comments, `⇧⌘M` merges.
 
+Slice 1 (#235, D59) builds the pane, the header lines 1 and 2, a state chip
+and the CI summary, the tabs and the Overview. It opens from the `#N` badge
+of a sidebar worktree row and the `#N` label of a board work row, and it
+collapses the title bar tabs to icon and id. Not built yet: the Files and
+Checks tabs (they show `Not built yet.`), the footer and its keys, the
+other entry points, `for <item>`, the needs-you tab collapse and hiding
+`board ▴`, and the enter motion.
+
 ## Review
 
 Shown in the terminal area while the top bar's `Review` button is on (D37).
