@@ -14,7 +14,7 @@ import (
 	"github.com/contursofran/contr/internal/usage"
 )
 
-const contrText = "contr " + Version
+var contrText = "contr " + Version
 
 type fakeHost struct {
 	mu    sync.Mutex
