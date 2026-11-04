@@ -19,6 +19,7 @@ import (
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/git"
+	"github.com/contursofran/contr/internal/herdr"
 	"github.com/contursofran/contr/internal/host"
 )
 
@@ -104,13 +105,19 @@ func spTree(ws ...agents.Worker) agentstate.Snapshot {
 	return agentstate.Snapshot{Workers: ws, CoreVersion: "0.1.18"}
 }
 
+// hcDown is the agent state of a core that contr does not follow:
+// no core version, and the hc problem.
+func hcDown() agentstate.Snapshot {
+	return agentstate.Snapshot{Problem: "hc: connection refused"}
+}
+
 // spSnap is the agent state the list reads.
 type spSnap struct {
 	mu sync.Mutex
 	s  agentstate.Snapshot
 }
 
-func (f *spSnap) get() agentstate.Snapshot { f.mu.Lock(); defer f.mu.Unlock(); return f.s }
+func (f *spSnap) get() agentstate.Snapshot  { f.mu.Lock(); defer f.mu.Unlock(); return f.s }
 func (f *spSnap) set(s agentstate.Snapshot) { f.mu.Lock(); f.s = s; f.mu.Unlock() }
 
 // ---- Harness ----
@@ -118,17 +125,16 @@ func (f *spSnap) set(s agentstate.Snapshot) { f.mu.Lock(); f.s = s; f.mu.Unlock(
 // spacesHarness shows the column alone in a window as wide as the sidebar.
 // The scan runs at once on this goroutine, so a test sees its result.
 type spacesHarness struct {
-	t       *testing.T
-	live    *spSnap
-	sel     *state.Selection
-	list    *SpacesList
-	host    *fakeHost
-	tt      *ui.Tester
-	hidden  bool
-	clock   time.Time
-	timers  []*spaceTimer
-	focused []string
-	stats   map[string]git.DiffStat
+	t      *testing.T
+	live   *spSnap
+	sel    *state.Selection
+	list   *SpacesList
+	host   *fakeHost
+	tt     *ui.Tester
+	hidden bool
+	clock  time.Time
+	timers []*spaceTimer
+	stats  map[string]git.DiffStat
 }
 
 func newSpaces(t *testing.T, live agentstate.Snapshot) *spacesHarness {
@@ -149,7 +155,6 @@ func (h *spacesHarness) makeList() *SpacesList {
 	l.Sync()
 	return l
 }
-
 
 // send replaces the live state, as the reader would, and draws a frame. It
 // returns what the sync changed.
@@ -341,7 +346,7 @@ func TestLosingTheTreeEmptiesTheGroups(t *testing.T) {
 	if len(h.list.Groups()) != 1 {
 		t.Fatal("want one group")
 	}
-	h.send(notRunningLive())
+	h.send(hcDown())
 	if len(h.list.Groups()) != 0 {
 		t.Errorf("groups %+v", h.list.Groups())
 	}
@@ -404,7 +409,7 @@ func TestLosingTheTreeClearsAWorktreeSelection(t *testing.T) {
 	wt, _ := oneWorktree(t, base)
 	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
 	h.pick(worktreeSel(wt))
-	h.send(notRunningLive())
+	h.send(hcDown())
 	if got, ok := h.sel.Current(); ok {
 		t.Errorf("selection %+v, want none", got)
 	}
@@ -417,7 +422,7 @@ func TestAnAgentSelectionIsLeftAlone(t *testing.T) {
 	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
 	agent := state.Selected{Kind: state.KindAgent, ID: "w1:p1"}
 	h.pick(agent)
-	h.send(notRunningLive())
+	h.send(hcDown())
 	if got, ok := h.sel.Current(); !ok || got != agent {
 		t.Errorf("selection %+v, %v", got, ok)
 	}
@@ -550,9 +555,9 @@ func TestLosingTheTreeStopsTheScans(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
 	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
-	h.send(notRunningLive())
+	h.send(hcDown())
 	h.advance(RescanAfter * 3)
-	h.send(notRunningLive())
+	h.send(hcDown())
 	if h.list.scans != 1 {
 		t.Errorf("scans %d: the lost tree drops its scan, and no later scan starts", h.list.scans)
 	}
@@ -564,7 +569,7 @@ func TestAConnectionChangeAloneRepaintsTheSidebar(t *testing.T) {
 	if !h.list.online {
 		t.Fatal("want online")
 	}
-	change := h.send(notRunningLive())
+	change := h.send(hcDown())
 	if h.list.online || !change.Online || !change.Any() {
 		t.Errorf("online %v, change %+v: the dot changed, so the column repaints", h.list.online, change)
 	}
@@ -575,9 +580,9 @@ func TestAConnectionChangeAloneRepaintsTheSidebar(t *testing.T) {
 func TestAScanLandsThroughThePostFunc(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	live := &fakeLive{live: spTree(spPane("w1:p1", wt, nil))}
+	live := &spSnap{s: spTree(spPane("w1:p1", wt, nil))}
 	var started, posted []func()
-	l := NewSpacesList(live, nil, state.NewSelection(nil), nil, nil, func(f func()) { posted = append(posted, f) })
+	l := NewSpacesList(live.get, nil, state.NewSelection(nil), nil, func(f func()) { posted = append(posted, f) })
 	l.start = func(f func()) { started = append(started, f) }
 	l.Sync()
 	if len(l.Groups()) != 0 || len(started) != 1 {
@@ -596,15 +601,15 @@ func TestAScanLandsThroughThePostFunc(t *testing.T) {
 func TestAScanThatLostTheTreeIsDropped(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	live := &fakeLive{live: spTree(spPane("w1:p1", wt, nil))}
+	live := &spSnap{s: spTree(spPane("w1:p1", wt, nil))}
 	var started []func()
-	l := NewSpacesList(live, nil, state.NewSelection(nil), nil, nil, nil)
+	l := NewSpacesList(live.get, nil, state.NewSelection(nil), nil, nil)
 	l.start = func(f func()) { started = append(started, f) }
 	l.Sync()
-	live.setLive(notRunningLive())
+	live.set(hcDown())
 	l.Sync()
 	started[0]() // the old scan ends now; post is nil, so it lands at once
-	live.setLive(spTree(spPane("w1:p1", wt, nil)))
+	live.set(spTree(spPane("w1:p1", wt, nil)))
 	if got := len(l.Groups()); got != 0 {
 		t.Errorf("groups %d: a dropped scan came back", got)
 	}
@@ -614,12 +619,12 @@ func TestOnlyTheNewestScanLands(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
 	repo := filepath.Join(base, "repo")
-	live := &fakeLive{live: spTree(spPane("w1:p1", wt, nil))}
+	live := &spSnap{s: spTree(spPane("w1:p1", wt, nil))}
 	var started []func()
-	l := NewSpacesList(live, nil, state.NewSelection(nil), nil, nil, nil)
+	l := NewSpacesList(live.get, nil, state.NewSelection(nil), nil, nil)
 	l.start = func(f func()) { started = append(started, f) }
 	l.Sync()
-	live.setLive(spTree(spPane("w1:p1", wt, nil), spPane("w1:p2", repo, nil)))
+	live.set(spTree(spPane("w1:p1", wt, nil), spPane("w1:p2", repo, nil)))
 	l.Sync()
 	started[1]()
 	started[0]() // the older scan ends last and is dropped
@@ -629,9 +634,9 @@ func TestOnlyTheNewestScanLands(t *testing.T) {
 }
 
 func TestTheScanFuncGetsTheCwdsInTreeOrder(t *testing.T) {
-	live := &fakeLive{live: spTree(spPane("w1:p1", "/x/b", nil), spPane("w1:p2", "/x/a", nil), spPane("w1:p3", "/x/b", nil))}
+	live := &spSnap{s: spTree(spPane("w1:p1", "/x/b", nil), spPane("w1:p2", "/x/a", nil), spPane("w1:p3", "/x/b", nil))}
 	var got []string
-	l := NewSpacesList(live, nil, nil, nil, nil, nil)
+	l := NewSpacesList(live.get, nil, nil, nil, nil)
 	l.scanFn = func(cwds []string) git.Scan { got = cwds; return git.Scan{} }
 	l.start = func(f func()) { f() }
 	l.Sync()
@@ -663,13 +668,13 @@ func TestTheRowsShowTheRepoItsWorktreesAndTheHostCard(t *testing.T) {
 	if held.H != theme.WorktreeRowHeight || held.W != theme.SidebarWidth-2*theme.CardInsetX {
 		t.Errorf("held row %v, want %d high", held, theme.WorktreeRowHeight)
 	}
-	if !h.tt.HasText("a done") {
+	if !h.tt.HasText("w1:p2 done") {
 		t.Errorf("held: a hold line; texts %q", h.tt.Texts())
 	}
 	if !h.has(h.label(0, 1)) {
 		t.Error("an unheld linked worktree should have a row")
 	}
-	if strings.Contains(h.label(0, 1), ", a ") {
+	if strings.Contains(h.label(0, 1), ", w1:p2 ") {
 		t.Errorf("unheld: no hold line, label %q", h.label(0, 1))
 	}
 	if h.selected(0, 0) {
@@ -745,8 +750,8 @@ func TestANewReadingRepaintsTheHostCard(t *testing.T) {
 	}
 }
 
-// Port of a_click_selects_the_row_and_focuses_its_holder.
-func TestAClickSelectsTheRowAndFocusesItsHolder(t *testing.T) {
+// A click on a row selects its worktree and does nothing else (D92).
+func TestAClickSelectsTheRowOnly(t *testing.T) {
 	h, wt1, _ := heldWorktree(t)
 	h.click(0, 0)
 	if !h.selected(0, 0) {
@@ -755,25 +760,18 @@ func TestAClickSelectsTheRowAndFocusesItsHolder(t *testing.T) {
 	if got, ok := h.sel.Current(); !ok || got != worktreeSel(wt1) {
 		t.Errorf("selection %+v, %v", got, ok)
 	}
-	if !reflect.DeepEqual(h.focused, []string{"w1:p2"}) {
-		t.Errorf("focused %q", h.focused)
-	}
 	h.click(0, 0)
-	if !reflect.DeepEqual(h.focused, []string{"w1:p2", "w1:p2"}) {
-		t.Errorf("focused %q: a second click focuses again", h.focused)
+	if got, ok := h.sel.Current(); !ok || got != worktreeSel(wt1) {
+		t.Errorf("selection %+v, %v after a second click", got, ok)
 	}
 }
 
-// Port of a_click_on_an_unheld_row_moves_the_card_without_a_focus_call.
-func TestAClickOnAnUnheldRowMovesTheCardWithoutAFocusCall(t *testing.T) {
+func TestAClickOnAnUnheldRowMovesTheCard(t *testing.T) {
 	h, _, _ := heldWorktree(t)
 	h.click(0, 0)
 	h.click(0, 1)
 	if !h.selected(0, 1) || h.selected(0, 0) {
 		t.Errorf("card on the wrong rows; texts %q", h.tt.Texts())
-	}
-	if !reflect.DeepEqual(h.focused, []string{"w1:p2"}) {
-		t.Errorf("focused %q: only the held row focuses", h.focused)
 	}
 }
 
@@ -918,21 +916,9 @@ func TestBadgeTextIsThePRNumberOrTheOwnersValue(t *testing.T) {
 	}
 }
 
-func TestActivateGivesTheWorktreeFocusTheStatusMessage(t *testing.T) {
-	status := state.NewStatusMessage(nil)
-	l := NewSpacesList(nil, nil, state.NewSelection(nil), status, nil, nil)
-	l.focus = func(_ string, report func(string)) { report("herdr is not running") }
-	pane := "p1"
-	l.Activate(spaces.WorktreeRow{Root: "/x", FocusPane: &pane})
-	if text, ok := status.Text(); !ok || text != "herdr is not running" {
-		t.Errorf("status %q, %v", text, ok)
-	}
-}
-
-func TestAnUnheldRowIsSelectedAndFocusesNothing(t *testing.T) {
+func TestActivateSelectsTheWorktree(t *testing.T) {
 	sel := state.NewSelection(nil)
-	l := NewSpacesList(nil, nil, sel, nil, nil, nil)
-	l.focus = func(id string, _ func(string)) { t.Errorf("focused %q", id) }
+	l := NewSpacesList(nil, nil, sel, nil, nil)
 	l.Activate(spaces.WorktreeRow{Root: "/x"})
 	if got, ok := sel.Current(); !ok || got != worktreeSel("/x") {
 		t.Errorf("selection %+v, %v", got, ok)
@@ -940,7 +926,7 @@ func TestAnUnheldRowIsSelectedAndFocusesNothing(t *testing.T) {
 }
 
 func TestAnEmptyColumnStillShowsTheHostCard(t *testing.T) {
-	h := newSpaces(t, notRunningLive())
+	h := newSpaces(t, hcDown())
 	if !h.has(LabelHostLocal) || !h.has(LabelSpacesHeader) {
 		t.Errorf("texts %q", h.tt.Texts())
 	}
@@ -1111,7 +1097,7 @@ func TestTheTimerStartsNoScanWithoutATree(t *testing.T) {
 // Port of losing_the_tree_stops_the_timer_scans.
 func TestLosingTheTreeStopsTheTimerScans(t *testing.T) {
 	h, _, _ := shownList(t)
-	h.send(notRunningLive())
+	h.send(hcDown())
 	h.advance(RescanAfter * 3)
 	if h.list.scans != 1 {
 		t.Errorf("scans %d, want 1", h.list.scans)
@@ -1178,7 +1164,7 @@ func TestWorktreeRowsShowDiffStats(t *testing.T) {
 	h, wt1, _ := heldWorktree(t)
 	h.stats = map[string]git.DiffStat{wt1: {Added: 12, Removed: 3}}
 	h.advance(RescanAfter)
-	h.send(h.live.live)
+	h.send(h.live.get())
 	if !h.has(kit.CountsText(12, 3)) {
 		t.Errorf("no stats on the row; texts %q", h.tt.Texts())
 	}
@@ -1188,32 +1174,31 @@ func TestWorktreeRowsShowNoStatsAfterAnError(t *testing.T) {
 	h, wt1, _ := heldWorktree(t)
 	h.stats = map[string]git.DiffStat{wt1: {Added: 12, Removed: 3}}
 	h.advance(RescanAfter)
-	h.send(h.live.live)
+	h.send(h.live.get())
 	h.stats = map[string]git.DiffStat{} // the next scan lost the stats
 	h.advance(RescanAfter)
-	h.send(h.live.live)
+	h.send(h.live.get())
 	if h.has(kit.CountsText(12, 3)) {
 		t.Error("the row still shows stats")
 	}
 }
 
-func TestSpacesShowHerdrLineWhenDown(t *testing.T) {
-	h := newSpaces(t, notRunningLive())
-	line, _ := notRunning().Line()
+func TestSpacesShowTheHCProblemWhenDown(t *testing.T) {
+	h := newSpaces(t, hcDown())
+	line := hcDown().Problem
 	if !h.tt.HasText(line) {
-		t.Fatalf("texts %q, want the herdr line", h.tt.Texts())
+		t.Fatalf("texts %q, want the hc problem", h.tt.Texts())
 	}
 	h.send(spTree())
 	if h.tt.HasText(line) {
-		t.Errorf("the line stays while herdr is connected: %q", h.tt.Texts())
+		t.Errorf("the line stays while hc is followed: %q", h.tt.Texts())
 	}
 }
 
-func TestSpacesLineChangesWithTheConnectionState(t *testing.T) {
-	h := newSpaces(t, notRunningLive())
-	connecting, _ := herdr.ConnState{Kind: herdr.Connecting}.Line()
-	change := h.send(herdr.LiveHerdr{State: herdr.ConnState{Kind: herdr.Connecting}})
-	if !change.Any() || !h.tt.HasText(connecting) {
-		t.Errorf("change %+v, texts %q: want a repaint with %q", change, h.tt.Texts(), connecting)
+func TestSpacesLineChangesWithTheProblem(t *testing.T) {
+	h := newSpaces(t, hcDown())
+	change := h.send(agentstate.Snapshot{Problem: "hc: timeout"})
+	if !change.Any() || !h.tt.HasText("hc: timeout") {
+		t.Errorf("change %+v, texts %q: want a repaint with the new problem", change, h.tt.Texts())
 	}
 }
