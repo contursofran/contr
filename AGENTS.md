@@ -14,8 +14,8 @@ contr is a native macOS client for herdr, with an agent board built in. It is wr
 
 - Go 1.27.3, set in `go.mod`. The `go` command downloads this toolchain by
   itself. Do not install Go or other tools.
-- MyGo v0.7.3, native UI (package `ui`), pinned. Upgrade MyGo only in a slice
-  of its own.
+- MyGo, native UI (package `ui`), pinned in `go.mod`. Upgrade MyGo only in a
+  slice of its own.
 - MyGo docs are in the module cache:
   `$(go list -m -f '{{.Dir}}' github.com/egoist/mygo)/docs/`. Start with
   `ui/README.md`, `architecture.md`, `ui/testing.md`, `ui/performance.md`,
@@ -23,6 +23,56 @@ contr is a native macOS client for herdr, with an agent board built in. It is wr
   `examples/` next to `docs/`. When the docs are not clear, the MyGo source
   is the final answer.
 - No cgo: do not write `import "C"`. Native calls go through MyGo.
+
+## MyGo first: do not build widgets from zero
+
+MyGo has a large set of widgets and native APIs. Before you write a widget,
+a layout helper or a native call, find the MyGo part that does it. Build
+your own only when MyGo has nothing for it, and write why in the PR.
+
+How to find it:
+
+1. Read the catalog: `docs/ui/README.md` in the MyGo module (path above).
+   It lists each widget with a link to its guide.
+2. Look at `examples/gallery`: it shows the controls and layouts in use.
+3. Search the API: `grep -n "^func " ui/api_gen.go` in the MyGo module.
+4. Search `internal/app/kit` for contr's shared parts.
+
+When MyGo's look is not contr's look (`docs/DESIGN.md`), use the unstyled
+`*Base` version and style it. A `*Base` widget keeps the keyboard, focus,
+Escape, screen-reader labels and the automation hooks that e2e tests click.
+`ui/custom-widgets.md` lists them: `TabsBase`, `PopoverBase`,
+`SegmentedBase`, `SwitchBase`, `ToggleBase`, `TooltipBase`, `ToastBase`,
+`DialogBase`, `CollapsibleBase`, `SelectBase` and others.
+
+| Need | Use (guide in `docs/ui/` unless noted) |
+|---|---|
+| Rows of any length, reorder by drag | `ui.List`, `ListState.Reorder` (`list.md`, `drag-and-drop.md`) |
+| Rows in columns | `ui.Table` (`table.md`), `ui.Outline` (`outline.md`) |
+| Items that open and close | `ui.Tree` (`tree.md`), `Collapsible`, `Accordion` |
+| Source list with sections | `ui.Sidebar`, `SidebarSection`, `Badge` (`sidebar.md`, `badge.md`) |
+| Tabs, segments | `ui.Tabs` / `TabsBase`, `ui.Segmented` / `SegmentedBase` |
+| Two panes with a drag divider | `ui.Split` (`split.md`) |
+| Panel below an element | `ui.Popover` / `PopoverBase` (`popover.md`, `overlays.md`) |
+| Dialog, modal, alert | `ui.Modal`, `Dialog` / `DialogBase`, `AlertDialog` |
+| Tip on hover or focus | `.Tooltip(...)` (`tooltip.md`) |
+| Short message | `ui.Toast` / `ToastBase` (`toast.md`) |
+| Menus | `MenuButton`, `.ContextMenu(...)` (`menu-button.md`, `context-menu.md`) |
+| Text fields | `TextInput`, `TextArea`, `SearchField`, `Combobox`, `FindBar` |
+| Clipped text | `Text(...).NoWrap().Ellipsis()` (`text.md`) |
+| Scroll | `ui.Scroll` (`scroll.md`) |
+| Markdown | package `ui/markdown`: `markdown.View`, `markdown.Stream` (`markdown.md`) |
+| Code and diffs | package `ui/editor`: code editor, `editor.DiffView` (`code-editor.md`, `diff-viewer.md`) |
+| Progress and status | `Progress`, `Spinner`, `Meter`, `Badge` |
+| Keys and shortcuts | `c.Shortcut(...)`, focus (`input.md`) |
+| Animation | `.Transition(...)`, `AnimatePose`, springs (`transitions.md`, `motion.md`) |
+| Terminal | terminal plugin (`docs/plugins/terminal.md`) over `internal/app/ghostty` |
+| File watching | `mygo.WatchFiles` (`docs/native.md`) |
+| Open and save dialogs, recent documents | `mygo.Dialog`, `mygo.App.AddRecentDocument` (`docs/native.md`, `docs/documents.md`) |
+| Click tests, window capture | automation plugin (`docs/plugins/automation.md`) |
+
+Issue #241 lists contr code that still rebuilds MyGo parts. When you touch
+that code, move it to the MyGo part in its own small PR.
 
 ## Layout
 
