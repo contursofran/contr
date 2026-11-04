@@ -543,6 +543,9 @@ func (f *Frame) syncAgents() {
 	if f.SpacesList != nil {
 		f.SpacesList.Sync()
 	}
+	if f.PR != nil {
+		f.PR.OnAgentsSync()
+	}
 }
 
 // Attach connects the frame's state to the window. A change of any of them
