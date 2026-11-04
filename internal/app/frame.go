@@ -5,12 +5,15 @@ package app
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 
+	gterm "github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/app/state"
-	"github.com/contursofran/contr/internal/app/terminal"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/herdr"
 	"github.com/contursofran/contr/internal/host"
@@ -91,7 +94,7 @@ type Frame struct {
 	// TerminalSource gives the source of the hc terminal with an address.
 	// The terminal view attaches to the selected agent's terminal through it.
 	// Nil shows no terminal.
-	TerminalSource func(address string) terminal.HCSource
+	TerminalSource func(address string) ghostty.Source
 	// Panel is the board panel. [Frame.Attach] makes it and puts its view in
 	// Slots.Panel.
 	Panel *BoardPanel
@@ -119,11 +122,20 @@ type Frame struct {
 	sidebarOpen bool
 	panelOpen   bool
 	reviewOpen  bool
-	// termView is the terminal view. termAddr is the hc terminal it shows;
-	// termSet is false before the first sync.
-	termView *terminal.View
-	termAddr string
-	termSet  bool
+	// term is the plugin's terminal of the selected agent and conn its hc
+	// connection; both are nil with no terminal. termAddr is the hc terminal
+	// they show; termSet is false before the first sync. termState is the
+	// connection state; termErr says why the terminal could not start.
+	term      *gterm.Terminal
+	conn      *ghostty.Conn
+	termAddr  string
+	termSet   bool
+	termState ghostty.State
+	termErr   string
+	// post and invalidate are the window's; nil before attachTerminal.
+	post       func(fn func())
+	invalidate func()
+	winFocused bool
 	// reviewDir is the repo that Review shows now. Empty: none.
 	reviewDir string
 	reviewSet bool
@@ -228,6 +240,7 @@ const (
 	LabelSidebarReopen = "Show sidebar"
 	LabelTitleBar      = "title bar"
 	LabelTerminal      = "terminal area"
+	LabelTerminalGrid  = "terminal grid"
 	LabelReview        = "review area"
 	LabelPanel         = "board panel"
 	LabelPanelToggle   = "Toggle panel"
@@ -529,6 +542,11 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 		f.Host.SetVisible(visible)
 		f.Usage.SetVisible(visible)
 		f.SpacesList.SetVisible(visible)
+		w.Update(func() {
+			if f.conn != nil {
+				f.conn.SetVisible(visible)
+			}
+		})
 		if visible {
 			w.Update(f.syncReview)
 		}
@@ -551,34 +569,74 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	}
 }
 
+// TerminalOffLine is shown while no agent is selected.
+const TerminalOffLine = "select an agent to see its terminal"
+
 // attachTerminal puts the terminal view in its slot and follows the window
-// focus. The returned function stops both. The link runs while the window is
-// hidden, as in the Rust app; MyGo holds the frames (D9).
+// focus. The returned function stops both. The connection runs while the
+// window is hidden, as in the Rust app; MyGo holds the frames (D9).
 func (f *Frame) attachTerminal(w Window) (stop func()) {
-	view := terminal.NewView(terminal.Options{
-		// Update posts and returns: a link goroutine never waits for the
-		// main thread, which may be in HCLink.Stop waiting for it (#204).
-		Post:       w.Update,
-		Invalidate: w.Invalidate,
-	})
-	f.termView = view
+	// Update posts and returns: a connection goroutine never waits for the
+	// main thread, which may be in Conn.Close waiting for it (#204).
+	f.post, f.invalidate = w.Update, w.Invalidate
+	f.winFocused = w.IsFocused()
 	f.syncTerminal()
-	f.Slots.Terminal = view.Build
-	view.SetWindowActive(w.IsFocused())
-	offFocus := w.OnFocus(func() { view.SetWindowActive(true) })
-	offBlur := w.OnBlur(func() { view.SetWindowActive(false) })
+	f.Slots.Terminal = f.buildTerminal
+	offFocus := w.OnFocus(func() { f.setTerminalFocus(true) })
+	offBlur := w.OnBlur(func() { f.setTerminalFocus(false) })
 	return func() {
 		offFocus()
 		offBlur()
-		view.Close()
+		f.closeTerminal()
 	}
+}
+
+func (f *Frame) setTerminalFocus(focused bool) {
+	f.winFocused = focused
+	if f.conn != nil {
+		if err := f.conn.SetFocus(focused); err != nil {
+			slog.Debug("terminal focus not sent", "err", err)
+		}
+	}
+}
+
+// terminalOptions are the plugin's options: contr's colors, JetBrains Mono at
+// the design's size and row height, and the design's padding.
+func terminalOptions(conn *ghostty.Conn) gterm.Options {
+	var pal [16]ui.Color
+	for i, rgb := range theme.TerminalPalette {
+		pal[i] = color(rgb)
+	}
+	return gterm.Options{
+		Conn: conn,
+		Theme: &gterm.Theme{
+			Foreground: color(theme.Text), Background: color(theme.BgTerminal), Palette: pal,
+		},
+		Font: gterm.Font{
+			Family: theme.FontFamily, Size: theme.TerminalFontSize,
+			LineHeight: theme.TerminalLineHeightScale,
+			Features:   []string{"-calt", "-clig", "-liga"},
+		},
+		Padding: gterm.Padding{X: theme.TermPadding, Y: theme.TermPadding},
+	}
+}
+
+// closeTerminal closes the terminal, which closes its connection. The program
+// keeps running in hc.
+func (f *Frame) closeTerminal() {
+	if f.term != nil {
+		_ = f.term.Close()
+	} else if f.conn != nil {
+		_ = f.conn.Close()
+	}
+	f.term, f.conn = nil, nil
 }
 
 // syncTerminal points the terminal view at the hc terminal of the selected
 // agent row (D12). Any other selection, or no source, shows no terminal. It
 // does nothing when the terminal stays the same. UI thread.
 func (f *Frame) syncTerminal() {
-	if f.termView == nil {
+	if f.post == nil {
 		return
 	}
 	addr := ""
@@ -590,10 +648,73 @@ func (f *Frame) syncTerminal() {
 	if addr == f.termAddr && f.termSet {
 		return
 	}
+	f.closeTerminal()
 	f.termAddr, f.termSet = addr, true
+	f.termState, f.termErr = ghostty.State{Kind: ghostty.Connecting}, ""
+	f.invalidate()
 	if addr == "" {
-		f.termView.SetTerminal(nil)
 		return
 	}
-	f.termView.SetTerminal(terminal.HCStarter(f.TerminalSource(addr)))
+	post, invalidate := f.post, f.invalidate
+	var conn *ghostty.Conn
+	conn = ghostty.NewConn(f.TerminalSource(addr), ghostty.Options{OnState: func(s ghostty.State) {
+		post(func() {
+			if f.conn == conn {
+				f.termState = s
+				invalidate()
+			}
+		})
+	}})
+	if f.Visibility != nil && !f.Visibility.Visible() {
+		conn.SetVisible(false)
+	}
+	t, err := gterm.New(terminalOptions(conn))
+	if err != nil {
+		_ = conn.Close()
+		slog.Error("terminal not started", "err", err)
+		f.termErr = fmt.Sprintf("terminal unavailable: %v", err)
+		return
+	}
+	f.term, f.conn = t, conn
+	f.setTerminalFocus(f.winFocused)
+}
+
+// staleOpacity is the grid's opacity while the connection is not live and the
+// screen on show may be out of date.
+const staleOpacity = 0.5
+
+// terminalLine is the line shown instead of, or over, the grid, with its
+// colour. ok is false when the grid speaks for itself.
+func (f *Frame) terminalLine() (line string, colour uint32, ok bool) {
+	if f.term == nil {
+		if f.termErr != "" {
+			return f.termErr, theme.Text2, true
+		}
+		return TerminalOffLine, theme.TextDim, true
+	}
+	switch f.termState.Kind {
+	case ghostty.NotRunning:
+		return herdr.NotRunningLine, theme.Text2, true
+	case ghostty.Incompatible:
+		return f.termState.Message, theme.Text2, true
+	}
+	return "", 0, false
+}
+
+// buildTerminal is the frame's terminal slot: the plugin's view of the
+// selected agent's terminal, dimmed and with a line while the connection is
+// down.
+func (f *Frame) buildTerminal(c *ui.Context) {
+	line, colour, showLine := f.terminalLine()
+	ui.Box(c).Fill().Center().Children(func() {
+		if f.term != nil {
+			grid := gterm.View(c, f.term).Label(LabelTerminalGrid).Absolute().Fill().AutoFocus()
+			if f.termState.Kind != ghostty.Live {
+				grid.Opacity(staleOpacity)
+			}
+		}
+		if showLine {
+			ui.Text(c, line).TextColor(theme.Color(colour))
+		}
+	})
 }
