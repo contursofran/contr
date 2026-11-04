@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"slices"
@@ -12,10 +13,20 @@ import (
 )
 
 const ownerUsage = `Usage:
+  contr owner ask [flags] <question…> ask a question; prints its id (D1, …)
   contr owner answer <id> <answer…>   answer a question (D1, …) and tell its coordinator
   contr owner done <id>               mark a to-do (T1, …) done and tell its coordinator
 
-Both do what the answer card does: the owner file changes first, then the
+Flags of ask (each of option, impact and ref can repeat):
+  --title T         a 2-4 word name
+  --from F          the worker, issue or PR it is about
+  --option O        a short answer to pick from
+  --impact I        what choosing the option means; the nth impact is for the nth option
+  --recommended N   index (from 0) of the recommended option
+  --ref R           what helps to decide: "PR 12", "#12" or "issue 12", an http(s) URL, a file path
+  --source S        a short excerpt of the text that raised the question
+
+answer and done do what the answer card does: the owner file changes first, then the
 coordinator that asked gets "Owner answered <id>: <answer>" or
 "Owner did <id>: <text>". When the coordinator cannot be reached the change
 stays saved and the command exits 1.
@@ -37,6 +48,9 @@ func runOwner(args []string, stdout, stderr io.Writer, dial func(context.Context
 		return code
 	}
 	sub, rest := args[0], args[1:]
+	if sub == "ask" {
+		return runOwnerAsk(rest, stdout, stderr, getenv)
+	}
 	switch {
 	case sub == "answer" && len(rest) >= 2 && strings.TrimSpace(strings.Join(rest[1:], " ")) != "":
 	case sub == "done" && len(rest) == 1:
@@ -98,4 +112,54 @@ func ownerChange(store *owner.Store, sub, id, answer string) (string, string, er
 		return "", "", err
 	}
 	return t.Coordinator, fmt.Sprintf("Owner did %s: %s\n", id, t.Text), nil
+}
+
+// listFlag is a flag that can repeat.
+type listFlag []string
+
+func (l *listFlag) String() string     { return strings.Join(*l, ",") }
+func (l *listFlag) Set(v string) error { *l = append(*l, v); return nil }
+
+// runOwnerAsk is `contr owner ask`: it adds a question to the owner file for
+// the project of the session and prints its id.
+func runOwnerAsk(args []string, stdout, stderr io.Writer, getenv func(string) string) int {
+	fs := flag.NewFlagSet("contr owner ask", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	var options, impacts, refs listFlag
+	title := fs.String("title", "", "")
+	from := fs.String("from", "", "")
+	source := fs.String("source", "", "")
+	rec := fs.Int("recommended", -1, "")
+	fs.Var(&options, "option", "")
+	fs.Var(&impacts, "impact", "")
+	fs.Var(&refs, "ref", "")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	question := strings.TrimSpace(strings.Join(fs.Args(), " "))
+	if question == "" {
+		fmt.Fprintf(stderr, "contr owner ask: give the question\n%s", ownerUsage)
+		return 2
+	}
+	if *rec >= len(options) || len(impacts) > len(options) {
+		fmt.Fprintf(stderr, "contr owner ask: --recommended and --impact need a matching --option\n")
+		return 2
+	}
+	q := owner.Question{Project: projectName(getenv), Coordinator: getenv("HC_TERMINAL_ID"), From: *from, Title: *title,
+		Question: question, Options: options, Impacts: impacts, Refs: refs, Source: *source}
+	if *rec >= 0 {
+		q.Recommended = rec
+	}
+	store, err := ownerStore(getenv)
+	if err != nil {
+		fmt.Fprintf(stderr, "contr owner: %v\n", err)
+		return 1
+	}
+	q, err = store.Ask(q)
+	if err != nil {
+		fmt.Fprintf(stderr, "contr owner ask: %v\n", err)
+		return 1
+	}
+	fmt.Fprintln(stdout, q.ID)
+	return 0
 }

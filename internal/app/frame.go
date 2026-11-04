@@ -811,7 +811,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		f.Worker = &WorkerPanel{Entry: entry, Source: src, Selection: f.Selection, Run: run, Status: f.Status.Show, Invalidate: w.Invalidate}
 		f.PR.Orchestrator, f.PR.Send = f.prOrchestrator, src.Send
 		f.Slots.Card = f.Card.View
-		f.Sheet = &Sheet{Source: src, Run: run, Invalidate: w.Invalidate}
+		f.Sheet = &Sheet{Source: src, Run: run, Invalidate: w.Invalidate, OpenPR: f.OpenPR, OpenIssue: f.OpenIssue, OpenURL: openURL}
 		f.Slots.Sheet = f.Sheet.View
 	}
 	f.AgentsList = NewAgentsList(agentSnap, f.Selection)

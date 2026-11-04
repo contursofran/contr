@@ -204,7 +204,7 @@ func TestMCPOwnerTools(t *testing.T) {
 		t.Fatal("no reply")
 		return "", false
 	}
-	if id, isErr := step(callLine(1, "ask_owner", map[string]any{"question": "Which layout?", "options": []string{"A", "B"}, "recommended": 1, "title": "Layout"})); id != "D1" || isErr {
+	if id, isErr := step(callLine(1, "ask_owner", map[string]any{"question": "Which layout?", "options": []string{"A", "B"}, "recommended": 1, "title": "Layout", "impacts": []string{"quick", "slow"}, "refs": []string{"PR 12"}, "source": "worker report"})); id != "D1" || isErr {
 		t.Fatalf("ask = %q, %v", id, isErr)
 	}
 	if id, _ := step(callLine(2, "pin_for_owner", map[string]any{"text": "Test the build", "from": "#160"})); id != "T1" {
@@ -222,6 +222,9 @@ func TestMCPOwnerTools(t *testing.T) {
 		t.Fatalf("items = %s (%v)", items, err)
 	}
 	q := open.Questions[0]
+	if q["source"] != "worker report" || len(q["impacts"].([]any)) != 2 || q["refs"].([]any)[0] != "PR 12" {
+		t.Errorf("impacts, refs, source = %v", q)
+	}
 	if q["coordinator"] != "t1" || q["project"] != "contr" || q["recommended"] != float64(1) {
 		t.Errorf("question = %v", q)
 	}
