@@ -215,6 +215,15 @@ func TestPRTextHelpers(t *testing.T) {
 	if got := StateText(github.PR{State: "MERGED"}); got != "merged" {
 		t.Error(got)
 	}
+	if got := StateText(github.PR{State: "OPEN", ReviewDecision: "APPROVED"}); got != "approved" {
+		t.Error(got)
+	}
+	if got := StateText(github.PR{State: "OPEN", IsDraft: true, ReviewDecision: "APPROVED"}); got != "draft" {
+		t.Error(got)
+	}
+	if got := StateText(github.PR{State: "OPEN", ReviewDecision: "CHANGES_REQUESTED"}); got != "open" {
+		t.Error(got)
+	}
 }
 
 func TestTabsCollapseWhilePRIsOpen(t *testing.T) {
@@ -333,5 +342,35 @@ func TestPRPaneEscapeOnlyWithFocus(t *testing.T) {
 	r.tt.Frame()
 	if !r.pane.IsOpen() || r.closed != 0 {
 		t.Error("Escape closed the pane while another part had the focus")
+	}
+}
+
+// TestPRPaneStateBadge: an approved PR shows `approved`; a merged PR shows
+// `merged` in the `you` style (white background).
+func TestPRPaneStateBadge(t *testing.T) {
+	r := newPRRig(t)
+	r.run.reply = func(string) ([]byte, error) {
+		return []byte(strings.Replace(prJSON, `"isDraft":false,`, `"isDraft":false,"reviewDecision":"APPROVED",`, 1)), nil
+	}
+	r.pane.Open("/w", 642)
+	r.flush()
+	if _, ok := r.tt.Find("state approved"); !ok || !r.tt.HasText("approved") {
+		t.Errorf("no approved badge; texts %v", r.tt.Texts())
+	}
+
+	r.run.reply = func(string) ([]byte, error) {
+		return []byte(strings.Replace(prJSON, `"state":"OPEN"`, `"state":"MERGED"`, 1)), nil
+	}
+	r.pane.Open("/w", 642)
+	r.flush()
+	b, ok := r.tt.Find("state merged")
+	if !ok {
+		t.Fatalf("no merged badge; texts %v", r.tt.Texts())
+	}
+	img := r.tt.Image()
+	scale := float32(img.Bounds().Dx()) / 900
+	px := img.RGBAAt(int((b.X+2)*scale), int((b.Y+b.H/2)*scale))
+	if got := uint32(px.R)<<16 | uint32(px.G)<<8 | uint32(px.B); got != theme.YouBg {
+		t.Errorf("merged badge background = %06X, want %06X", got, theme.YouBg)
 	}
 }

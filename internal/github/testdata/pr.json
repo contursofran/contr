@@ -13,6 +13,7 @@
   "changedFiles": 4,
   "isDraft": true,
   "mergeable": "MERGEABLE",
+  "reviewDecision": "APPROVED",
   "mergedAt": null,
   "closedAt": null,
   "comments": [{"author": {"login": "bob"}, "body": "Looks fine", "createdAt": "2026-11-03T10:05:00Z"}],

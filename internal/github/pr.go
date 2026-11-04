@@ -20,8 +20,10 @@ type PR struct {
 	ChangedFiles         int
 	IsDraft              bool
 	Mergeable            string
-	Timeline             []Event
-	ChecksSummary        CheckSummary
+	// ReviewDecision is gh's: APPROVED, CHANGES_REQUESTED, REVIEW_REQUIRED or "".
+	ReviewDecision string
+	Timeline       []Event
+	ChecksSummary  CheckSummary
 }
 
 // Event is one row of the PR timeline.
@@ -37,7 +39,7 @@ type CheckSummary struct{ Pass, Fail, Pending, Skip int }
 
 const prFields = "number,title,url,state,body,author,headRefName,baseRefName,headRefOid," +
 	"additions,deletions,changedFiles,isDraft,mergeable,comments,reviews,commits," +
-	"statusCheckRollup,mergedAt,closedAt"
+	"statusCheckRollup,mergedAt,closedAt,reviewDecision"
 
 type login struct {
 	Login string `json:"login"`
@@ -58,6 +60,7 @@ type rawPR struct {
 	ChangedFiles int        `json:"changedFiles"`
 	IsDraft      bool       `json:"isDraft"`
 	Mergeable    string     `json:"mergeable"`
+	Decision     string     `json:"reviewDecision"`
 	MergedAt     *time.Time `json:"mergedAt"`
 	ClosedAt     *time.Time `json:"closedAt"`
 	Comments     []struct {
@@ -101,7 +104,7 @@ func (c Client) PR(ctx context.Context, n int) (PR, error) {
 		Body: r.Body, Author: r.Author.Login, HeadRef: r.HeadRef,
 		BaseRef: r.BaseRef, HeadSHA: r.HeadSHA, Additions: r.Additions,
 		Deletions: r.Deletions, ChangedFiles: r.ChangedFiles,
-		IsDraft: r.IsDraft, Mergeable: r.Mergeable,
+		IsDraft: r.IsDraft, Mergeable: r.Mergeable, ReviewDecision: r.Decision,
 	}
 	for _, cm := range r.Comments {
 		pr.Timeline = append(pr.Timeline, Event{"commented", cm.Author.Login, cm.Body, cm.CreatedAt})
