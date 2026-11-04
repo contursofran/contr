@@ -81,10 +81,14 @@ type Profile struct {
 
 // Config maps profile names to profiles. Kit, when set, is the folder of
 // contr's Claude Code plugin (the repository's kit folder): a claude profile
-// whose name has an agent definition there starts as that agent.
+// whose name has an agent definition there starts as that agent. Setup maps
+// a project's main checkout (an absolute path, or one that starts with ~/)
+// to a shell command that prepares a new worktree of it: it runs in the
+// worktree before the agent starts, with CONTR_MAIN set to the main checkout.
 type Config struct {
 	Profiles map[string]Profile `json:"profiles"`
 	Kit      string             `json:"kit,omitempty"`
+	Setup    map[string]string  `json:"setup,omitempty"`
 }
 
 // EnvCoordinator holds the address of the terminal that started a worker, so
@@ -122,6 +126,7 @@ func LoadConfig(path string) (Config, error) {
 	if file.Kit != "" {
 		cfg.Kit = file.Kit
 	}
+	cfg.Setup = file.Setup
 	for name, p := range file.Profiles {
 		if len(p.Argv) == 0 {
 			return cfg, fmt.Errorf("agents: %s: profile %q has no argv", path, name)
@@ -223,13 +228,18 @@ func (t terminal) worker() Worker {
 	return w
 }
 
-// command is the foreground program's name, else the base of argv[0].
+// command is the foreground program's name, else the base of argv[0], or
+// of the agent's argv[0] after a setup wrapper.
 func (t terminal) command() string {
 	if t.Foreground != nil && t.Foreground.Name != "" {
 		return t.Foreground.Name
 	}
-	if len(t.Argv) > 0 {
-		return filepath.Base(t.Argv[0])
+	argv := t.Argv
+	if len(argv) > 5 && argv[3] == setupName {
+		argv = argv[5:]
+	}
+	if len(argv) > 0 {
+		return filepath.Base(argv[0])
 	}
 	return ""
 }
@@ -258,6 +268,7 @@ type Manager struct {
 	now  func() time.Time // the clock; tests replace it
 
 	getenv func(string) string // reads the environment; tests replace it
+	git    git                 // runs git; tests replace it
 }
 
 // New returns a manager on core with the profiles of cfg. A relative kit
@@ -268,7 +279,7 @@ func New(core Core, cfg Config) *Manager {
 			cfg.Kit = abs
 		}
 	}
-	return &Manager{core: core, cfg: cfg, now: time.Now, getenv: os.Getenv}
+	return &Manager{core: core, cfg: cfg, now: time.Now, getenv: os.Getenv, git: runGit}
 }
 
 // Spawn starts a worker and returns it.
@@ -282,6 +293,13 @@ func (m *Manager) Spawn(ctx context.Context, s Spec) (Worker, error) {
 	}
 	if strings.ContainsFunc(s.Project, unicode.IsControl) {
 		return Worker{}, errors.New("agents: the project name has a control character")
+	}
+	if s.Worktree != "" {
+		dir, err := worktreeDir(s.Worktree)
+		if err != nil {
+			return Worker{}, err
+		}
+		s.Worktree = dir
 	}
 	role := s.Role
 	if role == "" {
@@ -302,13 +320,23 @@ func (m *Manager) Spawn(ctx context.Context, s Spec) (Worker, error) {
 	if s.Task != "" {
 		argv = append(argv, s.Task)
 	}
+	env := map[string]string{}
+	if setup, main := m.setupFor(ctx, s.Worktree); setup != "" {
+		argv = withSetup(setup, argv)
+		env[EnvMain] = main
+	}
 	params := map[string]any{"argv": argv, "name": s.Name, "labels": labels, "wait": false, "outlive_parent": true}
 	if s.Worktree != "" {
 		params["cwd"] = s.Worktree
 	}
 	if s.Parent != "" {
+		env[EnvCoordinator] = s.Parent
+	}
+	if len(env) > 0 {
+		params["env"] = env
+	}
+	if s.Parent != "" {
 		params["parent"] = s.Parent
-		params["env"] = map[string]string{EnvCoordinator: s.Parent}
 	} else {
 		params["no_parent"] = true
 	}

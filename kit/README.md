@@ -28,6 +28,10 @@ The `--plugin-dir` sessions below still work with the plugin installed.
    its agent: `"planner-high": {"argv": ["claude", "--model", "opus",
    "--effort", "high"], "agent": "planner"}`. The `spawn` tool reads the
    profiles file on each spawn, so a new profile works at once.
+   To prepare new worktrees of a project, add its main checkout and a
+   shell command: `"setup": {"~/code/app": "cp -R \"$CONTR_MAIN/.husky/_\"
+   .husky/ && pnpm install --frozen-lockfile --offline"}`. Spawn runs it
+   in the worktree before the agent starts.
 2. Start the coordinator in an hc terminal with the plugin:
    `claude --plugin-dir <kit> --model opus --effort medium`, then
    `/contr:orchestrate <goal>`.

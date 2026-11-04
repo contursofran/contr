@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -22,9 +23,14 @@ import (
 const agentsUsage = `Usage:
   contr agents ls [--all] [--json]                 list the workers
   contr agents spawn --name N --profile P [--issue I] [--worktree DIR] [--project P]
-                     [--role R] [--no-parent] [--json] [--task-file F | [--] task…]
+                     [--role R] [--review-pr PR] [--no-parent] [--json]
+                     [--task-file F | [--] task…]
                                                    start a worker; --task-file reads the
-                                                   task from a file
+                                                   task from a file; --review-pr makes a
+                                                   detached worktree at the PR's head
+                                                   (<main>-wt/review-<PR>) of the repository
+                                                   at --worktree (default: here) and starts
+                                                   the worker there
   contr agents send <name> <text…>                 type text and press Enter
   contr agents interrupt <name>                    press the stop key
   contr agents stop <name>                         end the worker's program
@@ -37,7 +43,10 @@ part of the task.
 
 Environment:
   CONTR_AGENTS_CONFIG   profiles file (default: the user config folder, contr/agents.json):
-                        {"kit": DIR, "profiles": {NAME: {"argv": [...], "agent": KIT_AGENT}}}
+                        {"kit": DIR, "profiles": {NAME: {"argv": [...], "agent": KIT_AGENT}},
+                         "setup": {MAIN_CHECKOUT: SHELL_COMMAND}}
+                        setup runs in a new worktree of that main checkout before the
+                        agent starts, with CONTR_MAIN set to the main checkout
   CONTR_HC              the hc program (default: hc from PATH, then ~/.local/bin, /opt/homebrew/bin, /usr/local/bin)
   CONTR_KIT             contr's Claude Code plugin folder (the repository's kit);
                         claude profiles with an agent there start as that agent
@@ -97,6 +106,7 @@ func runAgents(args []string, stdout, stderr io.Writer, dial func(context.Contex
 		role     = fs.String("role", "", "role (default: the profile)")
 		noParent = fs.Bool("no-parent", false, "start without a parent terminal")
 		taskFile = fs.String("task-file", "", "read the task from this file")
+		reviewPR = fs.Int("review-pr", 0, "start in a review worktree at this pull request's head")
 		lines    = fs.Int("lines", 0, "only the last lines")
 	)
 	need := map[string]int{"ls": 0, "watch": 0, "spawn": 0, "send": 2, "interrupt": 1, "stop": 1, "read": 1, "prompt": 1}
@@ -111,7 +121,7 @@ func runAgents(args []string, stdout, stderr io.Writer, dial func(context.Contex
 	}
 	allowed := map[string][]string{
 		"ls":    {"all", "json"},
-		"spawn": {"name", "profile", "issue", "worktree", "project", "role", "no-parent", "json", "task-file"},
+		"spawn": {"name", "profile", "issue", "worktree", "project", "role", "no-parent", "json", "task-file", "review-pr"},
 		"read":  {"lines"},
 	}
 	var bad string
@@ -168,6 +178,11 @@ func runAgents(args []string, stdout, stderr io.Writer, dial func(context.Contex
 				return err
 			}
 			spec := agents.Spec{Name: *name, Profile: *profile, Role: *role, Issue: *issue, Worktree: *worktree, Project: *project, Task: task}
+			if *reviewPR != 0 {
+				if spec.Worktree, err = m.ReviewWorktree(ctx, cmp.Or(*worktree, "."), *reviewPR); err != nil {
+					return err
+				}
+			}
 			if !*noParent {
 				spec.Parent = getenv("HC_TERMINAL_ID")
 			}

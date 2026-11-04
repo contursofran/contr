@@ -134,13 +134,14 @@ func TestAgentsLs(t *testing.T) {
 func TestAgentsSpawn(t *testing.T) {
 	core := &cliCore{reply: map[string]any{"terminal.run": worker("t4", "b-158", "live", nil)}}
 	env := map[string]string{"HC_TERMINAL_ID": "t1"}
-	code, out, errs := run(t, core, env, "spawn", "--name", "b-158", "--profile", "builder", "--issue", "158", "--worktree", "/w/a", "read", "TASK.md")
+	wt := t.TempDir()
+	code, out, errs := run(t, core, env, "spawn", "--name", "b-158", "--profile", "builder", "--issue", "158", "--worktree", wt, "read", "TASK.md")
 	if code != 0 || out != "b-158 t4\n" {
 		t.Fatalf("code %d out %q err %q", code, out, errs)
 	}
 	p := core.params[0]
 	argv := p["argv"].([]any)
-	if argv[len(argv)-1] != "read TASK.md" || p["parent"] != "t1" || p["cwd"] != "/w/a" {
+	if argv[len(argv)-1] != "read TASK.md" || p["parent"] != "t1" || p["cwd"] != wt {
 		t.Errorf("params = %v", p)
 	}
 
@@ -301,5 +302,15 @@ func TestListShowsPlainTerminal(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("table has no %q:\n%s", want, out)
 		}
+	}
+}
+
+// --review-pr needs a repository; outside one, spawn fails before hc.
+func TestAgentsSpawnReviewPROutsideARepository(t *testing.T) {
+	t.Setenv("GIT_CEILING_DIRECTORIES", os.TempDir())
+	core := &cliCore{}
+	code, _, errs := run(t, core, nil, "spawn", "--name", "r", "--profile", "reviewer", "--review-pr", "3", "--worktree", t.TempDir())
+	if code != 1 || !strings.Contains(errs, "git rev-parse") || len(core.calls) != 0 {
+		t.Errorf("code %d err %q calls %v", code, errs, core.calls)
 	}
 }

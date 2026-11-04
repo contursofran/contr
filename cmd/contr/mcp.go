@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -175,6 +176,7 @@ func agentTools(m *managers, parent string) []mcp.Tool {
 		Text     string `json:"text"`
 		Lines    int    `json:"lines"`
 		All      bool   `json:"all"`
+		ReviewPR int    `json:"review_pr"`
 	}
 	run := func(f func(context.Context, *agents.Manager, args) (string, error)) func(context.Context, json.RawMessage) (string, error) {
 		return func(ctx context.Context, raw json.RawMessage) (string, error) {
@@ -189,7 +191,8 @@ func agentTools(m *managers, parent string) []mcp.Tool {
 		{Name: "spawn", Description: "Start a worker agent in a new hc terminal, in its worktree. It reports back with hc send when its turn ends.",
 			Schema: schema([]string{"name", "profile"}, map[string]prop{
 				"name": str("Unique worker name: 1-32 of a-z 0-9 - _ (for example b-158)."), "profile": str("builder, planner, reviewer or debugger, or a profile from the profiles file."),
-				"task": str("The self-contained brief: the first message. Give task or task_file."), "task_file": str("An absolute path to a file that holds the brief, instead of task."), "issue": str("Issue number."), "worktree": str("The worker's working folder (its git worktree)."), "role": str("Role label; the profile name by default."), "project": str("Project name; groups the worker with its project's questions.")}),
+				"task": str("The self-contained brief: the first message. Give task or task_file."), "task_file": str("An absolute path to a file that holds the brief, instead of task."), "issue": str("Issue number."), "worktree": str("The worker's working folder (its git worktree)."), "role": str("Role label; the profile name by default."), "project": str("Project name; groups the worker with its project's questions."),
+				"review_pr": {"integer", "A pull request number: start the worker in a detached worktree at the PR's head, <main checkout>-wt/review-<N>, of the repository at worktree (default: the coordinator's folder)."}}),
 			Run: run(func(ctx context.Context, mgr *agents.Manager, a args) (string, error) {
 				mgr, err := m.spawnManager(mgr)
 				if err != nil {
@@ -202,7 +205,13 @@ func agentTools(m *managers, parent string) []mcp.Tool {
 				if strings.TrimSpace(task) == "" {
 					return "", errors.New("give the brief as task or task_file")
 				}
-				w, err := mgr.Spawn(ctx, agents.Spec{Name: a.Name, Profile: a.Profile, Task: task, Issue: a.Issue, Worktree: a.Worktree, Role: a.Role, Project: a.Project, Parent: parent})
+				dir := a.Worktree
+				if a.ReviewPR != 0 {
+					if dir, err = mgr.ReviewWorktree(ctx, cmp.Or(dir, "."), a.ReviewPR); err != nil {
+						return "", err
+					}
+				}
+				w, err := mgr.Spawn(ctx, agents.Spec{Name: a.Name, Profile: a.Profile, Task: task, Issue: a.Issue, Worktree: dir, Role: a.Role, Project: a.Project, Parent: parent})
 				if err != nil {
 					return "", err
 				}
