@@ -2,7 +2,7 @@ package app
 
 // The Files tab of the PR pane (#153, D102): the changed files on a list,
 // the diff of the chosen file in a code view, and the review threads under
-// their lines. It is read only; reply and resolve come later.
+// their lines. An open thread has `reply` and `resolve` (#154, D103).
 
 import (
 	"context"
@@ -23,6 +23,11 @@ const (
 	LabelPRDiff   = "pr diff"
 	LabelPRNoFile = "No files."
 	LabelPRBinary = "Binary file."
+
+	LabelPRReply     = "reply"
+	LabelPRResolve   = "resolve"
+	LabelPRReplySend = "Reply"
+	LabelPRReplyBox  = "reply text"
 )
 
 // prFileListMax is the most height the file list takes, in DIPs.
@@ -45,6 +50,11 @@ type prFiles struct {
 	list      ui.ListState
 	diff      *editor.DiffState
 	note      string // binary or bad patch text, instead of the diff
+
+	replying map[string]bool    // threads whose reply field is open
+	drafts   map[string]*string // typed reply text per thread; kept when a write fails
+	busy     bool               // a write is in flight
+	writeErr string             // the last failed write
 }
 
 // loadFiles reads the files and the threads off the UI thread. Only the newest
@@ -111,6 +121,9 @@ func (p *PRPane) filesTab(c *ui.Context) {
 		p.showFile(f.sel)
 	}
 	ui.Column(c).Label(LabelPRFiles).Grow(1).MinHeight(0).FillWidth().Children(func() {
+		if f.writeErr != "" {
+			ui.Text(c, f.writeErr).TextColor(theme.Color(theme.Text)).Padding(6, theme.PRPanePad)
+		}
 		if f.threadErr != "" {
 			ui.Text(c, f.threadErr).TextColor(theme.Color(theme.TextDim)).Padding(6, theme.PRPanePad)
 		}
@@ -166,11 +179,11 @@ func (p *PRPane) showFile(i int) {
 			continue // the line is not in the diff
 		}
 		byKey[t.ID] = t
-		d.Annotations = append(d.Annotations, editor.DiffAnnotation{Side: side, Line: line, Height: threadHeight(t), Key: t.ID})
+		d.Annotations = append(d.Annotations, editor.DiffAnnotation{Side: side, Line: line, Height: p.threadBoxHeight(t), Key: t.ID})
 	}
 	d.RenderAnnotation = func(c *ui.Context, a editor.DiffAnnotation) {
 		id, _ := a.Key.(string)
-		renderThread(c, byKey[id])
+		p.renderThread(c, byKey[id])
 	}
 	f.diff = d
 }
@@ -239,13 +252,113 @@ func threadHeight(t github.Thread) float32 {
 	return float32(threadMarginTop+threadMarginBottom+2*threadPadY) + float32(lines)*theme.LineHeight
 }
 
+// threadBoxHeight is threadHeight plus the actions row of an open thread and
+// its reply field, when that is open.
+func (p *PRPane) threadBoxHeight(t github.Thread) float32 {
+	h := threadHeight(t)
+	if t.Resolved {
+		return h
+	}
+	h += theme.AnswerButtonHeight + 8 // actions row and its gap
+	if p.filesState.replying[t.ID] {
+		h += theme.AnswerButtonHeight + 8
+	}
+	return h
+}
+
+// syncThreadHeights resizes the thread boxes after a reply field opens or
+// closes. It keeps the diff and its scroll place.
+func (p *PRPane) syncThreadHeights() {
+	f := &p.filesState
+	if f.diff == nil {
+		return
+	}
+	byID := map[string]github.Thread{}
+	for _, t := range f.threads {
+		byID[t.ID] = t
+	}
+	for i := range f.diff.Annotations {
+		id, _ := f.diff.Annotations[i].Key.(string)
+		f.diff.Annotations[i].Height = p.threadBoxHeight(byID[id])
+	}
+}
+
+// draft is the reply text of thread id.
+func (f *prFiles) draft(id string) *string {
+	if f.drafts == nil {
+		f.drafts = map[string]*string{}
+	}
+	if f.drafts[id] == nil {
+		f.drafts[id] = new(string)
+	}
+	return f.drafts[id]
+}
+
+// writeThread runs one write off the UI thread. On success it reads the
+// threads again. On failure the error shows in the pane and the typed text
+// stays. Only one write runs at a time.
+func (p *PRPane) writeThread(do func(context.Context, github.Client) error, ok func()) {
+	f := &p.filesState
+	if f.busy || p.client.R == nil {
+		return
+	}
+	f.busy, f.writeErr = true, ""
+	gen, client, n := p.gen, p.client, p.number
+	p.Run.Do(func() func() {
+		err := do(context.Background(), client)
+		var threads []github.Thread
+		var terr error
+		if err == nil {
+			threads, terr = client.Threads(context.Background(), n)
+		}
+		return func() {
+			if gen != p.gen {
+				return
+			}
+			f.busy = false
+			switch {
+			case err != nil:
+				f.writeErr = err.Error()
+			default:
+				ok()
+				if terr != nil {
+					f.threadErr = terr.Error()
+				} else {
+					f.threads, f.threadErr = threads, ""
+					f.shown = -1 // rebuild the diff with the new threads
+				}
+			}
+			p.redraw()
+		}
+	})
+	p.redraw()
+}
+
+// replyTo sends the typed reply of thread id.
+func (p *PRPane) replyTo(id string) {
+	f := &p.filesState
+	text := strings.TrimSpace(*f.draft(id))
+	if text == "" {
+		return
+	}
+	p.writeThread(func(ctx context.Context, c github.Client) error { return c.Reply(ctx, id, text) },
+		func() { delete(f.drafts, id); delete(f.replying, id) })
+}
+
+// resolveThread marks thread id as resolved.
+func (p *PRPane) resolveThread(id string) {
+	p.writeThread(func(ctx context.Context, c github.Client) error { return c.Resolve(ctx, id) }, func() {})
+}
+
 // renderThread draws the box of a thread: bg #1C1C1C, border #2A2A2A,
 // radius 8, padding 8×10; per comment the author (bold) with `on line N`
-// on the first, then the text.
-func renderThread(c *ui.Context, t github.Thread) {
+// on the first, then the text. An open thread ends with `reply` and
+// `resolve`; `reply` opens a field (Enter or `Reply` sends).
+func (p *PRPane) renderThread(c *ui.Context, t github.Thread) {
+	f := &p.filesState
 	ui.Column(c).Label("thread "+t.ID).FillWidth().Margin(threadMarginTop, 10, threadMarginBottom, 12).
 		Padding(threadPadY, 10).Radius(8).Background(theme.Color(theme.BgCard)).
-		Border(1, theme.Color(theme.SegmentSelected)).Children(func() {
+		Border(1, theme.Color(theme.SegmentSelected)).Gap(8).Children(func() {
 		if s, ok := threadCollapsed(t); ok {
 			ui.Text(c, s).TextColor(theme.Color(theme.TextDim)).SingleLine().Ellipsis("…")
 			return
@@ -258,6 +371,36 @@ func renderThread(c *ui.Context, t github.Thread) {
 				}
 			})
 			ui.Text(c, cm.Body).TextColor(theme.Color(theme.Text2)).FillWidth()
+		}
+		ui.Row(c).Height(theme.AnswerButtonHeight).Gap(theme.AnswerButtonGap).AlignItems(ui.Center).Children(func() {
+			var reply, resolve ClickFn
+			if !f.busy {
+				reply = func() {
+					if f.replying == nil {
+						f.replying = map[string]bool{}
+					}
+					f.replying[t.ID] = !f.replying[t.ID]
+					p.syncThreadHeights()
+					p.redraw()
+				}
+				resolve = func() { p.resolveThread(t.ID) }
+			}
+			cardButton(c, LabelPRReply, ButtonPlain, theme.TextDim, reply)
+			cardButton(c, LabelPRResolve, ButtonPlain, theme.TextDim, resolve)
+		})
+		if f.replying[t.ID] {
+			ui.Row(c).Height(theme.AnswerButtonHeight).Gap(theme.AnswerButtonGap).AlignItems(ui.Center).Children(func() {
+				in := ui.TextInput(c.Key("reply"+t.ID), f.draft(t.ID)).Label(LabelPRReplyBox).
+					Placeholder("Reply").Grow(1).MinWidth(0)
+				if in.Submitted() {
+					p.replyTo(t.ID)
+				}
+				send := ClickFn(func() { p.replyTo(t.ID) })
+				if f.busy {
+					send = nil
+				}
+				cardButton(c, LabelPRReplySend, ButtonOutlined, theme.Text, send)
+			})
 		}
 	})
 }

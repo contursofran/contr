@@ -435,7 +435,10 @@ worker's PR, found from its branch; with no PR the label opens the issue in
 the browser, D104). While it
 is open, the needs-you tabs and the title bar tabs show icon and id only.
 Slice 5 (#152, D101) builds the Checks tab. Slice 6 (#153, D102) builds
-the Files tab, read only: no `reply` or `resolve` yet. A resolved thread
+the Files tab. Slice 9 (#154, D103) adds `reply` and `resolve` to an open
+thread: `reply` opens a field in the box (Enter or `Reply` sends), `resolve`
+sends at once. Each write runs off the UI thread, then the threads are read
+again; an error shows at the top of the tab and typed text stays. A resolved thread
 shows as one line, `resolved · who`; the owner has not decided this yet
 (D25). The thread box starts 12 px from the gutter, since the code view
 already leaves the gutter free. A thread whose line is not in the diff is
