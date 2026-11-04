@@ -152,6 +152,8 @@ type Worker struct {
 	Profile  string `json:"profile"`
 	Worktree string `json:"worktree"`
 	Project  string `json:"project,omitempty"`
+	// Parent is the hc terminal that started the worker, if any.
+	Parent string `json:"parent,omitempty"`
 	// Command is the program that runs in the terminal now: hc's foreground
 	// name, else the base name of the spawn command.
 	Command string `json:"command,omitempty"`
@@ -173,6 +175,7 @@ type Worker struct {
 // terminal is the part of an hc terminal that a Worker needs.
 type terminal struct {
 	Address  string            `json:"address"`
+	Parent   *string           `json:"parent"`
 	Name     *string           `json:"name"`
 	Labels   map[string]string `json:"labels"`
 	State    string            `json:"state"`
@@ -207,6 +210,9 @@ func (t terminal) worker() Worker {
 	}
 	if t.Name != nil {
 		w.Name = *t.Name
+	}
+	if t.Parent != nil {
+		w.Parent = *t.Parent
 	}
 	if t.Status != nil {
 		w.Status, w.Msg = t.Status.State, t.Status.Msg

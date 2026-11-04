@@ -2,8 +2,10 @@ package agents
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"io"
+	"os"
 	"strings"
 )
 
@@ -102,4 +104,69 @@ func reports(b block) bool {
 		return strings.Contains(b.Input.Command, "hc send")
 	}
 	return strings.HasSuffix(b.Name, "contr__message")
+}
+
+// tailBytes is how much of the end of a transcript ContextTokens reads.
+const tailBytes = 1 << 20
+
+// ContextTokens returns the size of the context at the last assistant reply
+// of the transcript at path: its input tokens, cache reads and cache writes.
+// It reads only the end of the file. It returns 0 when no reply has usage.
+func ContextTokens(path string) (int, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = f.Close() }()
+	fi, err := f.Stat()
+	if err != nil {
+		return 0, err
+	}
+	if off := fi.Size() - tailBytes; off > 0 {
+		if _, err := f.Seek(off, io.SeekStart); err != nil {
+			return 0, err
+		}
+	}
+	tokens := 0
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 64*1024), 64*1024*1024)
+	for sc.Scan() {
+		var e struct {
+			Type    string `json:"type"`
+			Message struct {
+				Usage *struct {
+					Input       int `json:"input_tokens"`
+					CacheRead   int `json:"cache_read_input_tokens"`
+					CacheCreate int `json:"cache_creation_input_tokens"`
+				} `json:"usage"`
+			} `json:"message"`
+		}
+		// The first line after a seek is cut; it does not parse and is skipped.
+		if json.Unmarshal(sc.Bytes(), &e) != nil || e.Type != "assistant" || e.Message.Usage == nil {
+			continue
+		}
+		u := e.Message.Usage
+		tokens = u.Input + u.CacheRead + u.CacheCreate
+	}
+	return tokens, sc.Err()
+}
+
+// RanCommand tells whether the transcript at path holds a run of the slash
+// command name (such as "contr:orchestrate"): Claude Code records it as
+// <command-name>/name</command-name>.
+func RanCommand(path, name string) (bool, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = f.Close() }()
+	mark := []byte("<command-name>/" + name + "</command-name>")
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 64*1024), 64*1024*1024)
+	for sc.Scan() {
+		if bytes.Contains(sc.Bytes(), mark) {
+			return true, nil
+		}
+	}
+	return false, sc.Err()
 }

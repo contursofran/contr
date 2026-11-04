@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,7 +32,7 @@ func hookRun(t *testing.T, env map[string]string, input string, lines ...string)
 	core := &cliCore{}
 	dial := func(context.Context, func(string) string) (agentsCore, error) { return core, nil }
 	var stderr bytes.Buffer
-	code := runHook([]string{"stop"}, strings.NewReader(input), &stderr, dial, func(k string) string { return env[k] })
+	code := runHook([]string{"stop"}, strings.NewReader(input), io.Discard, &stderr, dial, func(k string) string { return env[k] })
 	return code, stderr.String(), core, dir
 }
 
@@ -74,9 +75,9 @@ func TestHookQuiet(t *testing.T) {
 	if code, stderr, core, _ := hookRun(t, workerEnv, "", hookPrompt, hookSend, hookWords); code != 0 || len(core.calls) != 0 {
 		t.Errorf("reported: code %d, stderr %q, calls %v", code, stderr, core.calls)
 	}
-	// Not a workerEnv: nothing is read or sent, even with bad input.
-	if code, _, core, _ := hookRun(t, map[string]string{"HC_TERMINAL_ID": "t7"}, "not json"); code != 0 || len(core.calls) != 0 {
-		t.Errorf("no coordinator: code %d, calls %v", code, core.calls)
+	// Outside hc: nothing is read or sent, even with bad input.
+	if code, _, core, _ := hookRun(t, map[string]string{}, "not json"); code != 0 || len(core.calls) != 0 {
+		t.Errorf("outside hc: code %d, calls %v", code, core.calls)
 	}
 }
 
@@ -97,14 +98,14 @@ func TestHookErrors(t *testing.T) {
 		core := &cliCore{errs: map[string]error{"terminal.send": errors.New("not_found")}}
 		dial := func(context.Context, func(string) string) (agentsCore, error) { return core, nil }
 		var e bytes.Buffer
-		c := runHook([]string{"stop"}, strings.NewReader(`{"transcript_path":"`+tr+`"}`), &e, dial, func(k string) string { return workerEnv[k] })
+		c := runHook([]string{"stop"}, strings.NewReader(`{"transcript_path":"`+tr+`"}`), io.Discard, &e, dial, func(k string) string { return workerEnv[k] })
 		return c, e.String(), core, dir
 	}()
 	if code != 1 || !strings.Contains(stderr, "report to t1: not_found") || len(core.calls) != 1 {
 		t.Errorf("send error: code %d, stderr %q", code, stderr)
 	}
 	var e bytes.Buffer
-	if code := runHook([]string{"start"}, strings.NewReader(""), &e, nil, func(string) string { return "" }); code != 1 || !strings.Contains(e.String(), "Usage:") {
+	if code := runHook([]string{"start"}, strings.NewReader(""), io.Discard, &e, nil, func(string) string { return "" }); code != 1 || !strings.Contains(e.String(), "Usage:") {
 		t.Errorf("usage: code %d, %q", code, e.String())
 	}
 }

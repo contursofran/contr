@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,71 +16,361 @@ import (
 )
 
 const hookUsage = `Usage:
-  contr hook stop   the kit's Stop hook for worker sessions
+  contr hook stop            the kit's Stop hook
+  contr hook session-start   the kit's SessionStart hook (matcher compact)
 
-Claude Code runs it when a turn ends and gives it the hook input on stdin.
-In a worker (CONTR_COORDINATOR is set), a turn that sent no report with
-hc send gets one: "ended its turn without a report. Last words: …",
-sent to the coordinator. Otherwise it does nothing. It never stops the turn.
+Claude Code runs them and gives them the hook input on stdin.
+
+stop, in a worker (CONTR_COORDINATOR is set): a turn that sent no report
+with hc send gets one, "ended its turn without a report. Last words: …",
+sent to the coordinator. It never stops the turn.
+
+stop, in a coordinator (a session that ran /contr:orchestrate, or an hc
+terminal with role orchestrator): once the context passes CONTR_SAVE_AT
+tokens (default 220000), it keeps the turn going one time and asks the
+coordinator to update COORDINATOR-STATE.md before Claude Code compacts.
+
+session-start, after a compaction in a coordinator: prints the playbook,
+the state file to read, the live workers it started and its open owner
+items, which Claude Code adds to the new context.
 `
 
 // saidMax is the most characters of the worker's last words in a report.
 const saidMax = 300
 
-// stopInput is the part of Claude Code's Stop hook input that the hook reads.
-type stopInput struct {
+// defaultSaveAt is the context size, in tokens, from which a coordinator is
+// asked to save its state: below the owner's compaction window of 250000.
+const defaultSaveAt = 220000
+
+// restoreMax is the most characters that session-start prints. Claude Code
+// caps a hook's context at 10000 characters.
+const restoreMax = 9500
+
+// orchestrateCommand is the kit's coordinator command.
+const orchestrateCommand = "contr:orchestrate"
+
+// stateFile is the coordinator's state file in its folder (the playbook).
+const stateFile = "COORDINATOR-STATE.md"
+
+// hookInput is the part of Claude Code's hook input that the hooks read.
+type hookInput struct {
+	SessionID      string `json:"session_id"`
 	TranscriptPath string `json:"transcript_path"`
 	Cwd            string `json:"cwd"`
 	// LastAssistantMessage is set by newer Claude Code versions.
 	LastAssistantMessage string `json:"last_assistant_message"`
+	StopHookActive       bool   `json:"stop_hook_active"`
+	Source               string `json:"source"` // SessionStart: startup, resume, clear or compact
+}
+
+// hook is one run of a hook command.
+type hook struct {
+	in     hookInput
+	stdout io.Writer
+	dial   func(context.Context, func(string) string) (agentsCore, error)
+	getenv func(string) string
+	// markers is the folder of the per-session "state asked" files.
+	markers string
 }
 
 // runHook is `contr hook`. It returns the exit code: 0 when it is done or has
 // nothing to do, 1 on an error, usage errors included. It never returns 2:
 // for a Stop hook, 2 blocks the turn and sends stderr to the model. With 1,
 // Claude Code shows the error and the turn ends.
-func runHook(args []string, stdin io.Reader, stderr io.Writer, dial func(context.Context, func(string) string) (agentsCore, error), getenv func(string) string) int {
-	if len(args) != 1 || args[0] != "stop" {
+func runHook(args []string, stdin io.Reader, stdout, stderr io.Writer, dial func(context.Context, func(string) string) (agentsCore, error), getenv func(string) string) int {
+	if len(args) != 1 || (args[0] != "stop" && args[0] != "session-start") {
 		_, _ = io.WriteString(stderr, hookUsage)
 		return 1
 	}
-	coordinator := getenv(agents.EnvCoordinator)
-	if coordinator == "" {
+	// Outside hc there are no workers and no coordinators.
+	if getenv(agents.EnvCoordinator) == "" && getenv("HC_TERMINAL_ID") == "" {
 		return 0
 	}
-	var in stopInput
-	if err := json.NewDecoder(stdin).Decode(&in); err != nil {
+	h := &hook{stdout: stdout, dial: dial, getenv: getenv, markers: filepath.Join(os.TempDir(), "contr-hook")}
+	if err := json.NewDecoder(stdin).Decode(&h.in); err != nil {
 		fmt.Fprintf(stderr, "contr hook: bad hook input: %v\n", err)
 		return 1
 	}
-	turn, err := readTurn(in.TranscriptPath)
+	var err error
+	switch {
+	case args[0] == "session-start":
+		err = h.sessionStart()
+	case getenv(agents.EnvCoordinator) != "":
+		err = h.workerStop()
+	default:
+		err = h.coordinatorStop()
+	}
 	if err != nil {
 		fmt.Fprintf(stderr, "contr hook: %v\n", err)
-		return 1
-	}
-	if turn.Reported {
-		return 0
-	}
-	said := in.LastAssistantMessage
-	if strings.TrimSpace(said) == "" {
-		said = turn.Said
-	}
-	text := missedReport(said, in.Cwd)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	core, err := dial(ctx, getenv)
-	if err != nil {
-		fmt.Fprintf(stderr, "contr hook: %v\n", err)
-		return 1
-	}
-	defer func() { _ = core.Close() }()
-	m := agents.New(core, agents.Config{}).WithEnv(getenv)
-	if err := m.Send(ctx, coordinator, text); err != nil {
-		fmt.Fprintf(stderr, "contr hook: report to %s: %v\n", coordinator, err)
 		return 1
 	}
 	return 0
+}
+
+// workerStop sends the coordinator a report for a turn that sent none.
+func (h *hook) workerStop() error {
+	coordinator := h.getenv(agents.EnvCoordinator)
+	turn, err := readTurn(h.in.TranscriptPath)
+	if err != nil {
+		return err
+	}
+	if turn.Reported {
+		return nil
+	}
+	said := h.in.LastAssistantMessage
+	if strings.TrimSpace(said) == "" {
+		said = turn.Said
+	}
+	text := missedReport(said, h.in.Cwd)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	core, err := h.dial(ctx, h.getenv)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = core.Close() }()
+	m := agents.New(core, agents.Config{}).WithEnv(h.getenv)
+	if err := m.Send(ctx, coordinator, text); err != nil {
+		return fmt.Errorf("report to %s: %w", coordinator, err)
+	}
+	return nil
+}
+
+// coordinatorStop asks a coordinator, once per compaction, to save its state
+// when the context nears the compaction window.
+func (h *hook) coordinatorStop() error {
+	if h.in.StopHookActive || h.in.TranscriptPath == "" {
+		return nil
+	}
+	tokens, err := agents.ContextTokens(h.in.TranscriptPath)
+	if err != nil {
+		return err
+	}
+	if tokens < h.saveAt() || h.asked() {
+		return nil
+	}
+	coord, err := h.coordinator()
+	if err != nil || !coord {
+		return err
+	}
+	if err := h.markAsked(); err != nil {
+		return err
+	}
+	reason := fmt.Sprintf("contr: the context is at %dk tokens, and Claude Code compacts it soon. "+
+		"Update %s now (Ready, Running with worker, issue, worktree and PR, Decisions, Next), "+
+		"so you can carry on from it after the compaction. Then end your turn.", tokens/1000, stateFile)
+	return json.NewEncoder(h.stdout).Encode(map[string]string{"decision": "block", "reason": reason})
+}
+
+// sessionStart gives a coordinator its playbook and state after a compaction.
+func (h *hook) sessionStart() error {
+	if h.in.Source != "" && h.in.Source != "compact" {
+		return nil
+	}
+	h.clearAsked()
+	coord, err := h.coordinator()
+	if err != nil || !coord {
+		return err
+	}
+	_, err = io.WriteString(h.stdout, h.restoreText())
+	return err
+}
+
+// saveAt is CONTR_SAVE_AT, else defaultSaveAt.
+func (h *hook) saveAt() int {
+	if n, err := strconv.Atoi(h.getenv("CONTR_SAVE_AT")); err == nil && n > 0 {
+		return n
+	}
+	return defaultSaveAt
+}
+
+func (h *hook) marker() string {
+	return filepath.Join(h.markers, filepath.Base(h.in.SessionID)+".asked")
+}
+
+func (h *hook) asked() bool {
+	if h.in.SessionID == "" {
+		return false
+	}
+	_, err := os.Stat(h.marker())
+	return err == nil
+}
+
+func (h *hook) markAsked() error {
+	if h.in.SessionID == "" {
+		return nil
+	}
+	if err := os.MkdirAll(h.markers, 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(h.marker(), nil, 0o600)
+}
+
+func (h *hook) clearAsked() {
+	if h.in.SessionID != "" {
+		_ = os.Remove(h.marker())
+	}
+}
+
+// coordinator tells whether the session is a coordinator: it ran
+// /contr:orchestrate, or its hc terminal has role orchestrator.
+func (h *hook) coordinator() (bool, error) {
+	if h.in.TranscriptPath != "" {
+		ran, err := agents.RanCommand(h.in.TranscriptPath, orchestrateCommand)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return false, err
+		}
+		if ran {
+			return true, nil
+		}
+	}
+	self := h.getenv("HC_TERMINAL_ID")
+	if self == "" {
+		return false, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	core, err := h.dial(ctx, h.getenv)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = core.Close() }()
+	w, err := agents.New(core, agents.Config{}).Get(ctx, self)
+	if err != nil {
+		return false, err
+	}
+	return w.Orchestrator(), nil
+}
+
+// restoreText is what a coordinator gets after a compaction: the state file
+// to read, its live workers, its open owner items and the playbook, cut to
+// restoreMax characters.
+func (h *hook) restoreText() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "contr: the conversation was compacted. You are the coordinator, and the playbook follows again.\n")
+	fmt.Fprintf(&b, "First read %s: you wrote it before the compaction.\n\n", filepath.Join(h.in.Cwd, stateFile))
+	// The lists come before the playbook, so a cut takes only playbook text.
+	b.WriteString(h.workersText())
+	b.WriteString("\n")
+	b.WriteString(h.ownerText())
+	b.WriteString("\nThe playbook:\n\n")
+	b.WriteString(h.playbook())
+	return cut(b.String(), restoreMax)
+}
+
+// playbook is the body of the kit's orchestrate command, without its front
+// matter. The goal is in the state file.
+func (h *hook) playbook() string {
+	kit := h.getenv("CLAUDE_PLUGIN_ROOT")
+	if kit == "" {
+		kit = h.getenv("CONTR_KIT")
+	}
+	data, err := os.ReadFile(filepath.Join(kit, "commands", "orchestrate.md"))
+	if kit == "" || err != nil {
+		return "The playbook could not be read (" + errText(err, "no kit folder") + "). Run /contr:orchestrate with your goal to read it again."
+	}
+	body := string(data)
+	if rest, ok := strings.CutPrefix(body, "---\n"); ok {
+		if i := strings.Index(rest, "\n---\n"); i >= 0 {
+			body = rest[i+len("\n---\n"):]
+		}
+	}
+	return strings.TrimSpace(strings.ReplaceAll(body, "$ARGUMENTS", "(see the state file)"))
+}
+
+// workersText lists the live workers that this coordinator started.
+func (h *hook) workersText() string {
+	self := h.getenv("HC_TERMINAL_ID")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	core, err := h.dial(ctx, h.getenv)
+	if err != nil {
+		return "Your live workers: unknown (" + err.Error() + "); use the list tool.\n"
+	}
+	defer func() { _ = core.Close() }()
+	ws, err := agents.New(core, agents.Config{}).List(ctx, false)
+	if err != nil {
+		return "Your live workers: unknown (" + err.Error() + "); use the list tool.\n"
+	}
+	var b strings.Builder
+	b.WriteString("Your live workers:\n")
+	n := 0
+	for _, w := range ws {
+		if w.Parent != self || self == "" {
+			continue
+		}
+		n++
+		fmt.Fprintf(&b, "- %s (%s) %s, %s", w.Name, w.Address, w.Role, orText(w.Status, "no status"))
+		if w.Issue != "" {
+			fmt.Fprintf(&b, ", issue %s", w.Issue)
+		}
+		if w.Worktree != "" {
+			fmt.Fprintf(&b, ", %s", w.Worktree)
+		}
+		b.WriteString("\n")
+	}
+	if n == 0 {
+		b.WriteString("- none\n")
+	}
+	return b.String()
+}
+
+// ownerText lists the open questions and to-dos that this coordinator asked.
+func (h *hook) ownerText() string {
+	self := h.getenv("HC_TERMINAL_ID")
+	store, err := ownerStore(h.getenv)
+	if err != nil {
+		return "Open owner items: unknown (" + err.Error() + "); use the owner_items tool.\n"
+	}
+	st, err := store.Read()
+	if err != nil {
+		return "Open owner items: unknown (" + err.Error() + "); use the owner_items tool.\n"
+	}
+	qs, ts := st.Open("")
+	var b strings.Builder
+	b.WriteString("Your open owner items:\n")
+	n := 0
+	for _, q := range qs {
+		if q.Coordinator == self {
+			n++
+			fmt.Fprintf(&b, "- %s %s\n", q.ID, oneLine(orText(q.Title, q.Question)))
+		}
+	}
+	for _, t := range ts {
+		if t.Coordinator == self {
+			n++
+			fmt.Fprintf(&b, "- %s [%s] %s\n", t.ID, t.Kind, oneLine(t.Text))
+		}
+	}
+	if n == 0 {
+		b.WriteString("- none\n")
+	}
+	return b.String()
+}
+
+func orText(s, other string) string {
+	if strings.TrimSpace(s) == "" {
+		return other
+	}
+	return s
+}
+
+func errText(err error, other string) string {
+	if err == nil {
+		return other
+	}
+	return err.Error()
+}
+
+func oneLine(s string) string { return cut(strings.Join(strings.Fields(s), " "), 160) }
+
+// cut keeps at most n characters of s, with "…" at the end when it cuts.
+func cut(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n-1]) + "…"
+	}
+	return s
 }
 
 // readTurn reads the last turn of the transcript at path.
