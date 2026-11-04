@@ -12,6 +12,7 @@ const usageText = `Usage:
   contr --icons                               open the window with the status icon legend
   contr statusline [-- <command> [args…]]     print the Claude Code status line
   contr agents <command> [args…]              start and follow worker agents (contr agents help)
+  contr owner <command> [args…]               answer questions and mark to-dos done (contr owner help)
   contr mcp                                   serve the agent tools over MCP on stdin and stdout
   contr --help, -h                            print this text
 `
@@ -30,6 +31,8 @@ const (
 	kindAgents
 	// kindMCP is `mcp`.
 	kindMCP
+	// kindOwner is `owner`. Command.Then holds the words after it.
+	kindOwner
 	// kindUnknown is an argument that is not part of the command line.
 	kindUnknown
 )
@@ -46,7 +49,7 @@ type Command struct {
 }
 
 // parseArgs reads args, which hold the program name first. `statusline`,
-// `agents` and `mcp` must be the first argument. Otherwise the arguments are read in
+// `agents`, `owner` and `mcp` must be the first argument. Otherwise the arguments are read in
 // order: the first `--help` or `-h` asks for the usage, and the first
 // argument other than `--icons` is unknown.
 func parseArgs(args []string) Command {
@@ -58,6 +61,9 @@ func parseArgs(args []string) Command {
 	}
 	if len(args) > 0 && args[0] == "agents" {
 		return Command{Kind: kindAgents, Then: args[1:]}
+	}
+	if len(args) > 0 && args[0] == "owner" {
+		return Command{Kind: kindOwner, Then: args[1:]}
 	}
 	if len(args) == 1 && args[0] == "mcp" {
 		return Command{Kind: kindMCP}
