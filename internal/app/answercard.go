@@ -59,6 +59,8 @@ func CardOptions(q owner.Question) []CardOption {
 
 // FloatCard is the answer card that floats over the terminal. Its methods run on the UI thread.
 type FloatCard struct {
+	// Entry opens the pull request or issue of a blocked worker (D106).
+	Entry  WorkerEntry
 	Source AgentSource
 	Run    Runner
 	// Invalidate redraws the window; may be nil.
@@ -322,6 +324,11 @@ func (a *FloatCard) actions(c *ui.Context, t NeedTab, snap agentstate.Snapshot, 
 			style = ButtonPlain
 		}
 		cardButton(c, CardFocusWorker, style, theme.Text, func() { a.focusWorker(t) })
+		if w, ok := findBlocked(snap, t.Key); ok {
+			if label, open := a.Entry.For(w); open != nil {
+				cardButton(c, label, ButtonPlain, theme.Text, func() { open(); a.Close() })
+			}
+		}
 	}
 	cardButton(c, CardClose, ButtonPlain, theme.TextDim, a.Close)
 }
