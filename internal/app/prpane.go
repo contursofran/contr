@@ -64,6 +64,8 @@ type PRPane struct {
 	err     string
 	tab     int
 	gen     uint64
+	client  github.Client
+	checks  prChecks
 	handle  ui.Handle
 	refocus bool
 }
@@ -79,6 +81,7 @@ func (p *PRPane) Open(dir string, n int) {
 		mk = github.New
 	}
 	client := mk(dir)
+	p.client, p.checks = client, prChecks{}
 	p.Run.Do(func() func() {
 		pr, err := client.PR(context.Background(), n)
 		return func() {
@@ -371,6 +374,10 @@ func (p *PRPane) tabs(c *ui.Context) {
 }
 
 func (p *PRPane) body(c *ui.Context) {
+	if p.tab == PRTabChecks {
+		p.checksTab(c)
+		return
+	}
 	if p.tab != PRTabOverview {
 		ui.Text(c, "Not built yet.").TextColor(theme.Color(theme.TextDim)).Padding(theme.PRPanePad)
 		return
