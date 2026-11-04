@@ -16,12 +16,13 @@ import (
 
 // ghFake answers gh calls: pr view, api user and the writes. It records argv.
 type ghFake struct {
-	mu     sync.Mutex
-	calls  [][]string
-	pr     string // JSON of pr view
-	user   string
-	failOn string // a write verb that fails: comment, review or merge
-	prs    int    // count of pr view reads
+	mu      sync.Mutex
+	calls   [][]string
+	pr      string // JSON of pr view
+	user    string
+	failOn  string // a write verb that fails: comment, review or merge
+	prs     int    // count of pr view reads
+	userErr bool   // api user fails
 }
 
 func (g *ghFake) Run(_ context.Context, _ string, args ...string) ([]byte, error) {
@@ -29,6 +30,8 @@ func (g *ghFake) Run(_ context.Context, _ string, args ...string) ([]byte, error
 	defer g.mu.Unlock()
 	g.calls = append(g.calls, slices.Clone(args))
 	switch {
+	case args[0] == "api" && args[1] == "user" && g.userErr:
+		return nil, errors.New("gh: no login")
 	case args[0] == "api" && args[1] == "user":
 		return []byte(g.user + "\n"), nil
 	case args[0] == "pr" && args[1] == "view":
@@ -180,6 +183,35 @@ func TestPRFooterCommentSendsAndClears(t *testing.T) {
 	}
 	if r.pane.ft.text != "" {
 		t.Errorf("field not cleared: %q", r.pane.ft.text)
+	}
+}
+
+func TestPRFooterCommentKeptOnError(t *testing.T) {
+	r, g := footerRig(t, nil)
+	g.failOn = "comment"
+	r.pane.ft.text = "looks good"
+	r.tt.Frame()
+	if err := r.tt.Click(LabelPRComment); err != nil {
+		t.Fatal(err)
+	}
+	r.flush()
+	if r.pane.ft.text != "looks good" {
+		t.Errorf("text lost after a failed write: %q", r.pane.ft.text)
+	}
+	if !r.tt.HasText("gh: refused") {
+		t.Errorf("error not shown: %q", r.tt.Texts())
+	}
+}
+
+func TestPRFooterViewerErrorShown(t *testing.T) {
+	r := newPRRig(t)
+	g := &ghFake{pr: prJSON, user: "owner", userErr: true}
+	r.pane.Client = func(dir string) github.Client { return github.Client{R: g, Dir: dir} }
+	r.pane.Open("/w", 642)
+	r.tt.Frame()
+	r.flush()
+	if !r.tt.HasText("Approve unavailable: gh: gh: no login") {
+		t.Errorf("reason not shown: %q", r.tt.Texts())
 	}
 }
 

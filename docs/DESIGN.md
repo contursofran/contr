@@ -430,7 +430,9 @@ needs-you tabs show only the icon and the id, and the bottom row hides
 Slice 1 (#235, D59) builds the pane, the header lines 1 and 2, the state
 badge and the CI summary, the tabs and the Overview. The tab switch is
 `kit.Switch`, so the Review mode switch has the same look. It opens from the `#N` badge
-of a sidebar worktree row and the `#N` label of a board work row. While it
+of a sidebar worktree row and the `#N` label of a board work row (the
+worker's PR, found from its branch; with no PR the label opens the issue in
+the browser, D104). While it
 is open, the needs-you tabs and the title bar tabs show icon and id only.
 Slice 5 (#152, D101) builds the Checks tab. Slice 6 (#153, D102) builds
 the Files tab. Slice 9 (#154, D103) adds `reply` and `resolve` to an open
