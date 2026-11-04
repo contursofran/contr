@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"log"
 	"os"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -108,6 +109,12 @@ func openWindow(icons bool) int {
 		frame = app.NewFrame(nil)
 		frame.StartAgents = startAgents(os.Getenv)
 		frame.TerminalSource = terminalSource(os.Getenv)
+		frame.PickFolder = pickFolder
+		frame.SpawnOrchestrator = func(dir string) error {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			return spawnOrchestrator(ctx, os.Getenv, dialAgents, dir, time.Now())
+		}
 		opts.Content = ui.View(frame.View)
 	}
 	mygo.App.WhenReady(func() {

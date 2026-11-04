@@ -109,6 +109,8 @@ func (c SpacesChange) Any() bool { return c.Rebuilt || c.Online || len(c.Rows) >
 type SpacesList struct {
 	// OpenPR runs when a pull request badge is clicked, with the row's folder and the number.
 	OpenPR func(dir string, n int)
+	// OnNew runs when `+ new` is clicked. Nil: the button does nothing.
+	OnNew func()
 
 	src       liveSource
 	host      hostSource
@@ -423,14 +425,18 @@ func (l *SpacesList) View(c *ui.Context) {
 	})
 }
 
-// spacesHeader is the `Spaces` label and `+ new`. The button has no action
-// yet (Rust D50), so it has no pointer.
+// spacesHeader is the `Spaces` label and `+ new`. The button starts an
+// orchestrator (D57); without OnNew it has no action and no pointer.
 func (l *SpacesList) spacesHeader(c *ui.Context) {
 	ui.Row(c).Label(LabelSpacesHeader).FillWidth().Height(theme.SpacesRowHeight).Shrink(0).
 		AlignItems(ui.Center).PaddingX(theme.SidebarPadX).TextColor(theme.Color(theme.TextDim)).Children(func() {
 		ui.Text(c, "Spaces")
 		ui.Spacer(c)
-		ui.Row(c).Label(LabelSpacesNew).TextColor(theme.Color(theme.TextDim2)).Children(func() { ui.Text(c, "+ new") })
+		btn := ui.Row(c).Label(LabelSpacesNew).TextColor(theme.Color(theme.TextDim2))
+		if l.OnNew != nil {
+			btn = btn.Cursor(ui.CursorPointer).OnClick(l.OnNew)
+		}
+		btn.Children(func() { ui.Text(c, "+ new") })
 	})
 }
 
