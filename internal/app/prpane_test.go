@@ -90,7 +90,7 @@ func TestPRPaneHeaderTabsAndOverview(t *testing.T) {
 	r.flush()
 	for _, want := range []string{"#642", "Fix bag drag target", LabelPRWeb, LabelPRClose, "client",
 		"fix/bag-drag → main", "b-1140", "+86 −12 · 3 files", "open", "CI green · 3 checks",
-		"Overview", "Files 3", "Checks 3", "Why", "Drops land under the cursor.", "• one", "• two",
+		"Overview", "Files 3", "Checks 3", "Why", "Drops land under the cursor.", "one", "two",
 		LabelPRTimes, "alice", "Thanks", "r-1139", "approved", "14m", "10m"} {
 		if !r.tt.HasText(want) {
 			t.Errorf("missing %q in %q", want, r.tt.Texts())
@@ -372,5 +372,50 @@ func TestPRPaneStateBadge(t *testing.T) {
 	px := img.RGBAAt(int((b.X+2)*scale), int((b.Y+b.H/2)*scale))
 	if got := uint32(px.R)<<16 | uint32(px.G)<<8 | uint32(px.B); got != theme.YouBg {
 		t.Errorf("merged badge background = %06X, want %06X", got, theme.YouBg)
+	}
+}
+
+func TestPRPaneDescriptionRendersMarkdown(t *testing.T) {
+	r := newPRRig(t)
+	r.pane.Open("/w", 642)
+	r.flush()
+	for _, want := range []string{"Why", "Drops land under the cursor.", "one", "two"} {
+		if !r.tt.HasText(want) {
+			t.Errorf("missing %q in %q", want, r.tt.Texts())
+		}
+	}
+	if r.tt.HasText("## Why") {
+		t.Error("heading marks must not show")
+	}
+	if r.tt.HasText("No description.") {
+		t.Error("body exists")
+	}
+}
+
+func TestPRPaneEmptyDescription(t *testing.T) {
+	r := newPRRig(t)
+	r.run.reply = func(string) ([]byte, error) {
+		return []byte(strings.Replace(prJSON, `"body":"## Why\n\nDrops land under the cursor.\n- one\n- two"`, `"body":"  "`, 1)), nil
+	}
+	r.pane.Open("/w", 642)
+	r.flush()
+	if !r.tt.HasText("No description.") {
+		t.Errorf("texts %q", r.tt.Texts())
+	}
+}
+
+func TestPRPaneDescriptionLinksOpenOnlyWeb(t *testing.T) {
+	r := newPRRig(t)
+	r.pane.Open("/w", 642)
+	r.flush()
+	h := r.pane.md.OnLink
+	if h == nil {
+		t.Fatal("no link handler")
+	}
+	h("https://example.test/x")
+	h("javascript:alert(1)")
+	h("file:///etc/passwd")
+	if len(r.opened) != 1 || r.opened[0] != "https://example.test/x" {
+		t.Errorf("opened %q", r.opened)
 	}
 }

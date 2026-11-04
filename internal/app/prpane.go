@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/markdown"
 
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/kit"
@@ -23,13 +24,14 @@ import (
 
 // Labels of the PR pane.
 const (
-	LabelPRPane  = "pull request"
-	LabelPRClose = "×"
-	LabelPRWeb   = "GitHub ↗"
-	LabelPRTabs  = "pr tabs"
-	LabelPRLoad  = "Loading…"
-	LabelPRTimes = "Timeline"
-	LabelPRBody  = "pr body"
+	LabelPRPane   = "pull request"
+	LabelPRClose  = "×"
+	LabelPRWeb    = "GitHub ↗"
+	LabelPRTabs   = "pr tabs"
+	LabelPRLoad   = "Loading…"
+	LabelPRTimes  = "Timeline"
+	LabelPRNoDesc = "No description."
+	LabelPRBody   = "pr body"
 )
 
 // PR tab ids, as option indexes of the tab switch.
@@ -54,6 +56,7 @@ type PRPane struct {
 	// OnClose runs after the pane closes. May be nil.
 	OnClose func()
 
+	md      markdown.Options
 	open    bool
 	number  int
 	dir     string
@@ -380,62 +383,22 @@ func (p *PRPane) body(c *ui.Context) {
 	})
 }
 
-// description draws the PR text. It shows markdown lightly: headings are
-// bold, list items get a bullet, and a blank line is a gap.
+// description draws the PR text as markdown. Links open through OpenURL,
+// only for http and https addresses. An empty text shows a dim note.
 func (p *PRPane) description(c *ui.Context) {
-	ui.Column(c).FillWidth().Gap(4).TextColor(theme.Color(theme.Text2)).Children(func() {
-		for _, l := range descLines(p.pr.Body) {
-			if l.blank {
-				ui.Box(c).Height(theme.ReportBlankHeight)
-				continue
-			}
-			t := ui.Text(c, l.text).FillWidth()
-			if l.bold {
-				t = t.Bold().TextColor(theme.Color(theme.Text))
-			}
+	if strings.TrimSpace(p.pr.Body) == "" {
+		ui.Text(c, LabelPRNoDesc).TextColor(theme.Color(theme.TextDim))
+		return
+	}
+	p.md.OnLink = func(url string) {
+		u := strings.ToLower(url)
+		if p.OpenURL != nil && (strings.HasPrefix(u, "https://") || strings.HasPrefix(u, "http://")) {
+			p.OpenURL(url)
 		}
+	}
+	ui.Column(c).FillWidth().TextColor(theme.Color(theme.Text2)).Children(func() {
+		markdown.View(c, p.pr.Body, &p.md)
 	})
-}
-
-type descLine struct {
-	text        string
-	bold, blank bool
-}
-
-// descLines turns markdown text into lines to draw.
-func descLines(body string) []descLine {
-	var out []descLine
-	inCode := false
-	for _, raw := range strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n") {
-		line := strings.TrimRight(raw, " \t")
-		if strings.HasPrefix(strings.TrimSpace(line), "```") {
-			inCode = !inCode
-			continue
-		}
-		switch {
-		case inCode:
-			out = append(out, descLine{text: line})
-		case strings.TrimSpace(line) == "":
-			if len(out) > 0 && !out[len(out)-1].blank {
-				out = append(out, descLine{blank: true})
-			}
-		case strings.HasPrefix(line, "#"):
-			out = append(out, descLine{text: strings.TrimSpace(strings.TrimLeft(line, "#")), bold: true})
-		default:
-			t := strings.TrimSpace(line)
-			for _, m := range []string{"- ", "* "} {
-				if strings.HasPrefix(t, m) {
-					t = "• " + strings.TrimSpace(t[2:])
-					break
-				}
-			}
-			out = append(out, descLine{text: t})
-		}
-	}
-	for len(out) > 0 && out[len(out)-1].blank {
-		out = out[:len(out)-1]
-	}
-	return out
 }
 
 func (p *PRPane) timeline(c *ui.Context) {
