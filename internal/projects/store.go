@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -14,6 +15,9 @@ import (
 )
 
 const version = 1
+
+// MaxRecent is the most entries that the recent list keeps (D116).
+const MaxRecent = 10
 
 // Entry is a recent project: the project key, the folder opened and when.
 type Entry struct {
@@ -28,6 +32,9 @@ type Store struct {
 	order  []string
 	hidden []string
 	recent []Entry
+	// folders maps a project key to the folder that the owner opened for it.
+	// Only these projects show in the sidebar with no hc terminal (D116).
+	folders map[string]string
 }
 
 type file struct {
@@ -35,6 +42,8 @@ type file struct {
 	Order   []string `json:"order"`
 	Hidden  []string `json:"hidden"`
 	Recent  []Entry  `json:"recent"`
+	// Folders is added in D116. A file without it is still version 1.
+	Folders map[string]string `json:"folders,omitempty"`
 }
 
 // Path returns the store file: the user config folder, contr/projects.json.
@@ -64,13 +73,13 @@ func Load(path string) (*Store, error) {
 	if f.Version != version {
 		return &Store{}, fmt.Errorf("projects: %s has version %d, want %d", path, f.Version, version)
 	}
-	return &Store{order: f.Order, hidden: f.Hidden, recent: f.Recent}, nil
+	return &Store{order: f.Order, hidden: f.Hidden, recent: f.Recent, folders: f.Folders}, nil
 }
 
 // Save writes the store to path through a temp file in the same folder and a
 // rename, so a failed write leaves the old file whole.
 func (s *Store) Save(path string) error {
-	f := file{Version: version, Order: s.order, Hidden: s.hidden, Recent: s.recent}
+	f := file{Version: version, Order: s.order, Hidden: s.hidden, Recent: s.recent, Folders: s.folders}
 	if f.Order == nil {
 		f.Order = []string{}
 	}
@@ -164,6 +173,7 @@ func (s *Store) Clone() *Store {
 	c.order = slices.Clone(s.order)
 	c.hidden = slices.Clone(s.hidden)
 	c.recent = slices.Clone(s.recent)
+	c.folders = maps.Clone(s.folders)
 	return &c
 }
 
@@ -181,3 +191,46 @@ func (s *Store) Show(dir string) {
 
 // Hidden reports whether dir is hidden.
 func (s *Store) Hidden(dir string) bool { return slices.Contains(s.hidden, dir) }
+
+// Recent returns the recent projects, newest first.
+func (s *Store) Recent() []Entry { return slices.Clone(s.recent) }
+
+// Touch records that the folder path of project dir was opened at at. An
+// older entry of the same project is dropped, so the list has each project
+// once, newest first. It keeps at most MaxRecent entries (D116).
+func (s *Store) Touch(dir, path string, at time.Time) {
+	s.recent = slices.DeleteFunc(s.recent, func(e Entry) bool { return e.Dir == dir })
+	s.recent = append([]Entry{{Dir: dir, Path: path, At: at}}, s.recent...)
+	if len(s.recent) > MaxRecent {
+		s.recent = s.recent[:MaxRecent]
+	}
+}
+
+// AddFolder adds the project dir with its folder path to the store: it goes
+// to the end of the order when it is new, and it is no longer hidden (D116).
+func (s *Store) AddFolder(dir, path string) {
+	if !slices.Contains(s.order, dir) {
+		s.order = append(s.order, dir)
+	}
+	if s.folders == nil {
+		s.folders = map[string]string{}
+	}
+	s.folders[dir] = path
+	s.Show(dir)
+}
+
+// Folders returns the stored projects that were added with a folder, in the
+// stored order and with the hidden ones left out, as project dirs. Path gives
+// the folder of one.
+func (s *Store) Folders() []string {
+	var out []string
+	for _, d := range s.order {
+		if _, ok := s.folders[d]; ok && !s.Hidden(d) {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+// Path returns the folder that was added for project dir, or "".
+func (s *Store) Path(dir string) string { return s.folders[dir] }

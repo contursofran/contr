@@ -127,3 +127,57 @@ func TestFrameWithoutLoaderReadsNoStore(t *testing.T) {
 		t.Error("a store appeared without a loader")
 	}
 }
+
+func TestSidebarShowsStoredProjectWithoutTerminalAsEmptyGroup(t *testing.T) {
+	h, _ := twoRepos(t)
+	s := &projects.Store{}
+	s.AddFolder("/proj/gamma/.git", "/proj/gamma")
+	h.list.SetProjects(s)
+	h.tt.Frame()
+	if got := strings.Join(groupNames(h.list.Groups()), ","); got != "gamma,alpha,beta" {
+		t.Fatalf("groups %s", got)
+	}
+	g := h.list.Groups()[0]
+	if g.Path != "/proj/gamma" || len(g.Rows) != 0 {
+		t.Fatalf("empty group = %+v", g)
+	}
+	var started []string
+	h.list.OnNewIn = func(dir string) { started = append(started, dir) }
+	h.tt.Frame()
+	h.tt.Click(LabelNewIn(g))
+	if len(started) != 1 || started[0] != "/proj/gamma" {
+		t.Errorf("started %v", started)
+	}
+	for _, name := range []string{"alpha", "beta"} {
+		if _, ok := h.tt.Find(LabelNewIn(spaces.RepoGroup{Name: name})); ok {
+			t.Errorf("group %s with terminals has an empty-group button", name)
+		}
+	}
+}
+
+func TestSidebarStoredProjectHiddenOrWithTerminalIsNotEmptyGroup(t *testing.T) {
+	h, _ := twoRepos(t)
+	dir := h.group(0).CommonDir
+	s := &projects.Store{}
+	s.AddFolder(dir, "/somewhere") // a terminal sits in it: no empty copy
+	s.AddFolder("/proj/gamma/.git", "/proj/gamma")
+	s.Hide("/proj/gamma/.git")
+	h.list.SetProjects(s)
+	if got := strings.Join(groupNames(h.list.Groups()), ","); got != "alpha,beta" {
+		t.Errorf("groups %s", got)
+	}
+	if len(h.group(0).Rows) == 0 || h.group(0).Path != "" {
+		t.Errorf("group with terminals is empty: %+v", h.group(0))
+	}
+}
+
+func TestSidebarStoredProjectFollowsStoredOrder(t *testing.T) {
+	h, _ := twoRepos(t)
+	s := &projects.Store{}
+	s.SetOrder([]string{"/proj/gamma/.git"})
+	s.AddFolder("/proj/gamma/.git", "/proj/gamma")
+	h.list.SetProjects(s)
+	if got := strings.Join(groupNames(h.list.Groups()), ","); got != "gamma,alpha,beta" {
+		t.Errorf("groups %s", got)
+	}
+}

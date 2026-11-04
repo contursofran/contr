@@ -82,6 +82,9 @@ type RepoGroup struct {
 	// Branch is the main branch of the repo.
 	Branch string
 	Rows   []WorktreeRow
+	// Path is the folder of a group that no hc terminal sits in (D116). It
+	// is empty for a group that has rows.
+	Path string
 }
 
 // Build groups the terminals that sit in a checkout of scan into repos and
