@@ -199,6 +199,19 @@ func TestAttachWiresCmdWToTheSourceClose(t *testing.T) {
 		time.Sleep(time.Millisecond)
 		stopped, closed = src.calls()
 	}
+	// The close result reaches the window through a later Update: flush until
+	// it has run (it clears the closed terminal's selection), so no update is
+	// left queued when the frame stops.
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
+		w.flush()
+		if _, ok := f.Selection.Current(); !ok {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if _, ok := f.Selection.Current(); ok {
+		t.Fatal("the close result never reached the window")
+	}
 	w.flush()
 	// Close, not Stop: a stopped terminal stays in hc as finished, and its
 	// tab would stay with it.
