@@ -225,6 +225,47 @@ func TestListSendInterruptStopRead(t *testing.T) {
 	}
 }
 
+// TestControlCallsNameTheCaller: inside hc, stop, read and interrupt name
+// this terminal as the caller, so hc counts a child's news as seen by its
+// parent and types no exit note after a stop. Outside hc they name nobody.
+func TestControlCallsNameTheCaller(t *testing.T) {
+	for _, id := range []string{"t4", ""} {
+		f := &fakeCore{handle: map[string]func(map[string]any) (any, error){
+			"terminal.interrupt": func(map[string]any) (any, error) { return map[string]any{"outcome": "stopped"}, nil },
+			"terminal.read":      func(map[string]any) (any, error) { return map[string]any{"text": "screen"}, nil },
+		}}
+		m := New(f, DefaultConfig())
+		m.getenv = func(k string) string {
+			if k == "HC_TERMINAL_ID" {
+				return id
+			}
+			return ""
+		}
+		ctx := context.Background()
+		calls := []func() error{
+			func() error { return m.Stop(ctx, "alpha") },
+			func() error { _, err := m.Read(ctx, "alpha", 0); return err },
+			func() error { _, err := m.Interrupt(ctx, "alpha"); return err },
+		}
+		for _, call := range calls {
+			if err := call(); err != nil {
+				t.Fatal(err)
+			}
+			c := f.last()
+			got, has := c.Params["caller"]
+			if id != "" && got != id {
+				t.Errorf("HC_TERMINAL_ID %q: %s caller = %v, want %q", id, c.Method, got, id)
+			}
+			if id == "" && has {
+				t.Errorf("outside hc: %s has caller %v", c.Method, got)
+			}
+			if c.Params["terminal"] != "alpha" {
+				t.Errorf("%s params = %v", c.Method, c.Params)
+			}
+		}
+	}
+}
+
 func TestWatchFollowsEvents(t *testing.T) {
 	gets := map[string]any{
 		"t2": term("t2", "beta", "live", builderLabels, map[string]any{"state": "working"}),
