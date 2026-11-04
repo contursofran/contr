@@ -98,7 +98,8 @@ func TestWorkerPRCachesPerWorktreeAndBranch(t *testing.T) {
 	if r.runner.calls != 1 {
 		t.Errorf("gh ran %d times for one worktree and branch, want 1", r.runner.calls)
 	}
-	r.branch = "agent/2-y" // a new branch asks again
+	r.branch = "agent/2-y" // a new branch asks again, once the answer is old
+	r.now = r.now.Add(prHitTTL + time.Second)
 	r.w.Sync(ws)
 	r.flush()
 	if r.runner.calls != 2 {
@@ -229,5 +230,85 @@ func TestFrameOpenIssueRunsOffThreadAndShowsAnError(t *testing.T) {
 	queued[0]()
 	if gotDir != "/wt/a" || gotN != 151 {
 		t.Errorf("opened %q #%d", gotDir, gotN)
+	}
+}
+
+func TestWorkerPRFreshAnswerDoesNoGitRead(t *testing.T) {
+	r := newPRSourceRig(map[string]string{"/wt/a": `{"number":307}`})
+	reads := 0
+	r.w.Branch = func(string) string { reads++; return r.branch }
+	ws := liveWorker("/wt/a")
+	r.w.Sync(ws)
+	r.flush()
+	r.w.Sync(ws)
+	r.w.Sync(ws)
+	if len(r.queue) != 0 || reads != 1 {
+		t.Errorf("fresh answer: %d queued, %d git reads, want 0 and 1", len(r.queue), reads)
+	}
+}
+
+func TestWorkerPRClosedPRLeavesTheRow(t *testing.T) {
+	r := newPRSourceRig(map[string]string{"/wt/a": `{"number":307,"state":"OPEN"}`})
+	ws := liveWorker("/wt/a")
+	r.w.Sync(ws)
+	r.flush()
+	if r.w.PR("/wt/a") != 307 {
+		t.Fatal("open PR not found")
+	}
+	r.runner.out["/wt/a"] = `{"number":307,"state":"MERGED"}`
+	r.w.Sync(ws) // still fresh: no read
+	r.flush()
+	if r.w.PR("/wt/a") != 307 || r.runner.calls != 1 {
+		t.Fatalf("read before the TTL: PR %d, calls %d", r.w.PR("/wt/a"), r.runner.calls)
+	}
+	r.now = r.now.Add(prHitTTL + time.Second)
+	r.w.Sync(ws)
+	r.flush()
+	if r.w.PR("/wt/a") != 0 {
+		t.Errorf("merged PR stays: %d", r.w.PR("/wt/a"))
+	}
+}
+
+func TestWorkerPRErrorOnRecheckKeepsTheNumber(t *testing.T) {
+	r := newPRSourceRig(map[string]string{"/wt/a": `{"number":307,"state":"OPEN"}`})
+	ws := liveWorker("/wt/a")
+	r.w.Sync(ws)
+	r.flush()
+	r.runner.err = errors.New("gh: offline")
+	r.now = r.now.Add(prHitTTL + time.Second)
+	r.w.Sync(ws)
+	r.flush()
+	if r.w.PR("/wt/a") != 307 {
+		t.Errorf("PR = %d after a failed re-check, want 307", r.w.PR("/wt/a"))
+	}
+}
+
+func TestWorkerPRBoundsGHRuns(t *testing.T) {
+	r := newPRSourceRig(nil)
+	var ws []agents.Worker
+	for _, d := range []string{"/wt/a", "/wt/b", "/wt/c", "/wt/d", "/wt/e"} {
+		ws = append(ws, liveWorker(d)...)
+	}
+	r.w.Sync(ws)
+	// run the branch reads and their answers: each queues a gh run
+	for i := 0; i < 5; i++ {
+		f := r.queue[0]
+		r.queue = r.queue[1:]
+		f()
+	}
+	peak := 0
+	for len(r.queue) > 0 {
+		if r.w.active > peak {
+			peak = r.w.active
+		}
+		f := r.queue[0]
+		r.queue = r.queue[1:]
+		f()
+	}
+	if peak > 2 || r.runner.calls != 5 {
+		t.Errorf("peak %d gh runs (max %d), %d calls, want 5", peak, 2, r.runner.calls)
+	}
+	if r.w.active != 0 || len(r.w.waiting) != 0 {
+		t.Errorf("active %d, waiting %d at the end", r.w.active, len(r.w.waiting))
 	}
 }
