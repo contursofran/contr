@@ -173,6 +173,21 @@ const AnswerButtonRadius = 6
 const AnswerButtonGap = 8 // between two buttons
 const AnswerMargin = 8    // card to panel edges
 
+// Context sheet (DESIGN.md, D108)
+const BgSheet = 0x161616
+const BgSheetBox = 0x111111
+const SheetBoxBorder = 0x262626
+const SheetHeight = 470
+const SheetGap = 12
+const SheetPadTop = 14
+const SheetPadBottom = 16
+const SheetPadX = 22
+const SheetBoxRadius = 8
+const SheetBoxPadY = 12
+const SheetBoxPadX = 14
+const SheetOptionsWidth = 420
+const SheetOptionPadY = 8
+
 // Report tab (planner defaults; docs/DESIGN.md has no sizes for these)
 const ReportGap = 12         // between "Open in editor" and "back"
 const ReportIndent = 14      // per list depth (same as ROW_INDENT)

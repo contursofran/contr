@@ -335,27 +335,25 @@ cubic-bezier(0.2, 0.8, 0.2, 1) **(motion not built)**.
 - The answer goes to the coordinator that asked, as
   `Owner answered <ID>: <answer>` (D36).
 
-## Context sheet (⌘J) **(not built)**
+## Context sheet (⌘J)
 
-Opens from `⌘J` or `context ⌘J` for the picked item. It is an overlay over
-the top 470 px of the terminal area (left edge to the panel, or to the PR
-pane when open), bg #161616, bottom border `line.strong`, shadow 0 16 40
-rgba(0,0,0,.55), padding 14×22×16, gap 12. Enter motion: down 32 px and
-fade in, 0.3 s. The prompt, the bottom row and the newest output lines stay
-visible.
+Opens from `⌘J`; `⌘J` again closes it. It is an overlay over the top 470 px
+of the terminal area (left edge to the panel, or to the PR pane when open),
+bg #161616, bottom border `line.strong`, padding 14×22×16, gap 12. The
+terminal does not resize (D67). Esc closes it only while it has the focus
+(D72). The shadow and the enter motion are **(not built)**.
 
-- Header: icon, title (600), meta (dim), then `‹ N of M ›` to step through
-  the items, then ghost `esc`.
-- A line with the clock icon: what waits on this item.
-- Left column (grows): `Why it asks` with the source reference at the
-  right, then the source excerpt in a box (bg #111111, border #262626,
-  radius 8, padding 12×14, line height 19).
+- Header: icon, `id  title` (600), meta (dim: from, age), `‹`, `N of M`, `›`,
+  then ghost `esc`. The items are the open questions of the open project in
+  the order of the needs-you row. `‹` and `›` stop at the ends.
+- Left column (grows): `Why it asks`, then the question text in a box (bg
+  #111111, border #262626, radius 8, padding 12×14).
 - Right column (420): `Options`, one block each (top border `line`, padding
-  8×0): the option button, then its impact line (`text.2`). At the bottom:
-  secondary `Show in terminal` (scrolls the terminal to the source message
-  and marks it), ghost `Ask principal`, and `undo` once resolved.
-- Data each question must carry: the source message reference, one impact
-  line per option, related files and PRs.
+  8×0): the option text, `recommended` for the recommended one (first), and
+  its Answer button. Answer goes to the coordinator that asked (D108).
+- Not built, and not planned until `owner.Question` carries the data: impact
+  line per option, source excerpt and reference, related files and PRs,
+  `Show in terminal` (#146), `Ask principal`, `undo`.
 
 ## Board pop-up **(not built)**
 
