@@ -12,13 +12,12 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/app/state"
-	"github.com/contursofran/contr/internal/app/terminal"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/herdr"
 	"github.com/contursofran/contr/internal/host"
-	"github.com/contursofran/contr/internal/term"
 	"github.com/contursofran/contr/internal/usage"
 )
 
@@ -408,18 +407,6 @@ func TestAttachWiresTheTerminalToTheWindowFocus(t *testing.T) {
 	}
 }
 
-func TestTheTerminalGridIsInsideTheTerminalArea(t *testing.T) {
-	f, _, tt := newTester(t, connected())
-	v := terminal.NewView(terminal.Options{Invalidate: func() {}})
-	t.Cleanup(v.Close)
-	f.Slots.Terminal = v.Build
-	tt.Frame()
-	grid, area := box(t, tt, terminal.LabelGrid), box(t, tt, LabelTerminal)
-	if grid.X < area.X || grid.Y < area.Y || grid.X+grid.W > area.X+area.W+0.5 || grid.Y+grid.H > area.Y+area.H+0.5 {
-		t.Errorf("grid %+v is not inside the terminal area %+v", grid, area)
-	}
-}
-
 // reviewFrame returns a frame whose Review runs reads at once, with a selection and the
 // number of reads started.
 func reviewFrame(t *testing.T) (*Frame, *int) {
@@ -533,7 +520,7 @@ func TestAttachStartsAndStopsTheAgentState(t *testing.T) {
 // idleSource is a terminal source that never answers, so no link finishes an attach.
 type idleSource struct{ addr string }
 
-func (idleSource) Attach(ctx context.Context, _ hc.AttachParams) (terminal.HCStream, error) {
+func (idleSource) Attach(ctx context.Context, _ hc.AttachParams) (ghostty.Stream, error) {
 	<-ctx.Done()
 	return nil, ctx.Err()
 }
@@ -545,7 +532,7 @@ func TestTheTerminalFollowsTheSelectedAgent(t *testing.T) {
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	var asked []string
-	f.TerminalSource = func(addr string) terminal.HCSource {
+	f.TerminalSource = func(addr string) ghostty.Source {
 		asked = append(asked, addr)
 		return idleSource{addr}
 	}
@@ -569,49 +556,5 @@ func TestTheTerminalFollowsTheSelectedAgent(t *testing.T) {
 	f.syncTerminal() // the same terminal: no new source, no restart
 	if len(asked) != 3 {
 		t.Errorf("a sync with the same terminal asked for a new source: %v", asked)
-	}
-}
-
-// quietLink is a terminal link that does nothing.
-type quietLink struct{}
-
-func (quietLink) SendInput(string, []term.InputEvent) error { return nil }
-func (quietLink) Resize(term.GridSize, term.CellPx) error   { return nil }
-func (quietLink) SetFocus(bool) error                       { return nil }
-func (quietLink) TakeLatest() *term.Screen                  { return nil }
-
-// TestTerminalLinkUpdatesArePostedWithoutWaiting checks that a link update
-// goes to the UI thread with Window.Update, which queues it and returns. With
-// a post that waits for the UI thread (mygo.RunOnMain), the app hung in a
-// flood (#204): the UI thread stopped the link and waited for its reader,
-// which waited for the UI thread.
-func TestTerminalLinkUpdatesArePostedWithoutWaiting(t *testing.T) {
-	w := &fakeWindow{visible: true}
-	f := NewFrame(nil)
-	stop := f.attachTerminal(w)
-	defer stop()
-	notify := make(chan func(term.LinkUpdate), 1)
-	f.termView.SetTerminal(func(_ term.GridSize, _ term.CellPx, n func(term.LinkUpdate)) (terminal.Link, func(), error) {
-		notify <- n
-		return quietLink{}, func() {}, nil
-	})
-	tt := ui.NewTester(f.termView.Build, 400, 300)
-	tt.Frame() // the layout gives the grid size, and the link starts
-	var n func(term.LinkUpdate)
-	select {
-	case n = <-notify:
-	case <-time.After(2 * time.Second):
-		t.Fatal("the link did not start")
-	}
-	before := w.queued()
-	done := make(chan struct{})
-	go func() { n(term.ScreenUpdate{}); close(done) }()
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("the link update waits for the UI thread")
-	}
-	if w.queued() != before+1 {
-		t.Errorf("queued updates = %d, want %d: the update did not go through Window.Update", w.queued(), before+1)
 	}
 }
