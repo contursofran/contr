@@ -3,10 +3,12 @@ package app
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/github"
@@ -19,10 +21,6 @@ const (
 	LabelPRNoChecks = "No checks."
 )
 
-// checksMinGap is the least time between two re-reads that the frame asks
-// for. A read on tab open ignores it.
-const checksMinGap = 10 * time.Second
-
 // prChecks is the state of the Checks tab. It is reset when a PR opens.
 type prChecks struct {
 	rows     []github.Check
@@ -30,50 +28,83 @@ type prChecks struct {
 	loaded   bool // a read ended, with rows or with an error
 	started  bool // the tab asked for its first read
 	inflight bool
-	last     time.Time
+	// stamp is the hc event state of the worker terminal at the last read.
+	// known is false until the first agents sync after the tab opened takes it.
+	stamp termStamp
+	known bool
+}
+
+// termStamp is what shows a new hc event for a terminal: the time of its last
+// event, its turn and its status.
+type termStamp struct {
+	out    time.Time
+	turn   uint64
+	status string
+}
+
+func stampOf(w agents.Worker) termStamp {
+	return termStamp{out: w.LastOutput, turn: w.Turn, status: w.Status}
 }
 
 // checksTrigger says why the Checks tab reads.
 type checksTrigger int
 
 const (
-	checksTabOpened  checksTrigger = iota // the tab shows for the first time
-	checksAgentsSync                      // the frame synced the agents
+	checksTabOpened   checksTrigger = iota // the tab shows for the first time
+	checksWorkerEvent                      // the worker terminal of the PR folder has a new hc event
 )
 
 // checksDue is the one place that decides when the Checks tab reads again
-// (owner question D23). The tab reads when it opens, and again on an agents
-// sync, but not while a read runs and not more often than checksMinGap.
-// Change the rule here.
-func checksDue(s prChecks, t checksTrigger, now time.Time) bool {
+// (owner answer D23). The tab reads when it opens and on a new hc event of the
+// terminal of the worker whose worktree is the PR folder. There is no polling,
+// and no read starts while one runs.
+func checksDue(s prChecks, t checksTrigger) bool {
 	if s.inflight {
 		return false
 	}
 	switch t {
 	case checksTabOpened:
 		return !s.started
-	case checksAgentsSync:
-		return s.started && now.Sub(s.last) >= checksMinGap
+	case checksWorkerEvent:
+		return s.started
 	}
 	return false
 }
 
-// OnAgentsSync re-reads the checks when the Checks tab shows. The frame
-// calls it after each agents sync.
-func (p *PRPane) OnAgentsSync() {
-	if p.open && p.pr != nil && p.tab == PRTabChecks {
-		p.readChecks(checksAgentsSync)
+// OnAgentsSync re-reads the checks when the Checks tab shows and the worker of
+// the PR folder has a new hc event since the last read: its LastOutput, Turn or
+// Status changed. The frame calls it after each agents sync with the workers.
+func (p *PRPane) OnAgentsSync(workers []agents.Worker) {
+	if !p.open || p.pr == nil || p.tab != PRTabChecks {
+		return
+	}
+	dir := filepath.Clean(p.dir)
+	for _, w := range workers {
+		if w.Worktree == "" || filepath.Clean(w.Worktree) != dir {
+			continue
+		}
+		cur := stampOf(w)
+		if !p.checks.known {
+			p.checks.stamp, p.checks.known = cur, true
+			return
+		}
+		if cur != p.checks.stamp {
+			p.readChecks(checksWorkerEvent, cur)
+		}
+		return
 	}
 }
 
 // readChecks reads the checks off the UI thread when checksDue allows it.
 // The result is dropped when the pane opened another PR or closed (D59).
-func (p *PRPane) readChecks(t checksTrigger) {
-	if !checksDue(p.checks, t, p.now()) {
+func (p *PRPane) readChecks(t checksTrigger, stamp termStamp) {
+	if !checksDue(p.checks, t) {
 		return
 	}
 	p.checks.started, p.checks.inflight = true, true
-	p.checks.last = p.now()
+	if t == checksWorkerEvent {
+		p.checks.stamp = stamp
+	}
 	gen, n, client := p.gen, p.number, p.client
 	p.Run.Do(func() func() {
 		rows, err := client.Checks(context.Background(), n)
@@ -126,7 +157,7 @@ func checkTime(ch github.Check) string {
 
 // checksTab draws the Checks tab: loading, the error, or one row per check.
 func (p *PRPane) checksTab(c *ui.Context) {
-	p.readChecks(checksTabOpened)
+	p.readChecks(checksTabOpened, termStamp{})
 	dim := theme.Color(theme.TextDim)
 	switch {
 	case p.checks.err != "":

@@ -437,13 +437,12 @@ of a sidebar worktree row and the `#N` label of a board work row (the
 worker's PR, found from its branch; with no PR the label opens the issue in
 the browser, D104). While it
 is open, the needs-you tabs and the title bar tabs show icon and id only.
-Slice 5 (#152, D101) builds the Checks tab. Slice 6 (#153, D102) builds
+Slice 5 (#152, D101) builds the Checks tab. It reads when it opens and on a new hc event of the terminal of the worker whose worktree is the PR folder, with no polling (D23). Slice 6 (#153, D102) builds
 the Files tab. Slice 9 (#154, D103) adds `reply` and `resolve` to an open
 thread: `reply` opens a field in the box (Enter or `Reply` sends), `resolve`
 sends at once. Each write runs off the UI thread, then the threads are read
 again; an error shows at the top of the tab and typed text stays. A resolved thread
-shows as one line, `resolved · who`; the owner has not decided this yet
-(D25). The thread box starts 12 px from the gutter, since the code view
+shows as one line, `resolved · who` (owner decided, D25). The thread box starts 12 px from the gutter, since the code view
 already leaves the gutter free. A thread whose line is not in the diff is
 not shown. Slice 8 (#154, D103) builds the footer and its keys. Not built yet: the
 other entry points and `for <item>`. The bottom row has no `board ▴` yet, so there is nothing
@@ -453,7 +452,7 @@ The footer (#154, D103) shows for an open PR: the comment field (Enter or
 `Comment` sends), `Approve` and `Squash and merge`. `Approve` is hidden on the
 owner's own PR and once the PR is approved. The merge is pinned to the head
 commit that the pane shows. A failed CI does not stop the merge: the button
-stays and the CI summary is red. A write error shows above the field. After a
+stays and the CI summary is red (owner decided, D24). A write error shows above the field. After a
 write the pane reads the PR again. After a merge from the pane the footer
 shows one line and no buttons (D105): `merged · principal told`; `merged ·
 no one told` when the project has no orchestrator; or `merged` and the error
