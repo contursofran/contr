@@ -184,3 +184,6 @@ const ReportCodePadX = 6     // inside a code line's background
 const ReportCodeBg = BgBars  // grey
 const ReportQuotePad = 8     // between a quote's rule and its text
 const ReportRuleMargin = 8   // above and below a horizontal rule
+
+// PRFieldBorder is the border of the PR footer comment field.
+const PRFieldBorder = 0x2E2E2E
