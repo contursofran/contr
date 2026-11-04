@@ -20,6 +20,7 @@ import (
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/projects"
 	"github.com/contursofran/contr/internal/usage"
+	"github.com/contursofran/contr/internal/widths"
 	"github.com/egoist/mygo/plugins/terminal"
 )
 
@@ -128,6 +129,20 @@ func openWindow(icons bool) int {
 				return err
 			}
 			return s.Save(path)
+		}
+		frame.LoadWidths = func() (widths.Widths, error) {
+			path, err := widths.Path()
+			if err != nil {
+				return widths.Widths{}, err
+			}
+			return widths.Load(path)
+		}
+		frame.SaveWidths = func(w widths.Widths) error {
+			path, err := widths.Path()
+			if err != nil {
+				return err
+			}
+			return widths.Save(path, w)
 		}
 		frame.TerminalSource = terminalSource(os.Getenv)
 		frame.OpenTerminal = func(project, dir string) (string, error) {

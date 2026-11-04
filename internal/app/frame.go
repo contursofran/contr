@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"time"
 
 	gterm "github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
@@ -23,6 +24,7 @@ import (
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/projects"
 	"github.com/contursofran/contr/internal/usage"
+	"github.com/contursofran/contr/internal/widths"
 )
 
 // Slot is a view that fills one place of the frame. Later milestones replace
@@ -100,7 +102,13 @@ type Frame struct {
 	LoadProjects func() (*projects.Store, error)
 	// SaveProjects writes a copy of the store (D110). It runs on a goroutine.
 	// Nil saves nothing.
-	SaveProjects      func(*projects.Store) error
+	SaveProjects func(*projects.Store) error
+	// LoadWidths reads the widths of the sidebar and the panel (D111). It
+	// runs on a goroutine. Nil means the defaults and no file.
+	LoadWidths func() (widths.Widths, error)
+	// SaveWidths writes the widths after a drag. It runs on a goroutine.
+	// Nil saves nothing.
+	SaveWidths        func(widths.Widths) error
 	SpawnOrchestrator func(dir string) error
 	// OpenTerminal serves "+" and Cmd-T (D82): it starts a shell in an hc
 	// terminal for the open project, in dir, and returns its address. It
@@ -152,6 +160,12 @@ type Frame struct {
 	sidebarOpen bool
 	panelOpen   bool
 	reviewOpen  bool
+	// sidebarW and panelW are the dragged widths (D111). A hidden side keeps
+	// its width. movedNow tells that a divider moved in this frame; saveTimer
+	// waits for the dividers to rest before the save.
+	sidebarW, panelW        float32
+	movedNow, widthsTouched bool
+	saveTimer               *time.Timer
 	// term is the plugin's terminal of the selected agent and conn its hc
 	// connection; both are nil with no terminal. termAddr is the hc terminal
 	// they show; termSet is false before the first sync. termState is the
@@ -174,7 +188,8 @@ type Frame struct {
 // NewFrame returns a frame with the sidebar and the panel open and
 // placeholder slots.
 func NewFrame() *Frame {
-	return &Frame{Slots: PlaceholderSlots(), sidebarOpen: true, panelOpen: true}
+	return &Frame{Slots: PlaceholderSlots(), sidebarOpen: true, panelOpen: true,
+		sidebarW: theme.SidebarWidth, panelW: theme.PanelWidth}
 }
 
 // SidebarOpen tells whether the sidebar shows.
@@ -330,12 +345,16 @@ func (f *Frame) View(c *ui.Context) {
 		f.Sheet.Toggle()
 	}
 	ui.Column(c).Fill().Background(color(theme.BgWindow)).TextColor(color(theme.Text)).Children(func() {
+		f.sidebarW = clampWidth(f.sidebarW, theme.SidebarMinWidth, theme.SidebarMaxWidth)
+		f.panelW = clampWidth(f.panelW, theme.PanelMinWidth, theme.PanelMaxWidth)
 		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
 			if f.sidebarOpen {
-				f.sidebar(c)
+				f.split(c, &f.sidebarW, false, f.sidebar, f.main)
+			} else {
+				f.main(c)
 			}
-			f.main(c)
 		})
+		f.saveWidthsAfterDrag()
 		ui.Box(c).Label(LabelStatusBar).FillWidth().Height(theme.StatusBarHeight).Shrink(0).
 			Background(color(theme.BgBars)).BorderWidth(1, 0, 0, 0).BorderColor(color(theme.Line)).
 			Children(func() { f.statusBar(c) })
@@ -371,9 +390,8 @@ func (f *Frame) run(c *ui.Context, s Slot) {
 }
 
 func (f *Frame) sidebar(c *ui.Context) {
-	ui.Column(c).Label(LabelSidebar).Width(theme.SidebarWidth).Shrink(0).
-		Background(color(theme.BgBars)).BorderEndWidth(1).
-		BorderColor(color(theme.Line)).Children(func() {
+	ui.Column(c).Label(LabelSidebar).FillWidth().FillHeight().
+		Background(color(theme.BgBars)).Children(func() {
 		ui.Row(c).Label(LabelSidebarHeader).FillWidth().Height(theme.TitleBarHeight).Shrink(0).
 			PaddingStart(theme.TrafficLightInset).Gap(theme.SpacesGap).DragWindow().Children(func() {
 			toggleButton(c, LabelSidebarToggle, true, f.ToggleSidebar)
@@ -385,24 +403,97 @@ func (f *Frame) sidebar(c *ui.Context) {
 	})
 }
 
+// clampWidth keeps w between lo and hi.
+func clampWidth(w, lo, hi float32) float32 { return min(max(w, lo), hi) }
+
+// split draws first and second side by side with a draggable divider (D111).
+// size is the width of first. With rtl, first is at the right (the panel).
+// The divider is DESIGN's 1 px line in grey: the split builds under a copy of
+// the theme with the line and the hover colors of contr, and the panes build
+// under the window's theme again, so only the divider takes the copy.
+func (f *Frame) split(c *ui.Context, size *float32, rtl bool, first, second func(*ui.Context)) {
+	base := c.Theme()
+	line := *base
+	line.Border = color(theme.Line)
+	line.Accent = color(theme.TextDim)
+	pane := func(fn func(*ui.Context)) func() {
+		return func() {
+			ui.Themed(c, base).Background(ui.Transparent).FillWidth().FillHeight().
+				Direction(ui.LeftToRight).Children(func() { fn(c) })
+		}
+	}
+	// The direction is set on the wrapper, before the split is built: the
+	// split reads it as it builds (right to left puts first at the right and
+	// reverses the drag).
+	dir := ui.LeftToRight
+	if rtl {
+		dir = ui.RightToLeft
+	}
+	ui.Themed(c, &line).Background(ui.Transparent).Grow(1).MinWidth(0).FillHeight().Direction(dir).Children(func() {
+		before := *size
+		sp := ui.Split(c, size, pane(first), pane(second)).Grow(1).MinWidth(0)
+		if sp.Changed() || *size != before {
+			f.movedNow, f.widthsTouched = true, true
+		}
+	})
+}
+
+// widthsSaveDelay is how long a divider must rest before its widths are
+// saved (D111).
+var widthsSaveDelay = 400 * time.Millisecond
+
+// saveWidthsAfterDrag saves the widths once the dividers rest for
+// widthsSaveDelay, off the UI thread: every move restarts the wait, so a
+// drag writes once, after it ends (D111). A frame with no move does nothing.
+func (f *Frame) saveWidthsAfterDrag() {
+	if !f.movedNow {
+		return
+	}
+	f.movedNow = false
+	save := f.SaveWidths
+	if save == nil {
+		return
+	}
+	if f.saveTimer != nil {
+		f.saveTimer.Stop()
+	}
+	w := widths.Widths{Sidebar: f.sidebarW, Panel: f.panelW}
+	post := f.post
+	f.saveTimer = time.AfterFunc(widthsSaveDelay, func() {
+		if err := save(w); err != nil && post != nil {
+			post(func() { f.Status.Show(err.Error()) })
+		}
+	})
+}
+
 func (f *Frame) main(c *ui.Context) {
 	ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 		f.titleBar(c)
-		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-				f.terminal(c)
-				f.run(c, f.Slots.Needs)
-			})
-			if f.PR != nil {
-				f.PR.View(c)
-			}
-			if f.panelOpen {
-				ui.Box(c).Label(LabelPanel).Width(theme.PanelWidth).Shrink(0).
-					Background(color(theme.BgWindow)).BorderStartWidth(1).BorderColor(color(theme.Line)).
-					Children(func() { f.panel(c) })
-			}
-		})
+		if f.panelOpen {
+			f.split(c, &f.panelW, true, f.panelBox, f.content)
+		} else {
+			f.content(c)
+		}
 	})
+}
+
+// content draws the terminal and the PR pane, left of the panel.
+func (f *Frame) content(c *ui.Context) {
+	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
+		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
+			f.terminal(c)
+			f.run(c, f.Slots.Needs)
+		})
+		if f.PR != nil {
+			f.PR.View(c)
+		}
+	})
+}
+
+// panelBox draws the panel, as wide as its divider sets (D111).
+func (f *Frame) panelBox(c *ui.Context) {
+	ui.Box(c).Label(LabelPanel).FillWidth().FillHeight().
+		Background(color(theme.BgWindow)).Children(func() { f.panel(c) })
 }
 
 // panel draws the worker view while a worker is selected, and the slot (the
@@ -648,6 +739,34 @@ func (f *Frame) loadProjects(w Window) {
 	}()
 }
 
+// loadWidths reads the saved widths off the UI thread (D111). A bad file shows
+// in the status message and the defaults stay. A width the owner already
+// dragged is not replaced.
+func (f *Frame) loadWidths(w Window) {
+	load := f.LoadWidths
+	if load == nil {
+		return
+	}
+	go func() {
+		saved, err := load()
+		w.Update(func() {
+			if err != nil {
+				f.Status.Show(err.Error())
+			}
+			if f.widthsTouched {
+				return
+			}
+			if saved.Sidebar > 0 {
+				f.sidebarW = clampWidth(saved.Sidebar, theme.SidebarMinWidth, theme.SidebarMaxWidth)
+			}
+			if saved.Panel > 0 {
+				f.panelW = clampWidth(saved.Panel, theme.PanelMinWidth, theme.PanelMaxWidth)
+			}
+			w.Invalidate()
+		})
+	}()
+}
+
 // syncWorkerPRs starts the pull request reads for the workers now (D104).
 func (f *Frame) syncWorkerPRs() {
 	if f.WorkerPRs != nil && f.agentSnap != nil {
@@ -725,6 +844,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.Slots.Spaces = f.SpacesList.View
 	f.SpacesList.Sync()
 	f.loadProjects(w)
+	f.loadWidths(w)
 	f.Needs = &NeedsRow{Snapshot: agentSnap}
 	if src != nil {
 		f.Needs.Scope = func() string { return f.scope(src) }
