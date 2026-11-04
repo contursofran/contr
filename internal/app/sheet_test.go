@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/owner"
 )
@@ -139,5 +140,78 @@ func TestSheetClosesWithNoOpenQuestion(t *testing.T) {
 	r.tt.Frame()
 	if r.has(LabelSheet) {
 		t.Error("sheet shows with no open question")
+	}
+}
+
+func refsSource() *source {
+	src := sheetSource()
+	src.snap.Workers = []agents.Worker{{Name: "b-1", Worktree: "/wt/b-1", Project: "a"}}
+	src.snap.Questions[0].Impacts = []string{"simple, one file", "scales, needs a server"}
+	src.snap.Questions[0].Refs = []string{"PR 12", "#7", "https://example.com/x", "file:///etc/passwd", "docs/DECISIONS.md"}
+	src.snap.Questions[0].Source = "worker: which db should I use?"
+	return src
+}
+
+func TestSheetShowsImpactsRefsAndSource(t *testing.T) {
+	r := newSheetRig(t, refsSource())
+	r.tt.Key(ui.Cmd, ui.KeyJ)
+	r.tt.Frame()
+	for _, s := range []string{"simple, one file", "scales, needs a server", "worker: which db should I use?", "PR 12", "#7", "docs/DECISIONS.md"} {
+		if !r.text(s) {
+			t.Errorf("missing %q in %v", s, r.tt.Texts())
+		}
+	}
+}
+
+func TestSheetWithoutTheNewFieldsShowsNoExtras(t *testing.T) {
+	r := newSheetRig(t, sheetSource())
+	r.tt.Key(ui.Cmd, ui.KeyJ)
+	r.tt.Frame()
+	if r.text(SheetRefs) || r.text(SheetSource) {
+		t.Errorf("extras without data: %v", r.tt.Texts())
+	}
+}
+
+func TestSheetRefsOpen(t *testing.T) {
+	r := newSheetRig(t, refsSource())
+	var prs, issues []int
+	var dirs, urls []string
+	r.sheet.OpenPR = func(dir string, n int) { dirs = append(dirs, dir); prs = append(prs, n) }
+	r.sheet.OpenIssue = func(dir string, n int) { dirs = append(dirs, dir); issues = append(issues, n) }
+	r.sheet.OpenURL = func(u string) { urls = append(urls, u) }
+	r.tt.Key(ui.Cmd, ui.KeyJ)
+	r.tt.Frame()
+	for _, l := range []string{"PR 12", "#7", "https://example.com/x"} {
+		r.tt.Click(l)
+	}
+	if len(prs) != 1 || prs[0] != 12 || len(issues) != 1 || issues[0] != 7 || len(urls) != 1 || urls[0] != "https://example.com/x" {
+		t.Errorf("prs %v issues %v urls %v", prs, issues, urls)
+	}
+	if len(dirs) != 2 || dirs[0] != "/wt/b-1" {
+		t.Errorf("dirs %v", dirs)
+	}
+}
+
+func TestSheetRefClickIsNilWhenNothingOpens(t *testing.T) {
+	s := &Sheet{OpenPR: func(string, int) {}, OpenURL: func(string) {}}
+	for ref, dir := range map[string]string{"file:///etc/passwd": "/wt", "docs/x.md": "/wt", "PR 3": "", "#4": "/wt", "javascript:x": ""} {
+		if s.refClick(ref, dir) != nil {
+			t.Errorf("%q opens", ref)
+		}
+	}
+	if s.refClick("PR 3", "/wt") == nil || s.refClick("http://a.b", "") == nil {
+		t.Error("PR with a folder or URL does not open")
+	}
+}
+
+func TestParseRef(t *testing.T) {
+	for in, want := range map[string]Ref{
+		"PR 12": {Kind: RefPR, N: 12}, "pr#3": {Kind: RefPR, N: 3}, "#7": {Kind: RefIssue, N: 7}, "issue 9": {Kind: RefIssue, N: 9}, "5": {Kind: RefIssue, N: 5},
+		"https://a.b/c": {Kind: RefURL, URL: "https://a.b/c"}, "HTTP://a.b": {Kind: RefURL, URL: "HTTP://a.b"},
+		"file:///x": {}, "ftp://a.b/x": {}, "mailto:a@b.c": {}, "javascript:alert(1)": {}, "docs/x.md": {}, "": {},
+	} {
+		if got := ParseRef(in); got != want {
+			t.Errorf("ParseRef(%q) = %+v, want %+v", in, got, want)
+		}
 	}
 }
