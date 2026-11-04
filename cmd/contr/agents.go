@@ -22,8 +22,9 @@ import (
 const agentsUsage = `Usage:
   contr agents ls [--all] [--json]                 list the workers
   contr agents spawn --name N --profile P [--issue I] [--worktree DIR] [--project P]
-                     [--role R] [--no-parent] [--json] [--] [task…]
-                                                   start a worker
+                     [--role R] [--no-parent] [--json] [--task-file F | [--] task…]
+                                                   start a worker; --task-file reads the
+                                                   task from a file
   contr agents send <name> <text…>                 type text and press Enter
   contr agents interrupt <name>                    press the stop key
   contr agents stop <name>                         end the worker's program
@@ -94,6 +95,7 @@ func runAgents(args []string, stdout, stderr io.Writer, dial func(context.Contex
 		project  = fs.String("project", "", "project name")
 		role     = fs.String("role", "", "role (default: the profile)")
 		noParent = fs.Bool("no-parent", false, "start without a parent terminal")
+		taskFile = fs.String("task-file", "", "read the task from this file")
 		lines    = fs.Int("lines", 0, "only the last lines")
 	)
 	need := map[string]int{"ls": 0, "watch": 0, "spawn": 0, "send": 2, "interrupt": 1, "stop": 1, "read": 1, "prompt": 1}
@@ -108,7 +110,7 @@ func runAgents(args []string, stdout, stderr io.Writer, dial func(context.Contex
 	}
 	allowed := map[string][]string{
 		"ls":    {"all", "json"},
-		"spawn": {"name", "profile", "issue", "worktree", "project", "role", "no-parent", "json"},
+		"spawn": {"name", "profile", "issue", "worktree", "project", "role", "no-parent", "json", "task-file"},
 		"read":  {"lines"},
 	}
 	var bad string
@@ -160,7 +162,11 @@ func runAgents(args []string, stdout, stderr io.Writer, dial func(context.Contex
 			}
 			return writeTable(stdout, ws)
 		case "spawn":
-			spec := agents.Spec{Name: *name, Profile: *profile, Role: *role, Issue: *issue, Worktree: *worktree, Project: *project, Task: strings.Join(pos, " ")}
+			task, err := spawnTask(strings.Join(pos, " "), *taskFile)
+			if err != nil {
+				return err
+			}
+			spec := agents.Spec{Name: *name, Profile: *profile, Role: *role, Issue: *issue, Worktree: *worktree, Project: *project, Task: task}
 			if !*noParent {
 				spec.Parent = getenv("HC_TERMINAL_ID")
 			}
@@ -279,4 +285,24 @@ func writeTable(w io.Writer, ws []agents.Worker) error {
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", a.Name, a.Address, a.Role, issue, stateText(a), a.Worktree)
 	}
 	return tw.Flush()
+}
+
+// spawnTask is the task of a spawn: the text, or the content of file. It
+// refuses both at once, and a file that is missing or holds only blanks, so
+// a quoting slip or a wrong path never starts a worker with a wrong brief.
+func spawnTask(text, file string) (string, error) {
+	if file == "" {
+		return text, nil
+	}
+	if strings.TrimSpace(text) != "" {
+		return "", errors.New("give the task as text or with a task file, not both")
+	}
+	b, err := os.ReadFile(file)
+	if err != nil {
+		return "", fmt.Errorf("task file: %w", err)
+	}
+	if strings.TrimSpace(string(b)) == "" {
+		return "", fmt.Errorf("task file %s is empty", file)
+	}
+	return string(b), nil
 }
