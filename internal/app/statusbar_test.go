@@ -8,8 +8,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/theme"
-	"github.com/contursofran/contr/internal/herdr"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/usage"
 )
@@ -57,16 +57,32 @@ type fakeMessage struct {
 
 func (f *fakeMessage) Text() (string, bool) { return f.text, f.has }
 
-// barFrame builds a frame of width x 900 over a herdr in state s, with the fake sources.
-func barFrame(t *testing.T, h *fakeHost, s herdr.ConnState, width int) (*Frame, *fakeLive, *fakeUsage, *fakeMessage, *ui.Tester) {
+// fakeCore is the hc core version the agents report; empty while contr does
+// not follow a core.
+type fakeCore struct {
+	mu sync.Mutex
+	v  string
+}
+
+func (f *fakeCore) set(v string) { f.mu.Lock(); f.v = v; f.mu.Unlock() }
+func (f *fakeCore) snap() agentstate.Snapshot {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return agentstate.Snapshot{CoreVersion: f.v}
+}
+func (f *fakeCore) version() (string, bool) { s := f.snap(); return s.CoreVersion, s.CoreVersion != "" }
+
+// barFrame builds a frame of width x 900 whose agents follow a core of
+// version v ("" for none), with the fake sources.
+func barFrame(t *testing.T, h *fakeHost, v string, width int) (*Frame, *fakeCore, *fakeUsage, *fakeMessage, *ui.Tester) {
 	t.Helper()
-	live := &fakeLive{}
-	live.set(s)
+	core := &fakeCore{v: v}
 	u, m := &fakeUsage{left: map[usage.PlanID]float64{}}, &fakeMessage{}
-	f := NewFrame(live)
+	f := NewFrame(nil)
+	f.agentSnap = core.snap
 	f.status.host, f.status.usage, f.status.message = h, u, m
 	tt := ui.NewTester(f.View, width, theme.WindowHeight)
-	return f, live, u, m, tt
+	return f, core, u, m, tt
 }
 
 func readingHost(s host.Stats) *fakeHost { return &fakeHost{stats: s, has: true} }
@@ -77,8 +93,8 @@ func rightTexts(f *Frame, tt *ui.Tester) []string {
 }
 
 func TestShowsCPUAndMemoryThenTheVersions(t *testing.T) {
-	f, _, _, _, tt := barFrame(t, readingHost(stats(37.6, 62, 100)), connected(), theme.WindowWidth)
-	want := []string{"CPU 38%", "MEM 62%", contrText, "herdr 0.9.3"}
+	f, _, _, _, tt := barFrame(t, readingHost(stats(37.6, 62, 100)), "0.1.18", theme.WindowWidth)
+	want := []string{"CPU 38%", "MEM 62%", contrText, "hc 0.1.18"}
 	if got := rightTexts(f, tt); !reflect.DeepEqual(got, want) {
 		t.Errorf("right texts %q, want %q", got, want)
 	}
@@ -87,7 +103,7 @@ func TestShowsCPUAndMemoryThenTheVersions(t *testing.T) {
 	if version.X <= mem.X {
 		t.Errorf("the version at x=%v should be right of MEM at x=%v", version.X, mem.X)
 	}
-	for _, text := range []string{"CPU", "38%", "MEM", "62%", contrText, "herdr 0.9.3"} {
+	for _, text := range []string{"CPU", "38%", "MEM", "62%", contrText, "hc 0.1.18"} {
 		if !tt.HasText(text) {
 			t.Errorf("the bar does not draw %q; texts %q", text, tt.Texts())
 		}
@@ -95,76 +111,60 @@ func TestShowsCPUAndMemoryThenTheVersions(t *testing.T) {
 }
 
 func TestNoReadingShowsDashes(t *testing.T) {
-	f, _, _, _, tt := barFrame(t, &fakeHost{}, connected(), theme.WindowWidth)
-	want := []string{"CPU –", "MEM –", contrText, "herdr 0.9.3"}
+	f, _, _, _, tt := barFrame(t, &fakeHost{}, "0.1.18", theme.WindowWidth)
+	want := []string{"CPU –", "MEM –", contrText, "hc 0.1.18"}
 	if got := rightTexts(f, tt); !reflect.DeepEqual(got, want) {
 		t.Errorf("right texts %q, want %q", got, want)
 	}
 }
 
-func TestAConnectedHerdrShowsItsVersionAfterContr(t *testing.T) {
-	f, _, _, _, tt := barFrame(t, readingHost(stats(40, 50, 100)), connected(), theme.WindowWidth)
-	if got := rightTexts(f, tt)[3]; got != "herdr 0.9.3" {
-		t.Errorf("fourth item %q, want the herdr version", got)
+func TestTheCoreVersionShowsAfterContr(t *testing.T) {
+	f, _, _, _, tt := barFrame(t, readingHost(stats(40, 50, 100)), "0.1.18", theme.WindowWidth)
+	if got := rightTexts(f, tt)[3]; got != "hc 0.1.18" {
+		t.Errorf("fourth item %q, want the hc version", got)
 	}
-	contr, hv := box(t, tt, LabelContrVersion), box(t, tt, LabelHerdrVersion)
+	contr, hv := box(t, tt, LabelContrVersion), box(t, tt, LabelCoreVersion)
 	if hv.X <= contr.X {
-		t.Errorf("herdr at x=%v should be right of contr at x=%v", hv.X, contr.X)
+		t.Errorf("hc at x=%v should be right of contr at x=%v", hv.X, contr.X)
 	}
 }
 
-func TestNotRunningHerdrShowsNoVersion(t *testing.T) {
-	f, _, _, _, tt := barFrame(t, readingHost(stats(40, 50, 100)), notRunning(), theme.WindowWidth)
+func TestNoCoreShowsNoVersion(t *testing.T) {
+	f, _, _, _, tt := barFrame(t, readingHost(stats(40, 50, 100)), "", theme.WindowWidth)
 	want := []string{"CPU 40%", "MEM 50%", contrText}
 	if got := rightTexts(f, tt); !reflect.DeepEqual(got, want) {
 		t.Errorf("right texts %q, want %q", got, want)
 	}
-	if !absent(tt, LabelHerdrVersion) {
-		t.Error("the herdr version should not show")
+	if !absent(tt, LabelCoreVersion) {
+		t.Error("the hc version should not show")
 	}
 }
 
-func TestHerdrVersionFollowsTheConnection(t *testing.T) {
-	f, live, _, _, tt := barFrame(t, readingHost(stats(40, 50, 100)), herdr.ConnState{Kind: herdr.Connecting}, theme.WindowWidth)
+func TestTheCoreVersionFollowsTheAgents(t *testing.T) {
+	f, core, _, _, tt := barFrame(t, readingHost(stats(40, 50, 100)), "", theme.WindowWidth)
 	tt.Frame()
-	if !absent(tt, LabelHerdrVersion) {
-		t.Error("no version while connecting")
-	}
-
-	live.set(connected())
+	core.set("0.1.18")
 	tt.Frame()
-	if got := f.status.rightTexts()[3]; got != "herdr 0.9.3" {
-		t.Errorf("fourth item %q, want the herdr version", got)
+	if got := f.status.rightTexts()[3]; got != "hc 0.1.18" {
+		t.Errorf("fourth item %q, want the hc version", got)
 	}
-	box(t, tt, LabelHerdrVersion)
-
-	live.set(herdr.ConnState{Kind: herdr.Incompatible, Message: "herdr replied in a form contr does not read"})
-	tt.Frame()
-	if n := len(f.status.rightTexts()); n != 3 {
-		t.Errorf("%d items when incompatible, want 3", n)
-	}
-	if !absent(tt, LabelHerdrVersion) {
-		t.Error("no version when incompatible")
-	}
-
-	live.set(notRunning())
+	core.set("")
 	if got, want := rightTexts(f, tt), []string{"CPU 40%", "MEM 50%", contrText}; !reflect.DeepEqual(got, want) {
 		t.Errorf("right texts %q, want %q", got, want)
 	}
 }
 
-// counted returns a bar over fakes at 40 % CPU and 50 % memory, and a function that tells whether
-// the next refresh changed what the bar shows. The Rust test counted notifications.
-func counted(s herdr.ConnState) (*statusBar, *fakeHost, *fakeLive) {
-	h, live := readingHost(stats(40, 50, 100)), &fakeLive{}
-	live.set(s)
-	b := &statusBar{host: h, usage: &fakeUsage{}, message: &fakeMessage{}, herdr: live}
+// counted returns a bar over fakes at 40 % CPU and 50 % memory and core
+// version 0.1.18.
+func counted() (*statusBar, *fakeHost, *fakeCore) {
+	h, core := readingHost(stats(40, 50, 100)), &fakeCore{v: "0.1.18"}
+	b := &statusBar{host: h, usage: &fakeUsage{}, message: &fakeMessage{}, core: core.version}
 	b.refresh()
-	return b, h, live
+	return b, h, core
 }
 
 func TestAChangedReadingRepaintsTheBarOnce(t *testing.T) {
-	b, h, _ := counted(connected())
+	b, h, _ := counted()
 	if got := b.rightTexts()[0]; got != "CPU 40%" {
 		t.Fatalf("first item %q", got)
 	}
@@ -180,34 +180,18 @@ func TestAChangedReadingRepaintsTheBarOnce(t *testing.T) {
 	}
 }
 
-func TestAHerdrChangeThatKeepsTheVersionDoesNotRepaintTheBar(t *testing.T) {
-	b, _, live := counted(connected())
-	tree := herdr.HerdrTree{Version: "0.9.3"}
-	live.setLive(herdr.LiveHerdr{State: connected(), Tree: &tree})
-	if b.refresh() {
-		t.Error("the tree changed, the version did not: no repaint")
-	}
-	want := []string{"CPU 40%", "MEM 50%", contrText, "herdr 0.9.3"}
-	if got := b.rightTexts(); !reflect.DeepEqual(got, want) {
-		t.Errorf("right texts %q, want %q", got, want)
-	}
-}
-
-func TestANewHerdrVersionRepaintsTheBarOnce(t *testing.T) {
-	b, _, live := counted(connected())
-	live.set(herdr.ConnState{Kind: herdr.Connected, ServerVersion: "0.9.4"})
+func TestANewCoreVersionRepaintsTheBarOnce(t *testing.T) {
+	b, _, core := counted()
+	core.set("0.1.19")
 	if !b.refresh() {
 		t.Error("a new version should repaint")
 	}
-	if got := b.rightTexts()[3]; got != "herdr 0.9.4" {
-		t.Errorf("fourth item %q, want herdr 0.9.4", got)
+	if b.refresh() {
+		t.Error("the same version should not repaint again")
 	}
-	live.set(notRunning())
+	core.set("")
 	if !b.refresh() {
-		t.Error("herdr gone should repaint")
-	}
-	if got, want := b.rightTexts(), []string{"CPU 40%", "MEM 50%", contrText}; !reflect.DeepEqual(got, want) {
-		t.Errorf("right texts %q, want %q", got, want)
+		t.Error("a lost core should repaint")
 	}
 }
 
@@ -217,7 +201,7 @@ func fillOf(t *testing.T, tt *ui.Tester, label string) float32 {
 }
 
 func TestEachPlanShowsItsLeftPercentAndABarToMatch(t *testing.T) {
-	f, _, u, _, tt := barFrame(t, readingHost(stats(40, 50, 100)), connected(), theme.WindowWidth)
+	f, _, u, _, tt := barFrame(t, readingHost(stats(40, 50, 100)), "0.1.18", theme.WindowWidth)
 	u.left = plansLeft(61.6, 40).left
 	tt.Frame()
 	if got, want := f.status.leftTexts(), []string{"claude 62%", "codex 40%"}; !reflect.DeepEqual(got, want) {
@@ -232,7 +216,7 @@ func TestEachPlanShowsItsLeftPercentAndABarToMatch(t *testing.T) {
 }
 
 func TestALowPlanFillsWhiteAndTheOthersStayGrey(t *testing.T) {
-	_, _, u, _, tt := barFrame(t, readingHost(stats(40, 50, 100)), connected(), theme.WindowWidth)
+	_, _, u, _, tt := barFrame(t, readingHost(stats(40, 50, 100)), "0.1.18", theme.WindowWidth)
 	// Claude 62 % left, Codex 12 % left (under 20).
 	u.left = plansLeft(62, 12).left
 	tt.Frame()
@@ -268,7 +252,7 @@ func TestALowPlanShowsItsPercentInWhiteAndTheOthersInSecondaryGrey(t *testing.T)
 }
 
 func TestAPlanWithoutDataShowsADashAndAnEmptyTrack(t *testing.T) {
-	f, _, u, _, tt := barFrame(t, readingHost(stats(40, 50, 100)), connected(), theme.WindowWidth)
+	f, _, u, _, tt := barFrame(t, readingHost(stats(40, 50, 100)), "0.1.18", theme.WindowWidth)
 	tt.Frame()
 	if got, want := f.status.leftTexts(), []string{"claude –", "codex –"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("left texts %q, want %q", got, want)
@@ -296,7 +280,7 @@ func TestAPlanWithoutDataShowsADashAndAnEmptyTrack(t *testing.T) {
 // The Rust test also let the message time out. The Go message clears itself in state.StatusMessage,
 // and its test covers the time. Here the slot is a fake that the test empties.
 func TestMessageSitsLeftOfTheReadingsAndClearsAfterItsTTL(t *testing.T) {
-	f, _, _, m, tt := barFrame(t, readingHost(stats(40, 50, 100)), connected(), theme.WindowWidth)
+	f, _, _, m, tt := barFrame(t, readingHost(stats(40, 50, 100)), "0.1.18", theme.WindowWidth)
 	m.text, m.has = "D7 → By type · sent", true
 	if got := rightTexts(f, tt)[0]; got != m.text {
 		t.Errorf("first item %q, want the message", got)
@@ -306,7 +290,7 @@ func TestMessageSitsLeftOfTheReadingsAndClearsAfterItsTTL(t *testing.T) {
 	}
 
 	m.text, m.has = "", false
-	want := []string{"CPU 40%", "MEM 50%", contrText, "herdr 0.9.3"}
+	want := []string{"CPU 40%", "MEM 50%", contrText, "hc 0.1.18"}
 	if got := rightTexts(f, tt); !reflect.DeepEqual(got, want) {
 		t.Errorf("right texts %q, want %q", got, want)
 	}
@@ -317,7 +301,7 @@ func TestMessageSitsLeftOfTheReadingsAndClearsAfterItsTTL(t *testing.T) {
 
 func TestNarrowWindowKeepsTheReadingsInsideTheBar(t *testing.T) {
 	const width = 960
-	_, _, _, m, tt := barFrame(t, readingHost(stats(40, 50, 100)), connected(), width)
+	_, _, _, m, tt := barFrame(t, readingHost(stats(40, 50, 100)), "0.1.18", width)
 	m.text, m.has = strings20("a very long message "), true
 	tt.Frame()
 	msg, cpu := box(t, tt, LabelStatusMsg), box(t, tt, LabelHostCPU)
@@ -327,7 +311,7 @@ func TestNarrowWindowKeepsTheReadingsInsideTheBar(t *testing.T) {
 	if right := box(t, tt, LabelStatusRight); right.X+right.W > width {
 		t.Errorf("right side ends at %v, past the window", right.X+right.W)
 	}
-	for _, label := range []string{LabelHostCPU, LabelHostMem, LabelContrVersion, LabelHerdrVersion} {
+	for _, label := range []string{LabelHostCPU, LabelHostMem, LabelContrVersion, LabelCoreVersion} {
 		if r := box(t, tt, label); r.X+r.W > width {
 			t.Errorf("%s ends at %v, past the window", label, r.X+r.W)
 		}

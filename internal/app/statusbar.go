@@ -4,11 +4,11 @@ package app
 
 // The status bar along the bottom of the frame. Its left side shows each plan's usage as the
 // percent left and a bar. Its right side shows the message slot, host CPU and memory, the contr
-// version, and the herdr version while herdr is connected.
+// version, and the hc core's version while contr follows the core.
 //
 // The bar is cached: [statusBar.refresh] reads the sources and tells whether what the bar shows
-// changed. It changes only when the plan usage, the host reading, the message or the herdr version
-// changes. A herdr change that keeps the version changes nothing. Its methods run on the UI thread.
+// changed. It changes only when the plan usage, the host reading, the message or the core version
+// changes. Its methods run on the UI thread.
 
 import (
 	"slices"
@@ -16,7 +16,6 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/theme"
-	"github.com/contursofran/contr/internal/herdr"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/usage"
 )
@@ -36,7 +35,7 @@ const (
 	LabelHostCPU      = "host-cpu-status"
 	LabelHostMem      = "host-mem-status"
 	LabelContrVersion = "contr-version"
-	LabelHerdrVersion = "herdr-version"
+	LabelCoreVersion  = "hc-version"
 )
 
 // The sources that the bar reads. [host.Host], [usage.Sampler] and [state.StatusMessage] fit them.
@@ -126,23 +125,13 @@ type statusBar struct {
 	host    hostSource
 	usage   usageSource
 	message messageSource
-	herdr   liveSource
+	// core gives the hc core's version, and whether contr follows the core.
+	core func() (string, bool)
 	// now is the Unix time that the plan windows are read at.
 	now func() uint64
 
 	shown barContent
 	read  bool
-}
-
-// herdrVersion is the version to show: the server's, while herdr is connected.
-func herdrVersion(h liveSource) (string, bool) {
-	if h == nil {
-		return "", false
-	}
-	if s := h.Live().State; s.Kind == herdr.Connected {
-		return s.ServerVersion, true
-	}
-	return "", false
 }
 
 // content reads the sources. A nil source shows no reading.
@@ -174,8 +163,10 @@ func (b *statusBar) content() barContent {
 		segment{LabelHostCPU, toneReading, "CPU", cpu},
 		segment{LabelHostMem, toneReading, "MEM", mem},
 		segment{LabelContrVersion, toneMeta, "contr", Version})
-	if v, ok := herdrVersion(b.herdr); ok {
-		c.right = append(c.right, segment{LabelHerdrVersion, toneMeta, "herdr", v})
+	if b.core != nil {
+		if v, ok := b.core(); ok {
+			c.right = append(c.right, segment{LabelCoreVersion, toneMeta, "hc", v})
+		}
 	}
 	return c
 }

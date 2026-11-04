@@ -137,5 +137,9 @@ func openAgentState(ctx context.Context, getenv func(string) string, notify func
 	if err != nil {
 		return nil, nil, err
 	}
-	return agentstate.New(agents.New(core, cfg), store, notify), func() { _ = core.Close() }, nil
+	m := agentstate.New(agents.New(core, cfg), store, notify)
+	if h, ok := core.(agents.HC); ok && h.Client != nil {
+		m.SetCoreVersion(h.Client.Hello.Version)
+	}
+	return m, func() { _ = core.Close() }, nil
 }

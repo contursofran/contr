@@ -126,7 +126,7 @@ func TestTerminalGridIsInsideTheTerminalAreaAndShowsNoLineWhileLive(t *testing.T
 	if grid.X < area.X || grid.Y < area.Y || grid.X+grid.W > area.X+area.W+0.5 || grid.Y+grid.H > area.Y+area.H+0.5 {
 		t.Errorf("grid %+v is not inside the terminal area %+v", grid, area)
 	}
-	if got := strings.Join(tt.Texts(), "\n"); strings.Contains(got, herdr.NotRunningLine) || strings.Contains(got, TerminalOffLine) {
+	if got := strings.Join(tt.Texts(), "\n"); strings.Contains(got, TerminalNotRunningLine) || strings.Contains(got, TerminalOffLine) {
 		t.Errorf("a live terminal shows a line: %q", got)
 	}
 }
@@ -136,7 +136,7 @@ func TestTerminalSlotShowsWhyItIsNotRunning(t *testing.T) {
 		err  error
 		want string
 	}{
-		"finished":     {&hc.Error{Kind: "finished", Message: "done"}, herdr.NotRunningLine},
+		"finished":     {&hc.Error{Kind: "finished", Message: "done"}, TerminalNotRunningLine},
 		"incompatible": {&hc.Error{Kind: hc.KindIncompatible, Message: "core too old"}, "core too old"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -198,7 +198,7 @@ func TestAHiddenWindowDoesNotRetryAndShowingItDoes(t *testing.T) {
 	w.flush() // before the terminal exists: the terminal must start hidden by itself
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t2"})
 	tt := ui.NewTester(f.buildTerminal, 600, 400)
-	waitLine(t, w, tt, herdr.NotRunningLine)
+	waitLine(t, w, tt, TerminalNotRunningLine)
 	time.Sleep(1200 * time.Millisecond) // longer than the first backoff step
 	if n, _ := src.counts(); n != 1 {
 		t.Fatalf("attaches while hidden = %d, want 1", n)
