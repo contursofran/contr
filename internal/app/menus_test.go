@@ -55,7 +55,7 @@ func TestTheAppMenuHasAboutHideHideOthersAndQuit(t *testing.T) {
 }
 
 func TestTheEditMenuHasCopyPasteAndSelectAllAsOsActions(t *testing.T) {
-	edit := BuildMenus().Items()[1]
+	edit := BuildMenus().Items()[2]
 	if edit.Label != "Edit" {
 		t.Fatalf("name = %q", edit.Label)
 	}
@@ -75,7 +75,7 @@ func TestTheEditMenuHasCopyPasteAndSelectAllAsOsActions(t *testing.T) {
 }
 
 func TestTheWindowMenuHasMinimize(t *testing.T) {
-	window := BuildMenus().Items()[2]
+	window := BuildMenus().Items()[3]
 	if window.Label != "Window" {
 		t.Fatalf("name = %q", window.Label)
 	}
@@ -95,7 +95,38 @@ func TestInstallPutsTheMenusInTheMenuBar(t *testing.T) {
 	for _, m := range BuildMenus().Items() {
 		names = append(names, m.Label)
 	}
-	if want := []string{"contr", "Edit", "Window"}; !slices.Equal(names, want) {
+	if want := []string{"contr", "File", "Edit", "Window"}; !slices.Equal(names, want) {
 		t.Fatalf("menus = %v, want %v", names, want)
+	}
+}
+
+func TestTheFileMenuHasNewTerminalOnCmdT(t *testing.T) {
+	file := BuildMenus().Items()[1]
+	if file.Label != "File" {
+		t.Fatalf("name = %q", file.Label)
+	}
+	if got := itemNames(file.Submenu); !slices.Equal(got, []string{"New Terminal"}) {
+		t.Fatalf("items = %v", got)
+	}
+	it := find(t, file.Submenu, "New Terminal")
+	if it.Accelerator != "Cmd+T" || it.Click == nil {
+		t.Errorf("accelerator %q, click set %v", it.Accelerator, it.Click != nil)
+	}
+}
+
+func TestNewTerminalItemCallsTheFramesHandlerAndDoesNothingWithoutOne(t *testing.T) {
+	it := find(t, BuildMenus().Items()[1].Submenu, "New Terminal")
+	it.Click(it, nil) // no window: must not panic
+	n := 0
+	setNewTerminalHandler(func() { n++ })
+	defer setNewTerminalHandler(nil)
+	it.Click(it, nil)
+	if n != 1 {
+		t.Errorf("handler ran %d times, want 1", n)
+	}
+	setNewTerminalHandler(nil)
+	it.Click(it, nil)
+	if n != 1 {
+		t.Errorf("handler ran after it was cleared")
 	}
 }

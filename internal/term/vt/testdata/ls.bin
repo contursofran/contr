@@ -1,5 +1,0 @@
-total 0
--rwxr-xr-x@ 1 aerolab  staff   0 Nov  3 17:54 [31ma.go[39;49m[0m
--rw-r--r--@ 1 aerolab  staff   0 Nov  3 17:54 b.txt
-lrwxr-xr-x@ 1 aerolab  staff   4 Nov  3 17:54 [35mlink[39;49m[0m -> a.go
-drwxr-xr-x@ 2 aerolab  staff  64 Nov  3 17:54 [34msub[39;49m[0m

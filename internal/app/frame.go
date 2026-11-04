@@ -5,12 +5,16 @@ package app
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
+	"os"
 
+	gterm "github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/app/state"
-	"github.com/contursofran/contr/internal/app/terminal"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/herdr"
 	"github.com/contursofran/contr/internal/host"
@@ -25,7 +29,7 @@ type Slot func(c *ui.Context)
 type Slots struct {
 	Spaces    Slot // sidebar, under its header
 	Agents    Slot // sidebar, at the bottom
-	Terminal  Slot // shown only while herdr is connected
+	Terminal  Slot // the selected hc terminal; it needs no herdr
 	Needs     Slot // needs-you row, under the terminal; draws nothing when empty
 	Card      Slot // answer card, floating at the bottom of the terminal area
 	Panel     Slot // board panel, shown while it is open
@@ -58,8 +62,8 @@ type liveSource interface {
 // to the window. Its methods run on the UI thread.
 type Frame struct {
 	Slots Slots
-	// Herdr tells the connection state. The terminal area shows the state's
-	// line while herdr is not connected.
+	// Herdr tells the connection state. The spaces column shows the state's
+	// line while herdr is not connected; the terminal area does not need it.
 	Herdr liveSource
 	// Visibility, Selection and Status are the app state. The frame holds
 	// them for the views in its slots.
@@ -88,10 +92,15 @@ type Frame struct {
 	// UI thread. Nil makes `+ new` do nothing.
 	PickFolder        func() (string, error)
 	SpawnOrchestrator func(dir string) error
+	// OpenTerminal serves "+" and Cmd-T (D82): it starts a shell in an hc
+	// terminal for the open project, in dir, and returns its address. It
+	// blocks, so the frame runs it off the UI thread. Nil makes both do
+	// nothing.
+	OpenTerminal func(project, dir string) (string, error)
 	// TerminalSource gives the source of the hc terminal with an address.
 	// The terminal view attaches to the selected agent's terminal through it.
 	// Nil shows no terminal.
-	TerminalSource func(address string) terminal.HCSource
+	TerminalSource func(address string) ghostty.Source
 	// Panel is the board panel. [Frame.Attach] makes it and puts its view in
 	// Slots.Panel.
 	Panel *BoardPanel
@@ -109,6 +118,9 @@ type Frame struct {
 	// NewOrch is the `+ new` action. [Frame.Attach] makes it when PickFolder
 	// and SpawnOrchestrator are set.
 	NewOrch *NewOrchestrator
+	// NewTerm is the "+" and Cmd-T action. [Frame.Attach] makes it when
+	// OpenTerminal is set.
+	NewTerm *NewTerminal
 
 	status statusBar
 	bar    titleBar
@@ -119,11 +131,20 @@ type Frame struct {
 	sidebarOpen bool
 	panelOpen   bool
 	reviewOpen  bool
-	// termView is the terminal view. termAddr is the hc terminal it shows;
-	// termSet is false before the first sync.
-	termView *terminal.View
-	termAddr string
-	termSet  bool
+	// term is the plugin's terminal of the selected agent and conn its hc
+	// connection; both are nil with no terminal. termAddr is the hc terminal
+	// they show; termSet is false before the first sync. termState is the
+	// connection state; termErr says why the terminal could not start.
+	term      *gterm.Terminal
+	conn      *ghostty.Conn
+	termAddr  string
+	termSet   bool
+	termState ghostty.State
+	termErr   string
+	// post and invalidate are the window's; nil before attachTerminal.
+	post       func(fn func())
+	invalidate func()
+	winFocused bool
 	// reviewDir is the repo that Review shows now. Empty: none.
 	reviewDir string
 	reviewSet bool
@@ -213,13 +234,6 @@ func (f *Frame) syncReview() {
 	f.Review.SetRepo(dir)
 }
 
-func (f *Frame) connectionLine() (string, bool) {
-	if f.Herdr == nil {
-		return "", false
-	}
-	return f.Herdr.Live().State.Line()
-}
-
 // Element labels. Tests and the e2e driver find the frame's parts by them.
 const (
 	LabelSidebar       = "sidebar"
@@ -228,6 +242,7 @@ const (
 	LabelSidebarReopen = "Show sidebar"
 	LabelTitleBar      = "title bar"
 	LabelTerminal      = "terminal area"
+	LabelTerminalGrid  = "terminal grid"
 	LabelReview        = "review area"
 	LabelPanel         = "board panel"
 	LabelPanelToggle   = "Toggle panel"
@@ -332,32 +347,31 @@ func (f *Frame) titleBar(c *ui.Context) {
 		f.bar.setTabs(f.agentTabs())
 		f.bar.selectTab = f.selectTab
 		f.bar.toggleReview, f.bar.reviewOpen = f.ToggleReview, f.reviewOpen
+		f.bar.newTab = nil
+		if f.NewTerm != nil {
+			f.bar.newTab = f.newTerminal
+		}
 		f.bar.build(c, f.panelOpen, f.TogglePanel)
 	})
 }
 
-// terminal shows herdr's line while herdr is not connected, centred in the
-// area, and the terminal slot otherwise.
+// terminal shows the terminal slot and the answer card, or the Review view.
+// hc terminals work while herdr is down (#246).
 func (f *Frame) terminal(c *ui.Context) {
 	if f.reviewOpen && f.Review != nil {
 		ui.Box(c).Label(LabelReview).Grow(1).MinWidth(0).FillHeight().
 			Background(color(theme.BgWindow)).Children(func() { f.Review.View(c) })
 		return
 	}
-	line, down := f.connectionLine()
 	ui.Column(c).Label(LabelTerminal).Grow(1).MinWidth(0).Center().
 		Background(color(theme.BgTerminal)).Children(func() {
-		if down {
-			ui.Text(c, line).TextColor(color(theme.Text2))
-			return
-		}
 		f.run(c, f.Slots.Terminal)
 		f.run(c, f.Slots.Card)
 	})
 }
 
 // agentTabs returns the tabs of the open project. The open project follows the selected
-// orchestrator or worker, and keeps its last value for any other selection.
+// orchestrator, worker or plain terminal, and keeps its last value for any other selection.
 func (f *Frame) agentTabs() []AgentTab {
 	if f.agentSnap == nil {
 		return nil
@@ -370,20 +384,51 @@ func (f *Frame) agentTabs() []AgentTab {
 	}
 	f.openProject = OpenProject(snap, sel, ok, f.openProject)
 	selected := ""
-	if ok && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker) {
+	if ok && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker || sel.Kind == state.KindTerminal) {
 		selected = sel.ID
 	}
 	return AgentTabs(snap, f.openProject, selected)
 }
 
-// selectTab selects the agent of a title bar tab.
+// newTerminal opens a plain terminal in the open project (D82). Its folder is
+// the worktree of the project's first orchestrator, else the home folder.
+// UI thread.
+func (f *Frame) newTerminal() {
+	if f.NewTerm == nil {
+		return
+	}
+	project := f.openProject
+	f.NewTerm.Start(project, f.terminalDir(project))
+}
+
+// terminalDir is the start folder of a new terminal in project.
+func (f *Frame) terminalDir(project string) string {
+	if f.agentSnap != nil {
+		for _, o := range f.agentSnap().Orchestrators {
+			if o.Project == project && o.Worktree != "" {
+				return o.Worktree
+			}
+		}
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		slog.Debug("no home folder for the new terminal", "err", err)
+		return ""
+	}
+	return home
+}
+
+// selectTab selects the terminal of a title bar tab.
 func (f *Frame) selectTab(t AgentTab) {
 	if f.Selection == nil {
 		return
 	}
 	kind := state.KindWorker
-	if t.Orchestrator {
+	switch {
+	case t.Orchestrator:
 		kind = state.KindOrchestrator
+	case t.Plain:
+		kind = state.KindTerminal
 	}
 	f.Selection.Select(state.Selected{Kind: kind, ID: t.Address})
 }
@@ -504,6 +549,11 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 			Run: Runner{Post: w.Update}, Status: f.Status.Show}
 		f.SpacesList.OnNew = f.NewOrch.Start
 	}
+	if f.OpenTerminal != nil {
+		f.NewTerm = &NewTerminal{Open: f.OpenTerminal, Run: Runner{Post: w.Update}, Status: f.Status.Show,
+			Select: func(addr string) { f.Selection.Select(state.Selected{Kind: state.KindTerminal, ID: addr}) }}
+		setNewTerminalHandler(func() { w.Update(f.newTerminal) })
+	}
 	f.Slots.Spaces = f.SpacesList.View
 	f.SpacesList.Sync()
 	f.Needs = &NeedsRow{Snapshot: agentSnap}
@@ -529,6 +579,11 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 		f.Host.SetVisible(visible)
 		f.Usage.SetVisible(visible)
 		f.SpacesList.SetVisible(visible)
+		w.Update(func() {
+			if f.conn != nil {
+				f.conn.SetVisible(visible)
+			}
+		})
 		if visible {
 			w.Update(f.syncReview)
 		}
@@ -541,6 +596,7 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	unwatch := f.Visibility.Watch(w)
 	term := f.attachTerminal(w)
 	return func() {
+		setNewTerminalHandler(nil)
 		unwatch()
 		term()
 		stopAgents()
@@ -551,49 +607,152 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 	}
 }
 
+// TerminalOffLine is shown while no agent is selected.
+const TerminalOffLine = "select an agent to see its terminal"
+
 // attachTerminal puts the terminal view in its slot and follows the window
-// focus. The returned function stops both. The link runs while the window is
-// hidden, as in the Rust app; MyGo holds the frames (D9).
+// focus. The returned function stops both. The connection runs while the
+// window is hidden, as in the Rust app; MyGo holds the frames (D9).
 func (f *Frame) attachTerminal(w Window) (stop func()) {
-	view := terminal.NewView(terminal.Options{
-		// Update posts and returns: a link goroutine never waits for the
-		// main thread, which may be in HCLink.Stop waiting for it (#204).
-		Post:       w.Update,
-		Invalidate: w.Invalidate,
-	})
-	f.termView = view
+	// Update posts and returns: a connection goroutine never waits for the
+	// main thread, which may be in Conn.Close waiting for it (#204).
+	f.post, f.invalidate = w.Update, w.Invalidate
+	f.winFocused = w.IsFocused()
 	f.syncTerminal()
-	f.Slots.Terminal = view.Build
-	view.SetWindowActive(w.IsFocused())
-	offFocus := w.OnFocus(func() { view.SetWindowActive(true) })
-	offBlur := w.OnBlur(func() { view.SetWindowActive(false) })
+	f.Slots.Terminal = f.buildTerminal
+	offFocus := w.OnFocus(func() { f.setTerminalFocus(true) })
+	offBlur := w.OnBlur(func() { f.setTerminalFocus(false) })
 	return func() {
 		offFocus()
 		offBlur()
-		view.Close()
+		f.closeTerminal()
 	}
+}
+
+func (f *Frame) setTerminalFocus(focused bool) {
+	f.winFocused = focused
+	if f.conn != nil {
+		if err := f.conn.SetFocus(focused); err != nil {
+			slog.Debug("terminal focus not sent", "err", err)
+		}
+	}
+}
+
+// terminalOptions are the plugin's options: contr's colors, JetBrains Mono at
+// the design's size and row height, and the design's padding.
+func terminalOptions(conn *ghostty.Conn) gterm.Options {
+	var pal [16]ui.Color
+	for i, rgb := range theme.TerminalPalette {
+		pal[i] = color(rgb)
+	}
+	return gterm.Options{
+		Conn: conn,
+		Theme: &gterm.Theme{
+			Foreground: color(theme.Text), Background: color(theme.BgTerminal), Palette: pal,
+		},
+		Font: gterm.Font{
+			Family: theme.FontFamily, Size: theme.TerminalFontSize,
+			LineHeight: theme.TerminalLineHeightScale,
+			Features:   []string{"-calt", "-clig", "-liga"},
+		},
+		Padding: gterm.Padding{X: theme.TermPadding, Y: theme.TermPadding},
+	}
+}
+
+// closeTerminal closes the terminal, which closes its connection. The program
+// keeps running in hc.
+func (f *Frame) closeTerminal() {
+	if f.term != nil {
+		_ = f.term.Close()
+	} else if f.conn != nil {
+		_ = f.conn.Close()
+	}
+	f.term, f.conn = nil, nil
 }
 
 // syncTerminal points the terminal view at the hc terminal of the selected
 // agent row (D12). Any other selection, or no source, shows no terminal. It
 // does nothing when the terminal stays the same. UI thread.
 func (f *Frame) syncTerminal() {
-	if f.termView == nil {
+	if f.post == nil {
 		return
 	}
 	addr := ""
 	if f.Selection != nil && f.TerminalSource != nil {
-		if sel, ok := f.Selection.Current(); ok && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker) {
+		if sel, ok := f.Selection.Current(); ok && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker || sel.Kind == state.KindTerminal) {
 			addr = sel.ID
 		}
 	}
 	if addr == f.termAddr && f.termSet {
 		return
 	}
+	f.closeTerminal()
 	f.termAddr, f.termSet = addr, true
+	f.termState, f.termErr = ghostty.State{Kind: ghostty.Connecting}, ""
+	f.invalidate()
 	if addr == "" {
-		f.termView.SetTerminal(nil)
 		return
 	}
-	f.termView.SetTerminal(terminal.HCStarter(f.TerminalSource(addr)))
+	post, invalidate := f.post, f.invalidate
+	var conn *ghostty.Conn
+	conn = ghostty.NewConn(f.TerminalSource(addr), ghostty.Options{OnState: func(s ghostty.State) {
+		post(func() {
+			if f.conn == conn {
+				f.termState = s
+				invalidate()
+			}
+		})
+	}})
+	if f.Visibility != nil && !f.Visibility.Visible() {
+		conn.SetVisible(false)
+	}
+	t, err := gterm.New(terminalOptions(conn))
+	if err != nil {
+		_ = conn.Close()
+		slog.Error("terminal not started", "err", err)
+		f.termErr = fmt.Sprintf("terminal unavailable: %v", err)
+		return
+	}
+	f.term, f.conn = t, conn
+	f.setTerminalFocus(f.winFocused)
+}
+
+// staleOpacity is the grid's opacity while the connection is not live and the
+// screen on show may be out of date.
+const staleOpacity = 0.5
+
+// terminalLine is the line shown instead of, or over, the grid, with its
+// colour. ok is false when the grid speaks for itself.
+func (f *Frame) terminalLine() (line string, colour uint32, ok bool) {
+	if f.term == nil {
+		if f.termErr != "" {
+			return f.termErr, theme.Text2, true
+		}
+		return TerminalOffLine, theme.TextDim, true
+	}
+	switch f.termState.Kind {
+	case ghostty.NotRunning:
+		return herdr.NotRunningLine, theme.Text2, true
+	case ghostty.Incompatible:
+		return f.termState.Message, theme.Text2, true
+	}
+	return "", 0, false
+}
+
+// buildTerminal is the frame's terminal slot: the plugin's view of the
+// selected agent's terminal, dimmed and with a line while the connection is
+// down.
+func (f *Frame) buildTerminal(c *ui.Context) {
+	line, colour, showLine := f.terminalLine()
+	ui.Box(c).Fill().Center().Children(func() {
+		if f.term != nil {
+			grid := gterm.View(c, f.term).Label(LabelTerminalGrid).Absolute().Fill().AutoFocus()
+			if f.termState.Kind != ghostty.Live {
+				grid.Opacity(staleOpacity)
+			}
+		}
+		if showLine {
+			ui.Text(c, line).TextColor(theme.Color(colour))
+		}
+	})
 }

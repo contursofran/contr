@@ -287,3 +287,19 @@ func TestAgentsKitFromTheEnvironment(t *testing.T) {
 		t.Errorf("argv = %v, want the CONTR_KIT folder", argv)
 	}
 }
+
+func TestListShowsPlainTerminal(t *testing.T) {
+	labels := map[string]any{"contr": "agent", "role": "terminal", "worktree": "/w/a"}
+	core := &cliCore{reply: map[string]any{"terminal.list": map[string]any{"terminals": []any{
+		map[string]any{"address": "t5", "name": "term-0101", "state": "live", "labels": labels},
+	}}}}
+	code, out, errs := run(t, core, nil, "ls")
+	if code != 0 {
+		t.Fatalf("code %d: %s", code, errs)
+	}
+	for _, want := range []string{"term-0101", "terminal", "/w/a"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("table has no %q:\n%s", want, out)
+		}
+	}
+}
