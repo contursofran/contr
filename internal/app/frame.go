@@ -711,6 +711,9 @@ func terminalOptions(conn *ghostty.Conn) gterm.Options {
 	}
 	return gterm.Options{
 		Conn: conn,
+		// The screen takes the core's size, which the Conn reads from the
+		// stream, so a second viewer keeps its size while contr watches (D91).
+		ResizeByConn: true,
 		Theme: &gterm.Theme{
 			Foreground: color(theme.Text), Background: color(theme.BgTerminal), Palette: pal,
 		},
@@ -759,7 +762,7 @@ func (f *Frame) syncTerminal() {
 	}
 	post, invalidate := f.post, f.invalidate
 	var conn *ghostty.Conn
-	conn = ghostty.NewConn(f.TerminalSource(addr), ghostty.Options{OnState: func(s ghostty.State) {
+	conn = ghostty.NewConn(f.TerminalSource(addr), ghostty.Options{Watch: true, OnState: func(s ghostty.State) {
 		post(func() {
 			if f.conn == conn {
 				f.termState = s
@@ -777,6 +780,7 @@ func (f *Frame) syncTerminal() {
 		f.termErr = fmt.Sprintf("terminal unavailable: %v", err)
 		return
 	}
+	conn.SetScreen(t)
 	f.term, f.conn = t, conn
 	f.setTerminalFocus(f.winFocused)
 }

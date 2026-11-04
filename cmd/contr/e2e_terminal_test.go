@@ -20,8 +20,9 @@ import (
 
 // TestTerminalOnHC runs the built app against the dev herdr and a scratch hc
 // core with one `sh` worker. The test selects the worker, checks that the
-// plugin's grid shows and that hc has the grid's size, types `echo hi` and
-// checks that the shell got it, then runs vim with syntax colors. PNGs go to
+// plugin's grid shows and that hc keeps its size while contr only watches
+// (D91), types `echo hi` and checks that the shell got it and that hc then
+// has the grid's size, then runs vim with syntax colors. PNGs go to
 // tmp/e2e/. Start the dev herdr first:
 //
 //	eval "$(scripts/dev-herdr.sh)"
@@ -76,6 +77,7 @@ func TestTerminalOnHC(t *testing.T) {
 		return fmt.Sprintf("%dx%d", tm.Cols, tm.Rows)
 	}
 
+	start := size()
 	sock := filepath.Join(dir, "a.sock")
 	app := exec.Command(bin)
 	app.Env = append(os.Environ(), append(env, "MYGO_AUTOMATION="+sock,
@@ -101,8 +103,8 @@ func TestTerminalOnHC(t *testing.T) {
 	c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "click", "x": b.X + b.Width/2, "y": b.Y + b.Height/2}}})
 	time.Sleep(2 * time.Second)
 	c.capture(t, filepath.Join(out, "terminal-selected.png"))
-	if got := size(); got == "80x24" || got == "0x0" {
-		t.Errorf("size after selecting = %s, want the window's grid", got)
+	if got := size(); got != start {
+		t.Errorf("size after selecting = %s, want %s: contr only watches until a key", got, start)
 	}
 
 	grid := c.boundsOf(t, "terminal grid")
@@ -120,6 +122,9 @@ func TestTerminalOnHC(t *testing.T) {
 	}
 	if !strings.Contains(strings.ReplaceAll(text, "echo h''i", ""), "hi") {
 		t.Errorf("the shell did not run echo: %q", text)
+	}
+	if got := size(); got == start || got == "0x0" {
+		t.Errorf("size after typing = %s, want the window's grid", got)
 	}
 	time.Sleep(500 * time.Millisecond)
 	c.capture(t, filepath.Join(out, "terminal-typed.png"))
