@@ -20,6 +20,7 @@ import (
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/herdr"
 	"github.com/contursofran/contr/internal/usage"
+	"github.com/egoist/mygo/plugins/terminal"
 )
 
 const (
@@ -48,6 +49,8 @@ func main() {
 		os.Exit(runOwner(cmd.Then, os.Stdout, os.Stderr, dialAgents, os.Getenv))
 	case kindMCP:
 		os.Exit(runMCP(os.Stdin, os.Stdout, os.Stderr, dialAgents, os.Getenv))
+	case kindTerminalCheck:
+		os.Exit(terminalCheck(terminal.Load, terminal.LibraryPath, os.Stdout, os.Stderr))
 	case kindHook:
 		os.Exit(runHook(cmd.Then, os.Stdin, os.Stdout, os.Stderr, dialAgents, os.Getenv))
 	}
