@@ -521,7 +521,7 @@ func (m *ProjectsModal) cloneSection(c *ui.Context) {
 		})
 		switch {
 		case m.cloneErr != "":
-			ui.Text(c, m.cloneErr).TextColor(theme.Color(theme.StatusFailed))
+			ui.Text(c, m.cloneErr).TextColor(theme.Color(theme.Failed))
 		case perr != nil:
 			ui.Text(c, "not a repository yet").TextColor(theme.Color(theme.TextDim))
 		case dest != "":
