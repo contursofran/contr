@@ -24,6 +24,8 @@ const (
 	LabelTitleDrag = "title drag"
 	// LabelReviewToggle is the title bar's Review button.
 	LabelReviewToggle = "Review"
+	// LabelNewTab is the "+" button after the tabs: it opens a plain terminal (D82).
+	LabelNewTab = "New terminal"
 	// orchestratorMark comes before an orchestrator tab's name.
 	orchestratorMark = "◆ "
 )
@@ -39,6 +41,8 @@ type titleBar struct {
 	// toggleReview shows or hides the Review view. Nil: the bar has no Review button.
 	toggleReview func()
 	reviewOpen   bool
+	// newTab opens a plain terminal. Nil: the bar has no "+" button.
+	newTab func()
 }
 
 // setTabs takes in the tabs and tells whether they differ from the last ones.
@@ -62,11 +66,25 @@ func (b *titleBar) clickTab(i int) {
 // button and the panel toggle at the right edge.
 func (b *titleBar) build(c *ui.Context, panelOpen bool, togglePanel func()) {
 	b.tabRow(c)
+	if b.newTab != nil {
+		b.newTabButton(c)
+	}
 	ui.Box(c).Label(LabelTitleDrag).Grow(1).MinWidth(0).FillHeight().DragWindow()
 	if b.toggleReview != nil {
 		b.reviewButton(c)
 	}
 	panelToggle(c, panelOpen, togglePanel)
+}
+
+// newTabButton is the "+" after the tabs. It stays visible with no tabs.
+func (b *titleBar) newTabButton(c *ui.Context) {
+	el := ui.ButtonBase(c).Label(LabelNewTab).FillHeight().PaddingX(theme.TabPaddingX).Shrink(0).
+		Cursor(ui.CursorPointer).Center().OnClick(b.newTab)
+	color := uint32(theme.TextDim)
+	if el.Hovered() {
+		color = theme.Text
+	}
+	el.TextColor(theme.Color(color)).Children(func() { ui.Text(c, "+") })
 }
 
 // reviewButton is the "Review" toggle: it swaps the terminal area for the Review view. It is

@@ -44,8 +44,12 @@ func main() {
 		os.Exit(statusline(os.Stdin, os.Stdout, os.Stderr, cmd.Then))
 	case kindAgents:
 		os.Exit(runAgents(cmd.Then, os.Stdout, os.Stderr, dialAgents, os.Getenv))
+	case kindOwner:
+		os.Exit(runOwner(cmd.Then, os.Stdout, os.Stderr, dialAgents, os.Getenv))
 	case kindMCP:
 		os.Exit(runMCP(os.Stdin, os.Stdout, os.Stderr, dialAgents, os.Getenv))
+	case kindHook:
+		os.Exit(runHook(cmd.Then, os.Stdin, os.Stderr, dialAgents, os.Getenv))
 	}
 	os.Exit(openWindow(cmd.Icons))
 }
@@ -109,6 +113,11 @@ func openWindow(icons bool) int {
 		frame = app.NewFrame(nil)
 		frame.StartAgents = startAgents(os.Getenv)
 		frame.TerminalSource = terminalSource(os.Getenv)
+		frame.OpenTerminal = func(project, dir string) (string, error) {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			return openTerminal(ctx, os.Getenv, dialAgents, project, dir, time.Now())
+		}
 		frame.PickFolder = pickFolder
 		frame.SpawnOrchestrator = func(dir string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
