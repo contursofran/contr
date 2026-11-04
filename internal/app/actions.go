@@ -22,6 +22,7 @@ const (
 	keySelectAll     = "Cmd+A"
 	keyNewTerminal   = "Cmd+T"
 	keyCloseTerminal = "Cmd+W"
+	keySettings      = "Cmd+,"
 )
 
 // action is one item of the app menus: the MyGo role that does the work, and its shortcut.
@@ -47,6 +48,8 @@ var (
 	actionNewTerminal = action{"New Terminal", "", keyNewTerminal}
 	// Close Terminal has no role either: it closes a plain terminal only.
 	actionCloseTerminal = action{"Close Terminal", "", keyCloseTerminal}
+	// Settings has no role: its Click opens the Settings modal (D115).
+	actionSettings = action{"Settings…", "", keySettings}
 )
 
 // item makes the menu item of the action.
@@ -95,6 +98,29 @@ func closeTerminalItem() *mygo.MenuItem {
 	it := actionCloseTerminal.item()
 	it.Click = func(*mygo.MenuItem, *mygo.Window) {
 		if fn := closeTerminalHandler.Load(); fn != nil {
+			(*fn)()
+		}
+	}
+	return it
+}
+
+// settingsHandler opens the Settings modal of the open window, set and cleared like
+// newTerminalHandler.
+var settingsHandler atomic.Pointer[func()]
+
+func setSettingsHandler(fn func()) {
+	if fn == nil {
+		settingsHandler.Store(nil)
+		return
+	}
+	settingsHandler.Store(&fn)
+}
+
+// settingsItem is the Settings… item. Its Click runs on the main thread.
+func settingsItem() *mygo.MenuItem {
+	it := actionSettings.item()
+	it.Click = func(*mygo.MenuItem, *mygo.Window) {
+		if fn := settingsHandler.Load(); fn != nil {
 			(*fn)()
 		}
 	}

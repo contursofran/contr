@@ -39,7 +39,7 @@ func TestTheAppMenuHasAboutHideHideOthersAndQuit(t *testing.T) {
 	if app.Label != "contr" {
 		t.Fatalf("name = %q", app.Label)
 	}
-	want := []string{"About contr", "-", "Hide contr", "Hide Others", "-", "Quit contr"}
+	want := []string{"About contr", "-", "Settings…", "-", "Hide contr", "Hide Others", "-", "Quit contr"}
 	if got := itemNames(app.Submenu); !slices.Equal(got, want) {
 		t.Fatalf("items = %v, want %v", got, want)
 	}
@@ -165,5 +165,25 @@ func TestNoProjectsItemOrShortcutInTheMenus(t *testing.T) {
 				t.Errorf("menu %s has %q (%q)", m.Label, it.Label, it.Accelerator)
 			}
 		}
+	}
+}
+
+func TestTheAppMenuHasSettingsOnCmdCommaAndCallsTheFramesHandler(t *testing.T) {
+	it := find(t, BuildMenus().Items()[0].Submenu, "Settings…")
+	if it.Accelerator != "Cmd+," || it.Click == nil {
+		t.Fatalf("accelerator %q, click set %v", it.Accelerator, it.Click != nil)
+	}
+	it.Click(it, nil) // no window: must not panic
+	n := 0
+	setSettingsHandler(func() { n++ })
+	defer setSettingsHandler(nil)
+	it.Click(it, nil)
+	if n != 1 {
+		t.Errorf("handler ran %d times, want 1", n)
+	}
+	setSettingsHandler(nil)
+	it.Click(it, nil)
+	if n != 1 {
+		t.Errorf("handler ran after it was cleared")
 	}
 }

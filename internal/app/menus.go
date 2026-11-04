@@ -9,6 +9,8 @@ func BuildMenus() *mygo.Menu {
 		{Label: "contr", Submenu: []*mygo.MenuItem{
 			actionAbout.item(),
 			mygo.Separator(),
+			settingsItem(),
+			mygo.Separator(),
 			actionHide.item(),
 			actionHideOthers.item(),
 			mygo.Separator(),

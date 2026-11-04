@@ -1,0 +1,88 @@
+name: Release
+
+# A release for every push to main, except a push that changes only Markdown (owner answer D32,
+# D115). The workflow commits nothing: it takes the next patch from the newest vX.Y.Z tag, writes
+# VERSION and CHANGELOG.md on the runner only, and tags the pushed commit. A tag pushed with the
+# workflow token starts no workflow, so a release starts no second release.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version X.Y.Z (empty: the patch after the newest tag)"
+        required: false
+        type: string
+
+permissions: {}
+
+# Releases run one at a time, and a running release is never cancelled: two would pick one version.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Signed release (macOS arm64)
+    runs-on: macos-15
+    timeout-minutes: 45
+    permissions:
+      contents: write # the tag, the release and its files
+    env:
+      GH_TOKEN: ${{ github.token }}
+      MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
+    steps:
+      - name: Check the signing secret
+        run: |
+          if [ -z "$MYGO_UPDATER_PRIVATE_KEY" ]; then
+            echo "::error::MYGO_UPDATER_PRIVATE_KEY is not set. Add the update secret key to the repository secrets (gh secret set MYGO_UPDATER_PRIVATE_KEY < mygo-update.key). A release without it could not be installed by the app." >&2
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Check the public key
+        run: |
+          if [ -z "$(tr -d '[:space:]' < scripts/update.pub)" ]; then
+            echo "::error::scripts/update.pub is empty. Commit the public update key (mygo-update.pub) first." >&2
+            exit 1
+          fi
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Pick the version and write the notes
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          git fetch --tags --force
+          version="$(scripts/next-version.sh "$INPUT_VERSION")"
+          echo "VERSION_NEW=$version" >> "$GITHUB_ENV"
+          # On the runner only: the build reads them, and nothing commits them.
+          printf '%s\n' "$version" > VERSION
+          scripts/release-notes.sh > release-notes.md
+          { printf '## %s\n\n' "$version"; cat release-notes.md; } > CHANGELOG.md
+          cat release-notes.md
+      - name: Tag the commit and make the draft release
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git tag "v$VERSION_NEW" "$GITHUB_SHA"
+          git push origin "refs/tags/v$VERSION_NEW"
+          gh release create "v$VERSION_NEW" --draft --verify-tag --title "v$VERSION_NEW" --notes-file release-notes.md
+      - name: Build, sign and upload
+        run: |
+          scripts/mygo-config.sh > mygo.json
+          go tool mygo build -platform darwin/arm64 -skip-dmg -upload
+      - name: Publish the release
+        run: gh release edit "v$VERSION_NEW" --draft=false --latest
+      # A failed release leaves no tag and no draft, so the next push picks the same version.
+      - name: Remove the draft and the tag after a failure
+        if: failure()
+        run: |
+          if [ -n "${VERSION_NEW:-}" ]; then
+            gh release delete "v$VERSION_NEW" --yes --cleanup-tag || true
+            git push origin --delete "refs/tags/v$VERSION_NEW" || true
+          fi
