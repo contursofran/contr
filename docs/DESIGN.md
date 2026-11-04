@@ -434,7 +434,8 @@ of a sidebar worktree row and the `#N` label of a board work row. While it
 is open, the needs-you tabs and the title bar tabs show icon and id only.
 Slice 5 (#152, D101) builds the Checks tab. Not built yet: the Files tab
 (it shows `Not built yet.`), the footer and its keys, the other entry
-points, `for <item>`, and the enter motion. The bottom row has no `board ▴` yet, so there is nothing to hide.
+points, and `for <item>`. The bottom row has no `board ▴` yet, so there is
+nothing to hide.
 
 ## Review
 
