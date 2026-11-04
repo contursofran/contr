@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"slices"
+	"sync"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -76,6 +77,16 @@ type source struct {
 	signalled []string // names interrupted
 	stopped   []string
 	closed    []string
+	// mu guards stopped and closed: the frame calls Stop and Close on a
+	// goroutine.
+	mu sync.Mutex
+}
+
+// calls returns copies of the stopped and closed names.
+func (s *source) calls() (stopped, closed []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.stopped), slices.Clone(s.closed)
 }
 
 func (s *source) Snapshot() agentstate.Snapshot { return s.snap }
@@ -107,10 +118,14 @@ func (s *source) Interrupt(name string) error {
 	return s.actionErr
 }
 func (s *source) Stop(name string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.stopped = append(s.stopped, name)
 	return s.actionErr
 }
 func (s *source) Close(name string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.closed = append(s.closed, name)
 	return s.actionErr
 }
