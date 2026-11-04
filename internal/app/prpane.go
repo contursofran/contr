@@ -64,18 +64,21 @@ type PRPane struct {
 	err     string
 	tab     int
 	gen     uint64
+	client  github.Client
+	checks  prChecks
 	handle  ui.Handle
 	refocus bool
 
-	client       github.Client
 	ft           footerState
 	refocusField bool
+	filesState   prFiles // the Files tab (prfiles.go)
 }
 
 // Open shows pull request n of the repository in dir, and reads it.
 func (p *PRPane) Open(dir string, n int) {
 	p.open, p.number, p.dir = true, n, dir
 	p.pr, p.err, p.tab, p.refocus = nil, "", PRTabOverview, true
+	p.filesState = prFiles{}
 	p.gen++
 	gen := p.gen
 	mk := p.Client
@@ -83,7 +86,7 @@ func (p *PRPane) Open(dir string, n int) {
 		mk = github.New
 	}
 	client := mk(dir)
-	p.client = client
+	p.client, p.checks = client, prChecks{}
 	p.ft.text, p.ft.err, p.ft.busy = "", "", false
 	p.readViewer(client)
 	p.Run.Do(func() func() {
@@ -391,6 +394,14 @@ func (p *PRPane) tabs(c *ui.Context) {
 }
 
 func (p *PRPane) body(c *ui.Context) {
+	switch p.tab {
+	case PRTabFiles:
+		p.filesTab(c)
+		return
+	case PRTabChecks:
+		p.checksTab(c)
+		return
+	}
 	if p.tab != PRTabOverview {
 		ui.Text(c, "Not built yet.").TextColor(theme.Color(theme.TextDim)).Padding(theme.PRPanePad)
 		return
