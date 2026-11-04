@@ -11,7 +11,6 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/agents"
-	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/github"
@@ -264,30 +263,6 @@ func TestSidebarBadgeOpensPR(t *testing.T) {
 	}
 	if gotDir != wt1 || gotN != 640 {
 		t.Errorf("OpenPR(%q, %d)", gotDir, gotN)
-	}
-}
-
-func TestBoardWorkLabelOpensPR(t *testing.T) {
-	snap := agentstate.Snapshot{Workers: []agents.Worker{
-		{Name: "b-9", Address: "t1", Role: "builder", Issue: "151", Worktree: "/wt/a", Project: "a", Live: true, Status: "working"},
-		{Name: "b-8", Address: "t2", Role: "builder", Project: "a", Live: true},
-	}}
-	p, _ := newBoardPanel(snap, "a")
-	var dir string
-	var n int
-	picked := ""
-	p.OpenPR = func(d string, num int) { dir, n = d, num }
-	p.Select = func(a string) { picked = a }
-	tt := boardTester(p)
-	tt.Frame()
-	if err := tt.Click(LabelWorkPR("#151")); err != nil {
-		t.Fatal(err)
-	}
-	if dir != "/wt/a" || n != 151 || picked != "" {
-		t.Errorf("OpenPR(%q, %d), picked %q", dir, n, picked)
-	}
-	if _, ok := tt.Find(LabelWorkPR("b-8")); ok {
-		t.Error("a worker without an issue has no PR button")
 	}
 }
 

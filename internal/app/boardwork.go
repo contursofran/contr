@@ -28,8 +28,12 @@ const (
 	LabelWorkEmpty   = "No workers yet."
 )
 
-// LabelWorkPR is the label of a work row's issue button.
+// LabelWorkPR is the label of a work row's number button when the worker has a pull request.
 func LabelWorkPR(label string) string { return "pr " + label }
+
+// LabelWorkIssue is the label of a work row's number button when the worker has an issue and no
+// pull request. It opens the issue in the browser (D74, D104).
+func LabelWorkIssue(label string) string { return "issue " + label }
 
 // StageHeads are the stage columns: plan, build, review, you.
 var StageHeads = [4]string{"plan", "build", "review", "you"}
@@ -45,11 +49,14 @@ const (
 // WorkRow is one worker on the board.
 type WorkRow struct {
 	Address string
-	// Dir and PR open the pull request pane from the label. PR is 0 when the worker has no
-	// issue number or no worktree.
+	// Dir is the worker's worktree. PR is the number of its pull request, 0 when it has none
+	// or the source does not know yet (D104): the label then opens it in the pull request
+	// pane. Issue is the worker's issue number, 0 for none: with no PR the label opens the
+	// issue in the browser.
 	Dir    string
 	PR     int
-	Label  string // "#162", or the name when the worker has no issue
+	Issue  int
+	Label  string // "#162" (the PR number once there is a PR), or the name when the worker has no issue
 	Title  string
 	Role   string
 	Status string // the word shown: working, blocked, done, ended …
@@ -104,7 +111,7 @@ func WorkRows(snap agentstate.Snapshot, project string) []WorkRow {
 		if w.Issue != "" {
 			row.Label = "#" + strings.TrimPrefix(w.Issue, "#")
 			if n, err := strconv.Atoi(strings.TrimPrefix(w.Issue, "#")); err == nil && w.Worktree != "" {
-				row.Dir, row.PR = w.Worktree, n
+				row.Dir, row.Issue = w.Worktree, n
 			}
 		}
 		own := RoleStage(w.Role)
@@ -154,7 +161,8 @@ func WorkRowLabel(row WorkRow) string {
 
 // WorkSection adds the section: the head with the stage heads, then the rows
 // or the empty line. onPick gets the address of a clicked row.
-func WorkSection(c *ui.Context, rows []WorkRow, onPick func(address string), onPR func(dir string, n int)) {
+// onPR opens a PR, onIssue an issue: both get the worktree and the number.
+func WorkSection(c *ui.Context, rows []WorkRow, onPick func(address string), onPR, onIssue func(dir string, n int)) {
 	ui.Column(c).Label(LabelWorkSection).FillWidth().Shrink(0).MaxHeightPercent(60).Children(func() {
 		ui.Row(c).Label(LabelWorkHeader).FillWidth().Height(theme.BoardLineHeight).Shrink(0).
 			AlignItems(ui.Center).PaddingX(theme.PanelPadX).Children(func() {
@@ -171,13 +179,13 @@ func WorkSection(c *ui.Context, rows []WorkRow, onPick func(address string), onP
 		}
 		ui.Scroll(c).Label(LabelWorkRows).FillWidth().MinHeight(0).Children(func() {
 			for _, row := range rows {
-				workRow(c, row, onPick, onPR)
+				workRow(c, row, onPick, onPR, onIssue)
 			}
 		})
 	})
 }
 
-func workRow(c *ui.Context, row WorkRow, onPick func(address string), onPR func(dir string, n int)) {
+func workRow(c *ui.Context, row WorkRow, onPick func(address string), onPR, onIssue func(dir string, n int)) {
 	pick := func() {
 		if onPick != nil {
 			onPick(row.Address)
@@ -199,12 +207,21 @@ func workRow(c *ui.Context, row WorkRow, onPick func(address string), onPR func(
 			})
 		}
 	}
-	if row.PR > 0 && onPR != nil {
-		// The number opens the pull request pane (D59). Its button sits beside the row's
-		// button, not inside it, so both are separate elements.
+	// The number opens the pull request pane when there is a PR (D59, D104), else the issue in the
+	// browser (D74). Its button sits beside the row's button, not inside it, so both are separate
+	// elements.
+	var numLabel string
+	var open func()
+	switch {
+	case row.PR > 0 && onPR != nil:
+		numLabel, open = LabelWorkPR(row.Label), func() { onPR(row.Dir, row.PR) }
+	case row.PR == 0 && row.Issue > 0 && onIssue != nil:
+		numLabel, open = LabelWorkIssue(row.Label), func() { onIssue(row.Dir, row.Issue) }
+	}
+	if open != nil {
 		ui.Row(c).FillWidth().Height(theme.WorkRowHeight).Shrink(0).PaddingStart(theme.PanelPadX).Children(func() {
-			ui.ButtonBase(c).Label(LabelWorkPR(row.Label)).Width(theme.WorkLabelWidth).FillHeight().Shrink(0).
-				AlignItems(ui.Center).Cursor(ui.CursorPointer).OnClick(func() { onPR(row.Dir, row.PR) }).Children(label)
+			ui.ButtonBase(c).Label(numLabel).Width(theme.WorkLabelWidth).FillHeight().Shrink(0).
+				AlignItems(ui.Center).Cursor(ui.CursorPointer).OnClick(open).Children(label)
 			ui.ButtonBase(c).Label(WorkRowLabel(row)).Grow(1).MinWidth(0).FillHeight().
 				AlignItems(ui.Center).PaddingEnd(theme.PanelPadX).Radius(theme.CardRadius).
 				Cursor(ui.CursorPointer).OnClick(pick).Children(rest)

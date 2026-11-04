@@ -4,6 +4,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"log/slog"
@@ -18,6 +19,7 @@ import (
 	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/github"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/usage"
 )
@@ -106,6 +108,11 @@ type Frame struct {
 	// PR is the pull request pane. [Frame.Attach] makes it. [Frame.OpenPR] opens it at the
 	// right of the terminal area, and the title bar tabs shrink to icon and id (D59).
 	PR *PRPane
+	// WorkerPRs finds the pull request of each worker's branch (D104). [Frame.Attach] makes it.
+	WorkerPRs *WorkerPRs
+	// OpenIssueWeb opens issue n of the repository in dir in the browser. [Frame.Attach] sets it;
+	// tests replace it.
+	OpenIssueWeb func(dir string, n int) error
 	// Host and Usage feed the status bar. [Frame.Attach] creates them when they are nil (tests set
 	// fakes first) and ends them with its stop function.
 	Host  *host.Host
@@ -172,6 +179,27 @@ func (f *Frame) OpenPR(dir string, n int) {
 	if f.PR != nil {
 		f.PR.Open(dir, n)
 	}
+}
+
+// OpenIssue opens issue n of the repository in dir in the browser, off the UI thread (D74). A
+// failure shows in the status message.
+func (f *Frame) OpenIssue(dir string, n int) {
+	open := f.OpenIssueWeb
+	if open == nil {
+		open = func(dir string, n int) error { return github.New(dir).OpenIssue(context.Background(), n) }
+	}
+	run := Runner{}
+	if f.WorkerPRs != nil {
+		run = f.WorkerPRs.Run
+	}
+	run.Do(func() func() {
+		err := open(dir, n)
+		return func() {
+			if err != nil && f.Status != nil {
+				f.Status.Show(err.Error())
+			}
+		}
+	})
 }
 
 // ClosePR hides the pull request pane.
@@ -546,6 +574,14 @@ func (f *Frame) syncAgents() {
 	if f.PR != nil {
 		f.PR.OnAgentsSync()
 	}
+	f.syncWorkerPRs()
+}
+
+// syncWorkerPRs starts the pull request reads for the workers now (D104).
+func (f *Frame) syncWorkerPRs() {
+	if f.WorkerPRs != nil && f.agentSnap != nil {
+		f.WorkerPRs.Sync(f.agentSnap().Workers)
+	}
 }
 
 // Attach connects the frame's state to the window. A change of any of them
@@ -556,6 +592,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.Review = NewReview(w.Update, w.Invalidate)
 	f.Status = state.NewStatusMessage(w.Invalidate)
 	f.PR = &PRPane{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate, OpenURL: openURL}
+	f.WorkerPRs = &WorkerPRs{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate}
 	var agentSnap func() agentstate.Snapshot
 	var src AgentSource
 	stopAgents := func() {}
@@ -611,6 +648,9 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.Slots.Needs = f.Needs.View
 	f.Panel = &BoardPanel{Snapshot: agentSnap, Needs: f.Needs.Tabs}
 	f.Panel.OpenPR = f.OpenPR
+	f.Panel.OpenIssue = f.OpenIssue
+	f.Panel.PRs = f.WorkerPRs
+	f.syncWorkerPRs()
 	if src != nil {
 		f.Panel.Scope = f.Needs.Scope
 		f.Panel.Open = f.Card.Open

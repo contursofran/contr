@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -165,4 +166,30 @@ func rollupResult(status, conclusion, state string) string {
 		return "skip"
 	}
 	return "fail"
+}
+
+// BranchPR returns the number of the pull request of the checked-out branch
+// of c.Dir, from `gh pr view --json number`. It returns 0 and no error when
+// the branch has no pull request (D104).
+func (c Client) BranchPR(ctx context.Context) (int, error) {
+	out, err := c.run(ctx, "pr", "view", "--json", "number")
+	if err != nil {
+		if strings.Contains(err.Error(), "no pull requests found") {
+			return 0, nil
+		}
+		return 0, err
+	}
+	var r struct {
+		Number int `json:"number"`
+	}
+	if err := json.Unmarshal(out, &r); err != nil {
+		return 0, fmt.Errorf("gh: read branch pr: %w", err)
+	}
+	return r.Number, nil
+}
+
+// OpenIssue opens issue n of the repository of c.Dir in the web browser.
+func (c Client) OpenIssue(ctx context.Context, n int) error {
+	_, err := c.run(ctx, "issue", "view", fmt.Sprint(n), "--web")
+	return err
 }

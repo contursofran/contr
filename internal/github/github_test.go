@@ -210,3 +210,41 @@ func TestExecRunnerKilledGhDoesNotHang(t *testing.T) {
 		t.Errorf("Run took %v", d)
 	}
 }
+
+func TestBranchPRReadsNumberInDir(t *testing.T) {
+	f := &fakeRunner{out: []byte(`{"number":307}`)}
+	n, err := Client{R: f, Dir: "/w"}.BranchPR(context.Background())
+	if err != nil || n != 307 {
+		t.Fatalf("got %d, %v", n, err)
+	}
+	if f.dir != "/w" || strings.Join(f.args, " ") != "pr view --json number" {
+		t.Errorf("dir %q args %v", f.dir, f.args)
+	}
+}
+
+func TestBranchPRNoPullRequestIsZero(t *testing.T) {
+	f := &fakeRunner{err: errors.New(`no pull requests found for branch "x"`)}
+	n, err := Client{R: f}.BranchPR(context.Background())
+	if err != nil || n != 0 {
+		t.Errorf("got %d, %v", n, err)
+	}
+}
+
+func TestBranchPRErrors(t *testing.T) {
+	if _, err := (Client{R: &fakeRunner{err: errors.New("boom")}}).BranchPR(context.Background()); err == nil {
+		t.Error("other gh error was hidden")
+	}
+	if _, err := (Client{R: &fakeRunner{out: []byte("x")}}).BranchPR(context.Background()); err == nil {
+		t.Error("bad json was accepted")
+	}
+}
+
+func TestOpenIssueRunsWeb(t *testing.T) {
+	f := &fakeRunner{}
+	if err := (Client{R: f, Dir: "/w"}).OpenIssue(context.Background(), 12); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(f.args, " ") != "issue view 12 --web" || f.dir != "/w" {
+		t.Errorf("dir %q args %v", f.dir, f.args)
+	}
+}
