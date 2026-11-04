@@ -75,17 +75,20 @@ func (p *PRPane) readViewer(client github.Client) {
 		login, err := client.Viewer(context.Background())
 		return func() {
 			p.ft.viewerAsked = false
-			if err == nil {
+			if err != nil {
+				p.ft.err = "Approve unavailable: " + err.Error()
+			} else {
 				p.ft.viewer = login
-				p.redraw()
 			}
+			p.redraw()
 		}
 	})
 }
 
 // write runs a write off the UI thread, then reads the PR again. A result
 // of an older pane state is dropped (D59).
-func (p *PRPane) write(op func(context.Context, github.Client, github.PR) error) {
+// done runs after a write that succeeded, if it is not nil.
+func (p *PRPane) write(op func(context.Context, github.Client, github.PR) error, done func()) {
 	if p.ft.busy || p.pr == nil {
 		return
 	}
@@ -112,6 +115,9 @@ func (p *PRPane) write(op func(context.Context, github.Client, github.PR) error)
 			default:
 				p.pr = &fresh
 			}
+			if err == nil && done != nil {
+				done()
+			}
 			p.redraw()
 		}
 	})
@@ -123,16 +129,20 @@ func (p *PRPane) sendComment() {
 	if body == "" || p.ft.busy {
 		return
 	}
-	p.ft.text = ""
+	// The text stays until the write succeeds, so a failed write keeps it.
 	p.write(func(ctx context.Context, c github.Client, pr github.PR) error {
 		return c.Comment(ctx, pr.Number, body)
+	}, func() {
+		if strings.TrimSpace(p.ft.text) == body {
+			p.ft.text = ""
+		}
 	})
 }
 
 func (p *PRPane) approve() {
 	p.write(func(ctx context.Context, c github.Client, pr github.PR) error {
 		return c.Approve(ctx, pr.Number)
-	})
+	}, nil)
 }
 
 // merge squash-merges the head commit that the pane shows.
@@ -145,7 +155,7 @@ func (p *PRPane) merge() {
 	}
 	p.write(func(ctx context.Context, c github.Client, pr github.PR) error {
 		return c.Merge(ctx, pr.Number, pr.HeadSHA)
-	})
+	}, nil)
 }
 
 // footerKeys adds the footer keys to the pane root: `c` focuses the field,
