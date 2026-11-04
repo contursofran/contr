@@ -66,6 +66,10 @@ type PRPane struct {
 	gen     uint64
 	handle  ui.Handle
 	refocus bool
+
+	client       github.Client
+	ft           footerState
+	refocusField bool
 }
 
 // Open shows pull request n of the repository in dir, and reads it.
@@ -79,6 +83,9 @@ func (p *PRPane) Open(dir string, n int) {
 		mk = github.New
 	}
 	client := mk(dir)
+	p.client = client
+	p.ft.text, p.ft.err, p.ft.busy = "", "", false
+	p.readViewer(client)
 	p.Run.Do(func() func() {
 		pr, err := client.PR(context.Background(), n)
 		return func() {
@@ -303,7 +310,7 @@ func (p *PRPane) View(c *ui.Context) {
 	root := ui.Column(c).Label(LabelPRPane).Width(theme.PRPaneWidth).Shrink(0).FillHeight().
 		Background(theme.Color(theme.BgWindow)).BorderStartWidth(1).BorderColor(theme.Color(theme.Line)).
 		Focusable().FocusRing(false).Bind(&p.handle)
-	root = root.OnShortcut(0, ui.KeyEscape, p.Close)
+	root = p.footerKeys(root.OnShortcut(0, ui.KeyEscape, p.Close))
 	if p.refocus {
 		p.refocus = false
 		p.handle.Focus(c)
@@ -313,6 +320,7 @@ func (p *PRPane) View(c *ui.Context) {
 		if p.pr != nil {
 			p.tabs(c)
 			p.body(c)
+			p.footer(c)
 			return
 		}
 		text := LabelPRLoad
@@ -359,7 +367,7 @@ func (p *PRPane) header(c *ui.Context) {
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
 			stateBadge(c, StateText(*pr))
 			icons.Sized(c, ciIcon(pr.ChecksSummary), theme.IconSizeSmall)
-			ui.Text(c, CIText(pr.ChecksSummary)).TextColor(theme.Color(theme.Text2)).NoWrap()
+			ui.Text(c, CIText(pr.ChecksSummary)).TextColor(theme.Color(ciTextColor(pr.ChecksSummary))).NoWrap()
 		})
 	})
 }

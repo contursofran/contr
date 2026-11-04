@@ -153,6 +153,7 @@ func TestPRPaneStaleResultDropped(t *testing.T) {
 	r.run.reply = func(n string) ([]byte, error) {
 		return []byte(strings.Replace(prJSON, "Fix bag drag target", "title "+n, 1)), nil
 	}
+	r.pane.ft.viewer = "owner" // the login is read: only the PR reads queue
 	r.pane.Open("/w", 1)
 	r.pane.Open("/w", 2)
 	if len(r.queue) != 2 {

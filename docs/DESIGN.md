@@ -433,8 +433,15 @@ badge and the CI summary, the tabs and the Overview. The tab switch is
 of a sidebar worktree row and the `#N` label of a board work row. While it
 is open, the needs-you tabs and the title bar tabs show icon and id only.
 Not built yet: the Files and Checks tabs (they show `Not built yet.`), the
-footer and its keys, the other entry points, `for <item>`, and the enter
+the other entry points, `for <item>`, and the enter
 motion. The bottom row has no `board ▴` yet, so there is nothing to hide.
+
+The footer (#154, D103) shows for an open PR: the comment field (Enter or
+`Comment` sends), `Approve` and `Squash and merge`. `Approve` is hidden on the
+owner's own PR and once the PR is approved. The merge is pinned to the head
+commit that the pane shows. A failed CI does not stop the merge: the button
+stays and the CI summary is red. A write error shows above the field. After a
+write the pane reads the PR again. Not built yet: `merged · principal told`.
 
 ## Review
 
