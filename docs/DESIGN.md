@@ -432,7 +432,12 @@ badge and the CI summary, the tabs and the Overview. The tab switch is
 `kit.Switch`, so the Review mode switch has the same look. It opens from the `#N` badge
 of a sidebar worktree row and the `#N` label of a board work row. While it
 is open, the needs-you tabs and the title bar tabs show icon and id only.
-Not built yet: the Files and Checks tabs (they show `Not built yet.`), the
+Slice 6 (#153, D102) builds the Files tab, read only: no `reply` or
+`resolve` yet. A resolved thread shows as one line, `resolved · who`; the
+owner has not decided this yet (D25). The thread box starts 12 px from the
+gutter, since the code view already leaves the gutter free. A thread whose
+line is not in the diff is not shown.
+Not built yet: the Checks tab (it shows `Not built yet.`), the
 footer and its keys, the other entry points, `for <item>`, and the enter
 motion. The bottom row has no `board ▴` yet, so there is nothing to hide.
 

@@ -66,12 +66,15 @@ type PRPane struct {
 	gen     uint64
 	handle  ui.Handle
 	refocus bool
+
+	filesState prFiles // the Files tab (prfiles.go)
 }
 
 // Open shows pull request n of the repository in dir, and reads it.
 func (p *PRPane) Open(dir string, n int) {
 	p.open, p.number, p.dir = true, n, dir
 	p.pr, p.err, p.tab, p.refocus = nil, "", PRTabOverview, true
+	p.filesState = prFiles{}
 	p.gen++
 	gen := p.gen
 	mk := p.Client
@@ -371,6 +374,10 @@ func (p *PRPane) tabs(c *ui.Context) {
 }
 
 func (p *PRPane) body(c *ui.Context) {
+	if p.tab == PRTabFiles {
+		p.filesTab(c)
+		return
+	}
 	if p.tab != PRTabOverview {
 		ui.Text(c, "Not built yet.").TextColor(theme.Color(theme.TextDim)).Padding(theme.PRPanePad)
 		return
