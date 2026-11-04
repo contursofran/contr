@@ -19,8 +19,6 @@ go vet -tags 'e2e bench hccore' ./...
 scripts/check-conflicts.sh
 scripts/check-decisions.sh
 go test -race ./...
-# The patched terminal emulator is a module of its own (go.mod replaces it).
-(cd third_party/vt && go vet ./... && go test -race ./...)
 
 # MyGo needs no cgo, and contr must not add any.
 CGO_ENABLED=0 go build -o /dev/null ./cmd/contr

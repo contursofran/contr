@@ -214,17 +214,9 @@ an object with these keys:
 Example: `{"idle shown": {"frames": 11, "frames_per_s": 0.693,
 "cpu_seconds": 0.06, "cpu_med": 0, "footprint_max": 202, "working": false}}`.
 
-## How to run the grid test again
+## The grid test
 
-The terminal painter test is `cmd/gridbench` (build tag `bench`). Run it from
-the repository root, one mode at a time, and read CPU with `ps`:
-
-    go build -tags bench -o tmp/gridbench ./cmd/gridbench
-    tmp/gridbench -mode idle|scroll|churn
-
-`-mode sample` shows a fixed surface (colors, box glyphs, underline styles,
-selection, cursor). Build it with `-tags bench,e2e` to capture the window with
-MyGo's automation plugin.
+`cmd/gridbench` (the terminal painter test) is removed (D81). The numbers above stay as a record.
 
 The earlier MyGo, Gio and GPUI programs are not in this repository.
 

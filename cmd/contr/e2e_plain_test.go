@@ -95,7 +95,9 @@ func TestPlainTerminalWithoutHerdr(t *testing.T) {
 	c := dial(t, sock)
 	defer c.conn.Close()
 	c.waitWindow(t)
-	wake := func() { c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "pointerMove", "x": 700, "y": 500}}}) }
+	wake := func() {
+		c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "pointerMove", "x": 700, "y": 500}}})
+	}
 	has := func(label string) bool {
 		for _, n := range c.nodes(t) {
 			if n.Label == label {

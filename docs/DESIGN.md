@@ -161,7 +161,7 @@ then Settings.
   `5s`, `3m`, `2h` and move on a state change or a repaint, never on a timer
   (D35, D40).
 - A click on a row selects that agent: the top bar selects its tab, the
-  terminal shows its hc terminal (D45), the panel follows (D44).
+  terminal shows its hc terminal (D80), the panel follows (D44).
 - **Bottom:** a divider, then `Settings` (gear icon). The settings screen is
   not designed yet **(not built)**.
 
@@ -192,8 +192,10 @@ then Settings.
 - The output and the program's own prompt fill the rest. contr draws
   nothing between them: the strip and the card do not move the prompt.
   #150 later draws them between the output and the prompt (D67).
-- The selected orchestrator or worker shows its hc terminal (D45); any other
-  selection shows `select an agent to see its terminal`.
+- The selected orchestrator or worker shows its hc terminal (D80); any other
+  selection shows `select an agent to see its terminal`. contr takes the
+  terminal's size when it attaches (owner, 2026-11-04); another viewer's size
+  does not stay.
 
 ## Panel (380)
 
