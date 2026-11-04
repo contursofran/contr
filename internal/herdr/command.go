@@ -23,3 +23,13 @@ func FocusPane(path, paneID string, timeout time.Duration) error {
 func focusPaneParams(paneID string) map[string]any {
 	return map[string]any{"pane_id": paneID}
 }
+
+// CreateWorkspace makes a new workspace in herdr whose first pane starts in
+// cwd (`workspace.create`).
+func CreateWorkspace(path, cwd string, timeout time.Duration) error {
+	return command(path, timeout, "contr-workspace-create", "workspace.create", createWorkspaceParams(cwd), "workspace_created")
+}
+
+func createWorkspaceParams(cwd string) map[string]any {
+	return map[string]any{"cwd": cwd}
+}

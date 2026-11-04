@@ -86,3 +86,41 @@ func TestFocusPaneMissingSocketIsNotRunning(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 }
+
+const workspaceCreated = `{"id":"contr-workspace-create","result":{"type":"workspace_created"}}`
+
+func TestCreateWorkspaceParamsIsTheCwd(t *testing.T) {
+	want := map[string]any{"cwd": "/tmp/x"}
+	if got := createWorkspaceParams("/tmp/x"); !reflect.DeepEqual(got, want) {
+		t.Fatalf("%v", got)
+	}
+}
+
+func TestCreateWorkspaceSendsWorkspaceCreateAndAcceptsWorkspaceCreated(t *testing.T) {
+	path, server := serve(t, tempDir(t), []string{workspaceCreated}, 0)
+	if err := CreateWorkspace(path, "/tmp/x", tLong); err != nil {
+		t.Fatal(err)
+	}
+	wantRequest(t, server, "contr-workspace-create", "workspace.create", map[string]any{"cwd": "/tmp/x"})
+}
+
+func TestCreateWorkspaceMapsAnErrorReplyToAServerError(t *testing.T) {
+	reply := serverReply("contr-workspace-create", "invalid_params", "bad cwd")
+	path, server := serve(t, tempDir(t), []string{reply}, 0)
+	wantServerCode(t, CreateWorkspace(path, "/nope", tLong), "invalid_params")
+	server.Request(t)
+}
+
+func TestCreateWorkspaceRejectsAResultOfAnotherType(t *testing.T) {
+	reply := `{"id":"contr-workspace-create","result":{"type":"pong"}}`
+	path, server := serve(t, tempDir(t), []string{reply}, 0)
+	wantKind(t, CreateWorkspace(path, "/tmp/x", tLong), ErrUnexpected)
+	server.Request(t)
+}
+
+func TestCreateWorkspaceMissingSocketIsNotRunning(t *testing.T) {
+	err := CreateWorkspace(filepath.Join(tempDir(t), "missing.sock"), "/tmp/x", tLong)
+	if we := wireErr(t, err); !we.IsNotRunning() {
+		t.Fatalf("%v", err)
+	}
+}
