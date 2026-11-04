@@ -474,12 +474,20 @@ func panelToggle(c *ui.Context, open bool, onClick func()) {
 	toggleButton(c, LabelPanelToggle, open, onClick)
 }
 
+// toggleTip is the tip of a sidebar or panel toggle.
+func toggleTip(label string) string {
+	if label == LabelPanelToggle {
+		return "Show or hide the board panel"
+	}
+	return "Show or hide the sidebar"
+}
+
 // toggleButton draws the sidebar or panel toggle: a small outline with one
 // filled part. The sidebar's fill is on the left, the panel's on the right,
 // and the fill shows while the part is open.
 func toggleButton(c *ui.Context, label string, open bool, onClick func()) {
 	left := label != LabelPanelToggle
-	ui.ButtonBase(c).Label(label).Size(theme.TitleButtonSize, theme.TitleButtonSize).Shrink(0).
+	ui.ButtonBase(c).Label(label).Tooltip(toggleTip(label)).Size(theme.TitleButtonSize, theme.TitleButtonSize).Shrink(0).
 		Cursor(ui.CursorPointer).OnClick(onClick).Children(func() {
 		glyph := ui.Row(c).Size(theme.TitleGlyphWidth, theme.TitleGlyphHeight).
 			Border(1, color(theme.TextDim)).Radius(theme.SidebarToggleRadius)

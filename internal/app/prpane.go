@@ -339,7 +339,7 @@ func (p *PRPane) header(c *ui.Context) {
 					}
 				}).Children(func() { ui.Text(c, LabelPRWeb) })
 			}
-			ui.ButtonBase(c).Label(LabelPRClose).Cursor(ui.CursorPointer).Shrink(0).
+			ui.ButtonBase(c).Label(LabelPRClose).Tooltip("Close the pull request pane").Cursor(ui.CursorPointer).Shrink(0).
 				Size(theme.TitleButtonSize, theme.TitleButtonSize).Center().
 				TextColor(theme.Color(theme.TextDim)).OnClick(p.Close).Children(func() { ui.Text(c, "×") })
 		})
