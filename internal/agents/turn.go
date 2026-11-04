@@ -152,19 +152,31 @@ func ContextTokens(path string) (int, error) {
 }
 
 // RanCommand tells whether the transcript at path holds a run of the slash
-// command name (such as "contr:orchestrate"): Claude Code records it as
-// <command-name>/name</command-name>.
+// command name (such as "contr:orchestrate"): Claude Code records it as a
+// user message whose content is a plain string with
+// <command-name>/name</command-name>. The tag inside a tool result (a file
+// or a grep that shows it) is a list of blocks, and does not count.
 func RanCommand(path, name string) (bool, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return false, err
 	}
 	defer func() { _ = f.Close() }()
-	mark := []byte("<command-name>/" + name + "</command-name>")
+	mark := "<command-name>/" + name + "</command-name>"
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 64*1024), 64*1024*1024)
 	for sc.Scan() {
-		if bytes.Contains(sc.Bytes(), mark) {
+		if !bytes.Contains(sc.Bytes(), []byte(mark)) {
+			continue
+		}
+		var e struct {
+			Type    string `json:"type"`
+			Message struct {
+				Content json.RawMessage `json:"content"`
+			} `json:"message"`
+		}
+		var text string
+		if json.Unmarshal(sc.Bytes(), &e) == nil && e.Type == "user" && json.Unmarshal(e.Message.Content, &text) == nil && strings.Contains(text, mark) {
 			return true, nil
 		}
 	}

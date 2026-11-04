@@ -86,4 +86,10 @@ func TestRanCommand(t *testing.T) {
 	if ran, err := RanCommand(writeTranscript(t, prompt, words), "contr:orchestrate"); err != nil || ran {
 		t.Errorf("no command: ran = %v, %v", ran, err)
 	}
+	// The tag in a file the session read, or in what the assistant wrote, is no run of the command.
+	read := `{"type":"user","message":{"content":[{"type":"tool_result","content":"const orchestrateLine = ` + "`" + `{\"type\":\"user\",\"message\":{\"content\":\"<command-name>/contr:orchestrate</command-name>\"}}` + "`" + `"}]}}`
+	said := `{"type":"assistant","message":{"content":[{"type":"text","text":"<command-name>/contr:orchestrate</command-name>"}]}}`
+	if ran, err := RanCommand(writeTranscript(t, prompt, read, said, words), "contr:orchestrate"); err != nil || ran {
+		t.Errorf("tag in a tool result: ran = %v, %v", ran, err)
+	}
 }
