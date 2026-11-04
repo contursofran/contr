@@ -36,7 +36,7 @@ type followRig struct {
 func newFollowRig(t *testing.T) *followRig {
 	t.Helper()
 	src := panelSource()
-	f := NewFrame(nil)
+	f := NewFrame()
 	f.Selection = stateSelection()
 	f.Worker = &WorkerPanel{Source: src, Selection: f.Selection, Run: Runner{Go: func(f func()) { f() }}}
 	f.Slots.Panel = func(c *ui.Context) { ui.Text(c, "[board]") }

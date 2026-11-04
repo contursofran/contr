@@ -30,7 +30,7 @@ terminal with role orchestrator): once the context passes CONTR_SAVE_AT
 tokens (default 220000), it keeps the turn going one time and asks the
 coordinator to update COORDINATOR-STATE.md before Claude Code compacts.
 In any hc session that is not a worker it also labels the terminal with the
-context size (contr.context, contr.context-limit) for the Herdr strip.
+context size (contr.context, contr.context-limit) for the status strip.
 
 session-start, after a compaction in a coordinator: prints the playbook,
 the state file to read, the live workers it started and its open owner
@@ -186,7 +186,7 @@ func (h *hook) sessionStart() error {
 }
 
 // showContext puts the session's context size on its own hc terminal, for
-// the Herdr mod's strip: contr.context (tokens) and contr.context-limit (the
+// the status strip: contr.context (tokens) and contr.context-limit (the
 // compaction window). 0 removes contr.context. Best effort: a failure never
 // fails the hook.
 func (h *hook) showContext(tokens int) {

@@ -20,7 +20,7 @@ const HistoryLines = 1000
 const maxHeld = 64 << 10
 
 // The wait after a lost connection is baseRetry, doubled by each further
-// failure up to maxRetry, as for the herdr endpoint link. firstWait is how
+// failure up to maxRetry, as for the old endpoint link. firstWait is how
 // long the first attach waits for the view's size. They are variables so
 // tests can shorten them.
 var (

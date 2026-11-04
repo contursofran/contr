@@ -16,20 +16,15 @@ import (
 	"github.com/contursofran/contr/internal/hc"
 )
 
-// TestBoardCapture runs the built app against the dev herdr and a scratch hc
+// TestBoardCapture runs the built app against a scratch hc
 // core with an orchestrator, a planner and a builder, one question and one
 // to-do. With the orchestrator selected the panel shows the board
-// (tmp/e2e/board.png). Start the dev herdr first:
+// (tmp/e2e/board.png):
 //
-//	eval "$(scripts/dev-herdr.sh)"
 //	go test -tags e2e -run TestBoardCapture ./cmd/contr
 //
-// It refuses to run against any herdr but the dev one, and it never touches
-// the owner's hc core.
+// It never touches the owner's hc core.
 func TestBoardCapture(t *testing.T) {
-	if !strings.Contains(os.Getenv("HERDR_SOCKET_PATH"), "contr-go-dev-herdr") {
-		t.Skip("HERDR_SOCKET_PATH is not the dev herdr; run eval \"$(scripts/dev-herdr.sh)\" first")
-	}
 	if _, err := exec.LookPath("hc"); err != nil {
 		t.Skip("hc is not installed")
 	}

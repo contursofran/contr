@@ -78,7 +78,7 @@ func barFrame(t *testing.T, h *fakeHost, v string, width int) (*Frame, *fakeCore
 	t.Helper()
 	core := &fakeCore{v: v}
 	u, m := &fakeUsage{left: map[usage.PlanID]float64{}}, &fakeMessage{}
-	f := NewFrame(nil)
+	f := NewFrame()
 	f.agentSnap = core.snap
 	f.status.host, f.status.usage, f.status.message = h, u, m
 	tt := ui.NewTester(f.View, width, theme.WindowHeight)

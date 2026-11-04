@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -18,14 +17,10 @@ import (
 
 // TestNeedsRowCapture shows the needs-you row with two questions and a to-do
 // from a scratch owner.json and a scratch hc core, and saves the window as
-// tmp/e2e/needs.png. It never touches the owner's hc core. Start the dev herdr first:
+// tmp/e2e/needs.png. It never touches the owner's hc core.:
 //
-//	eval "$(scripts/dev-herdr.sh)"
 //	go test -tags e2e -run TestNeedsRowCapture ./cmd/contr
 func TestNeedsRowCapture(t *testing.T) {
-	if !strings.Contains(os.Getenv("HERDR_SOCKET_PATH"), "contr-go-dev-herdr") {
-		t.Skip("HERDR_SOCKET_PATH is not the dev herdr; run eval \"$(scripts/dev-herdr.sh)\" first")
-	}
 	root, err := filepath.Abs("../..")
 	if err != nil {
 		t.Fatal(err)

@@ -1,6 +1,6 @@
 # Working on contr
 
-contr is a native macOS client for herdr, with an agent board built in. It is written in Go with MyGo's native UI.
+contr is a native macOS client for herdr-core (`hc`), with an agent board built in. It is written in Go with MyGo's native UI.
 
 ## Goal and reference
 
@@ -82,7 +82,6 @@ that code, move it to the MyGo part in its own small PR.
 | `internal/app` | the window content: frame and views |
 | `internal/app/kit` | shared view parts: list row, +/− counts, switch, code view |
 | `internal/app/ghostty` | `Conn`: an hc terminal as the connection of MyGo's terminal plugin (D79) |
-| `internal/herdr` | herdr's JSON API: wire, model, reader, command, agents |
 | `internal/usage` | plan usage: Claude status line, Codex logs |
 | `internal/prompt` | reads a blocked worker's menu from terminal text: question and choices |
 | `internal/review` | git reads for the Review view: branches ahead of main, files, commits, texts |
@@ -94,7 +93,7 @@ that code, move it to the MyGo part in its own small PR.
 | `internal/owner` | questions and to-dos for the owner, in one locked JSON file |
 | `assets` | fonts, status icons, app icon |
 | `kit` | Claude Code plugin for agent work: agent definitions and the coordinator playbook |
-| `scripts` | `check.sh`, `bundle.sh`, `install.sh`, `dev-herdr.sh`, `agent-metrics.py` |
+| `scripts` | `check.sh`, `bundle.sh`, `install.sh`, `agent-metrics.py` |
 
 Add packages under `internal/` when a change needs them.
 
@@ -103,7 +102,7 @@ Add packages under `internal/` when a change needs them.
 - `scripts/check.sh` must pass before you report done: gofmt, `go vet`,
   `go test -race`, and a build with `CGO_ENABLED=0`.
 - Never block the UI thread. MyGo runs views and handlers on the main
-  thread. herdr I/O, file reads and git scans run on goroutines, and their
+  thread. hc I/O, file reads and git scans run on goroutines, and their
   results reach the views through `Window.Update` or `Invalidate`.
 - Performance is not a goal by itself (owner, 2026-11-03, D55). Keep the
   app responsive and do not use CPU while it is idle. Fix a slow part when
@@ -132,19 +131,17 @@ Add packages under `internal/` when a change needs them.
 - Docs, comments and commit messages: concise ASD-STE100 Simplified
   Technical English.
 
-## herdr safety
+## hc safety
 
 - The same rules apply to herdr-core (`hc`): never stop, restart or send
   input to the owner's core. Tests that need a real core use a scratch core
   with its own `HC_SESSION` and XDG folders, under the `hccore` build tag
   (see `internal/hc/core_test.go`).
-- Never run the herdr command line against the owner's herdr, not even
-  `--help` or `--version`. Never connect to the owner's herdr sockets or
-  send input to them.
-- For a live herdr, use only `scripts/dev-herdr.sh`. It starts an isolated
-  server with its own home and sockets: `eval "$(scripts/dev-herdr.sh)"`,
-  then `scripts/dev-herdr.sh stop` when you are done.
-- Tests use fakes: fake servers on sockets in temporary folders. No test touches the owner's herdr, `~/.claude`,
+- Never connect to the owner's hc sockets or send input to them.
+- For a live app, use a scratch hc core: `hctest.New` in
+  `internal/hc/hctest` starts one with its own session and XDG folders and
+  stops it when the test ends.
+- Tests use fakes: fake servers on sockets in temporary folders. No test touches the owner's core, `~/.claude`,
   `~/.codex` or a real repository.
 - Do not read `~/.claude` or `~/.codex`. Do not install the app.
 
@@ -158,9 +155,9 @@ Add packages under `internal/` when a change needs them.
   `//go:build e2e`. The plugin lists elements, clicks, types and captures a
   window as a PNG. To check a visible change, capture the window and look at
   the PNG yourself (decision D5).
-- Run the app only against `scripts/dev-herdr.sh` and a scratch project under
-  `/tmp`, never against the owner's herdr.
-- On the owner's Mac, run one heavy job at a time: an app run with dev herdr,
+- Run the app only against a scratch hc core and a scratch project under
+  `/tmp`, never against the owner's core.
+- On the owner's Mac, run one heavy job at a time: an app run with a scratch core,
   an e2e run or a release build. `go build` and `go test` are light and can
   run in parallel.
 

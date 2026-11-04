@@ -39,7 +39,7 @@ type realApp struct {
 // automation plugin), starts a scratch hc core, and starts the app with the
 // launchd PATH and a scratch home. hc is reachable only through
 // <home>/.local/bin, as on the owner's Mac. It starts no workers; the caller
-// spawns them with r.cl. The app never sees the owner's herdr or hc core.
+// spawns them with r.cl. The app never sees the owner's hc core.
 func startReal(t *testing.T) *realApp {
 	t.Helper()
 	if runtime.GOOS != "darwin" {
@@ -85,11 +85,8 @@ func startReal(t *testing.T) *realApp {
 		t.Fatal(err)
 	}
 
-	// The scratch core: its own session and XDG folders. HERDR_SOCKET_PATH
-	// names a socket that does not exist, so the app cannot reach the
-	// owner's herdr.
-	env := append(core.Env, "HOME="+home,
-		"HERDR_SOCKET_PATH="+filepath.Join(dir, "no-herdr.sock"))
+	// The scratch core: its own session and XDG folders.
+	env := append(core.Env, "HOME="+home)
 	core.Env = env
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)

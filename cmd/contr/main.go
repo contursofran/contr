@@ -1,4 +1,4 @@
-// Command contr is a native herdr client, written in Go with MyGo's native UI.
+// Command contr is a native client for herdr-core, written in Go with MyGo's native UI.
 // It opens the frame window, or the status icon legend with `--icons`.
 // `contr statusline` runs without a window. docs/PORT-PLAN.md lists what the
 // port adds next.
@@ -18,7 +18,6 @@ import (
 	"github.com/contursofran/contr/assets"
 	"github.com/contursofran/contr/internal/app"
 	"github.com/contursofran/contr/internal/app/theme"
-	"github.com/contursofran/contr/internal/herdr"
 	"github.com/contursofran/contr/internal/usage"
 	"github.com/egoist/mygo/plugins/terminal"
 )
@@ -113,7 +112,7 @@ func openWindow(icons bool) int {
 	if icons {
 		opts.Content = ui.View((&app.Legend{}).View)
 	} else {
-		frame = app.NewFrame(nil)
+		frame = app.NewFrame()
 		frame.StartAgents = startAgents(os.Getenv)
 		frame.TerminalSource = terminalSource(os.Getenv)
 		frame.OpenTerminal = func(project, dir string) (string, error) {
@@ -132,7 +131,7 @@ func openWindow(icons bool) int {
 	mygo.App.WhenReady(func() {
 		win := mygo.NewWindow(opts)
 		if frame != nil {
-			stop := frame.Attach(context.Background(), win, herdr.LocalTarget())
+			stop := frame.Attach(win)
 			win.OnClosed(stop)
 		}
 	})

@@ -292,7 +292,7 @@ func TestBoardWorkLabelOpensPR(t *testing.T) {
 }
 
 func TestFrameOpenPRShowsThePaneAndCollapsesTabs(t *testing.T) {
-	f := NewFrame(nil)
+	f := NewFrame()
 	r := newPRRig(t)
 	f.PR = r.pane
 	tt := ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)

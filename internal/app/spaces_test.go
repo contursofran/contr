@@ -19,7 +19,6 @@ import (
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/git"
-	"github.com/contursofran/contr/internal/herdr"
 	"github.com/contursofran/contr/internal/host"
 )
 
@@ -295,8 +294,8 @@ func TestTheScanFillsTheGroupsOnceTheTreeIsKnown(t *testing.T) {
 	}
 }
 
-// Port of a_herdr_change_with_the_same_cwds_rebuilds_without_a_scan.
-func TestAHerdrChangeWithTheSameCwdsRebuildsWithoutAScan(t *testing.T) {
+// Port of an_agents_change_with_the_same_cwds_rebuilds_without_a_scan.
+func TestAnAgentsChangeWithTheSameCwdsRebuildsWithoutAScan(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
 	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
@@ -420,7 +419,7 @@ func TestAnAgentSelectionIsLeftAlone(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
 	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
-	agent := state.Selected{Kind: state.KindAgent, ID: "w1:p1"}
+	agent := state.Selected{Kind: state.KindWorker, ID: "w1:p1"}
 	h.pick(agent)
 	h.send(hcDown())
 	if got, ok := h.sel.Current(); !ok || got != agent {
@@ -428,10 +427,10 @@ func TestAnAgentSelectionIsLeftAlone(t *testing.T) {
 	}
 }
 
-// ---- Rescans: the timer, and the check on herdr changes (D15) ----
+// ---- Rescans: the timer, and the check on agents changes (D15) ----
 
-// A herdr change after the interval rescans, with no timer armed.
-func TestAHerdrChangeAfterTheIntervalRescansWhileShown(t *testing.T) {
+// An agents change after the interval rescans, with no timer armed.
+func TestAnAgentsChangeAfterTheIntervalRescansWhileShown(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
 	live := spTree(spPane("w1:p1", wt, nil))
@@ -472,8 +471,8 @@ func TestARescanWaitsAFullIntervalAfterAFreshScan(t *testing.T) {
 	}
 }
 
-// Port of an_old_scan_is_not_refreshed_by_herdr_while_hidden.
-func TestAnOldScanIsNotRefreshedByHerdrWhileHidden(t *testing.T) {
+// Port of an_old_scan_is_not_refreshed_by_agents_while_hidden.
+func TestAnOldScanIsNotRefreshedByAgentsWhileHidden(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
 	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
@@ -481,15 +480,15 @@ func TestAnOldScanIsNotRefreshedByHerdrWhileHidden(t *testing.T) {
 	h.advance(RescanAfter * 6)
 	h.send(spTree(spPane("w1:p1", wt, hs("working"))))
 	if h.list.scans != 1 {
-		t.Errorf("scans %d: hidden, herdr starts no rescan", h.list.scans)
+		t.Errorf("scans %d: hidden, an agents change starts no rescan", h.list.scans)
 	}
 	if got := h.rowOf(0, 0).Status; got != icons.Working {
-		t.Errorf("status %v: the rows still follow herdr", got)
+		t.Errorf("status %v: the rows still follow the agents", got)
 	}
 	h.hidden = false
 	h.send(spTree(spPane("w1:p1", wt, hs("working"))))
 	if h.list.scans != 2 {
-		t.Errorf("scans %d: shown again, the next herdr change rescans", h.list.scans)
+		t.Errorf("scans %d: shown again, the next agents change rescans", h.list.scans)
 	}
 }
 
@@ -514,8 +513,8 @@ func TestABranchChangeShowsAfterTheNextRescan(t *testing.T) {
 	}
 }
 
-// Port of an_old_scan_starts_one_on_a_herdr_change_while_shown.
-func TestAnOldScanStartsOneOnAHerdrChangeWhileShown(t *testing.T) {
+// Port of an_old_scan_starts_one_on_an_agents_change_while_shown.
+func TestAnOldScanStartsOneOnAnAgentsChangeWhileShown(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
 	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
@@ -782,7 +781,7 @@ func TestAnAgentSelectionHidesTheWorktreeCard(t *testing.T) {
 	if !h.selected(0, 0) {
 		t.Fatal("the card is missing")
 	}
-	h.pick(state.Selected{Kind: state.KindAgent, ID: "w1:p2"})
+	h.pick(state.Selected{Kind: state.KindWorker, ID: "w1:p2"})
 	if h.selected(0, 0) || strings.Contains(h.label(0, 0), "selected") {
 		t.Error("an agent selection should clear the worktree card")
 	}
@@ -937,9 +936,9 @@ func TestAnEmptyColumnStillShowsTheHostCard(t *testing.T) {
 
 func TestAttachPutsTheSpacesColumnInTheSidebar(t *testing.T) {
 	w := &fakeWindow{visible: true}
-	f := NewFrame(nil)
+	f := NewFrame()
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
-	stop := f.Attach(t.Context(), w, herdr.SocketTarget(filepath.Join(t.TempDir(), "missing.sock")))
+	stop := f.Attach(w)
 	defer stop()
 	if f.SpacesList == nil || f.Slots.Spaces == nil {
 		t.Fatal("Attach should make the spaces list")
@@ -952,7 +951,7 @@ func TestAttachPutsTheSpacesColumnInTheSidebar(t *testing.T) {
 	if f.SpacesList.timerShown {
 		t.Error("the window is hidden, so the rescan timer should stop")
 	}
-	f.syncHerdr()
+	f.syncAgents()
 	tt := ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)
 	if _, ok := tt.Find(LabelHostLocal); !ok {
 		t.Errorf("the host card is missing from the sidebar; texts %q", tt.Texts())
@@ -1030,7 +1029,7 @@ func TestAWindowThatStartsHiddenArmsNoTimer(t *testing.T) {
 }
 
 // Rescan on show: an old scan is redone when the window comes back, without
-// a herdr change.
+// an agents change.
 func TestShowingTheWindowRescansAnOldScan(t *testing.T) {
 	h, _, admin := shownList(t)
 	h.hidden = true

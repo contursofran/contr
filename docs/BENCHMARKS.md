@@ -318,15 +318,12 @@ What is left (measured, not fixed here):
 The app test measures the whole app in seven phases: idle shown, idle shown
 with one item working, busy pane shown, flood pane shown, agent updates
 shown, idle hidden, busy pane hidden. Each phase has a 6 s warm-up and 15
-samples, one per second. It needs `hc` on the PATH. It runs only against the
-dev herdr (the app attaches to it) and a scratch hc core that the test starts
-and stops, with a scratch folder under `/tmp`. It never touches the owner's
-herdr or core. Keep `TMPDIR` short: the dev herdr socket path must stay
-under 103 bytes.
+samples, one per second. It needs `hc` on the PATH. It runs only against a
+scratch hc core that the test starts and stops, with a scratch folder under
+`/tmp`. It never touches the owner's core. Keep `TMPDIR` short: the socket
+path must stay under 103 bytes.
 
-    eval "$(scripts/dev-herdr.sh)"
     go test -tags e2e,bench -run AppBench -v -count=1 -timeout 15m ./cmd/contr
-    scripts/dev-herdr.sh stop
 
 One heavy job at a time: run nothing else (e2e, app, build) at the same
 time, and keep other windows off the app's window (a covered window stops

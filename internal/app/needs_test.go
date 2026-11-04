@@ -16,7 +16,6 @@ import (
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/github"
 	"github.com/contursofran/contr/internal/hc"
-	"github.com/contursofran/contr/internal/herdr"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/owner"
 	"github.com/contursofran/contr/internal/usage"
@@ -268,7 +267,7 @@ func TestNeedsClearDoneOnlyWithResolved(t *testing.T) {
 }
 
 func TestNeedsRowSitsUnderTheTerminal(t *testing.T) {
-	f := NewFrame(nil)
+	f := NewFrame()
 	f.Needs = &NeedsRow{Snapshot: sampleSource().Snapshot}
 	f.Slots.Needs = f.Needs.View
 	tt := ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)
@@ -282,7 +281,7 @@ func TestNeedsRowSitsUnderTheTerminal(t *testing.T) {
 }
 
 func TestFrameWithoutNeedsSlotHasNoRow(t *testing.T) {
-	tt := ui.NewTester(NewFrame(nil).View, theme.WindowWidth, theme.WindowHeight)
+	tt := ui.NewTester(NewFrame().View, theme.WindowWidth, theme.WindowHeight)
 	if _, ok := tt.Find(LabelNeedsRow); ok {
 		t.Error("row shows without a slot")
 	}
@@ -339,11 +338,11 @@ func TestNeedsRowCollapsesWhilePRIsOpen(t *testing.T) {
 // tabs exactly while the PR pane is open.
 func TestAttachCollapsesNeedsWithThePRPane(t *testing.T) {
 	w := &fakeWindow{visible: true}
-	f := NewFrame(nil)
+	f := NewFrame()
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	f.StartAgents = func(func()) (AgentSource, func()) { return sampleSource(), func() {} }
-	stop := f.Attach(context.Background(), w, herdr.SocketTarget(filepath.Join(t.TempDir(), "missing.sock")))
+	stop := f.Attach(w)
 	defer stop()
 	if f.Needs.Collapsed == nil || f.Needs.Collapsed() {
 		t.Fatal("needs collapsed with no PR pane")

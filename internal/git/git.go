@@ -59,7 +59,7 @@ type RepoInfo struct {
 
 // Scan holds checkouts and repositories for a set of pane working directories.
 type Scan struct {
-	// Checkouts is keyed by the cwd string as herdr sent it.
+	// Checkouts is keyed by the cwd string as the caller gave it.
 	Checkouts map[string]Checkout
 	// Repos is keyed by CommonDir. Every checkout's CommonDir is a key here.
 	Repos map[string]RepoInfo

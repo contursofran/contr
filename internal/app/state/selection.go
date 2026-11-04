@@ -8,8 +8,6 @@ const (
 	// KindWorktree is a worktree row. Its ID is the canonical root path of
 	// the checkout.
 	KindWorktree SelectedKind = iota + 1
-	// KindAgent is an agent row. Its ID is the herdr pane id.
-	KindAgent
 	// KindOrchestrator is an orchestrator row. Its ID is the hc terminal
 	// address.
 	KindOrchestrator

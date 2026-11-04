@@ -264,7 +264,7 @@ func TestAnswerCardWorksOffTheUIThread(t *testing.T) {
 
 func TestFrameOpensTheCardFromTheNeedsRow(t *testing.T) {
 	src := askSource()
-	f := NewFrame(nil)
+	f := NewFrame()
 	f.Selection = stateSelection()
 	f.Card = &FloatCard{Source: src, Run: Runner{Go: func(f func()) { f() }}}
 	f.Needs = &NeedsRow{Snapshot: src.Snapshot, Open: f.Card.Open}

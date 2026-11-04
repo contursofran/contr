@@ -1,6 +1,6 @@
 # contr design (v0.2)
 
-Source of truth: the owner's claude.ai design canvas "herdr sidebar mockup".
+Source of truth: the owner's claude.ai design canvas "sidebar mockup".
 
 - Page **Native · final**: artboards 1 (orchestrator tab), 2 (worker tab),
   3 (orchestrator quiet), 4 (needs a look), 5 (worker with failed CI),
@@ -12,7 +12,7 @@ Source of truth: the owner's claude.ai design canvas "herdr sidebar mockup".
   ("unchanged"), so they come from screens 1 and 2 of the archived "Final"
   page. Other archived screens and mockup G (v0.1) are not a source.
 
-The Native · final screens draw the herdr app's own look: a proportional
+The Native · final screens draw the reference app's own look: a proportional
 font, coloured project tiles, blue links and a blue focus border. contr
 keeps its own look (tokens below) and takes from these screens the layout,
 the parts, the texts, the behaviour and the status colours of the rules
@@ -96,7 +96,7 @@ Buttons (all 12 px, radius 6):
 Hues (D76): white means the owner acts. Red (`status.failed`) means failed
 or blocked. Amber (`status.attention`) means working or worth a look. The
 two diff colours stay in diffs and +/− counts. Everything else is grey.
-The herdr app's other colours (project tiles, blue links, blue focus border,
+The reference app's other colours (project tiles, blue links, blue focus border,
 green "online" dots, orange program icons) are not used: links use the text
 colour with `↗` and an underline on hover.
 The terminal shows program colours as they are; these rules apply to
@@ -143,7 +143,7 @@ then Settings.
   shows `+N −N` (diff colours, D52) at its right, hidden for 0 and 0 or when
   git fails. The projects and rows come from the hc terminals (orchestrators,
   workers and plain terminals) and the git scan of their folders, not from
-  herdr panes or tabs. The second line of a row is `<name> <state>` of its top
+  panes or tabs of another host. The second line of a row is `<name> <state>` of its top
   terminal, plus `+N` for the others. A click on a row selects its worktree
   and Review follows it; it does not focus any terminal (D92).
 - **Agents** section (12 px dim header), then sub-headers (11 px):
@@ -182,8 +182,8 @@ then Settings.
   terminal's title (set by the shell with OSC), else `$ <folder>`.
 - A `+` after the last tab opens a plain terminal in the open project, in
   the first orchestrator's folder, else the home folder. `⌘T` does the same.
-  It is always shown, also with no tabs. The terminal area works while herdr
-  is down; the Spaces column shows the hc problem then (D82, D92).
+  It is always shown, also with no tabs. The terminal area needs only hc;
+  the Spaces column shows the hc problem then (D82, D92).
 - `⌘W` closes the selected plain terminal and its tab (D85). The next tab is
   selected. An orchestrator or worker tab ignores it.
 - Right side: `Review` (D37), then the panel toggle. There is no tab row in
@@ -524,7 +524,7 @@ v0.2 does not settle these:
    start time.
 5. **PR pane and panel.** With the panel open, whether the PR pane replaces
    the panel or sits beside it is not drawn.
-6. **Footer.** The herdr footer shows the device, branch, agent count and
+6. **Footer.** The reference footer shows the device, branch, agent count and
    version. v0.2 keeps contr's usage footer.
 7. **Board pop-up.** Native · final draws `board ▴` but not the open
    pop-up; v0.2 uses the Final page's pop-up.
