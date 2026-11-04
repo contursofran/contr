@@ -152,3 +152,55 @@ func TestExecRunnerFakeGh(t *testing.T) {
 		t.Errorf("missing gh: %v", err)
 	}
 }
+
+func writeGh(t *testing.T, dir, script string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, "gh"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// With a short PATH, gh is found in the usual places.
+func TestExecRunnerFindsGhOffPath(t *testing.T) {
+	bin := t.TempDir()
+	writeGh(t, bin, "#!/bin/sh\necho found\n")
+	t.Setenv("PATH", t.TempDir())
+	out, err := ExecRunner{Dirs: []string{"/no/such/dir", bin}}.Run(context.Background(), t.TempDir(), "x")
+	if err != nil || strings.TrimSpace(string(out)) != "found" {
+		t.Errorf("out %q err %v", out, err)
+	}
+	_, err = ExecRunner{Dirs: []string{t.TempDir()}}.Run(context.Background(), t.TempDir(), "x")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("err %v", err)
+	}
+}
+
+func TestFindSkipsDirectoryAndPlainFile(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	d := t.TempDir()
+	if err := os.Mkdir(filepath.Join(d, "gh"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f := t.TempDir()
+	if err := os.WriteFile(filepath.Join(f, "gh"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Find("", []string{d, f}); !errors.Is(err, ErrNotFound) {
+		t.Errorf("err %v", err)
+	}
+}
+
+// A child of gh that holds the output pipe must not keep Run from returning
+// after the kill.
+func TestExecRunnerKilledGhDoesNotHang(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	_, err := ExecRunner{Path: "/bin/sh"}.Run(ctx, t.TempDir(), "-c", "sleep 20 & sleep 20")
+	if err == nil {
+		t.Error("want an error")
+	}
+	if d := time.Since(start); d > 10*time.Second {
+		t.Errorf("Run took %v", d)
+	}
+}
