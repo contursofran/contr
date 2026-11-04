@@ -94,3 +94,36 @@ func TestFrameShowsLoadErrorAndKeepsDefaultOrder(t *testing.T) {
 		t.Error("the corrupt file was overwritten")
 	}
 }
+
+func TestSidebarMissingStoreFileKeepsTreeOrder(t *testing.T) {
+	h, _ := twoRepos(t)
+	s, err := projects.Load(filepath.Join(t.TempDir(), "none.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.list.SetProjects(s)
+	if got := strings.Join(groupNames(h.list.Groups()), ","); got != "alpha,beta" {
+		t.Errorf("groups %s, want tree order", got)
+	}
+}
+
+func TestSidebarGroupMissingFromStoredOrderGoesLast(t *testing.T) {
+	h, _ := twoRepos(t)
+	s := &projects.Store{}
+	s.SetOrder([]string{h.group(1).CommonDir})
+	h.list.SetProjects(s)
+	if got := strings.Join(groupNames(h.list.Groups()), ","); got != "beta,alpha" {
+		t.Errorf("groups %s, want beta,alpha", got)
+	}
+}
+
+func TestFrameWithoutLoaderReadsNoStore(t *testing.T) {
+	w := &fakeWindow{visible: true}
+	f := NewFrame()
+	stop := f.Attach(w)
+	defer stop()
+	w.flush()
+	if f.Projects != nil {
+		t.Error("a store appeared without a loader")
+	}
+}

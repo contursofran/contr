@@ -90,6 +90,7 @@ type Frame struct {
 	// UI thread. Nil makes `+ new` do nothing.
 	PickFolder func() (string, error)
 	// LoadProjects reads the projects store (D109). It runs on a goroutine.
+	// Nil means no store: the frame reads no file.
 	// Nil reads the file in the user config folder.
 	LoadProjects      func() (*projects.Store, error)
 	SpawnOrchestrator func(dir string) error
@@ -589,19 +590,13 @@ func (f *Frame) syncAgents() {
 func (f *Frame) loadProjects(w Window) {
 	load := f.LoadProjects
 	if load == nil {
-		load = func() (*projects.Store, error) {
-			path, err := projects.Path()
-			if err != nil {
-				return nil, err
-			}
-			return projects.Load(path)
-		}
+		return
 	}
 	go func() {
 		store, err := load()
 		w.Update(func() {
 			if err != nil {
-				f.Status.Show("projects: " + err.Error())
+				f.Status.Show(err.Error())
 			}
 			if store != nil {
 				f.Projects = store
