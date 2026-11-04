@@ -146,7 +146,7 @@ func newSpaces(t *testing.T, live agentstate.Snapshot) *spacesHarness {
 }
 
 func (h *spacesHarness) makeList() *SpacesList {
-	l := NewSpacesList(h.live.get, h.host, h.sel, func() bool { return !h.hidden }, nil)
+	l := NewSpacesList(h.live.get, h.sel, func() bool { return !h.hidden }, nil)
 	l.start = func(f func()) { f() }
 	l.statsFn = func(git.Scan) map[string]git.DiffStat { return h.stats }
 	l.now = func() time.Time { return h.clock }
@@ -581,7 +581,7 @@ func TestAScanLandsThroughThePostFunc(t *testing.T) {
 	wt, _ := oneWorktree(t, base)
 	live := &spSnap{s: spTree(spPane("w1:p1", wt, nil))}
 	var started, posted []func()
-	l := NewSpacesList(live.get, nil, state.NewSelection(nil), nil, func(f func()) { posted = append(posted, f) })
+	l := NewSpacesList(live.get, state.NewSelection(nil), nil, func(f func()) { posted = append(posted, f) })
 	l.start = func(f func()) { started = append(started, f) }
 	l.statsFn = func(git.Scan) map[string]git.DiffStat { return nil }
 	l.Sync()
@@ -603,7 +603,7 @@ func TestAScanThatLostTheTreeIsDropped(t *testing.T) {
 	wt, _ := oneWorktree(t, base)
 	live := &spSnap{s: spTree(spPane("w1:p1", wt, nil))}
 	var started []func()
-	l := NewSpacesList(live.get, nil, state.NewSelection(nil), nil, nil)
+	l := NewSpacesList(live.get, state.NewSelection(nil), nil, nil)
 	l.start = func(f func()) { started = append(started, f) }
 	l.Sync()
 	live.set(hcDown())
@@ -621,7 +621,7 @@ func TestOnlyTheNewestScanLands(t *testing.T) {
 	repo := filepath.Join(base, "repo")
 	live := &spSnap{s: spTree(spPane("w1:p1", wt, nil))}
 	var started []func()
-	l := NewSpacesList(live.get, nil, state.NewSelection(nil), nil, nil)
+	l := NewSpacesList(live.get, state.NewSelection(nil), nil, nil)
 	l.start = func(f func()) { started = append(started, f) }
 	l.Sync()
 	live.set(spTree(spPane("w1:p1", wt, nil), spPane("w1:p2", repo, nil)))
@@ -636,7 +636,7 @@ func TestOnlyTheNewestScanLands(t *testing.T) {
 func TestTheScanFuncGetsTheCwdsInTreeOrder(t *testing.T) {
 	live := &spSnap{s: spTree(spPane("w1:p1", "/x/b", nil), spPane("w1:p2", "/x/a", nil), spPane("w1:p3", "/x/b", nil))}
 	var got []string
-	l := NewSpacesList(live.get, nil, nil, nil, nil)
+	l := NewSpacesList(live.get, nil, nil, nil)
 	l.scanFn = func(cwds []string) git.Scan { got = cwds; return git.Scan{} }
 	l.start = func(f func()) { f() }
 	l.Sync()
@@ -647,17 +647,14 @@ func TestTheScanFuncGetsTheCwdsInTreeOrder(t *testing.T) {
 
 // ---- Ports of the Rust view tests ----
 
-// Port of the_dot_and_the_name_colours_follow_the_connection_and_the_hold.
-func TestTheDotAndTheNameColoursFollowTheConnectionAndTheHold(t *testing.T) {
-	if onlineColour(true) != theme.Text2 || onlineColour(false) != theme.IconFaint {
-		t.Error("the dot colours are wrong")
-	}
+// The name colours follow the hold.
+func TestTheNameColoursFollowTheHold(t *testing.T) {
 	if nameColour(true) != theme.Text || nameColour(false) != theme.TextDim {
 		t.Error("the name colours are wrong")
 	}
 }
 
-// Port of the_rows_show_the_repo_its_worktrees_and_the_host_card.
+// Port of the_rows_show_the_repo_its_worktrees_and_the_device_header.
 func TestTheRowsShowTheRepoItsWorktreesAndTheHostCard(t *testing.T) {
 	h, _, _ := heldWorktree(t)
 	repo := box(t, h.tt, RepoLabel(h.group(0)))
@@ -680,7 +677,7 @@ func TestTheRowsShowTheRepoItsWorktreesAndTheHostCard(t *testing.T) {
 	if h.selected(0, 0) {
 		t.Error("nothing is selected")
 	}
-	for _, label := range []string{LabelSpacesNew, LabelHostLocal, LabelHostOnline, LabelSpacesHeader} {
+	for _, label := range []string{LabelSpacesNew, LabelSpacesProj, LabelDeviceHeader, LabelSpacesHeader} {
 		if !h.has(label) {
 			t.Errorf("%q is missing; texts %q", label, h.tt.Texts())
 		}
@@ -690,63 +687,65 @@ func TestTheRowsShowTheRepoItsWorktreesAndTheHostCard(t *testing.T) {
 	}
 }
 
-// Port of the_cpu_text_rounds_or_shows_a_dash.
-func TestTheCPUTextRoundsOrShowsADash(t *testing.T) {
-	for _, tc := range []struct {
-		cpu  float32
-		want string
-	}{{38.4, "CPU 38%"}, {37.5, "CPU 38%"}} {
-		if got := CPUText(readingHost(stats(tc.cpu, 0, 1))); got != tc.want {
-			t.Errorf("cpu %v: %q, want %q", tc.cpu, got, tc.want)
+// The group header is `This computer` with a monitor icon, 11 px, dim (D27).
+func TestDeviceHeaderShowsThisComputer(t *testing.T) {
+	h := newSpaces(t, spTree())
+	if !h.has(LabelDeviceHeader) || !h.tt.HasText("This computer") || !h.has("monitor") {
+		t.Fatalf("the device header is missing; texts %q", h.tt.Texts())
+	}
+	hdr, txt := box(t, h.tt, LabelDeviceHeader), box(t, h.tt, "This computer")
+	if hdr.H != theme.SpacesRowHeight || txt.H > theme.DeviceFontSize*2 {
+		t.Errorf("header %v, text %v", hdr, txt)
+	}
+	if icon := box(t, h.tt, "monitor"); icon.X >= txt.X || icon.W != theme.DeviceIconSize {
+		t.Errorf("monitor %v should sit left of the text %v", icon, txt)
+	}
+	if spaces := box(t, h.tt, LabelSpacesHeader); spaces.Y >= hdr.Y {
+		t.Errorf("the header %v should sit under the Spaces row %v", hdr, spaces)
+	}
+}
+
+// The old `Local` host card (CPU text, memory bar, online dot) is gone; CPU and
+// MEM are in the footer.
+func TestNoHostCardInSidebar(t *testing.T) {
+	h := newSpaces(t, spTree())
+	for _, label := range []string{"host-local", "host-cpu", "host-mem", "host-mem-fill", "host-online"} {
+		if h.has(label) {
+			t.Errorf("%q should not be in the sidebar", label)
 		}
 	}
-	if got := CPUText(&fakeHost{}); got != "CPU –" {
-		t.Errorf("no reading: %q", got)
-	}
-	if got := CPUText(nil); got != "CPU –" {
-		t.Errorf("no host: %q", got)
+	if h.tt.HasText("Local") || h.tt.HasText("CPU –") {
+		t.Errorf("the host card text is back; texts %q", h.tt.Texts())
 	}
 }
 
-// Port of the_host_card_fills_the_memory_bar_to_the_share.
-func TestTheHostCardFillsTheMemoryBarToTheShare(t *testing.T) {
+// The hc problem line stays under the header while contr does not follow the core.
+func TestCoreLineShowsUnderTheDeviceHeader(t *testing.T) {
+	h := newSpaces(t, hcDown())
+	hdr := box(t, h.tt, LabelDeviceHeader)
+	line := h.list.line
+	if line == "" || !h.tt.HasText(line) {
+		t.Fatalf("problem line %q is not shown; texts %q", line, h.tt.Texts())
+	}
+	if got := box(t, h.tt, line); got.Y < hdr.Y+hdr.H {
+		t.Errorf("line %v should sit under the header %v", got, hdr)
+	}
+}
+
+// The `projects` pill sits next to `+ new` and runs OnProjects (D113).
+func TestProjectsPillRunsOnProjects(t *testing.T) {
 	h := newSpaces(t, spTree())
-	h.host.set(stats(38, 50, 100))
+	pill, add := box(t, h.tt, LabelSpacesProj), box(t, h.tt, LabelSpacesNew)
+	if !h.tt.HasText("projects") || pill.X+pill.W > add.X {
+		t.Errorf("pill %v should sit left of + new %v", pill, add)
+	}
+	h.tt.Click(LabelSpacesProj) // no func: nothing happens
+	var n int
+	h.list.OnProjects = func() { n++ }
 	h.tt.Frame()
-	card := box(t, h.tt, LabelHostLocal)
-	bar := box(t, h.tt, LabelCardMem)
-	if bar.W != theme.MemBarWidth || bar.H != theme.MemBarHeight {
-		t.Errorf("bar %v", bar)
-	}
-	if bar.X+bar.W > card.X+card.W {
-		t.Errorf("the bar %v sits outside the card %v", bar, card)
-	}
-	if fill := box(t, h.tt, LabelCardMemFill); fill.W != 30 {
-		t.Errorf("fill %v, want 30 wide", fill)
-	}
-	if !h.has(LabelCardCPU) || !h.tt.HasText("CPU 38%") {
-		t.Errorf("the CPU is missing; texts %q", h.tt.Texts())
-	}
-}
-
-// Port of no_reading_leaves_the_bar_empty.
-func TestNoReadingLeavesTheBarEmpty(t *testing.T) {
-	h := newSpaces(t, spTree())
-	if !h.has(LabelCardCPU) || !h.tt.HasText("CPU –") {
-		t.Errorf("the CPU dash is missing; texts %q", h.tt.Texts())
-	}
-	if fill, ok := h.tt.Find(LabelCardMemFill); ok && fill.W != 0 {
-		t.Errorf("fill %v, want empty", fill)
-	}
-}
-
-// Port of a_new_reading_repaints_the_host_card.
-func TestANewReadingRepaintsTheHostCard(t *testing.T) {
-	h := newSpaces(t, spTree())
-	h.host.set(stats(10, 75, 100))
-	h.tt.Frame()
-	if fill := box(t, h.tt, LabelCardMemFill); fill.W != 45 {
-		t.Errorf("fill %v, want 45 wide", fill)
+	h.tt.Click(LabelSpacesProj)
+	if n != 1 {
+		t.Errorf("OnProjects ran %d times", n)
 	}
 }
 
@@ -918,16 +917,16 @@ func TestBadgeTextIsThePRNumberOrTheOwnersValue(t *testing.T) {
 
 func TestActivateSelectsTheWorktree(t *testing.T) {
 	sel := state.NewSelection(nil)
-	l := NewSpacesList(nil, nil, sel, nil, nil)
+	l := NewSpacesList(nil, sel, nil, nil)
 	l.Activate(spaces.WorktreeRow{Root: "/x"})
 	if got, ok := sel.Current(); !ok || got != worktreeSel("/x") {
 		t.Errorf("selection %+v, %v", got, ok)
 	}
 }
 
-func TestAnEmptyColumnStillShowsTheHostCard(t *testing.T) {
+func TestAnEmptyColumnStillShowsTheDeviceHeader(t *testing.T) {
 	h := newSpaces(t, hcDown())
-	if !h.has(LabelHostLocal) || !h.has(LabelSpacesHeader) {
+	if !h.has(LabelDeviceHeader) || !h.has(LabelSpacesHeader) {
 		t.Errorf("texts %q", h.tt.Texts())
 	}
 	if len(h.list.Groups()) != 0 || h.list.online {
@@ -954,8 +953,8 @@ func TestAttachPutsTheSpacesColumnInTheSidebar(t *testing.T) {
 	}
 	f.syncAgents()
 	tt := ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)
-	if _, ok := tt.Find(LabelHostLocal); !ok {
-		t.Errorf("the host card is missing from the sidebar; texts %q", tt.Texts())
+	if _, ok := tt.Find(LabelDeviceHeader); !ok {
+		t.Errorf("the device header is missing from the sidebar; texts %q", tt.Texts())
 	}
 }
 
@@ -1243,5 +1242,21 @@ func TestSpacesLineChangesWithTheProblem(t *testing.T) {
 	change := h.send(agentstate.Snapshot{Problem: "hc: timeout"})
 	if !change.Any() || !h.tt.HasText("hc: timeout") {
 		t.Errorf("change %+v, texts %q: want a repaint with the new problem", change, h.tt.Texts())
+	}
+}
+
+// The Attach step wires the pill to the projects modal (D113).
+func TestAttachWiresTheProjectsPillToTheModal(t *testing.T) {
+	w := &fakeWindow{visible: true}
+	f := NewFrame()
+	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
+	stop := f.Attach(w)
+	defer stop()
+	if f.SpacesList.OnProjects == nil {
+		t.Fatal("the pill has no action")
+	}
+	f.SpacesList.OnProjects()
+	if !f.ProjectsModal.Opened() {
+		t.Error("the pill should open the projects modal")
 	}
 }

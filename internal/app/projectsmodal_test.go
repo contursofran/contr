@@ -226,23 +226,6 @@ func TestProjectsModalSavesInOrderOffTheUIThread(t *testing.T) {
 	}
 }
 
-func TestProjectsMenuItemOpensTheModal(t *testing.T) {
-	file := BuildMenus().Items()[1]
-	it := find(t, file.Submenu, "Projects…")
-	if it.Accelerator != "Shift+Cmd+P" || it.Click == nil {
-		t.Fatalf("Projects item: accelerator %q, click %v", it.Accelerator, it.Click != nil)
-	}
-	called := 0
-	setProjectsHandler(func() { called++ })
-	defer setProjectsHandler(nil)
-	it.Click(it, nil)
-	if called != 1 {
-		t.Errorf("handler ran %d times", called)
-	}
-	setProjectsHandler(nil)
-	it.Click(it, nil) // no window: nothing happens
-}
-
 func TestProjectInitials(t *testing.T) {
 	for in, want := range map[string]string{"contr": "C", "herdr-agents": "HA", "a_b_c": "AB", "": ""} {
 		if got := projectInitials(in); got != want {

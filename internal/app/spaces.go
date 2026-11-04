@@ -1,6 +1,6 @@
 package app
 
-// The spaces column body: the `Spaces` label, the `Local` host card, then one
+// The spaces column body: the `Spaces` label, the `This computer` device header, then one
 // repo line and one row per worktree. The header (window-button inset,
 // toggle, wordmark) is the frame's sidebar header. Ported from the Rust
 // contr module spaces.
@@ -40,11 +40,8 @@ const RescanAfter = 10 * time.Second
 const (
 	LabelSpacesHeader = "spaces header"
 	LabelSpacesNew    = "spaces new"
-	LabelHostLocal    = "host-local"
-	LabelCardCPU      = "host-cpu"
-	LabelCardMem      = "host-mem"
-	LabelCardMemFill  = "host-mem-fill"
-	LabelHostOnline   = "host-online"
+	LabelSpacesProj   = "spaces projects"
+	LabelDeviceHeader = "device header"
 	LabelHoldYou      = "hold-you"
 	LabelBadge        = "badge"
 )
@@ -78,17 +75,6 @@ func BadgeText(b spaces.Badge) string {
 	return b.You
 }
 
-// CPUText is the CPU text of the host card: "CPU 38%", or "CPU –" without a
-// reading.
-func CPUText(s hostSource) string {
-	if s != nil {
-		if stats, ok := s.Stats(); ok {
-			return "CPU " + stats.CPULabel()
-		}
-	}
-	return "CPU " + noReading
-}
-
 // RowRef names a worktree row by its place: the repo group and the row in it.
 type RowRef struct{ Group, Row int }
 
@@ -100,7 +86,7 @@ type SpacesChange struct {
 	// Rows are the rows that show other data or another selection mark, when
 	// the shape is the same.
 	Rows []RowRef
-	// Online: the hc connection came or went (the host card's dot).
+	// Online: the hc connection came or went (the hc problem line).
 	Online bool
 }
 
@@ -113,9 +99,11 @@ type SpacesList struct {
 	OpenPR func(dir string, n int)
 	// OnNew runs when `+ new` is clicked. Nil: the button does nothing.
 	OnNew func()
+	// OnProjects runs when the `projects` pill is clicked (D113). Nil: the
+	// pill does nothing.
+	OnProjects func()
 
 	snap      func() agentstate.Snapshot
-	host      hostSource
 	selection *state.Selection
 
 	// visible tells whether the window is shown. Nil counts as shown.
@@ -164,14 +152,14 @@ type SpacesList struct {
 }
 
 // NewSpacesList returns the list. snap (may be nil) gives the hc terminals,
-// h (may be nil) the host card's reading, selection the card. visible (may be
+// selection the card. visible (may be
 // nil) tells whether the window is shown; post (may be nil) runs a func on
 // the UI thread, as Window.Update does. The list is empty until
 // [SpacesList.Sync], which the owner calls at the start and when the agents
 // changed.
-func NewSpacesList(snap func() agentstate.Snapshot, h hostSource, selection *state.Selection, visible func() bool, post func(func())) *SpacesList {
+func NewSpacesList(snap func() agentstate.Snapshot, selection *state.Selection, visible func() bool, post func(func())) *SpacesList {
 	l := &SpacesList{
-		snap: snap, host: h, selection: selection,
+		snap: snap, selection: selection,
 		visible: visible, post: post, scanFn: git.ScanCwds, statsFn: runStats, start: func(f func()) { go f() },
 		now: time.Now, builds: map[string]int{},
 		afterFunc: func(d time.Duration, f func()) stopper { return time.AfterFunc(d, f) },
@@ -455,12 +443,12 @@ func (l *SpacesList) openPR(dir string, n uint32) {
 	}
 }
 
-// View builds the body: the `Spaces` label, the host card, and the groups.
+// View builds the body: the `Spaces` label, the device header, and the groups.
 func (l *SpacesList) View(c *ui.Context) {
 	selected, _ := l.selectedWorktree()
 	ui.Scroll(c).Fill().Children(func() {
 		l.spacesHeader(c)
-		l.hostCard(c)
+		l.deviceHeader(c)
 		l.coreLine(c)
 		for _, g := range l.groups {
 			l.repoLine(c, g)
@@ -471,13 +459,19 @@ func (l *SpacesList) View(c *ui.Context) {
 	})
 }
 
-// spacesHeader is the `Spaces` label and `+ new`. The button starts an
-// orchestrator (D57); without OnNew it has no action and no pointer.
+// spacesHeader is the `Spaces` label, the `projects` pill and `+ new`. `+ new`
+// starts an orchestrator (D57); the pill opens the projects modal (D113).
+// Without its func, a button has no action and no pointer.
 func (l *SpacesList) spacesHeader(c *ui.Context) {
 	ui.Row(c).Label(LabelSpacesHeader).FillWidth().Height(theme.SpacesRowHeight).Shrink(0).
 		AlignItems(ui.Center).PaddingX(theme.SidebarPadX).TextColor(theme.Color(theme.TextDim)).Children(func() {
 		ui.Text(c, "Spaces")
 		ui.Spacer(c)
+		pill := ui.Row(c).Label(LabelSpacesProj).TextColor(theme.Color(theme.TextDim2)).MarginEnd(theme.SidebarPadX)
+		if l.OnProjects != nil {
+			pill = pill.Cursor(ui.CursorPointer).OnClick(l.OnProjects)
+		}
+		pill.Children(func() { ui.Text(c, "projects") })
 		btn := ui.Row(c).Label(LabelSpacesNew).TextColor(theme.Color(theme.TextDim2))
 		if l.OnNew != nil {
 			btn = btn.Cursor(ui.CursorPointer).OnClick(l.OnNew)
@@ -486,35 +480,19 @@ func (l *SpacesList) spacesHeader(c *ui.Context) {
 	})
 }
 
-// hostCard is `Local`, then the CPU reading, the memory bar and a dot that is
-// lit while contr follows the hc core. Without a reading the CPU shows a dash and
-// the bar stays empty.
-func (l *SpacesList) hostCard(c *ui.Context) {
-	var filled int
-	if l.host != nil {
-		if stats, ok := l.host.Stats(); ok {
-			filled = stats.MemBarPixels()
-		}
-	}
-	ui.Row(c).Label(LabelHostLocal).Height(theme.SpacesRowHeight).Shrink(0).
-		AlignItems(ui.Center).PaddingX(theme.SidebarPadX-theme.CardInsetX).MarginX(theme.CardInsetX).
-		Radius(theme.CardRadius).Background(theme.Color(theme.BgCard)).Border(1, theme.Color(theme.CardBorder)).Children(func() {
-		ui.Text(c, "Local").TextColor(theme.Color(theme.Text))
-		ui.Spacer(c)
-		ui.Row(c).AlignItems(ui.Center).Gap(theme.SpacesGap).Children(func() {
-			ui.Row(c).Label(LabelCardCPU).TextColor(theme.Color(theme.TextDim)).Children(func() { ui.Text(c, CPUText(l.host)) })
-			ui.Box(c).Label(LabelCardMem).Size(theme.MemBarWidth, theme.MemBarHeight).Shrink(0).
-				Radius(theme.UsageBarRadius).Background(theme.Color(theme.Line)).Children(func() {
-				ui.Box(c).Label(LabelCardMemFill).Size(float32(filled), theme.MemBarHeight).
-					Radius(theme.UsageBarRadius).Background(theme.Color(theme.TextDim))
-			})
-			ui.Box(c).Label(LabelHostOnline).Size(theme.HostDotSize, theme.HostDotSize).Shrink(0).
-				Radius(theme.HostDotSize / 2).Background(theme.Color(onlineColour(l.online)))
-		})
+// deviceHeader is the group header `This computer`: a monitor icon and the
+// name, 11 px, dim (D27, D113). Only the local Mac shows (D68). CPU and memory
+// are in the footer.
+func (l *SpacesList) deviceHeader(c *ui.Context) {
+	ui.Row(c).Label(LabelDeviceHeader).FillWidth().Height(theme.SpacesRowHeight).Shrink(0).
+		AlignItems(ui.Center).Gap(theme.SpacesGap).PaddingX(theme.SidebarPadX).
+		TextColor(theme.Color(theme.TextDim)).Children(func() {
+		icons.Monitor(c, theme.DeviceIconSize).Shrink(0)
+		ui.Text(c, "This computer").SingleLine().FontSize(theme.DeviceFontSize)
 	})
 }
 
-// coreLine is the hc problem, under the host card, while contr does not
+// coreLine is the hc problem, under the device header, while contr does not
 // follow the core.
 func (l *SpacesList) coreLine(c *ui.Context) {
 	if l.online || l.line == "" {
@@ -522,15 +500,6 @@ func (l *SpacesList) coreLine(c *ui.Context) {
 	}
 	ui.Text(c, l.line).TextColor(theme.Color(theme.TextDim)).
 		PaddingX(theme.SidebarPadX).PaddingY(theme.SpacesGap)
-}
-
-// onlineColour is the dot's colour: Text2 while contr follows the hc core,
-// the faint icon grey otherwise.
-func onlineColour(online bool) uint32 {
-	if online {
-		return theme.Text2
-	}
-	return theme.IconFaint
 }
 
 // nameColour is a worktree's name colour: white when a terminal holds it,

@@ -135,11 +135,14 @@ label.
 From the top: window buttons and `contr`, Spaces, then Agents at the bottom,
 then Settings.
 
-- **Spaces** header with `+ new` (D57: folder picker, then an orchestrator
-  in that folder).
+- **Spaces** header with a `projects` pill and `+ new` (D57: folder picker,
+  then an orchestrator in that folder). The pill opens the projects modal
+  (D113).
 - **Device group:** a header row `This computer` (11 px, dim, with a monitor
   icon). Only the local Mac shows (D68); `+ Add machine` and other device
-  groups wait for #149 **(not built)**.
+  groups wait for #149 **(not built)**. The header has no CPU text, memory
+  bar or connection dot: CPU and MEM are in the footer (D113). While contr
+  does not follow the hc core, the problem line shows under the header.
 - **Project rows:** one row per open project, padding 6×12, radius 6; a
   20×20 tile with the project initials (bg #1C1C1C), the name with an
   ellipsis, and at the right the count of commits behind its upstream
@@ -374,7 +377,7 @@ or a click outside closes it.
 
 ## Projects modal **(being built)**
 
-Opens from `File ▸ Projects…` (⇧⌘P, D110); a pill in the Spaces header may be added once the owner picks the entry point (open points). Built today: the header, the filter field (narrows the list by name; paste of a path or URL and drag-reorder under a filter are off), the open list with drag reorder and `close`, and `Done`. **(not built)**: `recent`, `+ open folder…` and `clone from GitHub…`. An overlay over the whole
+Opens from the `projects` pill in the Spaces header (D113); there is no menu item and no shortcut. Built today: the header, the filter field (narrows the list by name; paste of a path or URL and drag-reorder under a filter are off), the open list with drag reorder and `close`, and `Done`. **(not built)**: `recent`, `+ open folder…` and `clone from GitHub…`. An overlay over the whole
 window with the `scrim`; the dialog is 580 wide, 110 from the top, centred,
 `bg.overlay`, shadow 0 24 80 rgba(0,0,0,.6). Enter motion: up 8 px and fade
 in, 0.22 s.
@@ -536,11 +539,9 @@ its source has it and leaves it out when not.
 
 v0.2 does not settle these:
 
-1. **Projects control.** Native · final draws no projects pill. The
-   projects modal (screen 5) opens from a `projects` pill at the top of a
-   300-wide sidebar, next to a settings gear. Where the control sits in the
-   v0.2 sidebar (pill under the window buttons, the `Spaces` header, or the
-   `Settings` area) is open.
+1. **Projects control.** Settled (D113): a `projects` pill in the Spaces
+   header, next to `+ new`. Native · final draws a pill next to a settings gear;
+   v0.2 has no gear here.
 2. **Bottom row tabs.** Native · final draws the bottom row with counts only
    (no open items). v0.2 puts the needs-you tabs at its left, as the Final
    strip did, and flips the tab shape toward the floating card. The row is
