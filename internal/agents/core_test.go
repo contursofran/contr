@@ -133,3 +133,145 @@ func TestRealCoreSendKeysNoEnter(t *testing.T) {
 		t.Errorf("screen = %q, want bytes 1 and ESC and no CR", seen)
 	}
 }
+
+// TestRealCoreStopNote: hc types an exit note into a parent agent when its
+// child exits. A stop with the parent as caller must not cause that note;
+// a stop by someone else must, so the test shows that the note can come.
+func TestRealCoreStopNote(t *testing.T) {
+	for _, byParent := range []bool{false, true} {
+		env := isolatedCore(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		cl, err := hc.Dial(ctx, hc.Command("", env))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cl.Close()
+
+		// The parent says it is an idle agent (OSC 7501), then echoes what
+		// is typed into it, notes included.
+		var boss struct {
+			Address string `json:"address"`
+		}
+		parent := []string{"sh", "-c", `printf '\033]7501;state=idle\033\134'; exec cat`}
+		if err := cl.Call(ctx, "terminal.run", map[string]any{"argv": parent, "name": "boss", "wait": false, "no_parent": true}, &boss); err != nil {
+			t.Fatal(err)
+		}
+		cfg := Config{Profiles: map[string]Profile{"sleep": {Argv: []string{"sleep", "60"}}}}
+		m := New(HC{cl}, cfg)
+		m.getenv = func(string) string { return "" }
+		if byParent {
+			m.getenv = func(k string) string {
+				if k == "HC_TERMINAL_ID" {
+					return boss.Address
+				}
+				return ""
+			}
+		}
+		if _, err := m.Spawn(ctx, Spec{Name: "w1", Profile: "sleep", Parent: boss.Address}); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(300 * time.Millisecond)
+		if err := m.Stop(ctx, "w1"); err != nil {
+			t.Fatal(err)
+		}
+
+		var screen string
+		for i := 0; i < 50; i++ {
+			time.Sleep(100 * time.Millisecond)
+			var res struct {
+				Text string `json:"text"`
+			}
+			if err := cl.Call(ctx, "terminal.read", map[string]any{"terminal": "boss"}, &res); err != nil {
+				t.Fatal(err)
+			}
+			if screen = res.Text; strings.Contains(screen, "exited") {
+				break
+			}
+		}
+		noted := strings.Contains(screen, "w1 exited")
+		if byParent && noted {
+			t.Errorf("stop by the parent: parent got a note: %q", screen)
+		}
+		if !byParent && !noted {
+			t.Errorf("stop by another: no note in the parent: %q", screen)
+		}
+	}
+}
+
+// TestRealCoreSendTagsTheSender: a send from a worker to its coordinator
+// (both agents) names the worker as caller, so hc tags the text with it.
+// The kit's Stop hook reports a missed report this way.
+func TestRealCoreSendTagsTheSender(t *testing.T) {
+	env := isolatedCore(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cl, err := hc.Dial(ctx, hc.Command("", env))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cl.Close()
+
+	agent := []string{"sh", "-c", `printf '\033]7501;state=idle\033\134'; exec cat`}
+	var boss struct {
+		Address string `json:"address"`
+	}
+	if err := cl.Call(ctx, "terminal.run", map[string]any{"argv": agent, "name": "boss", "wait": false, "no_parent": true}, &boss); err != nil {
+		t.Fatal(err)
+	}
+	m := New(HC{cl}, Config{Profiles: map[string]Profile{"agent": {Argv: agent}}})
+	w, err := m.Spawn(ctx, Spec{Name: "w1", Profile: "agent", Parent: boss.Address})
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	m.WithEnv(func(k string) string {
+		if k == "HC_TERMINAL_ID" {
+			return w.Address
+		}
+		return ""
+	})
+	if err := m.Send(ctx, "boss", "ended its turn without a report"); err != nil {
+		t.Fatal(err)
+	}
+	want := `<hc from="` + w.Address + ` w1">ended its turn without a report</hc>`
+	var screen string
+	for i := 0; i < 50 && !strings.Contains(screen, want); i++ {
+		time.Sleep(100 * time.Millisecond)
+		if screen, err = m.Read(ctx, "boss", 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !strings.Contains(screen, want) {
+		t.Errorf("coordinator screen = %q, want %q", screen, want)
+	}
+}
+
+// TestRealCoreStopAndRemove: a stopped terminal stays in hc as finished;
+// after Remove, a list with finished terminals no longer has it.
+func TestRealCoreStopAndRemove(t *testing.T) {
+	env := isolatedCore(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cl, err := hc.Dial(ctx, hc.Command("", env))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cl.Close()
+	m := New(HC{cl}, Config{Profiles: map[string]Profile{"sleep": {Argv: []string{"sleep", "60"}}}}).WithEnv(func(string) string { return "" })
+	if _, err := m.Spawn(ctx, Spec{Name: "term-1", Profile: "sleep", Role: RoleTerminal}); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Stop(ctx, "term-1"); err != nil {
+		t.Fatal(err)
+	}
+	if ws, err := m.List(ctx, true); err != nil || len(ws) != 1 || ws[0].Live {
+		t.Fatalf("after stop: %+v, %v; want one finished terminal", ws, err)
+	}
+	if err := m.Remove(ctx, "term-1"); err != nil {
+		t.Fatal(err)
+	}
+	if ws, err := m.List(ctx, true); err != nil || len(ws) != 0 {
+		t.Errorf("after remove: %+v, %v; want none", ws, err)
+	}
+}

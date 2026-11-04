@@ -36,6 +36,8 @@ type AgentSource interface {
 	SendKeys(name string, keys []byte) error
 	Interrupt(name string) error
 	Stop(name string) error
+	// Close stops a plain terminal and removes it, so its tab goes.
+	Close(name string) error
 }
 
 // NeedKind tells what a [NeedTab] is.

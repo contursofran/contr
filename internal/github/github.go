@@ -55,8 +55,9 @@ func (c Client) run(ctx context.Context, args ...string) ([]byte, error) {
 	return out, nil
 }
 
-// ErrNotFound is the error of Find when gh is on no searched path.
-var ErrNotFound = errors.New("gh: program not found on PATH or in ~/.local/bin, /opt/homebrew/bin, /usr/local/bin")
+// ErrNotFound is the error of Find when gh is on no searched path. It has no
+// "gh: " prefix, because Client adds that prefix to each error.
+var ErrNotFound = errors.New("program not found on PATH or in ~/.local/bin, /opt/homebrew/bin, /usr/local/bin")
 
 // waitDelay is how long Run waits for the pipes of gh after the kill. A child
 // of gh (git, a pager) can keep them open.

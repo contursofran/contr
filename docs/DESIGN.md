@@ -1,100 +1,531 @@
-# contr design (v0.1)
+# contr design (v0.2)
 
-Source of truth: the "herdr sidebar mockup" design canvas, artboards **G · contr window** and **G · contr status icons** (owner's claude.ai artifact). This file is the text version builders work from.
+Source of truth: the owner's claude.ai design canvas "herdr sidebar mockup".
+
+- Page **Native · final**: artboards 1 (orchestrator tab), 2 (worker tab),
+  3 (orchestrator quiet), 4 (needs a look), 5 (worker with failed CI),
+  6 and 7 (narrow window), and the notes "Rules on these screens" and
+  "Needs new data before building".
+- Artboards **5 · Projects modal** and **SideFinal** for the projects modal.
+- Artboards **O · PR viewer** (PrView, PrViewFiles) for the PR viewer.
+- The answer card and the context sheet did not change on Native · final
+  ("unchanged"), so they come from screens 1 and 2 of the archived "Final"
+  page. Other archived screens and mockup G (v0.1) are not a source.
+
+The Native · final screens draw the herdr app's own look: a proportional
+font, coloured project tiles, blue links and a blue focus border. contr
+keeps its own look (tokens below) and takes from these screens the layout,
+the parts, the texts, the behaviour and the status colours of the rules
+note (D76).
+
+**(not built)** marks a part that the code does not have yet. Everything
+else is in the app today. "Open points" at the end lists what v0.2 does not
+settle.
 
 ## Window (1440×900 reference)
 
 ```
-┌ sidebar 280 ─┬ title bar 40: agent tabs ················ [Review] [panel] ┐
-│ ● ● ●  [◧] contr                                                          │
-│ Spaces  + new│ terminal (selected agent)            │ board panel 440       │
-│ [Local card] │                                      │  Work  plan build …   │
-│ client main  │                                      │  rows                 │
-│  ◐ sort-bags │                                      │  Needs you N          │
-│  ! bag-drag  │                                      │  rows                 │
-│ server main  │                                      │                       │
-│ linux-pc     │ [ needs-you row ]                    │                       │
-│ Orchestrators│                                      │  [answer card 168]    │
-│  ○ lead      │                                      │                       │
-│ Agents N run │                                      │                       │
-│  ◐ b162      │                                      │                       │
-├──────────────┴ status bar 26: claude ▬ 38% · codex ▬ 12% · CPU MEM                     ┤
+┌ sidebar 280 ──┬ top bar 40: ◆ orch · worker tabs · shell ········· [Review] [▣] ┐
+│ ● ● ●   contr │┌ terminal card ─────────────────────────┐┌ panel 380 ────────────┐│
+│ Spaces  + new ││ header 34: icon · program · agent · cwd ││ follows the top tab:  ││
+│ This computer ││                                         ││ orchestrator → board  ││
+│  ▸ project    ││ output                                  ││ worker → that worker  ││
+│    worktrees  ││                                         ││                       ││
+│               ││   card, sheet, pop-ups float over here  ││                       ││
+│ Agents        ││ prompt                                  ││                       ││
+│ Orchestrators │└─────────────────────────────────────────┘└───────────────────────┘│
+│ Blocked 1     │ bottom row 32: needs-you tabs ·········· ctx · ●3 ◷0 !0 · board ▴ ⌘J│
+│ Working 3     │                                                                    │
+├───────────────┴ footer 26: claude ▬ 38% · codex ▬ 12% · CPU MEM ··· status ────────┤
 ```
 
-- **`+ new` (D57):** the button next to Spaces opens the folder picker, then starts an orchestrator in that folder. Errors show in the status bar.
-- **Title bar tabs (D50):** one tab for each hc terminal of the open project: its orchestrators first (`◆ name`, terminal background), then its workers (`<issue> · <worktree>`, or the name when it has no issue). Each tab has the status icon. The first orchestrator tab has a white badge with the number of open needs-you items (blocked workers, questions, to-dos); it is hidden at 0. The open project is the project of the selected orchestrator or worker, and stays as it was for any other selection. A click on a tab selects that agent; the selected tab has the terminal background and a white underline. There are no "+" or split buttons until hc has actions for them.
-- A worktree row shows `+N −N` (diff colors, D52) at its right, the changes against the default branch with uncommitted ones. It is hidden for 0 and 0 or when git fails.
-- The title bar has a "Review" button left of the panel toggle. It swaps the terminal area for the Review view (see Review below) and is white while the view shows (D37).
-- Sidebar spans the full height, title-bar area included. Panel toggles from the title bar; hidden, the terminal takes the width.
-- v0.1 status bar usage shows only claude and codex. There is no OpenCode Go segment.
-- The agents area has an Orchestrators section on top, whatever the state of its agents, then Agents N running. An agent row has the status icon, the name, and a second line `<command> · <age>` (age since the last output: `5s`, `3m`, `2h`; it moves on a state change or a repaint, with no timer). The Orchestrators section is hidden when there is none.
-- Selecting a worktree or agent in the sidebar highlights it as a rounded card and shows that agent's hc terminal in the terminal area (D45). The terminal watches at the size the terminal already has and takes the size when you type.
+- The sidebar spans the full height, title-bar area included.
+- Top bar 40, then the content row, then the bottom row 32, then the footer
+  26. The bottom row and the footer keep their heights at all times (D67).
+- The content row holds the terminal card and the panel. Each is a card with
+  an 8 margin (terminal: top and left; panel: top, left and right), radius
+  10, border `line` **(not built)**.
+- The terminal size changes only with the window, the panel toggle, the
+  narrow-window rule and the PR viewer pane. The card, the context sheet,
+  the board pop-up, the narrow panel and popovers are overlays over the
+  terminal; they never resize it (D67).
+- Panel width 380 (v0.1: 440) **(not built)**. The panel toggle in the top
+  bar hides it; hidden, the terminal takes the width.
+- Below 1300 px window width the panel hides by itself (D77)
+  **(not built)**.
 
 ## Tokens
 
 | Token | Value | Use |
 |---|---|---|
 | font | JetBrains Mono 12/18 (terminal 13/20) | everything |
-| bg.window | #141414 | panel, window |
-| bg.sidebar / bars | #101010 | sidebar, title bar, status bar |
-| bg.terminal | #121212 | terminal |
-| bg.card | #1C1C1C + 1px #2C2C2C inset, radius 7 | selected row |
+| font.small | 11/17; 10 for stage column heads; 9 uppercase, 0.08em spacing for role tags | meta, second lines |
+| bg.window | #141414 | window, panel card |
+| bg.sidebar / bars | #101010 | sidebar, top bar, bottom row, footer |
+| bg.terminal | #121212 | terminal card |
+| bg.card | #1C1C1C + 1px #2C2C2C inset, radius 7 | selected row, selected tab |
+| bg.hover | #1C1C1C | row hover |
 | bg.answer | #1A1A1A, border #262626, radius 10 | answer card |
-| line | #222222 | dividers |
+| bg.overlay | #161616, border #2E2E2E, radius 12 | modal, context sheet |
+| bg.popup | #181818, border #3A3A3A, radius 10, shadow 0 16 48 rgba(0,0,0,.55) | board pop-up, narrow panel |
+| scrim | rgba(8,8,8,.72) | behind the projects modal |
+| line | #222222 | dividers, card borders |
+| line.strong | #3A3A3A | strip base line, pop-up borders, focus border of the terminal card |
 | text | #EDEDED | primary |
 | text.2 | #BDBDBD | secondary |
 | text.dim | #7A7A7A / #6A6A6A | labels, meta |
-| you | #EDEDED bg + #111111 bold text | anything waiting on the owner (badges, "your test") |
-| diff.added | #A6D189 | added lines and + counts in code views (D34) |
-| diff.deleted | #F07178 | deleted lines and − counts in code views (D34) |
+| text.faint | #4A4A4A | not-started dots, empty values |
+| you | #EDEDED bg + #111111 bold text | anything waiting on the owner (badges, "you" column) |
+| status.failed | #F07178 | failed CI, blocked dots, "Blocked N" label (D76) |
+| status.attention | #E5C07B | working dot, "Working N" label, "no output" after 5 min, overlap warnings, review blockers (D76) |
+| status.attention.line | #5A4A2A | border of the Interrupt button |
+| status.failed.box | bg #22191B, border #4A2F33 | the CI failed box |
+| diff.added | #A6D189 | added lines and + counts (D34) |
+| diff.deleted | #F07178 | deleted lines and − counts (D34) |
 
-No hue anywhere, except the two diff colors in code views and +/− counts: white means the owner acts, greys mean everything else.
-The terminal shows program colours as they are; greyscale applies to contr's own UI only.
+Buttons (all 12 px, radius 6):
 
-## Status icons (16px viewBox, drawn at 12–14px)
+| Kind | Style |
+|---|---|
+| primary | `you` bg, #111111 600 text, padding 5×12 |
+| secondary | text `text`, 1px #333333 border, padding 4×11 |
+| ghost | text #8A8A8A, no border; `text` on hover |
+| icon | 28×28, radius 6, #8A8A8A; hover bg #1E1E1E |
+| key | secondary with an 18×18 key cap (radius 4, bg #2A2A2A, 700 11 px) before the label, padding 3×10×3×4; the first option uses the primary colours with a #BDBDBD key cap |
+
+Hues (D76): white means the owner acts. Red (`status.failed`) means failed
+or blocked. Amber (`status.attention`) means working or worth a look. The
+two diff colours stay in diffs and +/− counts. Everything else is grey.
+The herdr app's other colours (project tiles, blue links, blue focus border,
+green "online" dots, orange program icons) are not used: links use the text
+colour with `↗` and an underline on hover.
+The terminal shows program colours as they are; these rules apply to
+contr's own UI only.
+
+## Status icons (16 px viewBox, drawn at 12–14 px)
 
 | State | Icon | Where |
 |---|---|---|
 | needs you | white filled circle, dark `!` | worktree waits on the owner |
-| decide | white filled circle, dark `?` | decision (D…) |
-| do | rounded square outline with → | to-do (T…) |
-| blocked | white filled octagon, dark bar | stuck at a prompt |
-| working | grey ring with a white quarter arc, spins 1.4 s | running |
+| decide | white filled circle, dark `?` | question (D…) |
+| do | rounded square outline with → | to-do of kind `do` (T…) |
+| fyi | grey circled `i` | to-do of kind `know` |
+| blocked | sidebar and tabs: red 7 px dot; card and strip: white octagon with a dark bar | stuck at a prompt |
+| working | sidebar only: ring #3A3A3A 2 px with an amber quarter arc, spins 1.4 s; elsewhere a static amber 7 px dot | running |
+| quiet | no icon; the second line says `no output · <age>` | mid-turn with no output |
 | waiting | grey clock | CI or another agent |
-| idle | hollow grey circle | nothing to do |
-| done | grey check | stage passed |
-| fyi | grey circled `i` | news |
-| not started | faint dot | stage ahead |
+| idle | hollow grey circle (r 4.5, 1.6 px, #6A6A6A) | turn ended, nothing to do |
+| done | grey check (#BDBDBD) | stage passed |
+| failed | red ✕ | CI failed |
+| not started | 3 px dot `text.faint` | stage ahead |
+| warning | amber triangle with `!`, 11 px | overlap, conflict |
+| you | head icon (column head), white 8 px dot (cell) | owner column |
 
-One icon set for sidebar, tabs, board stages and needs-you rows. Each has an accessible label.
+Spinners show only in the sidebar. Tabs and stage columns use the static
+amber dot for the current stage (rules note). Each icon has an accessible
+label.
 
-## Board panel
+## Sidebar (280)
 
-- **Work rows:** `#640` label, title, second line saying who/what holds it (`b-1151 building`, `CI on linux-pc`, `your test` in the "you" style), then four 44px stage columns headed `plan build review you`. The stage comes from the role (D46): planner is plan, builder is build, reviewer is review; earlier stages show done and later ones not started. The you column lights when the worker is blocked or an open question or to-do names it. A click on a row selects the worker. Rows are the workers of the selected orchestrator's project (all projects when none is selected).
-- **Needs-you row:** one line under the terminal. Tabs: blocked workers first, then questions (`D7`), then to-dos (`T12`; kind `know` shows the fyi icon). It shows the selected orchestrator's project, or all projects when none is selected. Hidden when empty. Resolved items strike through until "clear done". A click picks a tab and opens the answer card. There is no pin bar.
-- **Needs you (panel list):** the same tabs as the row, in the same order, one line each: icon, id (`D7`, `T12`), title, kind (`decide`, `do`, `fyi`, `done`). Rows never move on their own; resolved ones strike through until "clear done".
-- **Answer card:** floats over the bottom of the terminal area, above the needs-you row; fixed 168px. A question shows its options, the recommended one first as the filled button, and a field for a free answer. Enter sends the typed text, else the recommended option; `1`–`4` send an option in the card's order; Escape or Close closes it. The answer goes to the coordinator that asked as `Owner answered <ID>: <answer>`. If the send fails, the answer stays saved and the card shows the failure. A to-do shows Done. A blocked worker shows its menu: the card reads the last 40 lines of the worker's terminal when it opens and when the worker's turn or message changes, and shows the question with one button per choice (the first filled), then Focus worker and Close. A click or the digit `1`–`9` sends that choice as raw keys with no Enter, after a second read shows the same menu; if the menu changed, nothing is sent and the card says `The prompt changed; look again.` Enter does nothing. A choice that asks for typed text, an auth prompt, an unknown program or an unreadable screen shows only the worker's message and Focus worker. The card closes when the worker is no longer blocked. A resolved item shows no options.
-- **Panel follows the selected tab:** an orchestrator (or nothing) selected shows the board; a worker selected shows that worker: name, role and issue, worktree, status, the last 40 lines of its terminal in a code view, and Interrupt and Stop. Stop needs a second click.
-- **No Wrap up or Keep going button** (owner, 2026-11-03): the owner types "wrap up" in the orchestrator terminal. The Report tab is gone.
+From the top: window buttons and `contr`, Spaces, then Agents at the bottom,
+then Settings.
+
+- **Spaces** header with `+ new` (D57: folder picker, then an orchestrator
+  in that folder).
+- **Device group:** a header row `This computer` (11 px, dim, with a monitor
+  icon). Only the local Mac shows (D68); `+ Add machine` and other device
+  groups wait for #149 **(not built)**.
+- **Project rows:** one row per open project, padding 6×12, radius 6; a
+  20×20 tile with the project initials (bg #1C1C1C), the name with an
+  ellipsis, and at the right the count of commits behind its upstream
+  (`↓N`, red) **(not built)**. The project of the selected tab has the
+  `bg.card` style. Worktree rows sit under their project, as today: a row
+  shows `+N −N` (diff colours, D52) at its right, hidden for 0 and 0 or when
+  git fails.
+- **Agents** section (12 px dim header), then sub-headers (11 px):
+  `Orchestrators N` (dim) first, whatever the state of its agents, then
+  `Blocked N` (red), then `Working N` (amber) **(groups by state not built:
+  today one `Agents N running` list)**. Empty groups are hidden. The design
+  draws no group for workers in other states (see open points).
+- **Agent row:** padding 5×12, margin 0×6, radius 6, gap 3. Line 1: the
+  program icon (14), the name with an ellipsis, the status icon (12) at the
+  right. Line 2 (11 px, indent 22, `text.2`), only when there is something
+  to say **(not built; today `<role> · <state> · <age>`, D54)**:
+  - `running <command> · <age>` while a command runs;
+  - `no output · <age>` while the agent is mid-turn and quiet: grey, then
+    amber after 5 min, with no spinner, and an `Interrupt` button under it
+    (11 px, padding 2×8, amber text, `status.attention.line` border);
+  - `permission prompt · <age>` (red) when blocked;
+  - `idle · <age>` when the turn ended.
+  An agent that waits after its turn is idle and never warned. Ages are
+  `5s`, `3m`, `2h` and move on a state change or a repaint, never on a timer
+  (D35, D40).
+- A click on a row selects that agent: the top bar selects its tab, the
+  terminal shows its hc terminal (D80), the panel follows (D44).
+- **Bottom:** a divider, then `Settings` (gear icon). The settings screen is
+  not designed yet **(not built)**.
+
+## Top bar (40)
+
+- Tabs of the open project only (D50): the orchestrator first, then its
+  workers, then plain terminals (D82). A tab is 28 high, padding 0×10, radius 7,
+  gap 7: the program icon (14), the label, and a 7 px dot: amber while the
+  agent works, red while it is blocked. The red dot stays until the owner
+  has seen that tab (D73) **(dots not built; today the status icon)**.
+- The selected tab has the `bg.card` style. The first orchestrator tab keeps
+  its white needs badge (D50).
+- A plain terminal is a login shell in an hc terminal. Its tab shows the
+  terminal's title (set by the shell with OSC), else `$ <folder>`.
+- A `+` after the last tab opens a plain terminal in the open project, in
+  the first orchestrator's folder, else the home folder. `⌘T` does the same.
+  It is always shown, also with no tabs. The terminal area works while herdr
+  is down; the Spaces column shows the herdr line then (D82).
+- `⌘W` closes the selected plain terminal and its tab (D85). The next tab is
+  selected. An orchestrator or worker tab ignores it.
+- Right side: `Review` (D37), then the panel toggle. There is no tab row in
+  the panel.
+
+## Terminal
+
+- A card with a header row 34 high (12 px, padding 0×14, bottom border):
+  the program icon, the program name and the agent name in 600
+  (`<program> · <agent>`), then the terminal's working folder, dim, with
+  an ellipsis **(header not built)**.
+- The output and the program's own prompt fill the rest. contr draws
+  nothing between them: the strip and the card do not move the prompt.
+  #150 later draws them between the output and the prompt (D67).
+- The selected orchestrator or worker shows its hc terminal (D80); any other
+  selection shows `select an agent to see its terminal`. contr takes the
+  terminal's size when it attaches (owner, 2026-11-04); another viewer's size
+  does not stay.
+
+## Panel (380)
+
+The panel follows the selected tab (D44). An orchestrator (or nothing)
+selected shows the board; a worker shows that worker.
+
+### Board (orchestrator tab)
+
+- **Header** (padding 12×14×10, bottom border): line 1 the program icon, the
+  project name (600, 13 px, ellipsis), at the right the state (a 7 px dot
+  and the word, or `no output · <age>` in amber with `Interrupt`); line 2
+  `Board · orchestrator · <model>` (dim).
+- **Sections**, in this order, each with a dim head (padding 10×10×4):
+  1. `Needs a look · N` (head in `text`), only when not empty: blocked
+     workers, and PRs that need a person with no worker on them (conflict
+     with main) **(not built)**.
+  2. `Work · N running`: the project's workers (orchestrators excluded,
+     D46).
+  3. `Next`: the ready list, next in line first **(not built; needs a
+     source)**.
+  4. `Merged`, newest first, with a ghost `all N` at the right
+     **(not built)**. Next and Merged rows have opacity 0.9.
+- **Stage columns** at the right of the first section head: `P B R CI` and
+  the head icon for you, each 16 wide, gap 6, 10 px. A cell holds the
+  stage icon: done (check), current (amber dot; red dot when blocked),
+  failed (red ✕), not started (faint dot), or nothing. `P` shows only for a
+  task that had a planner. The you cell is a white 8 px dot when the owner
+  must act. Stages come from roles (D46); the CI column needs a CI source
+  **(CI not built)**.
+- **Work row** (padding 7×10, radius 7, gap 4, hover `bg.hover`):
+  - line 1: the title with an ellipsis, then the stage cells;
+  - line 2: the link (`#N ↗` for a PR, `issue #N ↗` for an issue; shown
+    once, and it is the link), then `<worker> · <activity>` (`text.2`);
+  - line 3, when it applies (11 px): `⚠ touches <file> like #N` in amber
+    (another open PR changes the same file); `✕ CI failed · N tests ↗` in
+    red; `blocked · waiting at a permission prompt` in red with a small
+    secondary `open tab` button; `conflicts with main · no worker on it`
+    in amber.
+  A click on a row selects that worker's tab (D46). A click on a link opens
+  the PR viewer (PRs) or the browser (issues).
+- **No Wrap up or Keep going button** (D71), no Report tab.
+
+### Worker (worker tab)
+
+- **Header** (padding 12×14×10, gap 8, bottom border):
+  - line 1: program icon, the name (600, 14 px), the role tag (`build`,
+    `review`, `plan`: 9 px uppercase, 1px #333333 border, radius 3, padding
+    0×4), at the right the activity (`running <command> · <age>`,
+    `no output · <age>`);
+  - line 2 (`text.2`): `<provider> · <model> · <worktree> · ctx N%`;
+  - line 3: the stage cells, then `build · review · CI · you` (dim).
+- **Body** (padding 12×14, gap 14), in this order, each part only when it has
+  data **(not built; today the last 40 lines of the terminal)**:
+  - **CI failed box** (`status.failed.box`, radius 8, padding 10×12): `✕ CI
+    failed` (red, 600) and `N failed · M passed`; `job <name> · <time>`;
+    the first failing test (mono 11, `text`); a primary `Open log` and
+    `+N more failing test`.
+  - **Task:** dim head `Task` with a ghost `TASK.md ↗` at the right, then the
+    task text (`text.2`).
+  - **PR line:** branch icon, `#N ↗`, the PR state (`draft`,
+    `changes needed`), at the right the CI result (check or ✕, then `CI`).
+  - **Review:** `Review · from <reviewer> · N blockers` (dim), then one line
+    per blocker with an amber `●`.
+  - **Branch vs main:** dim head with the `+N −N` total, then one row per
+    file (padding 4×8, radius 6): status letter (`M`, `A`, `D`, 12 wide),
+    the path (mono 11), `+N −N`.
+- **Footer** (padding 10×12, top border): secondary `Open diff` at the left
+  (opens the Review view on this branch), secondary `Stop` at the right
+  (grey; a second click confirms, D44). `Interrupt` shows in the header
+  while the worker is quiet.
+
+### Narrow window (D77) **(not built)**
+
+Below 1300 px the panel hides and the terminal takes the width. The bottom
+row shows `panel ▴`. A click floats the panel over the terminal: 360 wide,
+8 from the top, right and bottom, `bg.popup`, with a ghost `×` in its
+header; the button then reads `panel ▾` with the `bg.card` style. Esc (with
+the focus in the panel), `×` or a click outside closes it.
+
+## Bottom row (32)
+
+Directly under the terminal and the panel, full width of the main column,
+`bg.bars` (D67). It never hides, so the terminal does not move. Left to
+right:
+
+- **Needs-you tabs** (D69): blocked workers first, then questions (`D<n>`),
+  then to-dos of kind `do` (`T<n>`), then to-dos of kind `know` (fyi icon).
+  The scope is the open project; `N in <project> ›` (ghost) after the tabs
+  jumps to the next project with open items. A tab is 32 high, padding
+  0×12, gap 7, 1px border, margin-right 2: the icon (12), the id in 700, a
+  short title (max 110, ellipsis). Off: bg #151515, text #8A8A8A, border
+  #242424. On: bg #1A1A1A, text `text`, border `line.strong`, joined to
+  the open card. The tab opens toward the card: while the card floats above
+  the row, the tab has radius 0×0×8×8 and no top border; when #150 moves
+  the card under the strip, it has radius 8×8×0×0 and no bottom border. A
+  resolved item has opacity 0.45 until "clear done". **(tab shape not
+  built; today one-line tabs, D42)**
+- A spacer.
+- **Counts** (12 px, `text.2`, gap 16) **(not built)**: `ctx <used> /
+  <limit>` of the selected agent; the amber dot and the number working; the
+  clock and the number waiting; the blocked icon and the number blocked
+  (`N blocked` with a red dot when not 0).
+- `board ▴` on a worker tab: it opens the board pop-up. The orchestrator tab
+  with the panel open has no `board ▴` (the panel is the board). Below
+  1300 px it reads `panel ▴` (D77).
+- `⌘J` (dim): opens the context sheet for the picked item.
+
+## Answer card
+
+Floats over the bottom of the terminal, just above the bottom row and
+joined to the picked tab, `bg.answer`, padding 14×16, gap 12, fixed 168
+high (D44). Its edge toward the tab has no border and no radius (the
+design's 10 radius stays on the other corners; today all four corners are
+round). Enter motion: up 10 px and fade in, 0.22 s,
+cubic-bezier(0.2, 0.8, 0.2, 1) **(motion not built)**.
+
+- Header: icon (14), the id (700), the title (600), the PR link when the
+  item has one (`#N`, underlined, opens the PR viewer), the meta (dim,
+  ellipsis), then ghost `context ⌘J` and ghost `esc`.
+- The question (`text.2`).
+- Options: one row each, a 200 wide column with a key button (`1`, `2`,
+  `3`; the recommended one first and filled), then its impact line (#8A8A8A)
+  **(impact lines not built: need data)**. A free-answer field. Enter sends
+  the typed text, else the recommended option; `1`–`4` send an option.
+- A resolved item shows `<answer> · sent`, ghost `undo` and secondary
+  `next ›`.
+- A to-do shows Done. A blocked worker shows its menu (D51).
+- The answer goes to the coordinator that asked, as
+  `Owner answered <ID>: <answer>` (D36).
+
+## Context sheet (⌘J) **(not built)**
+
+Opens from `⌘J` or `context ⌘J` for the picked item. It is an overlay over
+the top 470 px of the terminal area (left edge to the panel, or to the PR
+pane when open), bg #161616, bottom border `line.strong`, shadow 0 16 40
+rgba(0,0,0,.55), padding 14×22×16, gap 12. Enter motion: down 32 px and
+fade in, 0.3 s. The prompt, the bottom row and the newest output lines stay
+visible.
+
+- Header: icon, title (600), meta (dim), then `‹ N of M ›` to step through
+  the items, then ghost `esc`.
+- A line with the clock icon: what waits on this item.
+- Left column (grows): `Why it asks` with the source reference at the
+  right, then the source excerpt in a box (bg #111111, border #262626,
+  radius 8, padding 12×14, line height 19).
+- Right column (420): `Options`, one block each (top border `line`, padding
+  8×0): the option button, then its impact line (`text.2`). At the bottom:
+  secondary `Show in terminal` (scrolls the terminal to the source message
+  and marks it), ghost `Ask principal`, and `undo` once resolved.
+- Data each question must carry: the source message reference, one impact
+  line per option, related files and PRs.
+
+## Board pop-up **(not built)**
+
+`board ▴` on a worker tab floats the board over the terminal, right-aligned
+above the bottom row: 620 wide, 8 above the row, `bg.popup` with shadow
+0 −12 40 rgba(0,0,0,.55), padding 10×6×8. The same sections and rows as the
+board panel, with the stage columns 44 wide (`plan build review CI you`).
+Enter motion: up 10 px and fade in, 0.22 s. Esc (with the focus), `board ▾`
+or a click outside closes it.
+
+## Projects modal **(not built)**
+
+Opens from the projects control (see open points). An overlay over the whole
+window with the `scrim`; the dialog is 580 wide, 110 from the top, centred,
+`bg.overlay`, shadow 0 24 80 rgba(0,0,0,.6). Enter motion: up 8 px and fade
+in, 0.22 s.
+
+- Header (padding 16×18×12): `Projects` (700, 14 px), `N open` (dim), then a
+  ghost `esc`.
+- Filter field (margin 0×18×12, border #2E2E2E, radius 8, padding 8×12):
+  placeholder `> filter, or paste a path or a GitHub URL…` (#555555).
+- `open in contr · drag to reorder the sidebar` (11 px, dim): one row per
+  open project (padding 8×10, radius 8, gap 12): a grip `⋮⋮` (#3A3A3A), a
+  28×28 tile (radius 7, bg #1F1F1F, initials 700 11 px), the name (700) over
+  `<folder> · <N worktrees · N need you>` (11 px, #5A5A5A), then a secondary
+  `close`. Drag changes the sidebar order.
+- `recent`: closed projects, the same row without the grip, the tile and
+  name dimmer, and a primary `open`.
+- Footer (top border #262626, padding 12×18, gap 14): ghost `+ open folder…`,
+  ghost `clone from GitHub…`, spacer, primary `Done`.
+- `close` hides the project in contr only (D70); the order, hidden and recent lists live in `projects.json` (D63). Esc (with the focus in the
+  modal), `esc` or `Done` closes the modal.
+
+## PR viewer (#151–#154) **(being built)**
+
+A PR number (card header, sheet refs, a board link, the worker panel) opens
+the PR in a 560 wide pane at the right of the terminal (D74). The pane
+pushes the terminal; it is the one accepted resize besides the window and
+the panel. Enter motion: left 24 px and fade in, 0.25 s. While it is open,
+needs-you tabs show only the icon and the id, and the bottom row hides
+`board ▴`.
+
+- **Header** (padding 12×16×10, bottom border, gap 6): line 1 `#N` (700), the
+  title (600, ellipsis), ghost `GitHub ↗` (opens the browser), icon `×`;
+  line 2 (dim, wraps): repo, `branch → main`, author agent, `+N −N · N
+  files`; line 3: the state badge (padding 1×8, radius 4: `approved` with a
+  #5A5A5A border, other states with a #3A3A3A border and `text.2`, `merged`
+  in the `you` style), the CI summary with its icon, and at the right
+  `for <item>` (dim).
+- **Tabs** (padding 10×16×0): a segmented control (bg #1A1A1A, radius 7,
+  padding 2; the selected segment bg #2A2A2A and `text`):
+  `Overview`, `Files N`, `Checks N`.
+- **Overview:** the description (`text.2`), then `Timeline`: one row per
+  event (top border #1F1F1F, padding 6×0, gap 10): icon (12), who (700, 74
+  wide), text (`text.2`), time (dim).
+- **Files:** the file list (rows padding 4×8, radius 6: path, `+N −N` in the
+  diff colours), then the diff in the kit code view (D34) with the review
+  threads under their lines: a box (margin 6×10×8×48, bg #1C1C1C, border
+  #2A2A2A, radius 8, padding 8×10): who (700) and `on line N` (dim), the
+  text, ghost `reply` and `resolve`.
+- **Checks:** one row per check (top border #1F1F1F, padding 8×0): icon
+  (14), name, time (dim), ghost `log`.
+- **Footer** (top border, padding 10×16×12, gap 8): a comment field (border
+  #2E2E2E, radius 8, padding 7×10, placeholder `Leave a comment on #N…`),
+  then secondary `Comment`, secondary `Approve` (hidden once approved),
+  spacer, primary `Squash and merge`. While CI runs the merge button is
+  replaced by the clock icon and `merge waits for CI`. After a merge:
+  `merged · principal told`; the item is done and the coordinator gets a
+  message.
+- Keys while it has the focus: Esc closes, `c` comments, `⇧⌘M` merges.
+
+Slice 1 (#235, D59) builds the pane, the header lines 1 and 2, a state chip
+and the CI summary, the tabs and the Overview. It opens from the `#N` badge
+of a sidebar worktree row and the `#N` label of a board work row, and it
+collapses the title bar tabs to icon and id. Not built yet: the Files and
+Checks tabs (they show `Not built yet.`), the footer and its keys, the
+other entry points, `for <item>`, the needs-you tab collapse and hiding
+`board ▴`, and the enter motion.
 
 ## Review
 
-Shown in the terminal area while the title bar's "Review" button is on. The repo is the selected worktree's root, or the folder of the selected agent. With no selection it shows "Select a project".
+Shown in the terminal area while the top bar's `Review` button is on (D37).
+The repo is the selected worktree's root, or the folder of the selected
+agent. With no selection it shows `Select a project`.
 
-- Three columns: branches (260), files or commits (260), code (grows). Branches are all local branches ahead of `main`.
-- Labels: `branch <name>`, `file <path>`, `commit <short>`; the switch `review mode` has `Whole branch` and `By commit`.
-- Rows and the code view come from `internal/app/kit`; the only colors are the two diff colors (D34).
+- Three columns: branches (260), files or commits (260), code (grows).
+  Branches are all local branches ahead of `main`.
+- Labels: `branch <name>`, `file <path>`, `commit <short>`; the switch
+  `review mode` has `Whole branch` and `By commit`.
+- Rows and the code view come from `internal/app/kit`; the only colours are
+  the two diff colours (D34).
 - No git runs while the view or the window is hidden.
 
-## PR viewer
+## Footer (26)
 
-A pull request pane at the right of the terminal area, from the v0.2 artboard (owner, 2026-11-03). The `#N` badge on a sidebar worktree row and the `#N` label of a board work row open it (D59). Slice 1 builds the header and the Overview tab; Files and Checks follow in later slices.
+`bg.bars`, top border `line`, 11 px dim. Left: plan usage, `claude` and
+`codex` with a 36×3 bar and the percent left (no OpenCode Go segment).
+Right: the message slot (errors from `+ new` and other actions), host CPU
+and memory, the contr version, and the herdr version while herdr is
+connected.
 
-- **Size and place:** 560px wide, fixed, between the terminal area and the board panel. It pushes the terminal narrower. Border on its left side, window background.
-- **Title bar tabs:** while the pane is open each agent tab shows only its icon and its id (`#151` for a worker with an issue, the name otherwise), so the pane has room.
-- **Header** (16px padding, a divider under it): row 1 is `#N`, the title (bold, one line, ellipsis), `GitHub ↗` (opens the PR in the browser) and `×` (closes). Row 2, in dim text: repository name, `head → base`, author, `+A −D · N files`. Row 3: a state chip (`open`, `draft`, `merged`, `closed`; grey, no hue), the CI icon with one line (`CI green · 3 checks`, `CI running`, `CI failing · 1 of 3`, `no checks`).
-- **Tabs:** a switch `Overview`, `Files N`, `Checks N`. Files and Checks show `Not built yet.` until their slices.
-- **Overview:** the PR text first, in secondary text (headings bold, list items with a `•`, code blocks as plain lines), then `Timeline`: one row per event with a divider above it: status icon, who (bold, 74px), what happened, age (`now`, `14m`, `3h`, `2d`). Events are comments, reviews, commits, and merge or close, oldest first.
-- **Loading and errors:** `Loading…` while gh runs. A failed read shows the error text, `gh: <stderr>`. Only the newest read lands.
-- **Close:** `×`, or Escape while the pane has focus. Opening a pane gives it focus.
-- Colors: mono font, greyscale. The only color in the pane is the status icons.
+## Motion
+
+- Enter motions: card and pop-ups up 10 px, modal up 8 px (0.22 s); sheet
+  down 32 px (0.3 s); PR pane left 24 px (0.25 s); a new output line up
+  6 px (0.4 s, ease-out). All use cubic-bezier(0.2, 0.8, 0.2, 1) unless
+  noted. Exit is instant.
+- Flash (D73): a new blocked item's tab pops in (scale 0.8 to 1, 0.3 s), then
+  flashes to the `you` colours 4 times (0.9 s each). Then it keeps a static
+  unseen style until seen. Flashes and spins run at 30 fps or less (D26).
+- Reduce Motion: no enter motions and no flashes; the static unseen style
+  stays. The working arc does not spin.
+
+## Keys
+
+| Key | Does | Where |
+|---|---|---|
+| `⌘T` | open a plain terminal in the open project (D82) | window, File menu |
+| `⌘W` | close the selected plain terminal (D85); does nothing on an orchestrator or worker tab | window, File menu |
+| `⌥1`–`⌥6` | pick needs-you tab 1–6 and open its card (D75) | window |
+| `1`–`4` | send that option | card, with the focus |
+| Enter | send the typed answer, else the recommended option | card, with the focus |
+| `⌘J` | open or close the context sheet | window |
+| Esc | close the sheet, card, pop-up, modal or PR pane | only the part with the focus (D72) |
+| `c`, `⇧⌘M` | comment, squash and merge | PR pane, with the focus |
+
+Esc is never a window shortcut: it interrupts Claude Code in the terminal.
+
+## Data the design needs
+
+From the note "Needs new data before building". The UI shows a field when
+its source has it and leaves it out when not.
+
+| Data | Source today |
+|---|---|
+| Next (ready) list | none |
+| Review verdict and blockers | none |
+| Worker ctx % | none |
+| Option impact lines, source message, refs | owner store (D32) has no fields for them |
+| Jump to the message | none |
+| +/− per file | git (D52 reads totals per worktree) |
+| Time since last output | hc events (`LastOutput`, D35) |
+| Failed CI job and test names, CI state, conflict state per PR | GitHub (PR viewer client, #151) |
+| Running command and how long it has run | hc foreground command (D35); no start time |
+| Files shared between open PRs | git or GitHub, not read yet |
+| Interrupt action | built (`AgentSource.Interrupt`, D44) |
+
+## Open points
+
+v0.2 does not settle these:
+
+1. **Projects control.** Native · final draws no projects pill. The
+   projects modal (screen 5) opens from a `projects` pill at the top of a
+   300-wide sidebar, next to a settings gear. Where the control sits in the
+   v0.2 sidebar (pill under the window buttons, the `Spaces` header, or the
+   `Settings` area) is open.
+2. **Bottom row tabs.** Native · final draws the bottom row with counts only
+   (no open items). v0.2 puts the needs-you tabs at its left, as the Final
+   strip did, and flips the tab shape toward the floating card. The row is
+   32 high here (Native draws 30, the Final strip tabs are 32).
+3. **Sidebar width.** Native · final draws 196 in a proportional font; v0.2
+   keeps 280 for the mono font.
+4. **Agent row second line.** The design shows activity; D54 shows
+   `<role> · <state> · <age>`. The design form needs the running command's
+   start time.
+5. **PR pane and panel.** With the panel open, whether the PR pane replaces
+   the panel or sits beside it is not drawn.
+6. **Footer.** The herdr footer shows the device, branch, agent count and
+   version. v0.2 keeps contr's usage footer.
+7. **Board pop-up.** Native · final draws `board ▴` but not the open
+   pop-up; v0.2 uses the Final page's pop-up.
+8. **Settings screen** and **`+ Add machine`** are not designed.
+9. **Ages.** `merged <age>` and `no output · <age>` need a repaint to move; D35
+   forbids a timer. When they move is open; so is when `no output` turns
+   amber at 5 min.
+10. **Other agent groups.** The sidebar draws `Blocked` and `Working` only.
+    Where idle, waiting and done workers go is open.
+11. **Hues.** D76 follows the rules note (red and amber for status). It
+    replaces the greyscale rule of v0.1; the owner can still keep
+    greyscale.

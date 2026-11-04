@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -27,6 +28,7 @@ type fakeCore struct {
 	mu      sync.Mutex
 	calls   []call
 	sendErr error
+	errs    map[string]error // per method
 	snap    hc.Snapshot
 	events  chan hc.Event
 }
@@ -41,7 +43,7 @@ func (f *fakeCore) Call(_ context.Context, method string, params, _ any) error {
 	if method == "terminal.send" {
 		return f.sendErr
 	}
-	return nil
+	return f.errs[method]
 }
 
 func (f *fakeCore) sends() []call {
@@ -134,6 +136,32 @@ func TestSnapshotSplitsOrchestratorsFirst(t *testing.T) {
 	}
 	if len(s.Workers) != 1 || s.Workers[0].Name != "worker-a" {
 		t.Errorf("workers = %+v", s.Workers)
+	}
+}
+
+func TestSnapshotSplitsTerminals(t *testing.T) {
+	r := newRig(t,
+		term("t1", "worker-a", "builder", "contr", "working"),
+		term("t2", "term-2", "terminal", "zed", ""),
+		term("t3", "term-1", "terminal", "contr", ""),
+		term("t4", "term-0", "terminal", "contr", ""),
+		term("t5", "orch", "orchestrator", "contr", "idle"),
+	)
+	r.start(t)
+	waitFor(t, "terminals", func() bool { return len(r.m.Snapshot().Terminals) == 3 })
+	s := r.m.Snapshot()
+	var names []string
+	for _, w := range s.Terminals {
+		names = append(names, w.Name)
+	}
+	if got := strings.Join(names, ","); got != "term-0,term-1,term-2" {
+		t.Errorf("terminals = %s, want by project then name", got)
+	}
+	if len(s.Workers) != 1 || s.Workers[0].Name != "worker-a" {
+		t.Errorf("workers = %+v, want only worker-a", s.Workers)
+	}
+	if len(s.Orchestrators) != 1 {
+		t.Errorf("orchestrators = %+v", s.Orchestrators)
 	}
 }
 
@@ -298,4 +326,29 @@ func TestStopEndsGoroutines(t *testing.T) {
 		t.Fatal("goroutines did not end")
 	}
 	waitFor(t, "goroutines", func() bool { return runtime.NumGoroutine() <= before })
+}
+
+// TestCloseStopsThenRemoves: Close kills the terminal, then removes it, so
+// the watch drops it. A failed kill removes nothing.
+func TestCloseStopsThenRemoves(t *testing.T) {
+	r := newRig(t)
+	if err := r.m.Close("tp"); err != nil {
+		t.Fatal(err)
+	}
+	var methods []string
+	for _, c := range r.core.calls {
+		methods = append(methods, c.Method)
+		if c.Params["terminal"] != "tp" {
+			t.Errorf("%s params = %v", c.Method, c.Params)
+		}
+	}
+	if !slices.Equal(methods, []string{"terminal.kill", "terminal.rm"}) {
+		t.Errorf("calls = %v, want kill then rm", methods)
+	}
+
+	r = newRig(t)
+	r.core.errs = map[string]error{"terminal.kill": errors.New("not_found")}
+	if err := r.m.Close("tp"); err == nil || len(r.core.calls) != 1 {
+		t.Errorf("failed kill: err %v, calls %v", err, r.core.calls)
+	}
 }

@@ -19,6 +19,7 @@ import (
 type Snapshot struct {
 	Orchestrators []agents.Worker  // role orchestrator, any status, by project then name
 	Workers       []agents.Worker  // the rest, by name
+	Terminals     []agents.Worker  // plain terminals (role terminal), by project then name
 	Questions     []owner.Question // open only, in asked order
 	Todos         []owner.Todo     // open only, in file order
 	Resolved      []string         // ids resolved in this run, until ClearDone
@@ -109,18 +110,23 @@ func (m *Model) Snapshot() Snapshot {
 	defer m.mu.Unlock()
 	var s Snapshot
 	for _, w := range m.workers {
-		if w.Orchestrator() {
+		switch {
+		case w.Orchestrator():
 			s.Orchestrators = append(s.Orchestrators, w)
-		} else {
+		case w.Plain():
+			s.Terminals = append(s.Terminals, w)
+		default:
 			s.Workers = append(s.Workers, w)
 		}
 	}
-	slices.SortStableFunc(s.Orchestrators, func(a, b agents.Worker) int {
+	byProjectName := func(a, b agents.Worker) int {
 		if c := strings.Compare(a.Project, b.Project); c != 0 {
 			return c
 		}
 		return strings.Compare(a.Name, b.Name)
-	})
+	}
+	slices.SortStableFunc(s.Orchestrators, byProjectName)
+	slices.SortStableFunc(s.Terminals, byProjectName)
 	s.Questions, s.Todos = m.state.Open("")
 	// An item resolved here is still shown, struck through, until ClearDone.
 	for _, q := range m.resolvedQ {
@@ -234,4 +240,15 @@ func (m *Model) Interrupt(name string) error {
 // Stop closes a worker's terminal.
 func (m *Model) Stop(name string) error {
 	return m.mgr.Stop(context.Background(), name)
+}
+
+// Close stops a terminal and removes it from hc, so the watch drops it. A
+// stopped terminal stays in hc as finished; Close is for a plain terminal
+// that has nothing to keep. It blocks: call it off the UI thread.
+func (m *Model) Close(name string) error {
+	ctx := context.Background()
+	if err := m.mgr.Stop(ctx, name); err != nil {
+		return err
+	}
+	return m.mgr.Remove(ctx, name)
 }

@@ -134,6 +134,8 @@ type SpacesList struct {
 
 	groups []spaces.RepoGroup
 	online bool
+	// line is herdr's connection line while herdr is not connected, else "".
+	line string
 	// shown is the id of the selected worktree at the last rebuild.
 	shown string
 
@@ -324,16 +326,17 @@ func (l *SpacesList) rebuild(tree *herdr.HerdrTree) SpacesChange {
 		groups = spaces.Build(*tree, l.scan)
 		spaces.ApplyStats(groups, l.stats)
 	}
-	online := true
+	online, line := true, ""
 	if l.src != nil {
-		_, down := l.src.Live().State.Line()
+		var down bool
+		line, down = l.src.Live().State.Line()
 		online = !down
 	}
 	l.clearGoneSelection(groups)
 	selected, _ := l.selectedWorktree()
 	change := l.diff(groups, selected)
-	change.Online = online != l.online
-	l.groups, l.online, l.shown = groups, online, selected
+	change.Online = online != l.online || line != l.line
+	l.groups, l.online, l.line, l.shown = groups, online, line, selected
 	return change
 }
 
@@ -416,6 +419,7 @@ func (l *SpacesList) View(c *ui.Context) {
 	ui.Scroll(c).Fill().Children(func() {
 		l.spacesHeader(c)
 		l.hostCard(c)
+		l.herdrLine(c)
 		for _, g := range l.groups {
 			l.repoLine(c, g)
 			for _, row := range g.Rows {
@@ -466,6 +470,17 @@ func (l *SpacesList) hostCard(c *ui.Context) {
 				Radius(theme.HostDotSize / 2).Background(theme.Color(onlineColour(l.online)))
 		})
 	})
+}
+
+// herdrLine is herdr's connection line, under the host card, while herdr is
+// not connected. The terminal area does not show it: hc terminals work
+// without herdr (#246).
+func (l *SpacesList) herdrLine(c *ui.Context) {
+	if l.online || l.line == "" {
+		return
+	}
+	ui.Text(c, l.line).TextColor(theme.Color(theme.TextDim)).
+		PaddingX(theme.SidebarPadX).PaddingY(theme.SpacesGap)
 }
 
 // onlineColour is the dot's colour: Text2 while herdr is connected, the

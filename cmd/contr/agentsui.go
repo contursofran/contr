@@ -9,16 +9,16 @@ import (
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app"
 	"github.com/contursofran/contr/internal/app/agentstate"
-	"github.com/contursofran/contr/internal/app/terminal"
+	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/hc"
 )
 
 // terminalSource gives the terminal view the source of one hc terminal. It
 // dials the same core as the agents, on connections of its own, and only when
 // the view attaches (D12).
-func terminalSource(getenv func(string) string) func(address string) terminal.HCSource {
-	return func(address string) terminal.HCSource {
-		return terminal.NewCoreSource(hc.Command(getenv("CONTR_HC"), nil), address)
+func terminalSource(getenv func(string) string) func(address string) ghostty.Source {
+	return func(address string) ghostty.Source {
+		return ghostty.NewCoreSource(hc.Command(getenv("CONTR_HC"), nil), address)
 	}
 }
 
@@ -86,6 +86,13 @@ func (l *lazySource) Interrupt(name string) error {
 func (l *lazySource) Stop(name string) error {
 	if m := l.model.Load(); m != nil {
 		return m.Stop(name)
+	}
+	return errNoAgents
+}
+
+func (l *lazySource) Close(name string) error {
+	if m := l.model.Load(); m != nil {
+		return m.Close(name)
 	}
 	return errNoAgents
 }

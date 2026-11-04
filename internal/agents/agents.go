@@ -33,6 +33,12 @@ const (
 // RoleOrchestrator is the role label of an orchestrator agent.
 const RoleOrchestrator = "orchestrator"
 
+// RoleTerminal is the role label of a plain terminal: a shell, not an agent.
+const RoleTerminal = "terminal"
+
+// defaultShell runs in a plain terminal when $SHELL is not set.
+const defaultShell = "/bin/zsh"
+
 // Core is the part of the hc client that the manager uses.
 type Core interface {
 	Call(ctx context.Context, method string, params, result any) error
@@ -221,6 +227,9 @@ func (t terminal) command() string {
 // Orchestrator tells if the worker is an orchestrator.
 func (w Worker) Orchestrator() bool { return w.Role == RoleOrchestrator }
 
+// Plain tells if the worker is a plain terminal (a shell, not an agent).
+func (w Worker) Plain() bool { return w.Role == RoleTerminal }
+
 func decodeWorker(raw json.RawMessage) (Worker, error) {
 	var t terminal
 	if err := json.Unmarshal(raw, &t); err != nil {
@@ -237,6 +246,8 @@ type Manager struct {
 	core Core
 	cfg  Config
 	now  func() time.Time // the clock; tests replace it
+
+	getenv func(string) string // reads the environment; tests replace it
 }
 
 // New returns a manager on core with the profiles of cfg. A relative kit
@@ -247,7 +258,7 @@ func New(core Core, cfg Config) *Manager {
 			cfg.Kit = abs
 		}
 	}
-	return &Manager{core: core, cfg: cfg, now: time.Now}
+	return &Manager{core: core, cfg: cfg, now: time.Now, getenv: os.Getenv}
 }
 
 // Spawn starts a worker and returns it.
@@ -294,6 +305,46 @@ func (m *Manager) Spawn(ctx context.Context, s Spec) (Worker, error) {
 	return decodeWorker(raw)
 }
 
+// TerminalSpec describes a plain terminal.
+type TerminalSpec struct {
+	Name    string
+	Project string // the open project; empty for none
+	Dir     string // the start folder; empty for the core's default
+	Shell   string // empty for $SHELL, then /bin/zsh
+}
+
+// OpenTerminal starts a login shell in an hc terminal and returns it. The
+// terminal has the worker labels with role "terminal", so it stays in hc
+// after contr closes and agents can read it.
+func (m *Manager) OpenTerminal(ctx context.Context, s TerminalSpec) (Worker, error) {
+	if s.Name == "" {
+		return Worker{}, errors.New("agents: a terminal needs a name")
+	}
+	if strings.ContainsFunc(s.Project, unicode.IsControl) {
+		return Worker{}, errors.New("agents: the project name has a control character")
+	}
+	shell := s.Shell
+	if shell == "" && m.getenv != nil {
+		shell = m.getenv("SHELL")
+	}
+	if shell == "" {
+		shell = defaultShell
+	}
+	labels := map[string]string{LabelApp: AppAgent, LabelRole: RoleTerminal, LabelWorktree: s.Dir}
+	if s.Project != "" {
+		labels[LabelProject] = s.Project
+	}
+	params := map[string]any{"argv": []string{shell, "-l"}, "name": s.Name, "labels": labels, "wait": false, "outlive_parent": true, "no_parent": true}
+	if s.Dir != "" {
+		params["cwd"] = s.Dir
+	}
+	var raw json.RawMessage
+	if err := m.core.Call(ctx, "terminal.run", params, &raw); err != nil {
+		return Worker{}, err
+	}
+	return decodeWorker(raw)
+}
+
 // agentArgv returns the profile's command. A claude command for a profile
 // that has an agent definition in the kit gets `--plugin-dir <kit> --agent
 // contr:<profile>` after the program name.
@@ -330,7 +381,16 @@ func (m *Manager) List(ctx context.Context, all bool) ([]Worker, error) {
 
 // Send types text into a worker and presses Enter.
 func (m *Manager) Send(ctx context.Context, name, text string) error {
-	return m.core.Call(ctx, "terminal.send", map[string]any{"terminal": name, "text": text}, nil)
+	params := m.looking(name)
+	params["text"] = text
+	return m.core.Call(ctx, "terminal.send", params, nil)
+}
+
+// WithEnv makes m read the environment with getenv (HC_TERMINAL_ID, SHELL)
+// and returns m.
+func (m *Manager) WithEnv(getenv func(string) string) *Manager {
+	m.getenv = getenv
+	return m
 }
 
 // SendKeys presses raw keys in a worker and does not press Enter. hc's
@@ -381,25 +441,46 @@ func keyNames(keys []byte) ([]string, error) {
 	return out, nil
 }
 
+// looking returns the params of a call that looks at, acts on or sends to a
+// terminal. Inside hc they name this terminal as the caller. When it is the
+// worker's parent, hc then counts the worker's news as seen and types no note
+// about it into the parent: a coordinator that stops a worker gets no exit
+// note. On a send between two agents, hc tags the text with the sender.
+func (m *Manager) looking(name string) map[string]any {
+	params := map[string]any{"terminal": name}
+	if m.getenv != nil {
+		if caller := m.getenv("HC_TERMINAL_ID"); caller != "" {
+			params["caller"] = caller
+		}
+	}
+	return params
+}
+
 // Interrupt presses a worker's stop key. The outcome is hc's: stopped,
 // exited, still_working or unknown.
 func (m *Manager) Interrupt(ctx context.Context, name string) (string, error) {
 	var res struct {
 		Outcome string `json:"outcome"`
 	}
-	err := m.core.Call(ctx, "terminal.interrupt", map[string]any{"terminal": name}, &res)
+	err := m.core.Call(ctx, "terminal.interrupt", m.looking(name), &res)
 	return res.Outcome, err
 }
 
 // Stop ends a worker's program.
 func (m *Manager) Stop(ctx context.Context, name string) error {
-	return m.core.Call(ctx, "terminal.kill", map[string]any{"terminal": name}, nil)
+	return m.core.Call(ctx, "terminal.kill", m.looking(name), nil)
+}
+
+// Remove deletes a finished terminal from hc, so lists and watches drop it.
+// hc refuses a live one (error kind "live").
+func (m *Manager) Remove(ctx context.Context, name string) error {
+	return m.core.Call(ctx, "terminal.rm", m.looking(name), nil)
 }
 
 // Read returns a worker's screen and history; lines > 0 keeps only the last
 // lines.
 func (m *Manager) Read(ctx context.Context, name string, lines int) (string, error) {
-	params := map[string]any{"terminal": name}
+	params := m.looking(name)
 	if lines > 0 {
 		params["lines"] = lines
 	}

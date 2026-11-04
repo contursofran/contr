@@ -19,10 +19,9 @@ import (
 )
 
 // TestTerminalOnHC runs the built app against the dev herdr and a scratch hc
-// core with one `sh` worker. A second viewer with input is attached first, so
-// the app must observe: the terminal keeps that viewer's size (D45). The test
-// selects the worker, checks that the grid shows, types `echo hi`, and checks
-// that the shell got it and that the size is now the window's. PNGs go to
+// core with one `sh` worker. The test selects the worker, checks that the
+// plugin's grid shows and that hc has the grid's size, types `echo hi` and
+// checks that the shell got it, then runs vim with syntax colors. PNGs go to
 // tmp/e2e/. Start the dev herdr first:
 //
 //	eval "$(scripts/dev-herdr.sh)"
@@ -69,20 +68,6 @@ func TestTerminalOnHC(t *testing.T) {
 	if err != nil {
 		t.Fatalf("spawn: %v", err)
 	}
-	// The other viewer, at 80x24 with input.
-	fc, err := hc.DialFramed(ctx, hc.Command("", env))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer fc.Close()
-	other, err := fc.Attach(ctx, hc.AttachParams{Terminal: w.Address, Cols: 80, Rows: 24})
-	if err != nil {
-		t.Fatal(err)
-	}
-	go func() {
-		for range other.Events() {
-		}
-	}()
 	size := func() string {
 		var tm struct{ Cols, Rows int }
 		if err := cl.Call(ctx, "terminal.get", map[string]any{"terminal": w.Address}, &tm); err != nil {
@@ -115,9 +100,9 @@ func TestTerminalOnHC(t *testing.T) {
 	b := c.boundsOf(t, row)
 	c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "click", "x": b.X + b.Width/2, "y": b.Y + b.Height/2}}})
 	time.Sleep(2 * time.Second)
-	c.capture(t, filepath.Join(out, "terminal-observe.png"))
-	if got := size(); got != "80x24" {
-		t.Errorf("size before typing = %s, want 80x24 (the app observes)", got)
+	c.capture(t, filepath.Join(out, "terminal-selected.png"))
+	if got := size(); got == "80x24" || got == "0x0" {
+		t.Errorf("size after selecting = %s, want the window's grid", got)
 	}
 
 	grid := c.boundsOf(t, "terminal grid")
@@ -136,11 +121,22 @@ func TestTerminalOnHC(t *testing.T) {
 	if !strings.Contains(strings.ReplaceAll(text, "echo h''i", ""), "hi") {
 		t.Errorf("the shell did not run echo: %q", text)
 	}
-	if got := size(); got == "80x24" {
-		t.Errorf("size after typing = %s, want the window's grid", got)
-	}
 	time.Sleep(500 * time.Millisecond)
 	c.capture(t, filepath.Join(out, "terminal-typed.png"))
+
+	c.typeLine(t, `printf '\033[1;32mgreen bold\033[0m \033[38;2;255;120;0mtruecolor\033[0m\n'; vim -u NONE -c 'syntax on' -c 'set nu' /etc/zprofile`)
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
+		var rd struct{ Text string }
+		if err := cl.Call(ctx, "terminal.read", map[string]any{"terminal": w.Address}, &rd); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(rd.Text, "zprofile") {
+			break
+		}
+	}
+	time.Sleep(1500 * time.Millisecond)
+	c.capture(t, filepath.Join(out, "terminal-vim.png"))
+	c.typeLine(t, ":q!")
 }
 
 // labelWithPrefix returns the first label that starts with prefix, or "".

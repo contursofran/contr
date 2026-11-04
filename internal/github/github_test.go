@@ -173,6 +173,12 @@ func TestExecRunnerFindsGhOffPath(t *testing.T) {
 	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("err %v", err)
 	}
+	// Through the client the text has the "gh: " prefix once (D58).
+	c := Client{R: ExecRunner{Dirs: []string{t.TempDir()}}, Dir: t.TempDir()}
+	_, err = c.PR(context.Background(), 1)
+	if err == nil || !strings.HasPrefix(err.Error(), "gh: program not found") {
+		t.Errorf("client err %v, want the prefix %q once", err, "gh: program not found")
+	}
 }
 
 func TestFindSkipsDirectoryAndPlainFile(t *testing.T) {

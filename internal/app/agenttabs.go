@@ -22,15 +22,17 @@ type AgentTab struct {
 	// ID is the short name shown while the PR pane is open: the issue, or the name.
 	ID           string
 	Orchestrator bool
-	Icon         icons.Status
+	// Plain is true for a plain terminal (a shell, not an agent).
+	Plain bool
+	Icon  icons.Status
 	// Needs is the badge count. Only the first orchestrator tab has it.
 	Needs    int
 	Selected bool
 }
 
 // AgentTabs returns the tabs of project in bar order: the orchestrators
-// first, then the workers, each in snapshot order. selected is the address
-// of the selected orchestrator or worker, or "".
+// first, then the workers, then the plain terminals, each in snapshot order.
+// selected is the address of the selected tab, or "".
 func AgentTabs(s agentstate.Snapshot, project, selected string) []AgentTab {
 	var tabs []AgentTab
 	add := func(w agents.Worker) {
@@ -38,7 +40,7 @@ func AgentTabs(s agentstate.Snapshot, project, selected string) []AgentTab {
 			return
 		}
 		t := AgentTab{
-			Address: w.Address, Label: tabLabel(w), ID: tabID(w), Orchestrator: w.Orchestrator(),
+			Address: w.Address, Label: tabLabel(w), ID: tabID(w), Orchestrator: w.Orchestrator(), Plain: w.Plain(),
 			Icon: workerIcon(w), Selected: selected != "" && w.Address == selected,
 		}
 		if t.Orchestrator && !hasOrchestratorTab(tabs) {
@@ -50,6 +52,9 @@ func AgentTabs(s agentstate.Snapshot, project, selected string) []AgentTab {
 		add(w)
 	}
 	for _, w := range s.Workers {
+		add(w)
+	}
+	for _, w := range s.Terminals {
 		add(w)
 	}
 	return tabs
@@ -75,8 +80,18 @@ func hasOrchestratorTab(tabs []AgentTab) bool {
 
 // tabLabel is the text of a tab (owner question Q4, recommended answer): an
 // orchestrator shows its name; a worker shows "<issue> · <worktree>", or its
-// name when it has no issue or no worktree.
+// name when it has no issue or no worktree. A plain terminal shows its title
+// (set by the shell with OSC), else "$ <folder>" (#246).
 func tabLabel(w agents.Worker) string {
+	if w.Plain() {
+		if w.Title != "" {
+			return w.Title
+		}
+		if w.Worktree != "" {
+			return "$ " + filepath.Base(w.Worktree)
+		}
+		return w.Name
+	}
 	if w.Orchestrator() || w.Issue == "" || w.Worktree == "" {
 		return w.Name
 	}
@@ -102,14 +117,16 @@ func NeedsCount(s agentstate.Snapshot, project string) int {
 }
 
 // OpenProject returns the project the bar shows. A selected orchestrator or
-// worker that is in the snapshot gives its project. Any other selection, or
+// worker or plain terminal that is in the snapshot gives its project. Any other selection, or
 // none, keeps keep. When keep is empty (at start) it is the project of the
 // first orchestrator (owner question Q1, recommended answer), or "".
 func OpenProject(s agentstate.Snapshot, sel state.Selected, ok bool, keep string) string {
-	if ok && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker) {
-		for _, w := range append(append([]agents.Worker(nil), s.Orchestrators...), s.Workers...) {
-			if w.Address == sel.ID {
-				return w.Project
+	if ok && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker || sel.Kind == state.KindTerminal) {
+		for _, list := range [][]agents.Worker{s.Orchestrators, s.Workers, s.Terminals} {
+			for _, w := range list {
+				if w.Address == sel.ID {
+					return w.Project
+				}
 			}
 		}
 	}

@@ -217,11 +217,55 @@ func TestListSendInterruptStopRead(t *testing.T) {
 	if err := m.Stop(ctx, "alpha"); err != nil || f.last().Method != "terminal.kill" {
 		t.Errorf("stop: %v, %s", err, f.last().Method)
 	}
+	if err := m.Remove(ctx, "alpha"); err != nil || f.last().Method != "terminal.rm" || f.last().Params["terminal"] != "alpha" {
+		t.Errorf("remove: %v, %+v", err, f.last())
+	}
 	if txt, err := m.Read(ctx, "alpha", 40); err != nil || txt != "screen" || f.last().Params["lines"] != float64(40) {
 		t.Errorf("read = %q, %v, %v", txt, err, f.last().Params)
 	}
 	if _, err := m.Read(ctx, "alpha", 0); err != nil || f.last().Params["lines"] != nil {
 		t.Errorf("read all: %v, %v", err, f.last().Params)
+	}
+}
+
+// TestControlCallsNameTheCaller: inside hc, stop, read and interrupt name
+// this terminal as the caller, so hc counts a child's news as seen by its
+// parent and types no exit note after a stop. Outside hc they name nobody.
+func TestControlCallsNameTheCaller(t *testing.T) {
+	for _, id := range []string{"t4", ""} {
+		f := &fakeCore{handle: map[string]func(map[string]any) (any, error){
+			"terminal.interrupt": func(map[string]any) (any, error) { return map[string]any{"outcome": "stopped"}, nil },
+			"terminal.read":      func(map[string]any) (any, error) { return map[string]any{"text": "screen"}, nil },
+		}}
+		m := New(f, DefaultConfig())
+		m.getenv = func(k string) string {
+			if k == "HC_TERMINAL_ID" {
+				return id
+			}
+			return ""
+		}
+		ctx := context.Background()
+		calls := []func() error{
+			func() error { return m.Stop(ctx, "alpha") },
+			func() error { _, err := m.Read(ctx, "alpha", 0); return err },
+			func() error { _, err := m.Interrupt(ctx, "alpha"); return err },
+		}
+		for _, call := range calls {
+			if err := call(); err != nil {
+				t.Fatal(err)
+			}
+			c := f.last()
+			got, has := c.Params["caller"]
+			if id != "" && got != id {
+				t.Errorf("HC_TERMINAL_ID %q: %s caller = %v, want %q", id, c.Method, got, id)
+			}
+			if id == "" && has {
+				t.Errorf("outside hc: %s has caller %v", c.Method, got)
+			}
+			if c.Params["terminal"] != "alpha" {
+				t.Errorf("%s params = %v", c.Method, c.Params)
+			}
+		}
 	}
 }
 
@@ -579,5 +623,99 @@ func TestSendKeysClosed(t *testing.T) {
 	}}
 	if err := New(f, DefaultConfig()).SendKeys(context.Background(), "w1", []byte("1")); !errors.Is(err, hc.ErrClosed) {
 		t.Errorf("err = %v, want ErrClosed", err)
+	}
+}
+
+func openTermCore() *fakeCore {
+	return &fakeCore{handle: map[string]func(map[string]any) (any, error){
+		"terminal.run": func(p map[string]any) (any, error) {
+			return term("t9", "term-1", "live", map[string]string{LabelApp: AppAgent, LabelRole: RoleTerminal}, nil), nil
+		},
+	}}
+}
+
+func TestOpenTerminalParams(t *testing.T) {
+	f := openTermCore()
+	m := New(f, DefaultConfig())
+	m.getenv = func(string) string { return "/bin/fish" }
+	w, err := m.OpenTerminal(context.Background(), TerminalSpec{Name: "term-1", Project: "contr", Dir: "/w/a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !w.Plain() || w.Address != "t9" {
+		t.Errorf("worker = %+v", w)
+	}
+	c := f.last()
+	if c.Method != "terminal.run" {
+		t.Fatalf("method = %q", c.Method)
+	}
+	want := map[string]any{
+		"argv":           []any{"/bin/fish", "-l"},
+		"name":           "term-1",
+		"labels":         map[string]any{"contr": "agent", "role": "terminal", "project": "contr", "worktree": "/w/a"},
+		"cwd":            "/w/a",
+		"wait":           false,
+		"outlive_parent": true,
+		"no_parent":      true,
+	}
+	if !reflect.DeepEqual(c.Params, want) {
+		t.Errorf("params = %v\nwant     %v", c.Params, want)
+	}
+}
+
+func TestOpenTerminalNoProject(t *testing.T) {
+	f := openTermCore()
+	m := New(f, DefaultConfig())
+	if _, err := m.OpenTerminal(context.Background(), TerminalSpec{Name: "term-1", Shell: "/bin/sh"}); err != nil {
+		t.Fatal(err)
+	}
+	p := f.last().Params
+	if _, ok := p["cwd"]; ok {
+		t.Errorf("empty dir sets cwd: %v", p)
+	}
+	if l := p["labels"].(map[string]any); l[LabelProject] != nil {
+		t.Errorf("empty project sets a label: %v", l)
+	}
+	if got := p["argv"].([]any)[0]; got != "/bin/sh" {
+		t.Errorf("shell = %v, want /bin/sh", got)
+	}
+}
+
+func TestOpenTerminalShellFallback(t *testing.T) {
+	f := openTermCore()
+	m := New(f, DefaultConfig())
+	m.getenv = func(string) string { return "" }
+	if _, err := m.OpenTerminal(context.Background(), TerminalSpec{Name: "term-1"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.last().Params["argv"].([]any); !reflect.DeepEqual(got, []any{"/bin/zsh", "-l"}) {
+		t.Errorf("argv = %v", got)
+	}
+}
+
+func TestOpenTerminalErrors(t *testing.T) {
+	f := openTermCore()
+	m := New(f, DefaultConfig())
+	if _, err := m.OpenTerminal(context.Background(), TerminalSpec{}); err == nil || !strings.Contains(err.Error(), "needs a name") {
+		t.Errorf("empty name: %v", err)
+	}
+	if _, err := m.OpenTerminal(context.Background(), TerminalSpec{Name: "a", Project: "a\nb"}); err == nil {
+		t.Error("no error for a project with a newline")
+	}
+	if len(f.calls) != 0 {
+		t.Errorf("terminal.run called: %v", f.calls)
+	}
+	boom := errors.New("hc down")
+	f.handle["terminal.run"] = func(map[string]any) (any, error) { return nil, boom }
+	if _, err := m.OpenTerminal(context.Background(), TerminalSpec{Name: "a"}); !errors.Is(err, boom) {
+		t.Errorf("core error = %v", err)
+	}
+}
+
+func TestWorkerPlain(t *testing.T) {
+	for role, want := range map[string]bool{RoleTerminal: true, RoleOrchestrator: false, "builder": false, "": false} {
+		if got := (Worker{Role: role}).Plain(); got != want {
+			t.Errorf("role %q: Plain() = %v, want %v", role, got, want)
+		}
 	}
 }
