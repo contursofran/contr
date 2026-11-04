@@ -36,7 +36,8 @@ Flags can come before or after the other arguments. After --, every word is
 part of the task.
 
 Environment:
-  CONTR_AGENTS_CONFIG   profiles file (default: the user config folder, contr/agents.json)
+  CONTR_AGENTS_CONFIG   profiles file (default: the user config folder, contr/agents.json):
+                        {"kit": DIR, "profiles": {NAME: {"argv": [...], "agent": KIT_AGENT}}}
   CONTR_HC              the hc program (default: hc from PATH, then ~/.local/bin, /opt/homebrew/bin, /usr/local/bin)
   CONTR_KIT             contr's Claude Code plugin folder (the repository's kit);
                         claude profiles with an agent there start as that agent

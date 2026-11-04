@@ -5,10 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/hc"
 )
 
@@ -297,5 +299,39 @@ func TestMCPRetriesACallThatWasNotSent(t *testing.T) {
 	}
 	if dials != 3 || len(cores[3].calls) != 0 {
 		t.Errorf("a sent call was retried: dials %d", dials)
+	}
+}
+
+// TestMCPSpawnReadsProfilesEachTime: a profile added to the profiles file
+// while the server runs works on the next spawn (#257).
+func TestMCPSpawnReadsProfilesEachTime(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "agents.json")
+	env := map[string]string{"CONTR_AGENTS_CONFIG": file}
+	getenv := func(k string) string { return env[k] }
+	load := func() (agents.Config, error) { return agents.LoadConfig(configPath(getenv)) }
+	cfg, _ := load()
+	core := &cliCore{reply: map[string]any{"terminal.run": worker("t4", "p", "live", nil)}}
+	dial := func(context.Context, func(string) string) (agentsCore, error) { return core, nil }
+	m := &managers{dial: dial, getenv: getenv, cfg: cfg, load: load}
+	spawn := agentTools(m, "")[0].Run
+	args := json.RawMessage(`{"name":"p","profile":"planner-high","task":"plan"}`)
+	if _, err := spawn(context.Background(), args); err == nil || !strings.Contains(err.Error(), `no profile "planner-high"`) {
+		t.Fatalf("before: %v", err)
+	}
+	if err := os.WriteFile(file, []byte(`{"profiles":{"planner-high":{"argv":["claude","--effort","high"]}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := spawn(context.Background(), args); err != nil {
+		t.Fatalf("after the profile was added: %v", err)
+	}
+	// A broken file fails the spawn with its error, not the other tools.
+	if err := os.WriteFile(file, []byte(`{`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := spawn(context.Background(), args); err == nil || !strings.Contains(err.Error(), "agents.json") {
+		t.Errorf("broken file: %v", err)
+	}
+	if _, err := agentTools(m, "")[1].Run(context.Background(), json.RawMessage(`{"name":"w","text":"x"}`)); err != nil {
+		t.Errorf("message with a broken file: %v", err)
 	}
 }
