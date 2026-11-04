@@ -14,7 +14,7 @@ const usageText = `Usage:
   contr agents <command> [args…]              start and follow worker agents (contr agents help)
   contr owner <command> [args…]               answer questions and mark to-dos done (contr owner help)
   contr mcp                                   serve the agent tools over MCP on stdin and stdout
-  contr hook stop                             the kit's Stop hook: report a worker's turn that sent no report
+  contr hook stop|session-start               the kit's hooks: worker reports, coordinator state around compaction
   contr --help, -h                            print this text
 `
 

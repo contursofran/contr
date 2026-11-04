@@ -1,0 +1,169 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/contursofran/contr/internal/owner"
+)
+
+const orchestrateLine = `{"type":"user","message":{"content":"<command-name>/contr:orchestrate</command-name>\n<command-args>ship #12</command-args>"}}`
+
+func usageLine(tokens int) string {
+	return fmt.Sprintf(`{"type":"assistant","message":{"content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":1,"cache_read_input_tokens":%d,"cache_creation_input_tokens":0}}}`, tokens-1)
+}
+
+// coordRig runs the coordinator hooks with a transcript, a fake core and
+// a scratch TMPDIR for the markers.
+type coordRig struct {
+	t    *testing.T
+	dir  string
+	tr   string
+	core *cliCore
+	env  map[string]string
+}
+
+func newCoordRig(t *testing.T, lines ...string) *coordRig {
+	t.Helper()
+	t.Setenv("TMPDIR", t.TempDir())
+	r := &coordRig{t: t, dir: t.TempDir(), core: &cliCore{reply: map[string]any{}}}
+	r.tr = filepath.Join(r.dir, "t.jsonl")
+	if err := os.WriteFile(r.tr, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r.env = map[string]string{"HC_TERMINAL_ID": "t1", "CONTR_OWNER_FILE": filepath.Join(r.dir, "owner.json")}
+	return r
+}
+
+func (r *coordRig) run(event string, extra map[string]any) (int, string, string) {
+	in := map[string]any{"session_id": "s1", "transcript_path": r.tr, "cwd": r.dir}
+	for k, v := range extra {
+		in[k] = v
+	}
+	b, _ := json.Marshal(in)
+	dial := func(context.Context, func(string) string) (agentsCore, error) { return r.core, nil }
+	var out, errb bytes.Buffer
+	code := runHook([]string{event}, bytes.NewReader(b), &out, &errb, dial, func(k string) string { return r.env[k] })
+	return code, out.String(), errb.String()
+}
+
+func TestHookCoordinatorSavesStateOnce(t *testing.T) {
+	r := newCoordRig(t, orchestrateLine, usageLine(230000))
+	code, out, errs := r.run("stop", nil)
+	if code != 0 || !strings.Contains(out, `"decision":"block"`) || !strings.Contains(out, "230k tokens") || !strings.Contains(out, "COORDINATOR-STATE.md") {
+		t.Fatalf("first stop: code %d out %q err %q", code, out, errs)
+	}
+	// Once per compaction: the next turn ends.
+	if _, out, _ := r.run("stop", nil); out != "" {
+		t.Errorf("second stop: %q, want nothing", out)
+	}
+	// After the compaction the marker goes, so the next cycle asks again.
+	if code, _, errs := r.run("session-start", map[string]any{"source": "compact"}); code != 0 {
+		t.Fatalf("session-start: %d %q", code, errs)
+	}
+	if _, out, _ := r.run("stop", nil); !strings.Contains(out, "block") {
+		t.Errorf("after compaction: %q, want a new ask", out)
+	}
+	// The transcript decided, so hc was asked only for the worker list.
+	if strings.Join(r.core.calls, " ") != "terminal.list" {
+		t.Errorf("calls %v, want only terminal.list", r.core.calls)
+	}
+}
+
+func TestHookCoordinatorStopQuiet(t *testing.T) {
+	// Below the limit.
+	r := newCoordRig(t, orchestrateLine, usageLine(150000))
+	if _, out, _ := r.run("stop", nil); out != "" {
+		t.Errorf("below: %q", out)
+	}
+	// The limit from CONTR_SAVE_AT.
+	r.env["CONTR_SAVE_AT"] = "100000"
+	if _, out, _ := r.run("stop", nil); !strings.Contains(out, "block") {
+		t.Errorf("CONTR_SAVE_AT: %q", out)
+	}
+	// stop_hook_active: the turn already goes on because of a hook.
+	r = newCoordRig(t, orchestrateLine, usageLine(240000))
+	if _, out, _ := r.run("stop", map[string]any{"stop_hook_active": true}); out != "" {
+		t.Errorf("stop_hook_active: %q", out)
+	}
+	// Not a coordinator: no command, and hc says role builder.
+	r = newCoordRig(t, usageLine(240000))
+	r.core.reply["terminal.get"] = worker("t1", "b1", "live", nil)
+	if code, out, errs := r.run("stop", nil); code != 0 || out != "" {
+		t.Errorf("builder: code %d out %q err %q", code, out, errs)
+	}
+}
+
+func TestHookCoordinatorByLabel(t *testing.T) {
+	r := newCoordRig(t, usageLine(240000))
+	w := worker("t1", "orch", "live", nil)
+	w["labels"] = map[string]any{"contr": "agent", "role": "orchestrator"}
+	r.core.reply["terminal.get"] = w
+	if _, out, _ := r.run("stop", nil); !strings.Contains(out, "block") {
+		t.Errorf("orchestrator label: %q, want a block", out)
+	}
+}
+
+func TestHookSessionStartRestores(t *testing.T) {
+	r := newCoordRig(t, orchestrateLine)
+	kit, err := filepath.Abs("../../kit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.env["CLAUDE_PLUGIN_ROOT"] = kit
+	mine := worker("t7", "b-12", "live", map[string]any{"state": "working"})
+	mine["parent"] = "t1"
+	other := worker("t8", "b-99", "live", nil)
+	other["parent"] = "t5"
+	r.core.reply["terminal.list"] = map[string]any{"terminals": []any{mine, other}}
+	store := &owner.Store{Path: r.env["CONTR_OWNER_FILE"]}
+	if _, err := store.Ask(owner.Question{Coordinator: "t1", Question: "Ship it?", Options: []string{"yes", "no"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Ask(owner.Question{Coordinator: "t5", Question: "Not mine?"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Pin(owner.Todo{Coordinator: "t1", Kind: "do", Text: "Test the bag"}); err != nil {
+		t.Fatal(err)
+	}
+	code, out, errs := r.run("session-start", map[string]any{"source": "compact"})
+	if code != 0 {
+		t.Fatalf("code %d err %q", code, errs)
+	}
+	for _, want := range []string{
+		filepath.Join(r.dir, "COORDINATOR-STATE.md"),
+		"- b-12 (t7) builder, working, issue 158, /w/a",
+		"Ship it?", "[do] Test the bag",
+		"You coordinate worker agents", "Goal: (see the state file)",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("restore text lacks %q:\n%s", want, out)
+		}
+	}
+	for _, not := range []string{"b-99", "Not mine?", "description:", "$ARGUMENTS"} {
+		if strings.Contains(out, not) {
+			t.Errorf("restore text has %q", not)
+		}
+	}
+	if n := len([]rune(out)); n > restoreMax {
+		t.Errorf("restore text is %d characters, more than %d", n, restoreMax)
+	}
+}
+
+func TestHookSessionStartQuiet(t *testing.T) {
+	r := newCoordRig(t, orchestrateLine)
+	if _, out, _ := r.run("session-start", map[string]any{"source": "startup"}); out != "" {
+		t.Errorf("startup: %q", out)
+	}
+	r = newCoordRig(t, usageLine(10))
+	r.core.reply["terminal.get"] = worker("t1", "b1", "live", nil)
+	if _, out, _ := r.run("session-start", map[string]any{"source": "compact"}); out != "" {
+		t.Errorf("not a coordinator: %q", out)
+	}
+}
