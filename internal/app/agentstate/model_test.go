@@ -137,6 +137,32 @@ func TestSnapshotSplitsOrchestratorsFirst(t *testing.T) {
 	}
 }
 
+func TestSnapshotSplitsTerminals(t *testing.T) {
+	r := newRig(t,
+		term("t1", "worker-a", "builder", "contr", "working"),
+		term("t2", "term-2", "terminal", "zed", ""),
+		term("t3", "term-1", "terminal", "contr", ""),
+		term("t4", "term-0", "terminal", "contr", ""),
+		term("t5", "orch", "orchestrator", "contr", "idle"),
+	)
+	r.start(t)
+	waitFor(t, "terminals", func() bool { return len(r.m.Snapshot().Terminals) == 3 })
+	s := r.m.Snapshot()
+	var names []string
+	for _, w := range s.Terminals {
+		names = append(names, w.Name)
+	}
+	if got := strings.Join(names, ","); got != "term-0,term-1,term-2" {
+		t.Errorf("terminals = %s, want by project then name", got)
+	}
+	if len(s.Workers) != 1 || s.Workers[0].Name != "worker-a" {
+		t.Errorf("workers = %+v, want only worker-a", s.Workers)
+	}
+	if len(s.Orchestrators) != 1 {
+		t.Errorf("orchestrators = %+v", s.Orchestrators)
+	}
+}
+
 func writeAtomic(t *testing.T, path, data string) {
 	t.Helper()
 	tmp := path + ".tmp"
