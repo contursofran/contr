@@ -31,9 +31,10 @@ type fakeCore struct {
 	errs    map[string]error // per method
 	snap    hc.Snapshot
 	events  chan hc.Event
+	get     json.RawMessage // the reply to terminal.get
 }
 
-func (f *fakeCore) Call(_ context.Context, method string, params, _ any) error {
+func (f *fakeCore) Call(_ context.Context, method string, params, result any) error {
 	b, _ := json.Marshal(params)
 	var p map[string]any
 	_ = json.Unmarshal(b, &p)
@@ -43,7 +44,13 @@ func (f *fakeCore) Call(_ context.Context, method string, params, _ any) error {
 	if method == "terminal.send" {
 		return f.sendErr
 	}
-	return f.errs[method]
+	if err := f.errs[method]; err != nil {
+		return err
+	}
+	if method == "terminal.get" && f.get != nil {
+		return json.Unmarshal(f.get, result)
+	}
+	return nil
 }
 
 func (f *fakeCore) sends() []call {
@@ -332,6 +339,7 @@ func TestStopEndsGoroutines(t *testing.T) {
 // the watch drops it. A failed kill removes nothing.
 func TestCloseStopsThenRemoves(t *testing.T) {
 	r := newRig(t)
+	r.core.get = term("t1", "tp", "terminal", "", "")
 	if err := r.m.Close("tp"); err != nil {
 		t.Fatal(err)
 	}
@@ -342,13 +350,14 @@ func TestCloseStopsThenRemoves(t *testing.T) {
 			t.Errorf("%s params = %v", c.Method, c.Params)
 		}
 	}
-	if !slices.Equal(methods, []string{"terminal.kill", "terminal.rm"}) {
+	if !slices.Equal(methods, []string{"terminal.get", "terminal.kill", "terminal.rm"}) {
 		t.Errorf("calls = %v, want kill then rm", methods)
 	}
 
 	r = newRig(t)
+	r.core.get = term("t1", "tp", "terminal", "", "")
 	r.core.errs = map[string]error{"terminal.kill": errors.New("not_found")}
-	if err := r.m.Close("tp"); err == nil || len(r.core.calls) != 1 {
+	if err := r.m.Close("tp"); err == nil || len(r.core.calls) != 2 {
 		t.Errorf("failed kill: err %v, calls %v", err, r.core.calls)
 	}
 }

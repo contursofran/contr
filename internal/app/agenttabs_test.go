@@ -241,3 +241,29 @@ func TestNeedsCountIgnoresTerminals(t *testing.T) {
 		t.Fatalf("NeedsCount = %d, want %d", got, want)
 	}
 }
+
+// TestEndedWorkersHaveNoTabNorWorktreeHolder: an ended worker gets no tab and
+// does not hold its worktree, while an ended orchestrator or plain terminal
+// stays (D112).
+func TestEndedWorkersHaveNoTabNorWorktreeHolder(t *testing.T) {
+	ended := workW("a", "a", "p")
+	ended.Live, ended.Worktree = false, "/w/a"
+	oldOrch := orchW("o", "orch", "p")
+	oldOrch.Live = false
+	shell := agents.Worker{Address: "s", Name: "sh", Project: "p", Role: agents.RoleTerminal}
+	s := agentstate.Snapshot{
+		Orchestrators: []agents.Worker{oldOrch},
+		Workers:       []agents.Worker{ended, workW("b", "b", "p")},
+		Terminals:     []agents.Worker{shell},
+	}
+	if got := addrs(AgentTabs(s, "p", "")); len(got) != 3 || got[0] != "o" || got[1] != "b" || got[2] != "s" {
+		t.Errorf("tabs = %v, want [o b s]", got)
+	}
+	var names []string
+	for _, term := range spaceTerms(s) {
+		names = append(names, term.Name)
+	}
+	if len(names) != 3 || names[0] != "orch" || names[1] != "b" || names[2] != "sh" {
+		t.Errorf("holders = %v, want [orch b sh]", names)
+	}
+}

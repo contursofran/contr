@@ -516,9 +516,52 @@ func (m *Manager) Interrupt(ctx context.Context, name string) (string, error) {
 	return res.Outcome, err
 }
 
-// Stop ends a worker's program.
-func (m *Manager) Stop(ctx context.Context, name string) error {
-	return m.core.Call(ctx, "terminal.kill", m.looking(name), nil)
+// Stop ends a worker's program and then removes its terminal from hc. With
+// keep, the finished terminal stays for reading. A terminal that already
+// finished is not killed again: it is only removed (or left, with keep).
+func (m *Manager) Stop(ctx context.Context, name string, keep bool) error {
+	w, err := m.Get(ctx, name)
+	if err != nil {
+		return err
+	}
+	if w.Live {
+		if err := m.core.Call(ctx, "terminal.kill", m.looking(name), nil); err != nil {
+			return err
+		}
+	}
+	if keep {
+		return nil
+	}
+	return m.Remove(ctx, name)
+}
+
+// RemoveEnded removes the finished workers that the caller started: those
+// whose parent is the terminal in HC_TERMINAL_ID. Orchestrators and plain
+// terminals stay, and so do the workers of other coordinators. It returns
+// the names removed. Outside hc it removes nothing.
+func (m *Manager) RemoveEnded(ctx context.Context) ([]string, error) {
+	var caller string
+	if m.getenv != nil {
+		caller = m.getenv("HC_TERMINAL_ID")
+	}
+	if caller == "" {
+		return nil, nil
+	}
+	ws, err := m.List(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+	var removed []string
+	for _, w := range ws {
+		if w.Live || w.Orchestrator() || w.Plain() || w.Parent != caller {
+			continue
+		}
+		if err := m.Remove(ctx, w.Address); err != nil {
+			return removed, fmt.Errorf("remove %s: %w", w.Name, err)
+		}
+		removed = append(removed, w.Name)
+	}
+	return removed, nil
 }
 
 // Get returns one worker by name or address.

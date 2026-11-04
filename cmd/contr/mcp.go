@@ -56,7 +56,7 @@ func (m *managers) get(ctx context.Context) (*agents.Manager, agentsCore, error)
 		}
 		m.core = core
 	}
-	return agents.New(m.core, m.cfg), m.core, nil
+	return agents.New(m.core, m.cfg).WithEnv(m.getenv), m.core, nil
 }
 
 // do runs f with a manager. When the connection had already ended before f
@@ -176,6 +176,7 @@ func agentTools(m *managers, parent string) []mcp.Tool {
 		Text     string `json:"text"`
 		Lines    int    `json:"lines"`
 		All      bool   `json:"all"`
+		Keep     bool   `json:"keep"`
 		ReviewPR int    `json:"review_pr"`
 	}
 	run := func(f func(context.Context, *agents.Manager, args) (string, error)) func(context.Context, json.RawMessage) (string, error) {
@@ -227,10 +228,10 @@ func agentTools(m *managers, parent string) []mcp.Tool {
 			Run: run(func(ctx context.Context, mgr *agents.Manager, a args) (string, error) {
 				return mgr.Interrupt(ctx, a.Name)
 			})},
-		{Name: "stop", Description: "End a worker's program. Its context is lost.",
-			Schema: schema([]string{"name"}, map[string]prop{"name": str("Worker name.")}),
+		{Name: "stop", Description: "End a worker's program and remove its terminal from hc. Its context is lost. Read its RESULT.md first.",
+			Schema: schema([]string{"name"}, map[string]prop{"name": str("Worker name."), "keep": {"boolean", "Keep the finished terminal so it can still be read. Default false."}}),
 			Run: run(func(ctx context.Context, mgr *agents.Manager, a args) (string, error) {
-				return "stopped", mgr.Stop(ctx, a.Name)
+				return "stopped", mgr.Stop(ctx, a.Name, a.Keep)
 			})},
 		{Name: "read", Description: "Read a worker's screen and history.",
 			Schema: schema([]string{"name"}, map[string]prop{"name": str("Worker name."), "lines": {"integer", "Only the last lines."}}),
@@ -250,6 +251,19 @@ func agentTools(m *managers, parent string) []mcp.Tool {
 					return "", err
 				}
 				return toJSON(ws)
+			})},
+		{Name: "clear_ended", Description: "Remove the finished terminals of the workers this coordinator started. Other coordinators' workers and plain terminals stay. Returns the names removed.",
+			Schema: schema(nil, nil),
+			Run: run(func(ctx context.Context, mgr *agents.Manager, a args) (string, error) {
+				names, err := mgr.RemoveEnded(ctx)
+				if names == nil {
+					names = []string{}
+				}
+				out, jerr := toJSON(names)
+				if err != nil {
+					return out, err
+				}
+				return out, jerr
 			})},
 	}
 }

@@ -299,6 +299,9 @@ func spaceTerms(s agentstate.Snapshot) []spaces.Term {
 	var out []spaces.Term
 	for _, ws := range [][]agents.Worker{s.Orchestrators, s.Workers, s.Terminals} {
 		for _, w := range ws {
+			if !w.Live && !w.Orchestrator() && !w.Plain() { // an ended worker holds no worktree (D112)
+				continue
+			}
 			out = append(out, spaces.Term{Name: w.Name, Address: w.Address, Dir: w.Worktree, Status: workerIcon(w)})
 		}
 	}
