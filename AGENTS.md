@@ -40,6 +40,7 @@ contr is a native macOS client for herdr, with an agent board built in. It is wr
 | `internal/hc` | herdr-core's JSON-RPC API over `hc connect`: calls and event subscriptions |
 | `internal/agents` | worker agents in hc terminals: profiles, spawn, list, send, interrupt, stop, read, watch |
 | `internal/mcp` | a small MCP server over stdio: tools only |
+| `internal/projects` | project order, hidden and recent projects, in one JSON file |
 | `internal/owner` | questions and to-dos for the owner, in one locked JSON file |
 | `third_party/vt` | a patched copy of the x/vt terminal emulator module (D53); `go.mod` replaces the module with it |
 | `assets` | fonts, status icons, app icon |
