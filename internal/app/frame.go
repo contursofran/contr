@@ -704,7 +704,7 @@ func (f *Frame) setTerminalFocus(focused bool) {
 
 // terminalOptions are the plugin's options: contr's colors, JetBrains Mono at
 // the design's size and row height, and the design's padding.
-func terminalOptions(conn *ghostty.Conn) gterm.Options {
+func terminalOptions(conn *ghostty.Conn, open func(string)) gterm.Options {
 	var pal [16]ui.Color
 	for i, rgb := range theme.TerminalPalette {
 		pal[i] = color(rgb)
@@ -714,6 +714,8 @@ func terminalOptions(conn *ghostty.Conn) gterm.Options {
 		// The screen takes the core's size, which the Conn reads from the
 		// stream, so a second viewer keeps its size while contr watches (D91).
 		ResizeByConn: true,
+		// Cmd-click opens http, https and mailto links only (D94).
+		OpenLink: terminalOpenLink(open),
 		Theme: &gterm.Theme{
 			Foreground: color(theme.Text), Background: color(theme.BgTerminal), Palette: pal,
 		},
@@ -773,7 +775,7 @@ func (f *Frame) syncTerminal() {
 	if f.Visibility != nil && !f.Visibility.Visible() {
 		conn.SetVisible(false)
 	}
-	t, err := gterm.New(terminalOptions(conn))
+	t, err := gterm.New(terminalOptions(conn, openURL))
 	if err != nil {
 		_ = conn.Close()
 		slog.Error("terminal not started", "err", err)
