@@ -28,6 +28,11 @@ const Generation = 1
 // connection is closed.
 var ErrClosed = errors.New("hc: connection closed")
 
+// ErrNotSent is the error of a call made on a connection that was already
+// closed: the core never got it, so the call can be made again on a new
+// connection. errors.Is(ErrNotSent, ErrClosed) is true.
+var ErrNotSent = fmt.Errorf("%w before the call was sent", ErrClosed)
+
 // Pipe is one connection to the core: the requests go to W, the replies and
 // events come from R. Close is required: it ends the connection, so that R
 // ends, and frees its resources. Stderr, when set, returns the last output of
@@ -272,7 +277,7 @@ func (c *conn) call(ctx context.Context, method string, params, result any) erro
 	c.mu.Lock()
 	if c.closed {
 		c.mu.Unlock()
-		return ErrClosed
+		return ErrNotSent
 	}
 	c.nextID++
 	id := c.nextID

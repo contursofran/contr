@@ -237,7 +237,7 @@ func (cl *FramedClient) call(ctx context.Context, method string, params, result 
 	cl.mu.Lock()
 	if cl.failed != nil {
 		cl.mu.Unlock()
-		return ErrClosed
+		return ErrNotSent
 	}
 	cl.nextID++
 	id := cl.nextID

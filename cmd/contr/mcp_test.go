@@ -265,3 +265,37 @@ func TestMCPListsTheOwnerTools(t *testing.T) {
 		t.Errorf("tools = %v", names)
 	}
 }
+
+// TestMCPRetriesACallThatWasNotSent: a call on a connection that had already
+// ended reaches no core, so the tool connects again and runs it once more;
+// the caller sees no error. A call that ended while it waited for a reply
+// (plain ErrClosed) is not retried.
+func TestMCPRetriesACallThatWasNotSent(t *testing.T) {
+	dials := 0
+	cores := []*cliCore{
+		{errs: map[string]error{"terminal.send": hc.ErrNotSent}},
+		{},
+		{errs: map[string]error{"terminal.send": hc.ErrClosed}},
+		{},
+	}
+	dial := func(context.Context, func(string) string) (agentsCore, error) {
+		dials++
+		return cores[dials-1], nil
+	}
+	m := &managers{dial: dial, getenv: func(string) string { return "" }}
+	send := agentTools(m, "")[1].Run
+	if out, err := send(context.Background(), json.RawMessage(`{"name":"w","text":"a"}`)); err != nil || out != "sent" {
+		t.Fatalf("not sent: %q, %v; want a retry that works", out, err)
+	}
+	if dials != 2 || !cores[0].closed || len(cores[1].calls) != 1 {
+		t.Errorf("dials %d, first closed %v, second calls %v", dials, cores[0].closed, cores[1].calls)
+	}
+	// The second connection ends while a send waits: no retry.
+	m.close()
+	if _, err := send(context.Background(), json.RawMessage(`{"name":"w","text":"b"}`)); !errors.Is(err, hc.ErrClosed) {
+		t.Fatalf("err = %v, want ErrClosed", err)
+	}
+	if dials != 3 || len(cores[3].calls) != 0 {
+		t.Errorf("a sent call was retried: dials %d", dials)
+	}
+}

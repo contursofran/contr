@@ -43,6 +43,25 @@ func (m *managers) get(ctx context.Context) (*agents.Manager, agentsCore, error)
 	return agents.New(m.core, m.cfg), m.core, nil
 }
 
+// do runs f with a manager. When the connection had already ended before f
+// sent anything (hc.ErrNotSent), the core never got the call, so do connects
+// again and runs f once more. A connection that ends while a call waits for
+// its reply is not retried: the core may have done the call.
+func (m *managers) do(ctx context.Context, f func(*agents.Manager) (string, error)) (string, error) {
+	for try := 0; ; try++ {
+		mgr, used, err := m.get(ctx)
+		if err != nil {
+			return "", err
+		}
+		out, err := f(mgr)
+		err = m.check(used, err)
+		if try == 0 && errors.Is(err, hc.ErrNotSent) {
+			continue
+		}
+		return out, err
+	}
+}
+
 // check drops used, the connection of a call, after err says that it ended,
 // so the next call connects again. A connection that another call already
 // replaced stays as it is.
@@ -144,12 +163,7 @@ func agentTools(m *managers, parent string) []mcp.Tool {
 			if err := json.Unmarshal(raw, &a); err != nil {
 				return "", fmt.Errorf("bad arguments: %w", err)
 			}
-			mgr, used, err := m.get(ctx)
-			if err != nil {
-				return "", err
-			}
-			out, err := f(ctx, mgr, a)
-			return out, m.check(used, err)
+			return m.do(ctx, func(mgr *agents.Manager) (string, error) { return f(ctx, mgr, a) })
 		}
 	}
 	return []mcp.Tool{

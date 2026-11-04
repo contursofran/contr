@@ -223,11 +223,13 @@ func TestPendingCallEndsWhenTheCoreGoesAway(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cl.Close()
-	if err := cl.Call(ctx(t), "terminal.wait", nil, nil); !errors.Is(err, ErrClosed) {
-		t.Fatalf("err = %v, want ErrClosed", err)
+	// The call was sent: it may have run, so it is not ErrNotSent.
+	if err := cl.Call(ctx(t), "terminal.wait", nil, nil); !errors.Is(err, ErrClosed) || errors.Is(err, ErrNotSent) {
+		t.Fatalf("err = %v, want ErrClosed and not ErrNotSent", err)
 	}
-	if err := cl.Call(ctx(t), "terminal.list", nil, nil); !errors.Is(err, ErrClosed) {
-		t.Fatalf("call after end: %v", err)
+	// A call after the end was never sent.
+	if err := cl.Call(ctx(t), "terminal.list", nil, nil); !errors.Is(err, ErrNotSent) || !errors.Is(err, ErrClosed) {
+		t.Fatalf("call after end: %v, want ErrNotSent", err)
 	}
 }
 
