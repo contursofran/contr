@@ -171,6 +171,8 @@ Work is tracked in GitHub issues and pull requests.
 - One issue, one branch `agent/<issue>-<slug>`, one PR into `main`. Ideally
   the PR is under about 400 changed lines.
 - `scripts/check.sh` and the `CI` check must pass before you ask for review.
+  A PR that changes only Markdown (`*.md`) does not run `CI`: it runs the
+  `Docs` check (conflict markers and decision ids), and that must pass.
 - Update a branch by merging `main` into it. Never force-push. Do not
   rewrite commits that a reviewer has seen.
 - Commit with clear messages. No `Co-Authored-By`, AI attribution or

@@ -15,7 +15,7 @@ You plan, start and check workers and land their PRs; you write little code your
 - **Fix rounds:** send blockers to a fresh builder: `stop` the one that wrote the PR, then spawn `builder` in the same worktree with the PR and the blockers. After two failed fix rounds, spawn `debugger`. Nits get no fix round and never hold a merge.
 - **PR bodies:** one closing keyword for each issue: `Fixes #a, fixes #b`.
 - **Screenshots:** check that every text on screen is the right data, not only the layout. Test fixtures must look like real Claude Code workers.
-- **Merge:** as the repo rules say. A reviewer approves the exact head; merge only that head, after CI passes on it (`gh pr merge --squash --match-head-commit <sha>`).
+- **Merge:** as the repo rules say. A reviewer approves the exact head; merge only that head, after CI passes on it (a Markdown-only PR runs only the `Docs` check) (`gh pr merge --squash --match-head-commit <sha>`).
 - **A worker going the wrong way or quiet too long:** `interrupt` it, then `message` it the correction. That keeps its context; `stop` loses it.
 - **Throughput:** keep up to 4 workers busy. Split big work into small PRs and run independent slices at once.
 - **Waiting:** never poll or sleep. Notes, CI results you started in the background and the owner's answers arrive by themselves.
