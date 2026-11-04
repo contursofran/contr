@@ -22,7 +22,6 @@ const (
 	keySelectAll     = "Cmd+A"
 	keyNewTerminal   = "Cmd+T"
 	keyCloseTerminal = "Cmd+W"
-	keyProjects      = "Shift+Cmd+P"
 )
 
 // action is one item of the app menus: the MyGo role that does the work, and its shortcut.
@@ -48,8 +47,6 @@ var (
 	actionNewTerminal = action{"New Terminal", "", keyNewTerminal}
 	// Close Terminal has no role either: it closes a plain terminal only.
 	actionCloseTerminal = action{"Close Terminal", "", keyCloseTerminal}
-	// Projects… opens the projects modal (D110).
-	actionProjects = action{"Projects…", "", keyProjects}
 )
 
 // item makes the menu item of the action.
@@ -98,29 +95,6 @@ func closeTerminalItem() *mygo.MenuItem {
 	it := actionCloseTerminal.item()
 	it.Click = func(*mygo.MenuItem, *mygo.Window) {
 		if fn := closeTerminalHandler.Load(); fn != nil {
-			(*fn)()
-		}
-	}
-	return it
-}
-
-// projectsHandler is the open window's "projects" action, set and cleared
-// like newTerminalHandler. The menu item is the one opener of the modal (D110).
-var projectsHandler atomic.Pointer[func()]
-
-func setProjectsHandler(fn func()) {
-	if fn == nil {
-		projectsHandler.Store(nil)
-		return
-	}
-	projectsHandler.Store(&fn)
-}
-
-// projectsItem is the Projects… item. Its Click runs on the main thread.
-func projectsItem() *mygo.MenuItem {
-	it := actionProjects.item()
-	it.Click = func(*mygo.MenuItem, *mygo.Window) {
-		if fn := projectsHandler.Load(); fn != nil {
 			(*fn)()
 		}
 	}

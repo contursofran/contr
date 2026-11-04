@@ -2,6 +2,7 @@ package app
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo"
@@ -105,7 +106,7 @@ func TestTheFileMenuHasNewTerminalOnCmdT(t *testing.T) {
 	if file.Label != "File" {
 		t.Fatalf("name = %q", file.Label)
 	}
-	if got := itemNames(file.Submenu); !slices.Equal(got, []string{"New Terminal", "Close Terminal", "-", "Projects…"}) {
+	if got := itemNames(file.Submenu); !slices.Equal(got, []string{"New Terminal", "Close Terminal"}) {
 		t.Fatalf("items = %v", got)
 	}
 	it := find(t, file.Submenu, "New Terminal")
@@ -152,5 +153,17 @@ func TestCloseTerminalItemCallsTheFramesHandlerAndDoesNothingWithoutOne(t *testi
 	it.Click(it, nil)
 	if n != 1 {
 		t.Errorf("handler ran after it was cleared")
+	}
+}
+
+// The projects modal opens from the Spaces header pill only (D113): no menu
+// item and no shortcut.
+func TestNoProjectsItemOrShortcutInTheMenus(t *testing.T) {
+	for _, m := range BuildMenus().Items() {
+		for _, it := range m.Submenu {
+			if strings.HasPrefix(it.Label, "Projects") || it.Accelerator == "Shift+Cmd+P" {
+				t.Errorf("menu %s has %q (%q)", m.Label, it.Label, it.Accelerator)
+			}
+		}
 	}
 }
