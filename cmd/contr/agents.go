@@ -28,6 +28,7 @@ const agentsUsage = `Usage:
   contr agents interrupt <name>                    press the stop key
   contr agents stop <name>                         end the worker's program
   contr agents read <name> [--lines N]             print the screen and history
+  contr agents prompt <name>                       print the menu a blocked worker waits on, or "no prompt"
   contr agents watch                               print the list as JSON on each change
 
 Flags can come before or after the other arguments. After --, every word is
@@ -95,7 +96,7 @@ func runAgents(args []string, stdout, stderr io.Writer, dial func(context.Contex
 		noParent = fs.Bool("no-parent", false, "start without a parent terminal")
 		lines    = fs.Int("lines", 0, "only the last lines")
 	)
-	need := map[string]int{"ls": 0, "watch": 0, "spawn": 0, "send": 2, "interrupt": 1, "stop": 1, "read": 1}
+	need := map[string]int{"ls": 0, "watch": 0, "spawn": 0, "send": 2, "interrupt": 1, "stop": 1, "read": 1, "prompt": 1}
 	n, ok := need[sub]
 	if !ok {
 		fmt.Fprintf(stderr, "contr agents: unknown command %s\n%s", sub, agentsUsage)
@@ -183,6 +184,13 @@ func runAgents(args []string, stdout, stderr io.Writer, dial func(context.Contex
 			return err
 		case "stop":
 			return m.Stop(ctx, pos[0])
+		case "prompt":
+			txt, err := pendingPrompt(ctx, m, pos[0])
+			if err != nil {
+				return err
+			}
+			_, err = fmt.Fprintln(stdout, txt)
+			return err
 		case "read":
 			txt, err := m.Read(ctx, pos[0], *lines)
 			if err != nil {

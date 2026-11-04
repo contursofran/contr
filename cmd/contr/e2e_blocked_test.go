@@ -76,7 +76,7 @@ import (
 
 func main() {
 	time.Sleep(time.Second)
-	fmt.Print(" Bash command\n   rm -rf build\n\n Do you want to proceed?\n")
+	fmt.Print("────────────────────────\n Bash command\n   rm -rf build\n\n Do you want to proceed?\n")
 	fmt.Print(" > 1. Yes\n   2. Yes, and do not ask again\n   3. No, and tell Claude what to do differently\n")
 	fmt.Print("\x1b]7501;state=blocked:kind=permission:msg=Allow%20rm\x07")
 	time.Sleep(time.Hour)

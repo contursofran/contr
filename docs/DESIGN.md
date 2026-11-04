@@ -324,7 +324,9 @@ cubic-bezier(0.2, 0.8, 0.2, 1) **(motion not built)**.
   the typed text, else the recommended option; `1`–`4` send an option.
 - A resolved item shows `<answer> · sent`, ghost `undo` and secondary
   `next ›`.
-- A to-do shows Done. A blocked worker shows its menu (D51).
+- A to-do shows Done. A blocked worker shows its menu (D51), with the
+  menu's detail above the question: for a permission, the tool and its
+  command (D86).
 - The answer goes to the coordinator that asked, as
   `Owner answered <ID>: <answer>` (D36).
 

@@ -2,6 +2,7 @@ package prompt
 
 import (
 	"os"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -153,5 +154,24 @@ func TestPromptEqual(t *testing.T) {
 	b.Choices[0].Keys = []byte("9")
 	if a.Equal(b) {
 		t.Fatal("different keys are equal")
+	}
+}
+
+// TestParseDetail: the lines of the box above the question are the detail;
+// a menu with no box above it has none.
+func TestParseDetail(t *testing.T) {
+	p, ok := Parse("claude", "permission", read(t, "claude_permission.txt"))
+	if !ok || !slices.Equal(p.Detail, []string{"Bash command", "npm test", "Run the unit tests"}) {
+		t.Errorf("boxed: detail %q, %v", p.Detail, ok)
+	}
+	sep := "● Done.\n────────────\n Bash command\n\n   go test ./...\n\n Do you want to proceed?\n ❯ 1. Yes\n   2. No\n"
+	if p, ok := Parse("claude", "permission", sep); !ok || !slices.Equal(p.Detail, []string{"Bash command", "go test ./..."}) {
+		t.Errorf("separator: detail %q, %v", p.Detail, ok)
+	}
+	if p, ok := Parse("claude", "permission", read(t, "old_prompt.txt")); !ok || p.Detail != nil {
+		t.Errorf("no box: detail %q, %v", p.Detail, ok)
+	}
+	if p, ok := Parse("claude", "question", read(t, "claude_question.txt")); !ok || p.Detail != nil {
+		t.Errorf("question with no box: detail %q, %v", p.Detail, ok)
 	}
 }
