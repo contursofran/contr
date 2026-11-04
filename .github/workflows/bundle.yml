@@ -8,6 +8,7 @@ on:
       - 'assets/app/**'
       - 'go.mod'
       - 'go.sum'
+      - 'cmd/contr/**'
       - 'VERSION'
       - '.github/workflows/bundle.yml'
 
@@ -43,6 +44,15 @@ jobs:
             echo "the release binary contains the automation plugin" >&2
             exit 1
           fi
+      - name: Check the packaged app loads the terminal library
+        run: |
+          app=dist/bundle/contr.app
+          lib="$("$app/Contents/MacOS/contr" terminal-check)"
+          test "$lib" = "$PWD/$app/Contents/Resources/libghostty-vt.dylib" || {
+            echo "the terminal library is not the one in the app: $lib" >&2
+            exit 1
+          }
+          codesign --verify --strict "$app"
       - name: Upload bundle
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

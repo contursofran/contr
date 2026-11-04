@@ -61,9 +61,11 @@ make_bundle() { # dir id marker
     printf '%s\n' "$3" >"$1/Contents/marker"
 }
 
+printf 'int ghostty_dummy(void){return 0;}' | cc -dynamiclib -x c - -o "$tmp/libghostty-vt.dylib" ||
+    fail "cc could not build the dummy library"
 printf 'int main(void){return 0;}' | cc -x c - -o "$tmp/contr" ||
     fail "cc could not build the dummy binary"
-"$bundle" --bin "$tmp/contr" --out "$tmp/b" >"$tmp/build.out" 2>"$tmp/build.err" ||
+"$bundle" --bin "$tmp/contr" --lib "$tmp/libghostty-vt.dylib" --out "$tmp/b" >"$tmp/build.out" 2>"$tmp/build.err" ||
     {
         cat "$tmp/build.err" >&2
         fail "bundle.sh could not build the dummy bundle"

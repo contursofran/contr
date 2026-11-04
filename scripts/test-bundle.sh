@@ -51,7 +51,11 @@ expect_plist() {
     [ "$got" = "$2" ] || fail "$1 is '$got', expected '$2'"
 }
 
-printf 'int main(void){return 0;}' | cc -x c - -o "$tmp/contr" ||
+# The dummy library, and a dummy binary whose terminal-check prints its path as the real one does.
+printf 'int ghostty_dummy(void){return 0;}' | cc -dynamiclib -x c - -o "$tmp/libghostty-vt.dylib" ||
+    fail "cc could not build the dummy library"
+printf '#include <stdio.h>\n#include <string.h>\nint main(int c,char**v){if(c>1&&!strcmp(v[1],"terminal-check")){puts("%s");return 0;}return 0;}' "$tmp/libghostty-vt.dylib" |
+    cc -x c - -o "$tmp/contr" ||
     fail "cc could not build the arm64 dummy binary"
 printf 'int main(void){return 0;}' | cc -arch x86_64 -x c - -o "$tmp/contr-x86" ||
     fail "cc could not build the x86_64 dummy binary"
@@ -179,6 +183,24 @@ rc=0
 grep -q "^bundle.sh: a command failed at line" "$tmp/run.err" ||
     fail "a failed cp should print 'bundle.sh: a command failed at line', got: $(cat "$tmp/run.err")"
 [ ! -e "$tmp/cp-out/contr.app.tmp" ] || fail "a failed cp left contr.app.tmp behind"
+
+# The library goes into Resources, signed with the app. --lib wins over terminal-check.
+[ -f "$tmp/out/contr.app/Contents/Resources/libghostty-vt.dylib" ] ||
+    fail "the app has no libghostty-vt.dylib in Resources"
+codesign --verify --strict "$tmp/out/contr.app" || fail "the signature does not verify with the library"
+if run_bundle --bin "$tmp/contr" --lib "$tmp/missing.dylib" --out "$tmp/lib-out"; then
+    fail "a missing --lib should fail"
+fi
+grep -q "^bundle.sh: terminal library not found" "$tmp/run.err" ||
+    fail "a missing --lib should say so, got: $(cat "$tmp/run.err")"
+# A binary whose terminal-check fails stops the bundle.
+cc -x c - -o "$tmp/contr-bad" <<<'int main(void){return 3;}'
+if run_bundle --bin "$tmp/contr-bad" --out "$tmp/lib-out"; then
+    fail "a failing terminal-check should fail"
+fi
+grep -q "^bundle.sh: terminal-check failed" "$tmp/run.err" ||
+    fail "a failing terminal-check should say so, got: $(cat "$tmp/run.err")"
+expect_failure "needs a path" --lib
 
 if ! "$bundle" --help >/dev/null 2>&1; then
     fail "--help should exit 0"

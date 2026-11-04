@@ -15,6 +15,7 @@ const usageText = `Usage:
   contr owner <command> [args…]               answer questions and mark to-dos done (contr owner help)
   contr mcp                                   serve the agent tools over MCP on stdin and stdout
   contr hook stop|session-start               the kit's hooks: worker reports, coordinator state around compaction
+  contr terminal-check                        load the terminal library and print its path
   contr --help, -h                            print this text
 `
 
@@ -36,6 +37,8 @@ const (
 	kindOwner
 	// kindHook is `hook`. Command.Then holds the words after it.
 	kindHook
+	// kindTerminalCheck is `terminal-check`.
+	kindTerminalCheck
 	// kindUnknown is an argument that is not part of the command line.
 	kindUnknown
 )
@@ -70,6 +73,9 @@ func parseArgs(args []string) Command {
 	}
 	if len(args) > 0 && args[0] == "hook" {
 		return Command{Kind: kindHook, Then: args[1:]}
+	}
+	if len(args) == 1 && args[0] == "terminal-check" {
+		return Command{Kind: kindTerminalCheck}
 	}
 	if len(args) == 1 && args[0] == "mcp" {
 		return Command{Kind: kindMCP}
