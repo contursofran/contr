@@ -18,7 +18,8 @@ import (
 const DefaultTimeout = 15 * time.Second
 
 // Runner runs gh with args in dir and returns its standard output. On
-// failure the error text is the stderr text of gh.
+// failure the error text is the stderr text of gh, and the output may still
+// hold the standard output.
 type Runner interface {
 	Run(ctx context.Context, dir string, args ...string) ([]byte, error)
 }
@@ -50,7 +51,9 @@ func (c Client) run(ctx context.Context, args ...string) ([]byte, error) {
 		if ctx.Err() != nil {
 			return nil, fmt.Errorf("gh: %s: %w", strings.Join(args[:min(2, len(args))], " "), ctx.Err())
 		}
-		return nil, fmt.Errorf("gh: %w", err)
+		// Keep the output: gh pr checks prints rows and exits 8 while
+		// checks are pending.
+		return out, fmt.Errorf("gh: %w", err)
 	}
 	return out, nil
 }
@@ -111,9 +114,9 @@ func (r ExecRunner) Run(ctx context.Context, dir string, args ...string) ([]byte
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {
-			return nil, errors.New(msg)
+			return stdout.Bytes(), errors.New(msg)
 		}
-		return nil, err
+		return stdout.Bytes(), err
 	}
 	return stdout.Bytes(), nil
 }
