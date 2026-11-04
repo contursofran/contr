@@ -34,16 +34,8 @@ func TestViewOnHC(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fc, err := hc.DialFramed(ctx, hc.Command("", core.Env))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer fc.Close()
-	s, err := fc.Attach(ctx, hc.AttachParams{Terminal: w.Address, Cols: 80, Rows: 24, History: 1000})
-	if err != nil {
-		t.Fatal(err)
-	}
-	term, err := terminal.New(terminal.Options{Conn: NewConn(s)})
+	conn := NewConn(NewCoreSource(hc.Command("", core.Env), w.Address), Options{})
+	term, err := terminal.New(terminal.Options{Conn: conn})
 	if err != nil {
 		t.Fatal(err)
 	}
