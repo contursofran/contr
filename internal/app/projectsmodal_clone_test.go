@@ -202,3 +202,46 @@ func TestCloneMessage(t *testing.T) {
 		t.Errorf("other: %q", got)
 	}
 }
+
+func TestCloneDefaultsToParentOfLastOpenedProject(t *testing.T) {
+	r, fallback := cloneRig(t, nil)
+	older, newest := t.TempDir(), t.TempDir()
+	r.store.Touch("/w/a/.git", filepath.Join(older, "a"), time.Unix(10, 0))
+	r.store.Touch("/w/b/.git", filepath.Join(newest, "b"), time.Unix(20, 0))
+	r.m.remote = "acme/widget"
+	_, dest, err := r.m.cloneDest()
+	if err != nil || dest != filepath.Join(newest, "widget") {
+		t.Errorf("dest %q err %v, want under %q (not %q)", dest, err, newest, fallback)
+	}
+}
+
+func TestCloneDefaultsToFallbackWithoutRecent(t *testing.T) {
+	r, fallback := cloneRig(t, nil)
+	r.m.remote = "acme/widget"
+	if _, dest, _ := r.m.cloneDest(); dest != filepath.Join(fallback, "widget") {
+		t.Errorf("no recent: dest %q", dest)
+	}
+	// A recent project whose parent folder is gone also falls back.
+	r.store.Touch("/w/a/.git", filepath.Join(fallback, "gone", "a"), time.Unix(10, 0))
+	if _, dest, _ := r.m.cloneDest(); dest != filepath.Join(fallback, "widget") {
+		t.Errorf("missing parent: dest %q", dest)
+	}
+}
+
+func TestCloseModalCancelsCloneAndAddsNothing(t *testing.T) {
+	r, _ := cloneRig(t, func(ctx context.Context, _ string, _ ...string) (string, error) {
+		return "", ctx.Err()
+	})
+	r.m.Run = Runner{Go: func(f func()) { r.held = append(r.held, f) }}
+	r.m.remote = "acme/widget"
+	r.open()
+	r.tt.Click(ProjectsClone)
+	if len(r.held) != 1 {
+		t.Fatal("clone did not start")
+	}
+	r.m.Close()
+	r.held[0]()
+	if r.m.cloning || r.m.cloneErr != "" || len(r.store.Folders()) != 0 || len(r.store.Recent()) != 0 {
+		t.Errorf("after close: cloning %v err %q folders %v", r.m.cloning, r.m.cloneErr, r.store.Folders())
+	}
+}

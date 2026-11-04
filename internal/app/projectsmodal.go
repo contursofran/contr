@@ -8,6 +8,7 @@ package app
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -63,8 +64,9 @@ type ProjectsModal struct {
 	// Resolve returns the project key of a folder: its git common dir, or the
 	// folder when it is outside git. It reads files, so it runs on a goroutine.
 	Resolve func(path string) string
-	// CloneParent is the default folder that holds a clone (D117). Empty hides
-	// the clone part.
+	// CloneParent is the folder that holds a clone when no project was opened
+	// before (D117); otherwise the parent folder of the last opened project
+	// is the default. Empty hides the clone part.
 	CloneParent string
 	// PickParent asks the owner for the folder that holds a clone, starting
 	// at def. It blocks and returns ErrPickCancelled for no choice. Nil hides
@@ -88,7 +90,9 @@ type ProjectsModal struct {
 	parent   string
 	cloning  bool
 	cloneErr string
-	list     ui.ListState
+	// cancelClone stops the running clone; the modal calls it when it closes.
+	cancelClone context.CancelFunc
+	list        ui.ListState
 	// saving is true while a save runs; next is the newest copy not yet
 	// saved, so the saves go in order and the last change wins.
 	saving bool
@@ -99,6 +103,9 @@ type ProjectsModal struct {
 // shortcut call this; a pill in the Spaces header can call it too.
 func (m *ProjectsModal) Toggle() {
 	m.open = !m.open
+	if !m.open {
+		m.stopClone()
+	}
 	m.filter = ""
 	m.redraw()
 }
@@ -106,11 +113,34 @@ func (m *ProjectsModal) Toggle() {
 // Close hides the modal.
 func (m *ProjectsModal) Close() {
 	m.open = false
+	m.stopClone()
 	m.redraw()
 }
 
 // Opened tells whether the modal shows.
 func (m *ProjectsModal) Opened() bool { return m.open }
+
+// stopClone cancels a running clone. Its result then adds nothing.
+func (m *ProjectsModal) stopClone() {
+	if m.cancelClone != nil {
+		m.cancelClone()
+	}
+}
+
+// defaultParent is the folder that holds a clone when the owner picked none
+// (D117): the parent folder of the last opened project, the newest recent
+// entry, when it exists; else CloneParent.
+func (m *ProjectsModal) defaultParent() string {
+	if st := m.store(); st != nil {
+		if rec := st.Recent(); len(rec) > 0 && rec[0].Path != "" {
+			p := filepath.Dir(rec[0].Path)
+			if fi, err := os.Stat(p); err == nil && fi.IsDir() {
+				return p
+			}
+		}
+	}
+	return m.CloneParent
+}
 
 func (m *ProjectsModal) redraw() {
 	if m.Invalidate != nil {
@@ -190,7 +220,8 @@ func (m *ProjectsModal) openFolder() {
 }
 
 // cloneDest returns the clone URL and the destination folder for the field.
-// ok is false while the field is empty or is not a remote.
+// The URL and the folder are empty while the field is empty; err is set when
+// the field is not a remote.
 func (m *ProjectsModal) cloneDest() (url, dest string, err error) {
 	if strings.TrimSpace(m.remote) == "" {
 		return "", "", nil
@@ -201,7 +232,7 @@ func (m *ProjectsModal) cloneDest() (url, dest string, err error) {
 	}
 	parent := m.parent
 	if parent == "" {
-		parent = m.CloneParent
+		parent = m.defaultParent()
 	}
 	return url, filepath.Join(parent, name), nil
 }
@@ -213,7 +244,7 @@ func (m *ProjectsModal) chooseParent() {
 	}
 	def := m.parent
 	if def == "" {
-		def = m.CloneParent
+		def = m.defaultParent()
 	}
 	m.Run.Do(func() func() {
 		path, err := m.PickParent(def)
@@ -248,14 +279,21 @@ func (m *ProjectsModal) clone() {
 	}
 	m.cloning, m.cloneErr = true, ""
 	m.redraw()
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancelClone = cancel
 	m.Run.Do(func() func() {
-		err := git.Clone(context.Background(), m.CloneRun, url, dest)
+		err := git.Clone(ctx, m.CloneRun, url, dest)
 		key := dest
 		if err == nil && m.Resolve != nil {
 			key = m.Resolve(dest)
 		}
 		return func() {
 			m.cloning = false
+			stopped := ctx.Err() != nil // the modal closed: add nothing
+			cancel()
+			if stopped {
+				return
+			}
 			if err != nil {
 				m.cloneErr = cloneMessage(err, dest)
 				m.redraw()

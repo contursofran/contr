@@ -9,7 +9,8 @@ import (
 	"github.com/contursofran/contr/internal/app"
 )
 
-// cloneParent is the default folder that holds a clone (D117): the first of
+// cloneParent is the folder that holds a clone when no project was opened
+// before (D117): the first of
 // ~/Developer, ~/code and ~/Documents/code that exists, else the home folder.
 // It is empty when the home folder is unknown.
 func cloneParent(home string) string {
