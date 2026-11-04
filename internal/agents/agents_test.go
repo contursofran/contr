@@ -190,6 +190,7 @@ func TestListSendInterruptStopRead(t *testing.T) {
 		},
 		"terminal.interrupt": func(map[string]any) (any, error) { return map[string]any{"outcome": "stopped", "key": "esc"}, nil },
 		"terminal.read":      func(map[string]any) (any, error) { return map[string]any{"text": "screen"}, nil },
+		"terminal.get":       func(map[string]any) (any, error) { return term("t3", "alpha", "live", builderLabels, nil), nil },
 		"terminal.send":      func(map[string]any) (any, error) { return nil, &hc.Error{Kind: "blocked"} },
 	}}
 	m := New(f, DefaultConfig())
@@ -215,8 +216,8 @@ func TestListSendInterruptStopRead(t *testing.T) {
 	if out, err := m.Interrupt(ctx, "alpha"); err != nil || out != "stopped" {
 		t.Errorf("interrupt = %q, %v", out, err)
 	}
-	if err := m.Stop(ctx, "alpha"); err != nil || f.last().Method != "terminal.kill" {
-		t.Errorf("stop: %v, %s", err, f.last().Method)
+	if err := m.Stop(ctx, "alpha", true); err != nil || f.last().Method != "terminal.kill" {
+		t.Errorf("stop with keep: %v, %s", err, f.last().Method)
 	}
 	if err := m.Remove(ctx, "alpha"); err != nil || f.last().Method != "terminal.rm" || f.last().Params["terminal"] != "alpha" {
 		t.Errorf("remove: %v, %+v", err, f.last())
@@ -237,6 +238,9 @@ func TestControlCallsNameTheCaller(t *testing.T) {
 		f := &fakeCore{handle: map[string]func(map[string]any) (any, error){
 			"terminal.interrupt": func(map[string]any) (any, error) { return map[string]any{"outcome": "stopped"}, nil },
 			"terminal.read":      func(map[string]any) (any, error) { return map[string]any{"text": "screen"}, nil },
+			"terminal.get": func(map[string]any) (any, error) {
+				return term("t3", "alpha", "live", builderLabels, nil), nil
+			},
 		}}
 		m := New(f, DefaultConfig())
 		m.getenv = func(k string) string {
@@ -247,7 +251,7 @@ func TestControlCallsNameTheCaller(t *testing.T) {
 		}
 		ctx := context.Background()
 		calls := []func() error{
-			func() error { return m.Stop(ctx, "alpha") },
+			func() error { return m.Stop(ctx, "alpha", false) },
 			func() error { _, err := m.Read(ctx, "alpha", 0); return err },
 			func() error { _, err := m.Interrupt(ctx, "alpha"); return err },
 		}
@@ -759,5 +763,93 @@ func TestProfileAgentPicksTheKitAgent(t *testing.T) {
 	}
 	if argv := f.last().Params["argv"].([]any); !reflect.DeepEqual(argv, []any{"claude"}) {
 		t.Errorf("odd argv = %v", argv)
+	}
+}
+
+func methodsOf(f *fakeCore) []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []string
+	for _, c := range f.calls {
+		out = append(out, c.Method)
+	}
+	return out
+}
+
+func TestStopKillsThenRemovesUnlessKept(t *testing.T) {
+	for _, tc := range []struct {
+		state string
+		keep  bool
+		want  []string
+	}{
+		{"live", false, []string{"terminal.get", "terminal.kill", "terminal.rm"}},
+		{"live", true, []string{"terminal.get", "terminal.kill"}},
+		{"finished", false, []string{"terminal.get", "terminal.rm"}},
+		{"finished", true, []string{"terminal.get"}},
+	} {
+		f := &fakeCore{handle: map[string]func(map[string]any) (any, error){
+			"terminal.get": func(map[string]any) (any, error) { return term("t3", "alpha", tc.state, builderLabels, nil), nil },
+		}}
+		if err := New(f, DefaultConfig()).Stop(context.Background(), "alpha", tc.keep); err != nil {
+			t.Fatal(err)
+		}
+		if got := methodsOf(f); !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s keep=%v: calls %v, want %v", tc.state, tc.keep, got, tc.want)
+		}
+	}
+}
+
+func TestStopFailsWhenTheKillFails(t *testing.T) {
+	f := &fakeCore{handle: map[string]func(map[string]any) (any, error){
+		"terminal.get":  func(map[string]any) (any, error) { return term("t3", "alpha", "live", builderLabels, nil), nil },
+		"terminal.kill": func(map[string]any) (any, error) { return nil, &hc.Error{Kind: "boom"} },
+	}}
+	if err := New(f, DefaultConfig()).Stop(context.Background(), "alpha", false); !hc.IsKind(err, "boom") {
+		t.Errorf("err = %v", err)
+	}
+	if got := methodsOf(f); !reflect.DeepEqual(got, []string{"terminal.get", "terminal.kill"}) {
+		t.Errorf("calls = %v: nothing is removed after a failed kill", got)
+	}
+}
+
+func TestRemoveEndedTouchesOnlyTheCallersFinishedWorkers(t *testing.T) {
+	mk := func(addr, name, state, parent, role string) map[string]any {
+		t := term(addr, name, state, map[string]string{LabelApp: AppAgent, LabelRole: role}, nil)
+		if parent != "" {
+			t["parent"] = parent
+		}
+		return t
+	}
+	list := []any{
+		mk("t4", "mine-done", "finished", "t1", "builder"),
+		mk("t5", "mine-live", "live", "t1", "builder"),
+		mk("t6", "theirs-done", "finished", "t2", "builder"),
+		mk("t7", "orphan-done", "finished", "", "builder"),
+		mk("t8", "my-orch", "finished", "t1", RoleOrchestrator),
+		mk("t9", "my-shell", "finished", "t1", RoleTerminal),
+	}
+	f := &fakeCore{handle: map[string]func(map[string]any) (any, error){
+		"terminal.list": func(map[string]any) (any, error) { return map[string]any{"terminals": list}, nil },
+	}}
+	m := New(f, DefaultConfig())
+	m.getenv = func(k string) string {
+		if k == "HC_TERMINAL_ID" {
+			return "t1"
+		}
+		return ""
+	}
+	got, err := m.RemoveEnded(context.Background())
+	if err != nil || !reflect.DeepEqual(got, []string{"mine-done"}) {
+		t.Fatalf("removed %v, %v", got, err)
+	}
+	if c := f.last(); c.Method != "terminal.rm" || c.Params["terminal"] != "t4" {
+		t.Errorf("last call = %+v", c)
+	}
+
+	// Outside hc: nothing is listed or removed.
+	f = &fakeCore{}
+	m = New(f, DefaultConfig()).WithEnv(func(string) string { return "" })
+	if got, err := m.RemoveEnded(context.Background()); err != nil || got != nil || len(f.calls) != 0 {
+		t.Errorf("outside hc: %v, %v, %d calls", got, err, len(f.calls))
 	}
 }

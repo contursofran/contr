@@ -42,7 +42,6 @@ func TestStagesComeFromRoles(t *testing.T) {
 		{"reviewer done", agents.Worker{Role: "reviewer", Live: true, Status: "done"}, [4]icons.Status{d, d, d, n}},
 		{"reviewer blocked", agents.Worker{Role: "reviewer", Live: true, Status: "blocked"}, [4]icons.Status{d, d, b, y}},
 		{"unknown role is build", agents.Worker{Role: "debugger", Live: true, Status: "working"}, [4]icons.Status{d, w, n, n}},
-		{"ended counts done", agents.Worker{Role: "builder", Live: false}, [4]icons.Status{d, d, n, n}},
 	}
 	for _, c := range cases {
 		rows := WorkRows(agentstate.Snapshot{Workers: []agents.Worker{c.w}}, "")
@@ -219,5 +218,17 @@ func TestWorkRowNameIsTheWorkerNotTheTitle(t *testing.T) {
 	rows := WorkRows(agentstate.Snapshot{Workers: []agents.Worker{w}}, "")
 	if len(rows) != 1 || rows[0].Title != "b212" {
 		t.Errorf("rows %+v", rows)
+	}
+}
+
+// TestEndedWorkersAreNotRows: an ended worker has no Work row (D112).
+func TestEndedWorkersAreNotRows(t *testing.T) {
+	snap := agentstate.Snapshot{Workers: []agents.Worker{
+		{Name: "gone", Role: "builder", Live: false},
+		{Name: "here", Role: "builder", Live: true},
+	}}
+	rows := WorkRows(snap, "")
+	if len(rows) != 1 || rows[0].Title != "here" {
+		t.Errorf("rows = %+v, want only here", rows)
 	}
 }

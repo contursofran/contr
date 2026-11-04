@@ -7,7 +7,8 @@ A Claude Code plugin for agent work with `contr agents`:
 - `hooks/hooks.json`: the Stop hook (a worker's turn that sent no report; a coordinator's state
   before a compaction) and the SessionStart hook after a compaction (the playbook comes back).
 - `.mcp.json`: starts `contr mcp`, which gives the session the agent tools (spawn, message,
-  interrupt, stop, read, list). `contr` must be on the PATH; `scripts/install.sh` links it.
+  interrupt, stop, read, list, clear_ended). `stop` removes the
+  worker's terminal unless `keep` is set. `contr` must be on the PATH; `scripts/install.sh` links it.
 
 ## Install
 
