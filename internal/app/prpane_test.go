@@ -306,3 +306,32 @@ func TestFrameOpenPRShowsThePaneAndCollapsesTabs(t *testing.T) {
 		t.Error("ClosePR should hide the pane")
 	}
 }
+
+// TestPRPaneEscapeOnlyWithFocus: Esc closes the pane only while the pane has
+// the focus (D72). With the focus on another part (the terminal, in the
+// app), Esc must reach that part and the pane stays open.
+func TestPRPaneEscapeOnlyWithFocus(t *testing.T) {
+	r := newPRRig(t)
+	var other ui.Handle
+	r.tt = ui.NewTester(func(c *ui.Context) {
+		ui.Row(c).Fill().Font(theme.FontFamily).FontSize(theme.FontSize).FixedLineHeight(theme.LineHeight).
+			TextColor(theme.Color(theme.Text)).Children(func() {
+			ui.Box(c).Label("other").Width(200).FillHeight().Focusable().Bind(&other)
+			r.pane.View(c)
+		})
+	}, 900, 700)
+	r.pane.Open("/w", 642)
+	r.flush()
+	if err := r.tt.Click("other"); err != nil {
+		t.Fatal(err)
+	}
+	r.tt.Frame()
+	if !r.tt.Focused("other") {
+		t.Fatal("the other part did not take the focus")
+	}
+	r.tt.Key(0, ui.KeyEscape)
+	r.tt.Frame()
+	if !r.pane.IsOpen() || r.closed != 0 {
+		t.Error("Escape closed the pane while another part had the focus")
+	}
+}
