@@ -372,9 +372,15 @@ func (f *Frame) terminal(c *ui.Context) {
 			Background(color(theme.BgWindow)).Children(func() { f.Review.View(c) })
 		return
 	}
-	ui.Column(c).Label(LabelTerminal).Grow(1).MinWidth(0).Center().
-		Background(color(theme.BgTerminal)).Children(func() {
+	col := ui.Column(c).Label(LabelTerminal).Grow(1).MinWidth(0).Center().
+		Background(color(theme.BgTerminal))
+	col.Children(func() {
 		f.run(c, f.Slots.Terminal)
+		// The card floats over the bottom edge of this strip. The strip has
+		// no height, so a press on the terminal is outside the card.
+		if f.Card != nil {
+			f.Card.Anchor = ui.Box(c).FillWidth().Height(0).Shrink(0)
+		}
 		f.run(c, f.Slots.Card)
 	})
 }

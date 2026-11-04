@@ -37,7 +37,11 @@ func newCardRig(t *testing.T, src *source) *cardRig {
 	r := &cardRig{t: t, src: src}
 	r.card = &FloatCard{Source: src, Run: Runner{Go: func(f func()) { f() }}}
 	r.tt = ui.NewTester(func(c *ui.Context) {
-		ui.Column(c).Fill().Children(func() { r.card.View(c) })
+		ui.Column(c).Fill().Children(func() {
+			ui.Box(c).Grow(1).Label("terminal")
+			r.card.Anchor = ui.Box(c).FillWidth().Height(0).Shrink(0)
+			r.card.View(c)
+		})
 	}, 900, 400)
 	return r
 }
@@ -481,5 +485,16 @@ func TestBlockedCardShowsTheCommand(t *testing.T) {
 	r.open(tabMenu)
 	if !r.tt.HasText("rm -rf build") || !r.tt.HasText("Do you want to proceed?") {
 		t.Errorf("command or question missing: %q", r.tt.Texts())
+	}
+}
+
+func TestAnswerCardOutsideClickCloses(t *testing.T) {
+	r := newCardRig(t, askSource())
+	r.open(tabD1)
+	r.tt.Frame()
+	r.tt.ClickAt(5, 5)
+	r.tt.Frame()
+	if _, open := r.card.Opened(); open {
+		t.Error("a press outside should close the card")
 	}
 }

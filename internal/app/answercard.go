@@ -63,6 +63,10 @@ type FloatCard struct {
 	Run    Runner
 	// Invalidate redraws the window; may be nil.
 	Invalidate func()
+	// Anchor is the element the card floats at the bottom of: a strip with no
+	// height at the bottom of the terminal area. The frame sets it before it
+	// builds the card.
+	Anchor ui.Element
 	// Select selects the worker at an address (the Focus button of a blocked
 	// tab); may be nil.
 	Select func(address string, orchestrator bool)
@@ -209,46 +213,57 @@ func (a *FloatCard) option(snap agentstate.Snapshot, pos int) {
 
 func resolvedID(snap agentstate.Snapshot, id string) bool { return slices.Contains(snap.Resolved, id) }
 
-// View builds the card, or nothing while it is closed. It is placed in its
-// parent, at the bottom, so the parent must be the terminal area.
+// View builds the card as a popover at the bottom of [FloatCard.Anchor], or
+// nothing while it is closed or has no anchor.
 func (a *FloatCard) View(c *ui.Context) {
-	if a.open == nil {
+	if a.open == nil || a.Anchor == (ui.Element{}) {
 		return
 	}
 	snap := a.Source.Snapshot()
 	t := *a.open
 	resolved := resolvedID(snap, t.Key)
-	root := ui.Column(c).Label(LabelAnswerCard).Absolute().
-		Left(theme.AnswerMargin).Right(theme.AnswerMargin).Bottom(theme.AnswerMargin).
-		Height(theme.AnswerCardHeight).Gap(theme.AnswerGap).Padding(theme.AnswerPad).
-		Background(theme.Color(theme.BgAnswer)).Border(1, theme.Color(theme.AnswerBorder)).
-		Radius(theme.AnswerRadius).Focusable().FocusRing(false).Bind(&a.handle)
-	root = root.OnShortcut(0, ui.KeyEscape, a.Close).
-		OnShortcut(0, ui.KeyEnter, func() { a.enter(snap) })
-	for pos, key := range keyOptions {
-		if pos >= 4 && t.Kind != NeedBlocked {
-			break
+	shown := true
+	pop := ui.PopoverBase(c, a.Anchor, &shown, func(panel ui.Element) {
+		// The panel floats at the bottom of the anchor, inside its margins.
+		panel = panel.AttachTo(a.Anchor, ui.AnchorBottom, ui.AnchorBottom).Margin(0, 0, theme.AnswerMargin, 0)
+		if w := a.Anchor.Bounds().W - 2*theme.AnswerMargin; w > 0 {
+			panel = panel.Width(w)
 		}
-		root = root.OnShortcut(0, key, func() { a.option(snap, pos) })
-	}
-	if t.Kind == NeedBlocked {
-		a.watchBlocked(snap, t)
-	}
-	if a.focus {
-		a.focus = false
-		a.handle.Focus(c)
-	}
-	root.Children(func() {
-		headLine(c, &t.Icon, t.Key+"  "+t.Title, resolved, t.Project)
-		cardText(c, a.body(t, snap, resolved))
-		ui.Row(c).Shrink(0).Wrap().Gap(theme.AnswerButtonGap).Children(func() { a.actions(c, t, snap, resolved) })
-		if t.Kind == NeedQuestion && !resolved {
-			a.input(c)
+		panel = panel.Label(LabelAnswerCard).Column().
+			Height(theme.AnswerCardHeight).Gap(theme.AnswerGap).Padding(theme.AnswerPad).
+			Background(theme.Color(theme.BgAnswer)).Border(1, theme.Color(theme.AnswerBorder)).
+			Radius(theme.AnswerRadius).Focusable().FocusRing(false).Bind(&a.handle)
+		panel = panel.OnShortcut(0, ui.KeyEnter, func() { a.enter(snap) })
+		for pos, key := range keyOptions {
+			if pos >= 4 && t.Kind != NeedBlocked {
+				break
+			}
+			panel = panel.OnShortcut(0, key, func() { a.option(snap, pos) })
 		}
-		if msg := a.foot(snap); msg != "" {
-			ui.Text(c, msg).SingleLine().Shrink(0).TextColor(theme.Color(theme.TextDim))
+		if t.Kind == NeedBlocked {
+			a.watchBlocked(snap, t)
 		}
+		if a.focus {
+			a.focus = false
+			a.handle.Focus(c)
+		}
+		panel.Children(func() {
+			headLine(c, &t.Icon, t.Key+"  "+t.Title, resolved, t.Project)
+			cardText(c, a.body(t, snap, resolved))
+			ui.Row(c).Shrink(0).Wrap().Gap(theme.AnswerButtonGap).Children(func() { a.actions(c, t, snap, resolved) })
+			if t.Kind == NeedQuestion && !resolved {
+				a.input(c)
+			}
+			if msg := a.foot(snap); msg != "" {
+				ui.Text(c, msg).SingleLine().Shrink(0).TextColor(theme.Color(theme.TextDim))
+			}
+		})
 	})
+	// Escape and a press outside close the card; MyGo returns the focus.
+	if pop.Dismissed() {
+		a.open = nil
+		a.redraw()
+	}
 }
 
 // body is the text under the head line.
