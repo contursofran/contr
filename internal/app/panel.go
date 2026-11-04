@@ -7,6 +7,8 @@ package app
 // (owner, 2026-11-03): the owner types "wrap up" in the orchestrator terminal.
 
 import (
+	"strconv"
+
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/agentstate"
@@ -36,6 +38,11 @@ type BoardPanel struct {
 	Open func(NeedTab)
 	// OpenPR runs when a work row's number is clicked, with the worktree and the number.
 	OpenPR func(dir string, n int)
+	// OpenIssue runs when the number of a work row with no pull request is clicked, with the
+	// worktree and the issue number (D74).
+	OpenIssue func(dir string, n int)
+	// PRs gives each worker's pull request number (D104). Nil: no worker has one.
+	PRs *WorkerPRs
 }
 
 // Rows returns the work rows now.
@@ -47,7 +54,13 @@ func (p *BoardPanel) Rows() []WorkRow {
 	if p.Scope != nil {
 		project = p.Scope()
 	}
-	return WorkRows(p.Snapshot(), project)
+	rows := WorkRows(p.Snapshot(), project)
+	for i := range rows {
+		if n := p.PRs.PR(rows[i].Dir); n > 0 {
+			rows[i].PR, rows[i].Label = n, "#"+strconv.Itoa(n)
+		}
+	}
+	return rows
 }
 
 // View builds the panel.
@@ -57,7 +70,7 @@ func (p *BoardPanel) View(c *ui.Context) {
 			TextLine(c, LabelBoardEmpty, emptyNoAgents, theme.TextDim)
 			return
 		}
-		WorkSection(c, p.Rows(), p.Select, p.OpenPR)
+		WorkSection(c, p.Rows(), p.Select, p.OpenPR, p.OpenIssue)
 		if prob := p.Snapshot().Problem; prob != "" {
 			TextLine(c, LabelBoardProblem, prob, theme.TextDim)
 		}
