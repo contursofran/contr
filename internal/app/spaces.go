@@ -28,6 +28,7 @@ import (
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/git"
+	"github.com/contursofran/contr/internal/projects"
 )
 
 // RescanAfter is the age at which a scan is old, and the time between rescans
@@ -132,7 +133,10 @@ type SpacesList struct {
 	afterFunc func(d time.Duration, f func()) stopper
 
 	groups []spaces.RepoGroup
-	online bool
+	// projects is the owner's order and hidden groups (D109). Nil keeps the
+	// tree order and hides nothing. UI thread only.
+	projects *projects.Store
+	online   bool
 	// line is the hc problem while contr does not follow the core, else "".
 	line string
 	// shown is the id of the selected worktree at the last rebuild.
@@ -177,6 +181,34 @@ func NewSpacesList(snap func() agentstate.Snapshot, h hostSource, selection *sta
 
 // Groups returns the repo groups shown. Empty without terminals.
 func (l *SpacesList) Groups() []spaces.RepoGroup { return l.groups }
+
+// SetProjects sets the store that orders and hides the groups (D109) and
+// rebuilds the list. Call it on the UI thread. It returns what changed.
+func (l *SpacesList) SetProjects(s *projects.Store) SpacesChange {
+	l.projects = s
+	return l.rebuild()
+}
+
+// applyProjects puts groups in the stored order and leaves the hidden ones
+// out (D109). Without a store it returns groups as they are.
+func (l *SpacesList) applyProjects(groups []spaces.RepoGroup) []spaces.RepoGroup {
+	if l.projects == nil || len(groups) == 0 {
+		return groups
+	}
+	dirs := make([]string, len(groups))
+	byDir := make(map[string]spaces.RepoGroup, len(groups))
+	for i, g := range groups {
+		dirs[i] = g.CommonDir
+		byDir[g.CommonDir] = g
+	}
+	out := make([]spaces.RepoGroup, 0, len(groups))
+	for _, d := range l.projects.Order(dirs) {
+		if !l.projects.Hidden(d) {
+			out = append(out, byDir[d])
+		}
+	}
+	return out
+}
 
 func (l *SpacesList) shownNow() bool { return l.visible == nil || l.visible() }
 
@@ -342,6 +374,7 @@ func (l *SpacesList) rebuild() SpacesChange {
 	snap := l.snapshot()
 	groups := spaces.Build(spaceTerms(snap), l.scan)
 	spaces.ApplyStats(groups, l.stats)
+	groups = l.applyProjects(groups)
 	online, line := true, ""
 	if l.snap != nil && snap.CoreVersion == "" {
 		online, line = false, snap.Problem

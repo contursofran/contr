@@ -21,6 +21,7 @@ import (
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/github"
 	"github.com/contursofran/contr/internal/host"
+	"github.com/contursofran/contr/internal/projects"
 	"github.com/contursofran/contr/internal/usage"
 )
 
@@ -65,6 +66,8 @@ type Frame struct {
 	Visibility *state.Visibility
 	Selection  *state.Selection
 	Status     *state.StatusMessage
+	// Projects is the projects store, loaded after Attach (D109). Nil until then.
+	Projects *projects.Store
 	// Needs is the needs-you row. [Frame.Attach] makes it and puts its view
 	// in Slots.Needs.
 	Needs *NeedsRow
@@ -85,7 +88,10 @@ type Frame struct {
 	// owner for a folder (ErrPickCancelled for none), the second starts the
 	// orchestrator profile there. Both block, so the frame runs them off the
 	// UI thread. Nil makes `+ new` do nothing.
-	PickFolder        func() (string, error)
+	PickFolder func() (string, error)
+	// LoadProjects reads the projects store (D109). It runs on a goroutine.
+	// Nil reads the file in the user config folder.
+	LoadProjects      func() (*projects.Store, error)
 	SpawnOrchestrator func(dir string) error
 	// OpenTerminal serves "+" and Cmd-T (D82): it starts a shell in an hc
 	// terminal for the open project, in dir, and returns its address. It
@@ -577,6 +583,34 @@ func (f *Frame) syncAgents() {
 	f.syncWorkerPRs()
 }
 
+// loadProjects reads the projects store off the UI thread and gives it to the
+// sidebar (D109). A read error shows in the status message; the store is then
+// empty, so the sidebar keeps the tree order, and the file stays as it is (D63).
+func (f *Frame) loadProjects(w Window) {
+	load := f.LoadProjects
+	if load == nil {
+		load = func() (*projects.Store, error) {
+			path, err := projects.Path()
+			if err != nil {
+				return nil, err
+			}
+			return projects.Load(path)
+		}
+	}
+	go func() {
+		store, err := load()
+		w.Update(func() {
+			if err != nil {
+				f.Status.Show("projects: " + err.Error())
+			}
+			if store != nil {
+				f.Projects = store
+				f.SpacesList.SetProjects(store)
+			}
+		})
+	}()
+}
+
 // syncWorkerPRs starts the pull request reads for the workers now (D104).
 func (f *Frame) syncWorkerPRs() {
 	if f.WorkerPRs != nil && f.agentSnap != nil {
@@ -639,6 +673,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	}
 	f.Slots.Spaces = f.SpacesList.View
 	f.SpacesList.Sync()
+	f.loadProjects(w)
 	f.Needs = &NeedsRow{Snapshot: agentSnap}
 	if src != nil {
 		f.Needs.Scope = func() string { return f.scope(src) }
