@@ -153,3 +153,12 @@ func Sized(c *ui.Context, s Status, size float32) ui.Element {
 		})
 	})
 }
+
+// Monitor shows the monitor icon of the device group header at size DIPs. It
+// takes the colour of the text around it.
+func Monitor(c *ui.Context, size float32) ui.Element {
+	if svg("monitor") == nil {
+		return ui.Box(c).Size(size, size).Label("monitor") // file missing, logged
+	}
+	return ui.Icon(c, svg("monitor")).Size(size, size).Label("monitor")
+}

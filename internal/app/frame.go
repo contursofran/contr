@@ -821,7 +821,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	}
 	// The git scan runs on a goroutine and lands through Window.Update.
 	if f.SpacesList == nil {
-		f.SpacesList = NewSpacesList(agentSnap, f.Host, f.Selection,
+		f.SpacesList = NewSpacesList(agentSnap, f.Selection,
 			func() bool { return f.Visibility == nil || f.Visibility.Visible() }, w.Update)
 	}
 	f.SpacesList.OpenPR = f.OpenPR
@@ -845,7 +845,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		},
 		Save: f.SaveProjects, Run: Runner{Post: w.Update}, Status: f.Status.Show, Invalidate: w.Invalidate,
 	}
-	setProjectsHandler(func() { w.Update(f.ProjectsModal.Toggle) })
+	f.SpacesList.OnProjects = f.ProjectsModal.Toggle
 	f.Slots.Spaces = f.SpacesList.View
 	f.SpacesList.Sync()
 	f.loadProjects(w)
@@ -897,7 +897,6 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	return func() {
 		setNewTerminalHandler(nil)
 		setCloseTerminalHandler(nil)
-		setProjectsHandler(nil)
 		unwatch()
 		term()
 		stopAgents()
