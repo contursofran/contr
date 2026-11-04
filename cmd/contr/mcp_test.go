@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -65,7 +66,7 @@ func TestMCPListsAndRunsTheAgentTools(t *testing.T) {
 			"terminal.interrupt": map[string]any{"outcome": "stopped"},
 			"terminal.read":      map[string]any{"text": "screen"},
 		},
-		errs: map[string]error{"terminal.kill": &hc.Error{Kind: "not_found", Message: `no terminal "zz"`}},
+		errs: map[string]error{"terminal.get": &hc.Error{Kind: "not_found", Message: `no terminal "zz"`}},
 	}
 	dial := func(context.Context, func(string) string) (agentsCore, error) { return core, nil }
 	wt := t.TempDir()
@@ -264,7 +265,7 @@ func TestMCPListsTheOwnerTools(t *testing.T) {
 			}
 		}
 	}
-	if strings.Join(names, " ") != "spawn message interrupt stop read prompt list ask_owner decided pin_for_owner unpin_for_owner owner_items" {
+	if strings.Join(names, " ") != "spawn message interrupt stop read prompt list clear_ended ask_owner decided pin_for_owner unpin_for_owner owner_items" {
 		t.Errorf("tools = %v", names)
 	}
 }
@@ -334,5 +335,33 @@ func TestMCPSpawnReadsProfilesEachTime(t *testing.T) {
 	}
 	if _, err := agentTools(m, "")[1].Run(context.Background(), json.RawMessage(`{"name":"w","text":"x"}`)); err != nil {
 		t.Errorf("message with a broken file: %v", err)
+	}
+}
+
+func TestMCPStopKeepAndClearEnded(t *testing.T) {
+	done := worker("t4", "done-1", "finished", nil)
+	done["parent"] = "t1"
+	core := &cliCore{reply: map[string]any{
+		"terminal.get":  worker("t4", "done-1", "live", nil),
+		"terminal.list": map[string]any{"terminals": []any{done}},
+	}}
+	dial := func(context.Context, func(string) string) (agentsCore, error) { return core, nil }
+	_, r := mcpRun(t, dial, map[string]string{"HC_TERMINAL_ID": "t1"},
+		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}`,
+		callLine(2, "stop", map[string]any{"name": "done-1"}),
+		callLine(3, "stop", map[string]any{"name": "done-1", "keep": true}),
+		callLine(4, "clear_ended", map[string]any{}),
+	)
+	// The tools may run in any order, so count the calls: stop twice kills
+	// twice but removes once (keep); clear_ended lists once and removes once.
+	count := map[string]int{}
+	for _, c := range core.calls {
+		count[c]++
+	}
+	if want := map[string]int{"terminal.get": 2, "terminal.kill": 2, "terminal.rm": 2, "terminal.list": 1}; !reflect.DeepEqual(count, want) {
+		t.Errorf("calls = %v, want %v", count, want)
+	}
+	if got, isErr := toolText(t, r["4"]); isErr || !strings.Contains(got, "done-1") {
+		t.Errorf("clear_ended = %q, %v", got, isErr)
 	}
 }

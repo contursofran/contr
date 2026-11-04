@@ -52,7 +52,9 @@ func AgentTabs(s agentstate.Snapshot, project, selected string) []AgentTab {
 		add(w)
 	}
 	for _, w := range s.Workers {
-		add(w)
+		if w.Live { // an ended worker has no tab (D112)
+			add(w)
+		}
 	}
 	for _, w := range s.Terminals {
 		add(w)

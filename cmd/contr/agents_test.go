@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -165,7 +166,7 @@ func TestAgentsSpawn(t *testing.T) {
 func TestAgentsSendInterruptStopRead(t *testing.T) {
 	core := &cliCore{
 		reply: map[string]any{"terminal.interrupt": map[string]any{"outcome": "stopped"}, "terminal.read": map[string]any{"text": "line\n\n"}},
-		errs:  map[string]error{"terminal.kill": &hc.Error{Kind: "not_found", Message: `no terminal "zz"`}},
+		errs:  map[string]error{"terminal.get": &hc.Error{Kind: "not_found", Message: `no terminal "zz"`}},
 	}
 	if code, _, _ := run(t, core, nil, "send", "w1", "fix", "the", "test"); code != 0 || core.params[0]["text"] != "fix the test" {
 		t.Errorf("send: %d %v", code, core.params)
@@ -257,7 +258,7 @@ func TestAgentsBrokenConfigBlocksOnlySpawn(t *testing.T) {
 		t.Fatal(err)
 	}
 	env := map[string]string{"CONTR_AGENTS_CONFIG": path}
-	if code, _, errs := run(t, &cliCore{}, env, "stop", "w1"); code != 0 {
+	if code, _, errs := run(t, &cliCore{reply: map[string]any{"terminal.get": worker("t1", "w1", "live", nil)}}, env, "stop", "w1"); code != 0 {
 		t.Errorf("stop with a broken config: %d %q", code, errs)
 	}
 	if code, _, _ := run(t, &cliCore{}, env, "spawn", "--name", "b", "--profile", "builder"); code != 1 {
@@ -312,5 +313,50 @@ func TestAgentsSpawnReviewPROutsideARepository(t *testing.T) {
 	code, _, errs := run(t, core, nil, "spawn", "--name", "r", "--profile", "reviewer", "--review-pr", "3", "--worktree", t.TempDir())
 	if code != 1 || !strings.Contains(errs, "git rev-parse") || len(core.calls) != 0 {
 		t.Errorf("code %d err %q calls %v", code, errs, core.calls)
+	}
+}
+
+func TestAgentsStopRemovesUnlessKept(t *testing.T) {
+	for _, tc := range []struct {
+		args  []string
+		state string
+		want  []string
+	}{
+		{[]string{"stop", "w1"}, "live", []string{"terminal.get", "terminal.kill", "terminal.rm"}},
+		{[]string{"stop", "w1", "--keep"}, "live", []string{"terminal.get", "terminal.kill"}},
+		{[]string{"stop", "w1"}, "finished", []string{"terminal.get", "terminal.rm"}},
+		{[]string{"rm", "w1"}, "finished", []string{"terminal.rm"}},
+	} {
+		core := &cliCore{reply: map[string]any{"terminal.get": worker("t1", "w1", tc.state, nil)}}
+		if code, _, errs := run(t, core, nil, tc.args...); code != 0 || !slices.Equal(core.calls, tc.want) {
+			t.Errorf("%v (%s): %d %q calls %v, want %v", tc.args, tc.state, code, errs, core.calls, tc.want)
+		}
+	}
+}
+
+func TestAgentsRmEnded(t *testing.T) {
+	mine := func(addr, name, state string) map[string]any {
+		w := worker(addr, name, state, nil)
+		w["parent"] = "t1"
+		return w
+	}
+	other := worker("t8", "theirs", "finished", nil)
+	other["parent"] = "t2"
+	core := &cliCore{reply: map[string]any{"terminal.list": map[string]any{"terminals": []any{
+		mine("t4", "done-1", "finished"), mine("t5", "busy", "live"), other,
+	}}}}
+	code, out, errs := run(t, core, map[string]string{"HC_TERMINAL_ID": "t1"}, "rm", "--ended")
+	if code != 0 || out != "done-1\n" || !slices.Equal(core.calls, []string{"terminal.list", "terminal.rm"}) || core.params[1]["terminal"] != "t4" {
+		t.Errorf("rm --ended: %d %q %q calls %v", code, out, errs, core.calls)
+	}
+	// Outside hc nothing is removed.
+	core = &cliCore{reply: core.reply}
+	if code, _, _ := run(t, core, nil, "rm", "--ended"); code != 0 || slices.Contains(core.calls, "terminal.rm") {
+		t.Errorf("rm --ended outside hc: %d %v", code, core.calls)
+	}
+	for _, args := range [][]string{{"rm"}, {"rm", "a", "--ended"}, {"rm", "a", "b"}, {"stop", "a", "--ended"}, {"rm", "a", "--keep"}} {
+		if code, _, _ := run(t, &cliCore{}, nil, args...); code != 2 {
+			t.Errorf("%v: code %d, want 2", args, code)
+		}
 	}
 }

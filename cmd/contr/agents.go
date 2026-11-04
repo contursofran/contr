@@ -33,7 +33,11 @@ const agentsUsage = `Usage:
                                                    the worker there
   contr agents send <name> <text…>                 type text and press Enter
   contr agents interrupt <name>                    press the stop key
-  contr agents stop <name>                         end the worker's program
+  contr agents stop <name> [--keep]                end the worker's program and remove its
+                                                   terminal; --keep leaves the finished one
+  contr agents rm <name>                           remove a finished worker's terminal
+  contr agents rm --ended                          remove all finished workers that this
+                                                   terminal started
   contr agents read <name> [--lines N]             print the screen and history
   contr agents prompt <name>                       print the menu a blocked worker waits on, or "no prompt"
   contr agents watch                               print the list as JSON on each change
@@ -107,9 +111,11 @@ func runAgents(args []string, stdout, stderr io.Writer, dial func(context.Contex
 		noParent = fs.Bool("no-parent", false, "start without a parent terminal")
 		taskFile = fs.String("task-file", "", "read the task from this file")
 		reviewPR = fs.Int("review-pr", 0, "start in a review worktree at this pull request's head")
+		keep     = fs.Bool("keep", false, "keep the finished terminal")
+		ended    = fs.Bool("ended", false, "remove all finished workers started by this terminal")
 		lines    = fs.Int("lines", 0, "only the last lines")
 	)
-	need := map[string]int{"ls": 0, "watch": 0, "spawn": 0, "send": 2, "interrupt": 1, "stop": 1, "read": 1, "prompt": 1}
+	need := map[string]int{"ls": 0, "watch": 0, "spawn": 0, "send": 2, "interrupt": 1, "stop": 1, "rm": 0, "read": 1, "prompt": 1}
 	n, ok := need[sub]
 	if !ok {
 		fmt.Fprintf(stderr, "contr agents: unknown command %s\n%s", sub, agentsUsage)
@@ -123,6 +129,8 @@ func runAgents(args []string, stdout, stderr io.Writer, dial func(context.Contex
 		"ls":    {"all", "json"},
 		"spawn": {"name", "profile", "issue", "worktree", "project", "role", "no-parent", "json", "task-file", "review-pr"},
 		"read":  {"lines"},
+		"stop":  {"keep"},
+		"rm":    {"ended"},
 	}
 	var bad string
 	fs.Visit(func(f *flag.Flag) {
@@ -134,8 +142,13 @@ func runAgents(args []string, stdout, stderr io.Writer, dial func(context.Contex
 		fmt.Fprintf(stderr, "contr agents %s: flag --%s does not apply\n%s", sub, bad, agentsUsage)
 		return 2
 	}
-	if len(pos) < n || (n == 1 && len(pos) > 1) || (n == 0 && sub != "spawn" && len(pos) > 0) {
+	if len(pos) < n || (n == 1 && len(pos) > 1) || (n == 0 && sub != "spawn" && sub != "rm" && len(pos) > 0) {
 		fmt.Fprintf(stderr, "contr agents %s: wrong number of arguments\n%s", sub, agentsUsage)
+		return 2
+	}
+
+	if sub == "rm" && *ended == (len(pos) == 1) || sub == "rm" && len(pos) > 1 {
+		fmt.Fprintf(stderr, "contr agents rm: give one name, or --ended\n%s", agentsUsage)
 		return 2
 	}
 
@@ -159,7 +172,7 @@ func runAgents(args []string, stdout, stderr io.Writer, dial func(context.Contex
 		return 1
 	}
 	defer core.Close()
-	m := agents.New(core, cfg)
+	m := agents.New(core, cfg).WithEnv(getenv)
 
 	err = func() error {
 		switch sub {
@@ -205,7 +218,16 @@ func runAgents(args []string, stdout, stderr io.Writer, dial func(context.Contex
 			_, err = fmt.Fprintln(stdout, out)
 			return err
 		case "stop":
-			return m.Stop(ctx, pos[0])
+			return m.Stop(ctx, pos[0], *keep)
+		case "rm":
+			if !*ended {
+				return m.Remove(ctx, pos[0])
+			}
+			names, err := m.RemoveEnded(ctx)
+			for _, n := range names {
+				fmt.Fprintln(stdout, n)
+			}
+			return err
 		case "prompt":
 			txt, err := pendingPrompt(ctx, m, pos[0])
 			if err != nil {

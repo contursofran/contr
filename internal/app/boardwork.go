@@ -100,11 +100,11 @@ func workIcon(w agents.Worker) icons.Status {
 }
 
 // WorkRows returns the rows for project ("" for all projects), in the order
-// of the snapshot. Orchestrators are not rows.
+// of the snapshot. Orchestrators and ended workers are not rows.
 func WorkRows(snap agentstate.Snapshot, project string) []WorkRow {
 	var rows []WorkRow
 	for _, w := range snap.Workers {
-		if project != "" && w.Project != project {
+		if !w.Live || (project != "" && w.Project != project) { // ended workers are dropped (D112)
 			continue
 		}
 		row := WorkRow{Address: w.Address, Label: w.Name, Title: w.Name, Role: w.Role, Status: StatusWord(w)}

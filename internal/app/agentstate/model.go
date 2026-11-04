@@ -256,18 +256,13 @@ func (m *Model) Interrupt(name string) error {
 	return err
 }
 
-// Stop closes a worker's terminal.
+// Stop ends a worker's program and keeps the finished terminal.
 func (m *Model) Stop(name string) error {
-	return m.mgr.Stop(context.Background(), name)
+	return m.mgr.Stop(context.Background(), name, true)
 }
 
-// Close stops a terminal and removes it from hc, so the watch drops it. A
-// stopped terminal stays in hc as finished; Close is for a plain terminal
-// that has nothing to keep. It blocks: call it off the UI thread.
+// Close stops a terminal and removes it from hc, so the watch drops it. It
+// blocks: call it off the UI thread.
 func (m *Model) Close(name string) error {
-	ctx := context.Background()
-	if err := m.mgr.Stop(ctx, name); err != nil {
-		return err
-	}
-	return m.mgr.Remove(ctx, name)
+	return m.mgr.Stop(context.Background(), name, false)
 }
