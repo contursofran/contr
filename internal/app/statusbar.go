@@ -67,7 +67,7 @@ const (
 type segment struct {
 	label string // element label
 	tone  tone
-	// name is "CPU", "MEM", "contr", "herdr", or the whole message text.
+	// name is "CPU", "MEM", "contr", "hc", or the whole message text.
 	name string
 	// value is "38%", "–", "0.1.0" or "0.9.3". It is empty for the message.
 	value string

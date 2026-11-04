@@ -16,18 +16,14 @@ import (
 	"github.com/contursofran/contr/internal/hc"
 )
 
-// TestBlockedCardCapture runs the built app against the dev herdr and a
+// TestBlockedCardCapture runs the built app against a
 // scratch hc core with a worker that sits at a Claude-shaped permission menu.
 // It opens the answer card on the blocked tab and saves tmp/e2e/blocked-card.png.
 //
-//	eval "$(scripts/dev-herdr.sh)"
 //	go test -tags e2e -run TestBlockedCardCapture ./cmd/contr
 //
-// It never touches the owner's herdr or hc core.
+// It never touches the owner's hc core.
 func TestBlockedCardCapture(t *testing.T) {
-	if !strings.Contains(os.Getenv("HERDR_SOCKET_PATH"), "contr-go-dev-herdr") {
-		t.Skip("HERDR_SOCKET_PATH is not the dev herdr; run eval \"$(scripts/dev-herdr.sh)\" first")
-	}
 	if _, err := exec.LookPath("hc"); err != nil {
 		t.Skip("hc is not installed")
 	}

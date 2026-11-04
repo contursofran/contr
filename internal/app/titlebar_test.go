@@ -10,13 +10,8 @@ import (
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
-	"github.com/contursofran/contr/internal/herdr"
 	"github.com/contursofran/contr/internal/owner"
 )
-
-func connectedWith(tree herdr.HerdrTree) herdr.LiveHerdr {
-	return herdr.LiveHerdr{State: connected(), Tree: &tree}
-}
 
 // tabsOf is the tabs of project p: orchestrator "lead" (selected), workers b1 (working, issue
 // #5 in worktree .../fix-x) and b2 (blocked, no issue).
@@ -191,7 +186,7 @@ func TestPanelGlyphFollowsThePanelState(t *testing.T) {
 // frame the state is the frame's and MyGo builds the view for each frame, so this checks that
 // the toggle follows the state and keeps its place.
 func TestThePanelToggleFollowsTheFrameAndKeepsItsPlace(t *testing.T) {
-	f, _, tt := newTester(t, connected())
+	f, tt := newTester(t)
 	if err := tt.Click(LabelPanelToggle); err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +230,7 @@ func TestManyTabsShrinkToTheMinimumThenClip(t *testing.T) {
 // agentFrame is a frame whose agents come from snap, with a selection.
 func agentFrame(t *testing.T, snap *agentstate.Snapshot) (*Frame, *ui.Tester) {
 	t.Helper()
-	f, _, tt := newTester(t, connected())
+	f, tt := newTester(t)
 	f.Selection = state.NewSelection(nil)
 	f.agentSnap = func() agentstate.Snapshot { return *snap }
 	return f, tt
@@ -341,7 +336,7 @@ func TestTheFrameBadgeCountsTheOpenItemsOfTheProject(t *testing.T) {
 }
 
 func TestNoAgentSourceShowsNoTabs(t *testing.T) {
-	_, _, tt := newTester(t, connected())
+	_, tt := newTester(t)
 	if !absent(tt, LabelTabs) && box(t, tt, LabelTabs).W != 0 {
 		t.Error("the tabs row shows without agents")
 	}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -17,40 +16,15 @@ import (
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/hc"
-	"github.com/contursofran/contr/internal/herdr"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/usage"
 )
 
-// fakeLive is a liveSource the test changes.
-type fakeLive struct {
-	mu   sync.Mutex
-	live herdr.LiveHerdr
-}
-
-func (f *fakeLive) Live() herdr.LiveHerdr {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.live
-}
-
-func (f *fakeLive) set(s herdr.ConnState) {
-	f.mu.Lock()
-	f.live = herdr.LiveHerdr{State: s}
-	f.mu.Unlock()
-}
-
-func notRunning() herdr.ConnState {
-	return herdr.ConnState{Kind: herdr.NotRunning, Reason: "no socket"}
-}
-
-// newTester builds a frame of 1440x900 over a herdr in state s.
-func newTester(t *testing.T, s herdr.ConnState) (*Frame, *fakeLive, *ui.Tester) {
+// newTester builds a frame of 1440x900.
+func newTester(t *testing.T) (*Frame, *ui.Tester) {
 	t.Helper()
-	live := &fakeLive{}
-	live.set(s)
-	f := NewFrame(live)
-	return f, live, ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)
+	f := NewFrame()
+	return f, ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)
 }
 
 func box(t *testing.T, tt *ui.Tester, label string) ui.Rect {
@@ -68,7 +42,7 @@ func absent(tt *ui.Tester, label string) bool {
 }
 
 func TestFrameMatchesDesignSizes(t *testing.T) {
-	_, _, tt := newTester(t, connected())
+	_, tt := newTester(t)
 	sidebar := box(t, tt, LabelSidebar)
 	if sidebar.Y != 0 || sidebar.W != theme.SidebarWidth || sidebar.H != theme.WindowHeight-theme.StatusBarHeight {
 		t.Errorf("sidebar %+v, want 280 wide from the top to the status bar", sidebar)
@@ -94,7 +68,7 @@ func TestFrameMatchesDesignSizes(t *testing.T) {
 }
 
 func TestToggleSitsRightOfTheWindowButtons(t *testing.T) {
-	_, _, tt := newTester(t, connected())
+	_, tt := newTester(t)
 	button := box(t, tt, LabelSidebarToggle)
 	if button.X != theme.TrafficLightInset {
 		t.Errorf("toggle at x %v, want %d", button.X, theme.TrafficLightInset)
@@ -105,7 +79,7 @@ func TestToggleSitsRightOfTheWindowButtons(t *testing.T) {
 }
 
 func TestToggleHidesAndReopensTheSidebar(t *testing.T) {
-	f, _, tt := newTester(t, connected())
+	f, tt := newTester(t)
 	if err := tt.Click(LabelSidebarToggle); err != nil {
 		t.Fatal(err)
 	}
@@ -133,34 +107,8 @@ func TestToggleHidesAndReopensTheSidebar(t *testing.T) {
 	}
 }
 
-func TestTerminalShownWhenHerdrDown(t *testing.T) {
-	// hc terminals do not need herdr: the terminal slot runs, and the area
-	// shows no herdr line (#246).
-	for _, st := range []herdr.ConnState{notRunning(), {Kind: herdr.Connecting}} {
-		_, _, tt := newTester(t, st)
-		line, _ := st.Line()
-		if !tt.HasText("[terminal]") {
-			t.Errorf("state %+v: texts %q, want the terminal slot", st, tt.Texts())
-		}
-		if tt.HasText(line) {
-			t.Errorf("state %+v: the terminal area shows %q", st, line)
-		}
-	}
-}
-
-func TestTerminalSlotFollowsNoHerdrState(t *testing.T) {
-	_, live, tt := newTester(t, connected())
-	for _, st := range []herdr.ConnState{notRunning(), {Kind: herdr.Connecting}, connected()} {
-		live.set(st)
-		tt.Frame()
-		if !tt.HasText("[terminal]") {
-			t.Fatalf("state %+v: texts %q, want the terminal slot", st, tt.Texts())
-		}
-	}
-}
-
 func TestPanelToggleHidesAndShowsThePanel(t *testing.T) {
-	f, _, tt := newTester(t, connected())
+	f, tt := newTester(t)
 	if err := tt.Click(LabelPanelToggle); err != nil {
 		t.Fatal(err)
 	}
@@ -181,27 +129,10 @@ func TestPanelToggleHidesAndShowsThePanel(t *testing.T) {
 	}
 }
 
-// The Rust frame counted the title bar's herdr commands. The frame has no
-// herdr command path: the toggle only changes the layout. M6 adds the tab
-// commands and must keep this test.
-func TestThePanelToggleSendsNoHerdrCommand(t *testing.T) {
-	f, live, tt := newTester(t, connected())
-	before := live.Live()
-	if err := tt.Click(LabelPanelToggle); err != nil {
-		t.Fatal(err)
-	}
-	if live.Live() != before {
-		t.Error("the toggle changed the herdr state")
-	}
-	if f.PanelOpen() {
-		t.Error("the toggle should hide the panel")
-	}
-}
-
 // MyGo builds the view again for each frame, so the slot builds once per
 // redraw. The terminal's own cache comes with the terminal view (M5).
 func TestAFrameRedrawDoesNotRenderTheTerminalAgain(t *testing.T) {
-	f, _, _ := newTester(t, connected())
+	f, _ := newTester(t)
 	builds := 0
 	f.Slots.Terminal = func(c *ui.Context) {
 		builds++
@@ -216,7 +147,7 @@ func TestAFrameRedrawDoesNotRenderTheTerminalAgain(t *testing.T) {
 }
 
 // fakeWindow is a Window the test drives. Update queues fn, as MyGo does:
-// the test runs the queue with flush on its own goroutine, so no herdr or
+// the test runs the queue with flush on its own goroutine, so no agent or
 // board goroutine runs view code.
 type fakeWindow struct {
 	visible, focused bool
@@ -282,38 +213,14 @@ func (w *fakeWindow) OnRestore(fn func()) func() {
 	return func() { w.restor = nil }
 }
 
-// A herdr change reaches the views only through Window.Update: the herdr
-// goroutine queues the sync and does not run it. Before the fix the fake ran
-// the sync on the herdr goroutine, which raced SetVisible under -race.
-func TestAttachSendsHerdrChangesThroughWindowUpdate(t *testing.T) {
-	w := &fakeWindow{visible: true}
-	f := NewFrame(nil)
-	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
-	f.Usage = usage.NewSampler(usage.Unread, nil)
-	stop := f.Attach(context.Background(), w, herdr.SocketTarget(filepath.Join(t.TempDir(), "missing.sock")))
-	defer stop()
-	deadline := time.Now().Add(2 * time.Second)
-	for w.queued() == 0 {
-		if time.Now().After(deadline) {
-			t.Fatal("the herdr change should queue a sync with Window.Update")
-		}
-		time.Sleep(time.Millisecond)
-	}
-	// The views stay on this goroutine while the queue runs.
-	w.hide()
-	w.flush()
-	w.show()
-	f.SpacesList.Sync()
-}
-
 func TestAttachWiresTheStateToTheWindow(t *testing.T) {
 	w := &fakeWindow{visible: true}
-	f := NewFrame(nil)
+	f := NewFrame()
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
-	stop := f.Attach(context.Background(), w, herdr.SocketTarget(filepath.Join(t.TempDir(), "missing.sock")))
-	if f.Herdr == nil || f.Visibility == nil || f.Selection == nil || f.Status == nil {
-		t.Fatal("Attach should set the herdr and the state")
+	stop := f.Attach(w)
+	if f.Visibility == nil || f.Selection == nil || f.Status == nil {
+		t.Fatal("Attach should set the state")
 	}
 	if !f.Visibility.Visible() {
 		t.Error("the window is shown, so Visibility should be")
@@ -323,7 +230,7 @@ func TestAttachWiresTheStateToTheWindow(t *testing.T) {
 		t.Error("Visibility should follow the window to hidden")
 	}
 	before := w.invalidated
-	f.Selection.Select(state.Selected{Kind: state.KindAgent, ID: "a1"})
+	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "a1"})
 	f.Status.Show("hello")
 	if w.invalidated != before+2 {
 		t.Errorf("redraws %d, want 2 more", w.invalidated-before)
@@ -334,21 +241,15 @@ func TestAttachWiresTheStateToTheWindow(t *testing.T) {
 	}
 }
 
-func (f *fakeLive) setLive(l herdr.LiveHerdr) {
-	f.mu.Lock()
-	f.live = l
-	f.mu.Unlock()
-}
-
 // The samplers follow the window: they read while it is shown and stay idle while it is hidden (D9).
 func TestAttachTiesTheSamplersToTheWindowVisibility(t *testing.T) {
 	reads := make(chan struct{}, 8)
 	attach := func(visible bool) (*fakeWindow, func()) {
 		w := &fakeWindow{visible: visible}
-		f := NewFrame(nil)
+		f := NewFrame()
 		f.Host = host.New(func() (host.Stats, error) { reads <- struct{}{}; return host.Stats{}, nil }, nil)
 		f.Usage = usage.NewSampler(usage.Unread, nil)
-		return w, f.Attach(context.Background(), w, herdr.SocketTarget(filepath.Join(t.TempDir(), "missing.sock")))
+		return w, f.Attach(w)
 	}
 	_, stop := attach(false)
 	select {
@@ -376,10 +277,10 @@ func TestAttachTiesTheSamplersToTheWindowVisibility(t *testing.T) {
 
 func TestAttachWiresTheTerminalToTheWindowFocus(t *testing.T) {
 	w := &fakeWindow{visible: true, focused: true}
-	f := NewFrame(nil)
+	f := NewFrame()
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
-	stop := f.Attach(context.Background(), w, herdr.SocketTarget(filepath.Join(t.TempDir(), "missing.sock")))
+	stop := f.Attach(w)
 	if f.Slots.Terminal == nil {
 		t.Fatal("Attach should put the terminal view in its slot")
 	}
@@ -398,7 +299,7 @@ func TestAttachWiresTheTerminalToTheWindowFocus(t *testing.T) {
 // number of reads started.
 func reviewFrame(t *testing.T) (*Frame, *int) {
 	t.Helper()
-	f, _, _ := newTester(t, notRunning())
+	f, _ := newTester(t)
 	r, reads := newTestReview()
 	f.Review = r
 	f.Selection = state.NewSelection(f.syncReview)
@@ -423,23 +324,6 @@ func TestFrameReviewFollowsSelection(t *testing.T) {
 	}
 }
 
-func TestFrameReviewFollowsAgentFolder(t *testing.T) {
-	a := reviewScratch(t)
-	f, live, _ := newTester(t, notRunning())
-	r, _ := newTestReview()
-	f.Review = r
-	f.Selection = state.NewSelection(f.syncReview)
-	live.mu.Lock()
-	live.live.Tree = &herdr.HerdrTree{Workspaces: []herdr.Workspace{{Tabs: []herdr.Tab{{
-		Panes: []herdr.Pane{{ID: "p1", Cwd: &a.dir}}}}}}}
-	live.mu.Unlock()
-	f.ToggleReview()
-	f.Selection.Select(state.Selected{Kind: state.KindAgent, ID: "p1"})
-	if f.Review.repo.Dir != a.dir {
-		t.Fatalf("repo %q, want %q", f.Review.repo.Dir, a.dir)
-	}
-}
-
 func TestFrameReviewHiddenNoReads(t *testing.T) {
 	a := reviewScratch(t)
 	f, reads := reviewFrame(t)
@@ -460,9 +344,7 @@ func TestFrameReviewHiddenNoReads(t *testing.T) {
 }
 
 func TestFrameReviewReplacesTerminal(t *testing.T) {
-	live := &fakeLive{}
-	live.set(herdr.ConnState{Kind: herdr.Connected})
-	f := NewFrame(live)
+	f := NewFrame()
 	f.Review, _ = newTestReview()
 	tt := ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)
 	if _, ok := tt.Find(LabelReview); ok {
@@ -477,7 +359,7 @@ func TestFrameReviewReplacesTerminal(t *testing.T) {
 
 func TestAttachStartsAndStopsTheAgentState(t *testing.T) {
 	w := &fakeWindow{visible: true}
-	f := NewFrame(nil)
+	f := NewFrame()
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	var notify func()
@@ -486,7 +368,7 @@ func TestAttachStartsAndStopsTheAgentState(t *testing.T) {
 		notify = n
 		return &source{snap: agentstate.Snapshot{Workers: []agents.Worker{{Name: "b1", Address: "a", Live: true}}}}, func() { stopped++ }
 	}
-	stop := f.Attach(context.Background(), w, herdr.SocketTarget(filepath.Join(t.TempDir(), "missing.sock")))
+	stop := f.Attach(w)
 	if f.Card == nil || f.Worker == nil || f.Needs == nil || f.Needs.Open == nil || f.Slots.Card == nil {
 		t.Error("Attach should wire the needs row, the answer card and the worker view")
 	}
@@ -515,7 +397,7 @@ func (idleSource) Watch(context.Context) (<-chan hc.Event, func(), error) { retu
 
 func TestTheTerminalFollowsTheSelectedAgent(t *testing.T) {
 	w := &fakeWindow{visible: true}
-	f := NewFrame(nil)
+	f := NewFrame()
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	var asked []string
@@ -523,7 +405,7 @@ func TestTheTerminalFollowsTheSelectedAgent(t *testing.T) {
 		asked = append(asked, addr)
 		return idleSource{addr}
 	}
-	stop := f.Attach(context.Background(), w, herdr.SocketTarget(filepath.Join(t.TempDir(), "missing.sock")))
+	stop := f.Attach(w)
 	defer stop()
 	if len(asked) != 0 {
 		t.Fatalf("a terminal was asked for before a selection: %v", asked)
@@ -533,7 +415,7 @@ func TestTheTerminalFollowsTheSelectedAgent(t *testing.T) {
 	if len(asked) != 2 || asked[0] != "t2" || asked[1] != "t1" {
 		t.Errorf("terminals asked = %v, want t2 then t1", asked)
 	}
-	// A herdr pane or a worktree has no hc terminal; the same terminal again does not restart.
+	// A worktree has no hc terminal; the same terminal again does not restart.
 	f.Selection.Select(state.Selected{Kind: state.KindWorktree, ID: "/repo"})
 	f.syncTerminal()
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t1"})

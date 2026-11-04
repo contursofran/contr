@@ -6,9 +6,9 @@ import (
 	"testing"
 )
 
-// TestNoHerdrBoardImport keeps the code that read the herdr-agents mod's
+// TestNoBoardImport keeps the code that read the old mod's
 // board out of the app (D47).
-func TestNoHerdrBoardImport(t *testing.T) {
+func TestNoBoardImport(t *testing.T) {
 	out, err := exec.Command("go", "list", "-deps", "-test", ".").CombinedOutput()
 	if err != nil {
 		t.Fatalf("go list: %v\n%s", err, out)

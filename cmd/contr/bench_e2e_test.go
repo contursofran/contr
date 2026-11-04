@@ -30,16 +30,13 @@ const (
 )
 
 // TestAppBench measures the whole app (frames, CPU and memory) in seven phases
-// against the dev herdr and a scratch hc core with three agents: an
+// against a scratch hc core with three agents: an
 // orchestrator, a "flag" worker whose status the test flips between idle and
 // working, and a "term" worker with a shell, which the app shows in its
 // terminal view. See docs/BENCHMARKS.md, "How to run the app test". It is a
 // heavy job: run nothing else at the same time. Files go to tmp/bench/:
 // start.png, busy.png, result.md and result.json.
 func TestAppBench(t *testing.T) {
-	if !strings.Contains(os.Getenv("HERDR_SOCKET_PATH"), "contr-go-dev-herdr") {
-		t.Skip("HERDR_SOCKET_PATH is not the dev herdr; run eval \"$(scripts/dev-herdr.sh)\" first")
-	}
 	if _, err := exec.LookPath("hc"); err != nil {
 		t.Skip("hc is not installed")
 	}

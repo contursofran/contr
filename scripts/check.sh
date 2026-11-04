@@ -13,7 +13,7 @@ if [ -n "$unformatted" ]; then
 fi
 
 go vet ./...
-# Compile the files behind build tags (no hc or herdr is needed to vet).
+# Compile the files behind build tags (no hc is needed to vet).
 go vet -tags 'e2e bench hccore' ./...
 # Merge-conflict markers and duplicate decision ids.
 scripts/check-conflicts.sh

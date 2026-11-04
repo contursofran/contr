@@ -13,20 +13,20 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/contursofran/contr/internal/hc/hctest"
 )
 
-// TestFrameWindowCapture runs the built app against the dev herdr, checks the
+// TestFrameWindowCapture runs the built app against a scratch hc core, checks the
 // frame's elements and saves the window as tmp/e2e/frame.png (and
-// frame-no-panel.png after the panel toggle). Start the dev herdr first:
+// frame-no-panel.png after the panel toggle):
 //
-//	eval "$(scripts/dev-herdr.sh)"
 //	go test -tags e2e -run TestFrameWindowCapture ./cmd/contr
 //
-// It refuses to run against any herdr but the dev one.
+// It never touches the owner's hc core.
 func TestFrameWindowCapture(t *testing.T) {
-	herdrSock := os.Getenv("HERDR_SOCKET_PATH")
-	if !strings.Contains(herdrSock, "contr-go-dev-herdr") {
-		t.Skip("HERDR_SOCKET_PATH is not the dev herdr; run eval \"$(scripts/dev-herdr.sh)\" first")
+	if _, err := exec.LookPath("hc"); err != nil {
+		t.Skip("hc is not installed")
 	}
 	root, err := filepath.Abs("../..")
 	if err != nil {
@@ -45,16 +45,13 @@ func TestFrameWindowCapture(t *testing.T) {
 	}
 
 	// A short path: macOS limits socket paths to 103 bytes.
-	dir, err := os.MkdirTemp("", "contr-e2e")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	core := hctest.New(t, "contr-fr", hctest.Session("fr"))
+	dir := core.Dir
 	sock := filepath.Join(dir, "a.sock")
 	app := exec.Command(bin)
 	// The app must not read the real usage files.
-	app.Env = append(os.Environ(), "MYGO_AUTOMATION="+sock,
-		"CONTR_STATE_DIR="+filepath.Join(dir, "state"), "CODEX_HOME="+filepath.Join(dir, "codex"))
+	app.Env = append(os.Environ(), append(core.Env, "MYGO_AUTOMATION="+sock,
+		"CONTR_STATE_DIR="+filepath.Join(dir, "state"), "CODEX_HOME="+filepath.Join(dir, "codex"))...)
 	if err := app.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -66,56 +63,16 @@ func TestFrameWindowCapture(t *testing.T) {
 	c.call(t, "idle", map[string]any{"timeout": 10000})
 
 	labels := c.labels(t)
-	for _, want := range []string{"Toggle sidebar", "Toggle panel", "contr", "New tab", "Split pane"} {
+	for _, want := range []string{"Toggle sidebar", "Toggle panel", "contr", "New terminal"} {
 		if !labels[want] {
 			t.Errorf("no element %q; labels %v", want, keys(labels))
 		}
 	}
 	c.capture(t, filepath.Join(out, "frame.png"))
 
-	// "New tab" sends tab.create to the dev herdr; the tree then holds one more tab.
-	before := c.tabCount(t)
-	c.call(t, "act", map[string]any{"id": c.idOf(t, "New tab"), "action": "press"})
-	deadline := time.Now().Add(10 * time.Second)
-	for c.tabCount(t) <= before && time.Now().Before(deadline) {
-		time.Sleep(100 * time.Millisecond)
-	}
-	if got := c.tabCount(t); got <= before {
-		t.Errorf("tabs %d after New tab, want more than %d", got, before)
-	}
-	c.call(t, "idle", map[string]any{"timeout": 10000})
-	c.capture(t, filepath.Join(out, "frame-tabs.png"))
-
 	c.call(t, "act", map[string]any{"id": c.idOf(t, "Toggle panel"), "action": "press"})
 	c.call(t, "idle", map[string]any{"timeout": 10000})
 	c.capture(t, filepath.Join(out, "frame-no-panel.png"))
-}
-
-// herdrCmd runs the herdr command line. The test runs it only against the
-// dev herdr, whose socket the environment names.
-func herdrCmd(t *testing.T, args ...string) []byte {
-	t.Helper()
-	msg, err := exec.Command("herdr", args...).CombinedOutput()
-	if err != nil {
-		t.Fatalf("herdr %v: %v\n%s", args, err, msg)
-	}
-	return msg
-}
-
-// lastPane returns the id of the last pane of the dev herdr.
-func lastPane(t *testing.T) string {
-	t.Helper()
-	var res struct {
-		Result struct {
-			Panes []struct {
-				PaneID string `json:"pane_id"`
-			}
-		}
-	}
-	if err := json.Unmarshal(herdrCmd(t, "pane", "list"), &res); err != nil || len(res.Result.Panes) == 0 {
-		t.Fatalf("pane list: %v", err)
-	}
-	return res.Result.Panes[len(res.Result.Panes)-1].PaneID
 }
 
 func (c *client) hasPrefix(t *testing.T, prefix string) bool {
@@ -219,20 +176,6 @@ func (c *client) labels(t *testing.T) map[string]bool {
 		m[n.Label] = true
 	}
 	return m
-}
-
-// tabCount counts the tab buttons in the window: their labels end in a status word.
-func (c *client) tabCount(t *testing.T) int {
-	t.Helper()
-	n := 0
-	for _, nd := range c.nodes(t) {
-		for _, status := range []string{", idle", ", working", ", blocked", ", done"} {
-			if strings.HasSuffix(nd.Label, status) {
-				n++
-			}
-		}
-	}
-	return n
 }
 
 func (c *client) idOf(t *testing.T, label string) string {

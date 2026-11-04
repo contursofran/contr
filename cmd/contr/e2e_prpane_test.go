@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -16,17 +15,13 @@ import (
 	"github.com/contursofran/contr/internal/hc"
 )
 
-// TestPRPaneCapture runs the built app against the dev herdr and a scratch hc
+// TestPRPaneCapture runs the built app against a scratch hc
 // core with a worker that has an issue and a worktree, and a fake gh on PATH. It
 // clicks the worker's number on the board and captures the PR pane
-// (tmp/e2e/pr-pane.png). Start the dev herdr first:
+// (tmp/e2e/pr-pane.png):
 //
-//	eval "$(scripts/dev-herdr.sh)"
 //	go test -tags e2e -run TestPRPaneCapture ./cmd/contr
 func TestPRPaneCapture(t *testing.T) {
-	if !strings.Contains(os.Getenv("HERDR_SOCKET_PATH"), "contr-go-dev-herdr") {
-		t.Skip("HERDR_SOCKET_PATH is not the dev herdr; run eval \"$(scripts/dev-herdr.sh)\" first")
-	}
 	if _, err := exec.LookPath("hc"); err != nil {
 		t.Skip("hc is not installed")
 	}

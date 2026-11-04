@@ -3,26 +3,27 @@
 package main
 
 import (
-	"encoding/json"
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/hc"
+	"github.com/contursofran/contr/internal/hc/hctest"
 )
 
 // TestReviewCapture selects a scratch repo in the sidebar, turns Review on and saves the window
-// as tmp/e2e/review-whole.png and review-commit.png (By commit). Start the dev herdr first:
+// as tmp/e2e/review-whole.png and review-commit.png (By commit):
 //
-//	eval "$(scripts/dev-herdr.sh)"
 //	go test -tags e2e -run TestReviewCapture ./cmd/contr
 //
-// It refuses to run against any herdr but the dev one.
+// It uses a scratch hc core with one `sh` worker in the repo and never touches
+// the owner's hc core.
 func TestReviewCapture(t *testing.T) {
-	if !strings.Contains(os.Getenv("HERDR_SOCKET_PATH"), "contr-go-dev-herdr") {
-		t.Skip("HERDR_SOCKET_PATH is not the dev herdr; run eval \"$(scripts/dev-herdr.sh)\" first")
-	}
 	root, err := filepath.Abs("../..")
 	if err != nil {
 		t.Fatal(err)
@@ -40,7 +41,7 @@ func TestReviewCapture(t *testing.T) {
 	}
 
 	// The scratch repo: branch feat is two commits ahead of main (an added, a modified and a
-	// deleted file). The sidebar row is named after the folder.
+	// deleted file). The worker row selects it.
 	repo, err := os.MkdirTemp("/tmp", "contr-review-")
 	if err != nil {
 		t.Fatal(err)
@@ -79,28 +80,26 @@ func TestReviewCapture(t *testing.T) {
 	git("commit", "-m", "change keep, drop gone")
 	git("checkout", "-b", "e2e-wt")
 
-	var ws struct {
-		Result struct {
-			Workspace struct {
-				ID string `json:"workspace_id"`
-			} `json:"workspace"`
-		}
-	}
-	if err := json.Unmarshal(herdrCmd(t, "workspace", "create", "--cwd", repo, "--label", "review", "--focus"), &ws); err != nil ||
-		ws.Result.Workspace.ID == "" {
-		t.Fatalf("workspace create: %v", err)
-	}
-	defer func() { _ = exec.Command("herdr", "workspace", "close", ws.Result.Workspace.ID).Run() }()
-
-	dir, err := os.MkdirTemp("", "contr-e2e")
+	// A short path: macOS limits socket paths to 103 bytes.
+	core := hctest.New(t, "contr-rv", hctest.Session("rv"))
+	dir := core.Dir
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	cl, err := hc.Dial(ctx, hc.Command("", core.Env))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(dir)
+	defer cl.Close()
+	cfg := agents.DefaultConfig()
+	cfg.Profiles["sh"] = agents.Profile{Argv: []string{"sh"}}
+	if _, err := agents.New(agents.HC{Client: cl}, cfg).Spawn(ctx, agents.Spec{Name: "rv", Profile: "sh", Role: "builder", Project: "review", Worktree: repo}); err != nil {
+		t.Fatalf("spawn: %v", err)
+	}
 	sock := filepath.Join(dir, "a.sock")
 	app := exec.Command(bin)
-	app.Env = append(os.Environ(), "MYGO_AUTOMATION="+sock,
-		"CONTR_STATE_DIR="+filepath.Join(dir, "state"), "CODEX_HOME="+filepath.Join(dir, "codex"))
+	app.Env = append(os.Environ(), append(core.Env, "MYGO_AUTOMATION="+sock,
+		"CONTR_STATE_DIR="+filepath.Join(dir, "state"), "CODEX_HOME="+filepath.Join(dir, "codex"),
+		"CONTR_OWNER_FILE="+filepath.Join(dir, "owner.json"), "CONTR_AGENTS_CONFIG="+filepath.Join(dir, "agents.json"))...)
 	if err := app.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +132,7 @@ func TestReviewCapture(t *testing.T) {
 	}
 
 	// The sidebar row selects on a real click, not on the press action.
-	b := c.boundsOf(t, waitFor("contr-review-", ", idle"))
+	b := c.boundsOf(t, waitFor("rv, "))
 	c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "click", "x": b.X + b.Width/2, "y": b.Y + b.Height/2}}})
 	c.call(t, "idle", map[string]any{"timeout": 10000})
 	press("Review")

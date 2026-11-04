@@ -18,21 +18,17 @@ import (
 	"github.com/contursofran/contr/internal/hc"
 )
 
-// TestTerminalOnHC runs the built app against the dev herdr and a scratch hc
+// TestTerminalOnHC runs the built app against a scratch hc
 // core with one `sh` worker. The test selects the worker, checks that the
 // plugin's grid shows and that hc keeps its size while contr only watches
 // (D91), types `echo hi` and checks that the shell got it and that hc then
 // has the grid's size, then runs vim with syntax colors. PNGs go to
-// tmp/e2e/. Start the dev herdr first:
+// tmp/e2e/:
 //
-//	eval "$(scripts/dev-herdr.sh)"
 //	go test -tags e2e -run TestTerminalOnHC ./cmd/contr
 //
-// It never touches the owner's herdr or hc core.
+// It never touches the owner's hc core.
 func TestTerminalOnHC(t *testing.T) {
-	if !strings.Contains(os.Getenv("HERDR_SOCKET_PATH"), "contr-go-dev-herdr") {
-		t.Skip("HERDR_SOCKET_PATH is not the dev herdr; run eval \"$(scripts/dev-herdr.sh)\" first")
-	}
 	if _, err := exec.LookPath("hc"); err != nil {
 		t.Skip("hc is not installed")
 	}

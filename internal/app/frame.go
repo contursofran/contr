@@ -4,7 +4,6 @@
 package app
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"log/slog"
@@ -19,7 +18,6 @@ import (
 	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
-	"github.com/contursofran/contr/internal/herdr"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/usage"
 )
@@ -32,7 +30,7 @@ type Slot func(c *ui.Context)
 type Slots struct {
 	Spaces    Slot // sidebar, under its header
 	Agents    Slot // sidebar, at the bottom
-	Terminal  Slot // the selected hc terminal; it needs no herdr
+	Terminal  Slot // the selected hc terminal
 	Needs     Slot // needs-you row, under the terminal; draws nothing when empty
 	Card      Slot // answer card, floating at the bottom of the terminal area
 	Panel     Slot // board panel, shown while it is open
@@ -56,18 +54,10 @@ func placeholder(name string) Slot {
 	}
 }
 
-// liveSource is the part of [Herdr] that the frame reads.
-type liveSource interface {
-	Live() herdr.LiveHerdr
-}
-
 // Frame is the window's view. Build it with [NewFrame] and give [Frame.View]
 // to the window. Its methods run on the UI thread.
 type Frame struct {
 	Slots Slots
-	// Herdr tells the connection state. The spaces column shows the state's
-	// line while herdr is not connected; the terminal area does not need it.
-	Herdr liveSource
 	// Visibility, Selection and Status are the app state. The frame holds
 	// them for the views in its slots.
 	Visibility *state.Visibility
@@ -160,9 +150,9 @@ type Frame struct {
 }
 
 // NewFrame returns a frame with the sidebar and the panel open and
-// placeholder slots. A nil herdr counts as connected.
-func NewFrame(h liveSource) *Frame {
-	return &Frame{Slots: PlaceholderSlots(), Herdr: h, sidebarOpen: true, panelOpen: true}
+// placeholder slots.
+func NewFrame() *Frame {
+	return &Frame{Slots: PlaceholderSlots(), sidebarOpen: true, panelOpen: true}
 }
 
 // SidebarOpen tells whether the sidebar shows.
@@ -171,10 +161,10 @@ func (f *Frame) SidebarOpen() bool { return f.sidebarOpen }
 // PanelOpen tells whether the board panel shows.
 func (f *Frame) PanelOpen() bool { return f.panelOpen }
 
-// ToggleSidebar shows or hides the sidebar. It sends no herdr command.
+// ToggleSidebar shows or hides the sidebar.
 func (f *Frame) ToggleSidebar() { f.sidebarOpen = !f.sidebarOpen }
 
-// TogglePanel shows or hides the board panel. It sends no herdr command.
+// TogglePanel shows or hides the board panel.
 func (f *Frame) TogglePanel() { f.panelOpen = !f.panelOpen }
 
 // OpenPR shows pull request n of the repository in dir.
@@ -229,29 +219,6 @@ func (f *Frame) reviewTarget() string {
 			}
 		}
 		return ""
-	case state.KindAgent:
-		if f.Herdr == nil {
-			return ""
-		}
-		return paneCwd(f.Herdr.Live().Tree, sel.ID)
-	}
-	return ""
-}
-
-// paneCwd is the folder of a pane, or "" when the pane or its folder is unknown. git finds the
-// repo from any folder inside it.
-func paneCwd(tree *herdr.HerdrTree, id string) string {
-	if tree == nil {
-		return ""
-	}
-	for _, ws := range tree.Workspaces {
-		for _, tab := range ws.Tabs {
-			for _, p := range tab.Panes {
-				if p.ID == id && p.Cwd != nil {
-					return *p.Cwd
-				}
-			}
-		}
 	}
 	return ""
 }
@@ -399,7 +366,6 @@ func (f *Frame) titleBar(c *ui.Context) {
 }
 
 // terminal shows the terminal slot and the answer card, or the Review view.
-// hc terminals work while herdr is down (#246).
 func (f *Frame) terminal(c *ui.Context) {
 	if f.reviewOpen && f.Review != nil {
 		ui.Box(c).Label(LabelReview).Grow(1).MinWidth(0).FillHeight().
@@ -538,13 +504,6 @@ type Window interface {
 	Update(fn func())
 }
 
-// syncHerdr follows a change of the herdr tree: the agents list takes the
-// new rows. UI thread.
-func (f *Frame) syncHerdr() {
-	f.syncAgents()
-	f.syncReview()
-}
-
 // scope is the project the needs-you row shows: the selected orchestrator's,
 // or "" (all projects) when none is selected.
 func (f *Frame) scope(src AgentSource) string {
@@ -572,19 +531,14 @@ func (f *Frame) syncAgents() {
 	}
 }
 
-// Attach connects the frame's state and the herdr connection to the window.
-// A change of any of them redraws the window; Visibility follows the window
-// and tells herdr. Call it once, on the UI thread, after the window exists.
-// The returned function ends the connection and the watching.
-func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop func()) {
+// Attach connects the frame's state to the window. A change of any of them
+// redraws the window; Visibility follows the window. Call it once, on the UI
+// thread, after the window exists. The returned function ends the watching.
+func (f *Frame) Attach(w Window) (stop func()) {
 	f.Selection = state.NewSelection(func() { w.Invalidate(); f.syncReview(); f.syncTerminal() })
 	f.Review = NewReview(w.Update, w.Invalidate)
 	f.Status = state.NewStatusMessage(w.Invalidate)
 	f.PR = &PRPane{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate, OpenURL: openURL}
-	// An onChange func can run on any goroutine or on the UI thread. It only
-	// queues the sync with Window.Update, which is safe from both.
-	h := NewHerdr(ctx, target, w.IsVisible(), func() { w.Update(f.syncHerdr) })
-	f.Herdr = h
 	var agentSnap func() agentstate.Snapshot
 	var src AgentSource
 	stopAgents := func() {}
@@ -652,7 +606,6 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 		f.Usage = usage.NewFileSampler(w.Invalidate)
 	}
 	f.Visibility = state.NewVisibility(func(visible bool) {
-		h.SetVisible(visible)
 		f.Host.SetVisible(visible)
 		f.Usage.SetVisible(visible)
 		f.SpacesList.SetVisible(visible)
@@ -678,7 +631,6 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 		unwatch()
 		term()
 		stopAgents()
-		h.Close()
 		f.SpacesList.Close()
 		f.Host.Close()
 		f.Usage.Close()

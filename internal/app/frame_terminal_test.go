@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -15,7 +14,6 @@ import (
 	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/hc"
-	"github.com/contursofran/contr/internal/herdr"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/usage"
 )
@@ -65,7 +63,7 @@ func (s *scriptSource) counts() (attach, closed int) {
 func terminalFrame(t *testing.T, errs map[string]error) (*Frame, *fakeWindow, *ui.Tester, map[string]*scriptSource) {
 	t.Helper()
 	w := &fakeWindow{visible: true}
-	f := NewFrame(nil)
+	f := NewFrame()
 	f.Selection = state.NewSelection(f.syncTerminal)
 	srcs := map[string]*scriptSource{}
 	f.TerminalSource = func(addr string) ghostty.Source {
@@ -105,10 +103,6 @@ func TestTerminalSlotSaysSelectAnAgentWithoutOne(t *testing.T) {
 
 func TestTerminalGridIsInsideTheTerminalAreaAndShowsNoLineWhileLive(t *testing.T) {
 	f, w, _, _ := terminalFrame(t, nil)
-	live := connected()
-	fl := &fakeLive{}
-	fl.set(live)
-	f.Herdr = fl
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t2"})
 	tt := ui.NewTester(f.terminal, 800, 500)
 	for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
@@ -168,7 +162,7 @@ func TestSwitchingTheAgentClosesTheOldSource(t *testing.T) {
 
 func TestTerminalStopClosesTheTerminal(t *testing.T) {
 	w := &fakeWindow{visible: true}
-	f := NewFrame(nil)
+	f := NewFrame()
 	f.Selection = state.NewSelection(f.syncTerminal)
 	src := &scriptSource{}
 	f.TerminalSource = func(string) ghostty.Source { return src }
@@ -185,7 +179,7 @@ func TestTerminalStopClosesTheTerminal(t *testing.T) {
 
 func TestAHiddenWindowDoesNotRetryAndShowingItDoes(t *testing.T) {
 	w := &fakeWindow{visible: false}
-	f := NewFrame(nil)
+	f := NewFrame()
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	src := &scriptSource{err: &hc.Error{Kind: "unavailable", Message: "no core"}}
@@ -193,7 +187,7 @@ func TestAHiddenWindowDoesNotRetryAndShowingItDoes(t *testing.T) {
 	f.StartAgents = func(func()) (AgentSource, func()) { // t2 is a known worker: the syncs keep it selected
 		return &source{snap: agentstate.Snapshot{Workers: []agents.Worker{{Name: "w2", Address: "t2", Live: true}}}}, func() {}
 	}
-	stop := f.Attach(context.Background(), w, herdr.SocketTarget(filepath.Join(t.TempDir(), "missing.sock")))
+	stop := f.Attach(w)
 	defer stop()
 	w.flush() // before the terminal exists: the terminal must start hidden by itself
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t2"})

@@ -17,16 +17,15 @@ import (
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
 
-// TestPlainTerminalWithoutHerdr runs the built app against a scratch hc core
-// and no herdr at all. It clicks "+", checks that a plain terminal opens as a
+// TestPlainTerminal runs the built app against a scratch hc core
+// . It clicks "+", checks that a plain terminal opens as a
 // tab and shows its grid, types into it, then opens a second one from the File
 // menu. Cmd+T is not tested here: the automation sends keys to the view, not to
 // the menu's key equivalents. Then it closes the second one from the File menu. PNGs go to
-// tmp/e2e/plain-*.png. It needs `hc` and never touches the owner's core or
-// herdr:
+// tmp/e2e/plain-*.png. It needs `hc` and never touches the owner's core:
 //
-//	go test -tags e2e -run TestPlainTerminalWithoutHerdr ./cmd/contr
-func TestPlainTerminalWithoutHerdr(t *testing.T) {
+//	go test -tags e2e -run TestPlainTerminal ./cmd/contr
+func TestPlainTerminal(t *testing.T) {
 	if _, err := exec.LookPath("hc"); err != nil {
 		t.Skip("hc is not installed")
 	}
@@ -47,11 +46,10 @@ func TestPlainTerminalWithoutHerdr(t *testing.T) {
 	}
 	core := hctest.New(t, "contr-pl", hctest.Session("pl"))
 	dir := core.Dir
-	// A herdr socket that does not exist: herdr is down.
 	sock := filepath.Join(dir, "a.sock")
 	appCmd := exec.Command(bin)
 	appCmd.Env = append(os.Environ(), append(core.Env, "MYGO_AUTOMATION="+sock,
-		"HERDR_SOCKET_PATH="+filepath.Join(dir, "no-herdr.sock"), "SHELL=/bin/sh",
+		"SHELL=/bin/sh",
 		"CONTR_STATE_DIR="+filepath.Join(dir, "state"), "CODEX_HOME="+filepath.Join(dir, "codex"),
 		"CONTR_OWNER_FILE="+filepath.Join(dir, "owner.json"), "CONTR_AGENTS_CONFIG="+filepath.Join(dir, "agents.json"))...)
 	if err := appCmd.Start(); err != nil {

@@ -1,7 +1,6 @@
 package app
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -12,42 +11,7 @@ import (
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
-	"github.com/contursofran/contr/internal/herdr"
 )
-
-// tabSpec is one tab of the test tree: its label, and the state of the agent
-// in its one pane. A nil agent is a plain pane.
-type tabSpec struct {
-	label string
-	agent *herdr.AgentState
-}
-
-func st(s herdr.AgentState) *herdr.AgentState { return &s }
-
-func agentTab(label string, s herdr.AgentState) tabSpec { return tabSpec{label, st(s)} }
-
-// agentsTree is one workspace with one tab per spec. Tab i has one pane p{i}.
-func agentsTree(specs ...tabSpec) herdr.HerdrTree {
-	var tabs []herdr.Tab
-	for i, s := range specs {
-		p := herdr.Pane{ID: fmt.Sprintf("p%d", i), Tokens: map[string]string{}}
-		if s.agent != nil {
-			p.Agent = &herdr.AgentInfo{Name: "claude", Status: *s.agent}
-		}
-		tabs = append(tabs, herdr.Tab{ID: fmt.Sprintf("t%d", i), Label: s.label, Status: herdr.StateIdle, Panes: []herdr.Pane{p}})
-	}
-	return herdr.HerdrTree{Version: "0.9.3", Workspaces: []herdr.Workspace{{ID: "w1", Label: "w1", Status: herdr.StateIdle, Tabs: tabs}}}
-}
-
-func idleTabs(labels ...string) []tabSpec {
-	var specs []tabSpec
-	for _, l := range labels {
-		specs = append(specs, agentTab(l, herdr.StateIdle))
-	}
-	return specs
-}
-
-func agentsOf(specs ...tabSpec) herdr.LiveHerdr { return connectedWith(agentsTree(specs...)) }
 
 var agentsNow = time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)
 
@@ -239,8 +203,6 @@ func TestSyncClearsAGoneSelectionOnly(t *testing.T) {
 		t.Error("a worktree selection was cleared")
 	}
 }
-
-func notRunningLive() herdr.LiveHerdr { return herdr.LiveHerdr{State: notRunning()} }
 
 // #212: the second line shows the role and state from the labels, not the
 // command, which Claude Code sets to its version.

@@ -16,21 +16,15 @@ import (
 	"github.com/contursofran/contr/internal/hc"
 )
 
-// TestAnswerCardAndWorkerPanelCapture runs the built app against the dev
-// herdr and a scratch hc core with an orchestrator and a worker. It opens the
+// TestAnswerCardAndWorkerPanelCapture runs the built app against a
+// scratch hc core with an orchestrator and a worker. It opens the
 // answer card on a question (tmp/e2e/answer-card.png), then selects the worker
-// so that the panel shows it (tmp/e2e/worker-panel.png). Start the dev herdr
-// first:
+// so that the panel shows it (tmp/e2e/worker-panel.png):
 //
-//	eval "$(scripts/dev-herdr.sh)"
 //	go test -tags e2e -run TestAnswerCardAndWorkerPanelCapture ./cmd/contr
 //
-// It refuses to run against any herdr but the dev one, and it never touches
-// the owner's hc core.
+// It never touches the owner's hc core.
 func TestAnswerCardAndWorkerPanelCapture(t *testing.T) {
-	if !strings.Contains(os.Getenv("HERDR_SOCKET_PATH"), "contr-go-dev-herdr") {
-		t.Skip("HERDR_SOCKET_PATH is not the dev herdr; run eval \"$(scripts/dev-herdr.sh)\" first")
-	}
 	if _, err := exec.LookPath("hc"); err != nil {
 		t.Skip("hc is not installed")
 	}
