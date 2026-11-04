@@ -33,6 +33,12 @@ const (
 // RoleOrchestrator is the role label of an orchestrator agent.
 const RoleOrchestrator = "orchestrator"
 
+// RoleTerminal is the role label of a plain terminal: a shell, not an agent.
+const RoleTerminal = "terminal"
+
+// defaultShell runs in a plain terminal when $SHELL is not set.
+const defaultShell = "/bin/zsh"
+
 // Core is the part of the hc client that the manager uses.
 type Core interface {
 	Call(ctx context.Context, method string, params, result any) error
@@ -221,6 +227,9 @@ func (t terminal) command() string {
 // Orchestrator tells if the worker is an orchestrator.
 func (w Worker) Orchestrator() bool { return w.Role == RoleOrchestrator }
 
+// Plain tells if the worker is a plain terminal (a shell, not an agent).
+func (w Worker) Plain() bool { return w.Role == RoleTerminal }
+
 func decodeWorker(raw json.RawMessage) (Worker, error) {
 	var t terminal
 	if err := json.Unmarshal(raw, &t); err != nil {
@@ -237,6 +246,8 @@ type Manager struct {
 	core Core
 	cfg  Config
 	now  func() time.Time // the clock; tests replace it
+
+	getenv func(string) string // reads the environment; tests replace it
 }
 
 // New returns a manager on core with the profiles of cfg. A relative kit
@@ -247,7 +258,7 @@ func New(core Core, cfg Config) *Manager {
 			cfg.Kit = abs
 		}
 	}
-	return &Manager{core: core, cfg: cfg, now: time.Now}
+	return &Manager{core: core, cfg: cfg, now: time.Now, getenv: os.Getenv}
 }
 
 // Spawn starts a worker and returns it.
@@ -286,6 +297,46 @@ func (m *Manager) Spawn(ctx context.Context, s Spec) (Worker, error) {
 		params["env"] = map[string]string{EnvCoordinator: s.Parent}
 	} else {
 		params["no_parent"] = true
+	}
+	var raw json.RawMessage
+	if err := m.core.Call(ctx, "terminal.run", params, &raw); err != nil {
+		return Worker{}, err
+	}
+	return decodeWorker(raw)
+}
+
+// TerminalSpec describes a plain terminal.
+type TerminalSpec struct {
+	Name    string
+	Project string // the open project; empty for none
+	Dir     string // the start folder; empty for the core's default
+	Shell   string // empty for $SHELL, then /bin/zsh
+}
+
+// OpenTerminal starts a login shell in an hc terminal and returns it. The
+// terminal has the worker labels with role "terminal", so it stays in hc
+// after contr closes and agents can read it.
+func (m *Manager) OpenTerminal(ctx context.Context, s TerminalSpec) (Worker, error) {
+	if s.Name == "" {
+		return Worker{}, errors.New("agents: a terminal needs a name")
+	}
+	if strings.ContainsFunc(s.Project, unicode.IsControl) {
+		return Worker{}, errors.New("agents: the project name has a control character")
+	}
+	shell := s.Shell
+	if shell == "" && m.getenv != nil {
+		shell = m.getenv("SHELL")
+	}
+	if shell == "" {
+		shell = defaultShell
+	}
+	labels := map[string]string{LabelApp: AppAgent, LabelRole: RoleTerminal, LabelWorktree: s.Dir}
+	if s.Project != "" {
+		labels[LabelProject] = s.Project
+	}
+	params := map[string]any{"argv": []string{shell, "-l"}, "name": s.Name, "labels": labels, "wait": false, "outlive_parent": true, "no_parent": true}
+	if s.Dir != "" {
+		params["cwd"] = s.Dir
 	}
 	var raw json.RawMessage
 	if err := m.core.Call(ctx, "terminal.run", params, &raw); err != nil {
