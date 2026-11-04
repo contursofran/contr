@@ -23,7 +23,11 @@ const (
 	LabelPRApprove   = "Approve"
 	LabelPRMerge     = "Squash and merge"
 	LabelPRMergeWait = "merge waits for CI"
-	LabelPRFooter    = "pr footer"
+	// After a merge (D105) the footer shows one of these three lines.
+	LabelPRMerged      = "merged · principal told"
+	LabelPRMergedBare  = "merged"
+	LabelPRMergedNoOne = "merged · no one told"
+	LabelPRFooter      = "pr footer"
 )
 
 // LabelPRField is the label and placeholder of the comment field.
@@ -52,11 +56,19 @@ type footerState struct {
 	err         string
 	viewer      string // login of the signed-in user; empty until read
 	viewerAsked bool
+	after       string // the line after a merge from this pane; empty before
 }
 
-// footerShown tells whether the footer shows: only for an open PR.
+// footerShown tells whether the footer shows: for an open PR, and after a
+// merge from this pane, with the line of the merge (D105).
 func (p *PRPane) footerShown() bool {
-	return p.pr != nil && p.pr.State == "OPEN"
+	return p.pr != nil && (p.pr.State == "OPEN" || p.ft.after != "")
+}
+
+// footerOpen tells whether the footer takes writes: the PR is open and was not
+// merged here.
+func (p *PRPane) footerOpen() bool {
+	return p.pr != nil && p.pr.State == "OPEN" && p.ft.after == ""
 }
 
 // canApprove hides Approve on the owner's own PR (GitHub refuses it) and
@@ -147,28 +159,70 @@ func (p *PRPane) approve() {
 
 // merge squash-merges the head commit that the pane shows.
 func (p *PRPane) merge() {
-	if p.pr == nil || p.ft.busy {
+	if !p.footerOpen() || p.ft.busy {
 		return
 	}
 	if wait, _ := ciGate(p.pr.ChecksSummary); wait {
 		return
 	}
+	// The orchestrator is found now, on the UI thread, from the PR's folder.
+	var addr string
+	if p.Orchestrator != nil {
+		addr = p.Orchestrator(p.dir)
+	}
+	n, sha := p.pr.Number, p.pr.HeadSHA
 	p.write(func(ctx context.Context, c github.Client, pr github.PR) error {
 		return c.Merge(ctx, pr.Number, pr.HeadSHA)
-	}, nil)
+	}, func() { p.mergedTell(addr, n, sha) })
+}
+
+// mergedTell tells the project's orchestrator about a merge (D105). The item
+// is the worker's issue, so nothing else is marked. With no orchestrator the
+// footer says that no one was told. A failed send shows its error and keeps
+// "merged". It runs on the UI thread after the merge; the send runs off it.
+func (p *PRPane) mergedTell(addr string, n int, sha string) {
+	if addr == "" || p.Send == nil {
+		p.ft.after = LabelPRMergedNoOne
+		return
+	}
+	p.ft.after = LabelPRMergedBare
+	text := "contr: PR #" + strconv.Itoa(n) + " merged at " + shortSHA(sha)
+	gen, send := p.gen, p.Send
+	p.Run.Do(func() func() {
+		err := send(addr, text)
+		return func() {
+			if gen != p.gen {
+				return
+			}
+			if err != nil {
+				p.ft.err = "principal not told: " + err.Error()
+			} else {
+				p.ft.after = LabelPRMerged
+			}
+			p.redraw()
+		}
+	})
+}
+
+// shortSHA is the first 7 characters of a commit id.
+func shortSHA(s string) string {
+	if len(s) > 7 {
+		return s[:7]
+	}
+	return s
 }
 
 // footerKeys adds the footer keys to the pane root: `c` focuses the field,
 // Shift-Cmd-M merges.
 func (p *PRPane) footerKeys(root ui.Element) ui.Element {
 	root = root.OnShortcut(0, ui.KeyC, func() {
-		if p.footerShown() {
+		if p.footerOpen() {
 			p.refocusField = true
 			p.redraw()
 		}
 	})
 	return root.OnShortcut(ui.Cmd|ui.Shift, ui.KeyM, func() {
-		if p.footerShown() {
+		if p.footerOpen() {
 			p.merge()
 		}
 	})
@@ -185,6 +239,10 @@ func (p *PRPane) footer(c *ui.Context) {
 		BorderWidth(1, 0, 0, 0).BorderColor(theme.Color(theme.Line)).Children(func() {
 		if p.ft.err != "" {
 			ui.Text(c, p.ft.err).TextColor(theme.Color(theme.DiffDeleted)).Wrap()
+		}
+		if p.ft.after != "" {
+			ui.Text(c, p.ft.after).TextColor(theme.Color(theme.TextDim)).NoWrap()
+			return
 		}
 		in := ui.TextInput(c, &p.ft.text).Label(LabelPRField(p.number)).Placeholder(LabelPRField(p.number)).
 			FillWidth().Border(1, theme.Color(theme.PRFieldBorder)).Radius(8).Padding(7, 10).Bind(&p.ft.field)

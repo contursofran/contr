@@ -421,8 +421,8 @@ needs-you tabs show only the icon and the id, and the bottom row hides
   then secondary `Comment`, secondary `Approve` (hidden once approved),
   spacer, primary `Squash and merge`. While CI runs the merge button is
   replaced by the clock icon and `merge waits for CI`. After a merge:
-  `merged · principal told`; the item is done and the coordinator gets a
-  message.
+  `merged · principal told`; the item is the worker's issue, and the project's
+  orchestrator gets the message `contr: PR #N merged at <short sha>` (D105).
 - Keys while it has the focus: Esc closes, `c` comments, `⇧⌘M` merges.
 
 Slice 1 (#235, D59) builds the pane, the header lines 1 and 2, the state
@@ -449,7 +449,10 @@ The footer (#154, D103) shows for an open PR: the comment field (Enter or
 owner's own PR and once the PR is approved. The merge is pinned to the head
 commit that the pane shows. A failed CI does not stop the merge: the button
 stays and the CI summary is red. A write error shows above the field. After a
-write the pane reads the PR again. Not built yet: `merged · principal told`.
+write the pane reads the PR again. After a merge from the pane the footer
+shows one line and no buttons (D105): `merged · principal told`; `merged ·
+no one told` when the project has no orchestrator; or `merged` and the error
+when the send failed.
 
 ## Review
 

@@ -32,6 +32,8 @@ type AgentSource interface {
 	ClearDone()
 	// Read, Interrupt and Stop act on one worker's terminal (its address).
 	Read(name string, lines int) (string, error)
+	// Send types text into a worker's terminal and presses Enter.
+	Send(name, text string) error
 	// SendKeys presses raw keys in a worker's terminal, with no Enter.
 	SendKeys(name string, keys []byte) error
 	Interrupt(name string) error
