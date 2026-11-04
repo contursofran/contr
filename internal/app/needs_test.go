@@ -71,6 +71,7 @@ type source struct {
 	sendErr   error
 	signalled []string // names interrupted
 	stopped   []string
+	closed    []string
 }
 
 func (s *source) Snapshot() agentstate.Snapshot { return s.snap }
@@ -103,6 +104,10 @@ func (s *source) Interrupt(name string) error {
 }
 func (s *source) Stop(name string) error {
 	s.stopped = append(s.stopped, name)
+	return s.actionErr
+}
+func (s *source) Close(name string) error {
+	s.closed = append(s.closed, name)
 	return s.actionErr
 }
 

@@ -217,6 +217,9 @@ func TestListSendInterruptStopRead(t *testing.T) {
 	if err := m.Stop(ctx, "alpha"); err != nil || f.last().Method != "terminal.kill" {
 		t.Errorf("stop: %v, %s", err, f.last().Method)
 	}
+	if err := m.Remove(ctx, "alpha"); err != nil || f.last().Method != "terminal.rm" || f.last().Params["terminal"] != "alpha" {
+		t.Errorf("remove: %v, %+v", err, f.last())
+	}
 	if txt, err := m.Read(ctx, "alpha", 40); err != nil || txt != "screen" || f.last().Params["lines"] != float64(40) {
 		t.Errorf("read = %q, %v, %v", txt, err, f.last().Params)
 	}

@@ -471,6 +471,12 @@ func (m *Manager) Stop(ctx context.Context, name string) error {
 	return m.core.Call(ctx, "terminal.kill", m.looking(name), nil)
 }
 
+// Remove deletes a finished terminal from hc, so lists and watches drop it.
+// hc refuses a live one (error kind "live").
+func (m *Manager) Remove(ctx context.Context, name string) error {
+	return m.core.Call(ctx, "terminal.rm", m.looking(name), nil)
+}
+
 // Read returns a worker's screen and history; lines > 0 keeps only the last
 // lines.
 func (m *Manager) Read(ctx context.Context, name string, lines int) (string, error) {

@@ -562,7 +562,7 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 				}
 				f.Selection.Select(state.Selected{Kind: kind, ID: address})
 			}}
-		f.CloseTerm = &CloseTerminal{Stop: src.Stop, Run: run, Status: f.Status.Show, Closed: f.terminalClosed}
+		f.CloseTerm = &CloseTerminal{Stop: src.Close, Run: run, Status: f.Status.Show, Closed: f.terminalClosed}
 		setCloseTerminalHandler(func() { w.Update(f.closeSelectedTerminal) })
 		f.Worker = &WorkerPanel{Source: src, Selection: f.Selection, Run: run, Status: f.Status.Show, Invalidate: w.Invalidate}
 		f.Slots.Card = f.Card.View

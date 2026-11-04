@@ -177,7 +177,7 @@ func TestCloseTerminalBusy(t *testing.T) {
 	}
 }
 
-func TestAttachWiresCmdWToTheSourceStop(t *testing.T) {
+func TestAttachWiresCmdWToTheSourceClose(t *testing.T) {
 	w := &fakeWindow{visible: true}
 	f := NewFrame(nil)
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
@@ -197,8 +197,10 @@ func TestAttachWiresCmdWToTheSourceStop(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	w.flush()
-	if !slices.Equal(src.stopped, []string{"tp"}) {
-		t.Errorf("stopped %v, want [tp]", src.stopped)
+	// Close, not Stop: a stopped terminal stays in hc as finished, and its
+	// tab would stay with it.
+	if !slices.Equal(src.closed, []string{"tp"}) || len(src.stopped) != 0 {
+		t.Errorf("closed %v, stopped %v; want closed [tp]", src.closed, src.stopped)
 	}
 	stop()
 	it.Click(it, nil) // the handler is cleared with the frame
