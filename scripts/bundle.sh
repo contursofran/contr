@@ -5,6 +5,8 @@
 #
 #   --bin PATH  use this binary instead of building (tests use a dummy); default:
 #               CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath ./cmd/contr
+#   --lib PATH  the libghostty-vt library to put in Contents/Resources; default: the path that
+#               `<binary> terminal-check` prints (it downloads the library into the user cache)
 #   --out DIR   output dir (default: <repo>/dist/bundle); contr.app inside is replaced.
 #               Refuses /, /Applications and $HOME.
 #   --zip       also write contr-<version>-macos-arm64.zip next to the .app
@@ -17,7 +19,7 @@ set -euo pipefail
 unset CDPATH # with CDPATH set, cd prints the directory and breaks $(cd ... && pwd)
 
 usage() {
-    echo "usage: $0 [--bin PATH] [--out DIR] [--zip]" >&2
+    echo "usage: $0 [--bin PATH] [--lib PATH] [--out DIR] [--zip]" >&2
 }
 
 die() {
@@ -27,6 +29,7 @@ die() {
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 bin=""
+lib=""
 out=""
 zip=0
 app_tmp=""
@@ -47,6 +50,12 @@ while [ $# -gt 0 ]; do
             [ $# -ge 2 ] || die "--bin needs a path"
             case "$2" in -*) die "--bin needs a path, not a flag: $2" ;; esac
             bin="$2"
+            shift 2
+            ;;
+        --lib)
+            [ $# -ge 2 ] || die "--lib needs a path"
+            case "$2" in -*) die "--lib needs a path, not a flag: $2" ;; esac
+            lib="$2"
             shift 2
             ;;
         --out)
@@ -102,6 +111,12 @@ min_macos="$(vtool -show-build "$bin" 2>/dev/null | awk '/minos/ && !v { v = $2 
     die "cannot read the minimum macOS version of $bin"
 [ -n "$min_macos" ] || die "no minimum macOS version in $bin"
 
+# The terminal library: a packaged app never downloads it (D93), so it goes into Resources.
+if [ -z "$lib" ]; then
+    lib="$("$bin" terminal-check)" || die "terminal-check failed: cannot find the terminal library"
+fi
+[ -f "$lib" ] || die "terminal library not found: $lib"
+
 version="$(sed -n 1p "$repo/VERSION" 2>/dev/null)" || die "cannot read $repo/VERSION"
 case "$version" in
     [0-9]*.[0-9]*.[0-9]*) ;;
@@ -127,6 +142,9 @@ rm -rf "$app_tmp"
 mkdir -p "$app_tmp/Contents/MacOS" "$app_tmp/Contents/Resources"
 cp "$bin" "$app_tmp/Contents/MacOS/contr"
 chmod 755 "$app_tmp/Contents/MacOS/contr"
+cp "$lib" "$app_tmp/Contents/Resources/libghostty-vt.dylib"
+codesign --force --sign - --timestamp=none "$app_tmp/Contents/Resources/libghostty-vt.dylib" ||
+    die "cannot sign the terminal library"
 
 # Icon: render the SVG once, resize it to the ten iconset sizes, pack them as .icns.
 icon_dir="$(mktemp -d)"
