@@ -64,6 +64,8 @@ type PRPane struct {
 	err     string
 	tab     int
 	gen     uint64
+	client  github.Client
+	checks  prChecks
 	handle  ui.Handle
 	refocus bool
 
@@ -82,6 +84,7 @@ func (p *PRPane) Open(dir string, n int) {
 		mk = github.New
 	}
 	client := mk(dir)
+	p.client, p.checks = client, prChecks{}
 	p.Run.Do(func() func() {
 		pr, err := client.PR(context.Background(), n)
 		return func() {
@@ -298,6 +301,15 @@ func firstLine(s string) string {
 	return s
 }
 
+// prPaneEnter is the enter motion (DESIGN "Motion"): in from the left 24 px
+// with a fade, 0.25 s, cubic-bezier(0.2, 0.8, 0.2, 1). Opening another PR
+// keeps the root, so it does not play again.
+var prPaneEnter = ui.ElementTransition{
+	Duration: 250 * time.Millisecond,
+	Ease:     ui.CubicBezier(0.2, 0.8, 0.2, 1),
+	Enter:    &ui.Motion{X: -24},
+}
+
 // View builds the pane, or nothing while it is closed.
 func (p *PRPane) View(c *ui.Context) {
 	if !p.open {
@@ -307,6 +319,9 @@ func (p *PRPane) View(c *ui.Context) {
 		Background(theme.Color(theme.BgWindow)).BorderStartWidth(1).BorderColor(theme.Color(theme.Line)).
 		Focusable().FocusRing(false).Bind(&p.handle)
 	root = root.OnShortcut(0, ui.KeyEscape, p.Close)
+	if !c.Preferences().ReduceMotion {
+		root = root.Transition(prPaneEnter) // Exit is instant: no Exit motion
+	}
 	if p.refocus {
 		p.refocus = false
 		p.handle.Focus(c)
@@ -374,8 +389,12 @@ func (p *PRPane) tabs(c *ui.Context) {
 }
 
 func (p *PRPane) body(c *ui.Context) {
-	if p.tab == PRTabFiles {
+	switch p.tab {
+	case PRTabFiles:
 		p.filesTab(c)
+		return
+	case PRTabChecks:
+		p.checksTab(c)
 		return
 	}
 	if p.tab != PRTabOverview {
