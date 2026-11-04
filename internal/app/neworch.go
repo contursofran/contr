@@ -45,6 +45,24 @@ func (n *NewOrchestrator) Start() {
 	})
 }
 
+// StartIn spawns an orchestrator in dir with no picker: the `+ new` of an
+// empty project group (D116).
+func (n *NewOrchestrator) StartIn(dir string) {
+	if n.Spawn == nil || n.busy {
+		return
+	}
+	n.busy = true
+	n.Run.Do(func() func() {
+		err := n.Spawn(dir)
+		return func() {
+			n.busy = false
+			if err != nil {
+				n.show("New orchestrator: " + err.Error())
+			}
+		}
+	})
+}
+
 func (n *NewOrchestrator) show(s string) {
 	if n.Status != nil {
 		n.Status(s)

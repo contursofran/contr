@@ -106,3 +106,20 @@ func TestPlusNewRunsOffTheCallingThread(t *testing.T) {
 		t.Error("the picker must not run in the click handler")
 	}
 }
+
+func TestStartInSpawnsWithoutPicker(t *testing.T) {
+	n := newOrch(t)
+	n.no.StartIn("/proj/gamma")
+	if n.picked != 0 || len(n.spawn) != 1 || n.spawn[0] != "/proj/gamma" {
+		t.Errorf("picked %d, spawn %v", n.picked, n.spawn)
+	}
+}
+
+func TestStartInShowsSpawnError(t *testing.T) {
+	n := newOrch(t)
+	n.spawnE = errors.New("no profile")
+	n.no.StartIn("/proj/gamma")
+	if len(n.status) != 1 || !strings.Contains(n.status[0], "no profile") {
+		t.Errorf("status %v", n.status)
+	}
+}

@@ -374,7 +374,7 @@ or a click outside closes it.
 
 ## Projects modal **(being built)**
 
-Opens from the `projects` pill in the Spaces header (D113); there is no menu item and no shortcut. Built today: the header, the filter field (narrows the list by name; paste of a path or URL and drag-reorder under a filter are off), the open list with drag reorder and `close`, and `Done`. **(not built)**: `recent`, `+ open folder…` and `clone from GitHub…`. An overlay over the whole
+Opens from the `projects` pill in the Spaces header (D113); there is no menu item and no shortcut. Built today: the header, the filter field (narrows the list by name; paste of a path or URL and drag-reorder under a filter are off), the open list with drag reorder and `close`, and `Done`. `recent` (projects not open, each with `open`) and `+ open folder…` (D116). **(not built)**: `clone from GitHub…`. An overlay over the whole
 window with the `scrim`; the dialog is 580 wide, 110 from the top, centred,
 `bg.overlay`, shadow 0 24 80 rgba(0,0,0,.6). Enter motion: up 8 px and fade
 in, 0.22 s.

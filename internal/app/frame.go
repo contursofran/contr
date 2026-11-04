@@ -96,6 +96,11 @@ type Frame struct {
 	// orchestrator profile there. Both block, so the frame runs them off the
 	// UI thread. Nil makes `+ new` do nothing.
 	PickFolder func() (string, error)
+	// OpenFolder asks the owner for a folder to add to the projects (D116). It
+	// blocks, so the modal calls it off the UI thread.
+	OpenFolder func() (string, error)
+	// ProjectKey returns the project key of a folder (D116); nil uses the folder.
+	ProjectKey func(path string) string
 	// LoadProjects reads the projects store (D109). It runs on a goroutine.
 	// Nil means no store: the frame reads no file.
 	// Nil reads the file in the user config folder.
@@ -829,6 +834,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		f.NewOrch = &NewOrchestrator{Pick: f.PickFolder, Spawn: f.SpawnOrchestrator,
 			Run: Runner{Post: w.Update}, Status: f.Status.Show}
 		f.SpacesList.OnNew = f.NewOrch.Start
+		f.SpacesList.OnNewIn = f.NewOrch.StartIn
 	}
 	if f.OpenTerminal != nil {
 		f.NewTerm = &NewTerminal{Open: f.OpenTerminal, Run: Runner{Post: w.Update}, Status: f.Status.Show,
@@ -843,6 +849,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 				f.SpacesList.SetProjects(f.Projects)
 			}
 		},
+		PickFolder: f.OpenFolder, Resolve: f.ProjectKey,
 		Save: f.SaveProjects, Run: Runner{Post: w.Update}, Status: f.Status.Show, Invalidate: w.Invalidate,
 	}
 	f.SpacesList.OnProjects = f.ProjectsModal.Toggle
