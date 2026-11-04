@@ -6,7 +6,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseRemote(t *testing.T) {
@@ -106,5 +108,59 @@ func TestCloneLocalBare(t *testing.T) {
 	err := Clone(context.Background(), nil, filepath.Join(root, "missing.git"), filepath.Join(root, "out2"))
 	if err == nil || err.Error() == "" {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+// fakeGit writes a shell script named git in a temporary folder.
+func fakeGit(t *testing.T, body string) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "git")
+	if err := os.WriteFile(p, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func TestExecCloneNoPrompt(t *testing.T) {
+	g := fakeGit(t, `echo "prompt=$GIT_TERMINAL_PROMPT" >&2; exit 1`)
+	stderr, err := ExecClone(context.Background(), g, "clone")
+	if err == nil || !strings.Contains(stderr, "prompt=0") {
+		t.Fatalf("stderr = %q, err = %v", stderr, err)
+	}
+}
+
+// TestExecCloneCancel starts a git that leaves a child holding the stderr
+// pipe. After cancel, ExecClone must return soon after WaitDelay.
+func TestExecCloneCancel(t *testing.T) {
+	g := fakeGit(t, `sleep 30 & sleep 30`)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		_, err := ExecClone(ctx, g, "clone")
+		done <- err
+	}()
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("err = nil after cancel")
+		}
+	case <-time.After(cloneWaitDelay + 3*time.Second):
+		t.Fatal("ExecClone hangs after cancel")
+	}
+}
+
+// TestExecCloneLingeringChild starts a git that exits well but leaves a child
+// holding the stderr pipe. ExecClone must return after WaitDelay, with no error.
+func TestExecCloneLingeringChild(t *testing.T) {
+	g := fakeGit(t, `sleep 30 & exit 0`)
+	start := time.Now()
+	_, err := ExecClone(context.Background(), g, "clone")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Since(start); d > cloneWaitDelay+3*time.Second {
+		t.Fatalf("took %v", d)
 	}
 }

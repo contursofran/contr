@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // ErrDestExists means the clone destination is already on disk.
@@ -75,14 +76,23 @@ func FindGit(dirs []string) (string, error) {
 	return "", ErrGitNotFound
 }
 
+// cloneWaitDelay is how long ExecClone waits for git's pipes after it kills
+// git on cancel. A child of git can keep the pipe open.
+const cloneWaitDelay = 2 * time.Second
+
 // ExecClone is the CloneRunner that starts the program. It turns off git's
 // prompts, so a private repository fails at once instead of waiting for input.
 func ExecClone(ctx context.Context, git string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, git, args...)
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	cmd.WaitDelay = cloneWaitDelay
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	err := cmd.Run()
+	if errors.Is(err, exec.ErrWaitDelay) {
+		// git exited well; a child of git kept the pipe open.
+		err = nil
+	}
 	return stderr.String(), err
 }
 
