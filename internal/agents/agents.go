@@ -432,25 +432,39 @@ func keyNames(keys []byte) ([]string, error) {
 	return out, nil
 }
 
+// looking returns the params of a call that looks at or acts on a worker.
+// Inside hc they name this terminal as the caller. When it is the worker's
+// parent, hc then counts the worker's news as seen and types no note about
+// it into the parent: a coordinator that stops a worker gets no exit note.
+func (m *Manager) looking(name string) map[string]any {
+	params := map[string]any{"terminal": name}
+	if m.getenv != nil {
+		if caller := m.getenv("HC_TERMINAL_ID"); caller != "" {
+			params["caller"] = caller
+		}
+	}
+	return params
+}
+
 // Interrupt presses a worker's stop key. The outcome is hc's: stopped,
 // exited, still_working or unknown.
 func (m *Manager) Interrupt(ctx context.Context, name string) (string, error) {
 	var res struct {
 		Outcome string `json:"outcome"`
 	}
-	err := m.core.Call(ctx, "terminal.interrupt", map[string]any{"terminal": name}, &res)
+	err := m.core.Call(ctx, "terminal.interrupt", m.looking(name), &res)
 	return res.Outcome, err
 }
 
 // Stop ends a worker's program.
 func (m *Manager) Stop(ctx context.Context, name string) error {
-	return m.core.Call(ctx, "terminal.kill", map[string]any{"terminal": name}, nil)
+	return m.core.Call(ctx, "terminal.kill", m.looking(name), nil)
 }
 
 // Read returns a worker's screen and history; lines > 0 keeps only the last
 // lines.
 func (m *Manager) Read(ctx context.Context, name string, lines int) (string, error) {
-	params := map[string]any{"terminal": name}
+	params := m.looking(name)
 	if lines > 0 {
 		params["lines"] = lines
 	}
