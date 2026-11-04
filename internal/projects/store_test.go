@@ -141,3 +141,19 @@ func TestPathIsUnderConfigFolder(t *testing.T) {
 		t.Fatalf("Path = %q, %v", p, err)
 	}
 }
+
+func TestCloneSharesNothing(t *testing.T) {
+	s := &Store{}
+	s.SetOrder([]string{"a", "b"})
+	s.Hide("a")
+	c := s.Clone()
+	s.SetOrder([]string{"b"})
+	s.Show("a")
+	s.Hide("b")
+	if !c.Hidden("a") || c.Hidden("b") {
+		t.Errorf("hidden changed in the copy")
+	}
+	if got := c.Order([]string{"a", "b"}); got[0] != "a" || got[1] != "b" {
+		t.Errorf("order changed in the copy: %v", got)
+	}
+}

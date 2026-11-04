@@ -157,6 +157,16 @@ func (s *Store) Move(rows []int, to int) {
 	s.order = out
 }
 
+// Clone returns a copy that shares nothing with s, so that one goroutine can
+// save the copy while another changes s.
+func (s *Store) Clone() *Store {
+	c := *s
+	c.order = slices.Clone(s.order)
+	c.hidden = slices.Clone(s.hidden)
+	c.recent = slices.Clone(s.recent)
+	return &c
+}
+
 // Hide marks dir as hidden.
 func (s *Store) Hide(dir string) {
 	if !s.Hidden(dir) {

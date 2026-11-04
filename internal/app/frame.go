@@ -77,6 +77,8 @@ type Frame struct {
 	Card *FloatCard
 	// Sheet is the context sheet that ⌘J opens ([Frame.Attach] makes it).
 	Sheet *Sheet
+	// ProjectsModal is the projects modal (D110), made in Attach.
+	ProjectsModal *ProjectsModal
 	// Worker is the panel's worker view. [Frame.Attach] makes it. The panel
 	// shows it while a worker is selected.
 	Worker *WorkerPanel
@@ -95,7 +97,10 @@ type Frame struct {
 	// LoadProjects reads the projects store (D109). It runs on a goroutine.
 	// Nil means no store: the frame reads no file.
 	// Nil reads the file in the user config folder.
-	LoadProjects      func() (*projects.Store, error)
+	LoadProjects func() (*projects.Store, error)
+	// SaveProjects writes a copy of the store (D110). It runs on a goroutine.
+	// Nil saves nothing.
+	SaveProjects      func(*projects.Store) error
 	SpawnOrchestrator func(dir string) error
 	// OpenTerminal serves "+" and Cmd-T (D82): it starts a shell in an hc
 	// terminal for the open project, in dir, and returns its address. It
@@ -311,6 +316,9 @@ func (f *Frame) View(c *ui.Context) {
 		ui.Box(c).Label(LabelStatusBar).FillWidth().Height(theme.StatusBarHeight).Shrink(0).
 			Background(color(theme.BgBars)).BorderWidth(1, 0, 0, 0).BorderColor(color(theme.Line)).
 			Children(func() { f.statusBar(c) })
+		if f.ProjectsModal != nil {
+			f.ProjectsModal.View(c)
+		}
 	})
 }
 
@@ -679,6 +687,17 @@ func (f *Frame) Attach(w Window) (stop func()) {
 			Select: func(addr string) { f.Selection.Select(state.Selected{Kind: state.KindTerminal, ID: addr}) }}
 		setNewTerminalHandler(func() { w.Update(f.newTerminal) })
 	}
+	f.ProjectsModal = &ProjectsModal{
+		Groups: f.SpacesList.Groups,
+		Store:  func() *projects.Store { return f.Projects },
+		Apply: func() {
+			if f.Projects != nil {
+				f.SpacesList.SetProjects(f.Projects)
+			}
+		},
+		Save: f.SaveProjects, Run: Runner{Post: w.Update}, Status: f.Status.Show, Invalidate: w.Invalidate,
+	}
+	setProjectsHandler(func() { w.Update(f.ProjectsModal.Toggle) })
 	f.Slots.Spaces = f.SpacesList.View
 	f.SpacesList.Sync()
 	f.loadProjects(w)
@@ -729,6 +748,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	return func() {
 		setNewTerminalHandler(nil)
 		setCloseTerminalHandler(nil)
+		setProjectsHandler(nil)
 		unwatch()
 		term()
 		stopAgents()

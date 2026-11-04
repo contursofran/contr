@@ -122,6 +122,13 @@ func openWindow(icons bool) int {
 			}
 			return projects.Load(path)
 		}
+		frame.SaveProjects = func(s *projects.Store) error {
+			path, err := projects.Path()
+			if err != nil {
+				return err
+			}
+			return s.Save(path)
+		}
 		frame.TerminalSource = terminalSource(os.Getenv)
 		frame.OpenTerminal = func(project, dir string) (string, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)

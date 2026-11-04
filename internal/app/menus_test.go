@@ -105,7 +105,7 @@ func TestTheFileMenuHasNewTerminalOnCmdT(t *testing.T) {
 	if file.Label != "File" {
 		t.Fatalf("name = %q", file.Label)
 	}
-	if got := itemNames(file.Submenu); !slices.Equal(got, []string{"New Terminal", "Close Terminal"}) {
+	if got := itemNames(file.Submenu); !slices.Equal(got, []string{"New Terminal", "Close Terminal", "-", "Projects…"}) {
 		t.Fatalf("items = %v", got)
 	}
 	it := find(t, file.Submenu, "New Terminal")
