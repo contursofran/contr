@@ -51,6 +51,11 @@ settle.
   terminal; they never resize it (D67).
 - Panel width 380 (v0.1: 440) **(not built)**. The panel toggle in the top
   bar hides it; hidden, the terminal takes the width.
+- The sidebar and the panel widths can be dragged at the 1 px divider line
+  (resize cursor on hover). The start values are the default widths above
+  (sidebar 280, panel 440 as built). Limits: sidebar 200–480, panel 280–720.
+  A hidden side keeps its width for when it shows again. The widths are kept
+  across launches (D111).
 - Below 1300 px window width the panel hides by itself (D77)
   **(not built)**.
 

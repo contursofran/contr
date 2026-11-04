@@ -96,6 +96,14 @@ const SidebarWidth = 280
 const TitleBarHeight = 40
 const PanelWidth = 440
 
+// Limits of the widths the owner can drag (D111).
+const (
+	SidebarMinWidth = 200
+	SidebarMaxWidth = 480
+	PanelMinWidth   = 280
+	PanelMaxWidth   = 720
+)
+
 // PR pane (D59)
 const PRPaneWidth = 560
 const PRPanePad = 16
