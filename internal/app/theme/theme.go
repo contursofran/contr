@@ -202,3 +202,20 @@ const ReportRuleMargin = 8   // above and below a horizontal rule
 
 // PRFieldBorder is the border of the PR footer comment field.
 const PRFieldBorder = 0x2E2E2E
+
+// Projects modal (DESIGN.md, D110)
+const BgOverlay = 0x161616
+const OverlayBorder = 0x2E2E2E
+const ModalWidth = 580
+const ModalTop = 110
+const ModalRadius = 12
+const ModalPadX = 18
+const ModalFilterBorder = 0x2E2E2E
+const ModalFilterHint = 0x555555
+const ModalRowSub = 0x5A5A5A
+const ModalTile = 28
+const ModalTileBg = 0x1F1F1F
+const ModalTileRadius = 7
+const ModalGrip = 0x3A3A3A
+const ModalListMax = 360
+const ModalRowHeight = 46

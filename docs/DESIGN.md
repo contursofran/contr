@@ -364,9 +364,9 @@ board panel, with the stage columns 44 wide (`plan build review CI you`).
 Enter motion: up 10 px and fade in, 0.22 s. Esc (with the focus), `board ▾`
 or a click outside closes it.
 
-## Projects modal **(not built)**
+## Projects modal **(being built)**
 
-Opens from the projects control (see open points). An overlay over the whole
+Opens from `File ▸ Projects…` (⇧⌘P, D110); a pill in the Spaces header may be added once the owner picks the entry point (open points). Built today: the header, the filter field (narrows the list by name; paste of a path or URL and drag-reorder under a filter are off), the open list with drag reorder and `close`, and `Done`. **(not built)**: `recent`, `+ open folder…` and `clone from GitHub…`. An overlay over the whole
 window with the `scrim`; the dialog is 580 wide, 110 from the top, centred,
 `bg.overlay`, shadow 0 24 80 rgba(0,0,0,.6). Enter motion: up 8 px and fade
 in, 0.22 s.
