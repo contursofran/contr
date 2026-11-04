@@ -143,6 +143,16 @@ func TestCloseTerminalKeepsASelectionThatMovedOn(t *testing.T) {
 	}
 }
 
+func TestCloseTerminalKeepsAnotherTerminalSelected(t *testing.T) {
+	snap := termSnap()
+	cf := newCloseFrame(t, &snap)
+	cf.Selection.Select(state.Selected{Kind: state.KindTerminal, ID: "t2"})
+	cf.terminalClosed("tp")
+	if sel, _ := cf.Selection.Current(); sel != (state.Selected{Kind: state.KindTerminal, ID: "t2"}) {
+		t.Errorf("selection %+v, want t2 kept", sel)
+	}
+}
+
 func TestCloseTerminalWithoutStopOrActionDoesNothing(t *testing.T) {
 	(&CloseTerminal{}).Start("tp")
 	snap := termSnap()
