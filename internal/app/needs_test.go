@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"slices"
+	"sync"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -13,8 +14,12 @@ import (
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/github"
 	"github.com/contursofran/contr/internal/hc"
+	"github.com/contursofran/contr/internal/herdr"
+	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/owner"
+	"github.com/contursofran/contr/internal/usage"
 )
 
 // needsCore is a fake hc core: a fixed snapshot, no events.
@@ -72,6 +77,16 @@ type source struct {
 	signalled []string // names interrupted
 	stopped   []string
 	closed    []string
+	// mu guards stopped and closed: the frame calls Stop and Close on a
+	// goroutine.
+	mu sync.Mutex
+}
+
+// calls returns copies of the stopped and closed names.
+func (s *source) calls() (stopped, closed []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.stopped), slices.Clone(s.closed)
 }
 
 func (s *source) Snapshot() agentstate.Snapshot { return s.snap }
@@ -103,10 +118,14 @@ func (s *source) Interrupt(name string) error {
 	return s.actionErr
 }
 func (s *source) Stop(name string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.stopped = append(s.stopped, name)
 	return s.actionErr
 }
 func (s *source) Close(name string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.closed = append(s.closed, name)
 	return s.actionErr
 }
@@ -289,5 +308,56 @@ func TestNeedsSectionLongNameStaysOnOneLine(t *testing.T) {
 	}
 	if key.W < 100 {
 		t.Errorf("name width %v: it is squeezed", key.W)
+	}
+}
+
+// TestNeedsRowCollapsesWhilePRIsOpen: with the PR pane open, each tab shows
+// its icon and id and no title; the tab keeps its label and still opens.
+func TestNeedsRowCollapsesWhilePRIsOpen(t *testing.T) {
+	collapsed := false
+	var opened []NeedTab
+	n := &NeedsRow{Snapshot: sampleSource().Snapshot, Collapsed: func() bool { return collapsed },
+		Open: func(t NeedTab) { opened = append(opened, t) }}
+	tt := ui.NewTester(n.View, 1200, 40)
+	tt.Frame()
+	// Texts holds the accessible labels too ("D2 Ship it?"), so match whole texts.
+	if !slices.Contains(tt.Texts(), "Ship it?") {
+		t.Fatalf("open row lacks a title: %v", tt.Texts())
+	}
+	collapsed = true
+	tt.Frame()
+	if slices.Contains(tt.Texts(), "Ship it?") || !slices.Contains(tt.Texts(), "D2") {
+		t.Errorf("collapsed row texts = %v, want ids and no titles", tt.Texts())
+	}
+	tab := n.Tabs()[3]
+	if err := tt.Click(tab.Label()); err != nil || len(opened) != 1 || opened[0].Key != "D2" {
+		t.Errorf("click on a collapsed tab: %v, opened %v", err, opened)
+	}
+}
+
+// TestAttachCollapsesNeedsWithThePRPane: the frame collapses the needs-you
+// tabs exactly while the PR pane is open.
+func TestAttachCollapsesNeedsWithThePRPane(t *testing.T) {
+	w := &fakeWindow{visible: true}
+	f := NewFrame(nil)
+	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
+	f.Usage = usage.NewSampler(usage.Unread, nil)
+	f.StartAgents = func(func()) (AgentSource, func()) { return sampleSource(), func() {} }
+	stop := f.Attach(context.Background(), w, herdr.SocketTarget(filepath.Join(t.TempDir(), "missing.sock")))
+	defer stop()
+	if f.Needs.Collapsed == nil || f.Needs.Collapsed() {
+		t.Fatal("needs collapsed with no PR pane")
+	}
+	f.PR.Client = func(string) github.Client {
+		return github.Client{R: &prRunner{reply: func(string) ([]byte, error) { return []byte(prJSON), nil }}}
+	}
+	f.PR.Run = Runner{Go: func(func()) {}}
+	f.OpenPR("/w", 642)
+	if !f.Needs.Collapsed() {
+		t.Error("needs not collapsed while the PR pane is open")
+	}
+	f.ClosePR()
+	if f.Needs.Collapsed() {
+		t.Error("needs still collapsed after the PR pane closed")
 	}
 }

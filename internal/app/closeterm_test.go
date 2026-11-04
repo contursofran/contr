@@ -193,14 +193,17 @@ func TestAttachWiresCmdWToTheSourceClose(t *testing.T) {
 	it := find(t, BuildMenus().Items()[1].Submenu, "Close Terminal")
 	it.Click(it, nil)
 	w.flush() // runs closeSelectedTerminal, which starts the stop on a goroutine
-	for deadline := time.Now().Add(5 * time.Second); w.queued() == 0 && time.Now().Before(deadline); {
+	// Wait for the call itself: another update can be queued before it.
+	var stopped, closed []string
+	for deadline := time.Now().Add(5 * time.Second); len(closed)+len(stopped) == 0 && time.Now().Before(deadline); {
 		time.Sleep(time.Millisecond)
+		stopped, closed = src.calls()
 	}
 	w.flush()
 	// Close, not Stop: a stopped terminal stays in hc as finished, and its
 	// tab would stay with it.
-	if !slices.Equal(src.closed, []string{"tp"}) || len(src.stopped) != 0 {
-		t.Errorf("closed %v, stopped %v; want closed [tp]", src.closed, src.stopped)
+	if !slices.Equal(closed, []string{"tp"}) || len(stopped) != 0 {
+		t.Errorf("closed %v, stopped %v; want closed [tp]", closed, stopped)
 	}
 	stop()
 	it.Click(it, nil) // the handler is cleared with the frame

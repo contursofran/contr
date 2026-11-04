@@ -82,6 +82,9 @@ type NeedsRow struct {
 	Scope func() string
 	// Open runs when a tab is clicked. The frame opens the answer card here.
 	Open func(NeedTab)
+	// Collapsed, when it returns true, shows only the icon and the id of
+	// each tab: the PR pane is open and takes the room (DESIGN.md, PR viewer).
+	Collapsed func() bool
 
 	picked string
 }
@@ -164,6 +167,7 @@ func (n *NeedsRow) View(c *ui.Context) {
 }
 
 func (n *NeedsRow) tab(c *ui.Context, t NeedTab) {
+	collapsed := n.Collapsed != nil && n.Collapsed()
 	text := uint32(theme.Text)
 	if t.Resolved {
 		text = theme.TextDim
@@ -183,6 +187,9 @@ func (n *NeedsRow) tab(c *ui.Context, t NeedTab) {
 	el.Children(func() {
 		icons.Sized(c, t.Icon, theme.IconSizeSmall).Shrink(0)
 		ui.Text(c, t.Key).Shrink(0).NoWrap().TextColor(theme.Color(text))
+		if collapsed {
+			return
+		}
 		title := ui.Text(c, t.Title).MinWidth(0).SingleLine().TextColor(theme.Color(text))
 		if t.Resolved {
 			title.Strikethrough()

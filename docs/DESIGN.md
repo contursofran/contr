@@ -423,11 +423,11 @@ needs-you tabs show only the icon and the id, and the bottom row hides
 Slice 1 (#235, D59) builds the pane, the header lines 1 and 2, the state
 badge and the CI summary, the tabs and the Overview. The tab switch is
 `kit.Switch`, so the Review mode switch has the same look. It opens from the `#N` badge
-of a sidebar worktree row and the `#N` label of a board work row, and it
-collapses the title bar tabs to icon and id. Not built yet: the Files and
-Checks tabs (they show `Not built yet.`), the footer and its keys, the
-other entry points, `for <item>`, the needs-you tab collapse and hiding
-`board ▴`, and the enter motion.
+of a sidebar worktree row and the `#N` label of a board work row. While it
+is open, the needs-you tabs and the title bar tabs show icon and id only.
+Not built yet: the Files and Checks tabs (they show `Not built yet.`), the
+footer and its keys, the other entry points, `for <item>`, and the enter
+motion. The bottom row has no `board ▴` yet, so there is nothing to hide.
 
 ## Review
 

@@ -622,6 +622,7 @@ func (f *Frame) Attach(ctx context.Context, w Window, target herdr.Target) (stop
 		f.Needs.Scope = func() string { return f.scope(src) }
 		f.Needs.Open = f.Card.Open
 	}
+	f.Needs.Collapsed = f.PROpen
 	f.Slots.Needs = f.Needs.View
 	f.Panel = &BoardPanel{Snapshot: agentSnap, Needs: f.Needs.Tabs}
 	f.Panel.OpenPR = f.OpenPR
