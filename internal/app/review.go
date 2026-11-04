@@ -30,15 +30,16 @@ const (
 type Review struct {
 	repo review.Repo
 
-	branches []review.Branch
-	branch   string
-	files    []review.File
-	file     string
-	commits  []review.Commit // of the selected branch, oldest first
-	commit   string          // sha of the selected commit, in By commit mode
-	code     *editor.DiffState
-	binary   bool
-	err      string
+	branches  []review.Branch
+	branch    string
+	files     []review.File
+	fileState ui.ListState
+	file      string
+	commits   []review.Commit // of the selected branch, oldest first
+	commit    string          // sha of the selected commit, in By commit mode
+	code      *editor.DiffState
+	binary    bool
+	err       string
 	// branchesRead is true once the branches of the repo are read.
 	branchesRead bool
 
@@ -300,20 +301,21 @@ func (r *Review) fileList(c *ui.Context) {
 			})
 		}
 		r.heading(c, "Files")
-		ui.Scroll(c.Key("filelist")).Fill().Children(func() {
-			for _, f := range r.files {
-				mark := theme.TextDim
-				switch f.Status {
-				case review.Added:
-					mark = theme.DiffAdded
-				case review.Deleted:
-					mark = theme.DiffDeleted
-				}
-				r.row(c, kit.RowOpts{Label: "file " + f.Path, Mark: string(f.Status), MarkColor: uint32(mark), Text: f.Path,
-					Counts: true, Added: f.Added, Removed: f.Removed,
-					Selected: f.Path == r.file, OnClick: func() { r.SelectFile(f.Path) }})
+		r.fileState.Key = func(i int) any { return r.files[i].Path }
+		r.fileState.Label = func(i int) string { return r.files[i].Path }
+		ui.List(c.Key("filelist"), &r.fileState, len(r.files), func(i int) {
+			f := r.files[i]
+			mark := theme.TextDim
+			switch f.Status {
+			case review.Added:
+				mark = theme.DiffAdded
+			case review.Deleted:
+				mark = theme.DiffDeleted
 			}
-		})
+			kit.Row(c, kit.RowOpts{Label: "file " + f.Path, Mark: string(f.Status), MarkColor: uint32(mark), Text: f.Path,
+				Counts: true, Added: f.Added, Removed: f.Removed,
+				Selected: f.Path == r.file, OnClick: func() { r.SelectFile(f.Path) }})
+		}).Fill()
 	})
 }
 
