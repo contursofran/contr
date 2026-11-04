@@ -59,8 +59,9 @@ Add packages under `internal/` when a change needs them.
   someone sees it. Do not add benchmarks, perf gates or tuning work.
 - No `panic` in non-test code: return errors. Do not drop errors silently:
   log them or show them.
-- The UI follows `docs/DESIGN.md` exactly: mono font, greyscale (the two
-  diff colors are the only hues), and white only for what needs the owner.
+- The UI follows `docs/DESIGN.md` exactly: mono font, greys, white only for
+  what needs the owner, and hues only where D76 allows them (red for failed
+  and blocked, amber for working and worth a look, the two diff colors).
 - Build views from `internal/app/kit` and MyGo's components (`ui.List`,
   `ui.Segmented`, `editor.DiffView`, `Text.NoWrap().Ellipsis`); do not build
   rows, clipping, scroll lists or code views by hand again.
