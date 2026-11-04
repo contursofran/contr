@@ -1189,3 +1189,24 @@ func TestWorktreeRowsShowNoStatsAfterAnError(t *testing.T) {
 		t.Error("the row still shows stats")
 	}
 }
+
+func TestSpacesShowHerdrLineWhenDown(t *testing.T) {
+	h := newSpaces(t, notRunningLive())
+	line, _ := notRunning().Line()
+	if !h.tt.HasText(line) {
+		t.Fatalf("texts %q, want the herdr line", h.tt.Texts())
+	}
+	h.send(spacesOf(spTree()))
+	if h.tt.HasText(line) {
+		t.Errorf("the line stays while herdr is connected: %q", h.tt.Texts())
+	}
+}
+
+func TestSpacesLineChangesWithTheConnectionState(t *testing.T) {
+	h := newSpaces(t, notRunningLive())
+	connecting, _ := herdr.ConnState{Kind: herdr.Connecting}.Line()
+	change := h.send(herdr.LiveHerdr{State: herdr.ConnState{Kind: herdr.Connecting}})
+	if !change.Any() || !h.tt.HasText(connecting) {
+		t.Errorf("change %+v, texts %q: want a repaint with %q", change, h.tt.Texts(), connecting)
+	}
+}

@@ -2,7 +2,8 @@ package app
 
 import (
 	"context"
-	"math"
+	"errors"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -132,44 +133,30 @@ func TestToggleHidesAndReopensTheSidebar(t *testing.T) {
 	}
 }
 
-func TestHerdrLineIsCentredInTheTerminalWhileNotRunning(t *testing.T) {
-	_, _, tt := newTester(t, notRunning())
-	line, term := box(t, tt, herdr.NotRunningLine), box(t, tt, LabelTerminal)
-	if line.X <= term.X || line.X+line.W >= term.X+term.W {
-		t.Errorf("line %+v is not inside terminal %+v", line, term)
-	}
-	dx := float64(line.X + line.W/2 - (term.X + term.W/2))
-	dy := float64(line.Y + line.H/2 - (term.Y + term.H/2))
-	if math.Abs(dx) >= 1 || math.Abs(dy) >= 1 {
-		t.Errorf("line is off centre by (%v, %v)", dx, dy)
+func TestTerminalShownWhenHerdrDown(t *testing.T) {
+	// hc terminals do not need herdr: the terminal slot runs, and the area
+	// shows no herdr line (#246).
+	for _, st := range []herdr.ConnState{notRunning(), {Kind: herdr.Connecting}} {
+		_, _, tt := newTester(t, st)
+		line, _ := st.Line()
+		if !tt.HasText("[terminal]") {
+			t.Errorf("state %+v: texts %q, want the terminal slot", st, tt.Texts())
+		}
+		if tt.HasText(line) {
+			t.Errorf("state %+v: the terminal area shows %q", st, line)
+		}
 	}
 }
 
-func TestHerdrLineFollowsTheConnection(t *testing.T) {
+func TestTerminalSlotFollowsNoHerdrState(t *testing.T) {
 	_, live, tt := newTester(t, connected())
-	if !tt.HasText("[terminal]") {
-		t.Fatalf("connected: texts %q, want the terminal slot", tt.Texts())
-	}
-	lost := notRunning()
-	notRunningLine, _ := lost.Line()
-	connectingLine, _ := herdr.ConnState{Kind: herdr.Connecting}.Line()
-	step := func(s herdr.ConnState, line string) {
-		t.Helper()
-		live.set(s)
+	for _, st := range []herdr.ConnState{notRunning(), {Kind: herdr.Connecting}, connected()} {
+		live.set(st)
 		tt.Frame()
-		if line == "" {
-			if !tt.HasText("[terminal]") || tt.HasText(notRunningLine) || tt.HasText(connectingLine) {
-				t.Fatalf("state %+v: texts %q, want the terminal and no line", s, tt.Texts())
-			}
-			return
-		}
-		if !tt.HasText(line) || tt.HasText("[terminal]") {
-			t.Fatalf("state %+v: texts %q, want only the line %q", s, tt.Texts(), line)
+		if !tt.HasText("[terminal]") {
+			t.Fatalf("state %+v: texts %q, want the terminal slot", st, tt.Texts())
 		}
 	}
-	step(lost, notRunningLine)
-	step(herdr.ConnState{Kind: herdr.Connecting}, connectingLine)
-	step(connected(), "")
 }
 
 func TestPanelToggleHidesAndShowsThePanel(t *testing.T) {
@@ -556,5 +543,152 @@ func TestTheTerminalFollowsTheSelectedAgent(t *testing.T) {
 	f.syncTerminal() // the same terminal: no new source, no restart
 	if len(asked) != 3 {
 		t.Errorf("a sync with the same terminal asked for a new source: %v", asked)
+	}
+}
+
+// ---- Plain terminals: "+", Cmd-T and the plain tab (#246) ----
+
+// termFrame is an agentFrame with a New Terminal action. opened records the
+// calls to Open; the runner works at once.
+type termFrame struct {
+	*Frame
+	tt       *ui.Tester
+	opened   [][2]string
+	openErr  error
+	statuses []string
+}
+
+func newTermFrame(t *testing.T, snap *agentstate.Snapshot) *termFrame {
+	t.Helper()
+	f, tt := agentFrame(t, snap)
+	tf := &termFrame{Frame: f, tt: tt}
+	f.NewTerm = &NewTerminal{
+		Open: func(project, dir string) (string, error) {
+			tf.opened = append(tf.opened, [2]string{project, dir})
+			return "tNew", tf.openErr
+		},
+		Run:    Runner{Go: func(f func()) { f() }},
+		Status: func(s string) { tf.statuses = append(tf.statuses, s) },
+		Select: func(addr string) { f.Selection.Select(state.Selected{Kind: state.KindTerminal, ID: addr}) },
+	}
+	return tf
+}
+
+func TestPlusTabStartsTerminal(t *testing.T) {
+	snap := tabSnap()
+	snap.Orchestrators[0].Worktree = "/work/p"
+	tf := newTermFrame(t, &snap)
+	tf.tt.Frame()
+	if err := tf.tt.Click(LabelNewTab); err != nil {
+		t.Fatal(err)
+	}
+	if len(tf.opened) != 1 || tf.opened[0] != [2]string{"p", "/work/p"} {
+		t.Fatalf("opened %v, want project p in the orchestrator's worktree", tf.opened)
+	}
+	if sel, _ := tf.Selection.Current(); sel != (state.Selected{Kind: state.KindTerminal, ID: "tNew"}) {
+		t.Errorf("selection %+v, want the new terminal", sel)
+	}
+}
+
+func TestPlusNoProjectUsesHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	snap := agentstate.Snapshot{}
+	tf := newTermFrame(t, &snap)
+	tf.tt.Frame()
+	if absent(tf.tt, LabelNewTab) {
+		t.Fatal("the + button must show with no tabs")
+	}
+	if err := tf.tt.Click(LabelNewTab); err != nil {
+		t.Fatal(err)
+	}
+	if len(tf.opened) != 1 || tf.opened[0] != [2]string{"", home} {
+		t.Errorf("opened %v, want no project in the home folder", tf.opened)
+	}
+}
+
+func TestNoPlusWithoutNewTerminal(t *testing.T) {
+	snap := tabSnap()
+	_, tt := agentFrame(t, &snap)
+	tt.Frame()
+	if !absent(tt, LabelNewTab) {
+		t.Error("the + button shows with no open action")
+	}
+}
+
+func TestPlusTabStartsInTheSelectedProject(t *testing.T) {
+	snap := tabSnap()
+	snap.Workers[2].Worktree = "/work/q"
+	tf := newTermFrame(t, &snap)
+	tf.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "w3"}) // project q, no orchestrator
+	tf.tt.Frame()
+	tf.newTerminal()
+	home, _ := os.UserHomeDir()
+	if len(tf.opened) != 1 || tf.opened[0] != [2]string{"q", home} {
+		t.Errorf("opened %v, want project q in the home folder", tf.opened)
+	}
+}
+
+func TestNewTerminalErrorStatus(t *testing.T) {
+	snap := tabSnap()
+	tf := newTermFrame(t, &snap)
+	tf.openErr = errors.New("hc is not running")
+	tf.tt.Frame()
+	tf.newTerminal()
+	if len(tf.statuses) != 1 || tf.statuses[0] != "Terminal: hc is not running" {
+		t.Errorf("statuses %q", tf.statuses)
+	}
+	if _, ok := tf.Selection.Current(); ok {
+		t.Error("an error must select nothing")
+	}
+}
+
+func TestNewTerminalBusy(t *testing.T) {
+	var jobs []func()
+	n := &NewTerminal{Open: func(string, string) (string, error) { return "t", nil },
+		Run: Runner{Go: func(f func()) { jobs = append(jobs, f) }}}
+	n.Start("p", "/d")
+	n.Start("p", "/d")
+	if len(jobs) != 1 {
+		t.Fatalf("started %d opens, want 1 while one runs", len(jobs))
+	}
+	jobs[0]()
+	n.Start("p", "/d")
+	if len(jobs) != 2 {
+		t.Errorf("a new open after the first ended did not start")
+	}
+}
+
+func TestNewTerminalWithoutOpenDoesNothing(t *testing.T) {
+	(&NewTerminal{}).Start("p", "/d")
+}
+
+func TestPlainTabSelectsKindTerminal(t *testing.T) {
+	snap := tabSnap()
+	snap.Terminals = []agents.Worker{{Name: "term-1", Address: "tp", Project: "p", Role: agents.RoleTerminal, Worktree: "/work/p", Live: true}}
+	f, tt := agentFrame(t, &snap)
+	tt.Frame()
+	label := "$ p, " + workerIcon(snap.Terminals[0]).Label()
+	if err := tt.Click(label); err != nil {
+		t.Fatal(err)
+	}
+	if sel, _ := f.Selection.Current(); sel != (state.Selected{Kind: state.KindTerminal, ID: "tp"}) {
+		t.Errorf("selection %+v, want a terminal", sel)
+	}
+	tt.Frame()
+	if absent(tt, LabelTabActive) {
+		t.Error("the plain tab is not underlined while selected")
+	}
+}
+
+func TestSyncTerminalAttachesAPlainTerminal(t *testing.T) {
+	f, w, _, srcs := terminalFrame(t, nil)
+	f.Selection.Select(state.Selected{Kind: state.KindTerminal, ID: "tp"})
+	w.flush()
+	if f.termAddr != "tp" || f.conn == nil {
+		t.Fatalf("termAddr %q, conn set %v, want an attach to tp", f.termAddr, f.conn != nil)
+	}
+	if srcs["tp"] == nil {
+		t.Error("no source made for tp")
 	}
 }

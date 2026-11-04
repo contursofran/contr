@@ -109,6 +109,11 @@ func openWindow(icons bool) int {
 		frame = app.NewFrame(nil)
 		frame.StartAgents = startAgents(os.Getenv)
 		frame.TerminalSource = terminalSource(os.Getenv)
+		frame.OpenTerminal = func(project, dir string) (string, error) {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			return openTerminal(ctx, os.Getenv, dialAgents, project, dir, time.Now())
+		}
 		frame.PickFolder = pickFolder
 		frame.SpawnOrchestrator = func(dir string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)

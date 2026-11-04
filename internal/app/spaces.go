@@ -43,7 +43,6 @@ const (
 	LabelCardMem      = "host-mem"
 	LabelCardMemFill  = "host-mem-fill"
 	LabelHostOnline   = "host-online"
-	LabelHerdrLine    = "herdr line"
 	LabelHoldYou      = "hold-you"
 	LabelBadge        = "badge"
 )
@@ -472,7 +471,7 @@ func (l *SpacesList) herdrLine(c *ui.Context) {
 	if l.online || l.line == "" {
 		return
 	}
-	ui.Text(c, l.line).Label(LabelHerdrLine).TextColor(theme.Color(theme.TextDim)).
+	ui.Text(c, l.line).TextColor(theme.Color(theme.TextDim)).
 		PaddingX(theme.SidebarPadX).PaddingY(theme.SpacesGap)
 }
 

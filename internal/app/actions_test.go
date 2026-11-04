@@ -14,7 +14,7 @@ func TestCmdQHAltHAndMRunTheirAppActions(t *testing.T) {
 			t.Errorf("%s key = %q, want %q", label, got, key)
 		}
 	}
-	if got := find(t, menus[2].Submenu, "Minimize").Accelerator; got != "Cmd+M" {
+	if got := find(t, menus[3].Submenu, "Minimize").Accelerator; got != "Cmd+M" {
 		t.Errorf("Minimize key = %q", got)
 	}
 }
@@ -22,7 +22,7 @@ func TestCmdQHAltHAndMRunTheirAppActions(t *testing.T) {
 func TestTheEditLabelsDoNotRunTheirActionsFromTheKeymap(t *testing.T) {
 	// The focused view owns Cmd-C, Cmd-V and Cmd-A. A Click on the menu item would run the
 	// action on top of it, so Cmd-V would paste twice.
-	for _, it := range BuildMenus().Items()[1].Submenu {
+	for _, it := range BuildMenus().Items()[2].Submenu {
 		if it.Click != nil {
 			t.Errorf("%s has a Click handler", it.Label)
 		}
@@ -41,6 +41,7 @@ func TestEachShortcutOfTheMenusIsBound(t *testing.T) {
 		{actionCopy, "Cmd+C"},
 		{actionPaste, "Cmd+V"},
 		{actionSelectAll, "Cmd+A"},
+		{actionNewTerminal, "Cmd+T"},
 	}
 	for _, c := range cases {
 		if got := c.a.item().Accelerator; got != c.want {
