@@ -87,3 +87,71 @@ func TestViewOnHC(t *testing.T) {
 	}
 	t.Logf("view %dx%d; after close hc says state=%q", cols, rows, tm.State)
 }
+
+// While contr watches, a second viewer keeps its size and contr's screen
+// shows it; the first key makes contr's view size the terminal (D91).
+func TestWatchKeepsASecondViewersSize(t *testing.T) {
+	core := hctest.New(t, "ctw", hctest.Session("w"))
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	cl, err := hc.Dial(ctx, hc.Command("", core.Env))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cl.Close()
+	cfg := agents.DefaultConfig()
+	cfg.Profiles["sh"] = agents.Profile{Argv: []string{"sh"}}
+	w, err := agents.New(agents.HC{Client: cl}, cfg).Spawn(ctx, agents.Spec{Name: "w1", Profile: "sh", Role: "builder"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := hc.DialFramed(ctx, hc.Command("", core.Env))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer other.Close()
+	if _, err := other.Attach(ctx, hc.AttachParams{Terminal: w.Address, Cols: 101, Rows: 31}); err != nil {
+		t.Fatal(err)
+	}
+	hcSize := func() (int, int) {
+		var tm struct{ Cols, Rows int }
+		if err := cl.Call(ctx, "terminal.get", map[string]any{"terminal": w.Address}, &tm); err != nil {
+			t.Fatal(err)
+		}
+		return tm.Cols, tm.Rows
+	}
+
+	conn := NewConn(NewCoreSource(hc.Command("", core.Env), w.Address), Options{Watch: true})
+	term, err := terminal.New(terminal.Options{Conn: conn, ResizeByConn: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer term.Close()
+	conn.SetScreen(term)
+	tt := ui.NewTester(func(c *ui.Context) { terminal.View(c, term).Fill().AutoFocus() }, 640, 400)
+	wait := func(what string, ok func() bool) {
+		t.Helper()
+		for !ok() {
+			if ctx.Err() != nil {
+				t.Fatalf("timed out waiting for %s; screen:\n%s", what, term.Text())
+			}
+			time.Sleep(20 * time.Millisecond)
+			tt.Frame()
+		}
+	}
+	wait("the core's size on the screen", func() bool { c, r := term.Size(); return c == 101 && r == 31 })
+	time.Sleep(300 * time.Millisecond)
+	tt.Frame()
+	if c, r := hcSize(); c != 101 || r != 31 {
+		t.Fatalf("hc size %dx%d while contr watches, want 101x31", c, r)
+	}
+
+	tt.Type("echo hi-$((40+2))")
+	tt.Key(0, ui.KeyEnter)
+	wait("output", func() bool { return strings.Contains(term.Text(), "hi-42") })
+	wait("contr's size", func() bool {
+		c, r := hcSize()
+		tc, tr := term.Size()
+		return c != 101 && c == tc && r == tr
+	})
+}

@@ -84,6 +84,22 @@ type Options struct {
 	// Cols and Rows are the size of the first attach: 80 by 24 when zero.
 	// The view's size replaces it as soon as the view tells it.
 	Cols, Rows uint16
+	// Watch attaches as an observer first (D91): no size, focus or input go
+	// to the core, so another viewer keeps its size. The first Write ends
+	// the observer stream and attaches with input at the view's size; the
+	// Conn then stays an input viewer.
+	Watch bool
+}
+
+// Screen is the terminal the Conn feeds: the plugin's *terminal.Terminal,
+// made with ResizeByConn. Conn sets its size where the core's stream says the
+// size changed, in order with the output.
+type Screen interface{ Resize(cols, rows int) }
+
+// chunk is one item from the pump to Read: output, or a new size.
+type chunk struct {
+	data []byte
+	size *hc.Size
 }
 
 // Conn is a terminal.Options.Conn over an hc terminal: the plugin reads the
@@ -97,7 +113,7 @@ type Conn struct {
 	ctx context.Context
 	end context.CancelFunc
 	wg  sync.WaitGroup
-	out chan []byte // output from the pump to Read
+	out chan chunk // output and sizes from the pump to Read
 
 	rmu sync.Mutex // Read's leftover
 	buf []byte
@@ -120,6 +136,11 @@ type Conn struct {
 	rows      uint16
 	cell      [2]int
 	state     State
+	watching  bool     // attach as an observer: no size, focus or input
+	takeover  bool     // Write closed the observer stream to attach with input
+	screen    Screen   // nil until SetScreen
+	pending   *hc.Size // a size this viewer set, for Read to give the screen
+	wake      chan struct{}
 }
 
 // NewConn returns a Conn for src. It never blocks: the attach and the watch
@@ -127,8 +148,9 @@ type Conn struct {
 // firstWait. Close ends it.
 func NewConn(src Source, o Options) *Conn {
 	ctx, end := context.WithCancel(context.Background())
-	c := &Conn{src: src, on: o.OnState, ctx: ctx, end: end, out: make(chan []byte),
-		visible: true, cols: o.Cols, rows: o.Rows, state: State{Kind: Connecting}}
+	c := &Conn{src: src, on: o.OnState, ctx: ctx, end: end, out: make(chan chunk),
+		visible: true, cols: o.Cols, rows: o.Rows, state: State{Kind: Connecting}, watching: o.Watch,
+		wake: make(chan struct{}, 1)}
 	if c.cols == 0 || c.rows == 0 {
 		c.cols, c.rows = 80, 24
 	}
@@ -165,15 +187,32 @@ func (c *Conn) setState(s State) {
 	}
 }
 
+// SetScreen gives Conn the terminal whose size it sets. A size that came
+// before it waits for Read.
+func (c *Conn) SetScreen(s Screen) {
+	c.mu.Lock()
+	c.screen = s
+	c.mu.Unlock()
+	c.poke()
+}
+
 // Read gives the program's output. It waits through a lost connection and
-// returns io.EOF only after Close.
+// returns io.EOF only after Close. A new size from the stream resizes the
+// screen here, after the output before it was read.
 func (c *Conn) Read(p []byte) (int, error) {
 	c.rmu.Lock()
 	defer c.rmu.Unlock()
 	for len(c.buf) == 0 {
 		select {
-		case b := <-c.out:
-			c.buf = b
+		case <-c.wake:
+			c.resizeScreen(nil)
+		case ch := <-c.out:
+			c.resizeScreen(nil) // a size this viewer set comes before later output
+			if ch.size != nil {
+				c.resizeScreen(ch.size)
+				continue
+			}
+			c.buf = ch.data
 		case <-c.ctx.Done():
 			return 0, io.EOF
 		}
@@ -191,6 +230,23 @@ func (c *Conn) Write(p []byte) (int, error) {
 	if c.stopped {
 		c.mu.Unlock()
 		return 0, io.ErrClosedPipe
+	}
+	if c.watching { // the owner types: attach with input instead
+		if c.noRetry || len(c.held)+len(p) > maxHeld {
+			c.mu.Unlock()
+			return 0, ErrNotRunning
+		}
+		c.watching, c.live = false, false
+		c.held = append(c.held, p...)
+		s := c.stream
+		c.takeover = s != nil
+		c.mu.Unlock()
+		if s != nil {
+			_ = s.Close() // run attaches again once the pump ends
+		} else {
+			c.retry(false)
+		}
+		return len(p), nil
 	}
 	if !c.live {
 		if c.noRetry || len(c.held)+len(p) > maxHeld {
@@ -217,7 +273,7 @@ func (c *Conn) ResizePixels(cols, rows, cellW, cellH int) error {
 	c.mu.Lock()
 	changed := c.cols != uint16(cols) || c.rows != uint16(rows)
 	c.cols, c.rows, c.cell = uint16(cols), uint16(rows), [2]int{cellW, cellH}
-	s, tried := c.stream, c.tried
+	s, tried, watching := c.stream, c.tried, c.watching
 	c.mu.Unlock()
 	if s == nil {
 		if !tried { // the first size starts the first attach; later ones wait for the backoff
@@ -225,10 +281,63 @@ func (c *Conn) ResizePixels(cols, rows, cellW, cellH int) error {
 		}
 		return nil
 	}
-	if !changed {
+	if !changed || watching {
 		return nil
 	}
-	return s.Resize(uint16(cols), uint16(rows))
+	if err := s.Resize(uint16(cols), uint16(rows)); err != nil {
+		return err
+	}
+	// The core sends no resize frame to the viewer that resized (D43).
+	c.setSize(uint16(cols), uint16(rows))
+	return nil
+}
+
+// setSize marks a size this viewer gave the core, for Read to give the
+// screen before the output that follows. It never waits for Read.
+func (c *Conn) setSize(cols, rows uint16) {
+	c.mu.Lock()
+	c.pending = &hc.Size{Cols: cols, Rows: rows}
+	c.mu.Unlock()
+	c.poke()
+}
+
+// poke wakes Read to give the screen the pending size.
+func (c *Conn) poke() {
+	select {
+	case c.wake <- struct{}{}:
+	default:
+	}
+}
+
+// resizeScreen gives the screen size, or the pending size when size is nil.
+// Without a screen yet, the size waits as the pending one. Read calls it.
+func (c *Conn) resizeScreen(size *hc.Size) {
+	c.mu.Lock()
+	scr := c.screen
+	if scr == nil {
+		if size != nil {
+			c.pending = size
+		}
+		c.mu.Unlock()
+		return
+	}
+	if size == nil {
+		size, c.pending = c.pending, nil
+	}
+	c.mu.Unlock()
+	if size != nil {
+		scr.Resize(int(size.Cols), int(size.Rows))
+	}
+}
+
+// deliver gives ch to Read, unless Conn closes first.
+func (c *Conn) deliver(ch chunk) bool {
+	select {
+	case c.out <- ch:
+		return true
+	case <-c.ctx.Done():
+		return false
+	}
 }
 
 // SetFocus tells the core whether the window has the focus. It is sent again
@@ -236,9 +345,9 @@ func (c *Conn) ResizePixels(cols, rows, cellW, cellH int) error {
 func (c *Conn) SetFocus(focused bool) error {
 	c.mu.Lock()
 	c.focused = focused
-	s := c.stream
+	s, watching := c.stream, c.watching
 	c.mu.Unlock()
-	if s == nil {
+	if s == nil || watching {
 		return nil
 	}
 	return s.Focus(focused)
@@ -372,7 +481,8 @@ func (c *Conn) retry(force bool) {
 // run attaches, then pumps the stream's output to Read until it ends.
 func (c *Conn) run() {
 	c.mu.Lock()
-	p := hc.AttachParams{Cols: c.cols, Rows: c.rows, History: HistoryLines, Resumed: c.resumed}
+	p := hc.AttachParams{Cols: c.cols, Rows: c.rows, History: HistoryLines, Resumed: c.resumed,
+		Observe: c.watching, ResizeNotifications: true}
 	if c.cell[0] > 0 && c.cell[1] > 0 {
 		cell := c.cell
 		p.Display = &hc.Display{Cell: &cell}
@@ -393,14 +503,25 @@ func (c *Conn) run() {
 		_ = s.Close()
 		return
 	}
+	if p.Observe && !c.watching { // a key came during the attach: attach with input
+		c.attaching = false
+		c.mu.Unlock()
+		_ = s.Close()
+		c.retry(false)
+		return
+	}
 	c.stream, c.attaching, c.resumed, c.noRetry = s, false, true, false
 	cols, rows, focused := c.cols, c.rows, c.focused
 	c.mu.Unlock()
-	if cols != p.Cols || rows != p.Rows { // the view's size changed during the attach
-		_ = s.Resize(cols, rows)
-	}
-	if focused {
-		_ = s.Focus(true)
+	if !p.Observe {
+		if cols != p.Cols || rows != p.Rows { // the view's size changed during the attach
+			_ = s.Resize(cols, rows)
+		}
+		if focused {
+			_ = s.Focus(true)
+		}
+		// This viewer set the size, and gets no resize frame for it (D43).
+		c.setSize(cols, rows)
 	}
 	c.flushHeld(s)
 	c.setState(State{Kind: Live})
@@ -411,10 +532,15 @@ func (c *Conn) run() {
 		c.stream = nil
 	}
 	c.live = false
-	stopped := c.stopped
+	stopped, takeover := c.stopped, c.takeover
+	c.takeover = false
 	c.mu.Unlock()
 	if stopped {
 		_ = s.Close()
+		return
+	}
+	if takeover { // Write closed the observer stream: attach with input now
+		c.retry(false)
 		return
 	}
 	var end *hc.StreamEnd
@@ -474,12 +600,10 @@ func (c *Conn) pump(s Stream) {
 			c.mu.Lock()
 			c.failures = 0 // data came: the connection works
 			c.mu.Unlock()
-			if len(ev.Data) == 0 {
-				continue
+			if ev.Resize != nil && !c.deliver(chunk{size: ev.Resize}) {
+				return
 			}
-			select {
-			case c.out <- ev.Data:
-			case <-c.ctx.Done():
+			if len(ev.Data) > 0 && !c.deliver(chunk{data: ev.Data}) {
 				return
 			}
 		case <-c.ctx.Done():

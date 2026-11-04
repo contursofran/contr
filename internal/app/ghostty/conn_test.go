@@ -649,3 +649,174 @@ func TestDataResetsTheBackoff(t *testing.T) {
 		t.Errorf("failures = %d after data, want 0", c.failures)
 	}
 }
+
+// fakeScreen records the sizes Conn gives the screen.
+type fakeScreen struct {
+	mu    sync.Mutex
+	sizes [][2]int
+}
+
+func (s *fakeScreen) Resize(cols, rows int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sizes = append(s.sizes, [2]int{cols, rows})
+}
+
+func (s *fakeScreen) last() [2]int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.sizes) == 0 {
+		return [2]int{}
+	}
+	return s.sizes[len(s.sizes)-1]
+}
+
+func (s *fakeScreen) wait(t *testing.T, cols, rows int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for s.last() != [2]int{cols, rows} {
+		if time.Now().After(deadline) {
+			t.Fatalf("screen size %v, want %dx%d", s.last(), cols, rows)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func startWatch(t *testing.T, src *fakeSource) (*Conn, *states, *fakeScreen) {
+	t.Helper()
+	fast(t)
+	st := &states{ch: make(chan State, 256)}
+	c := NewConn(src, Options{OnState: st.on, Watch: true})
+	scr := &fakeScreen{}
+	c.SetScreen(scr)
+	t.Cleanup(func() { _ = c.Close() })
+	return c, st, scr
+}
+
+// While it watches, Conn sends no size or focus, and the screen follows the
+// core's size in order with the output (D91).
+func TestWatchKeepsTheCoreSize(t *testing.T) {
+	src := newFakeSource()
+	c, st, scr := startWatch(t, src)
+	if err := c.ResizePixels(90, 20, 8, 16); err != nil {
+		t.Fatal(err)
+	}
+	st.wait(t, Live)
+	if p := src.param(0); !p.Observe || !p.ResizeNotifications || p.Cols != 90 || p.Rows != 20 {
+		t.Errorf("attach params %+v", p)
+	}
+	s := src.stream(t, 0)
+	s.events <- hc.StreamEvent{Resize: &hc.Size{Cols: 120, Rows: 40}}
+	s.data("ab")
+	if got := readN(t, c, 2); got != "ab" {
+		t.Errorf("read %q", got)
+	}
+	if got := scr.last(); got != [2]int{120, 40} {
+		t.Errorf("screen %v, want the core's 120x40 before the output", got)
+	}
+	if err := c.ResizePixels(100, 30, 8, 16); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SetFocus(true); err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	sent := len(s.resizes) + len(s.focus)
+	s.mu.Unlock()
+	if sent != 0 {
+		t.Errorf("an observer sent resizes %v focus %v", s.resizes, s.focus)
+	}
+}
+
+// The first key ends the observer stream and attaches with input at the
+// view's size; the key reaches the program, and the screen takes that size.
+func TestWatchTakesOverOnTheFirstKey(t *testing.T) {
+	src := newFakeSource()
+	c, st, scr := startWatch(t, src)
+	if err := c.ResizePixels(90, 20, 8, 16); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SetFocus(true); err != nil {
+		t.Fatal(err)
+	}
+	st.wait(t, Live)
+	obs := src.stream(t, 0)
+	if _, err := c.Write([]byte("x")); err != nil {
+		t.Fatal(err)
+	}
+	waitAttaches(t, src, 2)
+	if p := src.param(1); p.Observe || p.Cols != 90 || p.Rows != 20 || !p.Resumed {
+		t.Errorf("second attach %+v", p)
+	}
+	in := src.stream(t, 1)
+	deadline := time.Now().Add(2 * time.Second)
+	for in.wrote() != "x" && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if in.wrote() != "x" || obs.wrote() != "" {
+		t.Errorf("input: observer %q, live %q", obs.wrote(), in.wrote())
+	}
+	go func() { buf := make([]byte, 8); _, _ = c.Read(buf) }()
+	scr.wait(t, 90, 20)
+	in.mu.Lock()
+	focus := in.focus
+	in.mu.Unlock()
+	if len(focus) != 1 || !focus[0] {
+		t.Errorf("focus %v, want true once", focus)
+	}
+
+	// From now on Conn sizes the terminal, and the screen follows at once.
+	if err := c.ResizePixels(100, 30, 8, 16); err != nil {
+		t.Fatal(err)
+	}
+	scr.wait(t, 100, 30)
+	in.mu.Lock()
+	resizes := in.resizes
+	in.mu.Unlock()
+	if len(resizes) != 1 || resizes[0] != [2]uint16{100, 30} {
+		t.Errorf("resizes %v", resizes)
+	}
+	for {
+		select {
+		case s := <-st.ch:
+			if s.Kind == NotRunning {
+				t.Errorf("the take-over showed %+v", s)
+			}
+			continue
+		default:
+		}
+		break
+	}
+}
+
+// A key during the first attach, an observer's, leads to an attach with
+// input, and the key goes only to that one.
+func TestWatchKeyDuringTheFirstAttach(t *testing.T) {
+	src := newFakeSource()
+	gate := make(chan struct{})
+	src.gate0 = gate
+	c, st, _ := startWatch(t, src)
+	time.Sleep(20 * time.Millisecond) // the first attach waits at the gate
+	if _, err := c.Write([]byte("y")); err != nil {
+		t.Fatal(err)
+	}
+	close(gate)
+	st.wait(t, Live)
+	n := src.attachCount()
+	live := src.stream(t, n-1)
+	if p := src.param(n - 1); p.Observe {
+		t.Errorf("last attach %+v, want input", p)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for live.wrote() != "y" && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if live.wrote() != "y" {
+		t.Errorf("live stream got %q", live.wrote())
+	}
+	for i := range n - 1 {
+		if got := src.stream(t, i).wrote(); got != "" {
+			t.Errorf("observer stream %d got %q", i, got)
+		}
+	}
+}

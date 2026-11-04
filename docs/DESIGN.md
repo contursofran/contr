@@ -195,9 +195,10 @@ then Settings.
   nothing between them: the strip and the card do not move the prompt.
   #150 later draws them between the output and the prompt (D67).
 - The selected orchestrator or worker shows its hc terminal (D80); any other
-  selection shows `select an agent to see its terminal`. contr takes the
-  terminal's size when it attaches (owner, 2026-11-04); another viewer's size
-  does not stay.
+  selection shows `select an agent to see its terminal`. contr only watches
+  until the owner types in it: the screen shows the terminal at hc's size, so
+  another viewer keeps its size. The first key makes contr's view size the
+  terminal (D91).
 
 ## Panel (380)
 
