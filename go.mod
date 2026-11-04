@@ -7,7 +7,7 @@ require (
 	github.com/charmbracelet/x/ansi v0.11.7
 	github.com/charmbracelet/x/vt v0.1.0
 	github.com/ebitengine/purego v0.11.1
-	github.com/egoist/mygo v0.7.3
+	github.com/egoist/mygo v0.7.4
 	golang.org/x/sys v0.49.0
 )
 
