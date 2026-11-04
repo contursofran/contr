@@ -332,3 +332,8 @@ func TestWindowOptionsSizeTheFrameAndTheLegend(t *testing.T) {
 		t.Errorf("legend %+v", l)
 	}
 }
+
+func TestHookArgumentSelectsTheHook(t *testing.T) {
+	same(t, parse("contr", "hook", "stop"), Command{Kind: kindHook, Then: []string{"stop"}})
+	same(t, parse("contr", "hook"), Command{Kind: kindHook, Then: []string{}})
+}

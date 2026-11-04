@@ -1,7 +1,7 @@
 package app
 
 // CloseTerminal stops the selected plain terminal: Cmd-W and File > Close
-// Terminal (#246, S4, D83). Its methods run on the UI thread; Stop runs off it.
+// Terminal (#246, S4, D85). Its methods run on the UI thread; Stop runs off it.
 type CloseTerminal struct {
 	// Stop ends the hc terminal with an address. It blocks, so Start runs it
 	// off the UI thread. Nil makes Start do nothing.

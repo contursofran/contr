@@ -404,7 +404,7 @@ func (f *Frame) newTerminal() {
 	f.NewTerm.Start(project, f.terminalDir(project))
 }
 
-// closeSelectedTerminal stops the selected plain terminal (S4, D83). A worker
+// closeSelectedTerminal stops the selected plain terminal (S4, D85). A worker
 // or orchestrator tab, or no selection, does nothing. UI thread.
 func (f *Frame) closeSelectedTerminal() {
 	if f.CloseTerm == nil || f.Selection == nil {

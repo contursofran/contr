@@ -44,8 +44,12 @@ func main() {
 		os.Exit(statusline(os.Stdin, os.Stdout, os.Stderr, cmd.Then))
 	case kindAgents:
 		os.Exit(runAgents(cmd.Then, os.Stdout, os.Stderr, dialAgents, os.Getenv))
+	case kindOwner:
+		os.Exit(runOwner(cmd.Then, os.Stdout, os.Stderr, dialAgents, os.Getenv))
 	case kindMCP:
 		os.Exit(runMCP(os.Stdin, os.Stdout, os.Stderr, dialAgents, os.Getenv))
+	case kindHook:
+		os.Exit(runHook(cmd.Then, os.Stdin, os.Stderr, dialAgents, os.Getenv))
 	}
 	os.Exit(openWindow(cmd.Icons))
 }

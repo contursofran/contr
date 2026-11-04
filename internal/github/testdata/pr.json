@@ -1,0 +1,28 @@
+{
+  "number": 640,
+  "title": "Add the PR viewer client",
+  "url": "https://example.test/o/r/pull/640",
+  "state": "OPEN",
+  "body": "Part of #151",
+  "author": {"login": "alice"},
+  "headRefName": "agent/151-client",
+  "baseRefName": "main",
+  "headRefOid": "abc123",
+  "additions": 120,
+  "deletions": 7,
+  "changedFiles": 4,
+  "isDraft": true,
+  "mergeable": "MERGEABLE",
+  "mergedAt": null,
+  "closedAt": null,
+  "comments": [{"author": {"login": "bob"}, "body": "Looks fine", "createdAt": "2026-11-03T10:05:00Z"}],
+  "reviews": [{"author": {"login": "bob"}, "body": "", "state": "APPROVED", "submittedAt": "2026-11-03T10:10:00Z"}],
+  "commits": [{"messageHeadline": "Add client", "committedDate": "2026-11-03T10:00:00Z", "authors": [{"login": "alice", "name": "Alice"}]}],
+  "statusCheckRollup": [
+    {"__typename": "CheckRun", "status": "COMPLETED", "conclusion": "SUCCESS"},
+    {"__typename": "CheckRun", "status": "COMPLETED", "conclusion": "FAILURE"},
+    {"__typename": "CheckRun", "status": "COMPLETED", "conclusion": "SKIPPED"},
+    {"__typename": "CheckRun", "status": "IN_PROGRESS", "conclusion": ""},
+    {"__typename": "StatusContext", "state": "SUCCESS"}
+  ]
+}

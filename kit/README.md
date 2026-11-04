@@ -4,8 +4,19 @@ A Claude Code plugin for agent work with `contr agents`:
 
 - `agents/`: the builder, planner and reviewer agent definitions.
 - `commands/orchestrate.md`: the coordinator playbook, as `/contr:orchestrate <goal>`.
+- `hooks/hooks.json`: the Stop hook that reports a worker's turn that sent no report.
 - `.mcp.json`: starts `contr mcp`, which gives the session the agent tools (spawn, message,
   interrupt, stop, read, list). `contr` must be on the PATH; `scripts/install.sh` links it.
+
+## Install
+
+The repository root is a plugin marketplace (`.claude-plugin/marketplace.json`).
+Install the kit once, from the repository folder:
+`claude plugin marketplace add .`, then `claude plugin install contr@contr`.
+Every `claude` session then has
+`/contr:orchestrate`. Turn the plugin off or on in `/plugin`. The plugin
+reads this folder in place, so a change to the kit needs no update step.
+The `--plugin-dir` sessions below still work with the plugin installed.
 
 ## Use
 
@@ -17,7 +28,10 @@ A Claude Code plugin for agent work with `contr agents`:
    `claude --plugin-dir <kit> --model opus --effort medium`, then
    `/contr:orchestrate <goal>`.
 3. Workers that the coordinator starts get its address in
-   `CONTR_COORDINATOR` and report with `hc send`.
+   `CONTR_COORDINATOR` and report with `hc send`. When a worker's turn ends
+   without one, the kit's Stop hook (`hooks/hooks.json`, `contr hook stop`)
+   sends the coordinator "ended its turn without a report. Last words: …".
+   The hook does nothing in sessions without `CONTR_COORDINATOR`.
 
 ## Metrics
 
