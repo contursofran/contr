@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui/editor"
 
@@ -69,6 +70,7 @@ func filesRig(t *testing.T, diff, threads string, fail map[string]bool) *prRig {
 	if err := r.tt.Click("Files 3"); err != nil {
 		t.Fatal(err)
 	}
+	r.tt.Advance(400 * time.Millisecond) // let the enter motion end
 	r.tt.Frame()
 	return r
 }
