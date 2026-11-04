@@ -719,3 +719,44 @@ func TestWorkerPlain(t *testing.T) {
 		}
 	}
 }
+
+// TestProfileAgentPicksTheKitAgent: a profile with an agent field starts as
+// that kit agent; LoadConfig reads the field.
+func TestProfileAgentPicksTheKitAgent(t *testing.T) {
+	dir := t.TempDir()
+	kit := filepath.Join(dir, "kit")
+	if err := os.MkdirAll(filepath.Join(kit, "agents"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(kit, "agents", "planner.md"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(dir, "agents.json")
+	data := `{"kit":"` + kit + `","profiles":{"planner-high":{"argv":["claude","--effort","high"],"agent":"planner"},"odd":{"argv":["claude"]}}}`
+	if err := os.WriteFile(file, []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(file)
+	if err != nil || cfg.Profiles["planner-high"].Agent != "planner" {
+		t.Fatalf("cfg = %+v, %v", cfg.Profiles["planner-high"], err)
+	}
+	f := &fakeCore{handle: map[string]func(map[string]any) (any, error){
+		"terminal.run": func(map[string]any) (any, error) { return term("t1", "p", "live", nil, nil), nil },
+	}}
+	m := New(f, cfg)
+	if _, err := m.Spawn(context.Background(), Spec{Name: "p", Profile: "planner-high"}); err != nil {
+		t.Fatal(err)
+	}
+	argv := f.last().Params["argv"].([]any)
+	want := []any{"claude", "--plugin-dir", kit, "--agent", "contr:planner", "--effort", "high"}
+	if !reflect.DeepEqual(argv, want) {
+		t.Errorf("argv = %v, want %v", argv, want)
+	}
+	// No agent field and no kit file of that name: the argv as written.
+	if _, err := m.Spawn(context.Background(), Spec{Name: "o", Profile: "odd"}); err != nil {
+		t.Fatal(err)
+	}
+	if argv := f.last().Params["argv"].([]any); !reflect.DeepEqual(argv, []any{"claude"}) {
+		t.Errorf("odd argv = %v", argv)
+	}
+}

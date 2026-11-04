@@ -73,6 +73,10 @@ func (s hcStream) Snapshot() hc.Snapshot { return s.Subscription.Snapshot }
 // The task, when there is one, goes after them as the last argument.
 type Profile struct {
 	Argv []string `json:"argv"`
+	// Agent names the kit agent definition (kit/agents/<agent>.md) that the
+	// profile starts as. Empty means the profile name, so a variant such as
+	// planner-high can start as the planner agent.
+	Agent string `json:"agent,omitempty"`
 }
 
 // Config maps profile names to profiles. Kit, when set, is the folder of
@@ -284,7 +288,11 @@ func (m *Manager) Spawn(ctx context.Context, s Spec) (Worker, error) {
 	if s.Issue != "" {
 		labels[LabelIssue] = s.Issue
 	}
-	argv := m.agentArgv(s.Profile, p.Argv)
+	agent := p.Agent
+	if agent == "" {
+		agent = s.Profile
+	}
+	argv := m.agentArgv(agent, p.Argv)
 	if s.Task != "" {
 		argv = append(argv, s.Task)
 	}
@@ -345,18 +353,18 @@ func (m *Manager) OpenTerminal(ctx context.Context, s TerminalSpec) (Worker, err
 	return decodeWorker(raw)
 }
 
-// agentArgv returns the profile's command. A claude command for a profile
-// that has an agent definition in the kit gets `--plugin-dir <kit> --agent
-// contr:<profile>` after the program name.
-func (m *Manager) agentArgv(profile string, argv []string) []string {
+// agentArgv returns the profile's command. A claude command whose agent
+// (Profile.Agent, else the profile name) has a definition in the kit gets
+// `--plugin-dir <kit> --agent contr:<agent>` after the program name.
+func (m *Manager) agentArgv(agent string, argv []string) []string {
 	out := append([]string(nil), argv...)
 	if m.cfg.Kit == "" || len(out) == 0 || filepath.Base(out[0]) != "claude" {
 		return out
 	}
-	if _, err := os.Stat(filepath.Join(m.cfg.Kit, "agents", profile+".md")); err != nil {
+	if _, err := os.Stat(filepath.Join(m.cfg.Kit, "agents", agent+".md")); err != nil {
 		return out
 	}
-	return append([]string{out[0], "--plugin-dir", m.cfg.Kit, "--agent", "contr:" + profile}, out[1:]...)
+	return append([]string{out[0], "--plugin-dir", m.cfg.Kit, "--agent", "contr:" + agent}, out[1:]...)
 }
 
 // List returns the workers, sorted by name. With all, finished ones too.
@@ -384,6 +392,14 @@ func (m *Manager) Send(ctx context.Context, name, text string) error {
 	params := m.looking(name)
 	params["text"] = text
 	return m.core.Call(ctx, "terminal.send", params, nil)
+}
+
+// WithConfig returns a copy of m on the same core with the profiles of cfg.
+// A relative kit path is made absolute, as in New.
+func (m *Manager) WithConfig(cfg Config) *Manager {
+	c := New(m.core, cfg)
+	c.now, c.getenv = m.now, m.getenv
+	return c
 }
 
 // WithEnv makes m read the environment with getenv (HC_TERMINAL_ID, SHELL)

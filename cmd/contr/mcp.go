@@ -27,7 +27,22 @@ type managers struct {
 	dial   func(context.Context, func(string) string) (agentsCore, error)
 	getenv func(string) string
 	cfg    agents.Config
-	core   agentsCore
+	// load, when set, reads the profiles again for each spawn, so a profile
+	// added while the session runs works at once (#257).
+	load func() (agents.Config, error)
+	core agentsCore
+}
+
+// spawnManager is a manager with the profiles read now.
+func (m *managers) spawnManager(mgr *agents.Manager) (*agents.Manager, error) {
+	if m.load == nil {
+		return mgr, nil
+	}
+	cfg, err := m.load()
+	if err != nil {
+		return nil, err
+	}
+	return mgr.WithConfig(cfg), nil
 }
 
 func (m *managers) get(ctx context.Context) (*agents.Manager, agentsCore, error) {
@@ -88,15 +103,19 @@ func (m *managers) close() {
 
 // runMCP is `contr mcp`: the agent tools over MCP on stdin and stdout.
 func runMCP(stdin io.Reader, stdout, stderr io.Writer, dial func(context.Context, func(string) string) (agentsCore, error), getenv func(string) string) int {
-	cfg, err := agents.LoadConfig(configPath(getenv))
+	load := func() (agents.Config, error) {
+		cfg, err := agents.LoadConfig(configPath(getenv))
+		if kit := getenv("CONTR_KIT"); kit != "" {
+			cfg.Kit = kit
+		}
+		return cfg, err
+	}
+	cfg, err := load()
 	if err != nil {
 		fmt.Fprintf(stderr, "contr mcp: %v\n", err)
 		return 1
 	}
-	if kit := getenv("CONTR_KIT"); kit != "" {
-		cfg.Kit = kit
-	}
-	m := &managers{dial: dial, getenv: getenv, cfg: cfg}
+	m := &managers{dial: dial, getenv: getenv, cfg: cfg, load: load}
 	defer m.close()
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
@@ -172,6 +191,10 @@ func agentTools(m *managers, parent string) []mcp.Tool {
 				"name": str("Unique worker name: 1-32 of a-z 0-9 - _ (for example b-158)."), "profile": str("builder, planner, reviewer or debugger, or a profile from the profiles file."),
 				"task": str("The self-contained brief: the first message. Give task or task_file."), "task_file": str("An absolute path to a file that holds the brief, instead of task."), "issue": str("Issue number."), "worktree": str("The worker's working folder (its git worktree)."), "role": str("Role label; the profile name by default."), "project": str("Project name; groups the worker with its project's questions.")}),
 			Run: run(func(ctx context.Context, mgr *agents.Manager, a args) (string, error) {
+				mgr, err := m.spawnManager(mgr)
+				if err != nil {
+					return "", err
+				}
 				task, err := spawnTask(a.Task, a.TaskFile)
 				if err != nil {
 					return "", err
