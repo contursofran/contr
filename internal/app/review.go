@@ -30,16 +30,18 @@ const (
 type Review struct {
 	repo review.Repo
 
-	branches  []review.Branch
-	branch    string
-	files     []review.File
-	fileState ui.ListState
-	file      string
-	commits   []review.Commit // of the selected branch, oldest first
-	commit    string          // sha of the selected commit, in By commit mode
-	code      *editor.DiffState
-	binary    bool
-	err       string
+	branches   []review.Branch
+	branch     string
+	files      []review.File
+	fileState  ui.ListState
+	fileSel    int // row chosen in the file list, -1 for none
+	fileSynced int // row of the selected file at the last build
+	file       string
+	commits    []review.Commit // of the selected branch, oldest first
+	commit     string          // sha of the selected commit, in By commit mode
+	code       *editor.DiffState
+	binary     bool
+	err        string
 	// branchesRead is true once the branches of the repo are read.
 	branchesRead bool
 
@@ -303,6 +305,17 @@ func (r *Review) fileList(c *ui.Context) {
 		r.heading(c, "Files")
 		r.fileState.Key = func(i int) any { return r.files[i].Path }
 		r.fileState.Label = func(i int) string { return r.files[i].Path }
+		// An arrow key moved the row since the last build: open that file.
+		if r.fileSel >= 0 && r.fileSel < len(r.files) && r.fileSel != r.fileSynced && r.files[r.fileSel].Path != r.file {
+			r.SelectFile(r.files[r.fileSel].Path)
+		}
+		r.fileSel, r.fileSynced = -1, -1
+		for i, f := range r.files {
+			if f.Path == r.file {
+				r.fileSel, r.fileSynced = i, i
+			}
+		}
+		r.fileState.Selected = &r.fileSel
 		ui.List(c.Key("filelist"), &r.fileState, len(r.files), func(i int) {
 			f := r.files[i]
 			mark := theme.TextDim
