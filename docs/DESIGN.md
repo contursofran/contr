@@ -440,9 +440,16 @@ again; an error shows at the top of the tab and typed text stays. A resolved thr
 shows as one line, `resolved · who`; the owner has not decided this yet
 (D25). The thread box starts 12 px from the gutter, since the code view
 already leaves the gutter free. A thread whose line is not in the diff is
-not shown. Not built yet: the footer and its keys, the other entry points,
-and `for <item>`. The bottom row has no `board ▴` yet, so there is nothing
+not shown. Slice 8 (#154, D103) builds the footer and its keys. Not built yet: the
+other entry points and `for <item>`. The bottom row has no `board ▴` yet, so there is nothing
 to hide.
+
+The footer (#154, D103) shows for an open PR: the comment field (Enter or
+`Comment` sends), `Approve` and `Squash and merge`. `Approve` is hidden on the
+owner's own PR and once the PR is approved. The merge is pinned to the head
+commit that the pane shows. A failed CI does not stop the merge: the button
+stays and the CI summary is red. A write error shows above the field. After a
+write the pane reads the PR again. Not built yet: `merged · principal told`.
 
 ## Review
 
