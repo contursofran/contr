@@ -15,13 +15,14 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/usage"
 )
 
-// Version is contr's version, shown in the status bar.
-const Version = "0.1.0"
+// Version is contr's version, shown in the status bar. It comes from the VERSION file (D107).
+var Version = contr.Version()
 
 // noReading is shown in place of a reading that has not arrived yet.
 const noReading = "–"
