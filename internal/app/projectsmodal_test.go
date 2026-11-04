@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -231,5 +232,78 @@ func TestProjectInitials(t *testing.T) {
 		if got := projectInitials(in); got != want {
 			t.Errorf("%q: %q, want %q", in, got, want)
 		}
+	}
+}
+
+func (r *modalRig) pick(path string, err error) {
+	r.m.PickFolder = func() (string, error) { return path, err }
+	r.m.Resolve = func(p string) string { return p + "/.git" }
+	r.m.Now = func() time.Time { return time.Unix(50, 0) }
+}
+
+func TestProjectsModalOpenFolderAddsToStoreAndRecent(t *testing.T) {
+	r := newModalRig(t)
+	r.pick("/w/d", nil)
+	r.open()
+	if !r.has(ProjectsOpenFolder) {
+		t.Fatal("no open folder button")
+	}
+	r.tt.Click(ProjectsOpenFolder)
+	if got := r.store.Folders(); !slices.Equal(got, []string{"/w/d/.git"}) || r.store.Path("/w/d/.git") != "/w/d" {
+		t.Fatalf("folders = %v", got)
+	}
+	if rec := r.store.Recent(); len(rec) != 1 || rec[0].Path != "/w/d" {
+		t.Fatalf("recent = %v", rec)
+	}
+	if len(r.saved) != 1 {
+		t.Errorf("saved %d times", len(r.saved))
+	}
+	if got := r.store.Order([]string{"/w/d/.git", "/w/a/.git", "/w/b/.git", "/w/c/.git"}); got[3] != "/w/d/.git" {
+		t.Errorf("new project is not last: %v", got)
+	}
+}
+
+func TestProjectsModalOpenFolderCancelDoesNothing(t *testing.T) {
+	r := newModalRig(t)
+	r.pick("", ErrPickCancelled)
+	r.open()
+	r.tt.Click(ProjectsOpenFolder)
+	if len(r.store.Folders()) != 0 || len(r.store.Recent()) != 0 || len(r.saved) != 0 || len(r.status) != 0 {
+		t.Errorf("cancel changed state: %v %v %v", r.store.Recent(), r.saved, r.status)
+	}
+}
+
+func TestProjectsModalOpenFolderErrorShowsStatus(t *testing.T) {
+	r := newModalRig(t)
+	r.pick("", errors.New("dialog broke"))
+	r.open()
+	r.tt.Click(ProjectsOpenFolder)
+	if len(r.status) != 1 || !strings.Contains(r.status[0], "dialog broke") || len(r.saved) != 0 {
+		t.Errorf("status = %v", r.status)
+	}
+}
+
+func TestProjectsModalNoPickerHidesOpenFolder(t *testing.T) {
+	r := newModalRig(t)
+	r.open()
+	if r.has(ProjectsOpenFolder) {
+		t.Error("button shows without a picker")
+	}
+}
+
+func TestProjectsModalRecentOpensAProjectAgain(t *testing.T) {
+	r := newModalRig(t)
+	r.store.Touch("/w/z/.git", "/w/z", time.Unix(1, 0))
+	r.store.Touch("/w/a/.git", "/w/a", time.Unix(2, 0)) // open already: not listed
+	r.open()
+	if r.has(ProjectsOpenOf("a")) {
+		t.Error("an open project is in the recent list")
+	}
+	if !r.has(ProjectsOpenOf("z")) {
+		t.Fatal("no open button for z")
+	}
+	r.tt.Click(ProjectsOpenOf("z"))
+	if !slices.Equal(r.store.Folders(), []string{"/w/z/.git"}) || r.store.Recent()[0].Dir != "/w/z/.git" || len(r.saved) != 1 {
+		t.Errorf("folders = %v, recent = %v, saved = %d", r.store.Folders(), r.store.Recent(), len(r.saved))
 	}
 }

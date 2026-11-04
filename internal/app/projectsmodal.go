@@ -6,9 +6,12 @@ package app
 // saved to projects.json on a goroutine (D63). Esc, `esc` or `Done` closes it.
 
 import (
+	"errors"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -25,12 +28,17 @@ const (
 	ProjectsEsc         = "esc"
 	ProjectsDone        = "Done"
 	ProjectsClose       = "close"
+	ProjectsOpenFolder  = "+ open folder…"
+	LabelProjectsRecent = "projects recent"
 )
 
 // ProjectsRow is the label of a project row; ProjectsCloseOf is its close
 // button.
 func ProjectsRow(name string) string     { return "project " + name }
 func ProjectsCloseOf(name string) string { return ProjectsClose + " " + name }
+
+// ProjectsOpenOf is the `open` button of a recent project (D116).
+func ProjectsOpenOf(name string) string { return "open " + name }
 
 // ProjectsModal is the modal. Its methods run on the UI thread.
 type ProjectsModal struct {
@@ -43,6 +51,15 @@ type ProjectsModal struct {
 	// Save writes a copy of the store. It runs on a goroutine; nil saves nothing.
 	Save func(*projects.Store) error
 	Run  Runner
+	// PickFolder asks the owner for a folder. It blocks, so it runs on a
+	// goroutine, and returns ErrPickCancelled for no choice. Nil hides
+	// `+ open folder…` (D116).
+	PickFolder func() (string, error)
+	// Resolve returns the project key of a folder: its git common dir, or the
+	// folder when it is outside git. It reads files, so it runs on a goroutine.
+	Resolve func(path string) string
+	// Now gives the time of an open; nil uses time.Now.
+	Now func() time.Time
 	// Status shows an error; may be nil.
 	Status func(string)
 	// Invalidate redraws the window; may be nil.
@@ -124,6 +141,77 @@ func (m *ProjectsModal) closeProject(dir string) {
 	}
 	st.Hide(dir)
 	m.changed()
+}
+
+// openFolder asks for a folder on a goroutine, then adds it to the store and
+// to the recent list (D116). No herdr workspace and no terminal start (owner
+// comment, #245). A cancelled dialog does nothing.
+func (m *ProjectsModal) openFolder() {
+	if m.PickFolder == nil {
+		return
+	}
+	m.Run.Do(func() func() {
+		path, err := m.PickFolder()
+		dir := path
+		if err == nil && m.Resolve != nil {
+			dir = m.Resolve(path)
+		}
+		return func() {
+			switch {
+			case errors.Is(err, ErrPickCancelled):
+			case err != nil:
+				m.status("open folder: " + err.Error())
+			default:
+				m.add(dir, path)
+			}
+		}
+	})
+}
+
+// add puts a project in the store, shows it and records it as recent.
+func (m *ProjectsModal) add(dir, path string) {
+	st := m.store()
+	if st == nil {
+		return
+	}
+	now := time.Now
+	if m.Now != nil {
+		now = m.Now
+	}
+	// Fix the shown order first, so that the new project comes last.
+	var dirs []string
+	for _, g := range m.groupsAll() {
+		dirs = append(dirs, g.CommonDir)
+	}
+	st.SetOrder(st.Order(dirs))
+	st.AddFolder(dir, path)
+	st.Touch(dir, path, now())
+	m.changed()
+}
+
+// openRecent opens a project of the recent list again.
+func (m *ProjectsModal) openRecent(e projects.Entry) { m.add(e.Dir, e.Path) }
+
+func (m *ProjectsModal) status(s string) {
+	if m.Status != nil {
+		m.Status(s)
+	}
+}
+
+// recent returns the recent entries that the sidebar does not show now.
+func (m *ProjectsModal) recent() []projects.Entry {
+	st := m.store()
+	if st == nil {
+		return nil
+	}
+	open := m.groupsAll()
+	var out []projects.Entry
+	for _, e := range st.Recent() {
+		if !slices.ContainsFunc(open, func(g spaces.RepoGroup) bool { return g.CommonDir == e.Dir }) {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 func (m *ProjectsModal) store() *projects.Store {
@@ -241,9 +329,32 @@ func (m *ProjectsModal) body(c *ui.Context) {
 	h := float32(len(groups)) * theme.ModalRowHeight
 	ui.List(c.Key("projectslist"), &m.list, len(groups), func(i int) { m.row(c, groups[i]) }).
 		Label(LabelProjectsList).FillWidth().Shrink(0).Height(min(h, theme.ModalListMax)).Padding(6, 10)
+	m.recentSection(c)
 	ui.Row(c).Shrink(0).AlignItems(ui.Center).Justify(ui.End).Gap(14).Padding(12, theme.ModalPadX).
 		BorderWidth(1, 0, 0, 0).BorderColor(theme.Color(theme.Line)).Children(func() {
+		if m.PickFolder != nil {
+			cardButton(c, ProjectsOpenFolder, ButtonOutlined, theme.Text, m.openFolder)
+			ui.Spacer(c)
+		}
 		cardButton(c, ProjectsDone, ButtonFilled, theme.Text, m.Close)
+	})
+}
+
+// recentSection lists the recent projects that are not open, each with `open`.
+func (m *ProjectsModal) recentSection(c *ui.Context) {
+	recent := m.recent()
+	if len(recent) == 0 {
+		return
+	}
+	ui.Column(c).Label(LabelProjectsRecent).Shrink(0).Padding(10, theme.ModalPadX).Gap(4).Children(func() {
+		ui.Text(c, "recent").TextColor(theme.Color(theme.TextDim))
+		for _, e := range recent {
+			name := storedName(e.Dir, e.Path)
+			ui.Row(c).AlignItems(ui.Center).Gap(12).Children(func() {
+				ui.Text(c, name).Grow(1).SingleLine().MinWidth(0).TextColor(theme.Color(theme.Text2))
+				cardButton(c, ProjectsOpenOf(name), ButtonOutlined, theme.Text, func() { m.openRecent(e) })
+			})
+		}
 	})
 }
 

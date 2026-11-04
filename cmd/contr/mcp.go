@@ -300,6 +300,9 @@ func ownerTools(store *owner.Store, project, coordinator string) []mcp.Tool {
 		Question    string   `json:"question"`
 		Options     []string `json:"options"`
 		Recommended *int     `json:"recommended"`
+		Impacts     []string `json:"impacts"`
+		Refs        []string `json:"refs"`
+		Source      string   `json:"source"`
 		Title       string   `json:"title"`
 		From        string   `json:"from"`
 		Text        string   `json:"text"`
@@ -322,9 +325,12 @@ func ownerTools(store *owner.Store, project, coordinator string) []mcp.Tool {
 		{Name: "ask_owner", Description: "Ask the owner a question only they can answer (a product rule, a design choice, an approval). It is kept until it is decided. Returns its id (D1, D2, …). contr shows it in the needs-you row and the answer card, and sends the answer to you as `Owner answered <ID>: <answer>`. When the owner answers in chat, close it with decided.",
 			Schema: schema([]string{"question"}, map[string]prop{
 				"question": str("The question, with enough context to answer it from there alone."), "options": {"string[]", "Short answers to pick from (2-4)."},
-				"recommended": {"integer", "Index in options of your recommendation."}, "title": str("A 2-4 word name."), "from": str("The worker, issue or PR it is about.")}),
+				"recommended": {"integer", "Index in options of your recommendation."}, "title": str("A 2-4 word name."), "from": str("The worker, issue or PR it is about."),
+				"impacts": {"string[]", "One line per option, in the order of options: what choosing it means. The sheet shows each under its option."},
+				"refs":    {"string[]", "What helps the owner decide: `PR 12` (opens the PR pane), `#12` or `issue 12` (opens in the browser), an http or https URL, or a file path. At most a few."},
+				"source":  str("A short excerpt (a few lines) of the text that raised the question, such as a worker's report.")}),
 			Run: run(func(a args) (string, error) {
-				q, err := store.Ask(owner.Question{Project: project, Coordinator: coordinator, From: a.From, Title: a.Title, Question: a.Question, Options: a.Options, Recommended: a.Recommended})
+				q, err := store.Ask(owner.Question{Project: project, Coordinator: coordinator, From: a.From, Title: a.Title, Question: a.Question, Options: a.Options, Recommended: a.Recommended, Impacts: a.Impacts, Refs: a.Refs, Source: a.Source})
 				return q.ID, err
 			})},
 		{Name: "decided", Description: "Close questions: ones the owner answered in chat (by owner), or ones you settled yourself because they are not the owner's (by coordinator).",

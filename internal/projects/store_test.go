@@ -1,10 +1,12 @@
 package projects
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 	"testing"
+	"time"
 )
 
 func TestLoadMissingFileIsEmpty(t *testing.T) {
@@ -155,5 +157,62 @@ func TestCloneSharesNothing(t *testing.T) {
 	}
 	if got := c.Order([]string{"a", "b"}); got[0] != "a" || got[1] != "b" {
 		t.Errorf("order changed in the copy: %v", got)
+	}
+}
+
+func TestRecentNewestFirstNoDuplicatesCapped(t *testing.T) {
+	s := &Store{}
+	at := time.Unix(1000, 0)
+	s.Touch("/a/.git", "/a", at)
+	s.Touch("/b/.git", "/b", at.Add(time.Second))
+	s.Touch("/a/.git", "/a2", at.Add(2*time.Second))
+	got := s.Recent()
+	if len(got) != 2 || got[0].Dir != "/a/.git" || got[0].Path != "/a2" || got[1].Dir != "/b/.git" {
+		t.Fatalf("recent = %v", got)
+	}
+	for i := range MaxRecent + 5 {
+		s.Touch(fmt.Sprintf("/p%d/.git", i), "/p", at.Add(time.Duration(10+i)*time.Second))
+	}
+	got = s.Recent()
+	if len(got) != MaxRecent || got[0].Dir != fmt.Sprintf("/p%d/.git", MaxRecent+4) {
+		t.Fatalf("recent = %v", got)
+	}
+}
+
+func TestFoldersKeepOrderAndHide(t *testing.T) {
+	s := &Store{}
+	s.AddFolder("/a/.git", "/a")
+	s.AddFolder("/b/.git", "/b")
+	s.AddFolder("/a/.git", "/a")
+	if got := s.Folders(); !slices.Equal(got, []string{"/a/.git", "/b/.git"}) {
+		t.Fatalf("folders = %v", got)
+	}
+	s.Hide("/a/.git")
+	if got := s.Folders(); !slices.Equal(got, []string{"/b/.git"}) {
+		t.Fatalf("hidden folder shows: %v", got)
+	}
+	s.AddFolder("/a/.git", "/a")
+	if s.Hidden("/a/.git") || s.Path("/a/.git") != "/a" {
+		t.Fatal("adding a folder again does not show it")
+	}
+}
+
+func TestRecentAndFoldersSurviveSaveAndLoad(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "p.json")
+	s := &Store{}
+	s.AddFolder("/a/.git", "/a")
+	s.Touch("/a/.git", "/a", time.Unix(5, 0).UTC())
+	if err := s.Save(p); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(p)
+	if err != nil || len(got.Recent()) != 1 || got.Path("/a/.git") != "/a" {
+		t.Fatalf("Load = %v, %v", got, err)
+	}
+	// A copy shares nothing.
+	c := got.Clone()
+	c.AddFolder("/z/.git", "/z")
+	if got.Path("/z/.git") != "" {
+		t.Fatal("clone shares folders")
 	}
 }

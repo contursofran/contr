@@ -153,6 +153,8 @@ func openWindow(icons bool) int {
 		frame.PickFolder = pickFolder
 		frame.Updates = &mygoUpdates{}
 		frame.Relaunch = func() { mygo.App.Relaunch() }
+		frame.OpenFolder = openFolder
+		frame.ProjectKey = projectKey
 		frame.SpawnOrchestrator = func(dir string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()

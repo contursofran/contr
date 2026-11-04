@@ -113,3 +113,35 @@ func TestOwnerUsageErrors(t *testing.T) {
 		t.Errorf("help: code %d", code)
 	}
 }
+
+func TestOwnerAskSavesImpactsRefsAndSource(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "owner.json")
+	var out, errb bytes.Buffer
+	env := map[string]string{"CONTR_OWNER_FILE": path, "CONTR_PROJECT": "demo", "HC_TERMINAL_ID": "t-3"}
+	code := runOwner([]string{"ask", "--title", "Db", "--option", "sqlite", "--option", "postgres", "--impact", "simple", "--impact", "scales",
+		"--recommended", "1", "--ref", "PR 12", "--ref", "#7", "--source", "worker: which db?", "Which", "database?"},
+		&out, &errb, nil, func(k string) string { return env[k] })
+	if code != 0 || strings.TrimSpace(out.String()) != "D1" {
+		t.Fatalf("ask: %d %q %q", code, out.String(), errb.String())
+	}
+	st, _ := (&owner.Store{Path: path}).Read()
+	q := st.Questions[0]
+	if q.Project != "demo" || q.Coordinator != "t-3" || q.Question != "Which database?" || q.Title != "Db" ||
+		strings.Join(q.Impacts, "|") != "simple|scales" || strings.Join(q.Refs, "|") != "PR 12|#7" || q.Source != "worker: which db?" ||
+		q.Recommended == nil || *q.Recommended != 1 {
+		t.Errorf("saved: %+v", q)
+	}
+}
+
+func TestOwnerAskChecksItsInput(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "owner.json")
+	for _, args := range [][]string{
+		{"ask"},
+		{"ask", "--impact", "x", "Q?"},
+		{"ask", "--option", "a", "--recommended", "1", "Q?"},
+	} {
+		if code, _ := runOwnerCmd(t, nil, path, args...); code != 2 {
+			t.Errorf("%v: code %d, want 2", args, code)
+		}
+	}
+}

@@ -13,6 +13,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/git"
 )
 
 // orchestratorProfile is the profile that `+ new` starts (D57).
@@ -34,6 +35,34 @@ func pickFolder() (string, error) {
 		return "", app.ErrPickCancelled
 	}
 	return paths[0], nil
+}
+
+// openFolder asks the owner for a folder to add to the projects (D116). It
+// blocks, so the modal calls it off the UI thread. The folder goes to the
+// recent documents of the Dock menu.
+func openFolder() (string, error) {
+	paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{
+		Title:       "Open a folder as a project",
+		ButtonLabel: "Open",
+		Directory:   true,
+	})
+	if err != nil {
+		return "", err
+	}
+	if len(paths) == 0 {
+		return "", app.ErrPickCancelled
+	}
+	mygo.App.AddRecentDocument(paths[0])
+	return paths[0], nil
+}
+
+// projectKey returns the git common dir of a folder, or the folder when it is
+// outside git (D116). It reads files.
+func projectKey(path string) string {
+	if c, ok := git.Discover(path); ok {
+		return c.CommonDir
+	}
+	return path
 }
 
 var notNameChars = regexp.MustCompile(`[^a-z0-9_-]+`)

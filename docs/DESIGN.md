@@ -355,13 +355,16 @@ terminal does not resize (D67). Esc closes it only while it has the focus
   then ghost `esc`. The items are the open questions of the open project in
   the order of the needs-you row. `‹` and `›` stop at the ends.
 - Left column (grows): `Why it asks`, then the question text in a box (bg
-  #111111, border #262626, radius 8, padding 12×14).
+  #111111, border #262626, radius 8, padding 12×14). Under the question text,
+  when the question has them: `Source` with the excerpt (dim), and
+  `References` with one line each (D114). A ref that opens something is a
+  plain button: `PR 12` opens the PR pane, `#7` or `issue 7` opens the
+  browser, an http or https address opens the browser. A file path or other
+  text is dim text.
 - Right column (420): `Options`, one block each (top border `line`, padding
-  8×0): the option text, `recommended` for the recommended one (first), and
-  its Answer button. Answer goes to the coordinator that asked (D108).
-- Not built, and not planned until `owner.Question` carries the data: impact
-  line per option, source excerpt and reference, related files and PRs,
-  `Show in terminal` (#146), `Ask principal`, `undo`.
+  8×0): the option text, its impact line (dim; D114), `recommended` for the
+  recommended one (first), and its Answer button. Answer goes to the coordinator that asked (D108).
+- Not built: `Show in terminal` (#146), `Ask principal`, `undo`.
 
 ## Board pop-up **(not built)**
 
@@ -374,7 +377,7 @@ or a click outside closes it.
 
 ## Projects modal **(being built)**
 
-Opens from the `projects` pill in the Spaces header (D113); there is no menu item and no shortcut. Built today: the header, the filter field (narrows the list by name; paste of a path or URL and drag-reorder under a filter are off), the open list with drag reorder and `close`, and `Done`. **(not built)**: `recent`, `+ open folder…` and `clone from GitHub…`. An overlay over the whole
+Opens from the `projects` pill in the Spaces header (D113); there is no menu item and no shortcut. Built today: the header, the filter field (narrows the list by name; paste of a path or URL and drag-reorder under a filter are off), the open list with drag reorder and `close`, and `Done`. `recent` (projects not open, each with `open`) and `+ open folder…` (D116). **(not built)**: `clone from GitHub…`. An overlay over the whole
 window with the `scrim`; the dialog is 580 wide, 110 from the top, centred,
 `bg.overlay`, shadow 0 24 80 rgba(0,0,0,.6). Enter motion: up 8 px and fade
 in, 0.22 s.

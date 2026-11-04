@@ -13,6 +13,7 @@ package app
 
 import (
 	"context"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strconv"
@@ -102,6 +103,9 @@ type SpacesList struct {
 	// OnProjects runs when the `projects` pill is clicked (D113). Nil: the
 	// pill does nothing.
 	OnProjects func()
+	// OnNewIn runs when `+ new` of an empty group is clicked, with the group's
+	// folder (D116). Nil: the button does nothing.
+	OnNewIn func(dir string)
 
 	snap      func() agentstate.Snapshot
 	selection *state.Selection
@@ -180,7 +184,11 @@ func (l *SpacesList) SetProjects(s *projects.Store) SpacesChange {
 // applyProjects puts groups in the stored order and leaves the hidden ones
 // out (D109). Without a store it returns groups as they are.
 func (l *SpacesList) applyProjects(groups []spaces.RepoGroup) []spaces.RepoGroup {
-	if l.projects == nil || len(groups) == 0 {
+	if l.projects == nil {
+		return groups
+	}
+	groups = l.withStored(groups)
+	if len(groups) == 0 {
 		return groups
 	}
 	dirs := make([]string, len(groups))
@@ -196,6 +204,31 @@ func (l *SpacesList) applyProjects(groups []spaces.RepoGroup) []spaces.RepoGroup
 		}
 	}
 	return out
+}
+
+// withStored adds an empty group for each stored project that no hc terminal
+// sits in (D116). It waits for the first scan of the terminals, so that a
+// project with terminals does not show as empty for a moment.
+func (l *SpacesList) withStored(groups []spaces.RepoGroup) []spaces.RepoGroup {
+	if len(l.scanned) > 0 && l.scan.Repos == nil {
+		return groups
+	}
+	for _, d := range l.projects.Folders() {
+		if slices.ContainsFunc(groups, func(g spaces.RepoGroup) bool { return g.CommonDir == d }) {
+			continue
+		}
+		groups = append(groups, spaces.RepoGroup{CommonDir: d, Name: storedName(d, l.projects.Path(d)), Path: l.projects.Path(d)})
+	}
+	return groups
+}
+
+// storedName is the name of a stored project: the repo folder, as the scan
+// names it.
+func storedName(dir, path string) string {
+	if filepath.Base(dir) == ".git" {
+		return filepath.Base(filepath.Dir(dir))
+	}
+	return filepath.Base(path)
 }
 
 func (l *SpacesList) shownNow() bool { return l.visible == nil || l.visible() }
@@ -385,7 +418,7 @@ func (l *SpacesList) diff(groups []spaces.RepoGroup, selected string) SpacesChan
 		return change
 	}
 	for g := range groups {
-		if len(groups[g].Rows) != len(l.groups[g].Rows) {
+		if len(groups[g].Rows) != len(l.groups[g].Rows) || groups[g].CommonDir != l.groups[g].CommonDir {
 			change.Rebuilt = true
 			return change
 		}
@@ -452,6 +485,9 @@ func (l *SpacesList) View(c *ui.Context) {
 		l.coreLine(c)
 		for _, g := range l.groups {
 			l.repoLine(c, g)
+			if g.Path != "" {
+				l.emptyGroup(c, g)
+			}
 			for _, row := range g.Rows {
 				l.row(c, row, row.ID() == selected)
 			}
@@ -520,6 +556,20 @@ func (l *SpacesList) repoLine(c *ui.Context, g spaces.RepoGroup) {
 			ui.Text(c, g.Branch).TextColor(theme.Color(theme.TextDim)).SingleLine().Ellipsis("…").MinWidth(0)
 		}
 	})
+}
+
+// LabelNewIn is the label of the `+ new` button of an empty group.
+func LabelNewIn(g spaces.RepoGroup) string { return "new in " + g.Name }
+
+// emptyGroup is the line under a stored project that no hc terminal sits in:
+// `+ new` starts an orchestrator in its folder (D116).
+func (l *SpacesList) emptyGroup(c *ui.Context, g spaces.RepoGroup) {
+	btn := ui.Row(c).Label(LabelNewIn(g)).Height(theme.LineHeight).Shrink(0).AlignItems(ui.Center).
+		PaddingStart(theme.SidebarPadX + theme.RowIndent).TextColor(theme.Color(theme.TextDim2))
+	if l.OnNewIn != nil {
+		btn = btn.Cursor(ui.CursorPointer).OnClick(func() { l.OnNewIn(g.Path) })
+	}
+	btn.Children(func() { ui.Text(c, "+ new") })
 }
 
 // row builds one worktree row, two lines: the name with the status icon, and
