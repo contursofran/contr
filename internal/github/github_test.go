@@ -217,8 +217,22 @@ func TestBranchPRReadsNumberInDir(t *testing.T) {
 	if err != nil || n != 307 {
 		t.Fatalf("got %d, %v", n, err)
 	}
-	if f.dir != "/w" || strings.Join(f.args, " ") != "pr view --json number" {
+	if f.dir != "/w" || strings.Join(f.args, " ") != "pr view --json number,state" {
 		t.Errorf("dir %q args %v", f.dir, f.args)
+	}
+}
+
+func TestBranchPRClosedOrMergedIsZero(t *testing.T) {
+	for _, st := range []string{"CLOSED", "MERGED"} {
+		f := &fakeRunner{out: []byte(`{"number":307,"state":"` + st + `"}`)}
+		n, err := Client{R: f}.BranchPR(context.Background())
+		if err != nil || n != 0 {
+			t.Errorf("%s: got %d, %v", st, n, err)
+		}
+	}
+	f := &fakeRunner{out: []byte(`{"number":307,"state":"OPEN"}`)}
+	if n, _ := (Client{R: f}).BranchPR(context.Background()); n != 307 {
+		t.Errorf("open: got %d", n)
 	}
 }
 

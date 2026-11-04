@@ -168,11 +168,12 @@ func rollupResult(status, conclusion, state string) string {
 	return "fail"
 }
 
-// BranchPR returns the number of the pull request of the checked-out branch
-// of c.Dir, from `gh pr view --json number`. It returns 0 and no error when
-// the branch has no pull request (D104).
+// BranchPR returns the number of the open pull request of the checked-out
+// branch of c.Dir, from `gh pr view --json number,state`. It returns 0 and no
+// error when the branch has no pull request, or its pull request is closed or
+// merged (D104).
 func (c Client) BranchPR(ctx context.Context) (int, error) {
-	out, err := c.run(ctx, "pr", "view", "--json", "number")
+	out, err := c.run(ctx, "pr", "view", "--json", "number,state")
 	if err != nil {
 		if strings.Contains(err.Error(), "no pull requests found") {
 			return 0, nil
@@ -180,10 +181,14 @@ func (c Client) BranchPR(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	var r struct {
-		Number int `json:"number"`
+		Number int    `json:"number"`
+		State  string `json:"state"`
 	}
 	if err := json.Unmarshal(out, &r); err != nil {
 		return 0, fmt.Errorf("gh: read branch pr: %w", err)
+	}
+	if r.State == "CLOSED" || r.State == "MERGED" {
+		return 0, nil
 	}
 	return r.Number, nil
 }
