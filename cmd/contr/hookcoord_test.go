@@ -70,8 +70,8 @@ func TestHookCoordinatorSavesStateOnce(t *testing.T) {
 	if _, out, _ := r.run("stop", nil); !strings.Contains(out, "block") {
 		t.Errorf("after compaction: %q, want a new ask", out)
 	}
-	// The transcript decided, so hc was asked only for the worker list.
-	if strings.Join(r.core.calls, " ") != "terminal.list" {
+	// The transcript decided, so hc was asked only for the worker list (and to label the size).
+	if strings.Join(withoutLabels(r.core.calls), " ") != "terminal.list" {
 		t.Errorf("calls %v, want only terminal.list", r.core.calls)
 	}
 }
@@ -165,5 +165,44 @@ func TestHookSessionStartQuiet(t *testing.T) {
 	r.core.reply["terminal.get"] = worker("t1", "b1", "live", nil)
 	if _, out, _ := r.run("session-start", map[string]any{"source": "compact"}); out != "" {
 		t.Errorf("not a coordinator: %q", out)
+	}
+}
+
+func withoutLabels(calls []string) []string {
+	var out []string
+	for _, c := range calls {
+		if c != "terminal.label" {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+func TestHookStopLabelsTheContextSize(t *testing.T) {
+	r := newCoordRig(t, usageLine(145000))
+	if code, out, errs := r.run("stop", nil); code != 0 || out != "" {
+		t.Fatalf("stop: %d %q %q", code, out, errs)
+	}
+	if len(r.core.calls) != 1 || r.core.calls[0] != "terminal.label" || r.core.params[0]["terminal"] != "t1" {
+		t.Fatalf("calls %v %v", r.core.calls, r.core.params)
+	}
+	labels := r.core.params[0]["labels"].(map[string]any)
+	if labels["contr.context"] != "145000" || labels["contr.context-limit"] != "250000" {
+		t.Errorf("labels %v", labels)
+	}
+	r.env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"] = "300000"
+	r.run("stop", nil)
+	if l := r.core.params[1]["labels"].(map[string]any); l["contr.context-limit"] != "300000" {
+		t.Errorf("limit from the env: %v", l)
+	}
+	// After a compaction the old size goes.
+	r.run("session-start", map[string]any{"source": "compact"})
+	if l := r.core.params[2]["labels"].(map[string]any); r.core.calls[2] != "terminal.label" || l["contr.context"] != "" {
+		t.Errorf("after compaction: %v %v", r.core.calls, l)
+	}
+	// hc down: the hook still succeeds.
+	r.core.errs = map[string]error{"terminal.label": fmt.Errorf("hc down")}
+	if code, _, errs := r.run("stop", nil); code != 0 {
+		t.Errorf("hc down: %d %q", code, errs)
 	}
 }

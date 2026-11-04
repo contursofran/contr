@@ -29,6 +29,8 @@ stop, in a coordinator (a session that ran /contr:orchestrate, or an hc
 terminal with role orchestrator): once the context passes CONTR_SAVE_AT
 tokens (default 220000), it keeps the turn going one time and asks the
 coordinator to update COORDINATOR-STATE.md before Claude Code compacts.
+In any hc session that is not a worker it also labels the terminal with the
+context size (contr.context, contr.context-limit) for the Herdr strip.
 
 session-start, after a compaction in a coordinator: prints the playbook,
 the state file to read, the live workers it started and its open owner
@@ -41,6 +43,10 @@ const saidMax = 300
 // defaultSaveAt is the context size, in tokens, from which a coordinator is
 // asked to save its state: below the owner's compaction window of 250000.
 const defaultSaveAt = 220000
+
+// defaultCompactAt is the owner's compaction window (autoCompactWindow in
+// their Claude Code settings), which the strip shows the context against.
+const defaultCompactAt = 250000
 
 // restoreMax is the most characters that session-start prints. Claude Code
 // caps a hook's context at 10000 characters.
@@ -147,6 +153,7 @@ func (h *hook) coordinatorStop() error {
 	if err != nil {
 		return err
 	}
+	h.showContext(tokens)
 	if tokens < h.saveAt() || h.asked() {
 		return nil
 	}
@@ -169,12 +176,46 @@ func (h *hook) sessionStart() error {
 		return nil
 	}
 	h.clearAsked()
+	h.showContext(0) // the size before the compaction is stale; the next turn's Stop sets it again
 	coord, err := h.coordinator()
 	if err != nil || !coord {
 		return err
 	}
 	_, err = io.WriteString(h.stdout, h.restoreText())
 	return err
+}
+
+// showContext puts the session's context size on its own hc terminal, for
+// the Herdr mod's strip: contr.context (tokens) and contr.context-limit (the
+// compaction window). 0 removes contr.context. Best effort: a failure never
+// fails the hook.
+func (h *hook) showContext(tokens int) {
+	self := h.getenv("HC_TERMINAL_ID")
+	if self == "" {
+		return
+	}
+	labels := map[string]string{"contr.context": ""}
+	if tokens > 0 {
+		labels["contr.context"] = strconv.Itoa(tokens)
+		labels["contr.context-limit"] = strconv.Itoa(h.compactAt())
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	core, err := h.dial(ctx, h.getenv)
+	if err != nil {
+		return
+	}
+	defer func() { _ = core.Close() }()
+	_ = core.Call(ctx, "terminal.label", map[string]any{"terminal": self, "labels": labels}, nil)
+}
+
+// compactAt is the window Claude Code compacts at: CLAUDE_CODE_AUTO_COMPACT_WINDOW,
+// else defaultCompactAt.
+func (h *hook) compactAt() int {
+	if n, err := strconv.Atoi(h.getenv("CLAUDE_CODE_AUTO_COMPACT_WINDOW")); err == nil && n > 0 {
+		return n
+	}
+	return defaultCompactAt
 }
 
 // saveAt is CONTR_SAVE_AT, else defaultSaveAt.
