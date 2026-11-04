@@ -1,0 +1,326 @@
+package app
+
+import (
+	"context"
+	"errors"
+	"slices"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/egoist/mygo/ui"
+)
+
+// fakeUpdates is an update service that the test controls.
+type fakeUpdates struct {
+	enabled    bool
+	info       *UpdateInfo
+	checkErr   error
+	installErr error
+	checks     int
+	installs   int
+	// progress is sent to the install callback.
+	progress [][2]int64
+}
+
+func (f *fakeUpdates) Enabled() bool { return f.enabled }
+
+func (f *fakeUpdates) Check(context.Context) (*UpdateInfo, error) {
+	f.checks++
+	return f.info, f.checkErr
+}
+
+func (f *fakeUpdates) Install(_ context.Context, progress func(done, total int64)) error {
+	f.installs++
+	for _, p := range f.progress {
+		progress(p[0], p[1])
+	}
+	return f.installErr
+}
+
+type settingsRig struct {
+	t         *testing.T
+	s         *Settings
+	u         *fakeUpdates
+	tt        *ui.Tester
+	relaunch  int
+	redrawals int
+}
+
+func newSettingsRig(t *testing.T, u *fakeUpdates) *settingsRig {
+	t.Helper()
+	r := &settingsRig{t: t, u: u}
+	r.s = &Settings{Version: "1.2.3", Run: Runner{Go: func(f func()) { f() }},
+		Relaunch: func() { r.relaunch++ }, Invalidate: func() { r.redrawals++ }}
+	if u != nil {
+		r.s.Updates = u
+	}
+	r.tt = ui.NewTester(func(c *ui.Context) {
+		ui.Column(c).Fill().Children(func() {
+			ui.Box(c).Grow(1).Label("window")
+			r.s.View(c)
+		})
+	}, 1000, 700)
+	r.tt.Frame()
+	return r
+}
+
+func (r *settingsRig) open() { r.s.Toggle(); r.tt.Frame() }
+func (r *settingsRig) has(label string) bool {
+	_, ok := r.tt.Find(label)
+	return ok
+}
+func (r *settingsRig) texts() []string { return r.tt.Texts() }
+func (r *settingsRig) hasText(want string) bool {
+	return slices.ContainsFunc(r.texts(), func(s string) bool { return strings.Contains(s, want) })
+}
+
+func TestSettingsShowsTheVersionAndClosesWithEscAndDone(t *testing.T) {
+	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	if r.has(LabelSettings) {
+		t.Fatal("modal shows before it opens")
+	}
+	r.open()
+	if !r.has(LabelSettings) || !r.hasText("contr 1.2.3") || !r.has(SettingsCheck) {
+		t.Fatalf("modal incomplete: %v", r.texts())
+	}
+	r.tt.Key(0, ui.KeyEscape)
+	if r.s.Opened() {
+		t.Error("Esc did not close")
+	}
+	r.open()
+	r.tt.Click(SettingsDone)
+	if r.s.Opened() {
+		t.Error("Done did not close")
+	}
+	r.open()
+	r.tt.Click(SettingsEsc)
+	if r.s.Opened() {
+		t.Error("esc button did not close")
+	}
+	r.s.Toggle()
+	r.s.Toggle()
+	if r.s.Opened() {
+		t.Error("a second Toggle did not close")
+	}
+}
+
+func TestSettingsSaysUpdatesAreOffWhenTheBuildHasNoKey(t *testing.T) {
+	u := &fakeUpdates{enabled: false}
+	r := newSettingsRig(t, u)
+	r.open()
+	if !r.hasText(TextUpdatesOff) {
+		t.Fatalf("no off text in %v", r.texts())
+	}
+	r.tt.Click(SettingsCheck)
+	if u.checks != 0 {
+		t.Error("Check for updates ran with updates off")
+	}
+}
+
+func TestSettingsWithoutAnUpdateServiceSaysUpdatesAreOff(t *testing.T) {
+	r := newSettingsRig(t, nil)
+	r.open()
+	if !r.hasText(TextUpdatesOff) {
+		t.Fatalf("no off text in %v", r.texts())
+	}
+}
+
+func TestSettingsReportsUpToDate(t *testing.T) {
+	u := &fakeUpdates{enabled: true}
+	r := newSettingsRig(t, u)
+	r.open()
+	r.tt.Click(SettingsCheck)
+	r.tt.Frame()
+	if u.checks != 1 || !r.hasText(TextUpToDate) || r.has(SettingsInstall) {
+		t.Fatalf("checks %d, texts %v", u.checks, r.texts())
+	}
+}
+
+func TestSettingsShowsTheNotesOfANewerVersionAndInstalls(t *testing.T) {
+	u := &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0", Notes: "## 1.3.0\n\n- Fixed the sidebar"},
+		progress: [][2]int64{{50, 100}, {100, 100}}}
+	r := newSettingsRig(t, u)
+	r.open()
+	r.tt.Click(SettingsCheck)
+	r.tt.Frame()
+	if !r.hasText("contr 1.3.0 is available") || !r.has(LabelSettingsNotes) || !r.has(SettingsInstall) {
+		t.Fatalf("no update shown: %v", r.texts())
+	}
+	if !r.hasText("Fixed the sidebar") {
+		t.Errorf("notes not shown: %v", r.texts())
+	}
+	r.tt.Click(SettingsInstall)
+	r.tt.Frame()
+	if u.installs != 1 || r.relaunch != 1 {
+		t.Fatalf("installs %d, relaunches %d", u.installs, r.relaunch)
+	}
+	if got := r.s.percent.Load(); got != 100 {
+		t.Errorf("progress = %d, want 100", got)
+	}
+	if r.has(SettingsInstall) {
+		t.Error("Install and restart still shows after the install")
+	}
+}
+
+func TestSettingsShowsACheckError(t *testing.T) {
+	u := &fakeUpdates{enabled: true, checkErr: errors.New("offline")}
+	r := newSettingsRig(t, u)
+	r.open()
+	r.tt.Click(SettingsCheck)
+	r.tt.Frame()
+	if !r.hasText("update check failed: offline") {
+		t.Fatalf("no error: %v", r.texts())
+	}
+	if r.hasText(TextUpToDate) {
+		t.Error("a failed check says up to date")
+	}
+	u.checkErr = nil
+	r.tt.Click(SettingsCheck)
+	r.tt.Frame()
+	if r.hasText("failed") {
+		t.Error("the error stays after a good check")
+	}
+}
+
+func TestSettingsShowsAnInstallErrorAndDoesNotRelaunch(t *testing.T) {
+	u := &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}, installErr: errors.New("bad signature")}
+	r := newSettingsRig(t, u)
+	r.open()
+	r.tt.Click(SettingsCheck)
+	r.tt.Frame()
+	r.tt.Click(SettingsInstall)
+	r.tt.Frame()
+	if !r.hasText("install failed: bad signature") || r.relaunch != 0 {
+		t.Fatalf("texts %v, relaunches %d", r.texts(), r.relaunch)
+	}
+	if !r.has(SettingsInstall) {
+		t.Error("Install and restart is gone, so the owner cannot try again")
+	}
+}
+
+func TestSettingsButtonsDoNothingWhileWorkRuns(t *testing.T) {
+	u := &fakeUpdates{enabled: true}
+	var held []func()
+	r := newSettingsRig(t, u)
+	r.s.Run = Runner{Go: func(f func()) { held = append(held, f) }}
+	r.s.enabled, r.s.enabledKnown = true, true
+	r.open()
+	r.tt.Click(SettingsCheck)
+	r.tt.Frame()
+	if !r.hasText(TextChecking) {
+		t.Fatalf("no checking text: %v", r.texts())
+	}
+	r.tt.Click(SettingsCheck)
+	if len(held) != 1 {
+		t.Errorf("a second check started: %d jobs", len(held))
+	}
+}
+
+// scheduleRig runs StartChecks with an update service. Every redraw sends on redrawn, so a test
+// waits for the check without sleeping.
+func scheduleRig(t *testing.T, u *fakeUpdates, every time.Duration, visible func() bool) (s *Settings, redrawn chan struct{}, stop func()) {
+	t.Helper()
+	redrawn = make(chan struct{}, 100)
+	s = &Settings{Updates: u, Version: "1.2.3", Every: every, Visible: visible,
+		Run:        Runner{Go: func(f func()) { f() }},
+		Invalidate: func() { redrawn <- struct{}{} }}
+	stop = s.StartChecks()
+	t.Cleanup(stop)
+	return s, redrawn, stop
+}
+
+func waitFor(t *testing.T, ch chan struct{}) {
+	t.Helper()
+	select {
+	case <-ch:
+	case <-time.After(5 * time.Second):
+		t.Fatal("no redraw")
+	}
+}
+
+func TestStartChecksChecksAtLaunchAndShowsTheUpdateWithoutInstalling(t *testing.T) {
+	u := &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}}
+	s, redrawn, _ := scheduleRig(t, u, time.Hour, nil)
+	waitFor(t, redrawn)
+	if !s.Ready() {
+		t.Fatal("a newer version does not make the update ready")
+	}
+	if u.installs != 0 {
+		t.Error("contr installed without a click")
+	}
+	s.Install() // the click on the status bar item
+	if u.installs != 1 {
+		t.Errorf("installs = %d after the click", u.installs)
+	}
+}
+
+func TestStartChecksChecksAgainEveryInterval(t *testing.T) {
+	u := &fakeUpdates{enabled: true}
+	_, redrawn, _ := scheduleRig(t, u, 5*time.Millisecond, nil)
+	waitFor(t, redrawn)
+	waitFor(t, redrawn)
+	waitFor(t, redrawn)
+}
+
+func TestStartChecksSkipsAHiddenWindow(t *testing.T) {
+	u := &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}}
+	var visible atomic.Bool
+	_, redrawn, _ := scheduleRig(t, u, 5*time.Millisecond, visible.Load)
+	time.Sleep(60 * time.Millisecond) // many intervals pass
+	if len(redrawn) != 0 {
+		t.Fatal("a hidden window was checked")
+	}
+	visible.Store(true)
+	waitFor(t, redrawn)
+}
+
+func TestStartChecksStaysQuietOnAnErrorAndWhenUpdatesAreOff(t *testing.T) {
+	u := &fakeUpdates{enabled: true, checkErr: errors.New("offline")}
+	s, redrawn, _ := scheduleRig(t, u, time.Hour, nil)
+	waitFor(t, redrawn)
+	if s.Ready() || s.err != "" {
+		t.Errorf("a failed check shows: ready %v, err %q", s.Ready(), s.err)
+	}
+	off := &fakeUpdates{enabled: false, info: &UpdateInfo{Version: "1.3.0"}}
+	s2, redrawn2, _ := scheduleRig(t, off, time.Hour, nil)
+	waitFor(t, redrawn2)
+	if s2.Ready() || off.checks != 0 {
+		t.Error("a build with updates off checked")
+	}
+}
+
+func TestStartChecksStops(t *testing.T) {
+	u := &fakeUpdates{enabled: true}
+	_, redrawn, stop := scheduleRig(t, u, 5*time.Millisecond, nil)
+	waitFor(t, redrawn)
+	stop()
+	stop() // twice is safe
+	time.Sleep(30 * time.Millisecond)
+	for len(redrawn) > 0 {
+		<-redrawn
+	}
+	time.Sleep(30 * time.Millisecond)
+	if len(redrawn) != 0 {
+		t.Error("checks go on after stop")
+	}
+}
+
+func TestStartChecksWithoutAServiceDoesNothing(t *testing.T) {
+	s := &Settings{}
+	s.StartChecks()()
+}
+
+func TestSettingsInstallErrorReachesTheStatusMessage(t *testing.T) {
+	u := &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}, installErr: errors.New("no space")}
+	r := newSettingsRig(t, u)
+	var msgs []string
+	r.s.Status = func(m string) { msgs = append(msgs, m) }
+	r.open()
+	r.tt.Click(SettingsCheck)
+	r.tt.Click(SettingsInstall)
+	if len(msgs) != 1 || !strings.Contains(msgs[0], "no space") {
+		t.Errorf("status messages = %v", msgs)
+	}
+}

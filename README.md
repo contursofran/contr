@@ -18,7 +18,7 @@ A minimal native macOS client for herdr-core (`hc`), with an agent board built i
 ## Install
 
 ```sh
-scripts/bundle.sh      # builds dist/bundle/contr.app
+scripts/bundle.sh      # builds dist/bundle/contr.app with `go tool mygo build`
 scripts/install.sh     # installs to /Applications and links `contr` in ~/.local/bin
 ```
 

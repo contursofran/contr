@@ -61,16 +61,14 @@ make_bundle() { # dir id marker
     printf '%s\n' "$3" >"$1/Contents/marker"
 }
 
-printf 'int ghostty_dummy(void){return 0;}' | cc -dynamiclib -x c - -o "$tmp/libghostty-vt.dylib" ||
-    fail "cc could not build the dummy library"
-printf 'int main(void){return 0;}' | cc -x c - -o "$tmp/contr" ||
-    fail "cc could not build the dummy binary"
-"$bundle" --bin "$tmp/contr" --lib "$tmp/libghostty-vt.dylib" --out "$tmp/b" >"$tmp/build.out" 2>"$tmp/build.err" ||
-    {
-        cat "$tmp/build.err" >&2
-        fail "bundle.sh could not build the dummy bundle"
-    }
+# A dummy bundle: install.sh only needs the bundle id and the executable (D115: bundle.sh needs a
+# real build, so this test makes the bundle by hand).
 app="$tmp/b/contr.app"
+make_bundle "$app" dev.contr new
+rm "$app/Contents/marker"
+mkdir -p "$app/Contents/MacOS"
+printf 'int main(void){return 0;}' | cc -x c - -o "$app/Contents/MacOS/contr" ||
+    fail "cc could not build the dummy binary"
 [ "$(bundle_id "$app")" = dev.contr ] || fail "the dummy bundle is not dev.contr"
 
 # Fresh install: the app and the link are made, the link runs, stdout is the two paths.

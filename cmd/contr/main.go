@@ -151,6 +151,8 @@ func openWindow(icons bool) int {
 			return openTerminal(ctx, os.Getenv, dialAgents, project, dir, time.Now())
 		}
 		frame.PickFolder = pickFolder
+		frame.Updates = &mygoUpdates{}
+		frame.Relaunch = func() { mygo.App.Relaunch() }
 		frame.OpenFolder = openFolder
 		frame.ProjectKey = projectKey
 		frame.SpawnOrchestrator = func(dir string) error {

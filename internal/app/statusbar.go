@@ -24,6 +24,9 @@ import (
 // Version is contr's version, shown in the status bar. It comes from the VERSION file (D107).
 var Version = contr.Version()
 
+// TextUpdateReady is the status bar item for a newer version (D115). A click installs it.
+const TextUpdateReady = "update ready · restart"
+
 // noReading is shown in place of a reading that has not arrived yet.
 const noReading = "–"
 
@@ -37,6 +40,7 @@ const (
 	LabelHostMem      = "host-mem-status"
 	LabelContrVersion = "contr-version"
 	LabelCoreVersion  = "hc-version"
+	LabelUpdateReady  = "update-ready"
 )
 
 // The sources that the bar reads. [host.Host], [usage.Sampler] and [state.StatusMessage] fit them.
@@ -62,6 +66,8 @@ const (
 	toneReading
 	// toneMeta is a version: dim-2 label and value.
 	toneMeta
+	// toneAction is an item the owner clicks. It is white, because it waits for the owner.
+	toneAction
 )
 
 // segment is one item on the right side of the bar.
@@ -130,6 +136,9 @@ type statusBar struct {
 	core func() (string, bool)
 	// now is the Unix time that the plan windows are read at.
 	now func() uint64
+	// updateReady tells whether a newer version waits (D115); install is the click on its item.
+	updateReady func() bool
+	install     func()
 
 	shown barContent
 	read  bool
@@ -159,6 +168,9 @@ func (b *statusBar) content() barContent {
 		if text, ok := b.message.Text(); ok {
 			c.right = append(c.right, segment{LabelStatusMsg, toneMessage, text, ""})
 		}
+	}
+	if b.updateReady != nil && b.updateReady() {
+		c.right = append(c.right, segment{LabelUpdateReady, toneAction, TextUpdateReady, ""})
 	}
 	c.right = append(c.right,
 		segment{LabelHostCPU, toneReading, "CPU", cpu},
@@ -219,7 +231,7 @@ func (b *statusBar) View(c *ui.Context) {
 				if i > 0 {
 					separator(c)
 				}
-				segmentView(c, s)
+				b.segmentView(c, s)
 			}
 		})
 	})
@@ -229,8 +241,16 @@ func separator(c *ui.Context) {
 	ui.Text(c, "·").Shrink(0).TextColor(color(theme.TextDim2))
 }
 
-func segmentView(c *ui.Context, s segment) {
+func (b *statusBar) segmentView(c *ui.Context, s segment) {
 	switch s.tone {
+	case toneAction:
+		ui.Row(c).Label(s.label).Shrink(0).Cursor(ui.CursorPointer).OnClick(func() {
+			if b.install != nil {
+				b.install()
+			}
+		}).Children(func() {
+			ui.Text(c, s.text()).TextColor(color(theme.YouBg))
+		})
 	case toneMessage:
 		ui.Row(c).Label(s.label).Shrink(1).MinWidth(0).Children(func() {
 			ui.Text(c, s.name).SingleLine().MinWidth(0).TextColor(color(theme.Text2))
