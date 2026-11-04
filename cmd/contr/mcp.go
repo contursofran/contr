@@ -182,6 +182,11 @@ func agentTools(m *managers, parent string) []mcp.Tool {
 			Run: run(func(ctx context.Context, mgr *agents.Manager, a args) (string, error) {
 				return mgr.Read(ctx, a.Name, a.Lines)
 			})},
+		{Name: "prompt", Description: "Show the menu a blocked worker waits on: for a permission, the tool and its command, then the question and the numbered choices. \"no prompt\" when it waits on none.",
+			Schema: schema([]string{"name"}, map[string]prop{"name": str("Worker name.")}),
+			Run: run(func(ctx context.Context, mgr *agents.Manager, a args) (string, error) {
+				return pendingPrompt(ctx, mgr, a.Name)
+			})},
 		{Name: "list", Description: "List the workers with their role, issue, state and worktree.",
 			Schema: schema(nil, map[string]prop{"all": {"boolean", "Include finished workers."}}),
 			Run: run(func(ctx context.Context, mgr *agents.Manager, a args) (string, error) {

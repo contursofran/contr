@@ -25,13 +25,21 @@ type Choice struct {
 
 // Prompt is a question with its choices.
 type Prompt struct {
+	// Detail holds the lines of the menu's box above the question: for a
+	// permission prompt, the tool and its command. It is empty when the
+	// menu has no box or separator above it.
+	Detail   []string
 	Question string
 	Choices  []Choice
 }
 
+// maxDetail is the most lines that parseMenu looks above the question for
+// the top of the menu's box.
+const maxDetail = 12
+
 // Equal reports whether two prompts have the same question and choices.
 func (p Prompt) Equal(o Prompt) bool {
-	return p.Question == o.Question && slices.EqualFunc(p.Choices, o.Choices, func(a, b Choice) bool {
+	return p.Question == o.Question && slices.Equal(p.Detail, o.Detail) && slices.EqualFunc(p.Choices, o.Choices, func(a, b Choice) bool {
 		return a.Label == b.Label && a.Text == b.Text && slices.Equal(a.Keys, b.Keys)
 	})
 }
@@ -91,7 +99,8 @@ type item struct {
 // returns it with the nearest text line above it. textMarks lists label
 // parts that show a choice that asks for typed text.
 func parseMenu(screen string, textMarks []string) (Prompt, bool) {
-	lines := strings.Split(screen, "\n")
+	raw := strings.Split(screen, "\n")
+	lines := slices.Clone(raw)
 	for i := range lines {
 		lines[i] = clean(lines[i])
 	}
@@ -130,11 +139,38 @@ func parseMenu(screen string, textMarks []string) (Prompt, bool) {
 		}
 		p.Choices = append(p.Choices, c)
 	}
+	q := -1
 	for i := run[0].line - 1; i >= 0; i-- {
 		if lines[i] != "" {
-			p.Question = lines[i]
+			p.Question, q = lines[i], i
 			break
 		}
 	}
+	if q > 0 {
+		p.Detail = detail(raw, lines, q)
+	}
 	return p, true
+}
+
+// detail returns the cleaned lines between the top of the menu's box (a ╭
+// line or a line of ─) and the question line q. raw holds the screen lines
+// before clean. With no top within maxDetail lines, or with agent output
+// (●) or another menu item in between, there is no detail.
+func detail(raw, lines []string, q int) []string {
+	for i := q - 1; i >= 0 && i >= q-maxDetail; i-- {
+		r := strings.TrimSpace(raw[i])
+		if strings.HasPrefix(r, "╭") || (r != "" && strings.Trim(r, "─━") == "") {
+			var out []string
+			for _, l := range lines[i+1 : q] {
+				if l != "" {
+					out = append(out, l)
+				}
+			}
+			return out
+		}
+		if strings.HasPrefix(lines[i], "●") || itemRe.MatchString(lines[i]) {
+			return nil
+		}
+	}
+	return nil
 }

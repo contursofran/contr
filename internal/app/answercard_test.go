@@ -471,3 +471,15 @@ func TestBlockedCardClosesWhenNoLongerBlocked(t *testing.T) {
 		t.Error("the card should close")
 	}
 }
+
+// TestBlockedCardShowsTheCommand: a boxed permission menu shows its detail
+// (the tool and the command) above the question, so the owner can answer
+// without the terminal.
+func TestBlockedCardShowsTheCommand(t *testing.T) {
+	r := menuRig(t)
+	r.src.text = "────────\n" + claudeMenu
+	r.open(tabMenu)
+	if !r.tt.HasText("rm -rf build") || !r.tt.HasText("Do you want to proceed?") {
+		t.Errorf("command or question missing: %q", r.tt.Texts())
+	}
+}

@@ -10,6 +10,7 @@ package app
 import (
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/egoist/mygo/ui"
 
@@ -256,7 +257,8 @@ func (a *FloatCard) body(t NeedTab, snap agentstate.Snapshot, resolved bool) *st
 	switch t.Kind {
 	case NeedBlocked:
 		if a.menu != nil && a.menu.Question != "" {
-			text = a.menu.Question
+			// The detail first: for a permission, the tool and its command.
+			text = strings.Join(append(slices.Clone(a.menu.Detail), a.menu.Question), "\n")
 		}
 	case NeedQuestion:
 		if q, ok := a.question(snap); ok {

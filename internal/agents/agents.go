@@ -471,6 +471,15 @@ func (m *Manager) Stop(ctx context.Context, name string) error {
 	return m.core.Call(ctx, "terminal.kill", m.looking(name), nil)
 }
 
+// Get returns one worker by name or address.
+func (m *Manager) Get(ctx context.Context, name string) (Worker, error) {
+	var raw json.RawMessage
+	if err := m.core.Call(ctx, "terminal.get", m.looking(name), &raw); err != nil {
+		return Worker{}, err
+	}
+	return decodeWorker(raw)
+}
+
 // Remove deletes a finished terminal from hc, so lists and watches drop it.
 // hc refuses a live one (error kind "live").
 func (m *Manager) Remove(ctx context.Context, name string) error {

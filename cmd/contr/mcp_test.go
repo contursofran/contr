@@ -84,7 +84,7 @@ func TestMCPListsAndRunsTheAgentTools(t *testing.T) {
 	for _, tool := range r["2"]["result"].(map[string]any)["tools"].([]any) {
 		names = append(names, tool.(map[string]any)["name"].(string))
 	}
-	if !strings.HasPrefix(strings.Join(names, " "), "spawn message interrupt stop read list ") {
+	if !strings.HasPrefix(strings.Join(names, " "), "spawn message interrupt stop read prompt list ") {
 		t.Errorf("tools = %v", names)
 	}
 	if got, isErr := toolText(t, r["3"]); isErr || !strings.Contains(got, `"address": "t4"`) {
@@ -261,7 +261,7 @@ func TestMCPListsTheOwnerTools(t *testing.T) {
 			}
 		}
 	}
-	if strings.Join(names, " ") != "spawn message interrupt stop read list ask_owner decided pin_for_owner unpin_for_owner owner_items" {
+	if strings.Join(names, " ") != "spawn message interrupt stop read prompt list ask_owner decided pin_for_owner unpin_for_owner owner_items" {
 		t.Errorf("tools = %v", names)
 	}
 }
