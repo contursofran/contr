@@ -66,6 +66,10 @@ type SpacesList struct {
 	// Now is the clock; nil means time.Now. Tests replace it.
 	Now func() time.Time
 
+	// compact makes the rows icons only (D128). The frame sets it on each
+	// frame from the window width.
+	compact bool
+
 	snap      func() agentstate.Snapshot
 	selection *state.Selection
 
