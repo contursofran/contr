@@ -24,8 +24,15 @@ Design system page: component ProjectRow. Shared rules: [README.md](README.md).
 
 - One row per open project; stored projects with no terminal show as
   empty (D116).
-- Click selects the project's orchestrator, else the project.
-- The chevron or a click on the open row folds its agents.
+- Click selects the project's orchestrator, else the project (the main
+  checkout, or the folder of an empty project).
+- A click on the project that is already selected folds or opens it. The
+  icon set has no chevron yet, so the row shows no fold mark; the state is
+  in the screen-reader label (expanded). A folded project hides its agents
+  from the agents list below the projects, until #344 puts them under the
+  project.
+- An empty project has a `+` icon button at the right of its row. It starts
+  an orchestrator in the project folder (D116).
 
 ## Data
 
@@ -34,7 +41,9 @@ Design system page: component ProjectRow. Shared rules: [README.md](README.md).
 
 ## Keys and focus
 
-- ↑ ↓ move; ← fold; → open; ⏎ focuses the terminal.
+- ↑ ↓ move; ← fold; → open; ⏎ focuses the terminal. Not built yet: the
+  `ui.List` shows its keyboard choice in the accent color, which the rows
+  must not show. It comes with the sidebar key work.
 
 ## Edge cases
 

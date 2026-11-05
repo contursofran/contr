@@ -33,10 +33,29 @@ type RowOpts struct {
 	OnClick        func()
 	// Lead draws a leading part, such as a status icon, before Mark.
 	Lead func()
+
+	// Flat gives the row the token look of the sidebar (flatrow.go). It uses
+	// Label, Text, Meta, Selected, OnClick, Lead, Trail and the fields below;
+	// the other fields are for the card look.
+	Flat bool
+	// Meta is the text at the right of a flat row.
+	Meta string
+	// NameInk and MetaInk replace the ink of the name (ink-60) and of the
+	// meta (ink-38). The zero color keeps the default.
+	NameInk, MetaInk ui.Color
+	// NameStyle replaces the type style of the name (body).
+	NameStyle theme.TextStyle
+	// Expanded, when set, tells assistive technology that the row folds.
+	Expanded *bool
+	// Trail draws a trailing part, such as an icon button, after the meta.
+	Trail func()
 }
 
 // HeightOf is the height Row gives to a row with these options.
 func HeightOf(o RowOpts) float32 {
+	if o.Flat {
+		return theme.SizeRowHeight
+	}
 	if o.Sub != "" {
 		return 2*theme.LineHeight + 6
 	}
@@ -47,6 +66,10 @@ func HeightOf(o RowOpts) float32 {
 // background and border when selected, the same border color as the
 // background otherwise, so selecting moves nothing.
 func Row(c *ui.Context, o RowOpts) {
+	if o.Flat {
+		flatRow(c, o)
+		return
+	}
 	label := o.Label
 	if label == "" {
 		label = o.Text
