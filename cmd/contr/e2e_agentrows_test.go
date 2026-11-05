@@ -173,12 +173,20 @@ func TestAgentRows(t *testing.T) {
 	waitRows()
 	t.Logf("labels: %v", keys(c.labels(t)))
 	c.capture(t, filepath.Join(out, "agentrows-dark.png"))
-	click(c.labelWithPrefix(t, "b-241, "))
-	time.Sleep(1500 * time.Millisecond)
+	// The click selects the worker: its tab shows in the title bar. Click again
+	// if the first one came before the rows settled.
+	for try := 0; try < 4 && c.labelWithPrefix(t, "241 · demo") == ""; try++ {
+		click(c.labelWithPrefix(t, "b-241, "))
+		time.Sleep(1500 * time.Millisecond)
+	}
+	if c.labelWithPrefix(t, "241 · demo") == "" {
+		t.Fatalf("a click on the worker row did not select it; labels %v", keys(c.labels(t)))
+	}
 	c.capture(t, filepath.Join(out, "agentrows-dark-worker.png"))
 
 	pick("Light")
 	click(c.labelWithPrefix(t, "lead, "))
+	waitFor("the orchestrator tab", 20*time.Second, func() bool { return c.labelWithPrefix(t, "241 · demo") == "" })
 	time.Sleep(1500 * time.Millisecond)
 	c.capture(t, filepath.Join(out, "agentrows-light.png"))
 
