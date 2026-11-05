@@ -948,6 +948,7 @@ func (f *Frame) loadProjects(w Window) {
 			}
 			if store != nil {
 				f.Projects = store
+				f.SpacesList.Adopt = err == nil
 				f.SpacesList.SetProjects(store)
 			}
 		})
@@ -1074,6 +1075,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	}
 	f.SpacesList.OnProjects = f.ProjectsModal.Toggle
 	f.SpacesList.OnReordered = f.ProjectsModal.changed
+	f.SpacesList.OnAdopted = f.ProjectsModal.changed
 	f.lateWin.set(w)
 	if f.themeErr != nil {
 		f.Toasts.Show(f.themeErr.Error())

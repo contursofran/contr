@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/owner"
 )
 
@@ -53,7 +54,67 @@ type Model struct {
 	resolvedQ []owner.Question
 	resolvedT []owner.Todo
 
+	// projects caches the project name of each folder of a foreign terminal;
+	// asked holds the folders that are being resolved (D149).
+	projects map[string]string
+	asked    map[string]bool
+	resolve  func(dir string) string // reads git; tests replace it
+
 	wg sync.WaitGroup
+}
+
+// ProjectOf gives the project name of a working folder: the folder name of
+// the git repository that holds it (as the sidebar names it), else the name
+// of the folder. It reads files: call it only from a goroutine.
+func ProjectOf(dir string) string {
+	if dir == "" {
+		return ""
+	}
+	if c, ok := git.Discover(dir); ok {
+		return filepath.Base(filepath.Dir(c.CommonDir))
+	}
+	return filepath.Base(dir)
+}
+
+// resolveProjects starts the lookup of the project of each foreign terminal
+// whose folder is not cached yet. The lookups run on one goroutine, which
+// notifies when it has new names.
+func (m *Model) resolveProjects(ws []agents.Worker) {
+	m.mu.Lock()
+	var dirs []string
+	for _, w := range ws {
+		if _, ok := m.projects[w.Worktree]; w.Foreign && w.Worktree != "" && !ok && !m.asked[w.Worktree] && !slices.Contains(dirs, w.Worktree) {
+			dirs = append(dirs, w.Worktree)
+		}
+	}
+	if len(dirs) == 0 {
+		m.mu.Unlock()
+		return
+	}
+	if m.asked == nil {
+		m.asked = map[string]bool{}
+	}
+	for _, d := range dirs {
+		m.asked[d] = true
+	}
+	resolve := m.resolve
+	m.mu.Unlock()
+	go func() {
+		got := make(map[string]string, len(dirs))
+		for _, d := range dirs {
+			got[d] = resolve(d)
+		}
+		m.mu.Lock()
+		if m.projects == nil {
+			m.projects = map[string]string{}
+		}
+		for d, p := range got {
+			m.projects[d] = p
+			delete(m.asked, d)
+		}
+		m.mu.Unlock()
+		m.notify()
+	}()
 }
 
 // New returns a model. notify runs after each change, on a goroutine of the
@@ -62,7 +123,7 @@ func New(m *agents.Manager, store *owner.Store, notify func()) *Model {
 	if notify == nil {
 		notify = func() {}
 	}
-	return &Model{mgr: m, store: store, notify: notify}
+	return &Model{mgr: m, store: store, notify: notify, resolve: ProjectOf}
 }
 
 // SetCoreVersion sets the version of the hc core that the model follows.
@@ -78,10 +139,11 @@ func (m *Model) Start(ctx context.Context) {
 	m.wg.Add(2)
 	go func() {
 		defer m.wg.Done()
-		err := m.mgr.Watch(ctx, func(ws []agents.Worker) {
+		err := m.mgr.WatchAll(ctx, func(ws []agents.Worker) {
 			m.mu.Lock()
 			m.workers, m.hcProb = ws, ""
 			m.mu.Unlock()
+			m.resolveProjects(ws)
 			m.notify()
 		})
 		if err != nil && ctx.Err() == nil {
@@ -129,6 +191,9 @@ func (m *Model) Snapshot() Snapshot {
 	defer m.mu.Unlock()
 	var s Snapshot
 	for _, w := range m.workers {
+		if w.Foreign && w.Project == "" { // the cache has the name once resolved
+			w.Project = m.projects[w.Worktree]
+		}
 		switch {
 		case w.Orchestrator():
 			s.Orchestrators = append(s.Orchestrators, w)

@@ -17,13 +17,28 @@ import (
 // worker reloads that worker with terminal.get. A "removed" event drops it;
 // "missed" replaces the list with the fresh snapshot that comes with it.
 func (m *Manager) Watch(ctx context.Context, fn func([]Worker)) error {
-	s, err := m.core.Subscribe(ctx, hc.Filter{Labels: filter})
+	return m.watch(ctx, fn, false)
+}
+
+// WatchAll is Watch with the live terminals that contr did not start too
+// (Worker.Foreign, D149). The agents command line and the MCP tools use
+// Watch and List, which list only the workers that contr started.
+func (m *Manager) WatchAll(ctx context.Context, fn func([]Worker)) error {
+	return m.watch(ctx, fn, true)
+}
+
+func (m *Manager) watch(ctx context.Context, fn func([]Worker), foreign bool) error {
+	f := hc.Filter{Labels: filter}
+	if foreign {
+		f = hc.Filter{}
+	}
+	s, err := m.core.Subscribe(ctx, f)
 	if err != nil {
 		return err
 	}
 	defer s.Close()
 
-	ws, err := fromSnapshot(s.Snapshot())
+	ws, err := fromSnapshot(s.Snapshot(), foreign)
 	if err != nil {
 		return err
 	}
@@ -39,7 +54,7 @@ func (m *Manager) Watch(ctx context.Context, fn func([]Worker)) error {
 				}
 				return hc.ErrClosed
 			}
-			changed, err := m.apply(ctx, ws, e)
+			changed, err := m.apply(ctx, ws, e, foreign)
 			if err != nil {
 				return err
 			}
@@ -51,7 +66,7 @@ func (m *Manager) Watch(ctx context.Context, fn func([]Worker)) error {
 }
 
 // apply changes ws for one event and tells if anything changed.
-func (m *Manager) apply(ctx context.Context, ws map[string]Worker, e hc.Event) (bool, error) {
+func (m *Manager) apply(ctx context.Context, ws map[string]Worker, e hc.Event, foreign bool) (bool, error) {
 	switch e.Method {
 	case "heartbeat":
 		return false, nil
@@ -60,7 +75,7 @@ func (m *Manager) apply(ctx context.Context, ws map[string]Worker, e hc.Event) (
 		if err := json.Unmarshal(e.Data, &snap); err != nil {
 			return false, fmt.Errorf("agents: bad missed snapshot: %w", err)
 		}
-		fresh, err := fromSnapshot(snap)
+		fresh, err := fromSnapshot(snap, foreign)
 		if err != nil {
 			return false, err
 		}
@@ -99,11 +114,11 @@ func (m *Manager) apply(ctx context.Context, ws map[string]Worker, e hc.Event) (
 	if err := json.Unmarshal(raw, &t); err != nil {
 		return false, fmt.Errorf("agents: bad terminal: %w", err)
 	}
-	if t.Labels[LabelApp] != AppAgent { // its labels changed: no longer a worker
+	w := t.worker()
+	if !keep(w, foreign) { // its labels changed, or a foreign terminal ended
 		delete(ws, e.Terminal)
 		return had, nil
 	}
-	w := t.worker()
 	// hc has no output time: stamp the event (D35). The stamp alone is not a
 	// change, so a busy terminal does not repaint the UI; the next change
 	// carries the newest stamp.
@@ -115,14 +130,26 @@ func (m *Manager) apply(ctx context.Context, ws map[string]Worker, e hc.Event) (
 	return changed, nil
 }
 
-func fromSnapshot(snap hc.Snapshot) (map[string]Worker, error) {
+// keep tells if a watch lists w. A watch of contr's workers drops a terminal
+// without contr labels. A watch of all terminals drops a foreign terminal
+// that ended: the owner started it, so contr does not keep it (D112).
+func keep(w Worker, foreign bool) bool {
+	if w.Foreign {
+		return foreign && w.Live
+	}
+	return true
+}
+
+func fromSnapshot(snap hc.Snapshot, foreign bool) (map[string]Worker, error) {
 	ws := make(map[string]Worker, len(snap.Terminals))
 	for _, raw := range snap.Terminals {
 		w, err := decodeWorker(raw)
 		if err != nil {
 			return nil, err
 		}
-		ws[w.Address] = w
+		if keep(w, foreign) {
+			ws[w.Address] = w
+		}
 	}
 	return ws, nil
 }

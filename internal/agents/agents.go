@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -190,11 +191,15 @@ type Worker struct {
 	Turn     uint64 `json:"turn"`
 	Title    string `json:"title,omitempty"`
 	ExitCode *int   `json:"exit_code,omitempty"`
+	// Foreign is true for a terminal that contr did not start: it has no
+	// contr labels. Its role and folder come from hc (D149).
+	Foreign bool `json:"foreign,omitempty"`
 }
 
 // terminal is the part of an hc terminal that a Worker needs.
 type terminal struct {
 	Address  string            `json:"address"`
+	Cwd      string            `json:"cwd"`
 	Parent   *string           `json:"parent"`
 	Name     *string           `json:"name"`
 	Labels   map[string]string `json:"labels"`
@@ -231,6 +236,9 @@ func (t terminal) worker() Worker {
 	if t.Name != nil {
 		w.Name = *t.Name
 	}
+	if t.Labels[LabelApp] != AppAgent {
+		t.foreign(&w)
+	}
 	if t.Parent != nil {
 		w.Parent = *t.Parent
 	}
@@ -241,6 +249,40 @@ func (t terminal) worker() Worker {
 		}
 	}
 	return w
+}
+
+// foreign fills w for a terminal that has no contr labels (D149): the role
+// is orchestrator for Claude Code, else terminal; the folder is the working
+// folder that hc reports; a terminal without a name shows its address.
+func (t terminal) foreign(w *Worker) {
+	w.Foreign = true
+	w.Worktree = t.Cwd
+	if w.Name == "" {
+		w.Name = t.Address
+	}
+	w.Role = RoleTerminal
+	if t.runsClaude() {
+		w.Role = RoleOrchestrator
+	}
+}
+
+// versionName matches the name that Claude Code gives itself as foreground
+// program: its version, such as 2.1.30.
+var versionName = regexp.MustCompile(`^\d+\.\d+\.\d+`)
+
+// runsClaude tells if Claude Code runs in the terminal: it is the
+// foreground program (by name or by its version), the program in argv, or the
+// terminal has an hc status, which only an agent sets.
+func (t terminal) runsClaude() bool {
+	if t.Status != nil {
+		return true
+	}
+	if t.Foreground != nil {
+		if n := filepath.Base(t.Foreground.Name); n == "claude" || versionName.MatchString(n) {
+			return true
+		}
+	}
+	return len(t.Argv) > 0 && filepath.Base(t.Argv[0]) == "claude"
 }
 
 // command is the foreground program's name, else the base of argv[0], or
