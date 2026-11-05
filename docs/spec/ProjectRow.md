@@ -4,6 +4,10 @@ A sidebar row that names a project; the agents of the project list below it.
 
 Design system page: component ProjectRow. Shared rules: [README.md](README.md).
 
+| Dark | Light |
+|---|---|
+| ![ProjectRow, dark](images/ProjectRow-dark.png) | ![ProjectRow, light](images/ProjectRow-light.png) |
+
 ## Anatomy
 
 | Part | Value |

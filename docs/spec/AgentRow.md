@@ -4,6 +4,10 @@ A two-line sidebar row for one agent: the orchestrator sits at the top of its pr
 
 Design system page: component AgentRow. Shared rules: [README.md](README.md).
 
+| Dark | Light |
+|---|---|
+| ![AgentRow, dark](images/AgentRow-dark.png) | ![AgentRow, light](images/AgentRow-light.png) |
+
 ## Anatomy
 
 | Part | Value |

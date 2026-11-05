@@ -4,6 +4,10 @@ A square button with one 16px line icon; it shows its name and shortcut in a too
 
 Design system page: component IconButton. Shared rules: [README.md](README.md).
 
+| Dark | Light |
+|---|---|
+| ![IconButton, dark](images/IconButton-dark.png) | ![IconButton, light](images/IconButton-light.png) |
+
 ## Anatomy
 
 | Part | Value |

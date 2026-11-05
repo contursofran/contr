@@ -4,6 +4,10 @@ The open notch: one question at a time with its choices, a recommended choice, a
 
 Design system page: component QuestionsCard. Shared rules: [README.md](README.md).
 
+| Dark | Light |
+|---|---|
+| ![QuestionsCard, dark](images/QuestionsCard-dark.png) | ![QuestionsCard, light](images/QuestionsCard-light.png) |
+
 ## Anatomy
 
 Width `notch-open-width` (600px), padding `space-12`, glass as the notch.

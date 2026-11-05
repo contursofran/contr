@@ -4,6 +4,10 @@ A one-character mark that tells the state of an agent: a braille spinner for wor
 
 Design system page: component StatusGlyph. Shared rules: [README.md](README.md).
 
+| Dark | Light |
+|---|---|
+| ![StatusGlyph, dark](images/StatusGlyph-dark.png) | ![StatusGlyph, light](images/StatusGlyph-light.png) |
+
 ## Anatomy
 
 - Braille glyph: mono `glyph` style (17/18), 16px wide; 14px inside tabs and the notch.

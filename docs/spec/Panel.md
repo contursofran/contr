@@ -4,6 +4,10 @@ A panel is a rounded area inside the window glass: the sidebar, the terminal and
 
 Design system page: component Panel. Shared rules: [README.md](README.md).
 
+| Dark | Light |
+|---|---|
+| ![Panel, dark](images/Panel-dark.png) | ![Panel, light](images/Panel-light.png) |
+
 ## Anatomy
 
 | Part | Value |

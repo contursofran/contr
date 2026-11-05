@@ -4,6 +4,10 @@ The info block at the bottom of the files panel shows the context of the selecte
 
 Design system page: component UsageMeter. Shared rules: [README.md](README.md).
 
+| Dark | Light |
+|---|---|
+| ![UsageMeter, dark](images/UsageMeter-dark.png) | ![UsageMeter, light](images/UsageMeter-light.png) |
+
 ## Anatomy
 
 | Part | Value |

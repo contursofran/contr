@@ -4,6 +4,10 @@ A tab is one hc terminal of the selected agent: a status glyph, a title clipped 
 
 Design system page: component Tab. Shared rules: [README.md](README.md).
 
+| Dark | Light |
+|---|---|
+| ![Tab, dark](images/Tab-dark.png) | ![Tab, light](images/Tab-light.png) |
+
 ## Anatomy
 
 | Part | Value |
