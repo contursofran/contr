@@ -132,6 +132,7 @@ func dial(t *testing.T, sock string) *client {
 	for {
 		conn, err := net.Dial("unix", sock)
 		if err == nil {
+			guardActive(t, sock)
 			return &client{conn: conn, r: bufio.NewReaderSize(conn, 1<<26)}
 		}
 		if time.Now().After(deadline) {

@@ -22,6 +22,7 @@ import (
 //
 //	go test -tags e2e -run TestPRPaneCapture ./cmd/contr
 func TestPRPaneCapture(t *testing.T) {
+	skipWhileViewersHidden(t)
 	if _, err := exec.LookPath("hc"); err != nil {
 		t.Skip("hc is not installed")
 	}

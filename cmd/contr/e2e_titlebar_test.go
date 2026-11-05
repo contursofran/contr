@@ -351,7 +351,7 @@ func TestTitleBarCapture(t *testing.T) {
 		}
 		// A press can land while the window still builds a frame: press again until the tab shows.
 		for try := 0; try < 5 && !inBar(c, "#342 · agent-342-titlebar"); try++ {
-			c.call(t, "act", map[string]any{"id": c.idOf(t, row), "action": "press"})
+			clickAt(c, row)
 			for deadline := time.Now().Add(4 * time.Second); time.Now().Before(deadline) && !inBar(c, "#342 · agent-342-titlebar"); time.Sleep(200 * time.Millisecond) {
 				wake(c)
 			}
