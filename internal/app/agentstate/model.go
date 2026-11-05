@@ -221,6 +221,8 @@ func (m *Model) Snapshot() Snapshot {
 		}
 		return strings.Compare(a.Name, b.Name)
 	}
+	nameForeign(s.Orchestrators)
+	nameForeign(s.Terminals)
 	slices.SortStableFunc(s.Orchestrators, byProjectName)
 	slices.SortStableFunc(s.Terminals, byProjectName)
 	s.Questions, s.Todos = m.state.Open("")
