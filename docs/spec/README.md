@@ -84,15 +84,17 @@ tests, and what it replaces.
 - The terminal has a 16-color ANSI palette per theme. The dark palette is
   today's `TerminalPalette`; the light palette is open point O9.
 - Settings has an **Appearance** row: System, Dark, Light. The value is
-  stored with the other settings.
+  stored with the other settings, in `settings.json` in the user config
+  folder (`internal/prefs`). An unknown stored value is System.
 
 ## Type
 
 - Two families: **sans** for interface text, **mono** for values, ids,
   counts, keys and the terminal. This replaces "mono font everywhere"
   (D118).
-- Sans: Inter, else the system font (open point O7). Mono: JetBrains Mono,
-  in `assets` today.
+- Sans: Inter, bundled in `assets/fonts` (regular 400 and medium 500; O7
+  settled, D121). The system font is the fallback if a face fails to load.
+  Mono: JetBrains Mono, in `assets` today.
 - Styles (size, line height, weight) are in [tokens.md](tokens.md). Use the
   style name, not a size.
 
@@ -113,7 +115,7 @@ tests, and what it replaces.
 - Names: `project`, `computer`, `server`, `folder`, `folder-open`,
   `file-go`, `file-md`, `file`, `close`, `plus`, `split`, `search`,
   `sidebar-right`, `filter`, `terminal`. They go in `assets`.
-- The Claude mark is open point O8.
+- The Claude mark is the official Claude mark (O8 settled, D123): `claude.svg`, one filled shape.
 
 ## Data
 
@@ -194,9 +196,8 @@ The coordinator asks the owner these before the issues that need them.
    action messages go?
 5. **O5 PR viewer and Review.** Their place in the new frame.
 6. **O6 Narrow window.** Which panel hides first below which width.
-7. **O7 Sans font.** Bundle Inter (OFL, a `NOTICE` entry) or use the
-   system font.
-8. **O8 Claude mark.** Which drawing, and the right to use it.
+7. **O7 Sans font.** Settled: bundle Inter (OFL, a `NOTICE` entry), D121.
+8. **O8 Claude mark.** Settled (D123): the official Claude mark.
 9. **O9 Light terminal palette.** The 16 ANSI colors on the light panel.
 10. **O10 Ages.** The design system page moves ages once a minute while a
     row shows. D35 and D40 forbid a timer. Until the owner decides, ages

@@ -18,6 +18,7 @@ import (
 	"github.com/contursofran/contr/assets"
 	"github.com/contursofran/contr/internal/app"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/prefs"
 	"github.com/contursofran/contr/internal/projects"
 	"github.com/contursofran/contr/internal/usage"
 	"github.com/contursofran/contr/internal/widths"
@@ -58,26 +59,36 @@ func main() {
 	os.Exit(openWindow(cmd.Icons))
 }
 
-// bundledFonts lists the four faces of JetBrains Mono: regular, bold, italic
-// and bold italic. They register under theme.FontFamily, so italic and bold
-// text pick the matching face.
-var bundledFonts = []string{
-	"JetBrainsMono-Regular.ttf",
-	"JetBrainsMono-Bold.ttf",
-	"JetBrainsMono-Italic.ttf",
-	"JetBrainsMono-BoldItalic.ttf",
+// bundledFace is a font file in assets and the family it registers under.
+type bundledFace struct {
+	file   string
+	family string
+}
+
+// bundledFonts lists the faces that ship with contr. JetBrains Mono (mono)
+// has regular, bold, italic and bold italic; they register under
+// theme.FontFamily, so italic and bold text pick the matching face. Inter
+// (sans, D121) has the weights that the type styles use, 400 and 500; they
+// register under theme.FontFamilySans.
+var bundledFonts = []bundledFace{
+	{"JetBrainsMono-Regular.ttf", theme.FontFamily},
+	{"JetBrainsMono-Bold.ttf", theme.FontFamily},
+	{"JetBrainsMono-Italic.ttf", theme.FontFamily},
+	{"JetBrainsMono-BoldItalic.ttf", theme.FontFamily},
+	{"Inter-Regular.ttf", theme.FontFamilySans},
+	{"Inter-Medium.ttf", theme.FontFamilySans},
 }
 
 // registerFonts loads the bundled faces. A face that fails is reported and the
 // UI falls back to a system font.
 func registerFonts(files fs.FS, register func([]byte, string) error) {
-	for _, name := range bundledFonts {
-		data, err := fs.ReadFile(files, "fonts/"+name)
+	for _, f := range bundledFonts {
+		data, err := fs.ReadFile(files, "fonts/"+f.file)
 		if err == nil {
-			err = register(data, theme.FontFamily)
+			err = register(data, f.family)
 		}
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "contr: unable to load %s: %v\n", name, err)
+			fmt.Fprintf(os.Stderr, "contr: unable to load %s: %v\n", f.file, err)
 		}
 	}
 }
@@ -144,6 +155,21 @@ func openWindow(icons bool) int {
 			}
 			return widths.Save(path, w)
 		}
+		frame.LoadPrefs = func() (prefs.Prefs, error) {
+			path, err := prefs.Path()
+			if err != nil {
+				return prefs.Prefs{}, err
+			}
+			return prefs.Load(path)
+		}
+		frame.SavePrefs = func(p prefs.Prefs) error {
+			path, err := prefs.Path()
+			if err != nil {
+				return err
+			}
+			return prefs.Save(path, p)
+		}
+		frame.ThemePlatform = mygo.Theme
 		frame.TerminalSource = terminalSource(os.Getenv)
 		frame.OpenTerminal = func(project, dir string) (string, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -166,6 +192,10 @@ func openWindow(icons bool) int {
 		opts.Content = ui.View(frame.View)
 	}
 	mygo.App.WhenReady(func() {
+		if frame != nil {
+			// The stored appearance applies before the window shows (D119).
+			frame.StartTheme()
+		}
 		win := mygo.NewWindow(opts)
 		if frame != nil {
 			stop := frame.Attach(win)

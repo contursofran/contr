@@ -4,11 +4,16 @@ package theme
 // styles, spacing, radius, sizes and glass effects. The names follow the
 // token names. The unprefixed constants of theme.go are the v0.2 ones.
 
-// Font stacks of the two families (O7: the sans font is not bundled yet).
+// Font stacks of the two families. Inter and JetBrains Mono are bundled
+// (D121); the rest of each stack is the fallback.
 const (
 	FontSans = `Inter, -apple-system, system-ui, sans-serif`
 	FontMono = `"JetBrains Mono", ui-monospace, monospace`
 )
+
+// FontFamilySans is the name that the bundled Inter faces register under.
+// The mono name is FontFamily.
+const FontFamilySans = "Inter"
 
 // TextStyle is a type style: family, size, line height and weight.
 type TextStyle struct {
@@ -16,6 +21,23 @@ type TextStyle struct {
 	Size   float32
 	Line   float32
 	Weight int
+}
+
+// Family is the registered family name of the style: Inter or JetBrains Mono.
+func (s TextStyle) Family() string {
+	if s.Mono {
+		return FontFamily
+	}
+	return FontFamilySans
+}
+
+// Stack is the font stack of the style, for `Font(...)`: the registered
+// family first, then the fallbacks of tokens.md.
+func (s TextStyle) Stack() string {
+	if s.Mono {
+		return FontMono
+	}
+	return FontSans
 }
 
 // Type styles. Use the style, not a size.
@@ -33,6 +55,28 @@ var (
 	StyleMeta       = TextStyle{Mono: true, Size: 11, Line: 16, Weight: 400}
 	StyleCount      = TextStyle{Mono: true, Size: 11, Line: 14, Weight: 500}
 )
+
+// Styles maps each style name of tokens.md to its style.
+var Styles = map[string]TextStyle{
+	"question":    StyleQuestion,
+	"body":        StyleBody,
+	"body-strong": StyleBodyStrong,
+	"row-small":   StyleRowSmall,
+	"small":       StyleSmall,
+	"label":       StyleLabel,
+	"chip":        StyleChip,
+	"terminal":    StyleTerminal,
+	"glyph":       StyleGlyph,
+	"value":       StyleValue,
+	"meta":        StyleMeta,
+	"count":       StyleCount,
+}
+
+// Style returns the style with a token name, and false when there is none.
+func Style(name string) (TextStyle, bool) {
+	s, ok := Styles[name]
+	return s, ok
+}
 
 // Spacing
 const (

@@ -10,8 +10,10 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"sync"
 	"time"
 
+	"github.com/egoist/mygo"
 	gterm "github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
 
@@ -23,6 +25,7 @@ import (
 	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/github"
 	"github.com/contursofran/contr/internal/host"
+	"github.com/contursofran/contr/internal/prefs"
 	"github.com/contursofran/contr/internal/projects"
 	"github.com/contursofran/contr/internal/usage"
 	"github.com/contursofran/contr/internal/widths"
@@ -125,7 +128,15 @@ type Frame struct {
 	LoadWidths func() (widths.Widths, error)
 	// SaveWidths writes the widths after a drag. It runs on a goroutine.
 	// Nil saves nothing.
-	SaveWidths        func(widths.Widths) error
+	SaveWidths func(widths.Widths) error
+	// LoadPrefs reads the settings (D119). [Frame.StartTheme] calls it before the
+	// window shows, so it must be quick. Nil means the defaults and no file.
+	LoadPrefs func() (prefs.Prefs, error)
+	// SavePrefs writes the settings after a change. It runs on a goroutine. Nil
+	// saves nothing.
+	SavePrefs func(prefs.Prefs) error
+	// ThemePlatform is MyGo's theme (mygo.Theme). Nil leaves the palette as it is.
+	ThemePlatform     theme.Platform
 	SpawnOrchestrator func(dir string) error
 	// OpenTerminal serves "+" and Cmd-T (D82): it starts a shell in an hc
 	// terminal for the open project, in dir, and returns its address. It
@@ -182,7 +193,14 @@ type Frame struct {
 	// waits for the dividers to rest before the save.
 	sidebarW, panelW        float32
 	movedNow, widthsTouched bool
-	saveTimer               *time.Timer
+	// The Appearance setting (D119); see appearance.go.
+	appearance   mygo.ThemeSource
+	appearanceMu sync.Mutex
+	saveMu       sync.Mutex
+	follower     *theme.Follower
+	lateWin      lateWindow
+	themeErr     error
+	saveTimer    *time.Timer
 	// term is the plugin's terminal of the selected agent and conn its hc
 	// connection; both are nil with no terminal. termAddr is the hc terminal
 	// they show; termSet is false before the first sync. termState is the
@@ -361,6 +379,7 @@ func color(rgb uint32) ui.Color { return theme.Color(rgb) }
 // View builds the frame: the sidebar over the full height, the title bar,
 // the terminal and the panel to its right, and the status bar below them.
 func (f *Frame) View(c *ui.Context) {
+	theme.Apply(c)
 	if f.Sheet != nil && c.Shortcut(ui.Cmd, ui.KeyJ) {
 		f.Sheet.Toggle()
 	}
@@ -872,9 +891,14 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		Save: f.SaveProjects, Run: Runner{Post: w.Update}, Status: f.Status.Show, Invalidate: w.Invalidate,
 	}
 	f.SpacesList.OnProjects = f.ProjectsModal.Toggle
+	f.lateWin.set(w)
+	if f.themeErr != nil {
+		f.Status.Show(f.themeErr.Error())
+		f.themeErr = nil
+	}
 	f.Settings = &Settings{Updates: f.Updates, Version: Version, Run: Runner{Post: w.Update},
 		Relaunch: f.Relaunch, Invalidate: w.Invalidate, Visible: func() bool { return f.Visibility == nil || f.Visibility.Visible() },
-		Status: f.Status.Show}
+		Status: f.Status.Show, Appearance: f.Appearance, SetAppearance: f.SetAppearance}
 	setSettingsHandler(func() { w.Update(f.Settings.Toggle) })
 	stopChecks := f.Settings.StartChecks()
 	f.Slots.Spaces = f.SpacesList.View

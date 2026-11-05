@@ -40,8 +40,8 @@ func TestLabelsAreUniqueAndMatchDesign(t *testing.T) {
 // parser rejects bad input, so the check means something.
 func TestSVGsParse(t *testing.T) {
 	files, err := fs.Glob(assets.Icons, "icons/*.svg")
-	if err != nil || len(files) != 13 {
-		t.Fatalf("icon files %v, err %v, want 13 files", files, err)
+	if err != nil || len(files) != 12+len(LineNames)+1 {
+		t.Fatalf("icon files %v, err %v, want the 12 status icons, the line icons and the Claude mark", files, err)
 	}
 	for _, f := range files {
 		data, err := assets.Icons.ReadFile(f)
