@@ -198,6 +198,17 @@ type Worker struct {
 	// agent model once it has read it. It tells apart two repos with the same
 	// folder name. Empty when unknown or outside git.
 	ProjectKey string `json:"-"`
+	// Shown is the readable name of a foreign terminal, set by the agent
+	// model (D156). Empty when Name is already readable.
+	Shown string `json:"-"`
+}
+
+// DisplayName is the name the UI shows: Shown when set, else Name.
+func (w Worker) DisplayName() string {
+	if w.Shown != "" {
+		return w.Shown
+	}
+	return w.Name
 }
 
 // terminal is the part of an hc terminal that a Worker needs.

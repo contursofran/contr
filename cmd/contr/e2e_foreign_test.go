@@ -133,7 +133,17 @@ func TestForeignTerminals(t *testing.T) {
 		}
 	}
 
+	// Terminals with no name: the sidebar and the tabs name them by project and a number (D156).
+	for _, argv := range [][]string{{fake}, {"sh"}, {"sh"}} {
+		p := map[string]any{"argv": argv, "cwd": repo, "wait": false, "no_parent": true, "outlive_parent": true}
+		if err := cl.Call(ctx, "terminal.run", p, nil); err != nil {
+			t.Fatalf("run unnamed: %v", err)
+		}
+	}
+
 	pick("Dark")
+	waitFor("the unnamed orchestrator row", 30*time.Second, func() bool { return c.labelWithPrefix(t, "demo, ") != "" })
+	waitFor("the numbered plain terminal tab", 30*time.Second, func() bool { return has("demo 2") })
 	waitFor("the orchestrator row", 30*time.Second, func() bool { return c.labelWithPrefix(t, "claude-lead, ") != "" })
 	waitFor("the plain terminal tab", 30*time.Second, func() bool { return has("2") || c.labelWithPrefix(t, "$ demo") != "" })
 	time.Sleep(1500 * time.Millisecond)

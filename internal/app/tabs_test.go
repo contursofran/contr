@@ -2,6 +2,7 @@ package app
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/contursofran/contr/internal/agents"
@@ -193,5 +194,33 @@ func TestOpenProjectFollowsTheSelection(t *testing.T) {
 	}
 	if got := OpenProject(agentstate.Snapshot{}, state.Selected{}, false, ""); got != "" {
 		t.Errorf("OpenProject with no agents = %q", got)
+	}
+}
+
+func TestForeignTabsUseTheReadableNameAndKeepTheAddressInTheTip(t *testing.T) {
+	w := agents.Worker{Address: "t1nh", Name: "t1nh", Shown: "contr 2", Role: agents.RoleTerminal, Foreign: true, Live: true, Project: "contr"}
+	if got := tabTitle(w); got != "contr 2" {
+		t.Errorf("title %q", got)
+	}
+	if got := tabTip(w); got != "contr 2 · t1nh" {
+		t.Errorf("tip %q", got)
+	}
+	named := agents.Worker{Address: "t2", Name: "scout", Role: agents.RoleTerminal, Foreign: true, Live: true}
+	if got := tabTitle(named); got != "scout" {
+		t.Errorf("title %q", got)
+	}
+	own := agents.Worker{Address: "t3", Name: "w", Role: agents.RoleTerminal, Title: "vim", Live: true}
+	if got := tabTitle(own); got != "vim" || tabTip(own) != "w" {
+		t.Errorf("own terminal %q %q", got, tabTip(own))
+	}
+}
+
+func TestForeignRowLabelUsesTheReadableName(t *testing.T) {
+	w := agents.Worker{Address: "t1nh", Name: "t1nh", Shown: "contr", Role: agents.RoleOrchestrator, Foreign: true, Live: true}
+	if got := AgentLabel(w, "", ""); !strings.HasPrefix(got, "contr,") {
+		t.Errorf("label %q", got)
+	}
+	if got := rowTip(w); got != "contr · t1nh" {
+		t.Errorf("tip %q", got)
 	}
 }

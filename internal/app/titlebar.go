@@ -125,6 +125,9 @@ func (b *titleBar) tab(c *ui.Context, tab ui.Element, t Tab) {
 	el := tab.Label(t.Title).Height(theme.SizeRowHeight).MaxWidth(theme.SizeTabMaxWidth).MinWidth(0).Shrink(1).
 		Padding(0, theme.Space10).Gap(theme.Space8).AlignItems(ui.Center).Radius(theme.Radius8)
 	el = el.ContextMenu(func(m *ui.Menu) { b.tabMenu(m, t) })
+	if t.Tip != "" {
+		el = el.Tooltip(t.Tip)
+	}
 	over := false
 	if t.Movable() && b.moveTab != nil {
 		el = el.Drag(tabDrag{Address: t.Address})
