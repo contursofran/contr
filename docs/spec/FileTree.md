@@ -4,6 +4,10 @@ The files panel shows the project tree; changed files show their +/− line coun
 
 Design system page: component FileTree. Shared rules: [README.md](README.md).
 
+| Dark | Light |
+|---|---|
+| ![FileTree, dark](images/FileTree-dark.png) | ![FileTree, light](images/FileTree-light.png) |
+
 ## Anatomy
 
 | Part | Value |

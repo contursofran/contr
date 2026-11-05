@@ -4,6 +4,10 @@ A column of short ticks on the right edge of the orchestrator terminal, centered
 
 Design system page: component Outline. Shared rules: [README.md](README.md).
 
+| Dark | Light |
+|---|---|
+| ![Outline, dark](images/Outline-dark.png) | ![Outline, light](images/Outline-light.png) |
+
 ## Anatomy
 
 | Part | Value |

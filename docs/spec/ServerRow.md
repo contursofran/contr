@@ -4,6 +4,10 @@ A sidebar row for one machine that runs hc: this Mac, or a remote server.
 
 Design system page: component ServerRow. Shared rules: [README.md](README.md).
 
+| Dark | Light |
+|---|---|
+| ![ServerRow, dark](images/ServerRow-dark.png) | ![ServerRow, light](images/ServerRow-light.png) |
+
 ## Anatomy
 
 | Part | Value |
@@ -21,7 +25,8 @@ Design system page: component ServerRow. Shared rules: [README.md](README.md).
 
 ## Behavior
 
-- The Servers section is at the top of the sidebar. Only this Mac shows,
+- The Servers section is at the bottom of the sidebar, under the project
+  list and above the Settings button (screens 1 to 5). Only this Mac shows,
   under the heading "Servers" (O11 settled, D132; remote servers wait for
   #149). Its meta is "local".
 - The row of this Mac also shows its CPU and memory use (D126). They sit in

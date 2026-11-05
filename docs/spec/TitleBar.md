@@ -4,6 +4,10 @@ The title bar holds the traffic lights, the tabs of the selected agent, the diff
 
 Design system page: component TitleBar. Shared rules: [README.md](README.md).
 
+| Dark | Light |
+|---|---|
+| ![TitleBar, dark](images/TitleBar-dark.png) | ![TitleBar, light](images/TitleBar-light.png) |
+
 ## Anatomy
 
 From left to right:
