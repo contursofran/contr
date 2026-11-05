@@ -28,6 +28,7 @@ func backgroundOptions(opts *mygo.WindowOptions) {
 	// what is behind the window, and Dark came out washed grey. Without it the
 	// frame stands on the theme's ground token, so a capture shows the palette.
 	opts.Vibrancy = mygo.VibrancyNone
+	opts.Transparent = false
 	if foreground() {
 		return
 	}
