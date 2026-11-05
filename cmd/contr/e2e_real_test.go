@@ -61,18 +61,19 @@ func startReal(t *testing.T) *realApp {
 	core := hctest.New(t, "contr-e2e", hctest.Session("e2e"))
 	dir := core.Dir
 
-	bin := filepath.Join(dir, "contr-e2e")
-	build := exec.Command("go", "build", "-tags", "e2e", "-o", bin, "./cmd/contr")
-	build.Dir = root
-	build.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=darwin", "GOARCH=arm64")
-	if msg, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build: %v\n%s", err, msg)
-	}
-	bundle := exec.Command("scripts/bundle.sh", "--bin", bin, "--out", filepath.Join(dir, "bundle"))
+	// bundle.sh builds the app with `mygo build` (D115), which takes its build
+	// tags from GOFLAGS: the e2e tag adds the automation plugin, and
+	// MYGO_INSPECTOR=1 keeps it (a production build leaves automation out). It
+	// has no --bin flag. The update key is not needed: without MYGO_UPDATER_PRIVATE_KEY
+	// the build signs no update files.
+	bundle := exec.Command("scripts/bundle.sh", "--out", filepath.Join(dir, "bundle"))
 	bundle.Dir = root
+	bundle.Env = append(os.Environ(), "GOFLAGS=-tags=e2e", "MYGO_INSPECTOR=1", "MYGO_UPDATER_PRIVATE_KEY=")
+	var stderr strings.Builder
+	bundle.Stderr = &stderr
 	msg, err := bundle.Output()
 	if err != nil {
-		t.Fatalf("bundle.sh: %v\n%s", err, msg)
+		t.Fatalf("bundle.sh: %v\n%s\n%s", err, msg, stderr.String())
 	}
 	app := strings.TrimSpace(string(msg))
 	exe := filepath.Join(app, "Contents", "MacOS", "contr")
@@ -109,10 +110,19 @@ func (r *realApp) launch(t *testing.T) *client {
 		"MYGO_AUTOMATION="+r.sock, "CONTR_STATE_DIR="+filepath.Join(r.dir, "state"),
 		"CODEX_HOME="+filepath.Join(r.dir, "codex"), "CONTR_OWNER_FILE="+filepath.Join(r.dir, "owner.json"),
 		"CONTR_AGENTS_CONFIG="+filepath.Join(r.dir, "agents.json"))...)
+	// The app's log shows why it is offline, if it is.
+	var log strings.Builder
+	r.proc.Stdout, r.proc.Stderr = &log, &log
 	if err := r.proc.Start(); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = r.proc.Process.Kill(); _ = r.proc.Wait() })
+	t.Cleanup(func() {
+		_ = r.proc.Process.Kill()
+		_ = r.proc.Wait()
+		if t.Failed() && log.Len() > 0 {
+			t.Logf("app log:\n%s", log.String())
+		}
+	})
 	r.c = dial(t, r.sock)
 	t.Cleanup(func() { _ = r.c.conn.Close() })
 	r.c.waitWindow(t)
@@ -145,9 +155,10 @@ func TestBundleLaunchdPath(t *testing.T) {
 	cfg := agents.DefaultConfig()
 	cfg.Profiles["sleepy"] = agents.Profile{Argv: []string{"sh", "-c", "sleep 600"}}
 	mgr := agents.New(agents.HC{Client: r.cl}, cfg)
+	repo := scratchRepo(t, r.dir, "demo", "main")
 	for _, s := range []agents.Spec{
-		{Name: "lead", Profile: "sleepy", Role: agents.RoleOrchestrator, Project: "demo"},
-		{Name: "w211", Profile: "sleepy", Role: "builder", Project: "demo", Issue: "211"},
+		{Name: "lead", Profile: "sleepy", Role: agents.RoleOrchestrator, Project: "demo", Worktree: repo},
+		{Name: "w211", Profile: "sleepy", Role: "builder", Project: "demo", Issue: "211", Worktree: repo},
 	} {
 		if _, err := mgr.Spawn(r.ctx, s); err != nil {
 			t.Fatalf("spawn %s: %v", s.Name, err)
@@ -157,9 +168,11 @@ func TestBundleLaunchdPath(t *testing.T) {
 	c.waitLabel(t, "w211, ")
 	c.call(t, "idle", map[string]any{"timeout": 10000})
 	labels := c.labels(t)
-	for _, want := range []string{labelOrch, labelAgents} {
-		if !labels[want] {
-			t.Errorf("no element %q; labels %v", want, keys(labels))
+	// The sidebar has no orchestrators or agents sections now (D137): the
+	// agents show as rows of the project.
+	for _, want := range []string{"lead, ", "w211, "} {
+		if !c.hasPrefix(t, want) {
+			t.Errorf("no row with prefix %q; labels %v", want, keys(labels))
 		}
 	}
 	c.capture(t, filepath.Join(r.out, "bundle-launchd-path.png"))
@@ -189,7 +202,7 @@ func main() {
 
 // TestFakeClaudeWorker is #212: a worker that starts like a kit worker
 // (`--agent contr:builder`) and titles its terminal like Claude Code. The
-// sidebar, the board and the tabs must show the name, role and state from
+// sidebar and the tabs must show the name, role and state from
 // the hc labels, not Claude's version.
 //
 //	go test -tags e2e -run TestFakeClaudeWorker ./cmd/contr
@@ -221,11 +234,10 @@ func TestFakeClaudeWorker(t *testing.T) {
 	cfg.Profiles["builder"] = agents.Profile{Argv: []string{prog}}
 	mgr := agents.New(agents.HC{Client: r.cl}, cfg)
 	wt := filepath.Join(r.dir, "wt-b212")
-	if err := os.MkdirAll(wt, 0o755); err != nil {
-		t.Fatal(err)
-	}
+	repo := scratchRepo(t, r.dir, "demo", "main")
+	gitIn(t, repo, "worktree", "add", "-q", "-b", "agent/212-fake", wt)
 	for _, s := range []agents.Spec{
-		{Name: "lead", Profile: "sleepy", Role: agents.RoleOrchestrator, Project: "demo"},
+		{Name: "lead", Profile: "sleepy", Role: agents.RoleOrchestrator, Project: "demo", Worktree: repo},
 		{Name: "b212", Profile: "builder", Project: "demo", Issue: "212", Worktree: wt},
 	} {
 		if _, err := mgr.Spawn(r.ctx, s); err != nil {
@@ -256,28 +268,25 @@ func TestFakeClaudeWorker(t *testing.T) {
 		if strings.Contains(row, "2.1.317") {
 			t.Errorf("sidebar row %q shows Claude's version", row)
 		}
-		for _, want := range []string{"b212", "working", "builder"} {
+		// The row shows the name, the state, the issue and the model; the
+		// role is not on it any more.
+		for _, want := range []string{"b212", "working"} {
 			if !strings.Contains(row, want) {
 				t.Errorf("sidebar row %q lacks %q", row, want)
 			}
 		}
 	})
-	t.Run("board", func(t *testing.T) {
-		work := c.waitLabel(t, "#212 ")
-		if strings.Contains(work, "2.1.317") || strings.Contains(work, "contr:builder") {
-			t.Errorf("board row %q shows the version or the agent id", work)
-		}
-		for _, want := range []string{"b212", "builder working"} {
-			if !strings.Contains(work, want) {
-				t.Errorf("board row %q lacks %q", work, want)
-			}
-		}
-	})
+	// The board is hidden (D147), so this test no longer checks its row.
 	// The tab already shows the labels (issue and worktree); keep it so.
 	t.Run("tabs", func(t *testing.T) {
+		// The tab bar shows the tabs of the selected agent.
+		bounds := c.boundsOf(t, row)
+		c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "click",
+			"x": bounds.X + bounds.Width/2, "y": bounds.Y + bounds.Height/2}}})
 		tab := c.waitLabel(t, "212 · wt-b212")
-		if strings.Contains(tab, "2.1.317") || !strings.HasSuffix(tab, ", working") {
-			t.Errorf("tab %q: want the issue and worktree and the working state", tab)
+		// The tab label is its title; the state shows as a glyph, not in the label.
+		if strings.Contains(tab, "2.1.317") {
+			t.Errorf("tab %q shows Claude's version", tab)
 		}
 	})
 }

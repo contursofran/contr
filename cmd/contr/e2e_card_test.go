@@ -12,12 +12,14 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/app"
 	"github.com/contursofran/contr/internal/hc"
 )
 
 // TestQuestionsCardFromTheRow runs the built app against a
-// scratch hc core with an orchestrator and a worker. It opens the
-// questions card from the needs-you row (tmp/e2e/answer-card.png):
+// scratch hc core with an orchestrator and a worker in a scratch repository.
+// It opens the questions card from the notch of the orchestrator, since the
+// needs-you row is gone (D146) (tmp/e2e/answer-card.png):
 //
 //	go test -tags e2e -run TestQuestionsCardFromTheRow ./cmd/contr
 //
@@ -59,9 +61,14 @@ func TestQuestionsCardFromTheRow(t *testing.T) {
 	cfg := agents.DefaultConfig()
 	cfg.Profiles["sleepy"] = agents.Profile{Argv: []string{"sh", "-c", "echo working; sleep 600"}}
 	mgr := agents.New(agents.HC{Client: cl}, cfg)
+	home := filepath.Join(dir, "home")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	repo := scratchRepo(t, dir, "demo", "main")
 	for _, s := range []agents.Spec{
-		{Name: "lead", Profile: "sleepy", Role: agents.RoleOrchestrator, Project: "demo"},
-		{Name: "b162-s5-card", Profile: "sleepy", Role: "builder", Project: "demo", Issue: "162"},
+		{Name: "lead", Profile: "sleepy", Role: agents.RoleOrchestrator, Project: "demo", Worktree: repo},
+		{Name: "b162-s5-card", Profile: "sleepy", Role: "builder", Project: "demo", Issue: "162", Worktree: repo},
 	} {
 		s.Parent = ""
 		if _, err := mgr.Spawn(ctx, s); err != nil {
@@ -78,26 +85,42 @@ func TestQuestionsCardFromTheRow(t *testing.T) {
 		t.Fatal(err)
 	}
 	sock := filepath.Join(dir, "a.sock")
-	app := exec.Command(bin)
-	app.Env = append(os.Environ(), append(env, "MYGO_AUTOMATION="+sock,
+	appCmd := exec.Command(bin)
+	appCmd.Env = append(os.Environ(), append(env, "MYGO_AUTOMATION="+sock, "HOME="+home,
 		"CONTR_STATE_DIR="+filepath.Join(dir, "state"), "CODEX_HOME="+filepath.Join(dir, "codex"),
 		"CONTR_OWNER_FILE="+ownerFile, "CONTR_AGENTS_CONFIG="+filepath.Join(dir, "agents.json"))...)
-	if err := app.Start(); err != nil {
+	if err := appCmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = app.Process.Kill(); _ = app.Wait() }()
+	defer func() { _ = appCmd.Process.Kill(); _ = appCmd.Wait() }()
 
 	c := dial(t, sock)
 	defer c.conn.Close()
 	c.waitWindow(t)
-	deadline := time.Now().Add(15 * time.Second)
-	for !(c.hasPrefix(t, "b162-s5-card,") && c.labels(t)["needs row"]) && time.Now().Before(deadline) {
+	deadline := time.Now().Add(20 * time.Second)
+	row := ""
+	for row == "" && time.Now().Before(deadline) {
+		row = c.labelWithPrefix(t, "lead, ")
 		time.Sleep(100 * time.Millisecond)
 	}
-	press := func(id string) { c.call(t, "act", map[string]any{"id": id, "action": "press"}) }
-	press(c.idOf(t, "D1 Which database for the cache?"))
+	if row == "" {
+		t.Fatalf("no orchestrator row; labels %v", keys(c.labels(t)))
+	}
+	b := c.boundsOf(t, row)
+	c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "click", "x": b.X + b.Width/2, "y": b.Y + b.Height/2}}})
+	time.Sleep(1500 * time.Millisecond) // the terminal attaches
+	// One question and one to-do of "demo".
+	const notch = "2 items. Open"
+	for !c.labels(t)[notch] && time.Now().Before(deadline) {
+		time.Sleep(100 * time.Millisecond)
+	}
+	if !c.labels(t)[notch] {
+		t.Fatalf("no questions notch; labels %v", keys(c.labels(t)))
+	}
+	nb := c.boundsOf(t, notch)
+	c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "click", "x": nb.X + nb.Width/2, "y": nb.Y + nb.Height/2}}})
 	c.call(t, "idle", map[string]any{"timeout": 10000})
-	if !c.labels(t)["Or type an answer"] {
+	if !c.labels(t)[app.LabelQuestionsField] {
 		t.Fatalf("the questions card did not open; labels %v", keys(c.labels(t)))
 	}
 	c.capture(t, filepath.Join(out, "answer-card.png"))

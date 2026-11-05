@@ -59,10 +59,11 @@ func TestAgentsSidebarCapture(t *testing.T) {
 	cfg := agents.DefaultConfig()
 	cfg.Profiles["sleepy"] = agents.Profile{Argv: []string{"sh", "-c", "echo working; sleep 600"}}
 	mgr := agents.New(agents.HC{Client: cl}, cfg)
+	repo := scratchRepo(t, dir, "demo", "main")
 	for _, s := range []agents.Spec{
-		{Name: "lead", Profile: "sleepy", Role: agents.RoleOrchestrator, Project: "contr"},
-		{Name: "b162-s3-sidebar-long-name-clips", Profile: "sleepy", Role: "builder", Project: "contr", Issue: "162"},
-		{Name: "r162", Profile: "sleepy", Role: "reviewer", Project: "contr", Issue: "162"},
+		{Name: "lead", Profile: "sleepy", Role: agents.RoleOrchestrator, Project: "contr", Worktree: repo},
+		{Name: "b162-s3-sidebar-long-name-clips", Profile: "sleepy", Role: "builder", Project: "contr", Issue: "162", Worktree: repo},
+		{Name: "r162", Profile: "sleepy", Role: "reviewer", Project: "contr", Issue: "162", Worktree: repo},
 	} {
 		s.Parent = ""
 		if _, err := mgr.Spawn(ctx, s); err != nil {
@@ -84,20 +85,17 @@ func TestAgentsSidebarCapture(t *testing.T) {
 	defer c.conn.Close()
 	c.waitWindow(t)
 	deadline := time.Now().Add(15 * time.Second)
-	for !c.labels(t)[labelOrch] && time.Now().Before(deadline) {
+	for !(c.hasPrefix(t, "lead, ") && c.hasPrefix(t, "b162-s3-sidebar-long-name-clips, ") && c.hasPrefix(t, "r162, ")) &&
+		time.Now().Before(deadline) {
 		time.Sleep(100 * time.Millisecond)
 	}
 	c.call(t, "idle", map[string]any{"timeout": 10000})
-	labels := c.labels(t)
-	for _, want := range []string{labelOrch, labelAgents} {
-		if !labels[want] {
-			t.Errorf("no element %q; labels %v", want, keys(labels))
+	// The sidebar has no orchestrators or agents sections now: one row per
+	// agent under its project (D137).
+	for _, want := range []string{"lead, ", "b162-s3-sidebar-long-name-clips, ", "r162, "} {
+		if !c.hasPrefix(t, want) {
+			t.Errorf("no row with prefix %q; labels %v", want, keys(c.labels(t)))
 		}
 	}
 	c.capture(t, filepath.Join(out, "agents-sidebar.png"))
 }
-
-const (
-	labelOrch   = "orchestrators header"
-	labelAgents = "agents header"
-)

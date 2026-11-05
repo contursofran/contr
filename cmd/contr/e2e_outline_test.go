@@ -63,9 +63,10 @@ func TestOutlineCapture(t *testing.T) {
 	script := `printf '\033[38;5;173m✱\033[0m Orchestrating contr, tracker #333\n\n' ` +
 		`&& printf '  b-342  title bar        \033[2mpushed, CI running\033[0m\n  b-343  sidebar          \033[2mwaiting for review\033[0m\n  b-346  questions notch  \033[2mmerged\033[0m\n\n' ` +
 		`&& printf '> pin the sidebar PR for the owner\n'; exec sh`
+	repo := scratchRepo(t, dir, "contr", "main")
 	cfg := agents.DefaultConfig()
 	cfg.Profiles["lead"] = agents.Profile{Argv: []string{"sh", "-c", script}}
-	if _, err := agents.New(agents.HC{Client: cl}, cfg).Spawn(ctx, agents.Spec{Name: "lead", Profile: "lead", Role: agents.RoleOrchestrator, Project: "contr"}); err != nil {
+	if _, err := agents.New(agents.HC{Client: cl}, cfg).Spawn(ctx, agents.Spec{Name: "lead", Profile: "lead", Role: agents.RoleOrchestrator, Project: "contr", Worktree: repo}); err != nil {
 		t.Fatalf("spawn: %v", err)
 	}
 

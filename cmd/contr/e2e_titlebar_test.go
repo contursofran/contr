@@ -314,7 +314,7 @@ func TestTitleBarCapture(t *testing.T) {
 				t.Errorf("%s, orchestrator: no %q in the bar; labels %v", theme, want, keys(c.labels(t)))
 			}
 		}
-		for _, absent := range []string{"Split", "Search", "#342 · agent-342-titlebar", app.LabelCloseTab} {
+		for _, absent := range []string{"Split", "#342 · agent-342-titlebar", app.LabelCloseTab} {
 			if inBar(c, absent) {
 				t.Errorf("%s, orchestrator selected: the bar has %q", theme, absent)
 			}
@@ -342,7 +342,7 @@ func TestTitleBarCapture(t *testing.T) {
 		// Select the builder in the sidebar: its own tab replaces the orchestrator's.
 		var row string
 		for l := range c.labels(t) {
-			if strings.HasPrefix(l, "b342-s1-titlebar, working, builder") {
+			if strings.HasPrefix(l, "b342-s1-titlebar, working, #342") {
 				row = l
 			}
 		}

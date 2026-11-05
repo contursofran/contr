@@ -76,7 +76,7 @@ func TestFrameWindowCapture(t *testing.T) {
 			c.call(t, "idle", map[string]any{"timeout": 10000})
 
 			labels := c.labels(t)
-			for _, want := range []string{"Toggle sidebar", "Hide files", "Sidebar", "Terminal", "Files", "New terminal"} {
+			for _, want := range []string{"Toggle sidebar", "Hide files", "Sidebar", "Terminal", "Files", "New tab"} {
 				if !labels[want] {
 					t.Errorf("%s: no element %q; labels %v", name, want, keys(labels))
 				}
