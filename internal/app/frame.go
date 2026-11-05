@@ -71,6 +71,9 @@ type Frame struct {
 	Slots Slots
 	// Overlay is the layer above the terminal for the notch and the outline.
 	Overlay TerminalOverlay
+	// Outline is the message ticks of the orchestrator terminal. [Frame.Attach]
+	// makes it when there is an agent source. Nil otherwise.
+	Outline *Outline
 	// Visibility, Selection and Status are the app state. The frame holds
 	// them for the views in its slots.
 	Visibility *state.Visibility
@@ -942,6 +945,11 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		f.Sheet = &Sheet{Source: src, Run: run, Invalidate: w.Invalidate, OpenPR: f.OpenPR, OpenIssue: f.OpenIssue, OpenURL: openURL}
 		f.Slots.Sheet = f.Sheet.View
 	}
+	removeOutline := func() {}
+	if agentSnap != nil {
+		f.Outline = NewOutline(agentSnap, f.Selection, w.Invalidate)
+		removeOutline = f.Overlay.Add(LabelOutline, f.Outline.View)
+	}
 	f.AgentsList = NewAgentsList(agentSnap, f.Selection)
 	f.Slots.Agents = f.AgentsList.View
 	if f.Host == nil {
@@ -1044,6 +1052,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		f.Files.Close()
 		unwatch()
 		term()
+		removeOutline()
 		stopAgents()
 		f.SpacesList.Close()
 		f.Host.Close()
@@ -1075,11 +1084,22 @@ func (f *Frame) attachTerminal(w Window) (stop func()) {
 
 func (f *Frame) setTerminalFocus(focused bool) {
 	f.winFocused = focused
+	f.syncOutlineFocus()
 	if f.conn != nil {
 		if err := f.conn.SetFocus(focused); err != nil {
 			slog.Debug("terminal focus not sent", "err", err)
 		}
 	}
+}
+
+// syncOutlineFocus tells the outline which terminal has the focus: the shown
+// one while the window has the focus.
+func (f *Frame) syncOutlineFocus() {
+	addr := ""
+	if f.winFocused {
+		addr = f.termAddr
+	}
+	f.Outline.Focus(addr)
 }
 
 // terminalOptions are the plugin's options: contr's colors, JetBrains Mono at
@@ -1139,6 +1159,7 @@ func (f *Frame) syncTerminal() {
 	}
 	f.closeTerminal()
 	f.termAddr, f.termSet = addr, true
+	f.syncOutlineFocus()
 	f.termState, f.termErr = ghostty.State{Kind: ghostty.Connecting}, ""
 	f.invalidate()
 	if addr == "" {
