@@ -174,7 +174,7 @@ type Frame struct {
 	// OpenIssueWeb opens issue n of the repository in dir in the browser. [Frame.Attach] sets it;
 	// tests replace it.
 	OpenIssueWeb func(dir string, n int) error
-	// Host and Usage feed the status bar. [Frame.Attach] creates them when they are nil (tests set
+	// Host feeds the status bar and Usage the plan meters of the files panel. [Frame.Attach] creates them when they are nil (tests set
 	// fakes first) and ends them with its stop function.
 	Host  *host.Host
 	Usage *usage.Sampler
@@ -500,12 +500,22 @@ func (f *Frame) terminalPanel(c *ui.Context) {
 	kit.Panel(c, kit.PanelOpts{Name: LabelPanelTerminal, Bare: true, Body: func() { f.content(c) }})
 }
 
-// filesPanel is the files slot: the file tree. The v0.2 board and worker panel
+// filesPanel is the files slot: the file tree, with the usage meters in its footer. The v0.2 board and worker panel
 // stay in the code but are not shown (D122); see panelBox.
 func (f *Frame) filesPanel(c *ui.Context) {
 	kit.Panel(c, kit.PanelOpts{Name: LabelPanelFiles,
-		Head: func() { f.Files.Head(c) },
-		Body: func() { f.Files.View(c) }})
+		Head:   func() { f.Files.Head(c) },
+		Body:   func() { f.Files.View(c) },
+		Footer: func() { kit.UsageMeter(c, usageMeters(f.planUsage())) }})
+}
+
+// planUsage is the usage sampler as the meters read it. A nil sampler (a
+// frame without one) reads as an interface that holds nothing.
+func (f *Frame) planUsage() planPercent {
+	if f.Usage == nil {
+		return nil
+	}
+	return f.Usage
 }
 
 // statusBar draws the slot when one is set, and the status bar otherwise.
@@ -520,9 +530,6 @@ func (f *Frame) statusBar(c *ui.Context) {
 	}
 	if f.Host != nil {
 		f.status.host = f.Host
-	}
-	if f.Usage != nil {
-		f.status.usage = f.Usage
 	}
 	if f.Status != nil {
 		f.status.message = f.Status
