@@ -126,7 +126,7 @@ func (c *client) plainTabWidths(t *testing.T) (selected, other float64, ok bool)
 // TestTitleBarCapture runs the built app against a scratch hc core, a scratch HOME and a scratch
 // git repository. The project has a fake Claude Code orchestrator, a fake Claude Code builder in
 // a worktree, and two plain terminals. It captures the window in Dark and Light with each agent
-// selected and checks the tabs. PNGs go to tmp/e2e/titlebar-*.png. It needs `hc` and never
+// selected and checks the tabs and the diff summary against the file tree. PNGs go to tmp/e2e/titlebar-*.png. It needs `hc` and never
 // touches the owner's core:
 //
 //	go test -tags e2e -run TestTitleBarCapture ./cmd/contr
@@ -155,7 +155,8 @@ func TestTitleBarCapture(t *testing.T) {
 	home := filepath.Join(dir, "home")
 
 	// The project: a repository on main, and the worktree of the builder on a branch that is
-	// ahead of main by one commit: +29 −4 over two files.
+	// ahead of main by one commit (+29 −4 over two files), with an uncommitted edit (+3) and an
+	// untracked file (+5): the title bar and the file tree both count +37 −4 over three files.
 	repo := filepath.Join(dir, "contr")
 	wt := filepath.Join(dir, "contr-wt", "agent-342-titlebar")
 	for _, d := range []string{home, repo} {
@@ -181,6 +182,8 @@ func TestTitleBarCapture(t *testing.T) {
 	write(wt, "internal/app/tabs.go", lines("// tab model line", 20))
 	titlebarGit(t, wt, "add", "-A")
 	titlebarGit(t, wt, "commit", "-m", "Title bar: tabs of the selected agent")
+	write(wt, "internal/app/tabs.go", lines("// tab model line", 23))
+	write(wt, "notes.txt", lines("note", 5))
 
 	// The fake Claude Code.
 	src := filepath.Join(dir, "fake")
@@ -258,6 +261,13 @@ func TestTitleBarCapture(t *testing.T) {
 		}
 		t.Fatalf("%s never showed; labels %v", what, keys(labels))
 	}
+	// clickAt clicks the element with a label anywhere in the window.
+	clickAt := func(c *client, label string) {
+		t.Helper()
+		b := c.boundsOf(t, label)
+		c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "click", "x": b.X + b.Width/2, "y": b.Y + b.Height/2}}})
+		time.Sleep(700 * time.Millisecond)
+	}
 	click := func(c *client, label string) {
 		t.Helper()
 		b, ok := c.inBar(t, label)
@@ -316,7 +326,15 @@ func TestTitleBarCapture(t *testing.T) {
 		time.Sleep(time.Second)
 		// MyGo exposes a tab as one element, so the close button inside it has no node of its own.
 		// The selected plain tab is the 16px button and its 8px gap wider than the other one.
-		if sel, other, ok := c.plainTabWidths(t); !ok || sel < other+20 {
+		var sel, other float64
+		var two bool
+		for deadline := time.Now().Add(15 * time.Second); time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
+			wake(c)
+			if sel, other, two = c.plainTabWidths(t); two && sel >= other+20 {
+				break
+			}
+		}
+		if !two || sel < other+20 {
 			t.Errorf("%s: the selected plain tab has no close button (widths %.0f and %.0f)", theme, sel, other)
 		}
 		c.capture(t, filepath.Join(out, "titlebar-"+theme+"-terminal.png"))
@@ -331,7 +349,13 @@ func TestTitleBarCapture(t *testing.T) {
 		if row == "" {
 			t.Fatalf("%s: no sidebar row of the builder; labels %v", theme, keys(c.labels(t)))
 		}
-		c.call(t, "act", map[string]any{"id": c.idOf(t, row), "action": "press"})
+		// A press can land while the window still builds a frame: press again until the tab shows.
+		for try := 0; try < 5 && !inBar(c, "#342 · agent-342-titlebar"); try++ {
+			c.call(t, "act", map[string]any{"id": c.idOf(t, row), "action": "press"})
+			for deadline := time.Now().Add(4 * time.Second); time.Now().Before(deadline) && !inBar(c, "#342 · agent-342-titlebar"); time.Sleep(200 * time.Millisecond) {
+				wake(c)
+			}
+		}
 		waitFor(c, "the builder's tab", func(map[string]bool) bool { return inBar(c, "#342 · agent-342-titlebar") })
 		if inBar(c, "lead") {
 			t.Errorf("%s: the orchestrator's tab shows with the builder selected", theme)
@@ -340,10 +364,26 @@ func TestTitleBarCapture(t *testing.T) {
 			t.Errorf("%s: the plain terminals left the bar with the builder selected", theme)
 		}
 		time.Sleep(time.Second)
-		c.capture(t, filepath.Join(out, "titlebar-"+theme+"-builder.png"))
 
-		// A click on the Review button opens Review; a click on a tab brings the terminal back.
-		click(c, app.LabelReviewToggle)
+		// The diff summary counts what the file tree lists: with the changed-only filter on, the
+		// rows of the tree add up to the number in the title bar.
+		const summary = "37 lines added, 4 removed, 3 files. Open review"
+		waitFor(c, "the diff summary", func(map[string]bool) bool { return inBar(c, summary) })
+		clickAt(c, app.LabelFileFilter)
+		waitFor(c, "the changed files in the tree", func(l map[string]bool) bool { return l["notes.txt, +5"] })
+		for _, row := range []string{"tabs.go, +23", "notes.txt, +5", "titlebar.go, +9 −4"} {
+			if !c.labels(t)[row] {
+				t.Errorf("%s: the tree has no row %q; the title bar shows %q", theme, row, summary)
+			}
+		}
+		if !inBar(c, summary) {
+			t.Errorf("%s: no diff summary with the builder selected", theme)
+		}
+		c.capture(t, filepath.Join(out, "titlebar-"+theme+"-builder.png"))
+		clickAt(c, app.LabelFileFilter)
+
+		// A click on the diff summary opens Review; a click on a tab brings the terminal back.
+		click(c, summary)
 		waitFor(c, "the Review view", func(l map[string]bool) bool { return l[app.LabelReview] })
 		time.Sleep(time.Second)
 		c.capture(t, filepath.Join(out, "titlebar-"+theme+"-review.png"))

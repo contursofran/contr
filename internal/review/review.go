@@ -246,3 +246,22 @@ func lines(s string) []string {
 	}
 	return strings.Split(s, "\n")
 }
+
+// Summary is the size of a list of changed files: the lines added and
+// removed, and the number of files.
+type Summary struct {
+	Added   int
+	Removed int
+	Files   int
+}
+
+// Total adds up the files that [Repo.Changes] lists. The file tree and the
+// title bar's diff summary both use it, so their totals agree.
+func Total(files []File) Summary {
+	s := Summary{Files: len(files)}
+	for _, f := range files {
+		s.Added += f.Added
+		s.Removed += f.Removed
+	}
+	return s
+}

@@ -278,3 +278,25 @@ func TestUnicodePath(t *testing.T) {
 		t.Fatalf("texts %q %v", after, err)
 	}
 }
+
+func TestTotalAddsUpTheChangesOfTheWorkTree(t *testing.T) {
+	s := scratch(t)
+	s.commit("root", map[string]string{"a.txt": "1\n2\n3\n", "b.txt": "x\n"})
+	s.git("checkout", "-b", "one")
+	s.commit("one", map[string]string{"a.txt": "1\n"}) // committed: -2
+	s.write("b.txt", "x\ny\n")                         // uncommitted: +1
+	s.write("c.txt", "p\nq\n")                         // untracked: +2
+	files, err := s.repo().Changes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := Total(files), (Summary{Added: 3, Removed: 2, Files: 3}); got != want {
+		t.Errorf("Total = %+v, want %+v", got, want)
+	}
+}
+
+func TestTotalOfNoFilesIsZero(t *testing.T) {
+	if got := Total(nil); got != (Summary{}) {
+		t.Errorf("Total(nil) = %+v, want zero", got)
+	}
+}

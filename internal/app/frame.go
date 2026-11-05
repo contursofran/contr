@@ -161,6 +161,8 @@ type Frame struct {
 	Panel *BoardPanel
 	// Files is the tree of the files panel. [NewFrame] makes it.
 	Files *FileTree
+	// Diff is the title bar's diff summary. It shows the totals of Files. [NewFrame] makes it.
+	Diff *DiffSummary
 	// Review is the Review view. [Frame.Attach] makes it. While the Review toggle is on, it
 	// replaces the terminal area, and it follows the selected project.
 	Review *Review
@@ -243,6 +245,7 @@ func NewFrame() *Frame {
 	f := &Frame{Slots: PlaceholderSlots(), sidebarOpen: true, panelOpen: true,
 		sidebarW: theme.SidebarWidth, panelW: theme.PanelWidth}
 	f.Files = NewFileTree(f.filesDir)
+	f.Diff = &DiffSummary{Tree: f.Files}
 	f.Files.Open = f.openFileInReview
 	f.Files.Reveal = func(abs string) { mygo.Shell.ShowItemInFolder(abs) }
 	return f
@@ -489,6 +492,7 @@ func (f *Frame) View(c *ui.Context) {
 		if f.SpacesList != nil {
 			f.SpacesList.compact = f.icons
 		}
+		f.Files.Sync() // the diff summary counts what the tree lists, also while the panel is hidden
 		f.titleBar(c, sidebar, narrowWindow(win))
 		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Padding(0, theme.PanelGap, theme.PanelGap).Children(func() {
 			f.panels(c, sidebar, files, showFiles)
@@ -716,9 +720,17 @@ func (f *Frame) titleBar(c *ui.Context, sidebarW float32, narrow bool) {
 		if f.NewTerm != nil {
 			f.bar.newTab = f.newTerminal
 		}
-		f.bar.toggleReview, f.bar.reviewOpen = f.ToggleReview, f.reviewOpen
+		f.bar.diff, f.bar.openReview = f.Diff, f.openReviewView
 		f.bar.build(c, f.panelOpen && !narrow, narrow, f.TogglePanel)
 	})
+}
+
+// openReviewView shows the Review view. A second click on the diff summary does nothing: a tab
+// brings the terminal back.
+func (f *Frame) openReviewView() {
+	if !f.reviewOpen {
+		f.ToggleReview()
+	}
 }
 
 // terminal shows the terminal slot and the answer card, or the Review view.
