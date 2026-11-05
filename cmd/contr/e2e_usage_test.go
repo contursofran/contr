@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -51,7 +52,8 @@ func TestUsageMeters(t *testing.T) {
 	core := hctest.New(t, "contr-um", hctest.Session("um"))
 	dir := core.Dir
 	home, state, codex := filepath.Join(dir, "home"), filepath.Join(dir, "state"), filepath.Join(dir, "codex")
-	for _, d := range []string{home, state} {
+	project := filepath.Join(dir, "proj")
+	for _, d := range []string{home, state, project} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -133,6 +135,24 @@ func TestUsageMeters(t *testing.T) {
 	}
 	if addr == "" {
 		t.Fatal("no plain terminal opened")
+	}
+	// The terminal and its shell are scratch: cwd and HOME are inside the
+	// scratch folders.
+	// The login profile sets a prompt with the host and user: make it neutral.
+	if err := mgr.Send(context.Background(), addr, "PS1='$ '; cd "+project+"; clear\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := mgr.Send(context.Background(), addr, "echo \"cwd=$(pwd -P) home=$HOME\"\n"); err != nil {
+		t.Fatal(err)
+	}
+	wantCwd, _ := filepath.EvalSymlinks(project)
+	want := "cwd=" + wantCwd + " home=" + home
+	seen := ""
+	for deadline := time.Now().Add(10 * time.Second); !strings.Contains(seen, "\n"+want) && time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
+		seen, _ = mgr.Read(context.Background(), addr, 50)
+	}
+	if !strings.Contains(seen, want) {
+		t.Fatalf("terminal is not scratch: want %q in\n%s", want, seen)
 	}
 	ctxLine := `{"context_window":{"context_window_size":200000,"current_usage":{"input_tokens":2000,"cache_creation_input_tokens":8000,"cache_read_input_tokens":80000}}}`
 	if _, err := usage.WriteContext(state, addr, usage.ParseContext(ctxLine, usage.UnixNow())); err != nil {

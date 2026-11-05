@@ -31,7 +31,8 @@ Rows: "Context  90k of 200k  45%", then one meter per plan (Claude, Codex).
   agent in `usage/context/<HC_TERMINAL_ID>.json`. The sampler reads the folder
   with the plans. The line shows the file of the selected orchestrator, worker
   or plain terminal as "90k of 200k  45%", and the meter fills to that percent.
-  No file, no selection or a worktree row: "—" and an empty meter.
+  No file, no selection or a worktree row: "—" and an empty meter. The
+  context is up to one sampler period (60 s) old.
 - Plans: `internal/usage` on a goroutine; read again on a status line or log
   change. The view reads the sampler's last result and touches no file.
 
