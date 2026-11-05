@@ -159,8 +159,8 @@ func TestNotchIgnoresResolvedItemsAndABrokenFile(t *testing.T) {
 	}
 	src.snap.OwnerProblem = "owner: owner.json: invalid character"
 	r.tt.Frame()
-	if len(r.tt.Texts()) != 0 {
-		t.Errorf("notch shows with a broken questions file: %q", r.tt.Texts())
+	if r.tt.HasText("1 question") {
+		t.Errorf("notch counts with a broken questions file: %q", r.tt.Texts())
 	}
 	// A problem of hc alone leaves the notch.
 	src.snap.OwnerProblem, src.snap.Problem = "", "hc: gone"
@@ -360,4 +360,43 @@ func TestFrameCmdJOpensTheQuestionsCardNotTheSheet(t *testing.T) {
 	if !f.Card.IsOpen() {
 		t.Error("a click on the notch did not open the card")
 	}
+}
+
+func TestNotchShowsAProblemOfTheQuestionsFile(t *testing.T) {
+	src := &source{snap: agentstate.Snapshot{Questions: qs("a", 1)}}
+	r := newNotchRig(t, src, "a")
+	if _, ok := r.tt.Find(LabelOwnerProblem); ok {
+		t.Fatal("the problem shows while the file reads well")
+	}
+	src.snap.OwnerProblem = "owner: owner.json: invalid character"
+	r.tt.Frame()
+	box(t, r.tt, LabelOwnerProblem)
+	if !r.tt.HasText(TextOwnerProblem) {
+		t.Errorf("no problem text in %q", r.tt.Texts())
+	}
+	// It takes no click and opens no card.
+	if err := r.tt.Click(LabelOwnerProblem); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.opened) != 0 {
+		t.Errorf("the problem opened a card: %v", r.opened)
+	}
+	// It goes when the file reads again.
+	src.snap.OwnerProblem = ""
+	r.tt.Frame()
+	if _, ok := r.tt.Find(LabelOwnerProblem); ok {
+		t.Error("the problem stays after the file reads well")
+	}
+}
+
+func TestNotchProblemClosesAnOpenCard(t *testing.T) {
+	src := &source{snap: agentstate.Snapshot{Questions: qs("a", 1)}}
+	r := newNotchRig(t, src, "a")
+	r.n.Toggle()
+	src.snap.OwnerProblem = "owner: owner.json is locked"
+	r.tt.Frame()
+	if r.closes != 1 || r.isOpen {
+		t.Errorf("card closes = %d, open = %v", r.closes, r.isOpen)
+	}
+	box(t, r.tt, LabelOwnerProblem)
 }

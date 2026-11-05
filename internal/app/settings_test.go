@@ -438,3 +438,38 @@ func TestSettingsAppearanceRowNeedsNoHandlers(t *testing.T) {
 	}
 	r.tt.Frame()
 }
+
+func TestSettingsShowsTheHCVersion(t *testing.T) {
+	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	r.s.CoreVersion = func() (string, bool) { return "0.9.3", true }
+	r.open()
+	if !r.hasText("hc 0.9.3") || !r.hasText("contr 1.2.3") {
+		t.Fatalf("versions missing: %v", r.texts())
+	}
+}
+
+func TestSettingsSaysThatHCIsNotConnected(t *testing.T) {
+	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	r.open()
+	if !r.hasText(TextCoreOff) {
+		t.Fatalf("no %q without a source: %v", TextCoreOff, r.texts())
+	}
+	r.s.CoreVersion = func() (string, bool) { return "", false }
+	r.tt.Frame()
+	if !r.hasText(TextCoreOff) || r.hasText("hc 0") {
+		t.Fatalf("not connected core reads wrong: %v", r.texts())
+	}
+}
+
+func TestSettingsReadyFollowsTheFoundUpdate(t *testing.T) {
+	u := &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}}
+	r := newSettingsRig(t, u)
+	if r.s.Ready() {
+		t.Fatal("ready before a check")
+	}
+	r.open()
+	r.tt.Click(SettingsCheck)
+	if !r.s.Ready() {
+		t.Fatal("not ready after a check found 1.3.0")
+	}
+}

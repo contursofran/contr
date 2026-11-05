@@ -25,7 +25,9 @@ type AgentRowOpts struct {
 	Title string
 	// Issue, Model and Age are the items of line 2. An empty item is left out.
 	Issue, Model, Age string
-	State             GlyphState
+	// CI adds "CI" to line 2 after the model: the worker waits for checks.
+	CI    bool
+	State GlyphState
 	// Orchestrator draws the Claude glyph and the larger padding; a worker
 	// draws a braille glyph and sits on the rail.
 	Orchestrator bool
@@ -110,6 +112,9 @@ func agentRowButton(c *ui.Context, o AgentRowOpts, marginX float32) {
 				}
 				if o.Model != "" {
 					meta(o.Model)
+				}
+				if o.CI {
+					meta("CI")
 				}
 				if o.Age != "" {
 					ui.Spacer(c)

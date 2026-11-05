@@ -184,11 +184,24 @@ func TestAgentRows(t *testing.T) {
 	}
 	c.capture(t, filepath.Join(out, "agentrows-dark-worker.png"))
 
+	// ↑ from the worker row moves the selection to the orchestrator (D145).
+	c.call(t, "act", map[string]any{"id": c.idOf(t, app.LabelProjectList), "action": "focus"})
+	c.key(t, "Up")
+	waitFor("Up selects the orchestrator", 20*time.Second, func() bool { return c.labelWithPrefix(t, "241 · demo") == "" })
+	time.Sleep(800 * time.Millisecond)
+	c.capture(t, filepath.Join(out, "agentrows-dark-keys.png"))
+
 	pick("Light")
 	click(c.labelWithPrefix(t, "lead, "))
 	waitFor("the orchestrator tab", 20*time.Second, func() bool { return c.labelWithPrefix(t, "241 · demo") == "" })
 	time.Sleep(1500 * time.Millisecond)
 	c.capture(t, filepath.Join(out, "agentrows-light.png"))
+	// ↓ from the orchestrator row moves the selection to the first worker.
+	c.call(t, "act", map[string]any{"id": c.idOf(t, app.LabelProjectList), "action": "focus"})
+	c.key(t, "Down")
+	waitFor("Down selects the worker", 20*time.Second, func() bool { return c.labelWithPrefix(t, "241 · demo") != "" })
+	time.Sleep(800 * time.Millisecond)
+	c.capture(t, filepath.Join(out, "agentrows-light-keys.png"))
 
 	// The age timer: a minute after the agents started, with no other event, the
 	// ages read "1m". Text is not a label, so the capture is the check.

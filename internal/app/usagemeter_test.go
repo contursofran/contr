@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/ui"
+
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
@@ -131,17 +133,17 @@ func TestBuildingTheMetersReadsNoFile(t *testing.T) {
 	waitUntil(t, func() bool { return reads.Load() == 1 })
 }
 
-func TestTheStatusBarHasNoPlanBars(t *testing.T) {
-	_, _, _, tt := barFrame(t, readingHost(stats(40, 50, 100)), "0.1.18", theme.WindowWidth)
+func TestTheWindowHasNoV02PlanBars(t *testing.T) {
+	tt := ui.NewTester(NewFrame().View, theme.WindowWidth, theme.WindowHeight)
 	tt.Frame()
 	for _, label := range []string{"usage-claude", "usage-codex", "usage-claude-bar"} {
 		if !absent(tt, label) {
-			t.Errorf("the status bar still has %q", label)
+			t.Errorf("the window still has %q", label)
 		}
 	}
 	for _, s := range tt.Texts() {
 		if s == "claude" || s == "codex" {
-			t.Errorf("the status bar still shows the plan %q", s)
+			t.Errorf("the window still shows the plan %q", s)
 		}
 	}
 }

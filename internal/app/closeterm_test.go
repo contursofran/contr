@@ -114,7 +114,7 @@ func TestCloseTerminalDoesNothingOnOtherSelections(t *testing.T) {
 	})
 }
 
-func TestCloseTerminalErrorShowsInTheStatusBarAndKeepsTheTab(t *testing.T) {
+func TestCloseTerminalErrorShowsAsAToastAndKeepsTheTab(t *testing.T) {
 	snap := termSnap()
 	cf := newCloseFrame(t, &snap)
 	cf.stopErr = errors.New("no such terminal")

@@ -76,12 +76,12 @@ func TestFrameShowsLoadErrorAndKeepsDefaultOrder(t *testing.T) {
 	defer stop()
 	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
 		w.flush()
-		if _, ok := f.Status.Text(); ok {
+		if _, ok := lastToast(f); ok {
 			break
 		}
 		time.Sleep(time.Millisecond)
 	}
-	if text, _ := f.Status.Text(); !strings.HasPrefix(text, "projects: ") {
+	if text, _ := lastToast(f); !strings.HasPrefix(text, "projects: ") {
 		t.Errorf("message %q", text)
 	}
 	if f.Projects == nil {

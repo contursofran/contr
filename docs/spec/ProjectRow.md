@@ -40,9 +40,7 @@ Design system page: component ProjectRow. Shared rules: [README.md](README.md).
 
 ## Keys and focus
 
-- ↑ ↓ move; ← fold; → open; ⏎ focuses the terminal. Not built yet: the
-  `ui.List` shows its keyboard choice in the accent color, which the rows
-  must not show. It comes with the sidebar key work.
+- ↑ ↓ move; ⏎ focuses the terminal (D145). A key never folds a project. ← fold and → open are not built yet.
 
 ## Edge cases
 

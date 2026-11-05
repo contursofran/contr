@@ -9,7 +9,7 @@ type NewTerminal struct {
 	// blocks, so Start runs it off the UI thread. Nil makes Start do nothing.
 	Open func(project, dir string) (addr string, err error)
 	Run  Runner
-	// Status shows a line in the status bar; may be nil.
+	// Status shows a line as a toast; may be nil.
 	Status func(string)
 	// Select selects the new terminal. It runs on the UI thread; may be nil.
 	Select func(addr string)
