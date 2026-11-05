@@ -17,15 +17,24 @@ var planLabels = map[usage.PlanID]string{usage.PlanClaude: "Claude", usage.PlanC
 // sampler's last result, so it never touches a file.
 type planPercent interface {
 	Left(plan usage.PlanID, now uint64) (float64, bool)
+	// Context is the last read context of the agent in hc terminal id.
+	Context(id string) (usage.Context, bool)
 }
 
 // usageMeters is the info block of the files panel: the context of the
 // selected agent, then one line per plan with its percent used
 // (docs/spec/UsageMeter.md).
 //
-// The context has no data source yet (follow-up of #350), so it shows no data.
-func usageMeters(src planPercent) []kit.Meter {
-	out := []kit.Meter{{Label: LabelContext}}
+// terminal is the hc terminal of the selected agent ("" for none). Its context
+// comes from the status line it runs (D144); without one the line shows no data.
+func usageMeters(src planPercent, terminal string) []kit.Meter {
+	ctxLine := kit.Meter{Label: LabelContext}
+	if src != nil && terminal != "" {
+		if c, ok := src.Context(terminal); ok {
+			ctxLine.Percent, ctxLine.Has, ctxLine.Value = c.Percent(), true, c.Label()
+		}
+	}
+	out := []kit.Meter{ctxLine}
 	for _, plan := range usage.Plans {
 		m := kit.Meter{Label: planLabels[plan]}
 		if src != nil {

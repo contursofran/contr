@@ -27,7 +27,7 @@ Design system page: component ServerRow. Shared rules: [README.md](README.md).
 - The row of this Mac also shows its CPU and memory use (D126). They sit in
   the meta, in `ink-38`, and use no new color: "local · 12% CPU · 48% MEM".
 - Click selects the machine; the projects under it are its projects.
-- `+` in the head is hidden until #149 (D132). The head has the Settings button (D146): the `settings` icon, tooltip "Settings  ⌘,", a small `ink-100` dot at its top right corner while an update waits (label "Settings, update ready"). The icon column shows it above the project buttons.
+- `+` in the head is hidden until #149 (D132). The Settings button (D146, moved by D147) is not in this head: it is at the bottom left of the sidebar, below the project list (the gear icon, tooltip "Settings  ⌘,", a small `ink-100` dot at its top right corner while an update waits, label "Settings, update ready"). The icon column shows it at the bottom of the column. `⌘,` also opens Settings.
 
 ## Data
 

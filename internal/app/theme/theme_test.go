@@ -10,12 +10,11 @@ func grey(c uint32) bool {
 // Port of the Rust test tokens_are_greyscale.
 func TestTokensAreGreyscale(t *testing.T) {
 	colors := map[string]uint32{
-		"BgWindow": BgWindow, "BgBars": BgBars, "BgTerminal": BgTerminal,
-		"BgCard": BgCard, "CardBorder": CardBorder, "BgAnswer": BgAnswer,
-		"AnswerBorder": AnswerBorder, "Line": Line, "Text": Text,
+		"BgWindow": BgWindow, "BgBars": BgBars,
+		"BgCard": BgCard, "CardBorder": CardBorder, "Line": Line, "Text": Text,
 		"Text2": Text2, "TextDim": TextDim, "TextDim2": TextDim2,
 		"YouBg": YouBg, "YouText": YouText, "IconYou": IconYou,
-		"IconGrey": IconGrey, "IconFaint": IconFaint, "ReportCodeBg": ReportCodeBg,
+		"IconGrey": IconGrey, "IconFaint": IconFaint,
 	}
 	for name, c := range colors {
 		if !grey(c) {

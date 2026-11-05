@@ -42,7 +42,7 @@ type SpacesList struct {
 	// OnProjects runs when the projects button is clicked (D113). Nil: the
 	// button does nothing.
 	OnProjects func()
-	// OnSettings runs when the Settings button of the Servers head is clicked
+	// OnSettings runs when the Settings button at the bottom of the sidebar is clicked
 	// (D126). Nil: the button does nothing. UpdateReady tells whether a newer
 	// contr waits; the button shows a dot then. Nil: no dot.
 	OnSettings  func()
@@ -108,6 +108,13 @@ type SpacesList struct {
 	scans int
 	// list is the state of the project list.
 	list ui.ListState
+	// cursor is the row the arrow keys are on: -1, or the selected row.
+	cursor int
+	// ByKey (may be nil) wraps a selection made by the keys, so the frame knows
+	// the new terminal must not take the focus from the list (D145).
+	ByKey func(do func())
+	// OnOpen runs on Enter in the list: the terminal takes the focus.
+	OnOpen func()
 	// heads holds the cancel func of the HEAD watch of each repo.
 	heads  map[string]context.CancelFunc
 	closed bool

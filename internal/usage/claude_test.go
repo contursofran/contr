@@ -66,7 +66,7 @@ func mustWrite(t *testing.T, dir string, snap *ClaudeSnapshot) bool {
 func mustRun(t *testing.T, in io.Reader, then []string, dir string, timeout time.Duration) []byte {
 	t.Helper()
 	var out bytes.Buffer
-	if err := runWith(in, &out, then, dir, now, timeout); err != nil {
+	if err := runWith(in, &out, then, dir, "", now, timeout); err != nil {
 		t.Fatalf("runWith: %v", err)
 	}
 	return out.Bytes()
@@ -390,7 +390,7 @@ func TestNoStateDirStillRunsTheChainedCommand(t *testing.T) {
 
 func TestAFailingStdinIsAnError(t *testing.T) {
 	var out bytes.Buffer
-	if err := runWith(broken{}, &out, nil, "", now, chainTimeout); err == nil {
+	if err := runWith(broken{}, &out, nil, "", "", now, chainTimeout); err == nil {
 		t.Fatal("want an error")
 	}
 }

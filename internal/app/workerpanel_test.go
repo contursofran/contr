@@ -47,6 +47,7 @@ func newFollowRig(t *testing.T) *followRig {
 func (r *followRig) frame() { r.tt.Frame() }
 
 func TestPanelFollowsOrchestratorSelection(t *testing.T) {
+	enableViewers(t)
 	r := newFollowRig(t)
 	r.f.Selection.Select(state.Selected{Kind: state.KindOrchestrator, ID: "o1"})
 	r.frame()
@@ -59,6 +60,7 @@ func TestPanelFollowsOrchestratorSelection(t *testing.T) {
 }
 
 func TestPanelShowsTheBoardWithoutSelection(t *testing.T) {
+	enableViewers(t)
 	r := newFollowRig(t)
 	r.frame()
 	if !r.tt.HasText("[board]") {
@@ -67,6 +69,7 @@ func TestPanelShowsTheBoardWithoutSelection(t *testing.T) {
 }
 
 func TestPanelFollowsWorkerSelection(t *testing.T) {
+	enableViewers(t)
 	r := newFollowRig(t)
 	r.f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t1"})
 	r.frame()
@@ -93,6 +96,7 @@ func TestPanelFollowsWorkerSelection(t *testing.T) {
 }
 
 func TestWorkerPanelShowsOutputAndReadsAgainOnSync(t *testing.T) {
+	enableViewers(t)
 	r := newFollowRig(t)
 	r.f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t1"})
 	r.frame()
@@ -112,6 +116,7 @@ func TestWorkerPanelShowsOutputAndReadsAgainOnSync(t *testing.T) {
 }
 
 func TestWorkerPanelShowsAReadError(t *testing.T) {
+	enableViewers(t)
 	r := newFollowRig(t)
 	r.src.readErr = errors.New("terminal gone")
 	r.f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t1"})
@@ -123,6 +128,7 @@ func TestWorkerPanelShowsAReadError(t *testing.T) {
 }
 
 func TestWorkerPanelReadsOffTheUIThread(t *testing.T) {
+	enableViewers(t)
 	r := newFollowRig(t)
 	var queued []func()
 	r.f.Worker.Run = Runner{Go: func(f func()) { queued = append(queued, f) }}
@@ -139,6 +145,7 @@ func TestWorkerPanelReadsOffTheUIThread(t *testing.T) {
 }
 
 func TestWorkerPanelGoneWorker(t *testing.T) {
+	enableViewers(t)
 	r := newFollowRig(t)
 	r.f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t1"})
 	r.frame()
@@ -150,6 +157,7 @@ func TestWorkerPanelGoneWorker(t *testing.T) {
 }
 
 func TestWorkerPanelInterrupt(t *testing.T) {
+	enableViewers(t)
 	r := newFollowRig(t)
 	var status string
 	r.f.Worker.Status = func(s string) { status = s }
@@ -164,6 +172,7 @@ func TestWorkerPanelInterrupt(t *testing.T) {
 }
 
 func TestWorkerPanelStopAsks(t *testing.T) {
+	enableViewers(t)
 	r := newFollowRig(t)
 	r.f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t1"})
 	r.frame()
@@ -199,6 +208,7 @@ func TestWorkerPanelInterruptDisarmsStop(t *testing.T) {
 }
 
 func TestWorkerPanelActionErrorShows(t *testing.T) {
+	enableViewers(t)
 	r := newFollowRig(t)
 	r.src.actionErr = errors.New("hc said no")
 	r.f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t1"})
