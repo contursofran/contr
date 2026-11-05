@@ -1,7 +1,7 @@
 package app
 
 // The title bar (docs/spec/TitleBar.md): the tabs of the selected agent, the New tab button, the
-// Review button and the Hide files button. The sidebar toggle and the room for the window buttons
+// diff summary and the Hide files button. The sidebar toggle and the room for the window buttons
 // are drawn by the frame. The methods run on the UI thread.
 
 import (
@@ -20,8 +20,6 @@ const (
 	LabelTitleDrag = "title drag"
 	// LabelNewTab is the "+" button after the tabs: it opens a plain terminal (D82).
 	LabelNewTab = "New tab"
-	// LabelReviewToggle is the Review button. The diff summary replaces it (#342, DiffSummary).
-	LabelReviewToggle = "Review"
 	// LabelCloseTab is the close button of the selected plain terminal tab.
 	LabelCloseTab = "Close tab"
 )
@@ -54,9 +52,9 @@ type titleBar struct {
 	moveTab func(from, to string)
 	// newTab opens a plain terminal. Nil: the bar has no "+" button.
 	newTab func()
-	// toggleReview shows or hides the Review view. Nil: the bar has no Review button.
-	toggleReview func()
-	reviewOpen   bool
+	// diff is the diff summary and openReview its click. Nil diff: none.
+	diff       *DiffSummary
+	openReview func()
 	// choice is the index the tab list edits; model is the selected tab's index at the last build.
 	choice, model int
 }
@@ -96,27 +94,11 @@ func (b *titleBar) build(c *ui.Context, filesOn, filesDisabled bool, toggleFiles
 			MarginStart(theme.Space8)
 	}
 	ui.Box(c).Label(LabelTitleDrag).Grow(1).MinWidth(0).FillHeight().DragWindow()
-	if b.toggleReview != nil {
-		b.reviewButton(c)
+	if b.diff != nil {
+		ui.Row(c).Shrink(0).MarginEnd(theme.Space8).Children(func() { b.diff.View(c, b.openReview) })
 	}
 	kit.IconButton(c, kit.IconButtonOpts{Icon: "sidebar-right", Label: LabelFilesToggle, Key: "⌘⇧E",
 		On: &filesOn, OnClick: toggleFiles, Disabled: filesDisabled})
-}
-
-// reviewButton is the "Review" toggle: it swaps the terminal area for the Review view. It is
-// bright while the view shows (D37).
-func (b *titleBar) reviewButton(c *ui.Context) {
-	p := theme.Current()
-	el := ui.ButtonBase(c).Label(LabelReviewToggle).Tooltip("Show or hide the Review view").Height(theme.SizeRowHeight).
-		Padding(0, theme.Space10).Shrink(0).Radius(theme.Radius8).Cursor(ui.CursorPointer).Center().OnClick(b.toggleReview)
-	ink := p.Ink50
-	if b.reviewOpen || el.Hovered() {
-		ink = p.Ink100
-	}
-	el.TextColor(ink).Children(func() {
-		s := theme.StyleRowSmall
-		ui.Text(c, "Review").Font(s.Stack()).FontSize(s.Size).FixedLineHeight(s.Line).FontWeight(s.Weight).NoWrap()
-	})
 }
 
 // tabRow shows the tabs in model order, space-2 apart. When they do not fit, each tab shrinks

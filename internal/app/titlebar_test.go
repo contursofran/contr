@@ -11,6 +11,7 @@ import (
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/review"
 )
 
 // tabsOf is the tabs of project p: the orchestrator "lead" (selected), a plain terminal with a
@@ -150,7 +151,7 @@ func TestNewTabButtonFollowsTheTabsAndStaysWithNoTabs(t *testing.T) {
 
 func TestTheBarHasNoSplitNorSearchNorPRButton(t *testing.T) {
 	b := newBar(t, tabsOf(), true)
-	for _, label := range []string{"Split", "Search", "Pull request"} {
+	for _, label := range []string{"Split", "Search", "Pull request", "Review"} {
 		if b.has(label) {
 			t.Errorf("the bar has a %q button", label)
 		}
@@ -164,17 +165,6 @@ func TestNoTabsShowsOnlyPlusAndTheFilesToggle(t *testing.T) {
 	}
 	if !b.has(LabelFilesToggle) || !b.has(LabelTitleDrag) || !b.has(LabelNewTab) {
 		t.Errorf("a part is missing; texts %q", b.tt.Texts())
-	}
-}
-
-func TestTheReviewButtonTogglesTheReviewView(t *testing.T) {
-	b := newBar(t, tabsOf(), true)
-	reviews := 0
-	b.bar.toggleReview = func() { reviews++ }
-	b.tt.Frame()
-	b.click(t, LabelReviewToggle)
-	if reviews != 1 {
-		t.Errorf("the Review button ran %d times, want 1", reviews)
 	}
 }
 
@@ -459,5 +449,48 @@ func TestTheCloseButtonStopsAPlainTerminalAndNeverAnAgent(t *testing.T) {
 	}
 	if !slices.Equal(cf.stopped, []string{"tp"}) {
 		t.Errorf("stopped %v, want [tp]", cf.stopped)
+	}
+}
+
+func TestTheDiffSummaryFollowsTheSelectedAgentAndReadsOnlyThroughTheTree(t *testing.T) {
+	repo := reviewScratch(t)
+	repo.git("checkout", "-b", "feature")
+	write(t, repo.dir, "new.go", "a\nb\nc\n") // untracked: +3
+	snap := tabSnap()
+	snap.Workers[0].Worktree = repo.dir
+	f, tt := agentFrame(t, &snap)
+	f.panelOpen = false // the files panel is hidden: the summary still reads
+	f.Files.Watch = func(string, func()) (func(), error) { return func() {}, nil }
+	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "w1"})
+	tt.Frame()
+	tt.Frame()
+	if got := f.Files.Shown(); got != repo.dir {
+		t.Fatalf("the tree reads %q, want the selected worker's worktree", got)
+	}
+	if err := tt.Click("3 lines added, 1 file. Open review"); err != nil {
+		t.Fatalf("no diff summary; texts %q: %v", tt.Texts(), err)
+	}
+	sum, ok := f.Diff.Summary()
+	if want := (review.Summary{Added: 3, Files: 1}); !ok || sum != want {
+		t.Errorf("summary = %+v, %v; want %+v", sum, ok, want)
+	}
+	f.Files.Close()
+}
+
+func TestTheDiffSummaryClickOpensReviewInTheFrame(t *testing.T) {
+	snap := tabSnap()
+	f, tt := agentFrame(t, &snap)
+	f.Review, _ = newTestReview()
+	f.Diff = readyDiff(review.Summary{Added: 1, Files: 1})
+	tt.Frame()
+	if err := tt.Click("1 line added, 1 file. Open review"); err != nil {
+		t.Fatal(err)
+	}
+	if !f.ReviewOpen() {
+		t.Error("the click did not open Review")
+	}
+	tt.Frame()
+	if err := tt.Click("1 line added, 1 file. Open review"); err != nil || !f.ReviewOpen() {
+		t.Errorf("a second click closed Review (err %v)", err)
 	}
 }
