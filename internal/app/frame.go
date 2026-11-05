@@ -914,6 +914,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 				f.conn.SetVisible(visible)
 			}
 		})
+		w.Update(func() { f.Settings.SetVisible(visible) })
 		if visible {
 			w.Update(f.syncReview)
 		}
