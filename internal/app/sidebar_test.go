@@ -14,6 +14,7 @@ import (
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/state"
+	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/projects"
 )
@@ -448,4 +449,52 @@ func TestWatchFileReportsAChangeAndEndsWithItsContext(t *testing.T) {
 	}
 	cancel()
 	t.Fatal("no change reported")
+}
+
+// manyRepos is a harness with n projects, one pane each.
+func manyRepos(t *testing.T, n int) *spacesHarness {
+	t.Helper()
+	base := canonicalTmp(t)
+	var ws []agents.Worker
+	for i := 0; i < n; i++ {
+		name := "repo" + string(rune('a'+i/26)) + string(rune('a'+i%26))
+		gitDir := mainRepo(t, filepath.Join(base, name), "ref: refs/heads/main\n")
+		wt := filepath.Join(base, name+"-wt")
+		linkedWorktree(t, gitDir, "w1", wt, "ref: refs/heads/feature\n")
+		ws = append(ws, spPane("w1:p"+name, wt, nil))
+	}
+	return newSpaces(t, spTree(ws...))
+}
+
+// Servers sits under the project list and above Settings, wide and in the
+// icon column (D154).
+func TestServersSitBelowTheProjectsAndAboveSettings(t *testing.T) {
+	h, _ := twoRepos(t)
+	h.tt.Frame()
+	proj, list := box(t, h.tt, LabelProjectsHead+" header"), box(t, h.tt, LabelProjectList)
+	srv, row := box(t, h.tt, LabelServersHead+" header"), box(t, h.tt, "This Mac, local text")
+	set := box(t, h.tt, LabelSettingsOpen)
+	if proj.Y >= list.Y || srv.Y < list.Y+list.H-1 || row.Y < srv.Y+srv.H-1 || set.Y < row.Y+row.H-1 {
+		t.Errorf("order: projects %v list %v servers %v row %v settings %v", proj, list, srv, row, set)
+	}
+
+	h.list.compact = true
+	h.tt.Frame()
+	list, row, set = box(t, h.tt, LabelProjectList), box(t, h.tt, "This Mac, local"), box(t, h.tt, LabelSettingsOpen)
+	if row.Y < list.Y+list.H-1 || set.Y < row.Y+row.H-1 {
+		t.Errorf("icon column: list %v row %v settings %v", list, row, set)
+	}
+}
+
+// A long project list scrolls inside its own height; Servers and Settings stay visible.
+func TestALongProjectListScrollsAndServersStayInView(t *testing.T) {
+	h := manyRepos(t, 40)
+	h.tt.Frame()
+	list, row, set := box(t, h.tt, LabelProjectList), box(t, h.tt, "This Mac, local text"), box(t, h.tt, LabelSettingsOpen)
+	if bottom := float32(theme.WindowHeight); row.Y+row.H > bottom || set.Y+set.H > bottom+1 {
+		t.Errorf("Servers row %v or Settings %v leave the window (%v)", row, set, bottom)
+	}
+	if row.Y < list.Y+list.H-1 {
+		t.Errorf("Servers row %v overlaps the list %v", row, list)
+	}
 }
