@@ -47,6 +47,7 @@ Design system page: component IconButton. Shared rules: [README.md](README.md).
 
 - `ButtonBase` with `ui.Icon(svg)`; the icon draws in the text color, so the states only change the text color.
 - Toggle buttons (Hide files, Show changed files only): `ToggleBase`.
+- The ring is drawn by the button (`FocusRing(false)` and `DrawOver`): MyGo's own ring is 2px wide, 1px away.
 - Give each button a screen-reader label and `.Tooltip("Search  ⌘F")`.
 
 ## Do and do not

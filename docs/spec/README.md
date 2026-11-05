@@ -92,8 +92,9 @@ tests, and what it replaces.
 - Two families: **sans** for interface text, **mono** for values, ids,
   counts, keys and the terminal. This replaces "mono font everywhere"
   (D118).
-- Sans: Inter, else the system font (open point O7). Mono: JetBrains Mono,
-  in `assets` today.
+- Sans: Inter, bundled in `assets/fonts` (regular 400 and medium 500; O7
+  settled, D121). The system font is the fallback if a face fails to load.
+  Mono: JetBrains Mono, in `assets` today.
 - Styles (size, line height, weight) are in [tokens.md](tokens.md). Use the
   style name, not a size.
 
@@ -198,8 +199,7 @@ The coordinator asks the owner these before the issues that need them.
    tokens.
 6. **O6 Narrow window.** Settled (D128): below about 1100px the files
    panel hides; below about 800px the sidebar collapses to icons.
-7. **O7 Sans font.** Bundle Inter (OFL, a `NOTICE` entry) or use the
-   system font.
+7. **O7 Sans font.** Settled: bundle Inter (OFL, a `NOTICE` entry), D121.
 8. **O8 Claude mark.** Which drawing, and the right to use it.
 9. **O9 Light terminal palette.** Settled (D129): a known light palette
    (Ghostty or macOS Terminal style), tuned for contrast on the light

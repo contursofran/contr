@@ -205,15 +205,9 @@ func TestScaleTokens(t *testing.T) {
 }
 
 func TestTypeStyles(t *testing.T) {
-	styles := map[string]TextStyle{"question": StyleQuestion, "body": StyleBody,
-		"body-strong": StyleBodyStrong, "row-small": StyleRowSmall, "small": StyleSmall,
-		"label": StyleLabel, "chip": StyleChip, "terminal": StyleTerminal, "glyph": StyleGlyph,
-		"value": StyleValue, "meta": StyleMeta, "count": StyleCount}
 	rows := specRows(t, "Type")
-	// The first table of the section holds the font stacks as list items, so
-	// only the style rows start with "| `".
-	if len(rows) != len(styles) {
-		t.Fatalf("%d styles in code, %d in tokens.md", len(styles), len(rows))
+	if len(rows) != len(Styles) {
+		t.Fatalf("%d styles in code, %d in tokens.md", len(Styles), len(rows))
 	}
 	px := func(s string) float32 {
 		v, _ := strconv.ParseFloat(strings.TrimSuffix(s, "px"), 32)
@@ -222,8 +216,34 @@ func TestTypeStyles(t *testing.T) {
 	for _, r := range rows {
 		weight, _ := strconv.Atoi(r[4])
 		want := TextStyle{Mono: r[1] == "mono", Size: px(r[2]), Line: px(r[3]), Weight: weight}
-		if got := styles[r[0]]; got != want {
+		got, ok := Style(r[0])
+		if !ok {
+			t.Errorf("style %s does not resolve", r[0])
+			continue
+		}
+		if got != want {
 			t.Errorf("%s = %+v, want %+v", r[0], got, want)
+		}
+	}
+}
+
+func TestUnknownStyleDoesNotResolve(t *testing.T) {
+	if _, ok := Style("huge"); ok {
+		t.Error("style huge resolves")
+	}
+}
+
+// Sans styles use Inter, mono styles use JetBrains Mono: the registered
+// family and the stack both.
+func TestStylesUseTheirFamily(t *testing.T) {
+	for _, r := range specRows(t, "Type") {
+		s, _ := Style(r[0])
+		family, stack := "Inter", FontSans
+		if r[1] == "mono" {
+			family, stack = "JetBrains Mono", FontMono
+		}
+		if s.Family() != family || s.Stack() != stack {
+			t.Errorf("%s: family %q, stack %q; want %q, %q", r[0], s.Family(), s.Stack(), family, stack)
 		}
 	}
 }
@@ -331,11 +351,16 @@ func TestUIThemeGetsPaletteValues(t *testing.T) {
 			{"Border", u.Border, p.InputLine}, {"Text", u.Text, p.Ink95},
 			{"TextMuted", u.TextMuted, p.Ink50}, {"Danger", u.Danger, p.Blocked},
 			{"Focus", u.Focus, p.FocusRing}, {"Selection", u.Selection, p.Selected},
+			{"Warning", u.Warning, p.Ink85},
 		}
 		for _, c := range checks {
 			if c.got != c.want {
 				t.Errorf("dark=%v: %s = %v, want %v", p.Dark, c.name, c.got, c.want)
 			}
+		}
+		// D76 keeps the claude hue for Claude identity, not for warnings.
+		if u.Warning == p.Claude {
+			t.Errorf("dark=%v: Warning is the claude color", p.Dark)
 		}
 		if u.Dark != p.Dark {
 			t.Errorf("Dark = %v for the palette dark=%v", u.Dark, p.Dark)

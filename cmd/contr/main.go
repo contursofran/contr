@@ -59,26 +59,36 @@ func main() {
 	os.Exit(openWindow(cmd.Icons))
 }
 
-// bundledFonts lists the four faces of JetBrains Mono: regular, bold, italic
-// and bold italic. They register under theme.FontFamily, so italic and bold
-// text pick the matching face.
-var bundledFonts = []string{
-	"JetBrainsMono-Regular.ttf",
-	"JetBrainsMono-Bold.ttf",
-	"JetBrainsMono-Italic.ttf",
-	"JetBrainsMono-BoldItalic.ttf",
+// bundledFace is a font file in assets and the family it registers under.
+type bundledFace struct {
+	file   string
+	family string
+}
+
+// bundledFonts lists the faces that ship with contr. JetBrains Mono (mono)
+// has regular, bold, italic and bold italic; they register under
+// theme.FontFamily, so italic and bold text pick the matching face. Inter
+// (sans, D121) has the weights that the type styles use, 400 and 500; they
+// register under theme.FontFamilySans.
+var bundledFonts = []bundledFace{
+	{"JetBrainsMono-Regular.ttf", theme.FontFamily},
+	{"JetBrainsMono-Bold.ttf", theme.FontFamily},
+	{"JetBrainsMono-Italic.ttf", theme.FontFamily},
+	{"JetBrainsMono-BoldItalic.ttf", theme.FontFamily},
+	{"Inter-Regular.ttf", theme.FontFamilySans},
+	{"Inter-Medium.ttf", theme.FontFamilySans},
 }
 
 // registerFonts loads the bundled faces. A face that fails is reported and the
 // UI falls back to a system font.
 func registerFonts(files fs.FS, register func([]byte, string) error) {
-	for _, name := range bundledFonts {
-		data, err := fs.ReadFile(files, "fonts/"+name)
+	for _, f := range bundledFonts {
+		data, err := fs.ReadFile(files, "fonts/"+f.file)
 		if err == nil {
-			err = register(data, theme.FontFamily)
+			err = register(data, f.family)
 		}
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "contr: unable to load %s: %v\n", name, err)
+			fmt.Fprintf(os.Stderr, "contr: unable to load %s: %v\n", f.file, err)
 		}
 	}
 }
