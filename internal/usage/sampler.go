@@ -1,6 +1,7 @@
 package usage
 
 import (
+	"maps"
 	"math"
 	"sync"
 	"time"
@@ -96,6 +97,8 @@ type stopper interface{ Stop() bool }
 type Sampler struct {
 	read     func() Reading
 	onChange func()
+	// readContexts reads the context of every agent; nil for none.
+	readContexts func() map[string]Context
 
 	// afterFunc, run, and now are replaced in tests: a fake clock, a
 	// synchronous runner, and the clock's time.
@@ -110,6 +113,7 @@ type Sampler struct {
 	gen      uint64
 	timer    stopper
 	plans    Reading
+	contexts map[string]Context
 	shown    [len(Plans)]shownPercent
 	lastRead time.Time // zero until the first read ends
 }
@@ -128,7 +132,21 @@ func NewSampler(read func() Reading, onChange func()) *Sampler {
 }
 
 // NewFileSampler returns a sampler that reads the real sources.
-func NewFileSampler(onChange func()) *Sampler { return NewSampler(FileReader(), onChange) }
+func NewFileSampler(onChange func()) *Sampler {
+	s := NewSampler(FileReader(), onChange)
+	s.readContexts = func() map[string]Context { return ReadContexts(StateDir()) }
+	return s
+}
+
+// Context returns the last read context of the agent in hc terminal id. ok is
+// false when there is none.
+func (s *Sampler) Context(id string) (Context, bool) {
+	key := ContextKey(id)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.contexts[key]
+	return c, ok && key != ""
+}
 
 // Plans returns the last read: every plan in [Plans] order.
 func (s *Sampler) Plans() Reading {
@@ -211,6 +229,10 @@ func (s *Sampler) fire(gen uint64) {
 // the window is still visible.
 func (s *Sampler) readOnce() {
 	plans := s.read()
+	var contexts map[string]Context
+	if s.readContexts != nil {
+		contexts = s.readContexts()
+	}
 	now := UnixNow()
 	s.mu.Lock()
 	s.reading = false
@@ -219,6 +241,9 @@ func (s *Sampler) readOnce() {
 		return
 	}
 	changed := s.recordLocked(plans, s.now(), now)
+	if !maps.Equal(s.contexts, contexts) {
+		s.contexts, changed = contexts, true
+	}
 	if s.visible {
 		s.stopTimerLocked()
 		s.armLocked(ReadEvery)

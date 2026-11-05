@@ -1,5 +1,6 @@
 // Package hctest starts scratch hc cores for tests. A scratch core has its own
-// session and XDG folders, so it never touches the owner's core.
+// session, XDG folders and home folder, so it never touches the owner's core
+// or home.
 package hctest
 
 import (
@@ -33,7 +34,13 @@ func New(t *testing.T, prefix, session string) *Core {
 	}
 	// Cleanups run last in, first out: this one runs after the stop below.
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-	c := &Core{Dir: dir, Env: []string{"HC_SESSION=" + session}}
+	// The core and the shells it starts get a scratch home and a neutral
+	// shell, so no owner folder or prompt shows in them.
+	home := filepath.Join(dir, "home")
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	c := &Core{Dir: dir, Env: []string{"HC_SESSION=" + session, "HOME=" + home, "SHELL=/bin/sh", "PS1=$ ", "USER=scratch", "LOGNAME=scratch"}}
 	for _, v := range []string{"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR", "XDG_CACHE_HOME"} {
 		p := filepath.Join(dir, strings.ToLower(v[4:6]))
 		if err := os.MkdirAll(p, 0o700); err != nil {

@@ -153,18 +153,20 @@ func readSnapshot(path string) *ClaudeSnapshot {
 }
 
 // RunStatusline is `contr statusline`. It reads Claude Code's status line JSON
-// from stdin, keeps the windows in the state dir, then copies to stdout what
+// from stdin, keeps the windows, and the agent's context when HC_TERMINAL_ID is set,
+// in the state dir, then copies to stdout what
 // then prints for the same input (nothing when then is empty). Input over
 // 1 MiB is skipped: nothing is saved and then does not run, so no part of it is
 // used. Bad input and failed saves are logged, not returned, so the status line
 // keeps working. It returns an error only when stdin or stdout fails.
 func RunStatusline(stdin io.Reader, stdout io.Writer, then []string) error {
-	return runWith(stdin, stdout, then, StateDir(), uint64(time.Now().Unix()), chainTimeout)
+	return runWith(stdin, stdout, then, StateDir(), os.Getenv(EnvTerminal), uint64(time.Now().Unix()), chainTimeout)
 }
 
-// runWith is RunStatusline with the state dir (empty for none), the time and
-// the chain limit passed in.
-func runWith(stdin io.Reader, stdout io.Writer, then []string, dir string, now uint64, timeout time.Duration) error {
+// runWith is RunStatusline with the state dir (empty for none), the hc
+// terminal of the agent (empty outside hc), the time and the chain limit
+// passed in.
+func runWith(stdin io.Reader, stdout io.Writer, then []string, dir, terminal string, now uint64, timeout time.Duration) error {
 	// One byte past the cap tells an over-long input from one of exactly the cap.
 	input, err := io.ReadAll(io.LimitReader(stdin, maxInput+1))
 	if err != nil {
@@ -179,6 +181,11 @@ func runWith(stdin io.Reader, stdout io.Writer, then []string, dir string, now u
 			slog.Warn("no state dir; Claude usage not saved")
 		} else if _, err := WriteSnapshot(dir, snap); err != nil {
 			slog.Warn("unable to write the Claude usage file", "err", err)
+		}
+	}
+	if ctx := ParseContext(string(input), now); ctx != nil && terminal != "" && dir != "" {
+		if _, err := WriteContext(dir, terminal, ctx); err != nil {
+			slog.Warn("unable to write the context file", "err", err)
 		}
 	}
 	if len(then) > 0 {
