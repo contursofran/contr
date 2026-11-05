@@ -26,7 +26,8 @@ func panelSource() *source {
 	}
 }
 
-// followRig is a frame whose panel slot shows the board stand-in "[board]".
+// followRig is a frame whose right panel (hidden in the window, D122) shows the
+// board stand-in "[board]". The tests draw the panel alone.
 type followRig struct {
 	f   *Frame
 	src *source
@@ -40,7 +41,7 @@ func newFollowRig(t *testing.T) *followRig {
 	f.Selection = stateSelection()
 	f.Worker = &WorkerPanel{Source: src, Selection: f.Selection, Run: Runner{Go: func(f func()) { f() }}}
 	f.Slots.Panel = func(c *ui.Context) { ui.Text(c, "[board]") }
-	return &followRig{f: f, src: src, tt: ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)}
+	return &followRig{f: f, src: src, tt: ui.NewTester(f.panelBox, theme.PanelWidth, theme.WindowHeight)}
 }
 
 func (r *followRig) frame() { r.tt.Frame() }
