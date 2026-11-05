@@ -180,7 +180,7 @@ func attachWithWidths(t *testing.T, w widths.Widths, err error) *Frame {
 	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
 		win.flush()
 		if err != nil {
-			if _, ok := f.Status.Text(); ok {
+			if _, ok := lastToast(f); ok {
 				break
 			}
 		} else if f.sidebarW != theme.SidebarWidth || f.panelW != theme.PanelWidth {
@@ -209,7 +209,7 @@ func TestMissingWidthsGiveTheDefaults(t *testing.T) {
 
 func TestBadWidthsFileShowsAnErrorAndKeepsDefaults(t *testing.T) {
 	f := attachWithWidths(t, widths.Widths{}, errors.New("widths: parse x: bad"))
-	if text, _ := f.Status.Text(); text != "widths: parse x: bad" {
+	if text, _ := lastToast(f); text != "widths: parse x: bad" {
 		t.Errorf("message %q", text)
 	}
 	if f.sidebarW != theme.SidebarWidth || f.panelW != theme.PanelWidth {

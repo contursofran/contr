@@ -123,22 +123,15 @@ const (
 const PRPaneWidth = 560
 const PRPanePad = 16
 const PRWhoWidth = 74 // timeline: who column
-const StatusBarHeight = 26
 
 // Sidebar spaces (planner defaults; docs/DESIGN.md has no sizes for these)
 const SidebarPadX = 12       // left/right padding of sidebar content
 const TrafficLightInset = 78 // room for the native window buttons (x 14, 3×12 + 2×8 gaps, + 12)
-const SpacesRowHeight = 26   // one-line row: section header, repo, collapsed host
-const WorktreeRowHeight = 42 // two-line worktree row (18 + 18 + 6)
-const RowIndent = 14         // worktree rows under their repo
 const CardInsetX = 4         // selected-card margin (same 4 px as the agent rows)
 const BadgePadX = 5
 const BadgeRadius = 4
-const DeviceFontSize = 11 // the `This computer` header (D113)
-const DeviceIconSize = 12 // its monitor icon
-const SpacesGap = 8       // icon to text, name to branch, between a row's parts
+const SpacesGap = 8 // icon to text, name to branch, between a row's parts
 const MemBarWidth = 60
-const MemBarHeight = 4
 const SidebarToggleBox = 16   // clickable box around the toggle drawing
 const SidebarToggleWidth = 14 // toggle outline, border included
 const SidebarToggleHeight = 12
@@ -149,10 +142,6 @@ const SidebarToggleFill = 4 // filled left part of the outline
 const AgentRowHeight = 28 // Rust D42: one line per agent
 const AgentRowPadX = 8
 const AgentGap = 8 // icon to name, name to detail, detail to link
-
-// Status bar (planner defaults; docs/DESIGN.md has no sizes for these)
-const StatusPadX = 12 // left and right padding
-const StatusGap = 8   // between label and value, and around the "·" separators
 
 // Title bar tabs and buttons (planner defaults; docs/DESIGN.md has no sizes for these)
 const TabPaddingX = 12

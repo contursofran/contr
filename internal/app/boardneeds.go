@@ -1,6 +1,6 @@
 package app
 
-// The needs-you section of the board: the same tabs as the needs-you row
+// The needs-you section of the board: the same items as the former needs-you row
 // under the terminal, in the same order (blocked workers, questions, to-dos),
 // one line each. A click opens the questions card (#347).
 

@@ -1,10 +1,11 @@
 package app
 
-// The Settings modal (D115): contr's version, "Check for updates", the notes of a newer version,
-// "Install and restart", and the errors. The menu item "Settings…" (Cmd-,) opens it. The checks
-// and the install run on goroutines (D63); the modal reads their results on the UI thread.
-// StartChecks checks at launch and every CheckEvery while the window shows; a newer version
-// shows as "update ready · restart" in the status bar. contr never installs without a click.
+// The Settings modal (D115, D126): the contr and hc versions, "Check for updates", the notes of a
+// newer version, "Install and restart", and the errors. The menu item "Settings…" (Cmd-,) and the
+// Settings button of the sidebar open it. The checks and the install run on goroutines (D63); the
+// modal reads their results on the UI thread. StartChecks checks at launch and every CheckEvery
+// while the window shows; a newer version puts a dot on the Settings button (see
+// [SpacesList.UpdateReady]). contr never installs without a click.
 
 import (
 	"context"
@@ -18,8 +19,12 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
 
+	"github.com/contursofran/contr"
 	"github.com/contursofran/contr/internal/app/theme"
 )
+
+// Version is contr's version, shown in Settings. It comes from the VERSION file (D107).
+var Version = contr.Version()
 
 // Labels of the Settings modal.
 const (
@@ -45,6 +50,7 @@ const (
 	TextChecking   = "checking…"
 	TextUpToDate   = "contr is up to date"
 	TextInstalling = "installing…"
+	TextCoreOff    = "hc not connected"
 )
 
 // CheckEvery is the time between the automatic update checks (D115).
@@ -72,7 +78,10 @@ type Settings struct {
 	Updates Updates
 	// Version is contr's version.
 	Version string
-	Run     Runner
+	// CoreVersion gives the hc core's version, and whether contr follows the core. Nil shows
+	// that contr is not connected.
+	CoreVersion func() (string, bool)
+	Run         Runner
 	// Relaunch restarts contr after an install. It runs on the UI thread.
 	Relaunch func()
 	// Invalidate redraws the window; may be nil.
@@ -124,7 +133,8 @@ func (s *Settings) Close() {
 // Opened tells whether the modal shows.
 func (s *Settings) Opened() bool { return s.open }
 
-// Ready tells whether a newer version waits for a click on "update ready · restart".
+// Ready tells whether a newer version waits for the owner to install it. The Settings button
+// shows a dot while it does.
 func (s *Settings) Ready() bool { return s.found != nil }
 
 func (s *Settings) redraw() {
@@ -273,7 +283,7 @@ func (s *Settings) Check() {
 }
 
 // Install installs the version that the last check found, then restarts contr. Only a click
-// runs it: the modal's button and the status bar's item.
+// on the modal's button runs it.
 func (s *Settings) Install() {
 	if s.Updates == nil || s.found == nil || s.installing || s.checking {
 		return
@@ -308,6 +318,16 @@ func (s *Settings) Install() {
 			}
 		}
 	})
+}
+
+// coreText is the hc line: "hc 0.9.3", or "hc not connected" while contr does not follow a core.
+func (s *Settings) coreText() string {
+	if s.CoreVersion != nil {
+		if v, ok := s.CoreVersion(); ok {
+			return "hc " + v
+		}
+	}
+	return TextCoreOff
 }
 
 // status is the line under the version.
@@ -355,8 +375,10 @@ func (s *Settings) body(c *ui.Context) {
 	busy := s.checking || s.installing
 	live := s.Updates != nil && s.enabled && !busy
 	ui.Column(c).Shrink(0).Gap(8).PaddingX(theme.ModalPadX).Children(func() {
-		ui.Text(c, "Updates").TextColor(theme.Color(theme.TextDim))
+		ui.Text(c, "Versions").TextColor(theme.Color(theme.TextDim))
 		ui.Text(c, "contr "+s.Version).TextColor(theme.Color(theme.Text))
+		ui.Text(c, s.coreText()).TextColor(theme.Color(theme.Text))
+		ui.Text(c, "Updates").Margin(4, 0, 0, 0).TextColor(theme.Color(theme.TextDim))
 		if st := s.status(); st != "" {
 			ui.Text(c, st).TextColor(theme.Color(theme.Text2))
 		}

@@ -7,7 +7,7 @@ type CloseTerminal struct {
 	// off the UI thread. Nil makes Start do nothing.
 	Stop func(addr string) error
 	Run  Runner
-	// Status shows a line in the status bar; may be nil.
+	// Status shows a line as a toast; may be nil.
 	Status func(string)
 	// Closed runs on the UI thread after Stop worked; may be nil.
 	Closed func(addr string)

@@ -37,7 +37,7 @@ type WorkerPanel struct {
 	Source    AgentSource
 	Selection *state.Selection
 	Run       Runner
-	// Status shows a line in the status bar; may be nil.
+	// Status shows a line as a toast; may be nil.
 	Status func(string)
 	// Invalidate redraws the window; may be nil.
 	Invalidate func()

@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"path/filepath"
 	"slices"
 	"sync"
 	"testing"
@@ -14,11 +13,8 @@ import (
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/theme"
-	"github.com/contursofran/contr/internal/github"
 	"github.com/contursofran/contr/internal/hc"
-	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/owner"
-	"github.com/contursofran/contr/internal/usage"
 )
 
 // needsCore is a fake hc core: a fixed snapshot, no events.
@@ -167,14 +163,13 @@ func sampleSource() *source {
 	}}
 }
 
-func TestNeedsOrderBlockedThenQuestionsThenTodos(t *testing.T) {
-	n := &NeedsRow{Snapshot: sampleSource().Snapshot}
-	got := keys(n.Tabs())
+func TestNeedItemsOrderBlockedThenQuestionsThenTodos(t *testing.T) {
+	tabs := NeedItems(sampleSource().Snapshot, nil)()
+	got := keys(tabs)
 	want := []string{"b-2", "b-3", "D1", "D2", "T1", "T2"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("tabs %v, want %v", got, want)
 	}
-	tabs := n.Tabs()
 	if tabs[0].Icon != icons.Blocked || tabs[2].Icon != icons.Decide || tabs[4].Icon != icons.Do || tabs[5].Icon != icons.Fyi {
 		t.Errorf("icons wrong: %+v", tabs)
 	}
@@ -183,115 +178,34 @@ func TestNeedsOrderBlockedThenQuestionsThenTodos(t *testing.T) {
 	}
 }
 
-func TestNeedsProjectFilter(t *testing.T) {
+func TestNeedItemsProjectFilter(t *testing.T) {
 	proj := "a"
-	n := &NeedsRow{Snapshot: sampleSource().Snapshot, Scope: func() string { return proj }}
-	if got, want := keys(n.Tabs()), []string{"b-2", "D1", "T1"}; !slices.Equal(got, want) {
+	items := NeedItems(sampleSource().Snapshot, func() string { return proj })
+	if got, want := keys(items()), []string{"b-2", "D1", "T1"}; !slices.Equal(got, want) {
 		t.Fatalf("project a: %v, want %v", got, want)
 	}
 	proj = ""
-	if len(n.Tabs()) != 6 {
-		t.Errorf("no scope should show all, got %v", keys(n.Tabs()))
+	if len(items()) != 6 {
+		t.Errorf("no scope should show all, got %v", keys(items()))
 	}
 }
 
-func TestNeedsEmptyRowIsHidden(t *testing.T) {
-	n := &NeedsRow{Snapshot: (&source{}).Snapshot}
-	tt := ui.NewTester(n.View, 800, 200)
-	if _, ok := tt.Find(LabelNeedsRow); ok {
-		t.Error("an empty row must not show")
+func TestNeedItemsWithoutASourceListNothing(t *testing.T) {
+	if got := NeedItems(nil, nil)(); len(got) != 0 {
+		t.Fatalf("nil source gave %v", keys(got))
 	}
-	var nilSrc NeedsRow
-	if len(nilSrc.Tabs()) != 0 {
-		t.Error("nil source must give no tabs")
+	if got := NeedItems((&source{}).Snapshot, nil)(); len(got) != 0 {
+		t.Fatalf("empty state gave %v", keys(got))
 	}
 }
 
-func TestNeedsClickOpensTab(t *testing.T) {
-	var opened []NeedTab
-	n := &NeedsRow{Snapshot: sampleSource().Snapshot, Open: func(t NeedTab) { opened = append(opened, t) }}
-	tt := ui.NewTester(n.View, 1200, 200)
-	if err := tt.Click("D1 Which db?"); err != nil {
-		t.Fatal(err)
-	}
-	if len(opened) != 1 || opened[0].Key != "D1" || opened[0].Kind != NeedQuestion {
-		t.Fatalf("opened %+v", opened)
-	}
-}
-
-func TestNeedsRowSitsInOneLine(t *testing.T) {
-	n := &NeedsRow{Snapshot: sampleSource().Snapshot}
-	tt := ui.NewTester(n.View, 1200, 200)
-	r, ok := tt.Find(LabelNeedsRow)
-	if !ok {
-		t.Fatal("no row")
-	}
-	if r.H != theme.BoardLineHeight {
-		t.Errorf("row height %v, want %v", r.H, theme.BoardLineHeight)
-	}
-}
-
-func TestNeedsStrikeThroughUntilClearDone(t *testing.T) {
-	core := &needsCore{snap: hc.Snapshot{}}
-	store := &owner.Store{Path: filepath.Join(t.TempDir(), "owner.json")}
-	if _, err := store.Ask(owner.Question{Project: "a", Question: "Which db?", Options: []string{"pg"}}); err != nil {
-		t.Fatal(err)
-	}
-	m := agentstate.New(agents.New(core, agents.DefaultConfig()), store, nil)
-	ctx, cancel := context.WithCancel(context.Background())
-	m.Start(ctx)
-	defer func() { cancel(); m.Wait() }()
-	n := &NeedsRow{Snapshot: m.Snapshot, ClearDone: m.ClearDone}
-	if tabs := n.Tabs(); len(tabs) != 1 || tabs[0].Resolved {
-		t.Fatalf("before: %+v", tabs)
-	}
-	if err := m.Answer("D1", "pg"); err != nil {
-		t.Fatal(err)
-	}
-	if tabs := n.Tabs(); len(tabs) != 1 || !tabs[0].Resolved {
-		t.Fatalf("after answer the tab stays, resolved: %+v", tabs)
-	}
-	tt := ui.NewTester(n.View, 1200, 200)
-	if err := tt.Click(LabelNeedsClearDone); err != nil {
-		t.Fatal(err)
-	}
-	if tabs := n.Tabs(); len(tabs) != 0 {
-		t.Fatalf("after clear done: %+v", tabs)
-	}
-}
-
-func TestNeedsClearDoneOnlyWithResolved(t *testing.T) {
+func TestNeedItemsMarkResolvedItems(t *testing.T) {
 	s := sampleSource()
-	n := &NeedsRow{Snapshot: s.Snapshot, ClearDone: s.ClearDone}
-	tt := ui.NewTester(n.View, 1200, 200)
-	if _, ok := tt.Find(LabelNeedsClearDone); ok {
-		t.Error("clear done shows with nothing resolved")
-	}
 	s.snap.Resolved = []string{"D1"}
-	tt.Frame()
-	if err := tt.Click(LabelNeedsClearDone); err != nil || s.cleared != 1 {
-		t.Errorf("click: %v, cleared %d", err, s.cleared)
-	}
-}
-
-func TestNeedsRowSitsUnderTheTerminal(t *testing.T) {
-	f := NewFrame()
-	f.Needs = &NeedsRow{Snapshot: sampleSource().Snapshot}
-	f.Slots.Needs = f.Needs.View
-	tt := ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)
-	term, row := box(t, tt, LabelTerminal), box(t, tt, LabelNeedsRow)
-	if row.Y < term.Y+term.H-1 {
-		t.Errorf("row %+v is not under the terminal %+v", row, term)
-	}
-	if row.X != term.X || row.W != term.W {
-		t.Errorf("row %+v is not as wide as the terminal %+v", row, term)
-	}
-}
-
-func TestFrameWithoutNeedsSlotHasNoRow(t *testing.T) {
-	tt := ui.NewTester(NewFrame().View, theme.WindowWidth, theme.WindowHeight)
-	if _, ok := tt.Find(LabelNeedsRow); ok {
-		t.Error("row shows without a slot")
+	for _, tab := range NeedItems(s.Snapshot, nil)() {
+		if tab.Resolved != (tab.Key == "D1") {
+			t.Errorf("%s resolved = %v", tab.Key, tab.Resolved)
+		}
 	}
 }
 
@@ -315,56 +229,5 @@ func TestNeedsSectionLongNameStaysOnOneLine(t *testing.T) {
 	}
 	if key.W < 100 {
 		t.Errorf("name width %v: it is squeezed", key.W)
-	}
-}
-
-// TestNeedsRowCollapsesWhilePRIsOpen: with the PR pane open, each tab shows
-// its icon and id and no title; the tab keeps its label and still opens.
-func TestNeedsRowCollapsesWhilePRIsOpen(t *testing.T) {
-	collapsed := false
-	var opened []NeedTab
-	n := &NeedsRow{Snapshot: sampleSource().Snapshot, Collapsed: func() bool { return collapsed },
-		Open: func(t NeedTab) { opened = append(opened, t) }}
-	tt := ui.NewTester(n.View, 1200, 40)
-	tt.Frame()
-	// Texts holds the accessible labels too ("D2 Ship it?"), so match whole texts.
-	if !slices.Contains(tt.Texts(), "Ship it?") {
-		t.Fatalf("open row lacks a title: %v", tt.Texts())
-	}
-	collapsed = true
-	tt.Frame()
-	if slices.Contains(tt.Texts(), "Ship it?") || !slices.Contains(tt.Texts(), "D2") {
-		t.Errorf("collapsed row texts = %v, want ids and no titles", tt.Texts())
-	}
-	tab := n.Tabs()[3]
-	if err := tt.Click(tab.Label()); err != nil || len(opened) != 1 || opened[0].Key != "D2" {
-		t.Errorf("click on a collapsed tab: %v, opened %v", err, opened)
-	}
-}
-
-// TestAttachCollapsesNeedsWithThePRPane: the frame collapses the needs-you
-// tabs exactly while the PR pane is open.
-func TestAttachCollapsesNeedsWithThePRPane(t *testing.T) {
-	w := &fakeWindow{visible: true}
-	f := NewFrame()
-	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
-	f.Usage = usage.NewSampler(usage.Unread, nil)
-	f.StartAgents = func(func()) (AgentSource, func()) { return sampleSource(), func() {} }
-	stop := f.Attach(w)
-	defer stop()
-	if f.Needs.Collapsed == nil || f.Needs.Collapsed() {
-		t.Fatal("needs collapsed with no PR pane")
-	}
-	f.PR.Client = func(string) github.Client {
-		return github.Client{R: &prRunner{reply: func(string) ([]byte, error) { return []byte(prJSON), nil }}}
-	}
-	f.PR.Run = Runner{Go: func(func()) {}}
-	f.OpenPR("/w", 642)
-	if !f.Needs.Collapsed() {
-		t.Error("needs not collapsed while the PR pane is open")
-	}
-	f.ClosePR()
-	if f.Needs.Collapsed() {
-		t.Error("needs still collapsed after the PR pane closed")
 	}
 }

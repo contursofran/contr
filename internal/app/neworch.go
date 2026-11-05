@@ -16,7 +16,7 @@ type NewOrchestrator struct {
 	// Spawn starts the orchestrator profile in a folder.
 	Spawn func(dir string) error
 	Run   Runner
-	// Status shows a line in the status bar; may be nil.
+	// Status shows a line as a toast; may be nil.
 	Status func(string)
 
 	busy bool // a pick or spawn is running
