@@ -219,6 +219,29 @@ func (s *Store) AddFolder(dir, path string) {
 	s.Show(dir)
 }
 
+// Known reports whether the store has chosen something about dir: it is in
+// the order or it is hidden.
+func (s *Store) Known(dir string) bool {
+	return slices.Contains(s.order, dir) || s.Hidden(dir)
+}
+
+// AddLive adds project dir, found from a live terminal, with the main folder
+// path: it goes to the end of the order and to the recent list, and it stays
+// in the sidebar after its terminals end (D149). A project the store knows,
+// hidden ones included, is left as it is. It reports whether it added dir.
+func (s *Store) AddLive(dir, path string, at time.Time) bool {
+	if s.Known(dir) {
+		return false
+	}
+	s.order = append(s.order, dir)
+	if s.folders == nil {
+		s.folders = map[string]string{}
+	}
+	s.folders[dir] = path
+	s.Touch(dir, path, at)
+	return true
+}
+
 // Folders returns the stored projects that were added with a folder, in the
 // stored order and with the hidden ones left out, as project dirs. Path gives
 // the folder of one.

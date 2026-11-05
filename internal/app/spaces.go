@@ -94,7 +94,16 @@ type SpacesList struct {
 	// projects is the owner's order and hidden groups (D109). Nil keeps the
 	// tree order and hides nothing. UI thread only.
 	projects *projects.Store
-	online   bool
+	// Adopt makes the list add a project found from a live terminal to the
+	// store (D149). The frame sets it once the store has loaded well, so that
+	// a store that failed to read is never written over.
+	Adopt bool
+	// OnAdopted runs on the UI thread after the list added projects to the
+	// store: the frame saves the store, off the UI thread.
+	OnAdopted func()
+	// now is the clock; tests replace it.
+	now    func() time.Time
+	online bool
 	// line is the hc problem while contr does not follow the core, else "".
 	line string
 	// folded holds the CommonDir of the projects the owner folded.
@@ -282,7 +291,9 @@ func (l *SpacesList) later(fn func()) {
 
 func (l *SpacesList) rebuild() {
 	snap := l.snapshot()
-	groups := l.applyProjects(spaces.Build(spaceTerms(snap), l.scan))
+	built := spaces.Build(spaceTerms(snap), l.scan)
+	adopted := l.adopt(built)
+	groups := l.applyProjects(built)
 	l.online, l.line = true, ""
 	if l.snap != nil && snap.CoreVersion == "" {
 		l.online, l.line = false, snap.Problem
@@ -290,6 +301,37 @@ func (l *SpacesList) rebuild() {
 	l.groups = groups
 	l.syncHeads()
 	l.syncAges()
+	if adopted && l.OnAdopted != nil {
+		l.OnAdopted()
+	}
+}
+
+// adopt adds each project of groups that the store does not know to the
+// store, after the projects shown (D149). A hidden project stays hidden. It
+// changes the store in memory only; OnAdopted saves it off the UI thread. It
+// tells if it added any.
+func (l *SpacesList) adopt(groups []spaces.RepoGroup) bool {
+	if l.projects == nil || !l.Adopt {
+		return false
+	}
+	var fresh []spaces.RepoGroup
+	for _, g := range groups {
+		if !l.projects.Known(g.CommonDir) {
+			fresh = append(fresh, g)
+		}
+	}
+	if len(fresh) == 0 {
+		return false
+	}
+	now := time.Now
+	if l.now != nil {
+		now = l.now
+	}
+	for _, g := range fresh {
+		path := l.scan.Repos[g.CommonDir].MainRoot
+		l.projects.AddLive(g.CommonDir, path, now())
+	}
+	return true
 }
 
 // syncHeads watches the HEAD file of each repo that has terminals, and stops
