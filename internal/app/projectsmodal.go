@@ -86,10 +86,12 @@ type ProjectsModal struct {
 	// remote is the text of the clone field; parent is the folder the owner
 	// picked ("" means CloneParent); cloning is true while git runs; cloneErr
 	// is the text of the last failure.
-	remote   string
-	parent   string
-	cloning  bool
-	cloneErr string
+	remote string
+	parent string
+	// defParent is the kept default parent; "" means CloneParent.
+	defParent string
+	cloning   bool
+	cloneErr  string
 	// cancelClone stops the running clone; the modal calls it when it closes.
 	cancelClone context.CancelFunc
 	list        ui.ListState
@@ -105,6 +107,8 @@ func (m *ProjectsModal) Toggle() {
 	m.open = !m.open
 	if !m.open {
 		m.stopClone()
+	} else {
+		m.refreshDefault()
 	}
 	m.filter = ""
 	m.redraw()
@@ -128,18 +132,42 @@ func (m *ProjectsModal) stopClone() {
 }
 
 // defaultParent is the folder that holds a clone when the owner picked none
-// (D117): the parent folder of the last opened project, the newest recent
-// entry, when it exists; else CloneParent.
+// (D117). It returns the kept value, so the view does no file check; refreshDefault
+// keeps it.
 func (m *ProjectsModal) defaultParent() string {
-	if st := m.store(); st != nil {
-		if rec := st.Recent(); len(rec) > 0 && rec[0].Path != "" {
-			p := filepath.Dir(rec[0].Path)
-			if fi, err := os.Stat(p); err == nil && fi.IsDir() {
-				return p
-			}
-		}
+	if m.defParent != "" {
+		return m.defParent
 	}
 	return m.CloneParent
+}
+
+// refreshDefault works out the default parent on a goroutine (D117): the parent
+// folder of the newest recent project, when it exists; else CloneParent. It
+// runs when the modal opens and when the store changes.
+func (m *ProjectsModal) refreshDefault() {
+	recent := ""
+	if st := m.store(); st != nil {
+		if rec := st.Recent(); len(rec) > 0 {
+			recent = rec[0].Path
+		}
+	}
+	if recent == "" { // nothing to check: no file read
+		m.defParent = ""
+		return
+	}
+	m.Run.Do(func() func() {
+		def := ""
+		p := filepath.Dir(recent)
+		if fi, err := os.Stat(p); err == nil && fi.IsDir() {
+			def = p
+		}
+		return func() {
+			if def != m.defParent {
+				m.defParent = def
+				m.redraw()
+			}
+		}
+	})
 }
 
 func (m *ProjectsModal) redraw() {
@@ -377,6 +405,7 @@ func (m *ProjectsModal) store() *projects.Store {
 
 // changed updates the sidebar and saves the store.
 func (m *ProjectsModal) changed() {
+	m.refreshDefault()
 	if m.Apply != nil {
 		m.Apply()
 	}
