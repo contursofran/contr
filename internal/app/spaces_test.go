@@ -946,7 +946,7 @@ func TestAttachPutsTheSpacesColumnInTheSidebar(t *testing.T) {
 	if !f.SpacesList.timerShown {
 		t.Error("the window is shown, so the rescan timer should run")
 	}
-	w.visible = false
+	w.setVisible(false)
 	f.Visibility.Set(false)
 	if f.SpacesList.timerShown {
 		t.Error("the window is hidden, so the rescan timer should stop")

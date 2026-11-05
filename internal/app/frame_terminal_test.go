@@ -197,7 +197,7 @@ func TestAHiddenWindowDoesNotRetryAndShowingItDoes(t *testing.T) {
 	if n, _ := src.counts(); n != 1 {
 		t.Fatalf("attaches while hidden = %d, want 1", n)
 	}
-	w.visible = true
+	w.setVisible(true)
 	w.show()
 	w.flush()
 	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
