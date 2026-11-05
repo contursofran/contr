@@ -371,7 +371,7 @@ func TestFrameWindowIsGlassWithCenteredTrafficLights(t *testing.T) {
 
 func TestWindowOptionsSizeTheFrameAndTheLegend(t *testing.T) {
 	f := windowOptions(false)
-	if f.Width != theme.WindowWidth || f.Height != theme.WindowHeight || f.MinWidth != 960 || f.MinHeight != 600 {
+	if f.Width != theme.WindowWidth || f.Height != theme.WindowHeight || f.MinWidth != 640 || f.MinHeight != 600 {
 		t.Errorf("frame %+v", f)
 	}
 	l := windowOptions(true)
