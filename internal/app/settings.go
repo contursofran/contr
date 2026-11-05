@@ -358,8 +358,12 @@ func (s *Settings) View(c *ui.Context) {
 		// The veil is the ground of the theme, so Light stays light behind the card.
 		backdrop.Background(p.Ground.Alpha(0.72)).Justify(ui.Start).AlignItems(ui.Center).Padding(theme.ModalTop, 0, 0, 0)
 		panel.Label(LabelSettings).Column().Width(theme.ModalWidth).Background(p.Ground).
-			Border(1, p.FloatLine).Radius(theme.ModalRadius).
-			Shadow(0, 24, 80, 0, ui.RGBA(0, 0, 0, 0.6))
+			Border(1, p.FloatLine).Radius(theme.ModalRadius)
+		for _, l := range p.ShadowFloat {
+			if !l.Inset {
+				panel.Shadow(l.X, l.Y, l.Blur, l.Wide, l.Color)
+			}
+		}
 		panel.Children(func() { s.body(c) })
 	})
 	if d.Dismissed() || !open {
@@ -414,8 +418,8 @@ func (s *Settings) body(c *ui.Context) {
 }
 
 // appearanceRow is the Appearance row: System, Dark or Light on SegmentedBase (D119). A pick
-// calls SetAppearance, which applies the theme at once. The row uses the old tokens like the rest
-// of this modal; the modal moves to the new tokens in its own issue of tracker #333.
+// calls SetAppearance, which applies the theme at once. The row reads the current palette on
+// each build, like the rest of this modal (D155).
 func (s *Settings) appearanceRow(c *ui.Context) {
 	p := theme.Current()
 	cur := mygo.ThemeSystem
