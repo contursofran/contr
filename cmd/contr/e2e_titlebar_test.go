@@ -57,7 +57,7 @@ func main() {
 `
 
 // gitIn runs git in dir with a fixed identity.
-func gitIn(t *testing.T, dir string, args ...string) {
+func titlebarGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
 	cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.name=contr", "-c", "user.email=contr@example.com", "-c", "commit.gpgsign=false"}, args...)...)
 	if msg, err := cmd.CombinedOutput(); err != nil {
@@ -163,7 +163,7 @@ func TestTitleBarCapture(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	gitIn(t, repo, "init", "-b", "main")
+	titlebarGit(t, repo, "init", "-b", "main")
 	write := func(base, name, text string) {
 		p := filepath.Join(base, name)
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
@@ -174,13 +174,13 @@ func TestTitleBarCapture(t *testing.T) {
 		}
 	}
 	write(repo, "internal/app/titlebar.go", lines("// v0.2 line", 12))
-	gitIn(t, repo, "add", "-A")
-	gitIn(t, repo, "commit", "-m", "Title bar: v0.2")
-	gitIn(t, repo, "worktree", "add", "-b", "agent/342-titlebar", wt)
+	titlebarGit(t, repo, "add", "-A")
+	titlebarGit(t, repo, "commit", "-m", "Title bar: v0.2")
+	titlebarGit(t, repo, "worktree", "add", "-b", "agent/342-titlebar", wt)
 	write(wt, "internal/app/titlebar.go", lines("// v0.3 line", 9)+lines("// v0.2 line", 12)[len(lines("// v0.2 line", 4)):])
 	write(wt, "internal/app/tabs.go", lines("// tab model line", 20))
-	gitIn(t, wt, "add", "-A")
-	gitIn(t, wt, "commit", "-m", "Title bar: tabs of the selected agent")
+	titlebarGit(t, wt, "add", "-A")
+	titlebarGit(t, wt, "commit", "-m", "Title bar: tabs of the selected agent")
 
 	// The fake Claude Code.
 	src := filepath.Join(dir, "fake")
