@@ -165,13 +165,23 @@ func (l *SpacesList) modelOf(w agents.Worker) string {
 
 // AgentLabel is the label of an agent row: "<title>, <state>, <issue>, <model>".
 func AgentLabel(w agents.Worker, issue, model string) string {
-	parts := []string{w.Name, tabState(w).Label()}
+	parts := []string{w.DisplayName(), tabState(w).Label()}
 	for _, p := range []string{issue, model} {
 		if p != "" {
 			parts = append(parts, p)
 		}
 	}
 	return strings.Join(parts, ", ")
+}
+
+// rowTip is the tooltip of an agent row: the name. A terminal contr did not start also shows its
+// hc address, which is no longer its name (D156).
+func rowTip(w agents.Worker) string {
+	n := w.DisplayName()
+	if w.Foreign && w.Address != "" && n != w.Address {
+		return n + " · " + w.Address
+	}
+	return n
 }
 
 // issueText is the issue id of line 2: the label of the worker, as set. An
@@ -192,11 +202,11 @@ func (l *SpacesList) agentRow(c *ui.Context, a agentLine) {
 		label += ", waiting on CI"
 	}
 	o := kit.AgentRowOpts{
-		CI: ci, Label: label, Title: a.w.Name, Issue: issue, Model: model,
+		CI: ci, Label: label, Title: a.w.DisplayName(), Issue: issue, Model: model,
 		Age: agentAge(a.w, l.clock()), State: tabState(a.w), Orchestrator: a.orchestrator,
 		OnClick: func() { l.SelectAgent(a) },
 		Menu:    func(m *ui.Menu) { l.agentMenu(m, a) },
-		Compact: l.compact, Tip: a.w.Name,
+		Compact: l.compact, Tip: rowTip(a.w),
 	}
 	if l.selection != nil {
 		if sel, ok := l.selection.Current(); ok {
