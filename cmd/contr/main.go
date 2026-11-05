@@ -115,6 +115,10 @@ func windowOptions(icons bool) mygo.WindowOptions {
 	if !icons {
 		opts.TrafficLightPosition = &mygo.Point{X: 14, Y: (theme.TitleBarHeight - 12) / 2}
 		opts.Vibrancy = mygo.VibrancyGlassClear
+		// Liquid Glass shows what is behind the window only in a window that
+		// is not opaque. In an opaque window it shows the window's own grey
+		// background (D158).
+		opts.Transparent = true
 	}
 	if icons {
 		opts.Width, opts.Height = legendWidth, legendHeight

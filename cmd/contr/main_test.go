@@ -360,11 +360,16 @@ func TestFrameWindowIsGlassWithCenteredTrafficLights(t *testing.T) {
 	if f.Vibrancy != mygo.VibrancyGlassClear {
 		t.Errorf("vibrancy %q, want clear glass", f.Vibrancy)
 	}
+	// Without a transparent window the glass shows only the window's own
+	// background, not the desktop (D158).
+	if !f.Transparent {
+		t.Error("the glass window is not transparent")
+	}
 	// The close button is 12px high: it centers in the 46px title bar.
 	if f.TrafficLightPosition == nil || f.TrafficLightPosition.Y != (theme.TitleBarHeight-12)/2 {
 		t.Errorf("traffic lights at %+v", f.TrafficLightPosition)
 	}
-	if l := windowOptions(true); l.Vibrancy != "" || l.TrafficLightPosition != nil {
+	if l := windowOptions(true); l.Vibrancy != "" || l.Transparent || l.TrafficLightPosition != nil {
 		t.Errorf("the legend window has glass or moved controls: %+v", l)
 	}
 }
