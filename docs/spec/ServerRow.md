@@ -1,0 +1,70 @@
+# ServerRow
+
+A sidebar row for one machine that runs hc: this Mac, or a remote server.
+
+Design system page: component ServerRow. Shared rules: [README.md](README.md).
+
+## Anatomy
+
+| Part | Value |
+|---|---|
+| Row | as ProjectRow: `row-height`, padding `0 10px`, gap `space-10` |
+| Icon | `computer` (this Mac) or `server`, 15px, in the text color |
+| Name | `body`, `ink-60` |
+| Meta | `small` (12px), `ink-38`, right: "local", "online", "offline" |
+
+## States
+
+- **Selected:** the machine whose projects the sidebar shows: name and icon `ink-100`, no fill.
+- **Online, local:** as above.
+- **Offline:** the meta says "offline"; the row stays clickable to retry.
+
+## Behavior
+
+- The Servers section is at the top of the sidebar. Only this Mac shows
+  (O11, #149). Its meta is "local".
+- Click selects the machine; the projects under it are its projects.
+- `+` in the head is hidden until #149.
+
+## Data
+
+- hc connection state from `internal/hc` (connected, problem). No polling.
+
+## Keys and focus
+
+- ↑ ↓ in the sidebar list.
+
+## Edge cases
+
+- hc not reachable: meta "offline", the problem line under the row (as D113).
+
+## Accessibility
+
+- Label: "This Mac, local".
+
+## Tokens
+
+`row-height`, `hover`, `ink-100`, `ink-60`, `ink-38`, `small`.
+
+## Build in MyGo
+
+- `kit.Row` in a `ui.List` under a panel head "Servers" with an Add icon button.
+- Online state comes from the hc connection (`internal/hc`); do not poll in the view.
+
+## Do and do not
+
+**Do**
+
+- Name this computer "this Mac".
+
+**Don't**
+
+- Do not use green for online or red for offline: text says it.
+
+## Tests
+
+- View: local, offline states; the problem line shows when hc fails.
+
+## Replaces
+
+- The `This computer` header of `spaces.go` (D113).

@@ -1,5 +1,12 @@
 # contr design (v0.2)
 
+**v0.3:** the from-zero redesign is in [`docs/spec/`](spec/README.md): the
+window, the panels, the title bar, the sidebar rows, the terminal, the
+questions notch, the outline, the file tree, the usage meter, the tokens
+and the dark and light themes (D118, D119). Where a spec covers a part,
+the spec is the source of truth and this file is not. This file stays the
+source for the parts the specs do not cover yet.
+
 Source of truth: the owner's claude.ai design canvas "sidebar mockup".
 
 - Page **Native · final**: artboards 1 (orchestrator tab), 2 (worker tab),
