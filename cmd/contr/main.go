@@ -18,6 +18,7 @@ import (
 	"github.com/contursofran/contr/assets"
 	"github.com/contursofran/contr/internal/app"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/prefs"
 	"github.com/contursofran/contr/internal/projects"
 	"github.com/contursofran/contr/internal/usage"
 	"github.com/contursofran/contr/internal/widths"
@@ -144,6 +145,21 @@ func openWindow(icons bool) int {
 			}
 			return widths.Save(path, w)
 		}
+		frame.LoadPrefs = func() (prefs.Prefs, error) {
+			path, err := prefs.Path()
+			if err != nil {
+				return prefs.Prefs{}, err
+			}
+			return prefs.Load(path)
+		}
+		frame.SavePrefs = func(p prefs.Prefs) error {
+			path, err := prefs.Path()
+			if err != nil {
+				return err
+			}
+			return prefs.Save(path, p)
+		}
+		frame.ThemePlatform = mygo.Theme
 		frame.TerminalSource = terminalSource(os.Getenv)
 		frame.OpenTerminal = func(project, dir string) (string, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -166,6 +182,10 @@ func openWindow(icons bool) int {
 		opts.Content = ui.View(frame.View)
 	}
 	mygo.App.WhenReady(func() {
+		if frame != nil {
+			// The stored appearance applies before the window shows (D119).
+			frame.StartTheme()
+		}
 		win := mygo.NewWindow(opts)
 		if frame != nil {
 			stop := frame.Attach(win)

@@ -9,10 +9,12 @@ package app
 import (
 	"context"
 	"log"
+	"slices"
 	"strconv"
 	"sync/atomic"
 	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
 
@@ -27,7 +29,15 @@ const (
 	SettingsDone       = "Done"
 	SettingsCheck      = "Check for updates"
 	SettingsInstall    = "Install and restart"
+	// LabelAppearance names the Appearance row (D119); its segments are named by AppearanceNames.
+	LabelAppearance = "Appearance"
 )
+
+// AppearanceSources are the choices of the Appearance row, in order (D119).
+var AppearanceSources = [...]mygo.ThemeSource{mygo.ThemeSystem, mygo.ThemeDark, mygo.ThemeLight}
+
+// AppearanceNames are the texts of the segments, in the order of AppearanceSources.
+var AppearanceNames = [...]string{"System", "Dark", "Light"}
 
 // The texts of the update status line.
 const (
@@ -75,6 +85,10 @@ type Settings struct {
 	Now func() time.Time
 	// Status shows a short message; may be nil.
 	Status func(string)
+	// Appearance returns the theme source in use; nil means System. SetAppearance applies and
+	// stores a new one when the owner picks a segment; nil makes the row do nothing (D119).
+	Appearance    func() mygo.ThemeSource
+	SetAppearance func(mygo.ThemeSource)
 
 	open bool
 	// enabled is known once the first Enabled call returns.
@@ -337,6 +351,7 @@ func (s *Settings) body(c *ui.Context) {
 		ui.Text(c, "Settings").Bold().Grow(1).TextColor(theme.Color(theme.Text))
 		cardButton(c, SettingsEsc, ButtonPlain, theme.TextDim, s.Close)
 	})
+	s.appearanceRow(c)
 	busy := s.checking || s.installing
 	live := s.Updates != nil && s.enabled && !busy
 	ui.Column(c).Shrink(0).Gap(8).PaddingX(theme.ModalPadX).Children(func() {
@@ -371,4 +386,37 @@ func (s *Settings) body(c *ui.Context) {
 		}
 		cardButton(c, SettingsDone, ButtonPlain, theme.Text, s.Close)
 	})
+}
+
+// appearanceRow is the Appearance row: System, Dark or Light on SegmentedBase (D119). A pick
+// calls SetAppearance, which applies the theme at once. The row uses the old tokens like the rest
+// of this modal; the modal moves to the new tokens in its own issue of tracker #333.
+func (s *Settings) appearanceRow(c *ui.Context) {
+	cur := mygo.ThemeSystem
+	if s.Appearance != nil {
+		cur = s.Appearance()
+	}
+	sel := slices.Index(AppearanceSources[:], cur)
+	if sel < 0 {
+		sel = 0
+	}
+	picked := sel
+	ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(8).Padding(0, theme.ModalPadX, 12, theme.ModalPadX).Children(func() {
+		ui.Text(c, LabelAppearance).Grow(1).TextColor(theme.Color(theme.TextDim))
+		seg := ui.SegmentedBase(c.Key("appearance"), &picked, len(AppearanceNames))
+		seg.Track.Label(LabelAppearance).Padding(2).Radius(theme.CardRadius).Background(theme.Color(theme.BgWindow)).Children(func() {
+			for i, name := range AppearanceNames {
+				e := seg.Segment(i).Label(name).Padding(4, 12).Radius(theme.CardRadius)
+				text := uint32(theme.Text2)
+				if i == picked {
+					e.Background(theme.Color(theme.BgCard))
+					text = theme.Text
+				}
+				e.Children(func() { ui.Text(c, name).TextColor(theme.Color(text)) })
+			}
+		})
+	})
+	if picked != sel && s.SetAppearance != nil {
+		s.SetAppearance(AppearanceSources[picked])
+	}
 }
