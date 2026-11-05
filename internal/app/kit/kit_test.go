@@ -187,3 +187,27 @@ func TestSwitchLook(t *testing.T) {
 		t.Errorf("other segment = %06X, want %06X", got, theme.SegmentTrack)
 	}
 }
+
+func TestCountsWithShowsOnlyTheCountsAskedFor(t *testing.T) {
+	p := theme.Dark
+	look := CountsLook{Added: p.Ink40, Removed: p.Ink24, Gap: theme.Space6, Style: theme.StyleMeta}
+	build := func(only CountsOnly) *ui.Tester {
+		look.Only = only
+		return ui.NewTester(func(c *ui.Context) { CountsWith(c, 7, 2, look) }, 200, 40)
+	}
+	both := build(CountsBoth)
+	if !both.HasText("+7") || !both.HasText("−2") {
+		t.Errorf("both: %q", both.Texts())
+	}
+	added := build(CountsAddedOnly)
+	if !added.HasText("+7") || added.HasText("−2") {
+		t.Errorf("added only: %q", added.Texts())
+	}
+	if _, ok := added.Find("+7"); !ok {
+		t.Error("added only: no label +7")
+	}
+	removed := build(CountsRemovedOnly)
+	if removed.HasText("+7") || !removed.HasText("−2") {
+		t.Errorf("removed only: %q", removed.Texts())
+	}
+}

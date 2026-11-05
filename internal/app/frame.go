@@ -149,8 +149,10 @@ type Frame struct {
 	// Nil shows no terminal.
 	TerminalSource func(address string) ghostty.Source
 	// Panel is the board panel. [Frame.Attach] makes it and puts its view in
-	// Slots.Panel.
+	// Slots.Panel. The board is disabled (D122): the files panel does not show it.
 	Panel *BoardPanel
+	// Files is the tree of the files panel. [NewFrame] makes it.
+	Files *FileTree
 	// Review is the Review view. [Frame.Attach] makes it. While the Review toggle is on, it
 	// replaces the terminal area, and it follows the selected project.
 	Review *Review
@@ -224,8 +226,12 @@ type Frame struct {
 // NewFrame returns a frame with the sidebar and the panel open and
 // placeholder slots.
 func NewFrame() *Frame {
-	return &Frame{Slots: PlaceholderSlots(), sidebarOpen: true, panelOpen: true,
+	f := &Frame{Slots: PlaceholderSlots(), sidebarOpen: true, panelOpen: true,
 		sidebarW: theme.SidebarWidth, panelW: theme.PanelWidth}
+	f.Files = NewFileTree(f.filesDir)
+	f.Files.Open = f.openFileInReview
+	f.Files.Reveal = func(abs string) { mygo.Shell.ShowItemInFolder(abs) }
+	return f
 }
 
 // SidebarOpen tells whether the sidebar shows.
@@ -303,6 +309,44 @@ func (f *Frame) ClosePR() {
 
 // PROpen tells whether the pull request pane shows.
 func (f *Frame) PROpen() bool { return f.PR != nil && f.PR.IsOpen() }
+
+// filesDir is the folder of the file tree: the worktree of the selected agent
+// or worktree row, else the folder of the open project.
+func (f *Frame) filesDir() string {
+	if dir := f.reviewTarget(); dir != "" {
+		return dir
+	}
+	if f.SpacesList == nil || f.openProject == "" {
+		return ""
+	}
+	for _, g := range f.SpacesList.Groups() {
+		if g.Name != f.openProject {
+			continue
+		}
+		if g.Path != "" {
+			return g.Path
+		}
+		for _, r := range g.Rows {
+			if r.IsMain {
+				return r.Root
+			}
+		}
+		if len(g.Rows) > 0 {
+			return g.Rows[0].Root
+		}
+	}
+	return ""
+}
+
+// openFileInReview shows the Review view on the repository in dir, at the file rel.
+func (f *Frame) openFileInReview(dir, rel string) {
+	if f.Review == nil {
+		return
+	}
+	f.reviewOpen = true
+	f.reviewDir, f.reviewSet = dir, true
+	f.Review.OpenFile(dir, rel)
+}
 
 // ReviewOpen tells whether the Review view replaces the terminal area.
 func (f *Frame) ReviewOpen() bool { return f.reviewOpen }
@@ -448,10 +492,12 @@ func (f *Frame) terminalPanel(c *ui.Context) {
 	kit.Panel(c, kit.PanelOpts{Name: LabelPanelTerminal, Bare: true, Body: func() { f.content(c) }})
 }
 
-// filesPanel is the files slot. It shows the v0.2 right panel (board or
-// worker) until the file tree comes (#349).
+// filesPanel is the files slot: the file tree. The v0.2 board and worker panel
+// stay in the code but are not shown (D122); see panelBox.
 func (f *Frame) filesPanel(c *ui.Context) {
-	kit.Panel(c, kit.PanelOpts{Name: LabelPanelFiles, Bare: true, Body: func() { f.panelBox(c) }})
+	kit.Panel(c, kit.PanelOpts{Name: LabelPanelFiles,
+		Head: func() { f.Files.Head(c) },
+		Body: func() { f.Files.View(c) }})
 }
 
 // statusBar draws the slot when one is set, and the status bar otherwise.
@@ -579,7 +625,9 @@ func (f *Frame) content(c *ui.Context) {
 	})
 }
 
-// panelBox draws the v0.2 right panel, as wide as its divider sets (D111).
+// panelBox draws the v0.2 right panel (board or worker). Nothing calls it
+// while the board is disabled (D122); issue #352 decides about the code.
+// It is as wide as its divider sets (D111). as wide as its divider sets (D111).
 func (f *Frame) panelBox(c *ui.Context) {
 	ui.Box(c).Label(LabelPanel).FillWidth().FillHeight().Children(func() { f.panel(c) })
 }
@@ -859,7 +907,9 @@ func (f *Frame) syncWorkerPRs() {
 func (f *Frame) Attach(w Window) (stop func()) {
 	f.Selection = state.NewSelection(func() { w.Invalidate(); f.syncReview(); f.syncTerminal() })
 	f.Review = NewReview(w.Update, w.Invalidate)
+	f.Files.Post, f.Files.Invalidate = w.Update, w.Invalidate
 	f.Status = state.NewStatusMessage(w.Invalidate)
+	f.Files.Status = f.Status.Show
 	f.PR = &PRPane{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate, OpenURL: openURL}
 	f.WorkerPRs = &WorkerPRs{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate}
 	var agentSnap func() agentstate.Snapshot
@@ -989,6 +1039,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		setCloseTerminalHandler(nil)
 		setSettingsHandler(nil)
 		stopChecks()
+		f.Files.Close()
 		unwatch()
 		term()
 		stopAgents()
