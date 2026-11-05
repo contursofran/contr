@@ -65,7 +65,8 @@ func TestTerminalLook(t *testing.T) {
 		`i=$((i+1)); done; printf 'default text, \033[2mdim\033[0m, \033[1mbold\033[0m\n'; exec sh`
 	cfg := agents.DefaultConfig()
 	cfg.Profiles["ansi"] = agents.Profile{Argv: []string{"sh", "-c", script}}
-	w, err := agents.New(agents.HC{Client: cl}, cfg).Spawn(ctx, agents.Spec{Name: "w1", Profile: "ansi", Role: "builder", Project: "contr"})
+	repo := scratchRepo(t, dir, "demo", "main")
+	w, err := agents.New(agents.HC{Client: cl}, cfg).Spawn(ctx, agents.Spec{Name: "w1", Profile: "ansi", Role: "builder", Project: "contr", Worktree: repo})
 	if err != nil {
 		t.Fatalf("spawn: %v", err)
 	}

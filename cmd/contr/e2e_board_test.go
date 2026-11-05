@@ -25,6 +25,7 @@ import (
 //
 // It never touches the owner's hc core.
 func TestBoardCapture(t *testing.T) {
+	skipWhileViewersHidden(t)
 	if _, err := exec.LookPath("hc"); err != nil {
 		t.Skip("hc is not installed")
 	}

@@ -66,9 +66,10 @@ func TestQuestionsNotch(t *testing.T) {
 	cfg := agents.DefaultConfig()
 	cfg.Profiles["claude-like"] = agents.Profile{Argv: []string{"sh", "-c", script}}
 	mgr := agents.New(agents.HC{Client: cl}, cfg)
+	repo := scratchRepo(t, dir, "demo", "main")
 	for _, s := range []agents.Spec{
-		{Name: "lead", Profile: "claude-like", Role: agents.RoleOrchestrator, Project: "demo"},
-		{Name: "b-250-checks", Profile: "claude-like", Role: "builder", Project: "demo", Issue: "250"},
+		{Name: "lead", Profile: "claude-like", Role: agents.RoleOrchestrator, Project: "demo", Worktree: repo},
+		{Name: "b-250-checks", Profile: "claude-like", Role: "builder", Project: "demo", Issue: "250", Worktree: repo},
 	} {
 		if _, err := mgr.Spawn(ctx, s); err != nil {
 			t.Fatalf("spawn %s: %v", s.Name, err)

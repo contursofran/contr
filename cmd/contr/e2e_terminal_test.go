@@ -61,7 +61,8 @@ func TestTerminalOnHC(t *testing.T) {
 	defer cl.Close()
 	cfg := agents.DefaultConfig()
 	cfg.Profiles["sh"] = agents.Profile{Argv: []string{"sh"}}
-	w, err := agents.New(agents.HC{Client: cl}, cfg).Spawn(ctx, agents.Spec{Name: "w1", Profile: "sh", Role: "builder", Project: "contr"})
+	repo := scratchRepo(t, dir, "demo", "main")
+	w, err := agents.New(agents.HC{Client: cl}, cfg).Spawn(ctx, agents.Spec{Name: "w1", Profile: "sh", Role: "builder", Project: "contr", Worktree: repo})
 	if err != nil {
 		t.Fatalf("spawn: %v", err)
 	}
