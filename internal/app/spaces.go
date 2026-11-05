@@ -251,7 +251,7 @@ func spaceTerms(s agentstate.Snapshot) []spaces.Term {
 			if !w.Live && !w.Orchestrator() && !w.Plain() { // an ended worker holds no worktree (D112)
 				continue
 			}
-			out = append(out, spaces.Term{Name: w.Name, Address: w.Address, Dir: w.Worktree, Status: workerIcon(w)})
+			out = append(out, spaces.Term{Name: w.DisplayName(), Address: w.Address, Dir: w.Worktree, Status: workerIcon(w)})
 		}
 	}
 	return out

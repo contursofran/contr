@@ -18,7 +18,9 @@ type Tab struct {
 	// Address is the hc terminal address. It is the Selection ID.
 	Address string
 	// Title is the text shown.
-	Title        string
+	Title string
+	// Tip is the tooltip: for a terminal contr did not start it holds the hc address (D156).
+	Tip          string
 	Orchestrator bool
 	// Plain is true for a plain terminal (a shell, not an agent). Only a plain tab closes (D85).
 	Plain bool
@@ -41,12 +43,12 @@ func (t Tab) Movable() bool { return t.Plain }
 func TitleTabs(s agentstate.Snapshot, project, key, agent, selected string) []Tab {
 	var tabs []Tab
 	if w, ok := findAgent(s, agent); ok {
-		tabs = append(tabs, Tab{Address: w.Address, Title: tabTitle(w), Orchestrator: w.Orchestrator(),
+		tabs = append(tabs, Tab{Address: w.Address, Title: tabTitle(w), Tip: tabTip(w), Orchestrator: w.Orchestrator(),
 			State: tabState(w), Selected: selected != "" && w.Address == selected})
 	}
 	for _, w := range s.Terminals {
 		if agentstate.SameProject(w, project, key) {
-			tabs = append(tabs, Tab{Address: w.Address, Title: tabTitle(w), Plain: true,
+			tabs = append(tabs, Tab{Address: w.Address, Title: tabTitle(w), Tip: tabTip(w), Plain: true,
 				Selected: selected != "" && w.Address == selected})
 		}
 	}
@@ -88,6 +90,9 @@ func tabState(w agents.Worker) kit.GlyphState {
 // else "$ <folder>"; an orchestrator shows its name; a worker shows "<issue> · <worktree>", or
 // its name when it has no issue or no worktree.
 func tabTitle(w agents.Worker) string {
+	if w.Foreign { // named by hc name, title or project (D156)
+		return w.DisplayName()
+	}
 	if w.Plain() {
 		if w.Title != "" {
 			return w.Title
@@ -101,6 +106,11 @@ func tabTitle(w agents.Worker) string {
 		return w.Name
 	}
 	return w.Issue + " · " + filepath.Base(w.Worktree)
+}
+
+// tabTip is the tooltip of a tab: the name, and for a terminal contr did not start its address.
+func tabTip(w agents.Worker) string {
+	return rowTip(w)
 }
 
 // TabAgent returns the address of the agent whose tabs show. A selected orchestrator or live
