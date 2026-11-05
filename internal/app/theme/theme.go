@@ -142,11 +142,9 @@ const SidebarToggleRadius = 2
 const SidebarToggleFill = 4 // filled left part of the outline
 
 // Agents list (planner defaults; docs/DESIGN.md has no sizes for these)
-const AgentsHeaderHeight = 28 // "Agents" and "N running"
-const AgentRowHeight = 28     // Rust D42: one line per agent
+const AgentRowHeight = 28 // Rust D42: one line per agent
 const AgentRowPadX = 8
-const AgentGap = 8          // icon to name, name to detail, detail to link
-const AgentsMaxShare = 0.45 // share of the sidebar height (Rust D46)
+const AgentGap = 8 // icon to name, name to detail, detail to link
 
 // Status bar (planner defaults; docs/DESIGN.md has no sizes for these)
 const StatusPadX = 12    // left and right padding

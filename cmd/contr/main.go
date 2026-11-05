@@ -16,6 +16,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/assets"
+	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/prefs"
@@ -133,6 +134,10 @@ func openWindow(icons bool) int {
 		frame = app.NewFrame()
 		frame.StartAgents = startAgents(os.Getenv)
 		frame.WatchHead = app.WatchFile
+		// The model on line 2 of an agent row comes from the profile. A config
+		// that does not read is reported by the agent state; the defaults serve here.
+		cfg, _ := agents.LoadConfig(configPath(os.Getenv))
+		frame.ModelOf = cfg.ModelOf
 		frame.LoadProjects = func() (*projects.Store, error) {
 			path, err := projects.Path()
 			if err != nil {

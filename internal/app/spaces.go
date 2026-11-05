@@ -15,6 +15,7 @@ import (
 	"context"
 	"path/filepath"
 	"slices"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -48,6 +49,22 @@ type SpacesList struct {
 	WatchHead func(ctx context.Context, path string, changed func()) error
 	// Host gives CPU and memory for the This Mac row. Nil shows none.
 	Host hostSource
+
+	// Source is what the context menu of an agent row calls. Nil: Interrupt
+	// and Stop are off.
+	Source AgentActions
+	// Run runs the actions off the UI thread; Status tells their result.
+	Run    Runner
+	Status func(string)
+	// Entry opens the pull request of an agent from its menu.
+	Entry WorkerEntry
+	// ModelOf names the model of an agent profile for line 2. Nil: none.
+	ModelOf func(profile string) string
+	// Ages is the one timer of all ages (D137). Nil: ages move on a state
+	// change only.
+	Ages *AgeClock
+	// Now is the clock; nil means time.Now. Tests replace it.
+	Now func() time.Time
 
 	snap      func() agentstate.Snapshot
 	selection *state.Selection
@@ -170,6 +187,7 @@ func (l *SpacesList) Sync() {
 	case !slices.Equal(cwds, l.scanned):
 		l.startScan(cwds)
 	}
+	l.dropGoneSelection()
 	l.rebuild()
 }
 
@@ -249,6 +267,7 @@ func (l *SpacesList) rebuild() {
 	}
 	l.groups = groups
 	l.syncHeads()
+	l.syncAges()
 }
 
 // syncHeads watches the HEAD file of each repo that has terminals, and stops
@@ -309,32 +328,40 @@ func (l *SpacesList) Folded(commonDir string) bool { return l.folded[commonDir] 
 func (l *SpacesList) Fold(commonDir string) {
 	if l.folded[commonDir] {
 		delete(l.folded, commonDir)
-		return
+	} else {
+		l.folded[commonDir] = true
 	}
-	l.folded[commonDir] = true
-}
-
-// AgentFolded tells whether the agent at address sits in a folded project.
-func (l *SpacesList) AgentFolded(address string) bool {
-	for _, g := range l.groups {
-		if !l.folded[g.CommonDir] {
-			continue
-		}
-		for _, r := range g.Rows {
-			if slices.ContainsFunc(r.Holders, func(h spaces.Holder) bool { return h.Address == address }) {
-				return true
-			}
-		}
-	}
-	return false
+	l.syncAges()
 }
 
 // Reorder moves the project rows before row to (len for the end) and stores
-// the order (D109). OnReordered then lets the owner save it.
+// the order (D109). OnReordered then lets the owner save it. The rows are
+// those of the list, which holds the agent rows too: an agent row does not
+// move, and a project goes before the project whose rows come at or after
+// to.
 func (l *SpacesList) Reorder(rows []int, to int) {
 	if l.projects == nil {
 		return
 	}
+	items := l.items()
+	var moved []int
+	for _, r := range rows {
+		if r >= 0 && r < len(items) && items[r].agent == nil {
+			moved = append(moved, items[r].group)
+		}
+	}
+	if len(moved) == 0 {
+		return
+	}
+	rows = moved
+	target := len(l.groups)
+	for i := max(to, 0); i < len(items); i++ {
+		if items[i].agent == nil {
+			target = items[i].group
+			break
+		}
+	}
+	to = target
 	dirs := make([]string, len(l.groups))
 	for i, g := range l.groups {
 		dirs[i] = g.CommonDir

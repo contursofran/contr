@@ -20,7 +20,7 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
 - **Hover:** fill `hover`.
 - **Selected:** no fill. Title turns `ink-100`, line 2 `ink-62`. The tabs and the right panel follow the selected row.
 - **Needs you:** the glyph turns `blocked`. The row is not otherwise colored.
-- **Waiting on CI:** idle glyph; line 2 adds "CI".
+- **Waiting on CI:** idle glyph; line 2 adds "CI". Not built yet: no data tells that an agent waits on CI.
 
 ## Behavior
 
@@ -28,8 +28,20 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
   it on the rail.
 - Click selects the agent: the title bar shows its tabs, the terminal
   shows its main terminal, the files panel shows its worktree.
-- Line 2: issue id, model, age. Ages follow D35 (state change or repaint)
-  until open point O10 settles.
+- Line 2: issue id, model, age. The model is the `--model` of the agent's
+  profile. The age is the time since the last hc event for the terminal,
+  as "now" (under a minute), "6m" or "2h".
+- Ages (D137, O10): one shared 1-minute timer moves them. It runs only
+  while the window is visible and an age is on screen (an agent row of an
+  open project has one). It stops when the window hides or no age shows.
+  Ages also move on every state change, because each build reads the clock.
+- Context menu: Interrupt, Stop, Open PR. They call the agent source
+  (`internal/agents`) off the UI thread; Open PR is off while the agent has
+  no pull request. Stop asks for no second click: the menu choice is the
+  confirmation.
+- A selected agent that is gone leaves the selection.
+- The project row shows the selection for the project itself, and while the
+  project is folded; an open project shows it on the agent row.
 
 ## Data
 
@@ -58,7 +70,8 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
 
 - A `kit.Row` in the same `ui.List` as the projects. The two lines are `Text(...).NoWrap().Ellipsis()`.
 - Data: `internal/agents` (list, watch). Watch events reach the view through `Window.Update`.
-- Ages follow D35 until open point O10 settles.
+- Ages: `AgeClock`, one timer (D137). It starts and stops from `SpacesList`
+  (an age shows) and the window visibility.
 - Keys: ↑ ↓ move the selection, ⏎ focuses the terminal.
 - `.ContextMenu(...)`: Interrupt, Stop, Open PR.
 

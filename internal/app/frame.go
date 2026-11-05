@@ -39,7 +39,6 @@ type Slot func(c *ui.Context)
 // Slots are the views of the frame. A nil slot is left empty.
 type Slots struct {
 	Spaces    Slot // sidebar, under its header
-	Agents    Slot // sidebar, at the bottom
 	Terminal  Slot // the selected hc terminal
 	Needs     Slot // needs-you row, under the terminal; draws nothing when empty
 	Card      Slot // answer card, floating at the bottom of the terminal area
@@ -52,7 +51,6 @@ type Slots struct {
 func PlaceholderSlots() Slots {
 	return Slots{
 		Spaces:    placeholder("spaces"),
-		Agents:    placeholder("agents"),
 		Terminal:  placeholder("terminal"),
 		Panel:     placeholder("panel"),
 		StatusBar: nil,
@@ -99,9 +97,6 @@ type Frame struct {
 	// Worker is the panel's worker view. [Frame.Attach] makes it. The panel
 	// shows it while a worker is selected.
 	Worker *WorkerPanel
-	// AgentsList is the agents section. [Frame.Attach] makes it and puts
-	// its view in Slots.Agents.
-	AgentsList *AgentsList
 	// StartAgents follows the agents. [Frame.Attach] calls it once, with a
 	// notify function that is safe from any goroutine, and uses the source
 	// and the stop function it returns. Nil means no agents.
@@ -128,6 +123,9 @@ type Frame struct {
 	// SaveProjects writes a copy of the store (D110). It runs on a goroutine.
 	// Nil saves nothing.
 	SaveProjects func(*projects.Store) error
+	// ModelOf names the model that an agent profile starts, for line 2 of the
+	// agent rows. Nil shows no model.
+	ModelOf func(profile string) string
 	// WatchHead watches a repo's HEAD file for the sidebar's branch (see
 	// SpacesList.WatchHead). Nil: the branch is read when the terminals change.
 	WatchHead func(ctx context.Context, path string, changed func()) error
@@ -539,8 +537,6 @@ func (f *Frame) run(c *ui.Context, s Slot) {
 func (f *Frame) sidebar(c *ui.Context) {
 	ui.Column(c).Label(LabelSidebar).FillWidth().FillHeight().Children(func() {
 		ui.Box(c).Grow(1).MinHeight(0).Children(func() { f.run(c, f.Slots.Spaces) })
-		// The agents section takes at most its share of the sidebar.
-		ui.Column(c).Shrink(0).MaxHeightPercent(theme.AgentsMaxShare * 100).Children(func() { f.run(c, f.Slots.Agents) })
 	})
 }
 
@@ -840,9 +836,6 @@ func (f *Frame) syncAgents() {
 	if f.Worker != nil {
 		f.Worker.Sync()
 	}
-	if f.AgentsList != nil {
-		f.AgentsList.Sync()
-	}
 	if f.SpacesList != nil {
 		f.SpacesList.Sync()
 	}
@@ -948,8 +941,6 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		f.Sheet = &Sheet{Source: src, Run: run, Invalidate: w.Invalidate, OpenPR: f.OpenPR, OpenIssue: f.OpenIssue, OpenURL: openURL}
 		f.Slots.Sheet = f.Sheet.View
 	}
-	f.AgentsList = NewAgentsList(agentSnap, f.Selection)
-	f.Slots.Agents = f.AgentsList.View
 	if f.Host == nil {
 		f.Host = host.NewSystem(w.Invalidate)
 	}
@@ -958,6 +949,13 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		f.SpacesList = NewSpacesList(agentSnap, f.Selection, w.Update)
 	}
 	f.SpacesList.Host = f.Host
+	f.SpacesList.ModelOf = f.ModelOf
+	f.SpacesList.Run, f.SpacesList.Status = Runner{Post: w.Update}, f.Status.Show
+	f.SpacesList.Entry = WorkerEntry{PRs: f.WorkerPRs, OpenPR: f.OpenPR, OpenIssue: f.OpenIssue}
+	f.SpacesList.Ages = &AgeClock{Tick: w.Invalidate}
+	if src != nil {
+		f.SpacesList.Source = src
+	}
 	f.SpacesList.WatchHead = f.WatchHead
 	f.SpacesList.OnError = func(err error) { f.Status.Show(err.Error()) }
 	if f.PickFolder != nil && f.SpawnOrchestrator != nil {
@@ -985,7 +983,6 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	}
 	f.SpacesList.OnProjects = f.ProjectsModal.Toggle
 	f.SpacesList.OnReordered = f.ProjectsModal.changed
-	f.AgentsList.Hidden = f.SpacesList.AgentFolded
 	f.lateWin.set(w)
 	if f.themeErr != nil {
 		f.Status.Show(f.themeErr.Error())
@@ -1032,6 +1029,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		f.Usage = usage.NewFileSampler(w.Invalidate)
 	}
 	f.Visibility = state.NewVisibility(func(visible bool) {
+		f.SpacesList.Ages.SetVisible(visible)
 		f.Host.SetVisible(visible)
 		f.Usage.SetVisible(visible)
 		w.Update(func() {
@@ -1048,6 +1046,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	// reports. The samplers start hidden: tell them the window state now.
 	f.Host.SetVisible(w.IsVisible())
 	f.Usage.SetVisible(w.IsVisible())
+	f.SpacesList.Ages.SetVisible(w.IsVisible())
 	unwatch := f.Visibility.Watch(w)
 	term := f.attachTerminal(w)
 	return func() {

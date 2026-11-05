@@ -853,3 +853,18 @@ func TestRemoveEndedTouchesOnlyTheCallersFinishedWorkers(t *testing.T) {
 		t.Errorf("outside hc: %v, %v, %d calls", got, err, len(f.calls))
 	}
 }
+
+func TestConfigModelOf(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Profiles["inline"] = Profile{Argv: []string{"claude", "--model=haiku"}}
+	cfg.Profiles["none"] = Profile{Argv: []string{"claude"}}
+	cfg.Profiles["dangling"] = Profile{Argv: []string{"claude", "--model"}}
+	for profile, want := range map[string]string{
+		"builder": "sonnet", "reviewer": "opus", "inline": "haiku",
+		"none": "", "dangling": "", "missing": "",
+	} {
+		if got := cfg.ModelOf(profile); got != want {
+			t.Errorf("ModelOf(%q) = %q, want %q", profile, got, want)
+		}
+	}
+}
