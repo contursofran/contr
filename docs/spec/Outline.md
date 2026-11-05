@@ -23,7 +23,11 @@ Design system page: component Outline. Shared rules: [README.md](README.md).
 ## Behavior
 
 - One tick per orchestrator message pinned for the owner (`pin_for_owner`).
-- "New" means after the last time this terminal had the focus.
+- "New" means after the last time this terminal had the focus. The terminal
+  has the focus while it is selected and the window has the focus. A message
+  that comes while the owner looks is not new. A message that came while away
+  stays new until the owner leaves again or clicks it. A terminal never seen
+  starts with what is pinned when contr starts as old.
 - Click jumps to the message. hc has no scroll-to (DESIGN.md data table):
   until a source exists, click opens the OutlineCard and marks the tick
   read.
