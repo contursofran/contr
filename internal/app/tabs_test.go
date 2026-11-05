@@ -46,21 +46,21 @@ func twoAgents() agentstate.Snapshot {
 
 func TestTitleTabsAreTheAgentThenThePlainTerminalsOfItsProject(t *testing.T) {
 	s := twoAgents()
-	if got := addrs(TitleTabs(s, "p", "o", "")); !slices.Equal(got, []string{"o", "t1", "t2"}) {
+	if got := addrs(TitleTabs(s, "p", "", "o", "")); !slices.Equal(got, []string{"o", "t1", "t2"}) {
 		t.Fatalf("tabs of o = %v, want [o t1 t2]", got)
 	}
 	// Another agent of the same project: its own tab, the same plain terminals.
-	if got := addrs(TitleTabs(s, "p", "a", "")); !slices.Equal(got, []string{"a", "t1", "t2"}) {
+	if got := addrs(TitleTabs(s, "p", "", "a", "")); !slices.Equal(got, []string{"a", "t1", "t2"}) {
 		t.Fatalf("tabs of a = %v, want [a t1 t2]", got)
 	}
 	// An agent of another project: its own project's terminals.
-	if got := addrs(TitleTabs(s, "q", "x", "")); !slices.Equal(got, []string{"x", "tq"}) {
+	if got := addrs(TitleTabs(s, "q", "", "x", "")); !slices.Equal(got, []string{"x", "tq"}) {
 		t.Fatalf("tabs of x = %v, want [x tq]", got)
 	}
 }
 
 func TestTitleTabsMarkKindAndSelection(t *testing.T) {
-	tabs := TitleTabs(twoAgents(), "p", "o", "t1")
+	tabs := TitleTabs(twoAgents(), "p", "", "o", "t1")
 	o, t1 := tabs[0], tabs[1]
 	if !o.Orchestrator || o.Plain || o.Closable() || o.Selected {
 		t.Errorf("agent tab = %+v", o)
@@ -68,7 +68,7 @@ func TestTitleTabsMarkKindAndSelection(t *testing.T) {
 	if !t1.Plain || !t1.Closable() || !t1.Selected || t1.Title != "$ repo" {
 		t.Errorf("plain tab = %+v", t1)
 	}
-	for _, tab := range TitleTabs(twoAgents(), "p", "o", "") {
+	for _, tab := range TitleTabs(twoAgents(), "p", "", "o", "") {
 		if tab.Selected {
 			t.Errorf("tab %s selected with no selection", tab.Address)
 		}
@@ -76,11 +76,11 @@ func TestTitleTabsMarkKindAndSelection(t *testing.T) {
 }
 
 func TestTitleTabsWithoutAnAgentKeepThePlainTerminals(t *testing.T) {
-	got := addrs(TitleTabs(twoAgents(), "p", "", ""))
+	got := addrs(TitleTabs(twoAgents(), "p", "", "", ""))
 	if !slices.Equal(got, []string{"t1", "t2"}) {
 		t.Fatalf("tabs = %v, want the plain terminals only", got)
 	}
-	if got := TitleTabs(agentstate.Snapshot{}, "", "", ""); len(got) != 0 {
+	if got := TitleTabs(agentstate.Snapshot{}, "", "", "", ""); len(got) != 0 {
 		t.Fatalf("tabs with no agents = %v", got)
 	}
 }
@@ -89,11 +89,11 @@ func TestTitleTabsWithoutAnAgentKeepThePlainTerminals(t *testing.T) {
 func TestTitleTabsSkipAnEndedWorker(t *testing.T) {
 	s := twoAgents()
 	s.Workers[0].Live = false
-	if got := addrs(TitleTabs(s, "p", "a", "")); !slices.Equal(got, []string{"t1", "t2"}) {
+	if got := addrs(TitleTabs(s, "p", "", "a", "")); !slices.Equal(got, []string{"t1", "t2"}) {
 		t.Errorf("tabs of an ended worker = %v", got)
 	}
 	s.Orchestrators[0].Live = false
-	if got := addrs(TitleTabs(s, "p", "o", "")); !slices.Equal(got, []string{"o", "t1", "t2"}) {
+	if got := addrs(TitleTabs(s, "p", "", "o", "")); !slices.Equal(got, []string{"o", "t1", "t2"}) {
 		t.Errorf("tabs of an ended orchestrator = %v", got)
 	}
 }
@@ -142,10 +142,10 @@ func TestTabStateFollowsTheAgentStatus(t *testing.T) {
 
 func TestTabAgentFollowsTheSelectedAgent(t *testing.T) {
 	s := twoAgents()
-	if got := TabAgent(s, state.Selected{Kind: state.KindWorker, ID: "a"}, true, "p", "o"); got != "a" {
+	if got := TabAgent(s, state.Selected{Kind: state.KindWorker, ID: "a"}, true, "p", "", "o"); got != "a" {
 		t.Errorf("selected worker: agent = %q, want a", got)
 	}
-	if got := TabAgent(s, state.Selected{Kind: state.KindOrchestrator, ID: "o"}, true, "p", "a"); got != "o" {
+	if got := TabAgent(s, state.Selected{Kind: state.KindOrchestrator, ID: "o"}, true, "p", "", "a"); got != "o" {
 		t.Errorf("selected orchestrator: agent = %q, want o", got)
 	}
 }
@@ -153,19 +153,19 @@ func TestTabAgentFollowsTheSelectedAgent(t *testing.T) {
 func TestTabAgentKeepsTheLastAgentWhileAPlainTerminalIsSelected(t *testing.T) {
 	s := twoAgents()
 	sel := state.Selected{Kind: state.KindTerminal, ID: "t1"}
-	if got := TabAgent(s, sel, true, "p", "a"); got != "a" {
+	if got := TabAgent(s, sel, true, "p", "", "a"); got != "a" {
 		t.Errorf("agent = %q, want the kept a", got)
 	}
 	// A kept agent of another project does not hold: the first orchestrator of the project does.
-	if got := TabAgent(s, sel, true, "p", "x"); got != "o" {
+	if got := TabAgent(s, sel, true, "p", "", "x"); got != "o" {
 		t.Errorf("agent = %q, want o", got)
 	}
 	// No orchestrator: the first live worker.
 	s.Orchestrators = nil
-	if got := TabAgent(s, sel, true, "p", ""); got != "a" {
+	if got := TabAgent(s, sel, true, "p", "", ""); got != "a" {
 		t.Errorf("agent = %q, want a", got)
 	}
-	if got := TabAgent(agentstate.Snapshot{}, state.Selected{}, false, "", ""); got != "" {
+	if got := TabAgent(agentstate.Snapshot{}, state.Selected{}, false, "", "", ""); got != "" {
 		t.Errorf("agent = %q with no agents", got)
 	}
 }

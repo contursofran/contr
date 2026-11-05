@@ -167,8 +167,8 @@ func TestAClickOnAnAgentRowSelectsItAndTheTabsFollow(t *testing.T) {
 		snap.Workers[i].Project = "alpha"
 	}
 	snap.Orchestrators[0].Project = "alpha"
-	agent := TabAgent(snap, sel, ok, "alpha", "")
-	for _, tab := range TitleTabs(snap, "alpha", agent, sel.ID) {
+	agent := TabAgent(snap, sel, ok, "alpha", "", "")
+	for _, tab := range TitleTabs(snap, "alpha", "", agent, sel.ID) {
 		if tab.Selected {
 			chosen = append(chosen, tab.Address)
 		}

@@ -216,3 +216,31 @@ func TestRecentAndFoldersSurviveSaveAndLoad(t *testing.T) {
 		t.Fatal("clone shares folders")
 	}
 }
+
+func TestAddLive(t *testing.T) {
+	at := time.Date(2026, 11, 5, 9, 0, 0, 0, time.UTC)
+	s := &Store{}
+	s.SetOrder([]string{"/a/.git"})
+	s.Hide("/h/.git")
+	if !s.AddLive("/n/.git", "/n", at) {
+		t.Fatal("a new project was not added")
+	}
+	if s.AddLive("/n/.git", "/n", at.Add(time.Hour)) || s.AddLive("/a/.git", "/a", at) {
+		t.Error("a known project was added again")
+	}
+	if s.AddLive("/h/.git", "/h", at) {
+		t.Error("a hidden project was added")
+	}
+	if !s.Hidden("/h/.git") || s.Path("/h/.git") != "" {
+		t.Error("the hidden project changed")
+	}
+	if got := s.Order([]string{"/n/.git", "/a/.git"}); got[0] != "/a/.git" || got[1] != "/n/.git" {
+		t.Errorf("order %v, want the new project last", got)
+	}
+	if r := s.Recent(); len(r) != 1 || r[0].Dir != "/n/.git" || !r[0].At.Equal(at) {
+		t.Errorf("recent %+v", r)
+	}
+	if f := s.Folders(); len(f) != 1 || f[0] != "/n/.git" || s.Path("/n/.git") != "/n" {
+		t.Errorf("folders %v", f)
+	}
+}
