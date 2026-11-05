@@ -142,7 +142,7 @@ func TestCodeViewFollowsLightAndDark(t *testing.T) {
 	if *d.Theme == light {
 		t.Error("the code theme did not change with dark mode")
 	}
-	if d.Theme.Added.R == 0 && d.Theme.Added.G == 0 {
+	if d.Theme.Added.A == 0 {
 		t.Error("no added color")
 	}
 }
@@ -268,5 +268,49 @@ func TestRowAndSwitchFollowTheTheme(t *testing.T) {
 	wr, wt = want(theme.Light)
 	if row != wr || track != wt {
 		t.Errorf("light row %v track %v, want %v %v", row, track, wr, wt)
+	}
+}
+
+// Diff counts and the code theme use greys, not hues: added ink-42, removed
+// ink-30 (docs/spec/DiffSummary.md), in each theme (#403, D157).
+func TestCountsAndCodeThemeUseInks(t *testing.T) {
+	for _, tc := range []struct {
+		src mygo.ThemeSource
+		pal *theme.Palette
+	}{{mygo.ThemeDark, theme.Dark}, {mygo.ThemeLight, theme.Light}} {
+		themetest.Use(t, tc.src)
+		var th *editor.Theme
+		tt := ui.NewTester(func(c *ui.Context) {
+			th = CodeTheme(c)
+			ui.Column(c).Fill().Background(tc.pal.Ground).Children(func() { Counts(c, 3, 1) })
+		}, 200, 40)
+		tt.Frame()
+		if th.Added != theme.Over(tc.pal.Ink42, tc.pal.Ground) || th.Deleted != theme.Over(tc.pal.Ink30, tc.pal.Ground) {
+			t.Errorf("code theme added %v deleted %v", th.Added, th.Deleted)
+		}
+		r, ok := tt.Find(CountsText(3, 1))
+		if !ok {
+			t.Fatal("no counts")
+		}
+		// The "+" is the first glyph: its brightest pixel is the added color.
+		img := tt.Image()
+		var best [3]uint8
+		var most int
+		for y := int(r.Y); y < int(r.Y+r.H); y++ {
+			for x := int(r.X); x < int(r.X+r.W/4); x++ {
+				p := pix(img, float32(x), float32(y))
+				d := int(p[0]) - int(tc.pal.Ground.R)
+				if d < 0 {
+					d = -d
+				}
+				if d > most {
+					best, most = p, d
+				}
+			}
+		}
+		want := theme.Over(tc.pal.Ink42, tc.pal.Ground)
+		if diff := int(best[0]) - int(want.R); diff > 12 || diff < -12 {
+			t.Errorf("added count pixel %v, want grey near %v", best, want)
+		}
 	}
 }

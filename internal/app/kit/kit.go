@@ -118,22 +118,16 @@ func Row(c *ui.Context, o RowOpts) {
 	})
 }
 
-// Indexes of the green and the red in Palette.ANSI. A diff needs hues, and
-// the terminal palette is the one set of them that has a value per theme.
-const (
-	ansiRed   = 1
-	ansiGreen = 2
-)
-
 // CountsText is the text of Counts, as "+5 −1".
 func CountsText(added, removed int) string {
 	return "+" + strconv.Itoa(added) + " −" + strconv.Itoa(removed)
 }
 
-// Counts shows "+added −removed" in the diff colors.
+// Counts shows "+added −removed": added in ink-42, removed in ink-30
+// (docs/spec/DiffSummary.md).
 func Counts(c *ui.Context, added, removed int) {
 	p := theme.Current()
-	CountsWith(c, added, removed, CountsLook{Added: p.ANSI[ansiGreen], Removed: p.ANSI[ansiRed], Gap: 4})
+	CountsWith(c, added, removed, CountsLook{Added: p.Ink42, Removed: p.Ink30, Gap: 4})
 }
 
 // CountsLook is how CountsWith draws the counts. Colors come from the
@@ -237,8 +231,10 @@ func CodeTheme(c *ui.Context) *editor.Theme {
 	t := editor.DefaultTheme(c.Theme())
 	p := theme.Current()
 	t.Background = p.Ground
-	t.Added = p.ANSI[ansiGreen]
-	t.Deleted = p.ANSI[ansiRed]
+	// Greys, not hues (AGENTS.md): the editor mixes these into the line
+	// backgrounds, so they are flattened over the ground first.
+	t.Added = theme.Over(p.Ink42, p.Ground)
+	t.Deleted = theme.Over(p.Ink30, p.Ground)
 	return t
 }
 
