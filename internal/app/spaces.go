@@ -42,7 +42,7 @@ type SpacesList struct {
 	// OnProjects runs when the projects button is clicked (D113). Nil: the
 	// button does nothing.
 	OnProjects func()
-	// OnSettings runs when the Settings button of the Servers head is clicked
+	// OnSettings runs when the Settings button at the bottom of the sidebar is clicked
 	// (D126). Nil: the button does nothing. UpdateReady tells whether a newer
 	// contr waits; the button shows a dot then. Nil: no dot.
 	OnSettings  func()

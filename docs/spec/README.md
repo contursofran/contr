@@ -174,10 +174,10 @@ Esc is never a window shortcut: it interrupts Claude Code in the terminal.
 | Panel 380: board or worker | Files panel 280: FileTree and UsageMeter | replaced; the board and worker detail are disabled (D122) |
 | Bottom row 32: needs-you tabs and counts | QuestionsNotch | replaced and removed (D146); to-dos and blocked workers are more chips (D124) |
 | Answer card | QuestionsCard | replaced |
-| Context sheet (`⌘J`) | QuestionsCard impacts and a collapsible section | replaced; no sheet (D125) |
+| Context sheet (`⌘J`) | QuestionsCard impacts and a collapsible section | replaced; no sheet (D125); code removed (D147) |
 | Footer 26: plan usage | UsageMeter | replaced; removed (D146): CPU and memory on ServerRow, versions in Settings, messages as toasts (D126) |
 | Pin bar (removed) | Outline and OutlineCard | new |
-| Board pop-up, PR viewer, Review, projects modal, settings | unchanged; restyle with the tokens | Review, projects modal and settings restyled; the board pop-up and PR viewer disabled (D122, D127) |
+| Board pop-up, PR viewer, Review, projects modal, settings | unchanged; restyle with the tokens | Review, projects modal and settings restyled; the board pop-up and PR viewer disabled (D122, D127); hidden behind one switch, code kept (D147) |
 
 ## Open points
 
@@ -192,9 +192,9 @@ The coordinator asks the owner these before the issues that need them.
    section.
 4. **O4 Footer.** Settled (D126): CPU and memory go on the `This computer`
    row; versions and the update go in Settings, with a dot when an update
-   is ready; action messages are toasts. Built in D146: the Settings entry is
-   a button in the Servers head of the sidebar (also in the icon column), with
-   the dot on it.
+   is ready; action messages are toasts. Built in D146 and moved by D147: the Settings
+   entry is a gear button at the bottom left of the sidebar (at the bottom of
+   the icon column), with the dot on it.
 5. **O5 PR viewer and Review.** Settled (D127): the PR viewer is disabled
    until it is redesigned; Review keeps its place, restyled with the
    tokens.

@@ -180,6 +180,7 @@ func TestNoWrapUpControl(t *testing.T) {
 }
 
 func TestFramePanelRowClickShowsTheWorker(t *testing.T) {
+	enableViewers(t)
 	src := &source{snap: boardSnap(), text: "out"}
 	f := NewFrame()
 	f.Selection = state.NewSelection(nil)

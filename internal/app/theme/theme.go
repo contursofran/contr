@@ -30,7 +30,6 @@ const FontFamily = "JetBrains Mono"
 const FontSize = 12
 const LineHeight = 18
 const TerminalFontSize = 13
-const TerminalLineHeight = 20
 
 // TerminalLineHeightScale is the row height of the terminal as a multiple of
 // the font's own line height: TerminalLineHeight over JetBrains Mono's 1.32
@@ -38,14 +37,11 @@ const TerminalLineHeight = 20
 const TerminalLineHeightScale = 1.165
 
 // Backgrounds
-const BgWindow = 0x141414 // window, panel
-const BgBars = 0x101010   // sidebar, title bar, status bar
-const BgTerminal = 0x121212
+const BgWindow = 0x141414   // window, panel
+const BgBars = 0x101010     // sidebar, title bar, status bar
 const BgCard = 0x1C1C1C     // selected row
 const CardBorder = 0x2C2C2C // 1px inset
 const CardRadius = 7
-const BgAnswer = 0x1A1A1A // answer card
-const AnswerBorder = 0x262626
 const Line = 0x222222 // dividers
 const LineStrong = 0x3A3A3A
 
@@ -128,30 +124,13 @@ const PRWhoWidth = 74 // timeline: who column
 const SidebarPadX = 12       // left/right padding of sidebar content
 const TrafficLightInset = 78 // room for the native window buttons (x 14, 3×12 + 2×8 gaps, + 12)
 const CardInsetX = 4         // selected-card margin (same 4 px as the agent rows)
-const BadgePadX = 5
 const BadgeRadius = 4
 const SpacesGap = 8 // icon to text, name to branch, between a row's parts
 const MemBarWidth = 60
-const SidebarToggleBox = 16   // clickable box around the toggle drawing
-const SidebarToggleWidth = 14 // toggle outline, border included
-const SidebarToggleHeight = 12
 const SidebarToggleRadius = 2
-const SidebarToggleFill = 4 // filled left part of the outline
-
-// Agents list (planner defaults; docs/DESIGN.md has no sizes for these)
-const AgentRowHeight = 28 // Rust D42: one line per agent
-const AgentRowPadX = 8
-const AgentGap = 8 // icon to name, name to detail, detail to link
 
 // Title bar tabs and buttons (planner defaults; docs/DESIGN.md has no sizes for these)
-const TabPaddingX = 12
-const TabGap = 6 // icon to label
-const TabMaxWidth = 180
 
-// TabMinWidth: when the tabs do not fit, each tab shrinks to this width and
-// its label ends in an ellipsis, then the tabs row clips the rest (Rust D62).
-const TabMinWidth = 72
-const TabUnderline = 2     // active tab, bottom edge
 const TitleButtonSize = 28 // "+", split, panel toggle: square hit areas
 const TitleGlyphWidth = 14 // split and panel glyphs, border included
 const TitleGlyphHeight = 12
@@ -175,33 +154,6 @@ const AnswerButtonPadX = 10
 const AnswerButtonRadius = 6
 const AnswerButtonGap = 8 // between two buttons
 
-// Context sheet (DESIGN.md, D108)
-const BgSheet = 0x161616
-const BgSheetBox = 0x111111
-const SheetBoxBorder = 0x262626
-const SheetHeight = 470
-const SheetGap = 12
-const SheetPadTop = 14
-const SheetPadBottom = 16
-const SheetPadX = 22
-const SheetBoxRadius = 8
-const SheetBoxPadY = 12
-const SheetBoxPadX = 14
-const SheetOptionsWidth = 420
-const SheetOptionPadY = 8
-
-// Report tab (planner defaults; docs/DESIGN.md has no sizes for these)
-const ReportGap = 12         // between "Open in editor" and "back"
-const ReportIndent = 14      // per list depth (same as ROW_INDENT)
-const ReportMarkerWidth = 22 // "•" or "10." column
-const ReportBlockGap = 9     // above level 1 and 2 headings
-const ReportBlankHeight = 9  // half a line
-const ReportBodyPadTop = 6   // between the divider and the first line
-const ReportCodePadX = 6     // inside a code line's background
-const ReportCodeBg = BgBars  // grey
-const ReportQuotePad = 8     // between a quote's rule and its text
-const ReportRuleMargin = 8   // above and below a horizontal rule
-
 // PRFieldBorder is the border of the PR footer comment field.
 const PRFieldBorder = 0x2E2E2E
 
@@ -212,8 +164,6 @@ const ModalWidth = 580
 const ModalTop = 110
 const ModalRadius = 12
 const ModalPadX = 18
-const ModalFilterBorder = 0x2E2E2E
-const ModalFilterHint = 0x555555
 const ModalRowSub = 0x5A5A5A
 const ModalTile = 28
 const ModalTileBg = 0x1F1F1F

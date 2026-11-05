@@ -116,6 +116,7 @@ func TestItemOfFindsTheWorkersIssue(t *testing.T) {
 }
 
 func TestFrameOpenPRSetsTheItemOfTheWorker(t *testing.T) {
+	enableViewers(t)
 	r := newPRRig(t)
 	f := NewFrame()
 	f.PR = r.pane

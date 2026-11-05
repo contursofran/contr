@@ -45,7 +45,30 @@ func TestServerRowShowsCPUAndMemory(t *testing.T) {
 	}
 }
 
-func TestServersHeadHasASettingsButton(t *testing.T) {
+func TestSettingsButtonIsAtTheBottomLeft(t *testing.T) {
+	h := newSpaces(t, spTree())
+	h.tt.Frame()
+	b, side := box(t, h.tt, LabelSettingsOpen), box(t, h.tt, LabelProjectList)
+	if b.Y < side.Y+side.H-1 {
+		t.Errorf("Settings at y %v, above the end of the project list %v", b.Y, side.Y+side.H)
+	}
+	if b.X > 24 {
+		t.Errorf("Settings at x %v, not at the left", b.X)
+	}
+	head := box(t, h.tt, LabelServersHead+" header")
+	if b.Y < head.Y+head.H {
+		t.Error("Settings still sits in the Servers head")
+	}
+
+	h.list.compact = true
+	h.tt.Frame()
+	b, side = box(t, h.tt, LabelSettingsOpen), box(t, h.tt, LabelProjectList)
+	if b.Y < side.Y+side.H-1 {
+		t.Errorf("icon column: Settings at y %v, above the project list end %v", b.Y, side.Y+side.H)
+	}
+}
+
+func TestSettingsButtonOpensSettings(t *testing.T) {
 	h := newSpaces(t, spTree())
 	opened := 0
 	h.list.OnSettings = func() { opened++ }
