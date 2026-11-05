@@ -127,6 +127,7 @@ type client struct {
 
 func dial(t *testing.T, sock string) *client {
 	t.Helper()
+	guardFocus(t)
 	deadline := time.Now().Add(30 * time.Second)
 	for {
 		conn, err := net.Dial("unix", sock)
