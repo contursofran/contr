@@ -27,8 +27,11 @@ Rows: "Context  90k of 200k  45%", then one meter per plan (Claude, Codex).
 
 ## Data
 
-- Context: no source yet (D139). The line shows "—" and an empty meter until
-  #372 adds one (`contr statusline` writes it per terminal).
+- Context (D144): `contr statusline` saves the tokens and window size of an
+  agent in `usage/context/<HC_TERMINAL_ID>.json`. The sampler reads the folder
+  with the plans. The line shows the file of the selected orchestrator, worker
+  or plain terminal as "90k of 200k  45%", and the meter fills to that percent.
+  No file, no selection or a worktree row: "—" and an empty meter.
 - Plans: `internal/usage` on a goroutine; read again on a status line or log
   change. The view reads the sampler's last result and touches no file.
 

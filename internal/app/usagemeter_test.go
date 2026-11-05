@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/usage"
 )
@@ -18,8 +19,36 @@ func (f fakeLeft) Left(plan usage.PlanID, _ uint64) (float64, bool) {
 	return v, ok
 }
 
+func (f fakeLeft) Context(string) (usage.Context, bool) { return usage.Context{}, false }
+
+// fakeCtx adds the context of some terminals to fakeLeft.
+type fakeCtx struct {
+	fakeLeft
+	ctx map[string]usage.Context
+}
+
+func (f fakeCtx) Context(id string) (usage.Context, bool) { c, ok := f.ctx[id]; return c, ok }
+
+func TestUsageMetersShowTheContextOfTheSelectedTerminal(t *testing.T) {
+	src := fakeCtx{fakeLeft{}, map[string]usage.Context{"t1": {Tokens: 90000, Size: 200000}, "t2": {Tokens: 200000, Size: 200000}}}
+	got := usageMeters(src, "t1")[0]
+	want := kit.Meter{Label: "Context", Value: "90k of 200k  45%", Percent: 45, Has: true}
+	if got != want {
+		t.Errorf("context %+v, want %+v", got, want)
+	}
+	if got := usageMeters(src, "t2")[0]; got.Percent != 100 || got.Value != "200k of 200k  100%" {
+		t.Errorf("full context %+v", got)
+	}
+	// No terminal selected, or a terminal with no file: no data.
+	for _, id := range []string{"", "t3"} {
+		if got := usageMeters(src, id)[0]; got.Has || got.Value != "" {
+			t.Errorf("terminal %q: context %+v has data", id, got)
+		}
+	}
+}
+
 func TestUsageMetersShowThePercentUsedOfEachPlan(t *testing.T) {
-	got := usageMeters(fakeLeft{usage.PlanClaude: 62, usage.PlanCodex: 0})
+	got := usageMeters(fakeLeft{usage.PlanClaude: 62, usage.PlanCodex: 0}, "")
 	want := []kit.Meter{
 		{Label: "Context"},
 		{Label: "Claude", Value: "38%", Percent: 38, Has: true},
@@ -37,14 +66,14 @@ func TestUsageMetersShowThePercentUsedOfEachPlan(t *testing.T) {
 
 func TestUsageMetersWithoutDataHaveNone(t *testing.T) {
 	for name, src := range map[string]planPercent{"nil": nil, "empty": fakeLeft{}} {
-		for _, m := range usageMeters(src) {
+		for _, m := range usageMeters(src, "t1") {
 			if m.Has || m.Value != "" || m.Percent != 0 {
 				t.Errorf("%s source: meter %+v has data", name, m)
 			}
 		}
 	}
 	// One plan with data leaves the other plan and the context empty.
-	got := usageMeters(fakeLeft{usage.PlanClaude: 75})
+	got := usageMeters(fakeLeft{usage.PlanClaude: 75}, "")
 	if !got[1].Has || got[2].Has || got[0].Has {
 		t.Errorf("meters %+v, want only Claude with data", got)
 	}
@@ -135,4 +164,50 @@ func waitUntil(t *testing.T, ok func() bool) {
 		}
 	}
 	t.Fatal("timed out")
+}
+
+// The Context line follows the selected terminal: a context file per terminal,
+// read by the sampler (D144).
+func TestTheContextLineFollowsTheSelectedTerminal(t *testing.T) {
+	f, tt := newTester(t)
+	f.Selection = state.NewSelection(nil)
+	f.Usage = usage.NewSampler(usage.Unread, nil)
+	defer f.Usage.Close()
+	if got := f.selectedTerminal(); got != "" {
+		t.Errorf("terminal %q with no selection", got)
+	}
+	f.Selection.Select(state.Selected{Kind: state.KindWorktree, ID: "/tmp/x"})
+	if got := f.selectedTerminal(); got != "" {
+		t.Errorf("terminal %q for a worktree row", got)
+	}
+	for kind, id := range map[state.SelectedKind]string{state.KindOrchestrator: "o1", state.KindWorker: "w1", state.KindTerminal: "p1"} {
+		f.Selection.Select(state.Selected{Kind: kind, ID: id})
+		if got := f.selectedTerminal(); got != id {
+			t.Errorf("kind %d: terminal %q, want %q", kind, got, id)
+		}
+	}
+	tt.Frame()
+	if tt.HasText("90k of 200k  45%") {
+		t.Fatal("a context shows with no file")
+	}
+	dir := t.TempDir()
+	t.Setenv("CONTR_STATE_DIR", dir)
+	if _, err := usage.WriteContext(dir, "w1", &usage.Context{Schema: 1, Tokens: 90000, Size: 200000}); err != nil {
+		t.Fatal(err)
+	}
+	f.Usage.Close()
+	f.Usage = usage.NewFileSampler(nil)
+	defer f.Usage.Close()
+	f.Usage.SetVisible(true)
+	waitUntil(t, func() bool { _, ok := f.Usage.Context("w1"); return ok })
+	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "w1"})
+	tt.Frame()
+	if !tt.HasText("90k of 200k  45%") {
+		t.Errorf("no context text; texts %q", tt.Texts())
+	}
+	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "w2"})
+	tt.Frame()
+	if tt.HasText("90k of 200k  45%") {
+		t.Error("the context of w1 shows for w2")
+	}
 }

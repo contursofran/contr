@@ -544,7 +544,20 @@ func (f *Frame) filesPanel(c *ui.Context) {
 	kit.Panel(c, kit.PanelOpts{Name: LabelPanelFiles,
 		Head:   func() { f.Files.Head(c) },
 		Body:   func() { f.Files.View(c) },
-		Footer: func() { kit.UsageMeter(c, usageMeters(f.planUsage())) }})
+		Footer: func() { kit.UsageMeter(c, usageMeters(f.planUsage(), f.selectedTerminal())) }})
+}
+
+// selectedTerminal is the hc terminal of the selected orchestrator, worker or
+// plain terminal, or "" for any other selection.
+func (f *Frame) selectedTerminal() string {
+	if f.Selection == nil {
+		return ""
+	}
+	sel, ok := f.Selection.Current()
+	if ok && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker || sel.Kind == state.KindTerminal) {
+		return sel.ID
+	}
+	return ""
 }
 
 // planUsage is the usage sampler as the meters read it. A nil sampler (a
