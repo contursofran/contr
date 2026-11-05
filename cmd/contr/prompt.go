@@ -13,7 +13,7 @@ import (
 const noPrompt = "no prompt"
 
 // promptLines is how many terminal lines pendingPrompt reads to find the
-// menu, as the answer card does.
+// menu, as the questions card does.
 const promptLines = 40
 
 // pendingPrompt returns the menu that a blocked worker waits on: the detail

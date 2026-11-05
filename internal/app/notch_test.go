@@ -339,25 +339,25 @@ func TestFrameShowsTheNotchInEveryTerminalOfTheProject(t *testing.T) {
 	}
 }
 
-func TestFrameCmdJOpensTheAnswerCardNotTheSheet(t *testing.T) {
+func TestFrameCmdJOpensTheQuestionsCardNotTheSheet(t *testing.T) {
 	f, tt, _ := notchFrame(t)
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "wa"})
 	tt.Frame()
 	tt.Key(ui.Cmd, ui.KeyJ)
-	if tab, ok := f.Card.Opened(); !ok || tab.Key != "D1" {
-		t.Fatalf("⌘J: card %+v open=%v, want D1", tab, ok)
+	if !f.Card.IsOpen() || f.Card.key != "D1" {
+		t.Fatalf("⌘J: card key %q open=%v, want D1", f.Card.key, f.Card.IsOpen())
 	}
 	if f.Sheet.Opened() {
 		t.Error("⌘J opened the context sheet (D125)")
 	}
 	tt.Key(ui.Cmd, ui.KeyJ)
-	if _, ok := f.Card.Opened(); ok {
+	if f.Card.IsOpen() {
 		t.Error("the second ⌘J left the card open")
 	}
 	if err := tt.Click("2 questions. Open"); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := f.Card.Opened(); !ok {
+	if !f.Card.IsOpen() {
 		t.Error("a click on the notch did not open the card")
 	}
 }

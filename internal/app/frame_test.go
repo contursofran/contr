@@ -429,8 +429,8 @@ func TestAttachStartsAndStopsTheAgentState(t *testing.T) {
 		return &source{snap: agentstate.Snapshot{Workers: []agents.Worker{{Name: "b1", Address: "a", Live: true}}}}, func() { stopped++ }
 	}
 	stop := f.Attach(w)
-	if f.Card == nil || f.Worker == nil || f.Needs == nil || f.Needs.Open == nil || f.Slots.Card == nil {
-		t.Error("Attach should wire the needs row, the answer card and the worker view")
+	if f.Card == nil || f.Worker == nil || f.Needs == nil || f.Needs.Open == nil {
+		t.Error("Attach should wire the needs row, the questions card and the worker view")
 	}
 	if f.AgentsList == nil || len(f.AgentsList.snapshot().Workers) != 1 {
 		t.Fatal("the agents list should read the snapshot of StartAgents")

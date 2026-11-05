@@ -42,7 +42,6 @@ type Slots struct {
 	Agents    Slot // sidebar, at the bottom
 	Terminal  Slot // the selected hc terminal
 	Needs     Slot // needs-you row, under the terminal; draws nothing when empty
-	Card      Slot // answer card, floating at the bottom of the terminal area
 	Sheet     Slot // context sheet, floating at the top of the terminal area
 	Panel     Slot // board panel, shown while it is open
 	StatusBar Slot
@@ -84,9 +83,9 @@ type Frame struct {
 	// Needs is the needs-you row. [Frame.Attach] makes it and puts its view
 	// in Slots.Needs.
 	Needs *NeedsRow
-	// Card is the answer card that the needs-you row opens. [Frame.Attach]
-	// makes it and puts its view in Slots.Card.
-	Card *FloatCard
+	// Card is the questions card. The notch, the needs-you row and the board
+	// panel open it; the notch builds it ([Frame.Attach] makes it).
+	Card *QuestionsCard
 	// Sheet is the v0.2 context sheet. Nothing opens it now (D125); #352 removes it.
 	Sheet *Sheet
 	// Notch is the questions notch in the terminal overlay ([Frame.Attach] makes it).
@@ -684,7 +683,7 @@ func (f *Frame) titleBar(c *ui.Context, sidebarW float32, narrow bool) {
 	})
 }
 
-// terminal shows the terminal slot and the answer card, or the Review view.
+// terminal shows the terminal slot, or the Review view.
 func (f *Frame) terminal(c *ui.Context) {
 	if f.reviewOpen && f.Review != nil {
 		ui.Box(c).Label(LabelReview).Grow(1).MinWidth(0).FillHeight().
@@ -700,12 +699,6 @@ func (f *Frame) terminal(c *ui.Context) {
 		}
 		f.run(c, f.Slots.Sheet)
 		f.run(c, f.Slots.Terminal)
-		// The card floats over the bottom edge of this strip. The strip has
-		// no height, so a press on the terminal is outside the card.
-		if f.Card != nil {
-			f.Card.Anchor = ui.Box(c).FillWidth().Height(0).Shrink(0)
-		}
-		f.run(c, f.Slots.Card)
 	})
 }
 
@@ -944,7 +937,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		agentSnap = src.Snapshot
 		f.agentSnap = agentSnap
 		run := Runner{Post: w.Update}
-		f.Card = &FloatCard{Source: src, Run: run, Invalidate: w.Invalidate,
+		f.Card = &QuestionsCard{Source: src, Run: run, Invalidate: w.Invalidate,
 			Select: func(address string, orchestrator bool) {
 				kind := state.KindWorker
 				if orchestrator {
@@ -958,7 +951,6 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		f.Card.Entry = entry
 		f.Worker = &WorkerPanel{Entry: entry, Source: src, Selection: f.Selection, Run: run, Status: f.Status.Show, Invalidate: w.Invalidate}
 		f.PR.Orchestrator, f.PR.Send = f.prOrchestrator, src.Send
-		f.Slots.Card = f.Card.View
 		f.Sheet = &Sheet{Source: src, Run: run, Invalidate: w.Invalidate, OpenPR: f.OpenPR, OpenIssue: f.OpenIssue, OpenURL: openURL}
 		f.Slots.Sheet = f.Sheet.View
 	}
@@ -1031,7 +1023,8 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	if src != nil {
 		f.Notch.Open = f.Card.Open
 		f.Notch.Close = f.Card.Close
-		f.Notch.Opened = func() bool { _, ok := f.Card.Opened(); return ok }
+		f.Notch.Opened = f.Card.IsOpen
+		f.Notch.Panel = f.Card.View
 	}
 	f.Overlay.Add(LabelNotchLayer, f.Notch.View)
 	f.Panel = &BoardPanel{Snapshot: agentSnap, Needs: f.Needs.Tabs}

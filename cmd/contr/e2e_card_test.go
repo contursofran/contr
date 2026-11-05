@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -16,15 +15,14 @@ import (
 	"github.com/contursofran/contr/internal/hc"
 )
 
-// TestAnswerCardAndWorkerPanelCapture runs the built app against a
+// TestQuestionsCardFromTheRow runs the built app against a
 // scratch hc core with an orchestrator and a worker. It opens the
-// answer card on a question (tmp/e2e/answer-card.png), then selects the worker
-// so that the panel shows it (tmp/e2e/worker-panel.png):
+// questions card from the needs-you row (tmp/e2e/answer-card.png):
 //
-//	go test -tags e2e -run TestAnswerCardAndWorkerPanelCapture ./cmd/contr
+//	go test -tags e2e -run TestQuestionsCardFromTheRow ./cmd/contr
 //
 // It never touches the owner's hc core.
-func TestAnswerCardAndWorkerPanelCapture(t *testing.T) {
+func TestQuestionsCardFromTheRow(t *testing.T) {
 	if _, err := exec.LookPath("hc"); err != nil {
 		t.Skip("hc is not installed")
 	}
@@ -99,25 +97,8 @@ func TestAnswerCardAndWorkerPanelCapture(t *testing.T) {
 	press := func(id string) { c.call(t, "act", map[string]any{"id": id, "action": "press"}) }
 	press(c.idOf(t, "D1 Which database for the cache?"))
 	c.call(t, "idle", map[string]any{"timeout": 10000})
-	if !c.labels(t)["answer card"] {
-		t.Fatalf("the answer card did not open; labels %v", keys(c.labels(t)))
+	if !c.labels(t)["Or type an answer"] {
+		t.Fatalf("the questions card did not open; labels %v", keys(c.labels(t)))
 	}
 	c.capture(t, filepath.Join(out, "answer-card.png"))
-
-	for _, n := range c.nodes(t) {
-		if strings.HasPrefix(n.Label, "b162-s5-card,") {
-			press(n.ID)
-			break
-		}
-	}
-	deadline = time.Now().Add(15 * time.Second)
-	for !c.labels(t)["worker panel"] && time.Now().Before(deadline) {
-		time.Sleep(100 * time.Millisecond)
-	}
-	time.Sleep(time.Second) // the terminal read lands
-	c.call(t, "idle", map[string]any{"timeout": 10000})
-	if !c.labels(t)["worker panel"] {
-		t.Fatalf("the worker panel did not show; labels %v", keys(c.labels(t)))
-	}
-	c.capture(t, filepath.Join(out, "worker-panel.png"))
 }

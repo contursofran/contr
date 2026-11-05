@@ -180,6 +180,6 @@ func TestQuestionsNotch(t *testing.T) {
 	c.capture(t, filepath.Join(out, "notch-light-orchestrator.png"))
 
 	click("3 items. Open")
-	waitFor("answer card", func() bool { return has("answer card") })
+	waitFor("questions card", func() bool { return has(app.LabelQuestionsField) })
 	c.capture(t, filepath.Join(out, "notch-light-card.png"))
 }

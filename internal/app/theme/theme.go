@@ -46,7 +46,6 @@ const CardBorder = 0x2C2C2C // 1px inset
 const CardRadius = 7
 const BgAnswer = 0x1A1A1A // answer card
 const AnswerBorder = 0x262626
-const AnswerRadius = 10
 const Line = 0x222222 // dividers
 const LineStrong = 0x3A3A3A
 
@@ -183,15 +182,10 @@ const StageColWidth = 44     // DESIGN.md: five 44 px stage columns
 const WorkLabelWidth = 52    // "#123456"
 
 // Answer card (DESIGN.md fixes the height at 168; the rest are planner defaults)
-const AnswerCardHeight = 168
-const AnswerPad = 12                     // inside the card's border
-const AnswerGap = 8                      // between the card's head, text, actions and foot lines
-const AnswerTextHeight = LineHeight * 3. // the text takes at most three lines
 const AnswerButtonHeight = 24
 const AnswerButtonPadX = 10
 const AnswerButtonRadius = 6
 const AnswerButtonGap = 8 // between two buttons
-const AnswerMargin = 8    // card to panel edges
 
 // Context sheet (DESIGN.md, D108)
 const BgSheet = 0x161616

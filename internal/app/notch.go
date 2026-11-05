@@ -4,8 +4,8 @@ package app
 // that hangs from the top of the terminal while the open project has a
 // question, a to-do or a blocked worker's menu. It sits in the terminal
 // overlay, so it shows over the terminal of the orchestrator and of every
-// worker of the project. A click or ⌘J opens the card. Until the questions
-// card lands (#347), the card is the v0.2 answer card.
+// worker of the project. A click or ⌘J opens the questions card
+// (questions.go), which hangs from the notch.
 //
 // The data is the agent state: it reads owner.json on a goroutine, after a
 // file watch event (agentstate), so the notch reads no file on the UI thread.
@@ -71,6 +71,8 @@ type Notch struct {
 	Open   func(NeedTab)
 	Close  func()
 	Opened func() bool
+	// Panel builds the card anchored to the notch while it is open; may be nil.
+	Panel func(c *ui.Context, anchor ui.Element, items []NeedTab)
 }
 
 // Items returns the open items of the project: blocked menus, questions and
@@ -120,7 +122,13 @@ func (n *Notch) Toggle() {
 // to the terminal.
 func (n *Notch) View(c *ui.Context) {
 	items := n.Items()
+	open := n.Opened != nil && n.Opened()
 	if len(items) == 0 {
+		// Nothing waits any more: the card closes with the notch, and does not
+		// open again by itself when something new comes.
+		if open && n.Close != nil {
+			n.Close()
+		}
 		return
 	}
 	p := theme.Current()
@@ -144,6 +152,13 @@ func (n *Notch) View(c *ui.Context) {
 					p.FocusRing, theme.Radius12+gap+width, width)
 			}
 		})
+		if open && n.Panel != nil {
+			// The card takes the notch's place: the tab shows nothing, and stays
+			// the anchor of the card.
+			b.Children(func() {})
+			n.Panel(c, b, items)
+			return
+		}
 		b.Children(func() {
 			// glass-float over the blur, with float-line on the sides and the
 			// bottom (no top border).

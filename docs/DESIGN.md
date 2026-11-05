@@ -448,7 +448,7 @@ badge and the CI summary, the tabs and the Overview. The tab switch is
 `kit.Switch`, so the Review mode switch has the same look. It opens from
 the `#N` label of a board work row (the
 worker's PR, found from its branch; with no PR the label opens the issue in
-the browser, D104). The worker panel and the answer card of a blocked
+the browser, D104). The worker panel and the questions card of a blocked
 worker have a button that does the same (`Open PR #N`, else `Open issue #N`,
 D106). Line 3 of the header ends with `for #N`, the issue of the worker that
 opened the pane (D106). While it
