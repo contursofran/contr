@@ -24,6 +24,19 @@ const (
 	LabelCloseTab = "Close tab"
 )
 
+// Items of the tab context menu. Rename is not in it: hc has no way to store a name for a
+// terminal (the tab shows the title the shell sets).
+const (
+	MenuClose       = "Close"
+	MenuCloseOthers = "Close others"
+)
+
+// tabDrag is the value a plain tab carries while it is dragged.
+type tabDrag struct{ Address string }
+
+// middleButton is the Button of ui.InputEvent for the middle button.
+const middleButton = 2
+
 // titleBar holds the tabs the bar shows and where its clicks go.
 type titleBar struct {
 	tabs []Tab
@@ -31,6 +44,12 @@ type titleBar struct {
 	selectTab func(Tab)
 	// closeTab takes the plain tab whose close button was clicked. Nil: no close buttons.
 	closeTab func(Tab)
+	// closeOthers takes the tab whose menu chose "Close others": the frame closes every plain tab
+	// except it. Nil: the menu has no such item.
+	closeOthers func(keep Tab)
+	// moveTab takes the address of a plain tab that was dropped on another plain tab: from takes
+	// the place of to. Nil: the tabs do not drag.
+	moveTab func(from, to string)
 	// newTab opens a plain terminal. Nil: the bar has no "+" button.
 	newTab func()
 	// diff is the diff summary and openReview its click. Nil diff: none.
@@ -99,6 +118,24 @@ func (b *titleBar) tab(c *ui.Context, tab ui.Element, t Tab) {
 	p := theme.Current()
 	el := tab.Label(t.Title).Height(theme.SizeRowHeight).MaxWidth(theme.SizeTabMaxWidth).MinWidth(0).Shrink(1).
 		Padding(0, theme.Space10).Gap(theme.Space8).AlignItems(ui.Center).Radius(theme.Radius8)
+	el = el.ContextMenu(func(m *ui.Menu) { b.tabMenu(m, t) })
+	over := false
+	if t.Movable() && b.moveTab != nil {
+		el = el.Drag(tabDrag{Address: t.Address})
+		if d, ok := ui.DragOver[tabDrag](el); ok && d.Address != t.Address {
+			over = true
+		}
+		if d, ok := ui.Drop[tabDrag](el); ok {
+			b.moveTab(d.Address, t.Address)
+		}
+	}
+	if t.Closable() && b.closeTab != nil {
+		// The box is the last frame's: an element is not valid after the pass that built it.
+		box := el.Bounds()
+		el = el.HandleInput(func(ev ui.InputEvent) bool {
+			return middleClick(ev, box, func() { b.closeTab(t) })
+		})
+	}
 	ink := p.Ink50
 	switch {
 	case t.Selected:
@@ -107,7 +144,7 @@ func (b *titleBar) tab(c *ui.Context, tab ui.Element, t Tab) {
 		ink = p.Ink100
 	default:
 		el = el.Cursor(ui.CursorPointer)
-		if el.Hovered() {
+		if over || el.Hovered() {
 			el = el.Background(p.Hover)
 		}
 	}
@@ -120,6 +157,48 @@ func (b *titleBar) tab(c *ui.Context, tab ui.Element, t Tab) {
 			closeButton(c, func() { b.closeTab(t) })
 		}
 	})
+}
+
+// middleClick closes a tab when the middle button is pressed and released on it (D85: the caller
+// gives a close function only for a plain tab). It takes the middle press so that the release
+// comes to the tab; any other event is left alone. bounds is the tab's box in the window.
+func middleClick(ev ui.InputEvent, bounds ui.Rect, closeTab func()) bool {
+	if ev.Button != middleButton {
+		return false
+	}
+	switch ev.Kind {
+	case ui.InputPointerDown:
+		return true
+	case ui.InputPointerUp:
+		if ev.X >= 0 && ev.Y >= 0 && ev.X < bounds.W && ev.Y < bounds.H {
+			closeTab()
+		}
+		return true
+	}
+	return false
+}
+
+// tabMenu fills the context menu of tab t. Close and Close others close plain terminals only
+// (D85): Close is off on an agent tab, and Close others never closes t when t is an agent tab.
+func (b *titleBar) tabMenu(m *ui.Menu, t Tab) {
+	closable := t.Closable() && b.closeTab != nil
+	if m.Item(MenuClose).Disabled(!closable).Chosen() && closable {
+		b.closeTab(t)
+	}
+	others := b.closeOthers != nil && b.hasOtherPlain(t)
+	if m.Item(MenuCloseOthers).Disabled(!others).Chosen() && others {
+		b.closeOthers(t)
+	}
+}
+
+// hasOtherPlain tells whether the bar has a plain tab other than t.
+func (b *titleBar) hasOtherPlain(t Tab) bool {
+	for _, o := range b.tabs {
+		if o.Plain && o.Address != t.Address {
+			return true
+		}
+	}
+	return false
 }
 
 // glyph is the leading part of a tab: the Claude mark for an orchestrator, the status glyph for
