@@ -315,19 +315,14 @@ func (l *SpacesList) adopt(groups []spaces.RepoGroup) bool {
 		return false
 	}
 	var fresh []spaces.RepoGroup
-	var dirs []string
 	for _, g := range groups {
-		if l.projects.Known(g.CommonDir) {
-			dirs = append(dirs, g.CommonDir)
-		} else {
+		if !l.projects.Known(g.CommonDir) {
 			fresh = append(fresh, g)
 		}
 	}
 	if len(fresh) == 0 {
 		return false
 	}
-	// Fix the shown order first, so that the new projects come last.
-	l.projects.SetOrder(l.projects.Order(dirs))
 	now := time.Now
 	if l.now != nil {
 		now = l.now

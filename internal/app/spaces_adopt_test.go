@@ -100,7 +100,7 @@ func TestTabsShowAForeignPlainTerminalOfItsProject(t *testing.T) {
 		Terminals: []agents.Worker{foreignTerm("t2", agents.RoleTerminal, "alpha", "/a"),
 			foreignTerm("t3", agents.RoleTerminal, "beta", "/b")},
 	}
-	tabs := TitleTabs(s, "alpha", "t1", "")
+	tabs := TitleTabs(s, "alpha", "", "t1", "")
 	if len(tabs) != 2 || tabs[0].Address != "t1" || tabs[1].Address != "t2" || !tabs[1].Plain {
 		t.Errorf("tabs %+v", tabs)
 	}
@@ -163,5 +163,48 @@ func TestFrameDoesNotAdoptOverACorruptFile(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(path); string(b) != "{not json" || saves != 0 {
 		t.Errorf("the corrupt file was written over (saves %d)", saves)
+	}
+}
+
+func TestAdoptKeepsTheStoredOrderOfProjectsWithoutTerminals(t *testing.T) {
+	h, _ := twoRepos(t)
+	alpha, beta := h.group(0).CommonDir, h.group(1).CommonDir
+	gone := "/x/gone/.git"
+	h.list.Adopt = true
+	s := &projects.Store{}
+	s.SetOrder([]string{gone, beta}) // gone has no live terminal; alpha is live and unknown
+	h.list.SetProjects(s)
+	if !s.Known(gone) {
+		t.Fatal("a stored project without a live terminal was dropped")
+	}
+	if got := strings.Join(s.Order([]string{gone, beta, alpha}), ","); got != strings.Join([]string{gone, beta, alpha}, ",") {
+		t.Errorf("order %s, want gone, beta, alpha", got)
+	}
+	// Adopting again adds alpha no second time.
+	h.list.SetProjects(s)
+	n := 0
+	for _, d := range s.Order([]string{gone, beta, alpha}) {
+		if d == alpha {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("alpha is %d times in the order", n)
+	}
+}
+
+func TestTabsKeepTwoReposWithTheSameFolderNameApart(t *testing.T) {
+	a := foreignTerm("ta", agents.RoleTerminal, "app", "/one/app")
+	a.ProjectKey = "/one/app/.git"
+	b := foreignTerm("tb", agents.RoleTerminal, "app", "/two/app")
+	b.ProjectKey = "/two/app/.git"
+	s := agentstate.Snapshot{Terminals: []agents.Worker{a, b}}
+	tabs := TitleTabs(s, "app", "/two/app/.git", "", "")
+	if len(tabs) != 1 || tabs[0].Address != "tb" {
+		t.Errorf("tabs of /two/app: %+v", tabs)
+	}
+	tabs = TitleTabs(s, "app", "/one/app/.git", "", "")
+	if len(tabs) != 1 || tabs[0].Address != "ta" {
+		t.Errorf("tabs of /one/app: %+v", tabs)
 	}
 }

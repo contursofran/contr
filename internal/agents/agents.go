@@ -194,6 +194,10 @@ type Worker struct {
 	// Foreign is true for a terminal that contr did not start: it has no
 	// contr labels. Its role and folder come from hc (D149).
 	Foreign bool `json:"foreign,omitempty"`
+	// ProjectKey is the git common folder of the working folder, set by the
+	// agent model once it has read it. It tells apart two repos with the same
+	// folder name. Empty when unknown or outside git.
+	ProjectKey string `json:"-"`
 }
 
 // terminal is the part of an hc terminal that a Worker needs.

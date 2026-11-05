@@ -191,6 +191,7 @@ type Frame struct {
 	// project the title bar shows, and tabAgent the address of the agent whose tabs show.
 	agentSnap   func() agentstate.Snapshot
 	openProject string
+	openKey     string // the git common folder of openProject, when known
 	tabAgent    string
 	// tabOrder is the order the owner dragged the plain tabs to, as addresses, for the session.
 	tabOrder    []string
@@ -765,13 +766,13 @@ func (f *Frame) titleTabs() []Tab {
 	if f.Selection != nil {
 		sel, ok = f.Selection.Current()
 	}
-	f.openProject = OpenProject(snap, sel, ok, f.openProject)
-	f.tabAgent = TabAgent(snap, sel, ok, f.openProject, f.tabAgent)
+	f.openProject, f.openKey = OpenProjectKey(snap, sel, ok, f.openProject, f.openKey)
+	f.tabAgent = TabAgent(snap, sel, ok, f.openProject, f.openKey, f.tabAgent)
 	selected := ""
 	if ok && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker || sel.Kind == state.KindTerminal) {
 		selected = sel.ID
 	}
-	return OrderTabs(TitleTabs(snap, f.openProject, f.tabAgent, selected), f.tabOrder)
+	return OrderTabs(TitleTabs(snap, f.openProject, f.openKey, f.tabAgent, selected), f.tabOrder)
 }
 
 // newTerminal opens a plain terminal in the open project (D82). Its folder is

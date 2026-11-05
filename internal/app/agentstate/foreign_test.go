@@ -26,7 +26,7 @@ func TestSnapshotListsForeignTerminalsByProject(t *testing.T) {
 		fterm("t3", "/x/beta", map[string]any{"argv": []string{"zsh"}}),
 		fterm("t4", "/x/gone", map[string]any{"argv": []string{"zsh"}, "state": "finished"}),
 	)
-	r.m.resolve = func(dir string) string { return filepath.Base(dir) }
+	r.m.resolve = func(dir string) (string, string) { return filepath.Base(dir), "" }
 	r.start(t)
 	waitFor(t, "projects", func() bool {
 		s := r.m.Snapshot()
@@ -46,12 +46,12 @@ func TestProjectLookupStaysOffTheCallerAndRunsOncePerFolder(t *testing.T) {
 	release := make(chan struct{})
 	var mu sync.Mutex
 	calls := 0
-	r.m.resolve = func(string) string {
+	r.m.resolve = func(string) (string, string) {
 		<-release // a slow git read
 		mu.Lock()
 		calls++
 		mu.Unlock()
-		return "alpha"
+		return "alpha", ""
 	}
 	r.start(t)
 	waitFor(t, "terminals", func() bool { return len(r.m.Snapshot().Terminals) == 2 })
@@ -103,8 +103,25 @@ func TestProjectOf(t *testing.T) {
 		"missing":       {filepath.Join(base, "nope"), "nope"},
 		"empty":         {"", ""},
 	} {
-		if got := ProjectOf(c.dir); got != c.want {
+		if got, _ := ProjectOf(c.dir); got != c.want {
 			t.Errorf("%s: ProjectOf(%q) = %q, want %q", name, c.dir, got, c.want)
 		}
+	}
+}
+
+func TestProjectOfGivesTheCommonDirAsKey(t *testing.T) {
+	base := t.TempDir()
+	for _, n := range []string{"a", "b"} {
+		if err := os.MkdirAll(filepath.Join(base, n, "app", ".git"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	na, ka := ProjectOf(filepath.Join(base, "a", "app"))
+	nb, kb := ProjectOf(filepath.Join(base, "b", "app"))
+	if na != "app" || nb != "app" || ka == "" || kb == "" || ka == kb {
+		t.Errorf("got (%q,%q) and (%q,%q): same name, different keys expected", na, ka, nb, kb)
+	}
+	if _, k := ProjectOf(t.TempDir()); k != "" {
+		t.Errorf("key %q outside git, want empty", k)
 	}
 }

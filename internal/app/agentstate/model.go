@@ -56,24 +56,32 @@ type Model struct {
 
 	// projects caches the project name of each folder of a foreign terminal;
 	// asked holds the folders that are being resolved (D149).
-	projects map[string]string
+	projects map[string][2]string // name and key
 	asked    map[string]bool
-	resolve  func(dir string) string // reads git; tests replace it
+	resolve  func(dir string) (name, key string) // reads git; tests replace it
 
 	wg sync.WaitGroup
 }
 
 // ProjectOf gives the project name of a working folder: the folder name of
 // the git repository that holds it (as the sidebar names it), else the name
-// of the folder. It reads files: call it only from a goroutine.
-func ProjectOf(dir string) string {
+// of the folder. The key is the git common folder (the sidebar's project key),
+// or "" outside git. It reads files: call it only from a goroutine.
+func ProjectOf(dir string) (name, key string) {
 	if dir == "" {
-		return ""
+		return "", ""
 	}
 	if c, ok := git.Discover(dir); ok {
-		return filepath.Base(filepath.Dir(c.CommonDir))
+		return filepath.Base(filepath.Dir(c.CommonDir)), c.CommonDir
 	}
-	return filepath.Base(dir)
+	return filepath.Base(dir), ""
+}
+
+// SameProject tells if w is in the project with this name and key. Names must
+// match. Keys must match too when both sides have one, so two repos with the
+// same folder name stay apart.
+func SameProject(w agents.Worker, name, key string) bool {
+	return w.Project == name && (key == "" || w.ProjectKey == "" || key == w.ProjectKey)
 }
 
 // resolveProjects starts the lookup of the project of each foreign terminal
@@ -83,7 +91,7 @@ func (m *Model) resolveProjects(ws []agents.Worker) {
 	m.mu.Lock()
 	var dirs []string
 	for _, w := range ws {
-		if _, ok := m.projects[w.Worktree]; w.Foreign && w.Worktree != "" && !ok && !m.asked[w.Worktree] && !slices.Contains(dirs, w.Worktree) {
+		if _, ok := m.projects[w.Worktree]; w.Worktree != "" && !ok && !m.asked[w.Worktree] && !slices.Contains(dirs, w.Worktree) {
 			dirs = append(dirs, w.Worktree)
 		}
 	}
@@ -100,13 +108,14 @@ func (m *Model) resolveProjects(ws []agents.Worker) {
 	resolve := m.resolve
 	m.mu.Unlock()
 	go func() {
-		got := make(map[string]string, len(dirs))
+		got := make(map[string][2]string, len(dirs))
 		for _, d := range dirs {
-			got[d] = resolve(d)
+			n, k := resolve(d)
+			got[d] = [2]string{n, k}
 		}
 		m.mu.Lock()
 		if m.projects == nil {
-			m.projects = map[string]string{}
+			m.projects = map[string][2]string{}
 		}
 		for d, p := range got {
 			m.projects[d] = p
@@ -191,8 +200,11 @@ func (m *Model) Snapshot() Snapshot {
 	defer m.mu.Unlock()
 	var s Snapshot
 	for _, w := range m.workers {
-		if w.Foreign && w.Project == "" { // the cache has the name once resolved
-			w.Project = m.projects[w.Worktree]
+		if p, ok := m.projects[w.Worktree]; ok { // the cache has them once resolved
+			if w.Foreign && w.Project == "" {
+				w.Project = p[0]
+			}
+			w.ProjectKey = p[1]
 		}
 		switch {
 		case w.Orchestrator():
