@@ -115,7 +115,7 @@ tests, and what it replaces.
 - Names: `project`, `computer`, `server`, `folder`, `folder-open`,
   `file-go`, `file-md`, `file`, `close`, `plus`, `search`,
   `sidebar-right`, `filter`, `terminal`. They go in `assets`.
-- The Claude mark is open point O8.
+- The Claude mark is the official Claude mark (O8 settled, D123): `claude.svg`, one filled shape.
 
 ## Data
 
@@ -200,7 +200,7 @@ The coordinator asks the owner these before the issues that need them.
 6. **O6 Narrow window.** Settled (D128): below about 1100px the files
    panel hides; below about 800px the sidebar collapses to icons.
 7. **O7 Sans font.** Settled: bundle Inter (OFL, a `NOTICE` entry), D121.
-8. **O8 Claude mark.** Which drawing, and the right to use it.
+8. **O8 Claude mark.** Settled (D123): the official Claude mark.
 9. **O9 Light terminal palette.** Settled (D129): a known light palette
    (Ghostty or macOS Terminal style), tuned for contrast on the light
    panel. The values come in #345.
