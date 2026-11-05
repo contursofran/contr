@@ -242,7 +242,7 @@ func TestAgentRowOpenPRGoesToTheBrowserNotThePane(t *testing.T) {
 	var gotN int
 	var queued []func()
 	f.WorkerPRs = &WorkerPRs{Run: Runner{Go: func(fn func()) { queued = append(queued, fn) }}}
-	f.Status = state.NewStatusMessage(func() {})
+	f.Toasts = state.NewToasts(func() {})
 	f.OpenPRWeb = func(d string, n int) error { gotDir, gotN = d, n; return errors.New("gh: no browser") }
 	e := f.agentRowEntry()
 	if e.OpenPR != nil {
@@ -262,7 +262,7 @@ func TestAgentRowOpenPRGoesToTheBrowserNotThePane(t *testing.T) {
 	if f.PROpen() {
 		t.Error("the PR pane opened")
 	}
-	if msg, ok := f.Status.Text(); !ok || msg != "gh: no browser" {
+	if msg, ok := lastToast(f); !ok || msg != "gh: no browser" {
 		t.Errorf("status %q, %v", msg, ok)
 	}
 }

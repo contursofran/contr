@@ -297,7 +297,10 @@ row shows `panel ▴`. A click floats the panel over the terminal: 360 wide,
 header; the button then reads `panel ▾` with the `bg.card` style. Esc (with
 the focus in the panel), `×` or a click outside closes it.
 
-## Bottom row (32)
+## Bottom row (32) **(replaced: removed, D146)**
+
+The bottom row is gone. The questions notch and card (D124, D135, D140)
+show questions, to-dos and blocked menus. This section is kept as history.
 
 Directly under the terminal and the panel, full width of the main column,
 `bg.bars` (D67). It never hides, so the terminal does not move. Left to
@@ -488,7 +491,12 @@ agent. With no selection it shows `Select a project`.
   the two diff colours (D34).
 - No git runs while the view or the window is hidden.
 
-## Footer (26)
+## Footer (26) **(replaced: removed, D126, D146)**
+
+The footer is gone. CPU and memory are on the `This Mac` row, the contr and
+hc versions and the update are in Settings (a dot on the Settings button
+while an update waits), and action messages are toasts. This section is kept
+as history.
 
 `bg.bars`, top border `line`, 11 px dim. The plan usage left the footer
 for the files panel (D126, D139). The footer has the message slot (errors from `+ new` and other actions), host CPU
@@ -513,7 +521,7 @@ while contr follows the core (#245).
 |---|---|---|
 | `⌘T` | open a plain terminal in the open project (D82) | window, File menu |
 | `⌘W` | close the selected plain terminal (D85); does nothing on an orchestrator or worker tab | window, File menu |
-| `⌥1`–`⌥6` | pick needs-you tab 1–6 and open its card (D75) | window |
+| `⌥1`–`⌥6` | **removed with the needs-you row (D146)** | window |
 | `1`–`4` | send that option | card, with the focus |
 | Enter | send the typed answer, else the recommended option | card, with the focus |
 | `⌘J` | open or close the context sheet | window |

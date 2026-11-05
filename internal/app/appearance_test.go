@@ -81,7 +81,7 @@ func TestStartThemeShowsAReadErrorWhenTheFrameAttaches(t *testing.T) {
 	f.StartTheme()
 	stop := f.Attach(&fakeWindow{visible: true})
 	defer stop()
-	if msg, _ := f.Status.Text(); msg != "bad file" {
+	if msg, _ := lastToast(f); msg != "bad file" {
 		t.Errorf("status %q, want the read error", msg)
 	}
 }
@@ -118,8 +118,8 @@ func TestSetAppearanceAppliesAtOnceAndStores(t *testing.T) {
 func TestSetAppearanceShowsASaveError(t *testing.T) {
 	f, _ := themeFrame(t, nil)
 	shown := make(chan string, 1)
-	f.Status = state.NewStatusMessage(nil)
-	f.post = func(fn func()) { fn(); msg, _ := f.Status.Text(); shown <- msg }
+	f.Toasts = state.NewToasts(nil)
+	f.post = func(fn func()) { fn(); msg, _ := lastToast(f); shown <- msg }
 	f.SavePrefs = func(prefs.Prefs) error { return errors.New("disk full") }
 	f.SetAppearance(mygo.ThemeDark)
 	select {

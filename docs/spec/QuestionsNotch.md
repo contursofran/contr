@@ -40,7 +40,7 @@ Design system page: component QuestionsNotch. Shared rules: [README.md](README.m
 ## Edge cases
 
 - Questions, to-dos and blocked menus of another project: not counted here.
-- The questions file is broken: hide the notch and log the error (once, by the agent state; D135).
+- The questions file is broken (unreadable or locked): the model logs the error once (D135) and the notch shows "Questions file unreadable" in `blocked`, in the same place and in every terminal of the window, with the error in a tooltip and no click (D146). The card closes. It goes when the file reads again.
 
 ## Accessibility
 

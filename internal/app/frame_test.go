@@ -63,17 +63,13 @@ func TestFrameMatchesDesignSizes(t *testing.T) {
 		t.Errorf("terminal %+v, want 10 from the sidebar and 10 from the files", term)
 	}
 	for _, r := range []ui.Rect{sidebar, term, files} {
-		if r.Y+r.H != theme.WindowHeight-theme.StatusBarHeight-10 {
-			t.Errorf("panel %+v should end 10 above the status bar", r)
+		if r.Y+r.H != theme.WindowHeight-10 {
+			t.Errorf("panel %+v should end 10 above the window edge (no footer, D126)", r)
 		}
 	}
 	// The tabs start above the terminal panel.
 	if tabs := box(t, tt, LabelTabs); tabs.X < term.X {
 		t.Errorf("tabs at %v, left of the terminal panel at %v", tabs.X, term.X)
-	}
-	status := box(t, tt, LabelStatusBar)
-	if status.H != theme.StatusBarHeight || status.W != theme.WindowWidth {
-		t.Errorf("status bar %+v, want 1440 x 26", status)
 	}
 }
 
@@ -281,7 +277,7 @@ func TestAttachWiresTheStateToTheWindow(t *testing.T) {
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	stop := f.Attach(w)
-	if f.Visibility == nil || f.Selection == nil || f.Status == nil {
+	if f.Visibility == nil || f.Selection == nil || f.Toasts == nil {
 		t.Fatal("Attach should set the state")
 	}
 	if !f.Visibility.Visible() {
@@ -293,7 +289,7 @@ func TestAttachWiresTheStateToTheWindow(t *testing.T) {
 	}
 	before := w.redraws()
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "a1"})
-	f.Status.Show("hello")
+	f.Toasts.Show("hello")
 	if got := w.redraws(); got != before+2 {
 		t.Errorf("redraws %d, want 2 more", got-before)
 	}
@@ -432,8 +428,8 @@ func TestAttachStartsAndStopsTheAgentState(t *testing.T) {
 		return &source{snap: agentstate.Snapshot{Workers: []agents.Worker{{Name: "b1", Address: "a", Live: true}}}}, func() { stopped++ }
 	}
 	stop := f.Attach(w)
-	if f.Card == nil || f.Worker == nil || f.Needs == nil || f.Needs.Open == nil {
-		t.Error("Attach should wire the needs row, the questions card and the worker view")
+	if f.Card == nil || f.Worker == nil {
+		t.Error("Attach should wire the questions card and the worker view")
 	}
 	if f.SpacesList == nil || len(f.SpacesList.snapshot().Workers) != 1 {
 		t.Fatal("the sidebar list should read the snapshot of StartAgents")

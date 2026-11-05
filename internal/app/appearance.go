@@ -38,7 +38,7 @@ func (l *lateWindow) Update(fn func()) {
 
 // StartTheme reads the stored settings and applies the theme source. Call it on the UI thread
 // once the app runs, before the window is made. A missing, bad or unknown stored value gives
-// System; a read error shows in the status bar once the frame attaches. Without ThemePlatform
+// System; a read error shows as a toast once the frame attaches. Without ThemePlatform
 // it only keeps the value.
 func (f *Frame) StartTheme() {
 	src := mygo.ThemeSystem
@@ -85,7 +85,7 @@ func (f *Frame) SetAppearance(src mygo.ThemeSource) {
 		cur := f.appearance
 		f.appearanceMu.Unlock()
 		if err := save(prefs.Prefs{Appearance: cur}); err != nil && post != nil {
-			post(func() { f.Status.Show(err.Error()) })
+			post(func() { f.Toasts.Show(err.Error()) })
 		}
 	}()
 }

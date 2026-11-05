@@ -39,21 +39,18 @@ type Slot func(c *ui.Context)
 
 // Slots are the views of the frame. A nil slot is left empty.
 type Slots struct {
-	Spaces    Slot // sidebar, under its header
-	Terminal  Slot // the selected hc terminal
-	Needs     Slot // needs-you row, under the terminal; draws nothing when empty
-	Sheet     Slot // context sheet, floating at the top of the terminal area
-	Panel     Slot // board panel, shown while it is open
-	StatusBar Slot
+	Spaces   Slot // sidebar, under its header
+	Terminal Slot // the selected hc terminal
+	Sheet    Slot // context sheet, floating at the top of the terminal area
+	Panel    Slot // board panel, shown while it is open
 }
 
 // PlaceholderSlots returns slots that show only their own name in dim text.
 func PlaceholderSlots() Slots {
 	return Slots{
-		Spaces:    placeholder("spaces"),
-		Terminal:  placeholder("terminal"),
-		Panel:     placeholder("panel"),
-		StatusBar: nil,
+		Spaces:   placeholder("spaces"),
+		Terminal: placeholder("terminal"),
+		Panel:    placeholder("panel"),
 	}
 }
 
@@ -72,17 +69,14 @@ type Frame struct {
 	// Outline is the message ticks of the orchestrator terminal. [Frame.Attach]
 	// makes it when there is an agent source. Nil otherwise.
 	Outline *Outline
-	// Visibility, Selection and Status are the app state. The frame holds
+	// Visibility, Selection and Toasts are the app state. The frame holds
 	// them for the views in its slots.
 	Visibility *state.Visibility
 	Selection  *state.Selection
-	Status     *state.StatusMessage
+	Toasts     *state.Toasts
 	// Projects is the projects store, loaded after Attach (D109). Nil until then.
 	Projects *projects.Store
-	// Needs is the needs-you row. [Frame.Attach] makes it and puts its view
-	// in Slots.Needs.
-	Needs *NeedsRow
-	// Card is the questions card. The notch, the needs-you row and the board
+	// Card is the questions card. The notch and the board
 	// panel open it; the notch builds it ([Frame.Attach] makes it).
 	Card *QuestionsCard
 	// Sheet is the v0.2 context sheet. Nothing opens it now (D125); #352 removes it.
@@ -180,7 +174,7 @@ type Frame struct {
 	// OpenPRWeb opens pull request n of the repository in dir in the browser. [Frame.Attach] sets
 	// it; tests replace it.
 	OpenPRWeb func(dir string, n int) error
-	// Host feeds the status bar and Usage the plan meters of the files panel. [Frame.Attach] creates them when they are nil (tests set
+	// Host feeds the This Mac row and Usage the plan meters of the files panel. [Frame.Attach] creates them when they are nil (tests set
 	// fakes first) and ends them with its stop function.
 	Host  *host.Host
 	Usage *usage.Sampler
@@ -195,8 +189,7 @@ type Frame struct {
 	// agents.
 	CloseTerm *CloseTerminal
 
-	status statusBar
-	bar    titleBar
+	bar titleBar
 	// agentSnap gives the agents; nil before Attach or without agents. openProject is the
 	// project the title bar shows, and tabAgent the address of the agent whose tabs show.
 	agentSnap   func() agentstate.Snapshot
@@ -335,8 +328,8 @@ func (f *Frame) openWeb(open func(dir string, n int) error, dir string, n int) {
 	run.Do(func() func() {
 		err := open(dir, n)
 		return func() {
-			if err != nil && f.Status != nil {
-				f.Status.Show(err.Error())
+			if err != nil && f.Toasts != nil {
+				f.Toasts.Show(err.Error())
 			}
 		}
 	})
@@ -462,14 +455,13 @@ const (
 	LabelPanelSidebar  = "Sidebar"
 	LabelPanelTerminal = "Terminal"
 	LabelPanelFiles    = "Files"
-	LabelStatusBar     = "status bar"
 )
 
 func color(rgb uint32) ui.Color { return theme.Color(rgb) }
 
 // View builds the frame: one glass sheet with the title bar on top, the sidebar,
-// terminal and files panels in a row under it, and the v0.2 status bar below
-// (docs/spec/Window.md).
+// terminal and files panels in a row under it (docs/spec/Window.md). The window
+// has no footer (D146); messages are toasts.
 func (f *Frame) View(c *ui.Context) {
 	theme.Apply(c)
 	p := theme.Current()
@@ -502,15 +494,13 @@ func (f *Frame) View(c *ui.Context) {
 			f.panels(c, sidebar, files, showFiles)
 		})
 		f.saveWidthsAfterDrag()
-		ui.Box(c).Label(LabelStatusBar).FillWidth().Height(theme.StatusBarHeight).Shrink(0).
-			Background(color(theme.BgBars)).BorderWidth(1, 0, 0, 0).BorderColor(color(theme.Line)).
-			Children(func() { f.statusBar(c) })
 		if f.ProjectsModal != nil {
 			f.ProjectsModal.View(c)
 		}
 		if f.Settings != nil {
 			f.Settings.View(c)
 		}
+		f.toastView(c)
 	})
 }
 
@@ -556,25 +546,6 @@ func (f *Frame) planUsage() planPercent {
 		return nil
 	}
 	return f.Usage
-}
-
-// statusBar draws the slot when one is set, and the status bar otherwise.
-func (f *Frame) statusBar(c *ui.Context) {
-	if f.Slots.StatusBar != nil {
-		f.Slots.StatusBar(c)
-		return
-	}
-	f.status.core = f.coreVersion
-	if f.Settings != nil {
-		f.status.updateReady, f.status.install = f.Settings.Ready, f.Settings.Install
-	}
-	if f.Host != nil {
-		f.status.host = f.Host
-	}
-	if f.Status != nil {
-		f.status.message = f.Status
-	}
-	f.status.View(c)
 }
 
 func (f *Frame) run(c *ui.Context, s Slot) {
@@ -662,7 +633,7 @@ func (f *Frame) saveWidthsAfterDrag() {
 	post := f.post
 	f.saveTimer = time.AfterFunc(widthsSaveDelay, func() {
 		if err := save(w); err != nil && post != nil {
-			post(func() { f.Status.Show(err.Error()) })
+			post(func() { f.Toasts.Show(err.Error()) })
 		}
 	})
 }
@@ -672,7 +643,6 @@ func (f *Frame) content(c *ui.Context) {
 	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
 		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 			f.terminal(c)
-			f.run(c, f.Slots.Needs)
 		})
 		if f.PR != nil {
 			f.PR.View(c)
@@ -910,7 +880,7 @@ type Window interface {
 	Update(fn func())
 }
 
-// scope is the project the needs-you row shows: the selected orchestrator's,
+// scope is the project the board and the sheet show: the selected orchestrator's,
 // or "" (all projects) when none is selected.
 func (f *Frame) scope(src AgentSource) string {
 	sel, ok := f.Selection.Current()
@@ -950,7 +920,7 @@ func (f *Frame) loadProjects(w Window) {
 		store, err := load()
 		w.Update(func() {
 			if err != nil {
-				f.Status.Show(err.Error())
+				f.Toasts.Show(err.Error())
 			}
 			if store != nil {
 				f.Projects = store
@@ -972,7 +942,7 @@ func (f *Frame) loadWidths(w Window) {
 		saved, err := load()
 		w.Update(func() {
 			if err != nil {
-				f.Status.Show(err.Error())
+				f.Toasts.Show(err.Error())
 			}
 			if f.widthsTouched {
 				return
@@ -1002,8 +972,8 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.Selection = state.NewSelection(func() { w.Invalidate(); f.syncReview(); f.syncTerminal() })
 	f.Review = NewReview(w.Update, w.Invalidate)
 	f.Files.Post, f.Files.Invalidate = w.Update, w.Invalidate
-	f.Status = state.NewStatusMessage(w.Invalidate)
-	f.Files.Status = f.Status.Show
+	f.Toasts = state.NewToasts(w.Invalidate)
+	f.Files.Status = f.Toasts.Show
 	f.PR = &PRPane{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate, OpenURL: openURL}
 	f.WorkerPRs = &WorkerPRs{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate}
 	var agentSnap func() agentstate.Snapshot
@@ -1024,11 +994,11 @@ func (f *Frame) Attach(w Window) (stop func()) {
 				}
 				f.Selection.Select(state.Selected{Kind: kind, ID: address})
 			}}
-		f.CloseTerm = &CloseTerminal{Stop: src.Close, Run: run, Status: f.Status.Show, Closed: f.terminalClosed}
+		f.CloseTerm = &CloseTerminal{Stop: src.Close, Run: run, Status: f.Toasts.Show, Closed: f.terminalClosed}
 		setCloseTerminalHandler(func() { w.Update(f.closeSelectedTerminal) })
 		entry := WorkerEntry{PRs: f.WorkerPRs, OpenPR: f.OpenPR, OpenIssue: f.OpenIssue}
 		f.Card.Entry = entry
-		f.Worker = &WorkerPanel{Entry: entry, Source: src, Selection: f.Selection, Run: run, Status: f.Status.Show, Invalidate: w.Invalidate}
+		f.Worker = &WorkerPanel{Entry: entry, Source: src, Selection: f.Selection, Run: run, Status: f.Toasts.Show, Invalidate: w.Invalidate}
 		f.PR.Orchestrator, f.PR.Send = f.prOrchestrator, src.Send
 		f.Sheet = &Sheet{Source: src, Run: run, Invalidate: w.Invalidate, OpenPR: f.OpenPR, OpenIssue: f.OpenIssue, OpenURL: openURL}
 		f.Slots.Sheet = f.Sheet.View
@@ -1047,22 +1017,22 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	}
 	f.SpacesList.Host = f.Host
 	f.SpacesList.ModelOf = f.ModelOf
-	f.SpacesList.Run, f.SpacesList.Status = Runner{Post: w.Update}, f.Status.Show
+	f.SpacesList.Run, f.SpacesList.Status = Runner{Post: w.Update}, f.Toasts.Show
 	f.SpacesList.Entry = f.agentRowEntry()
 	f.SpacesList.Ages = &AgeClock{Tick: w.Invalidate}
 	if src != nil {
 		f.SpacesList.Source = src
 	}
 	f.SpacesList.WatchHead = f.WatchHead
-	f.SpacesList.OnError = func(err error) { f.Status.Show(err.Error()) }
+	f.SpacesList.OnError = func(err error) { f.Toasts.Show(err.Error()) }
 	if f.PickFolder != nil && f.SpawnOrchestrator != nil {
 		f.NewOrch = &NewOrchestrator{Pick: f.PickFolder, Spawn: f.SpawnOrchestrator,
-			Run: Runner{Post: w.Update}, Status: f.Status.Show}
+			Run: Runner{Post: w.Update}, Status: f.Toasts.Show}
 		f.SpacesList.OnNew = f.NewOrch.Start
 		f.SpacesList.OnNewIn = f.NewOrch.StartIn
 	}
 	if f.OpenTerminal != nil {
-		f.NewTerm = &NewTerminal{Open: f.OpenTerminal, Run: Runner{Post: w.Update}, Status: f.Status.Show,
+		f.NewTerm = &NewTerminal{Open: f.OpenTerminal, Run: Runner{Post: w.Update}, Status: f.Toasts.Show,
 			Select: func(addr string) { f.Selection.Select(state.Selected{Kind: state.KindTerminal, ID: addr}) }}
 		setNewTerminalHandler(func() { w.Update(f.newTerminal) })
 	}
@@ -1076,32 +1046,31 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		},
 		PickFolder: f.OpenFolder, Resolve: f.ProjectKey,
 		CloneParent: f.CloneParent, PickParent: f.PickCloneParent, CloneRun: f.CloneRun,
-		Save: f.SaveProjects, Run: Runner{Post: w.Update}, Status: f.Status.Show, Invalidate: w.Invalidate,
+		Save: f.SaveProjects, Run: Runner{Post: w.Update}, Status: f.Toasts.Show, Invalidate: w.Invalidate,
 	}
 	f.SpacesList.OnProjects = f.ProjectsModal.Toggle
 	f.SpacesList.OnReordered = f.ProjectsModal.changed
 	f.lateWin.set(w)
 	if f.themeErr != nil {
-		f.Status.Show(f.themeErr.Error())
+		f.Toasts.Show(f.themeErr.Error())
 		f.themeErr = nil
 	}
-	f.Settings = &Settings{Updates: f.Updates, Version: Version, Run: Runner{Post: w.Update},
+	f.Settings = &Settings{Updates: f.Updates, Version: Version, CoreVersion: f.coreVersion, Run: Runner{Post: w.Update},
 		Relaunch: f.Relaunch, Invalidate: w.Invalidate, Visible: func() bool { return f.Visibility == nil || f.Visibility.Visible() },
-		Status: f.Status.Show, Appearance: f.Appearance, SetAppearance: f.SetAppearance}
+		Status: f.Toasts.Show, Appearance: f.Appearance, SetAppearance: f.SetAppearance}
 	setSettingsHandler(func() { w.Update(f.Settings.Toggle) })
+	f.SpacesList.OnSettings = func() { f.Settings.Toggle() }
+	f.SpacesList.UpdateReady = f.Settings.Ready
 	stopChecks := f.Settings.StartChecks()
 	f.Slots.Spaces = f.SpacesList.View
 	f.SpacesList.Sync()
 	f.loadProjects(w)
 	f.loadWidths(w)
-	f.Needs = &NeedsRow{Snapshot: agentSnap}
+	var scope func() string
 	if src != nil {
-		f.Needs.Scope = func() string { return f.scope(src) }
-		f.Needs.Open = f.Card.Open
-		f.Sheet.Scope = f.Needs.Scope
+		scope = func() string { return f.scope(src) }
+		f.Sheet.Scope = scope
 	}
-	f.Needs.Collapsed = f.PROpen
-	f.Slots.Needs = f.Needs.View
 	f.Notch = &Notch{Snapshot: agentSnap, Project: func() string { return f.openProject }}
 	if src != nil {
 		f.Notch.Open = f.Card.Open
@@ -1110,13 +1079,13 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		f.Notch.Panel = f.Card.View
 	}
 	f.Overlay.Add(LabelNotchLayer, f.Notch.View)
-	f.Panel = &BoardPanel{Snapshot: agentSnap, Needs: f.Needs.Tabs}
+	f.Panel = &BoardPanel{Snapshot: agentSnap, Needs: NeedItems(agentSnap, scope)}
 	f.Panel.OpenPR = f.OpenPR
 	f.Panel.OpenIssue = f.OpenIssue
 	f.Panel.PRs = f.WorkerPRs
 	f.syncWorkerPRs()
 	if src != nil {
-		f.Panel.Scope = f.Needs.Scope
+		f.Panel.Scope = scope
 		f.Panel.Open = f.Card.Open
 		f.Panel.Select = func(address string) {
 			f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: address})

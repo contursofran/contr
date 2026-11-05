@@ -24,8 +24,14 @@ import (
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/git"
+	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/projects"
 )
+
+// hostSource is the host reading that the This Mac row shows. [host.Host] fits it.
+type hostSource interface {
+	Stats() (host.Stats, bool)
+}
 
 // SpacesList is the model of the sidebar's projects. Methods run on the UI
 // thread.
@@ -36,6 +42,11 @@ type SpacesList struct {
 	// OnProjects runs when the projects button is clicked (D113). Nil: the
 	// button does nothing.
 	OnProjects func()
+	// OnSettings runs when the Settings button of the Servers head is clicked
+	// (D126). Nil: the button does nothing. UpdateReady tells whether a newer
+	// contr waits; the button shows a dot then. Nil: no dot.
+	OnSettings  func()
+	UpdateReady func() bool
 	// OnNewIn runs when `+ new` of an empty project is clicked, with the
 	// project's folder (D116). Nil: the button does nothing.
 	OnNewIn func(dir string)
