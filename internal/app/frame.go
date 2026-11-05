@@ -87,8 +87,10 @@ type Frame struct {
 	// Card is the answer card that the needs-you row opens. [Frame.Attach]
 	// makes it and puts its view in Slots.Card.
 	Card *FloatCard
-	// Sheet is the context sheet that ⌘J opens ([Frame.Attach] makes it).
+	// Sheet is the v0.2 context sheet. Nothing opens it now (D125); #352 removes it.
 	Sheet *Sheet
+	// Notch is the questions notch in the terminal overlay ([Frame.Attach] makes it).
+	Notch *Notch
 	// ProjectsModal is the projects modal (D110), made in Attach.
 	ProjectsModal *ProjectsModal
 	// Updates is the update service of the Settings modal (D115). Nil shows "updates are off".
@@ -129,6 +131,9 @@ type Frame struct {
 	// SaveProjects writes a copy of the store (D110). It runs on a goroutine.
 	// Nil saves nothing.
 	SaveProjects func(*projects.Store) error
+	// WatchHead watches a repo's HEAD file for the sidebar's branch (see
+	// SpacesList.WatchHead). Nil: the branch is read when the terminals change.
+	WatchHead func(ctx context.Context, path string, changed func()) error
 	// LoadWidths reads the widths of the sidebar and the panel (D111). It
 	// runs on a goroutine. Nil means the defaults and no file.
 	LoadWidths func() (widths.Widths, error)
@@ -436,8 +441,9 @@ func color(rgb uint32) ui.Color { return theme.Color(rgb) }
 func (f *Frame) View(c *ui.Context) {
 	theme.Apply(c)
 	p := theme.Current()
-	if f.Sheet != nil && c.Shortcut(ui.Cmd, ui.KeyJ) {
-		f.Sheet.Toggle()
+	// ⌘J opens or closes the card from the notch (D125); it no longer opens the context sheet.
+	if f.Notch != nil && c.Shortcut(ui.Cmd, ui.KeyJ) {
+		f.Notch.Toggle()
 	}
 	win, _ := c.Size()
 	if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyE) && !narrowWindow(win) {
@@ -957,10 +963,11 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	}
 	// The git scan runs on a goroutine and lands through Window.Update.
 	if f.SpacesList == nil {
-		f.SpacesList = NewSpacesList(agentSnap, f.Selection,
-			func() bool { return f.Visibility == nil || f.Visibility.Visible() }, w.Update)
+		f.SpacesList = NewSpacesList(agentSnap, f.Selection, w.Update)
 	}
-	f.SpacesList.OpenPR = f.OpenPR
+	f.SpacesList.Host = f.Host
+	f.SpacesList.WatchHead = f.WatchHead
+	f.SpacesList.OnError = func(err error) { f.Status.Show(err.Error()) }
 	if f.PickFolder != nil && f.SpawnOrchestrator != nil {
 		f.NewOrch = &NewOrchestrator{Pick: f.PickFolder, Spawn: f.SpawnOrchestrator,
 			Run: Runner{Post: w.Update}, Status: f.Status.Show}
@@ -985,6 +992,8 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		Save: f.SaveProjects, Run: Runner{Post: w.Update}, Status: f.Status.Show, Invalidate: w.Invalidate,
 	}
 	f.SpacesList.OnProjects = f.ProjectsModal.Toggle
+	f.SpacesList.OnReordered = f.ProjectsModal.changed
+	f.AgentsList.Hidden = f.SpacesList.AgentFolded
 	f.lateWin.set(w)
 	if f.themeErr != nil {
 		f.Status.Show(f.themeErr.Error())
@@ -1007,6 +1016,13 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	}
 	f.Needs.Collapsed = f.PROpen
 	f.Slots.Needs = f.Needs.View
+	f.Notch = &Notch{Snapshot: agentSnap, Project: func() string { return f.openProject }}
+	if src != nil {
+		f.Notch.Open = f.Card.Open
+		f.Notch.Close = f.Card.Close
+		f.Notch.Opened = func() bool { _, ok := f.Card.Opened(); return ok }
+	}
+	f.Overlay.Add(LabelNotchLayer, f.Notch.View)
 	f.Panel = &BoardPanel{Snapshot: agentSnap, Needs: f.Needs.Tabs}
 	f.Panel.OpenPR = f.OpenPR
 	f.Panel.OpenIssue = f.OpenIssue
@@ -1026,7 +1042,6 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.Visibility = state.NewVisibility(func(visible bool) {
 		f.Host.SetVisible(visible)
 		f.Usage.SetVisible(visible)
-		f.SpacesList.SetVisible(visible)
 		w.Update(func() {
 			if f.conn != nil {
 				f.conn.SetVisible(visible)
@@ -1041,7 +1056,6 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	// reports. The samplers start hidden: tell them the window state now.
 	f.Host.SetVisible(w.IsVisible())
 	f.Usage.SetVisible(w.IsVisible())
-	f.SpacesList.SetVisible(w.IsVisible())
 	unwatch := f.Visibility.Watch(w)
 	term := f.attachTerminal(w)
 	return func() {
