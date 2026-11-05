@@ -4,6 +4,12 @@
 //
 // Ported from the Rust contr theme module. Sizes are in DIPs and colors are
 // 0xRRGGBB values; Color turns one into a MyGo color.
+//
+// OLD (v0.2): the constants in this file are the old tokens of docs/DESIGN.md.
+// The from-zero redesign (D118, D119) replaces them with the palettes in
+// palette.go, the scales in scale.go and the theme wiring in follow.go. Each
+// view keeps its old constants until its own issue of tracker #333 moves it
+// to the new tokens; then the constants it used are deleted.
 package theme
 
 import (
