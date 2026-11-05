@@ -70,8 +70,9 @@ const rowHeight = 20
 
 func TestCmdClickOpensWebAddressOnce(t *testing.T) {
 	tt, opened := linkTester(t, "see https://example.com/pr/1 now\r\nfile:///etc/hosts\r\n")
-	// Row 0 text starts at the padding; each cell is about 8 px wide.
-	x, y := float32(60), float32(20)
+	// The terminal has no padding of its own (the view adds it); each cell is
+	// about 8 px wide and row 0 is the first 20 px.
+	x, y := float32(60), float32(10)
 	tt.ClickAt(x, y)
 	if len(*opened) != 0 {
 		t.Fatalf("a plain click opened %q", *opened)
@@ -81,7 +82,7 @@ func TestCmdClickOpensWebAddressOnce(t *testing.T) {
 		t.Errorf("Cmd-click opened %q, want %q", *opened, want)
 	}
 	// A scheme that is not allowed does nothing, and the system opens nothing.
-	tt.ClickAtWith(ui.Super, 20, 20+rowHeight)
+	tt.ClickAtWith(ui.Super, 20, 10+rowHeight)
 	if len(*opened) != 1 || len(tt.OpenedURLs()) != 0 {
 		t.Errorf("file link: opened %q, system %q", *opened, tt.OpenedURLs())
 	}

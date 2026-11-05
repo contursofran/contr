@@ -69,6 +69,8 @@ func placeholder(name string) Slot {
 // to the window. Its methods run on the UI thread.
 type Frame struct {
 	Slots Slots
+	// Overlay is the layer above the terminal for the notch and the outline.
+	Overlay TerminalOverlay
 	// Visibility, Selection and Status are the app state. The frame holds
 	// them for the views in its slots.
 	Visibility *state.Visibility
@@ -632,8 +634,8 @@ func (f *Frame) terminal(c *ui.Context) {
 			Background(color(theme.BgWindow)).Children(func() { f.Review.View(c) })
 		return
 	}
-	col := ui.Column(c).Label(LabelTerminal).Grow(1).MinWidth(0).Center().
-		Background(color(theme.BgTerminal))
+	// No background: the terminal is clear over the panel (docs/spec/Terminal.md).
+	col := ui.Column(c).Label(LabelTerminal).Grow(1).MinWidth(0).Center()
 	col.Children(func() {
 		// The sheet floats over the top edge of this strip (D67: no resize).
 		if f.Sheet != nil {
@@ -1032,10 +1034,7 @@ func (f *Frame) setTerminalFocus(focused bool) {
 // terminalOptions are the plugin's options: contr's colors, JetBrains Mono at
 // the design's size and row height, and the design's padding.
 func terminalOptions(conn *ghostty.Conn, open func(string)) gterm.Options {
-	var pal [16]ui.Color
-	for i, rgb := range theme.TerminalPalette {
-		pal[i] = color(rgb)
-	}
+	light, dark := terminalColors()
 	return gterm.Options{
 		Conn: conn,
 		// The screen takes the core's size, which the Conn reads from the
@@ -1043,15 +1042,20 @@ func terminalOptions(conn *ghostty.Conn, open func(string)) gterm.Options {
 		ResizeByConn: true,
 		// Cmd-click opens http, https and mailto links only (D94).
 		OpenLink: terminalOpenLink(open),
-		Theme: &gterm.Theme{
-			Foreground: color(theme.Text), Background: color(theme.BgTerminal), Palette: pal,
-		},
+		// The colors follow the theme without a reconnect: the plugin takes
+		// Theme in a light window and DarkTheme in a dark one.
+		Theme:     light,
+		DarkTheme: dark,
+		// The glass shows through: the plugin draws no background.
+		Transparent: true,
 		Font: gterm.Font{
 			Family: theme.FontFamily, Size: theme.TerminalFontSize,
 			LineHeight: theme.TerminalLineHeightScale,
 			Features:   []string{"-calt", "-clig", "-liga"},
 		},
-		Padding: gterm.Padding{X: theme.TermPadding, Y: theme.TermPadding},
+		// The padding is the view's (terminalGrid): the spec's sides and top
+		// differ from its bottom, and the plugin has one value for each axis.
+		Padding: gterm.Padding{X: -1, Y: -1},
 	}
 }
 
@@ -1132,38 +1136,45 @@ func (f *Frame) coreVersion() (string, bool) {
 const staleOpacity = 0.5
 
 // terminalLine is the line shown instead of, or over, the grid, with its
-// colour. ok is false when the grid speaks for itself.
-func (f *Frame) terminalLine() (line string, colour uint32, ok bool) {
+// colour. ok is false when the grid speaks for itself. The empty text and the
+// reasons the terminal cannot show are ink-42; the line of an ended process
+// is ink-38 (docs/spec/Terminal.md).
+func (f *Frame) terminalLine() (line string, colour ui.Color, ok bool) {
+	p := theme.Current()
 	if f.term == nil {
 		if f.termErr != "" {
-			return f.termErr, theme.Text2, true
+			return f.termErr, p.Ink42, true
 		}
-		return TerminalOffLine, theme.TextDim, true
+		return TerminalOffLine, p.Ink42, true
 	}
 	switch f.termState.Kind {
 	case ghostty.NotRunning:
-		return TerminalNotRunningLine, theme.Text2, true
+		return TerminalNotRunningLine, p.Ink38, true
 	case ghostty.Incompatible:
-		return f.termState.Message, theme.Text2, true
+		return f.termState.Message, p.Ink42, true
 	}
-	return "", 0, false
+	return "", ui.Color{}, false
 }
 
 // buildTerminal is the frame's terminal slot: the plugin's view of the
 // selected agent's terminal, dimmed and with a line while the connection is
-// down.
+// down, and the overlay layer above them. The grid sits inside the spec's
+// padding: 18 above, 26 at the sides, 10 below.
 func (f *Frame) buildTerminal(c *ui.Context) {
 	line, colour, showLine := f.terminalLine()
 	ui.Box(c).Fill().Center().Children(func() {
 		if f.term != nil {
-			grid := gterm.View(c, f.term).Label(LabelTerminalGrid).Absolute().Fill().AutoFocus()
-			if f.termState.Kind != ghostty.Live {
-				grid.Opacity(staleOpacity)
-			}
+			ui.Box(c).Absolute().Fill().Padding(theme.Space18, theme.Space26, theme.Space10).Children(func() {
+				grid := gterm.View(c, f.term).Label(LabelTerminalGrid).Fill().AutoFocus()
+				if f.termState.Kind != ghostty.Live {
+					grid.Opacity(staleOpacity)
+				}
+			})
 		}
 		if showLine {
-			ui.Text(c, line).TextColor(theme.Color(colour))
+			ui.Text(c, line).TextColor(colour)
 		}
+		f.Overlay.View(c)
 	})
 }
 
