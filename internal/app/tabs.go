@@ -5,6 +5,7 @@ package app
 
 import (
 	"path/filepath"
+	"slices"
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
@@ -27,7 +28,12 @@ type Tab struct {
 }
 
 // Closable tells whether the tab has a close button: a plain terminal, not an agent (D85).
+// Middle-click and the menu close only a closable tab too.
 func (t Tab) Closable() bool { return t.Plain }
+
+// Movable tells whether the tab can be dragged to another place: a plain terminal. The agent's
+// own tab stays first.
+func (t Tab) Movable() bool { return t.Plain }
 
 // TitleTabs returns the tabs for agent, the address of the agent whose tabs show: its own tab
 // first, then the plain terminals of project. selected is the address of the selected tab, or "".
@@ -140,4 +146,47 @@ func OpenProject(s agentstate.Snapshot, sel state.Selected, ok bool, keep string
 		return s.Orchestrators[0].Project
 	}
 	return keep
+}
+
+// OrderTabs puts the plain tabs in the order of order, a list of addresses. The agent's own tab
+// stays first. A plain tab that order does not name goes after the ones it names, in the order it
+// came in. The result is a new slice.
+func OrderTabs(tabs []Tab, order []string) []Tab {
+	out := make([]Tab, 0, len(tabs))
+	var plain []Tab
+	for _, t := range tabs {
+		if t.Plain {
+			plain = append(plain, t)
+		} else {
+			out = append(out, t)
+		}
+	}
+	rank := func(t Tab) int {
+		if i := slices.Index(order, t.Address); i >= 0 {
+			return i
+		}
+		return len(order)
+	}
+	slices.SortStableFunc(plain, func(a, b Tab) int { return rank(a) - rank(b) })
+	return append(out, plain...)
+}
+
+// MoveTab returns the addresses of the plain tabs after the plain tab from takes the place of the
+// plain tab to: a tab that moves right goes after to, one that moves left goes before it. The
+// agent's own tab is not in the list and never moves. ok is false, and nothing moves, when from
+// or to is not a plain tab of tabs, or they are the same tab.
+func MoveTab(tabs []Tab, from, to string) (order []string, ok bool) {
+	var plain []string
+	for _, t := range tabs {
+		if t.Plain {
+			plain = append(plain, t.Address)
+		}
+	}
+	i, j := slices.Index(plain, from), slices.Index(plain, to)
+	if i < 0 || j < 0 || i == j {
+		return nil, false
+	}
+	plain = slices.Delete(plain, i, i+1)
+	plain = slices.Insert(plain, j, from)
+	return plain, true
 }

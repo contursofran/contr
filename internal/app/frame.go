@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"slices"
 	"sync"
 	"time"
 
@@ -200,6 +201,8 @@ type Frame struct {
 	agentSnap   func() agentstate.Snapshot
 	openProject string
 	tabAgent    string
+	// tabOrder is the order the owner dragged the plain tabs to, as addresses, for the session.
+	tabOrder    []string
 	sidebarOpen bool
 	panelOpen   bool
 	reviewOpen  bool
@@ -702,6 +705,7 @@ func (f *Frame) titleBar(c *ui.Context, sidebarW float32, narrow bool) {
 		}
 		f.bar.setTabs(f.titleTabs())
 		f.bar.selectTab, f.bar.closeTab = f.selectTab, f.closeTab
+		f.bar.closeOthers, f.bar.moveTab = f.closeOtherTabs, f.moveTab
 		f.bar.newTab = nil
 		if f.NewTerm != nil {
 			f.bar.newTab = f.newTerminal
@@ -755,7 +759,7 @@ func (f *Frame) titleTabs() []Tab {
 	if ok && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker || sel.Kind == state.KindTerminal) {
 		selected = sel.ID
 	}
-	return TitleTabs(snap, f.openProject, f.tabAgent, selected)
+	return OrderTabs(TitleTabs(snap, f.openProject, f.tabAgent, selected), f.tabOrder)
 }
 
 // newTerminal opens a plain terminal in the open project (D82). Its folder is
@@ -836,6 +840,32 @@ func (f *Frame) closeTab(t Tab) {
 	if f.CloseTerm != nil && t.Closable() {
 		f.CloseTerm.Start(t.Address)
 	}
+}
+
+// closeOtherTabs closes every plain terminal tab except keep. The agent's own tab never closes
+// (D85). UI thread.
+func (f *Frame) closeOtherTabs(keep Tab) {
+	for _, t := range f.bar.tabs {
+		if t.Address != keep.Address {
+			f.closeTab(t)
+		}
+	}
+}
+
+// moveTab puts the plain tab from in the place of the plain tab to. The agent's own tab does
+// not move. The order lasts for the session. UI thread.
+func (f *Frame) moveTab(from, to string) {
+	order, ok := MoveTab(f.bar.tabs, from, to)
+	if !ok {
+		return
+	}
+	// Keep the order of the other projects' tabs; it only matters among tabs of one project.
+	for _, a := range f.tabOrder {
+		if !slices.Contains(order, a) {
+			order = append(order, a)
+		}
+	}
+	f.tabOrder = order
 }
 
 // toggleButton draws the sidebar toggle: a small outline with one filled
