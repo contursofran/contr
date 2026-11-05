@@ -30,7 +30,14 @@ type IconButtonOpts struct {
 	OnClick func()
 	// Disabled dims the icon and removes the hover and the tooltip key.
 	Disabled bool
+	// Dot draws a small dot at the top right corner, in ink-100: the button
+	// has something that waits for the owner (D126). Name it in Label too,
+	// for the screen reader.
+	Dot bool
 }
+
+// SizeIconButtonDot is the width of the dot of an IconButton.
+const SizeIconButtonDot = 6
 
 // TipText is the tooltip of a button: the label, and the key after two
 // spaces. A disabled button shows no key.
@@ -94,6 +101,10 @@ func IconButton(c *ui.Context, o IconButtonOpts) ui.Element {
 			const gap, width = 2, 1
 			p.Stroke(ui.Rect{X: r.X - gap - width, Y: r.Y - gap - width, W: r.W + 2*(gap+width), H: r.H + 2*(gap+width)},
 				theme.Current().FocusRing, theme.Radius8+gap+width, width)
+		}
+		if o.Dot {
+			d := float32(SizeIconButtonDot)
+			p.Fill(ui.Rect{X: r.X + r.W - d - 4, Y: r.Y + 4, W: d, H: d}, theme.Current().Ink100, d/2)
 		}
 	})
 	return b.Children(func() {

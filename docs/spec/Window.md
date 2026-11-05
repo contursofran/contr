@@ -77,7 +77,7 @@ Design system page: component Window. Shared rules: [README.md](README.md).
 
 **Don't**
 
-- Do not add a status bar or a footer to the window.
+- Do not add a status bar or a footer to the window (removed, D146). Action messages are toasts at the bottom center, `glass-float` with `float-line`.
 - Do not use color on the ground or the glass.
 
 ## Tests

@@ -1,27 +1,17 @@
 package app
 
-// The needs-you row under the terminal: one line of tabs for what waits on
-// the owner. Blocked workers come first, then questions (D7), then to-dos
-// (T12). Resolved items stay, struck through, until "clear done". The row is
-// hidden when nothing waits. A click on a tab picks it; it opens the
-// questions card (#347).
+// The items that wait on the owner: blocked workers first, then questions
+// (D7), then to-dos (T12). The v0.2 needs-you row under the terminal is gone
+// (D146); the questions notch shows these items now (D135). The disabled board
+// lists them with [NeedItems].
 
 import (
 	"cmp"
 	"strings"
 
-	"github.com/egoist/mygo/ui"
-
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/icons"
-	"github.com/contursofran/contr/internal/app/theme"
-)
-
-// Labels of the needs-you row.
-const (
-	LabelNeedsRow       = "needs row"
-	LabelNeedsClearDone = "clear done"
 )
 
 // AgentSource is the part of agentstate.Model that the views read and act on.
@@ -72,39 +62,23 @@ type NeedTab struct {
 // Label is the accessible name: "{key} {title}".
 func (t NeedTab) Label() string { return t.Key + " " + t.Title }
 
-// NeedsRow is the row's state. Build it with its fields set; Scope,
-// ClearDone and Open may be nil.
-type NeedsRow struct {
-	// Snapshot reads the agent state; nil means nothing waits.
-	Snapshot func() agentstate.Snapshot
-	// ClearDone forgets the resolved items. The "clear done" control shows
-	// only when it is set.
-	ClearDone func()
-	// Scope returns the project to show, or "" for all projects.
-	Scope func() string
-	// Open runs when a tab is clicked. The frame opens the questions card here.
-	Open func(NeedTab)
-	// Collapsed, when it returns true, shows only the icon and the id of
-	// each tab: the PR pane is open and takes the room (DESIGN.md, PR viewer).
-	Collapsed func() bool
-
-	picked string
+// NeedItems returns a function that lists the items for the scope: the project
+// scope returns, or all projects when it is nil or returns "". A nil snap
+// lists nothing.
+func NeedItems(snap func() agentstate.Snapshot, scope func() string) func() []NeedTab {
+	return func() []NeedTab {
+		if snap == nil {
+			return nil
+		}
+		project := ""
+		if scope != nil {
+			project = scope()
+		}
+		return needItems(snap(), project)
+	}
 }
 
-// Tabs returns the tabs for the scope: blocked workers, then questions, then
-// to-dos.
-func (n *NeedsRow) Tabs() []NeedTab {
-	if n.Snapshot == nil {
-		return nil
-	}
-	project := ""
-	if n.Scope != nil {
-		project = n.Scope()
-	}
-	return needItems(n.Snapshot(), project)
-}
-
-// needItems returns the items of the needs-you row for project, or for all
+// needItems returns the items of the items for project, or for all
 // projects when project is "": blocked workers, then questions, then to-dos.
 func needItems(snap agentstate.Snapshot, project string) []NeedTab {
 	in := func(p string) bool { return project == "" || p == project }
@@ -142,59 +116,3 @@ func needItems(snap agentstate.Snapshot, project string) []NeedTab {
 }
 
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
-
-// View builds the row, or nothing when no tab shows.
-func (n *NeedsRow) View(c *ui.Context) {
-	tabs := n.Tabs()
-	if len(tabs) == 0 {
-		return
-	}
-	anyDone := false
-	ui.Row(c).Label(LabelNeedsRow).FillWidth().Height(theme.BoardLineHeight).Shrink(0).
-		AlignItems(ui.Center).Gap(theme.NeedGap).PaddingX(theme.PanelPadX).
-		Background(theme.Color(theme.BgBars)).BorderWidth(1, 0, 0, 0).BorderColor(theme.Color(theme.Line)).
-		Children(func() {
-			for _, t := range tabs {
-				anyDone = anyDone || t.Resolved
-				n.tab(c, t)
-			}
-			ui.Box(c).Grow(1)
-			if anyDone && n.ClearDone != nil {
-				ui.ButtonBase(c).Label(LabelNeedsClearDone).Shrink(0).Cursor(ui.CursorPointer).
-					OnClick(n.ClearDone).Children(func() {
-					ui.Text(c, LabelNeedsClearDone).TextColor(theme.Color(theme.TextDim)).NoWrap()
-				})
-			}
-		})
-}
-
-func (n *NeedsRow) tab(c *ui.Context, t NeedTab) {
-	collapsed := n.Collapsed != nil && n.Collapsed()
-	text := uint32(theme.Text)
-	if t.Resolved {
-		text = theme.TextDim
-	}
-	picked := n.picked == t.Key
-	el := ui.ButtonBase(c).Label(t.Label()).Height(theme.BoardLineHeight - 6).Shrink(1).MinWidth(0).MaxWidth(220).
-		AlignItems(ui.Center).Gap(theme.NeedGap).PaddingX(6).Radius(theme.CardRadius).
-		Cursor(ui.CursorPointer).Selected(picked).OnClick(func() {
-		n.picked = t.Key
-		if n.Open != nil {
-			n.Open(t)
-		}
-	})
-	if picked {
-		el = el.Background(theme.Color(theme.BgCard))
-	}
-	el.Children(func() {
-		icons.Sized(c, t.Icon, theme.IconSizeSmall).Shrink(0)
-		ui.Text(c, t.Key).Shrink(0).NoWrap().TextColor(theme.Color(text))
-		if collapsed {
-			return
-		}
-		title := ui.Text(c, t.Title).MinWidth(0).SingleLine().TextColor(theme.Color(text))
-		if t.Resolved {
-			title.Strikethrough()
-		}
-	})
-}

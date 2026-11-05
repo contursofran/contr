@@ -86,9 +86,10 @@ func boardTester(p *BoardPanel) *ui.Tester {
 	}, theme.PanelWidth, 900)
 }
 
-func newBoardPanel(snap agentstate.Snapshot, project string) (*BoardPanel, *NeedsRow) {
-	n := &NeedsRow{Snapshot: func() agentstate.Snapshot { return snap }, Scope: func() string { return project }}
-	return &BoardPanel{Snapshot: n.Snapshot, Scope: n.Scope, Needs: n.Tabs}, n
+func newBoardPanel(snap agentstate.Snapshot, project string) (*BoardPanel, func() []NeedTab) {
+	get, scope := func() agentstate.Snapshot { return snap }, func() string { return project }
+	tabs := NeedItems(get, scope)
+	return &BoardPanel{Snapshot: get, Scope: scope, Needs: tabs}, tabs
 }
 
 func TestPanelShowsWorkRowsAndTheHeads(t *testing.T) {
@@ -129,7 +130,7 @@ func TestNeedsSectionEqualsTheRowOrder(t *testing.T) {
 	tt := boardTester(p)
 	tt.Frame()
 	var labels []string
-	for _, tab := range row.Tabs() {
+	for _, tab := range row() {
 		labels = append(labels, tab.Key)
 		box(t, tt, tab.Label()+", "+NeedKindLabel(tab))
 	}
@@ -184,8 +185,8 @@ func TestFramePanelRowClickShowsTheWorker(t *testing.T) {
 	f.Selection = state.NewSelection(nil)
 	f.Selection.Select(state.Selected{Kind: state.KindOrchestrator, ID: "o1"})
 	f.Worker = &WorkerPanel{Source: src, Selection: f.Selection, Run: Runner{Go: func(f func()) { f() }}}
-	n := &NeedsRow{Snapshot: src.Snapshot, Scope: func() string { return f.scope(src) }}
-	f.Panel = &BoardPanel{Snapshot: src.Snapshot, Scope: n.Scope, Needs: n.Tabs,
+	scope := func() string { return f.scope(src) }
+	f.Panel = &BoardPanel{Snapshot: src.Snapshot, Scope: scope, Needs: NeedItems(src.Snapshot, scope),
 		Select: func(a string) { f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: a}) }}
 	f.Slots.Panel = f.Panel.View
 	tt := ui.NewTester(f.panelBox, theme.PanelWidth, theme.WindowHeight)

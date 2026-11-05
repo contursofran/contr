@@ -17,6 +17,7 @@ import (
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/git"
+	"github.com/contursofran/contr/internal/host"
 )
 
 // ---- Fake git layouts on disk (plain files, no `git` binary) ----
@@ -323,4 +324,27 @@ func TestTheScanFuncGetsTheCwdsInTreeOrder(t *testing.T) {
 	if want := []string{"/x/b", "/x/a"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("cwds %q, want %q", got, want)
 	}
+}
+
+// fakeHost is a host reading that a test sets.
+type fakeHost struct {
+	mu    sync.Mutex
+	stats host.Stats
+	has   bool
+}
+
+func (f *fakeHost) Stats() (host.Stats, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.stats, f.has
+}
+
+func (f *fakeHost) set(s host.Stats) {
+	f.mu.Lock()
+	f.stats, f.has = s, true
+	f.mu.Unlock()
+}
+
+func stats(cpu float32, used, total uint64) host.Stats {
+	return host.Stats{CPUPercent: cpu, MemUsed: used, MemTotal: total}
 }

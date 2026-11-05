@@ -45,6 +45,34 @@ func TestServerRowShowsCPUAndMemory(t *testing.T) {
 	}
 }
 
+func TestServersHeadHasASettingsButton(t *testing.T) {
+	h := newSpaces(t, spTree())
+	opened := 0
+	h.list.OnSettings = func() { opened++ }
+	h.tt.Frame()
+	if h.has(LabelSettingsUpdate) {
+		t.Error("the update label shows with no update")
+	}
+	if err := h.tt.Click(LabelSettingsOpen); err != nil || opened != 1 {
+		t.Fatalf("click: %v, opened %d", err, opened)
+	}
+}
+
+func TestSettingsButtonNamesAnUpdateThatWaits(t *testing.T) {
+	h := newSpaces(t, spTree())
+	ready := false
+	h.list.UpdateReady = func() bool { return ready }
+	h.tt.Frame()
+	if !h.has(LabelSettingsOpen) {
+		t.Fatal("no Settings button")
+	}
+	ready = true
+	h.tt.Frame()
+	if !h.has(LabelSettingsUpdate) || h.has(LabelSettingsOpen) {
+		t.Errorf("the button does not say that an update waits: %q", h.tt.Texts())
+	}
+}
+
 func TestServerRowHasNoPlusUntilRemoteServers(t *testing.T) {
 	h := newSpaces(t, spTree())
 	h.tt.Frame()
