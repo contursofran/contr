@@ -23,9 +23,11 @@ Design system page: component Terminal. Shared rules: [README.md](README.md).
 - Shows the hc terminal of the selected tab (D80). contr watches until the
   owner types; the first key sizes the terminal (D91).
 - The background is clear over `panel`; the text color is
-  `terminal-text`; the ANSI palette is the theme's (README Themes).
+  `terminal-text`; the ANSI palette is the theme's (README Themes). The
+  Light palette is a known light palette tuned for contrast on the light
+  panel (D129).
 - Overlays: QuestionsNotch in every terminal of a project with an open
-  question; Outline in the orchestrator terminal only.
+  question, to-do or blocked worker menu (D124); Outline in the orchestrator terminal only.
 
 ## Data
 
@@ -34,6 +36,8 @@ Design system page: component Terminal. Shared rules: [README.md](README.md).
 ## Keys and focus
 
 - Keys go to the terminal while it has the focus. Esc is never taken by contr.
+- `⌘F` opens MyGo's `FindBar` over the terminal text (D130). Esc in the
+  `FindBar` closes it and returns the focus to the terminal. There is no split.
 
 ## Edge cases
 
@@ -68,6 +72,7 @@ Design system page: component Terminal. Shared rules: [README.md](README.md).
 ## Tests
 
 - View: palette per theme; overlays do not take keys.
+- View: `⌘F` shows the `FindBar` over the terminal; Esc closes it.
 - e2e: type in a scratch core terminal and read the text back.
 
 ## Replaces

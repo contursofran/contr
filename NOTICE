@@ -20,3 +20,6 @@ Some code is adapted from Herdr UI (https://github.com/penso/herdr-gpui),
 Copyright 2026 Fabien Penso, licensed under the Apache License, Version 2.0.
 Each file with adapted code has a header comment that says so and names the
 changes.
+
+The Claude mark (assets/icons/claude.svg) is a trademark of Anthropic, used
+to mark Claude agents.

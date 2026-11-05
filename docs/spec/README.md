@@ -82,7 +82,7 @@ tests, and what it replaces.
   - **ReduceTransparency:** glass becomes a solid fill (open point O13).
   - **HighContrast:** open point O13.
 - The terminal has a 16-color ANSI palette per theme. The dark palette is
-  today's `TerminalPalette`; the light palette is open point O9.
+  today's `TerminalPalette`; the light palette is a known light palette (D129).
 - Settings has an **Appearance** row: System, Dark, Light. The value is
   stored with the other settings, in `settings.json` in the user config
   folder (`internal/prefs`). An unknown stored value is System.
@@ -113,9 +113,9 @@ tests, and what it replaces.
 - 16px line drawings, stroke 1.2 to 1.4, drawn in the text color
   (`ui.Icon`), so a state changes only the text color.
 - Names: `project`, `computer`, `server`, `folder`, `folder-open`,
-  `file-go`, `file-md`, `file`, `close`, `plus`, `split`, `search`,
+  `file-go`, `file-md`, `file`, `close`, `plus`, `search`,
   `sidebar-right`, `filter`, `terminal`. They go in `assets`.
-- The Claude mark is open point O8.
+- The Claude mark is the official Claude mark (O8 settled, D123): `claude.svg`, one filled shape.
 
 ## Data
 
@@ -132,8 +132,7 @@ tests, and what it replaces.
 |---|---|---|
 | `⌘T` | new tab: a plain terminal in the selected project (D82) | window |
 | `⌘W` | close the selected tab when it is a plain terminal (D85) | window |
-| `⌘D` | split terminal (open point O12) | window |
-| `⌘F` | search in the terminal (open point O12) | window |
+| `⌘F` | search in the terminal, `FindBar` (D130) | window |
 | `⌘⇧E` | show or hide the files panel | window |
 | `⌘J` | open or close the questions card | window, while a question is open |
 | `1`–`9` | pick that choice | questions card, with the focus |
@@ -173,38 +172,44 @@ Esc is never a window shortcut: it interrupts Claude Code in the terminal.
 | Top bar 40: tabs of the open project | TitleBar 46: tabs of the selected agent | replaced |
 | Sidebar: Spaces, `This computer` header | ServerRow section, then ProjectRow | replaced |
 | Sidebar: Agents section in state groups | AgentRow under its project: orchestrator first, workers on a rail | replaced |
-| Panel 380: board or worker | Files panel 280: FileTree and UsageMeter | replaced; board is O1 |
-| Bottom row 32: needs-you tabs and counts | QuestionsNotch | questions replaced; to-dos and blocked workers are O2 |
+| Panel 380: board or worker | Files panel 280: FileTree and UsageMeter | replaced; the board and worker detail are disabled (D122) |
+| Bottom row 32: needs-you tabs and counts | QuestionsNotch | questions replaced; to-dos and blocked workers are more chips (D124) |
 | Answer card | QuestionsCard | replaced |
-| Context sheet (`⌘J`) | QuestionsCard context line | O3 |
-| Footer 26: plan usage | UsageMeter | replaced; CPU, memory, versions and messages are O4 |
+| Context sheet (`⌘J`) | QuestionsCard impacts and a collapsible section | replaced; no sheet (D125) |
+| Footer 26: plan usage | UsageMeter | replaced; CPU and memory on ServerRow, versions in Settings, messages as toasts (D126) |
 | Pin bar (removed) | Outline and OutlineCard | new |
-| Board pop-up, PR viewer, Review, projects modal, settings | unchanged; restyle with the tokens | O5 |
+| Board pop-up, PR viewer, Review, projects modal, settings | unchanged; restyle with the tokens | Review, projects modal and settings restyled; the board pop-up and PR viewer disabled (D122, D127) |
 
 ## Open points
 
 The coordinator asks the owner these before the issues that need them.
 
-1. **O1 Board.** The right panel shows files now. Where do the board
-   (needs a look, work, next, merged) and the worker detail (task, PR,
-   CI, review, branch) go?
-2. **O2 To-dos and blocked workers.** The notch shows questions. Where do
-   to-dos (`do`, `know`) and a blocked worker's menu (D51) show?
-3. **O3 Context sheet.** Keep `⌘J` for a sheet with the source, refs and
-   option impacts (D114), or put them in the card?
-4. **O4 Footer.** Where do CPU, memory, the contr and hc versions, and
-   action messages go?
-5. **O5 PR viewer and Review.** Their place in the new frame.
-6. **O6 Narrow window.** Settled: below 1100px the files panel hides; the sidebar collapse to icons below about 800px is still to build.
+1. **O1 Board.** Settled (D122): the board and the worker detail are
+   disabled until they are redesigned. The right panel shows only files.
+2. **O2 To-dos and blocked workers.** Settled (D124): they show in the
+   questions notch, as more chips after the questions.
+3. **O3 Context sheet.** Settled (D125): no `⌘J` sheet. The card shows
+   option impacts under each option, and refs and source in a collapsible
+   section.
+4. **O4 Footer.** Settled (D126): CPU and memory go on the `This computer`
+   row; versions and the update go in Settings, with a dot when an update
+   is ready; action messages are toasts.
+5. **O5 PR viewer and Review.** Settled (D127): the PR viewer is disabled
+   until it is redesigned; Review keeps its place, restyled with the
+   tokens.
+6. **O6 Narrow window.** Settled (D128): below about 1100px the files
+   panel hides; below about 800px the sidebar collapses to icons.
 7. **O7 Sans font.** Settled: bundle Inter (OFL, a `NOTICE` entry), D121.
-8. **O8 Claude mark.** Which drawing, and the right to use it.
-9. **O9 Light terminal palette.** The 16 ANSI colors on the light panel.
+8. **O8 Claude mark.** Settled (D123): the official Claude mark.
+9. **O9 Light terminal palette.** Settled (D129): a known light palette
+   (Ghostty or macOS Terminal style), tuned for contrast on the light
+   panel. The values come in #345.
 10. **O10 Ages.** The design system page moves ages once a minute while a
     row shows. D35 and D40 forbid a timer. Until the owner decides, ages
     follow D35.
 11. **O11 Servers.** Remote servers need a source (#149). Only this Mac
     shows now.
-12. **O12 Split and search.** What split means for an hc terminal, and
-    whether search uses MyGo's `FindBar` over the terminal text.
+12. **O12 Split and search.** Settled (D130): split is dropped for now.
+    Search uses MyGo's `FindBar` over the terminal text.
 13. **O13 Reduce transparency and high contrast.** The fill and ink values
     for each.
