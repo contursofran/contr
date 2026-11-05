@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -91,6 +92,35 @@ func (c *client) inBar(t *testing.T, label string) (rect, bool) {
 		}
 	}
 	return rect{}, false
+}
+
+// plainTabWidths returns the width of the selected "$ contr" tab and of the other one.
+func (c *client) plainTabWidths(t *testing.T) (selected, other float64, ok bool) {
+	t.Helper()
+	var tree struct {
+		Nodes []struct {
+			Label  string
+			Role   string
+			States []string
+			Bounds rect
+		}
+	}
+	if err := json.Unmarshal(c.call(t, "tree", map[string]any{}), &tree); err != nil {
+		t.Fatal(err)
+	}
+	var found int
+	for _, n := range tree.Nodes {
+		if n.Role != "tab" || n.Label != "$ contr" {
+			continue
+		}
+		found++
+		if slices.Contains(n.States, "checked") {
+			selected = n.Bounds.Width
+		} else {
+			other = n.Bounds.Width
+		}
+	}
+	return selected, other, found == 2
 }
 
 // TestTitleBarCapture runs the built app against a scratch hc core, a scratch HOME and a scratch
@@ -197,7 +227,7 @@ func TestTitleBarCapture(t *testing.T) {
 		if err := os.MkdirAll(settings, 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(settings, "settings.json"), []byte(`{"appearance": "`+theme+`"}`), 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(settings, "settings.json"), []byte(`{"version": 1, "appearance": "`+theme+`"}`), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		sock = filepath.Join(dir, theme+".sock")
@@ -263,7 +293,10 @@ func TestTitleBarCapture(t *testing.T) {
 				}
 			}
 		}
-		waitFor(c, "the two plain terminal tabs", func(map[string]bool) bool { return inBar(c, "$ contr") && inBar(c, app.LabelNewTab) })
+		waitFor(c, "the two plain terminal tabs", func(map[string]bool) bool {
+			_, _, two := c.plainTabWidths(t)
+			return two && inBar(c, app.LabelNewTab)
+		})
 		click(c, "lead")
 		time.Sleep(time.Second)
 		for _, want := range []string{"lead", "$ contr", app.LabelNewTab, app.LabelFilesToggle} {
@@ -281,15 +314,17 @@ func TestTitleBarCapture(t *testing.T) {
 		// A plain terminal tab selected: its close button shows, the agent's tab does not have one.
 		click(c, "$ contr")
 		time.Sleep(time.Second)
-		if !inBar(c, app.LabelCloseTab) {
-			t.Errorf("%s: the selected plain tab has no close button", theme)
+		// MyGo exposes a tab as one element, so the close button inside it has no node of its own.
+		// The selected plain tab is the 16px button and its 8px gap wider than the other one.
+		if sel, other, ok := c.plainTabWidths(t); !ok || sel < other+20 {
+			t.Errorf("%s: the selected plain tab has no close button (widths %.0f and %.0f)", theme, sel, other)
 		}
 		c.capture(t, filepath.Join(out, "titlebar-"+theme+"-terminal.png"))
 
 		// Select the builder in the sidebar: its own tab replaces the orchestrator's.
 		var row string
 		for l := range c.labels(t) {
-			if strings.HasPrefix(l, "b342-s1-titlebar") {
+			if strings.HasPrefix(l, "b342-s1-titlebar, working, builder") {
 				row = l
 			}
 		}
@@ -306,5 +341,13 @@ func TestTitleBarCapture(t *testing.T) {
 		}
 		time.Sleep(time.Second)
 		c.capture(t, filepath.Join(out, "titlebar-"+theme+"-builder.png"))
+
+		// A click on the Review button opens Review; a click on a tab brings the terminal back.
+		click(c, app.LabelReviewToggle)
+		waitFor(c, "the Review view", func(l map[string]bool) bool { return l[app.LabelReview] })
+		time.Sleep(time.Second)
+		c.capture(t, filepath.Join(out, "titlebar-"+theme+"-review.png"))
+		click(c, "$ contr")
+		waitFor(c, "the terminal again", func(l map[string]bool) bool { return !l[app.LabelReview] })
 	}
 }
