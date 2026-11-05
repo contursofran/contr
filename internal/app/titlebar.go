@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/icons"
+	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/theme"
 )
 
@@ -75,8 +76,9 @@ func (b *titleBar) syncChoice() {
 }
 
 // build adds the bar's parts to the title bar row: the tabs, the drag stretch, the Review
-// button and the panel toggle at the right edge.
-func (b *titleBar) build(c *ui.Context, panelOpen bool, togglePanel func()) {
+// button and the files toggle at the right edge. The toggle is pressed while the files show; it
+// is disabled while the window is too narrow for them.
+func (b *titleBar) build(c *ui.Context, filesOn, filesDisabled bool, toggleFiles func()) {
 	b.tabRow(c)
 	if b.newTab != nil {
 		b.newTabButton(c)
@@ -85,7 +87,8 @@ func (b *titleBar) build(c *ui.Context, panelOpen bool, togglePanel func()) {
 	if b.toggleReview != nil {
 		b.reviewButton(c)
 	}
-	panelToggle(c, panelOpen, togglePanel)
+	kit.IconButton(c, kit.IconButtonOpts{Icon: "sidebar-right", Label: LabelFilesToggle, Key: "⌘⇧E",
+		On: &filesOn, OnClick: toggleFiles, Disabled: filesDisabled})
 }
 
 // newTabButton is the "+" after the tabs. It stays visible with no tabs.

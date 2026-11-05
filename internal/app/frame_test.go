@@ -43,23 +43,31 @@ func absent(tt *ui.Tester, label string) bool {
 
 func TestFrameMatchesDesignSizes(t *testing.T) {
 	_, tt := newTester(t)
-	sidebar := box(t, tt, LabelSidebar)
-	if sidebar.Y != 0 || sidebar.W != theme.SidebarWidth || sidebar.H != theme.WindowHeight-theme.StatusBarHeight {
-		t.Errorf("sidebar %+v, want 280 wide from the top to the status bar", sidebar)
+	bar := box(t, tt, LabelTitleBar)
+	if bar.X != 0 || bar.Y != 0 || bar.W != theme.WindowWidth || bar.H != 46 {
+		t.Errorf("title bar %+v, want 46 high at the top over the full width", bar)
 	}
-	header := box(t, tt, LabelSidebarHeader)
-	if header.Y != 0 || header.H != theme.TitleBarHeight {
-		t.Errorf("sidebar header %+v, want 40 high at the top", header)
+	// 10px between all panels and the window edge (docs/spec/Window.md).
+	sidebar := box(t, tt, LabelPanelSidebar)
+	if sidebar.X != 10 || sidebar.Y != 46 || sidebar.W != 312 {
+		t.Errorf("sidebar %+v, want 312 wide at x 10 under the title bar", sidebar)
 	}
-	if got := box(t, tt, LabelTitleBar).H; got != theme.TitleBarHeight {
-		t.Errorf("title bar height %v, want 40", got)
+	files := box(t, tt, LabelPanelFiles)
+	if files.W != 280 || files.X+files.W != theme.WindowWidth-10 {
+		t.Errorf("files %+v, want 280 wide, 10 from the right edge", files)
 	}
-	panel := box(t, tt, LabelPanel)
-	if panel.W != theme.PanelWidth || panel.X+panel.W != theme.WindowWidth {
-		t.Errorf("panel %+v, want 440 wide at the right edge", panel)
+	term := box(t, tt, LabelPanelTerminal)
+	if term.X != sidebar.X+sidebar.W+10 || term.X+term.W != files.X-10 {
+		t.Errorf("terminal %+v, want 10 from the sidebar and 10 from the files", term)
 	}
-	if got := box(t, tt, LabelTerminal).W; got != 718 {
-		t.Errorf("terminal width %v, want 718 (two 1 px dividers)", got)
+	for _, r := range []ui.Rect{sidebar, term, files} {
+		if r.Y+r.H != theme.WindowHeight-theme.StatusBarHeight-10 {
+			t.Errorf("panel %+v should end 10 above the status bar", r)
+		}
+	}
+	// The tabs start above the terminal panel.
+	if tabs := box(t, tt, LabelTabs); tabs.X < term.X {
+		t.Errorf("tabs at %v, left of the terminal panel at %v", tabs.X, term.X)
 	}
 	status := box(t, tt, LabelStatusBar)
 	if status.H != theme.StatusBarHeight || status.W != theme.WindowWidth {
@@ -83,14 +91,14 @@ func TestToggleHidesAndReopensTheSidebar(t *testing.T) {
 	if err := tt.Click(LabelSidebarToggle); err != nil {
 		t.Fatal(err)
 	}
-	if f.SidebarOpen() || !absent(tt, LabelSidebar) || !absent(tt, LabelSidebarToggle) {
+	if f.SidebarOpen() || !absent(tt, LabelPanelSidebar) || !absent(tt, LabelSidebarToggle) {
 		t.Error("the sidebar should be hidden")
 	}
 	if absent(tt, LabelSidebarReopen) {
 		t.Error("reopen button should show")
 	}
-	if term := box(t, tt, LabelTerminal); term.W != 999 || term.X != 0 {
-		t.Errorf("terminal %+v, want 999 wide from x 0", term)
+	if term := box(t, tt, LabelPanelTerminal); term.W != 1130 || term.X != 10 {
+		t.Errorf("terminal %+v, want 1130 wide from x 10", term)
 	}
 
 	if err := tt.Click(LabelSidebarReopen); err != nil {
@@ -99,33 +107,53 @@ func TestToggleHidesAndReopensTheSidebar(t *testing.T) {
 	if !absent(tt, LabelSidebarReopen) {
 		t.Error("reopen button should go")
 	}
-	if got := box(t, tt, LabelSidebar).W; got != theme.SidebarWidth {
-		t.Errorf("sidebar width %v, want 280", got)
+	if got := box(t, tt, LabelPanelSidebar).W; got != theme.SidebarWidth {
+		t.Errorf("sidebar width %v, want 312", got)
 	}
-	if got := box(t, tt, LabelTerminal).W; got != 718 {
-		t.Errorf("terminal width %v, want 718 (two 1 px dividers)", got)
+	if got := box(t, tt, LabelPanelTerminal).W; got != 808 {
+		t.Errorf("terminal width %v, want 808", got)
 	}
 }
 
 func TestPanelToggleHidesAndShowsThePanel(t *testing.T) {
 	f, tt := newTester(t)
-	if err := tt.Click(LabelPanelToggle); err != nil {
+	if err := tt.Click(LabelFilesToggle); err != nil {
 		t.Fatal(err)
 	}
-	if f.PanelOpen() || !absent(tt, LabelPanel) {
-		t.Error("the panel should be hidden")
+	if f.PanelOpen() || !absent(tt, LabelPanelFiles) {
+		t.Error("the files panel should be hidden")
 	}
-	if got := box(t, tt, LabelTerminal).W; got != 1159 {
-		t.Errorf("terminal width %v, want 1159", got)
+	if got := box(t, tt, LabelPanelTerminal).W; got != 1098 {
+		t.Errorf("terminal width %v, want 1098", got)
 	}
-	if err := tt.Click(LabelPanelToggle); err != nil {
+	if err := tt.Click(LabelFilesToggle); err != nil {
 		t.Fatal(err)
 	}
-	if got := box(t, tt, LabelPanel).W; got != theme.PanelWidth {
-		t.Errorf("panel width %v, want 440", got)
+	if got := box(t, tt, LabelPanelFiles).W; got != theme.PanelWidth {
+		t.Errorf("files width %v, want 280", got)
 	}
-	if got := box(t, tt, LabelTerminal).W; got != 718 {
-		t.Errorf("terminal width %v, want 718 (two 1 px dividers)", got)
+	if got := box(t, tt, LabelPanelTerminal).W; got != 808 {
+		t.Errorf("terminal width %v, want 808", got)
+	}
+}
+
+// The shortcut does what the button does (docs/spec/Window.md).
+func TestCmdShiftEHidesAndShowsTheFilesPanel(t *testing.T) {
+	f, tt := newTester(t)
+	tt.Key(ui.Cmd|ui.Shift, ui.KeyE)
+	if f.PanelOpen() || !absent(tt, LabelPanelFiles) {
+		t.Error("the key should hide the files panel")
+	}
+	tt.Key(ui.Cmd|ui.Shift, ui.KeyE)
+	if !f.PanelOpen() || absent(tt, LabelPanelFiles) {
+		t.Error("the key should show the files panel again")
+	}
+}
+
+func TestPanelsHaveNamesForScreenReaders(t *testing.T) {
+	_, tt := newTester(t)
+	for _, name := range []string{"Sidebar", "Terminal", "Files"} {
+		box(t, tt, name)
 	}
 }
 

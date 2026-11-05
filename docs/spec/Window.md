@@ -28,7 +28,10 @@ Design system page: component Window. Shared rules: [README.md](README.md).
   480.
 - The files toggle (`⌘⇧E`, the title bar button) hides and shows the files
   panel. A hidden panel keeps its width.
-- The narrow-window rule is open point O6.
+- Narrow window (O6, settled by the owner): below 1100px window width the
+  files panel hides, and its toggle is disabled. The toggle keeps its state,
+  so the panel comes back when the window is wide again. The sidebar
+  collapse to icons below about 800px comes with the sidebar issues.
 
 ## Data
 
@@ -42,8 +45,9 @@ Design system page: component Window. Shared rules: [README.md](README.md).
 
 ## Edge cases
 
-- Window narrower than sidebar + 480 + files: hide the files panel first
-  (until O6 settles it).
+- Window narrower than sidebar + 480 + files, but 1100px or more: the files
+  panel gives way down to 220, then the sidebar down to 200. The stored
+  widths do not change.
 - Reduce transparency: solid fills (O13).
 
 ## Accessibility

@@ -195,7 +195,7 @@ The coordinator asks the owner these before the issues that need them.
 4. **O4 Footer.** Where do CPU, memory, the contr and hc versions, and
    action messages go?
 5. **O5 PR viewer and Review.** Their place in the new frame.
-6. **O6 Narrow window.** Which panel hides first below which width.
+6. **O6 Narrow window.** Settled: below 1100px the files panel hides; the sidebar collapse to icons below about 800px is still to build.
 7. **O7 Sans font.** Settled: bundle Inter (OFL, a `NOTICE` entry), D121.
 8. **O8 Claude mark.** Which drawing, and the right to use it.
 9. **O9 Light terminal palette.** The 16 ANSI colors on the light panel.

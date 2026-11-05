@@ -94,8 +94,9 @@ func registerFonts(files fs.FS, register func([]byte, string) error) {
 }
 
 // windowOptions are the options of the frame window, or of the legend when
-// icons is set. MyGo has no option for the traffic light position (the Rust
-// app put them at 14, 13); TitleBarHidden keeps the system controls.
+// icons is set. TitleBarHidden keeps the system controls over the 46px title bar the
+// view draws; the controls are centered in it. VibrancyGlass makes macOS draw the glass
+// behind the view (docs/spec/Window.md).
 func windowOptions(icons bool) mygo.WindowOptions {
 	opts := mygo.WindowOptions{
 		Title:         "contr",
@@ -104,6 +105,10 @@ func windowOptions(icons bool) mygo.WindowOptions {
 		MinWidth:      minWidth,
 		MinHeight:     minHeight,
 		TitleBarStyle: mygo.TitleBarHidden,
+	}
+	if !icons {
+		opts.TrafficLightPosition = &mygo.Point{X: 14, Y: (theme.TitleBarHeight - 12) / 2}
+		opts.Vibrancy = mygo.VibrancyGlass
 	}
 	if icons {
 		opts.Width, opts.Height = legendWidth, legendHeight
