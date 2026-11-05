@@ -60,6 +60,9 @@ type Model struct {
 	asked    map[string]bool
 	resolve  func(dir string) (name, key string) // reads git; tests replace it
 
+	// orchNums and termNums keep the numbers of unnamed foreign terminals (D156).
+	orchNums, termNums Numbering
+
 	wg sync.WaitGroup
 }
 
@@ -132,7 +135,7 @@ func New(m *agents.Manager, store *owner.Store, notify func()) *Model {
 	if notify == nil {
 		notify = func() {}
 	}
-	return &Model{mgr: m, store: store, notify: notify, resolve: ProjectOf}
+	return &Model{mgr: m, store: store, notify: notify, resolve: ProjectOf, orchNums: Numbering{}, termNums: Numbering{}}
 }
 
 // SetCoreVersion sets the version of the hc core that the model follows.
@@ -221,8 +224,8 @@ func (m *Model) Snapshot() Snapshot {
 		}
 		return strings.Compare(a.Name, b.Name)
 	}
-	nameForeign(s.Orchestrators)
-	nameForeign(s.Terminals)
+	nameForeign(s.Orchestrators, m.orchNums)
+	nameForeign(s.Terminals, m.termNums)
 	slices.SortStableFunc(s.Orchestrators, byProjectName)
 	slices.SortStableFunc(s.Terminals, byProjectName)
 	s.Questions, s.Todos = m.state.Open("")

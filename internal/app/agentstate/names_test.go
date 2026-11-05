@@ -16,7 +16,12 @@ func TestNameForeignOrder(t *testing.T) {
 		want string
 	}{
 		"hc name wins":        {fw("t1", "scout", "My title", "contr"), "scout"},
-		"title when usable":   {fw("t1", "t1", "✳ Fix the build", "contr"), "✳ Fix the build"},
+		"title when usable":   {fw("t1", "t1", "✳ Fix the build", "contr"), "Fix the build"},
+		"spinner removed":     {fw("t1", "t1", "⠐ Fix the build", "contr"), "Fix the build"},
+		"idle claude code":    {fw("t1", "t1", "✳ Claude Code", "contr"), "contr"},
+		"plain claude code":   {fw("t1", "t1", "claude code", "contr"), "contr"},
+		"spinner claude code": {fw("t1", "t1", "⠐ Claude Code", "contr"), "contr"},
+		"glyph only":          {fw("t1", "t1", "✳", "contr"), "contr"},
 		"path title skipped":  {fw("t1", "t1", "~/code/contr", "contr"), "contr"},
 		"abs path skipped":    {fw("t1", "t1", "/x/contr", "contr"), "contr"},
 		"shell name skipped":  {fw("t1", "t1", "zsh", "contr"), "contr"},
@@ -25,7 +30,7 @@ func TestNameForeignOrder(t *testing.T) {
 	}
 	for name, c := range cases {
 		ws := []agents.Worker{c.w}
-		nameForeign(ws)
+		nameForeign(ws, nil)
 		if got := ws[0].DisplayName(); got != c.want {
 			t.Errorf("%s: %q, want %q", name, got, c.want)
 		}
@@ -36,7 +41,7 @@ func TestNameForeignCommandTitleSkipped(t *testing.T) {
 	w := fw("t1", "t1", "vim", "contr")
 	w.Command = "/usr/bin/vim"
 	ws := []agents.Worker{w}
-	nameForeign(ws)
+	nameForeign(ws, nil)
 	if ws[0].DisplayName() != "contr" {
 		t.Errorf("got %q", ws[0].DisplayName())
 	}
@@ -47,7 +52,7 @@ func TestNameForeignNumbersProjectsWithMoreThanOne(t *testing.T) {
 		fw("t9", "t9", "", "contr"), fw("t2", "t2", "", "contr"), fw("t5", "t5", "", "aerum"),
 		fw("t3", "t3", "", "contr"), fw("t4", "scout", "", "contr"),
 	}
-	nameForeign(ws)
+	nameForeign(ws, nil)
 	got := map[string]string{}
 	for _, w := range ws {
 		got[w.Address] = w.DisplayName()
@@ -63,7 +68,7 @@ func TestNameForeignNumbersProjectsWithMoreThanOne(t *testing.T) {
 func TestNameForeignKeepsAddressWithoutProject(t *testing.T) {
 	w := agents.Worker{Address: "t7", Name: "t7", Foreign: true, Live: true}
 	ws := []agents.Worker{w}
-	nameForeign(ws)
+	nameForeign(ws, nil)
 	if ws[0].DisplayName() != "t7" {
 		t.Errorf("got %q", ws[0].DisplayName())
 	}
@@ -71,7 +76,7 @@ func TestNameForeignKeepsAddressWithoutProject(t *testing.T) {
 
 func TestNameForeignLeavesContrWorkersAlone(t *testing.T) {
 	ws := []agents.Worker{{Address: "t1", Name: "t1", Title: "Some title", Project: "contr"}}
-	nameForeign(ws)
+	nameForeign(ws, nil)
 	if ws[0].Shown != "" {
 		t.Errorf("Shown %q", ws[0].Shown)
 	}
@@ -101,4 +106,32 @@ func TestSnapshotNamesForeignTerminals(t *testing.T) {
 	if names["t2"] != "alpha" || names["t3"] != "alpha 2" || names["t4"] != "build" {
 		t.Errorf("terminals %v", names)
 	}
+}
+
+func TestNameForeignNumbersAreStable(t *testing.T) {
+	num := Numbering{}
+	names := func(addrs ...string) map[string]string {
+		var ws []agents.Worker
+		for _, a := range addrs {
+			ws = append(ws, fw(a, a, "", "contr"))
+		}
+		nameForeign(ws, num)
+		got := map[string]string{}
+		for _, w := range ws {
+			got[w.Address] = w.DisplayName()
+		}
+		return got
+	}
+	check := func(got, want map[string]string) {
+		t.Helper()
+		for k, v := range want {
+			if got[k] != v {
+				t.Errorf("%s: %q, want %q (all %v)", k, got[k], v, got)
+			}
+		}
+	}
+	check(names("t9", "ta"), map[string]string{"t9": "contr", "ta": "contr 2"})
+	check(names("t9", "ta", "t10"), map[string]string{"t9": "contr", "ta": "contr 2", "t10": "contr 3"})
+	check(names("ta", "t10"), map[string]string{"ta": "contr 2", "t10": "contr 3"})
+	check(names("ta", "t10", "tb"), map[string]string{"ta": "contr 2", "t10": "contr 3", "tb": "contr"})
 }

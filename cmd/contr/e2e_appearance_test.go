@@ -4,6 +4,8 @@ package main
 
 import (
 	"context"
+	"image"
+	"image/png"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +14,7 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
 
@@ -97,11 +100,58 @@ func TestAppearanceRow(t *testing.T) {
 
 	click("Dark")
 	c.capture(t, filepath.Join(out, "appearance-1-dark.png"))
+	// Dark: the card is the Dark ground.
+	checkGround(t, c, filepath.Join(out, "appearance-1-dark.png"), theme.Dark)
 	click("Light")
-	c.capture(t, filepath.Join(out, "appearance-2-light.png"))
+	light := filepath.Join(out, "appearance-2-light.png")
+	c.capture(t, light)
+	// Light (#400): the open dialog and the window ground take the Light palette at once. The card
+	// is the ground token; the window edge is the glass-less frame under the veil, near it.
+	checkGround(t, c, light, theme.Light)
 	for deadline := time.Now().Add(5 * time.Second); !strings.Contains(stored(), `"light"`) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
 	}
 	if got := stored(); !strings.Contains(got, `"appearance": "light"`) {
 		t.Errorf("settings.json = %q, want light", got)
 	}
+}
+
+// checkGround reads the capture at path: a pixel of the Settings card must be the ground token of
+// p, and a pixel of the window edge must be near it (the veil over the frame is the same ground).
+func checkGround(t *testing.T, c *client, path string, p *theme.Palette) {
+	t.Helper()
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	img, err := png.Decode(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := c.boundsOf(t, app.LabelSettings)
+	// The card is centered, so twice its center is the window width in DIPs.
+	scale := float64(img.Bounds().Dx()) / (2 * (b.X + b.Width/2))
+	at := func(x, y float64) [3]int {
+		return rgb(img, int(x*scale), int(y*scale))
+	}
+	want := [3]int{int(p.Ground.R), int(p.Ground.G), int(p.Ground.B)}
+	near := func(got [3]int, tol int) bool {
+		for i := range got {
+			if d := got[i] - want[i]; d > tol || d < -tol {
+				return false
+			}
+		}
+		return true
+	}
+	if got := at(b.X+6, b.Y+6); !near(got, 2) {
+		t.Errorf("%s: card pixel %v, want ground %v", filepath.Base(path), got, want)
+	}
+	if got := at(1, float64(img.Bounds().Dy())/scale/2); !near(got, 14) {
+		t.Errorf("%s: window pixel %v, want near ground %v", filepath.Base(path), got, want)
+	}
+}
+
+func rgb(img image.Image, x, y int) [3]int {
+	r, g, b, _ := img.At(x, y).RGBA()
+	return [3]int{int(r >> 8), int(g >> 8), int(b >> 8)}
 }

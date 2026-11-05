@@ -353,11 +353,17 @@ func (s *Settings) View(c *ui.Context) {
 		return
 	}
 	open := true
+	p := theme.Current()
 	d := ui.DialogBase(c, &open, func(backdrop, panel ui.Element) {
-		backdrop.Background(ui.RGBA(8, 8, 8, 0.72)).Justify(ui.Start).AlignItems(ui.Center).Padding(theme.ModalTop, 0, 0, 0)
-		panel.Label(LabelSettings).Column().Width(theme.ModalWidth).Background(theme.Color(theme.BgOverlay)).
-			Border(1, theme.Color(theme.OverlayBorder)).Radius(theme.ModalRadius).
-			Shadow(0, 24, 80, 0, ui.RGBA(0, 0, 0, 0.6))
+		// The veil is the ground of the theme, so Light stays light behind the card.
+		backdrop.Background(p.Ground.Alpha(0.72)).Justify(ui.Start).AlignItems(ui.Center).Padding(theme.ModalTop, 0, 0, 0)
+		panel.Label(LabelSettings).Column().Width(theme.ModalWidth).Background(p.Ground).
+			Border(1, p.FloatLine).Radius(theme.ModalRadius)
+		for _, l := range p.ShadowFloat {
+			if !l.Inset {
+				panel.Shadow(l.X, l.Y, l.Blur, l.Wide, l.Color)
+			}
+		}
 		panel.Children(func() { s.body(c) })
 	})
 	if d.Dismissed() || !open {
@@ -367,53 +373,55 @@ func (s *Settings) View(c *ui.Context) {
 }
 
 func (s *Settings) body(c *ui.Context) {
+	p := theme.Current()
 	ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(8).Padding(16, theme.ModalPadX, 12, theme.ModalPadX).Children(func() {
-		ui.Text(c, "Settings").Bold().Grow(1).TextColor(theme.Color(theme.Text))
-		cardButton(c, SettingsEsc, ButtonPlain, theme.TextDim, s.Close)
+		ui.Text(c, "Settings").Bold().Grow(1).TextColor(p.Ink95)
+		settingsButton(c, SettingsEsc, ButtonPlain, s.Close)
 	})
 	s.appearanceRow(c)
 	busy := s.checking || s.installing
 	live := s.Updates != nil && s.enabled && !busy
 	ui.Column(c).Shrink(0).Gap(8).PaddingX(theme.ModalPadX).Children(func() {
-		ui.Text(c, "Versions").TextColor(theme.Color(theme.TextDim))
-		ui.Text(c, "contr "+s.Version).TextColor(theme.Color(theme.Text))
-		ui.Text(c, s.coreText()).TextColor(theme.Color(theme.Text))
-		ui.Text(c, "Updates").Margin(4, 0, 0, 0).TextColor(theme.Color(theme.TextDim))
+		ui.Text(c, "Versions").TextColor(p.Ink50)
+		ui.Text(c, "contr "+s.Version).TextColor(p.Ink95)
+		ui.Text(c, s.coreText()).TextColor(p.Ink95)
+		ui.Text(c, "Updates").Margin(4, 0, 0, 0).TextColor(p.Ink50)
 		if st := s.status(); st != "" {
-			ui.Text(c, st).TextColor(theme.Color(theme.Text2))
+			ui.Text(c, st).TextColor(p.Ink62)
 		}
 		if s.err != "" {
-			ui.Text(c, s.err).TextColor(theme.Color(theme.Failed))
+			ui.Text(c, s.err).TextColor(p.Blocked)
 		}
 		if s.found != nil && s.found.Notes != "" {
 			ui.Scroll(c).Label(LabelSettingsNotes).FillWidth().Height(220).Shrink(0).Padding(8, 10).
-				Background(theme.Color(theme.BgWindow)).Radius(8).Children(func() {
+				Background(p.Hover).Radius(8).Children(func() {
 				markdown.View(c, s.found.Notes, &s.md)
 			})
 		}
 	})
 	ui.Row(c).Shrink(0).AlignItems(ui.Center).Justify(ui.End).Gap(14).Padding(12, theme.ModalPadX).Margin(12, 0, 0, 0).
-		BorderWidth(1, 0, 0, 0).BorderColor(theme.Color(theme.Line)).Children(func() {
+		BorderWidth(1, 0, 0, 0).BorderColor(p.Hairline).Children(func() {
 		var check ClickFn
 		if live {
 			check = s.Check
 		}
-		cardButton(c, SettingsCheck, ButtonOutlined, theme.Text, check)
+		settingsButton(c, SettingsCheck, ButtonOutlined, check)
 		if s.found != nil {
 			var install ClickFn
 			if live {
 				install = s.Install
 			}
-			cardButton(c, SettingsInstall, ButtonFilled, theme.Text, install)
+			settingsButton(c, SettingsInstall, ButtonFilled, install)
 		}
-		cardButton(c, SettingsDone, ButtonPlain, theme.Text, s.Close)
+		settingsButton(c, SettingsDone, ButtonPlain, s.Close)
 	})
 }
 
 // appearanceRow is the Appearance row: System, Dark or Light on SegmentedBase (D119). A pick
-// calls SetAppearance, which applies the theme at once. The row uses the old tokens like the rest
-// of this modal; the modal moves to the new tokens in its own issue of tracker #333.
+// calls SetAppearance, which applies the theme at once. The row reads the current palette on
+// each build, like the rest of this modal (D155).
 func (s *Settings) appearanceRow(c *ui.Context) {
+	p := theme.Current()
 	cur := mygo.ThemeSystem
 	if s.Appearance != nil {
 		cur = s.Appearance()
@@ -424,21 +432,59 @@ func (s *Settings) appearanceRow(c *ui.Context) {
 	}
 	picked := sel
 	ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(8).Padding(0, theme.ModalPadX, 12, theme.ModalPadX).Children(func() {
-		ui.Text(c, LabelAppearance).Grow(1).TextColor(theme.Color(theme.TextDim))
+		ui.Text(c, LabelAppearance).Grow(1).TextColor(p.Ink50)
 		seg := ui.SegmentedBase(c.Key("appearance"), &picked, len(AppearanceNames))
-		seg.Track.Label(LabelAppearance).Padding(2).Radius(theme.CardRadius).Background(theme.Color(theme.BgWindow)).Children(func() {
+		seg.Track.Label(LabelAppearance).Padding(2).Radius(theme.CardRadius).Background(p.Hover).Children(func() {
 			for i, name := range AppearanceNames {
 				e := seg.Segment(i).Label(name).Padding(4, 12).Radius(theme.CardRadius)
-				text := uint32(theme.Text2)
+				text := p.Ink62
 				if i == picked {
-					e.Background(theme.Color(theme.BgCard))
-					text = theme.Text
+					e.Background(p.Selected)
+					text = p.Ink100
 				}
-				e.Children(func() { ui.Text(c, name).TextColor(theme.Color(text)) })
+				e.Children(func() { ui.Text(c, name).TextColor(text) })
 			}
 		})
 	})
 	if picked != sel && s.SetAppearance != nil {
 		s.SetAppearance(AppearanceSources[picked])
 	}
+}
+
+// settingsButton is a button of the Settings dialog, drawn from the palette of the current theme
+// (D155). A nil click is a dim button that does nothing. Filled is ink-100 with text on the ground:
+// the owner acts. Plain has no border and underlines on hover. Outlined has the input line.
+func settingsButton(c *ui.Context, label string, style ButtonStyle, click ClickFn) {
+	p := theme.Current()
+	live := click != nil
+	el := ui.ButtonBase(c).Label(label).Height(theme.AnswerButtonHeight).Shrink(0).
+		PaddingX(theme.AnswerButtonPadX).AlignItems(ui.Center).Radius(theme.AnswerButtonRadius)
+	text := p.Ink42
+	switch {
+	case style == ButtonFilled && live:
+		el = el.Background(p.Ink100)
+		text = p.Ground
+	case style == ButtonPlain:
+		if live {
+			text = p.Ink62
+		}
+	default:
+		el = el.Border(1, p.InputLine)
+		if live {
+			text = p.Ink95
+		}
+	}
+	if live {
+		el = el.Cursor(ui.CursorPointer).OnClick(click)
+	}
+	el = el.TextColor(text)
+	el.Children(func() {
+		t := ui.Text(c, label)
+		if style == ButtonFilled && live {
+			t = t.Bold()
+		}
+		if style == ButtonPlain && live && el.Hovered() {
+			t.Underline()
+		}
+	})
 }
