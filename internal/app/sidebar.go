@@ -10,7 +10,6 @@ import (
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/spaces"
-	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 )
 
@@ -162,13 +161,20 @@ func (l *SpacesList) projectList(c *ui.Context) {
 	if l.projects != nil {
 		l.list.Reorder = l.Reorder
 	}
+	// Up, Down and Enter are the list's shortcuts, not its Selected choice:
+	// that paints a row in the accent color, which the rows must not show.
+	// The app selection stays the one source; l.cursor follows it.
+	l.syncCursor(items)
+	l.list.Handle.OnShortcut(c, 0, ui.KeyUp, func() { l.move(items, -1) })
+	l.list.Handle.OnShortcut(c, 0, ui.KeyDown, func() { l.move(items, 1) })
+	l.list.Handle.OnShortcut(c, 0, ui.KeyEnter, func() { l.open(items) })
 	ui.List(c.Key("projects"), &l.list, len(items), func(i int) {
 		if a := items[i].agent; a != nil {
 			l.agentRow(c, *a)
 			return
 		}
 		l.projectRow(c, l.groups[items[i].group])
-	}).Label(LabelProjectList).FillWidth().Grow(1).MinHeight(0)
+	}).Label(LabelProjectList).Focusable().FillWidth().Grow(1).MinHeight(0)
 }
 
 // projectRow is one ProjectRow. An empty project (D116) has a dim name, the
@@ -186,7 +192,7 @@ func (l *SpacesList) projectRow(c *ui.Context, g spaces.RepoGroup) {
 		if sel, ok := l.selection.Current(); ok {
 			// An open project shows the selection on the agent row; the project
 			// row shows it for the project itself and while the agents are folded.
-			o.Selected = l.holds(g, sel) && (sel.Kind == state.KindWorktree || !open)
+			o.Selected = l.itemSelected(sideItem{group: l.groupIndex(g)}, sel)
 		}
 	}
 	if g.Path != "" {

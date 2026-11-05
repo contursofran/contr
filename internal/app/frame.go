@@ -231,6 +231,13 @@ type Frame struct {
 	post       func(fn func())
 	invalidate func()
 	winFocused bool
+	// focusTerm asks the next build to give the terminal the focus (Enter in
+	// the sidebar list).
+	focusTerm bool
+	// keyNav is true while the sidebar keys change the selection; autoFocus
+	// asks the next terminal view to take the focus. A terminal that a key
+	// chose leaves the focus in the list, so the next key still moves it.
+	keyNav, autoFocus bool
 	// reviewDir is the repo that Review shows now. Empty: none.
 	reviewDir string
 	reviewSet bool
@@ -1016,6 +1023,8 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		f.SpacesList = NewSpacesList(agentSnap, f.Selection, w.Update)
 	}
 	f.SpacesList.Host = f.Host
+	f.SpacesList.ByKey = func(do func()) { f.keyNav = true; do(); f.keyNav = false }
+	f.SpacesList.OnOpen = func() { f.focusTerm = true; w.Invalidate() }
 	f.SpacesList.ModelOf = f.ModelOf
 	f.SpacesList.Run, f.SpacesList.Status = Runner{Post: w.Update}, f.Toasts.Show
 	f.SpacesList.Entry = f.agentRowEntry()
@@ -1264,6 +1273,7 @@ func (f *Frame) syncTerminal() {
 	}
 	conn.SetScreen(t)
 	f.term, f.conn = t, conn
+	f.autoFocus = !f.keyNav
 	f.setTerminalFocus(f.winFocused)
 }
 
@@ -1314,7 +1324,11 @@ func (f *Frame) buildTerminal(c *ui.Context) {
 	ui.Box(c).Fill().Center().Children(func() {
 		if f.term != nil {
 			ui.Box(c).Absolute().Fill().Padding(theme.Space18, theme.Space26, theme.Space10).Children(func() {
-				grid := gterm.View(c, f.term).Label(LabelTerminalGrid).Fill().AutoFocus()
+				grid := gterm.View(c, f.term).Label(LabelTerminalGrid).Fill()
+				if f.autoFocus {
+					f.autoFocus = false
+					grid.AutoFocus()
+				}
 				if f.find.refocus {
 					// The find bar closed: the keys go to the terminal again.
 					f.find.refocus = false
@@ -1322,6 +1336,10 @@ func (f *Frame) buildTerminal(c *ui.Context) {
 				}
 				if f.termState.Kind != ghostty.Live {
 					grid.Opacity(staleOpacity)
+				}
+				if f.focusTerm {
+					f.focusTerm = false
+					grid.Focus()
 				}
 			})
 		}

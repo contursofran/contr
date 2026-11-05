@@ -20,7 +20,7 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
 - **Hover:** fill `hover`.
 - **Selected:** no fill. Title turns `ink-100`, line 2 `ink-62`. The tabs and the right panel follow the selected row.
 - **Needs you:** the glyph turns `blocked`. The row is not otherwise colored.
-- **Waiting on CI:** idle glyph; line 2 adds "CI". Not built yet: no data tells that an agent waits on CI.
+- **Waiting on CI:** idle glyph; line 2 adds "CI" after the model (D145). The data is the checks of the worker's pull request: a live worker that is not working, whose PR has unfinished checks.
 
 ## Behavior
 
@@ -50,7 +50,7 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
 
 ## Keys and focus
 
-- ↑ ↓ move; ⏎ focuses the terminal.
+- ↑ ↓ move the selection over project and agent rows; ⏎ focuses the terminal (D145). They work in the icon column too.
 
 ## Edge cases
 

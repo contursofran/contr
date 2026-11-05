@@ -168,29 +168,54 @@ func rollupResult(status, conclusion, state string) string {
 	return "fail"
 }
 
+// BranchState is the open pull request of a checked-out branch: its number
+// (0 for none) and how many checks of its head commit are still pending.
+type BranchState struct{ Number, Pending int }
+
 // BranchPR returns the number of the open pull request of the checked-out
-// branch of c.Dir, from `gh pr view --json number,state`. It returns 0 and no
-// error when the branch has no pull request, or its pull request is closed or
-// merged (D104).
+// branch of c.Dir. It returns 0 and no error when the branch has no pull
+// request, or its pull request is closed or merged (D104).
 func (c Client) BranchPR(ctx context.Context) (int, error) {
-	out, err := c.run(ctx, "pr", "view", "--json", "number,state")
+	st, err := c.BranchState(ctx)
+	return st.Number, err
+}
+
+// BranchState reads the open pull request of the checked-out branch of c.Dir
+// and its pending checks, from `gh pr view --json number,state,statusCheckRollup`
+// (D145). A branch with no pull request, or a closed or merged one, gives the
+// zero state and no error.
+func (c Client) BranchState(ctx context.Context) (BranchState, error) {
+	out, err := c.run(ctx, "pr", "view", "--json", "number,state,statusCheckRollup")
 	if err != nil {
 		if strings.Contains(err.Error(), "no pull requests found") {
-			return 0, nil
+			return BranchState{}, nil
 		}
-		return 0, err
+		return BranchState{}, err
 	}
 	var r struct {
 		Number int    `json:"number"`
 		State  string `json:"state"`
+		Rollup []struct {
+			Status     string `json:"status"`
+			Conclusion string `json:"conclusion"`
+			State      string `json:"state"`
+		} `json:"statusCheckRollup"`
 	}
 	if err := json.Unmarshal(out, &r); err != nil {
-		return 0, fmt.Errorf("gh: read branch pr: %w", err)
+		return BranchState{}, fmt.Errorf("gh: read branch pr: %w", err)
 	}
 	if r.State == "CLOSED" || r.State == "MERGED" {
-		return 0, nil
+		return BranchState{}, nil
 	}
-	return r.Number, nil
+	st := BranchState{Number: r.Number}
+	for _, k := range r.Rollup {
+		switch rollupResult(k.Status, k.Conclusion, k.State) {
+		case "pass", "fail", "skip":
+		default:
+			st.Pending++
+		}
+	}
+	return st, nil
 }
 
 // OpenIssue opens issue n of the repository of c.Dir in the web browser.
