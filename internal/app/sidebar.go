@@ -70,13 +70,23 @@ func LabelNewIn(g spaces.RepoGroup) string { return "New orchestrator in " + g.N
 // View builds the sidebar head part.
 func (l *SpacesList) View(c *ui.Context) {
 	ui.Column(c).FillWidth().FillHeight().Padding(theme.Space10, 0, 0, 0).Children(func() {
+		buttons := func() {
+			kit.IconButton(c, kit.IconButtonOpts{Icon: "folder", Label: LabelProjectsOpen, Small: true, OnClick: l.OnProjects})
+			kit.IconButton(c, kit.IconButtonOpts{Icon: "plus", Label: LabelProjectsNew, Small: true, OnClick: l.OnNew})
+		}
+		if l.compact {
+			// An icon column (D128): no section names or problem line; the
+			// project buttons stay, one above the other.
+			l.serverRow(c)
+			ui.Column(c).FillWidth().Shrink(0).AlignItems(ui.Center).Gap(theme.Space2).
+				Padding(theme.Space6, 0, theme.Space6, 0).Children(buttons)
+			l.projectList(c)
+			return
+		}
 		l.head(c, LabelServersHead, nil)
 		l.serverRow(c)
 		l.coreLine(c)
-		l.head(c, LabelProjectsHead, func() {
-			kit.IconButton(c, kit.IconButtonOpts{Icon: "folder", Label: LabelProjectsOpen, Small: true, OnClick: l.OnProjects})
-			kit.IconButton(c, kit.IconButtonOpts{Icon: "plus", Label: LabelProjectsNew, Small: true, OnClick: l.OnNew})
-		})
+		l.head(c, LabelProjectsHead, buttons)
 		l.projectList(c)
 	})
 }
@@ -105,7 +115,7 @@ func rowIcon(c *ui.Context, name string) {
 func (l *SpacesList) serverRow(c *ui.Context) {
 	kit.Row(c, kit.RowOpts{
 		Flat: true, Label: ServerLabel(l.online), Text: "This Mac", Meta: l.ServerMeta(), Selected: true,
-		Lead: func() { rowIcon(c, "computer") },
+		Lead: func() { rowIcon(c, "computer") }, Compact: l.compact, Tip: "This Mac",
 	})
 }
 
@@ -158,7 +168,7 @@ func (l *SpacesList) projectRow(c *ui.Context, g spaces.RepoGroup) {
 		Flat: true, Label: ProjectLabel(g), Text: g.Name, Meta: projectMeta(g),
 		NameInk: p.Ink85, MetaInk: p.Ink26, NameStyle: theme.StyleBodyStrong,
 		Expanded: &open, OnClick: func() { l.Activate(g) },
-		Lead: func() { rowIcon(c, "project") },
+		Lead: func() { rowIcon(c, "project") }, Compact: l.compact, Tip: g.Name,
 	}
 	if l.selection != nil {
 		if sel, ok := l.selection.Current(); ok {
@@ -169,6 +179,7 @@ func (l *SpacesList) projectRow(c *ui.Context, g spaces.RepoGroup) {
 	}
 	if g.Path != "" {
 		o.NameInk = p.Ink42
+		// The icon column has no room for the `+` (D128).
 		o.Trail = func() {
 			kit.IconButton(c, kit.IconButtonOpts{Icon: "plus", Label: LabelNewIn(g), Small: true,
 				OnClick: func() {

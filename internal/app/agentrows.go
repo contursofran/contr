@@ -191,6 +191,7 @@ func (l *SpacesList) agentRow(c *ui.Context, a agentLine) {
 		Age: agentAge(a.w, l.clock()), State: tabState(a.w), Orchestrator: a.orchestrator,
 		OnClick: func() { l.SelectAgent(a) },
 		Menu:    func(m *ui.Menu) { l.agentMenu(m, a) },
+		Compact: l.compact, Tip: a.w.Name,
 	}
 	if l.selection != nil {
 		if sel, ok := l.selection.Current(); ok {

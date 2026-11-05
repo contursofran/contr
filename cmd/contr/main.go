@@ -29,9 +29,14 @@ import (
 const (
 	legendWidth  = 480
 	legendHeight = 420
-	// The smallest frame window.
-	minWidth  = 960
-	minHeight = 600
+	minHeight    = 600
+)
+
+// The smallest frame window, and the width it opens with. Variables so that an
+// e2e build can open a narrow window (automation_e2e.go).
+var (
+	minWidth    = 960
+	windowWidth = theme.WindowWidth
 )
 
 // runStatusline is usage.RunStatusline. Tests replace it.
@@ -101,7 +106,7 @@ func registerFonts(files fs.FS, register func([]byte, string) error) {
 func windowOptions(icons bool) mygo.WindowOptions {
 	opts := mygo.WindowOptions{
 		Title:         "contr",
-		Width:         theme.WindowWidth,
+		Width:         windowWidth,
 		Height:        theme.WindowHeight,
 		MinWidth:      minWidth,
 		MinHeight:     minHeight,
