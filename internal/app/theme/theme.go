@@ -68,7 +68,8 @@ const BadgeApprovedBorder = 0x5A5A5A
 const DiffAdded = 0xA6D189
 const DiffDeleted = 0xF07178
 
-// Failed is the red of failed and blocked (D76). Settings shows update errors in it (D115).
+// Failed is the red of failed and blocked (D76). Settings shows update errors in it (D115);
+// the clone error uses it too.
 const Failed = 0xF07178
 
 // Text

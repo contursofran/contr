@@ -6,7 +6,9 @@ package app
 // saved to projects.json on a goroutine (D63). Esc, `esc` or `Done` closes it.
 
 import (
+	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -17,6 +19,7 @@ import (
 
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/projects"
 )
 
@@ -30,6 +33,9 @@ const (
 	ProjectsClose       = "close"
 	ProjectsOpenFolder  = "+ open folder…"
 	LabelProjectsRecent = "projects recent"
+	LabelCloneRemote    = "Clone from GitHub"
+	ProjectsClone       = "Clone"
+	ProjectsCloneFolder = "Choose folder…"
 )
 
 // ProjectsRow is the label of a project row; ProjectsCloseOf is its close
@@ -58,6 +64,16 @@ type ProjectsModal struct {
 	// Resolve returns the project key of a folder: its git common dir, or the
 	// folder when it is outside git. It reads files, so it runs on a goroutine.
 	Resolve func(path string) string
+	// CloneParent is the folder that holds a clone when no project was opened
+	// before (D117); otherwise the parent folder of the last opened project
+	// is the default. Empty hides the clone part.
+	CloneParent string
+	// PickParent asks the owner for the folder that holds a clone, starting
+	// at def. It blocks and returns ErrPickCancelled for no choice. Nil hides
+	// `Choose folder…`.
+	PickParent func(def string) (string, error)
+	// CloneRun runs git for a clone; nil runs the program (git.ExecClone).
+	CloneRun git.CloneRunner
 	// Now gives the time of an open; nil uses time.Now.
 	Now func() time.Time
 	// Status shows an error; may be nil.
@@ -67,7 +83,16 @@ type ProjectsModal struct {
 
 	open   bool
 	filter string
-	list   ui.ListState
+	// remote is the text of the clone field; parent is the folder the owner
+	// picked ("" means CloneParent); cloning is true while git runs; cloneErr
+	// is the text of the last failure.
+	remote   string
+	parent   string
+	cloning  bool
+	cloneErr string
+	// cancelClone stops the running clone; the modal calls it when it closes.
+	cancelClone context.CancelFunc
+	list        ui.ListState
 	// saving is true while a save runs; next is the newest copy not yet
 	// saved, so the saves go in order and the last change wins.
 	saving bool
@@ -78,6 +103,9 @@ type ProjectsModal struct {
 // shortcut call this; a pill in the Spaces header can call it too.
 func (m *ProjectsModal) Toggle() {
 	m.open = !m.open
+	if !m.open {
+		m.stopClone()
+	}
 	m.filter = ""
 	m.redraw()
 }
@@ -85,11 +113,34 @@ func (m *ProjectsModal) Toggle() {
 // Close hides the modal.
 func (m *ProjectsModal) Close() {
 	m.open = false
+	m.stopClone()
 	m.redraw()
 }
 
 // Opened tells whether the modal shows.
 func (m *ProjectsModal) Opened() bool { return m.open }
+
+// stopClone cancels a running clone. Its result then adds nothing.
+func (m *ProjectsModal) stopClone() {
+	if m.cancelClone != nil {
+		m.cancelClone()
+	}
+}
+
+// defaultParent is the folder that holds a clone when the owner picked none
+// (D117): the parent folder of the last opened project, the newest recent
+// entry, when it exists; else CloneParent.
+func (m *ProjectsModal) defaultParent() string {
+	if st := m.store(); st != nil {
+		if rec := st.Recent(); len(rec) > 0 && rec[0].Path != "" {
+			p := filepath.Dir(rec[0].Path)
+			if fi, err := os.Stat(p); err == nil && fi.IsDir() {
+				return p
+			}
+		}
+	}
+	return m.CloneParent
+}
 
 func (m *ProjectsModal) redraw() {
 	if m.Invalidate != nil {
@@ -166,6 +217,109 @@ func (m *ProjectsModal) openFolder() {
 			}
 		}
 	})
+}
+
+// cloneDest returns the clone URL and the destination folder for the field.
+// The URL and the folder are empty while the field is empty; err is set when
+// the field is not a remote.
+func (m *ProjectsModal) cloneDest() (url, dest string, err error) {
+	if strings.TrimSpace(m.remote) == "" {
+		return "", "", nil
+	}
+	url, name, err := git.ParseRemote(m.remote)
+	if err != nil {
+		return "", "", err
+	}
+	parent := m.parent
+	if parent == "" {
+		parent = m.defaultParent()
+	}
+	return url, filepath.Join(parent, name), nil
+}
+
+// chooseParent asks for the folder that holds the clone, on a goroutine.
+func (m *ProjectsModal) chooseParent() {
+	if m.PickParent == nil || m.cloning {
+		return
+	}
+	def := m.parent
+	if def == "" {
+		def = m.defaultParent()
+	}
+	m.Run.Do(func() func() {
+		path, err := m.PickParent(def)
+		return func() {
+			switch {
+			case errors.Is(err, ErrPickCancelled):
+			case err != nil:
+				m.status("choose folder: " + err.Error())
+			default:
+				m.parent = path
+				m.redraw()
+			}
+		}
+	})
+}
+
+// clone runs git clone on a goroutine. On success it adds the folder to the
+// store and to the recent list like open folder does (D117); the project then
+// shows as an empty group with `+ new` (D116). A failure shows in the modal.
+func (m *ProjectsModal) clone() {
+	if m.cloning {
+		return
+	}
+	url, dest, err := m.cloneDest()
+	if err != nil || url == "" {
+		m.cloneErr = "enter owner/name or a URL"
+		if err != nil {
+			m.cloneErr = "not a repository: " + strings.TrimSpace(m.remote)
+		}
+		m.redraw()
+		return
+	}
+	m.cloning, m.cloneErr = true, ""
+	m.redraw()
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancelClone = cancel
+	m.Run.Do(func() func() {
+		err := git.Clone(ctx, m.CloneRun, url, dest)
+		key := dest
+		if err == nil && m.Resolve != nil {
+			key = m.Resolve(dest)
+		}
+		return func() {
+			m.cloning = false
+			stopped := ctx.Err() != nil // the modal closed: add nothing
+			cancel()
+			if stopped {
+				return
+			}
+			if err != nil {
+				m.cloneErr = cloneMessage(err, dest)
+				m.redraw()
+				return
+			}
+			m.remote, m.parent = "", ""
+			m.add(key, dest)
+		}
+	})
+}
+
+// cloneMessage turns a clone error into the text of the modal.
+func cloneMessage(err error, dest string) string {
+	switch {
+	case errors.Is(err, git.ErrDestExists):
+		return "folder exists: " + dest
+	case errors.Is(err, git.ErrGitNotFound):
+		return "git is not installed"
+	}
+	msg := err.Error()
+	for _, k := range []string{"Authentication failed", "could not read Username", "Permission denied", "not found"} {
+		if strings.Contains(msg, k) {
+			return msg + " · check the name and your GitHub access"
+		}
+	}
+	return msg
 }
 
 // add puts a project in the store, shows it and records it as recent.
@@ -316,7 +470,7 @@ func (m *ProjectsModal) body(c *ui.Context) {
 		ui.Text(c, strconv.Itoa(len(m.groupsAll()))+" open").Grow(1).TextColor(theme.Color(theme.TextDim))
 		cardButton(c, ProjectsEsc, ButtonPlain, theme.TextDim, m.Close)
 	})
-	ui.TextInput(c, &m.filter).Label(LabelProjectsFilter).Placeholder("> filter, or paste a path or a GitHub URL…").
+	ui.TextInput(c, &m.filter).Label(LabelProjectsFilter).Placeholder("> filter projects…").
 		AutoFocus().Shrink(0).Margin(0, theme.ModalPadX, 12, theme.ModalPadX)
 	ui.Text(c, "open in contr · drag to reorder the sidebar").Shrink(0).
 		PaddingX(theme.ModalPadX).TextColor(theme.Color(theme.TextDim))
@@ -330,6 +484,7 @@ func (m *ProjectsModal) body(c *ui.Context) {
 	ui.List(c.Key("projectslist"), &m.list, len(groups), func(i int) { m.row(c, groups[i]) }).
 		Label(LabelProjectsList).FillWidth().Shrink(0).Height(min(h, theme.ModalListMax)).Padding(6, 10)
 	m.recentSection(c)
+	m.cloneSection(c)
 	ui.Row(c).Shrink(0).AlignItems(ui.Center).Justify(ui.End).Gap(14).Padding(12, theme.ModalPadX).
 		BorderWidth(1, 0, 0, 0).BorderColor(theme.Color(theme.Line)).Children(func() {
 		if m.PickFolder != nil {
@@ -337,6 +492,41 @@ func (m *ProjectsModal) body(c *ui.Context) {
 			ui.Spacer(c)
 		}
 		cardButton(c, ProjectsDone, ButtonFilled, theme.Text, m.Close)
+	})
+}
+
+// cloneSection is the clone part: the field, the destination preview and the
+// buttons. A busy state or the last error shows below.
+func (m *ProjectsModal) cloneSection(c *ui.Context) {
+	if m.CloneParent == "" {
+		return
+	}
+	_, dest, perr := m.cloneDest()
+	ui.Column(c).Shrink(0).Padding(10, theme.ModalPadX).Gap(6).
+		BorderWidth(1, 0, 0, 0).BorderColor(theme.Color(theme.Line)).Children(func() {
+		ui.Text(c, "clone from GitHub").TextColor(theme.Color(theme.TextDim))
+		ui.Row(c).AlignItems(ui.Center).Gap(12).Children(func() {
+			if ui.TextInput(c, &m.remote).Label(LabelCloneRemote).Placeholder("owner/name or a URL").Grow(1).MinWidth(0).
+				Submitted() {
+				m.clone()
+			}
+			if m.PickParent != nil {
+				cardButton(c, ProjectsCloneFolder, ButtonOutlined, theme.Text, m.chooseParent)
+			}
+			label := ProjectsClone
+			if m.cloning {
+				label = "Cloning…"
+			}
+			cardButton(c, label, ButtonOutlined, theme.Text, m.clone)
+		})
+		switch {
+		case m.cloneErr != "":
+			ui.Text(c, m.cloneErr).TextColor(theme.Color(theme.Failed))
+		case perr != nil:
+			ui.Text(c, "not a repository yet").TextColor(theme.Color(theme.TextDim))
+		case dest != "":
+			ui.Text(c, "→ "+dest).SingleLine().MinWidth(0).TextColor(theme.Color(theme.Text2))
+		}
 	})
 }
 
