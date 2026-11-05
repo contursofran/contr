@@ -24,7 +24,13 @@ func terminalTheme(p *theme.Palette) *gterm.Theme {
 		CursorText:    bg,
 		Selection:     p.TerminalSelection(),
 		SelectionText: p.TerminalForeground(),
-		Palette:       p.ANSI,
+		// Search matches use greys only (docs/spec/Terminal.md): a press tint for each match
+		// and ink-95 for the selected one, so no amber or orange shows.
+		Search:             theme.Over(p.Press, bg),
+		SearchText:         p.TerminalForeground(),
+		SearchSelected:     p.Ink95,
+		SearchSelectedText: bg,
+		Palette:            p.ANSI,
 	}
 }
 

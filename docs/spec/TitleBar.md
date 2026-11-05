@@ -82,6 +82,8 @@ Height `titlebar-height` (46px), gap `space-8`, right padding `space-14`. Items 
 - View: `+` opens a plain terminal (fake hc); `⌘W` closes a plain terminal
   tab and ignores an agent tab.
 - View: Hide files is pressed while the files panel shows.
+- View: Search sits left of Hide files, shows "Search  ⌘F" and opens the
+  find bar.
 
 ## Replaces
 

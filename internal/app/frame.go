@@ -225,6 +225,8 @@ type Frame struct {
 	termSet   bool
 	termState ghostty.State
 	termErr   string
+	// find is the find bar over the terminal (termfind.go).
+	find termFind
 	// post and invalidate are the window's; nil before attachTerminal.
 	post       func(fn func())
 	invalidate func()
@@ -694,6 +696,7 @@ func (f *Frame) titleBar(c *ui.Context, sidebarW float32, narrow bool) {
 			f.bar.newTab = f.newTerminal
 		}
 		f.bar.diff, f.bar.openReview = f.Diff, f.openReviewView
+		f.bar.search = f.openFind
 		f.bar.build(c, f.panelOpen && !narrow, narrow, f.TogglePanel)
 	})
 }
@@ -1142,11 +1145,13 @@ func (f *Frame) attachTerminal(w Window) (stop func()) {
 	f.winFocused = w.IsFocused()
 	f.syncTerminal()
 	f.Slots.Terminal = f.buildTerminal
+	removeFind := f.Overlay.Add(LabelFindLayer, f.findView)
 	offFocus := w.OnFocus(func() { f.setTerminalFocus(true) })
 	offBlur := w.OnBlur(func() { f.setTerminalFocus(false) })
 	return func() {
 		offFocus()
 		offBlur()
+		removeFind()
 		f.closeTerminal()
 	}
 }
@@ -1227,6 +1232,7 @@ func (f *Frame) syncTerminal() {
 		return
 	}
 	f.closeTerminal()
+	f.resetFind()
 	f.termAddr, f.termSet = addr, true
 	f.syncOutlineFocus()
 	f.termState, f.termErr = ghostty.State{Kind: ghostty.Connecting}, ""
@@ -1247,7 +1253,9 @@ func (f *Frame) syncTerminal() {
 	if f.Visibility != nil && !f.Visibility.Visible() {
 		conn.SetVisible(false)
 	}
-	t, err := gterm.New(terminalOptions(conn, openURL))
+	opts := terminalOptions(conn, openURL)
+	opts.OnSearch = f.onSearch
+	t, err := gterm.New(opts)
 	if err != nil {
 		_ = conn.Close()
 		slog.Error("terminal not started", "err", err)
@@ -1307,6 +1315,11 @@ func (f *Frame) buildTerminal(c *ui.Context) {
 		if f.term != nil {
 			ui.Box(c).Absolute().Fill().Padding(theme.Space18, theme.Space26, theme.Space10).Children(func() {
 				grid := gterm.View(c, f.term).Label(LabelTerminalGrid).Fill().AutoFocus()
+				if f.find.refocus {
+					// The find bar closed: the keys go to the terminal again.
+					f.find.refocus = false
+					grid.Focus()
+				}
 				if f.termState.Kind != ghostty.Live {
 					grid.Opacity(staleOpacity)
 				}
