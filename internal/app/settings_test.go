@@ -11,6 +11,8 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
+	"github.com/contursofran/contr/internal/app/theme"
 )
 
 // fakeUpdates is an update service that the test controls.
@@ -471,5 +473,40 @@ func TestSettingsReadyFollowsTheFoundUpdate(t *testing.T) {
 	r.tt.Click(SettingsCheck)
 	if !r.s.Ready() {
 		t.Fatal("not ready after a check found 1.3.0")
+	}
+}
+
+// An open Settings dialog reads the palette of the current theme on every build: after a switch
+// to Light its card is the Light ground, not the Dark one it was built with (#400, D155).
+func TestOpenSettingsDialogChangesWithTheTheme(t *testing.T) {
+	restoreTheme(t)
+	panelPixel := func(r *settingsRig) [3]uint8 {
+		t.Helper()
+		b, ok := r.tt.Find(LabelSettings)
+		if !ok {
+			t.Fatal("no Settings dialog")
+		}
+		p := pixelAt(r.tt.Image(), b.X+6, b.Y+6)
+		return [3]uint8{p.R, p.G, p.B}
+	}
+	want := func(p *theme.Palette) [3]uint8 {
+		c := p.Ground
+		return [3]uint8{c.R, c.G, c.B}
+	}
+	f := theme.Follow(&fakeTheme{}, &fakeWindow{}, mygo.ThemeDark)
+	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	r.open()
+	if got := panelPixel(r); got != want(theme.Dark) {
+		t.Fatalf("dark card = %v, want %v", got, want(theme.Dark))
+	}
+	f.SetSource(mygo.ThemeLight)
+	r.tt.Frame()
+	if got := panelPixel(r); got != want(theme.Light) {
+		t.Errorf("light card = %v, want the Light ground %v", got, want(theme.Light))
+	}
+	f.SetSource(mygo.ThemeDark)
+	r.tt.Frame()
+	if got := panelPixel(r); got != want(theme.Dark) {
+		t.Errorf("dark again = %v, want %v", got, want(theme.Dark))
 	}
 }
