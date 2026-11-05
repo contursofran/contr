@@ -47,7 +47,7 @@ Design system page: component IconButton. Shared rules: [README.md](README.md).
 
 - `ButtonBase` with `ui.Icon(svg)`; the icon draws in the text color, so the states only change the text color.
 - Toggle buttons (Hide files, Show changed files only): `ToggleBase`.
-- Give each button a screen-reader label and `.Tooltip("Split terminal  ⌘D")`.
+- Give each button a screen-reader label and `.Tooltip("Search  ⌘F")`.
 
 ## Do and do not
 

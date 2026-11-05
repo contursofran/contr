@@ -23,12 +23,16 @@ Design system page: component ServerRow. Shared rules: [README.md](README.md).
 
 - The Servers section is at the top of the sidebar. Only this Mac shows
   (O11, #149). Its meta is "local".
+- The row of this Mac also shows its CPU and memory use (D126). They sit in
+  the meta, in `ink-38`, and use no new color.
 - Click selects the machine; the projects under it are its projects.
 - `+` in the head is hidden until #149.
 
 ## Data
 
 - hc connection state from `internal/hc` (connected, problem). No polling.
+- CPU and memory: the source of the v0.2 host card (D113), read on a
+  goroutine; the result reaches the row through `Window.Update`.
 
 ## Keys and focus
 

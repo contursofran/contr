@@ -12,7 +12,7 @@ From left to right:
 2. Tabs (see Tab) and a "New tab" icon button.
 3. Flexible space (drags the window).
 4. DiffSummary of the selected project.
-5. Icon buttons: Split terminal, Search, Hide files (pressed while files show).
+5. Icon buttons: Search, Hide files (pressed while files show).
 
 Height `titlebar-height` (46px), gap `space-8`, right padding `space-14`. Items center on the vertical axis.
 
@@ -29,8 +29,8 @@ Height `titlebar-height` (46px), gap `space-8`, right padding `space-14`. Items 
 - `+` (New tab) opens a plain terminal in the folder of the selected agent
   (D82).
 - DiffSummary counts the selected project.
-- Split and Search are open point O12: show the buttons disabled until it
-  settles, or leave them out.
+- Search opens MyGo's `FindBar` over the terminal text (D130). There is no
+  Split button: split is dropped for now.
 
 ## Data
 
@@ -39,8 +39,7 @@ Height `titlebar-height` (46px), gap `space-8`, right padding `space-14`. Items 
 
 ## Keys and focus
 
-- `⌘T` new tab, `⌘W` close tab (plain terminals only, D85), `⌘D` split,
-  `⌘F` search, `⌘⇧E` files.
+- `⌘T` new tab, `⌘W` close tab (plain terminals only, D85), `⌘F` search, `⌘⇧E` files.
 - The tooltips show each key.
 
 ## Edge cases
@@ -61,7 +60,7 @@ Height `titlebar-height` (46px), gap `space-8`, right padding `space-14`. Items 
 - Draw the bar in the view; mark the empty parts as the window drag area so the window moves and a double-click zooms.
 - Tabs: `TabsBase` (keeps arrow keys, focus and the automation hooks).
 - Buttons: IconButton (`ButtonBase`).
-- Shortcuts: `c.Shortcut(...)` for new tab (⌘T), close tab (⌘W), split (⌘D), search (⌘F), files (⌘⇧E). Show them in the tooltips.
+- Shortcuts: `c.Shortcut(...)` for new tab (⌘T), close tab (⌘W), search (⌘F), files (⌘⇧E). Show them in the tooltips.
 
 ## Do and do not
 

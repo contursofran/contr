@@ -28,7 +28,9 @@ Design system page: component Window. Shared rules: [README.md](README.md).
   480.
 - The files toggle (`⌘⇧E`, the title bar button) hides and shows the files
   panel. A hidden panel keeps its width.
-- The narrow-window rule is open point O6.
+- Narrow window (D128): below about 1100px the files panel hides. Below
+  about 800px the sidebar collapses to icons. The terminal keeps its
+  minimum width.
 
 ## Data
 
@@ -42,9 +44,11 @@ Design system page: component Window. Shared rules: [README.md](README.md).
 
 ## Edge cases
 
-- Window narrower than sidebar + 480 + files: hide the files panel first
-  (until O6 settles it).
-- Reduce transparency: solid fills (O13).
+- Window below about 1100px: the files panel hides, and `⌘⇧E` does not show
+  it. It returns when the window grows, unless the owner hid it.
+- Window below about 800px: the sidebar shows icons only (project and agent
+  glyphs, no text); the tooltips keep the names.
+- Reduce transparency: solid fills (O13, open).
 
 ## Accessibility
 
@@ -82,5 +86,5 @@ Design system page: component Window. Shared rules: [README.md](README.md).
 ## Replaces
 
 - `frame.go`: the v0.2 frame (top bar, content row, bottom row, footer).
-  The bottom row and footer go only after O2 and O4 settle (see the
-  cleanup issue).
+  The bottom row and footer go with the cleanup issue: their parts have a
+  place now (D124, D126).

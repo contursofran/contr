@@ -1,6 +1,6 @@
 # QuestionsNotch
 
-A small glass tab that hangs from the top of every terminal of the project while an agent asks the owner a question; click opens the questions card.
+A small glass tab that hangs from the top of every terminal of the project while an agent asks the owner a question or something else needs the owner; click opens the questions card.
 
 Design system page: component QuestionsNotch. Shared rules: [README.md](README.md).
 
@@ -11,18 +11,21 @@ Design system page: component QuestionsNotch. Shared rules: [README.md](README.m
 | Box | height `notch-height` (30px), padding `0 16px 0 12px`, gap `space-9`, radius `0 0 radius-12 radius-12` |
 | Glass | `glass-float`, blur `glass-blur`, line `float-line`, shadow `shadow-notch` |
 | Glyph | StatusGlyph, needs-you, 14px |
-| Label | 12px, `ink-100`: "1 question", "2 questions" |
+| Label | 12px, `ink-100`: "1 question", "2 questions"; with to-dos or blocked menus, "3 items" (D124) |
 
 ## States
 
-- **Hidden:** no open questions.
+- **Hidden:** no open questions, to-dos or blocked menus.
 - **Closed:** as above.
 - **Open:** see QuestionsCard.
 
 ## Behavior
 
-- Shows while the project has at least one open question, at the top
-  center of each terminal of the project.
+- Shows while the project has at least one open question, to-do or blocked
+  worker menu, at the top center of each terminal of the project.
+- To-dos (`do`, `know`) and the menu of a blocked worker (D51) are more
+  chips after the questions, in the card (D124). The count in the label
+  covers all of them.
 - Click or `⌘J` opens the QuestionsCard.
 - Worker questions reach the owner through the orchestrator.
 
@@ -36,12 +39,12 @@ Design system page: component QuestionsNotch. Shared rules: [README.md](README.m
 
 ## Edge cases
 
-- Questions of another project: not counted here.
+- Questions, to-dos and blocked menus of another project: not counted here.
 - The questions file is broken: hide the notch and log the error.
 
 ## Accessibility
 
-- Label: "2 questions. Open".
+- Label: "2 questions. Open". With to-dos or blocked menus: "3 items. Open".
 
 ## Tokens
 
@@ -62,12 +65,13 @@ Design system page: component QuestionsNotch. Shared rules: [README.md](README.m
 
 **Don't**
 
-- Do not show the notch when no question is open.
+- Do not show the notch when nothing needs the owner.
 - Do not animate the notch in a loop: only the glyph moves.
 
 ## Tests
 
 - View: hidden at 0, "1 question", "2 questions".
+- View: a to-do and a blocked menu count with the questions ("3 items").
 - View: shows in an orchestrator and a worker terminal of the same project.
 
 ## Replaces
