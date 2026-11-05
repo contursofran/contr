@@ -36,7 +36,8 @@ Design system page: component Tab. Shared rules: [README.md](README.md).
 
 ## Keys and focus
 
-- `⌘W` and middle-click close a plain terminal tab. Arrows move between tabs (`TabsBase`).
+- `⌘W` closes a plain terminal tab. Arrows move between tabs (`TabsBase`).
+  Middle-click close and the context menu are not built yet (D131).
 
 ## Edge cases
 

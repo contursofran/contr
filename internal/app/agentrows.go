@@ -146,20 +146,6 @@ func (l *SpacesList) items() []sideItem {
 	return out
 }
 
-// glyphState maps an agent to the state of its glyph (docs/spec/StatusGlyph.md).
-// Needs you wins. Waiting on CI has no source yet, so it is not shown.
-func glyphState(w agents.Worker) kit.GlyphState {
-	switch {
-	case !w.Live:
-		return kit.GlyphIdle
-	case w.Status == "blocked" || w.Status == "error":
-		return kit.GlyphNeedsYou
-	case w.Status == "working":
-		return kit.GlyphWorking
-	}
-	return kit.GlyphIdle
-}
-
 // agentAge is the age of an agent as of now.
 func agentAge(w agents.Worker, now time.Time) string { return AgeText(now, w.LastOutput) }
 
@@ -179,7 +165,7 @@ func (l *SpacesList) modelOf(w agents.Worker) string {
 
 // AgentLabel is the label of an agent row: "<title>, <state>, <issue>, <model>".
 func AgentLabel(w agents.Worker, issue, model string) string {
-	parts := []string{w.Name, glyphState(w).Label()}
+	parts := []string{w.Name, tabState(w).Label()}
 	for _, p := range []string{issue, model} {
 		if p != "" {
 			parts = append(parts, p)
@@ -202,7 +188,7 @@ func (l *SpacesList) agentRow(c *ui.Context, a agentLine) {
 	issue, model := issueText(a), l.modelOf(a.w)
 	o := kit.AgentRowOpts{
 		Label: AgentLabel(a.w, issue, model), Title: a.w.Name, Issue: issue, Model: model,
-		Age: agentAge(a.w, l.clock()), State: glyphState(a.w), Orchestrator: a.orchestrator,
+		Age: agentAge(a.w, l.clock()), State: tabState(a.w), Orchestrator: a.orchestrator,
 		OnClick: func() { l.SelectAgent(a) },
 		Menu:    func(m *ui.Menu) { l.agentMenu(m, a) },
 	}

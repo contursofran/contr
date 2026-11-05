@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/ui"
+
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/state"
@@ -18,6 +20,7 @@ import (
 // terminal from the snapshot, as the core's event does.
 type closeFrame struct {
 	*Frame
+	tt       *ui.Tester
 	snap     *agentstate.Snapshot
 	stopped  []string
 	stopErr  error
@@ -28,7 +31,7 @@ func newCloseFrame(t *testing.T, snap *agentstate.Snapshot) *closeFrame {
 	t.Helper()
 	f, tt := agentFrame(t, snap)
 	tt.Frame()
-	cf := &closeFrame{Frame: f, snap: snap}
+	cf := &closeFrame{Frame: f, tt: tt, snap: snap}
 	f.CloseTerm = &CloseTerminal{
 		Stop: func(addr string) error {
 			cf.stopped = append(cf.stopped, addr)
@@ -58,7 +61,7 @@ func TestCloseTerminalStopsTheSelectedPlainTerminalAndSelectsAnotherTab(t *testi
 	if !slices.Equal(cf.stopped, []string{"tp"}) {
 		t.Fatalf("stopped %v, want [tp]", cf.stopped)
 	}
-	for _, tab := range cf.agentTabs() {
+	for _, tab := range cf.titleTabs() {
 		if tab.Address == "tp" {
 			t.Error("the closed terminal still has a tab")
 		}

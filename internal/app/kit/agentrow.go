@@ -54,7 +54,7 @@ func AgentRow(c *ui.Context, o AgentRowOpts) {
 			agentRowButton(c, o, theme.Space6)
 			return
 		}
-		ui.Row(c).Shrink(0).MarginStart(theme.Space6 + RailIndent).MarginEnd(theme.Space6).
+		ui.Row(c).Shrink(0).MarginStart(theme.Space6+RailIndent).MarginEnd(theme.Space6).
 			PaddingStart(RailPad).BorderWidth(0, 0, 0, 1).BorderColor(theme.Current().Rail).Children(func() {
 			agentRowButton(c, o, 0)
 		})

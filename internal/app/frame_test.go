@@ -614,16 +614,15 @@ func TestPlainTabSelectsKindTerminal(t *testing.T) {
 	snap.Terminals = []agents.Worker{{Name: "term-1", Address: "tp", Project: "p", Role: agents.RoleTerminal, Worktree: "/work/p", Live: true}}
 	f, tt := agentFrame(t, &snap)
 	tt.Frame()
-	label := "$ p, " + workerIcon(snap.Terminals[0]).Label()
-	if err := tt.Click(label); err != nil {
+	if err := tt.Click("$ p"); err != nil {
 		t.Fatal(err)
 	}
 	if sel, _ := f.Selection.Current(); sel != (state.Selected{Kind: state.KindTerminal, ID: "tp"}) {
 		t.Errorf("selection %+v, want a terminal", sel)
 	}
 	tt.Frame()
-	if absent(tt, LabelTabActive) {
-		t.Error("the plain tab is not underlined while selected")
+	if absent(tt, LabelCloseTab) {
+		t.Error("the selected plain tab has no close button")
 	}
 }
 

@@ -1,14 +1,11 @@
-// Ported from the Rust contr module title_bar.
-
 package app
 
-// The title bar: one tab for each hc terminal of the open project (#138, D50), the Review
-// button and the panel toggle. A click on a tab selects its agent. Its methods run on the UI
-// thread.
+// The title bar (docs/spec/TitleBar.md): the tabs of the selected agent, the New tab button, the
+// Review button and the Hide files button. The sidebar toggle and the room for the window buttons
+// are drawn by the frame. The methods run on the UI thread.
 
 import (
 	"slices"
-	"strconv"
 
 	"github.com/egoist/mygo/ui"
 
@@ -17,41 +14,36 @@ import (
 	"github.com/contursofran/contr/internal/app/theme"
 )
 
-// Labels of the title bar parts. A worker tab's label is "<label>, <status>"; an orchestrator
-// tab's is "orchestrator <name>, <status>"; the badge's is "needs <N>".
+// Labels of the title bar parts. A tab's label is its title.
 const (
 	LabelTabs      = "tabs"
-	LabelTabActive = "active tab underline"
 	LabelTitleDrag = "title drag"
-	// LabelReviewToggle is the title bar's Review button.
-	LabelReviewToggle = "Review"
 	// LabelNewTab is the "+" button after the tabs: it opens a plain terminal (D82).
-	LabelNewTab = "New terminal"
-	// orchestratorMark comes before an orchestrator tab's name.
-	orchestratorMark = "◆ "
+	LabelNewTab = "New tab"
+	// LabelReviewToggle is the Review button. The diff summary replaces it (#342, DiffSummary).
+	LabelReviewToggle = "Review"
+	// LabelCloseTab is the close button of the selected plain terminal tab.
+	LabelCloseTab = "Close tab"
 )
-
-// LabelNeedsBadge is the accessible label of the needs badge on an orchestrator tab.
-func LabelNeedsBadge(n int) string { return "needs " + strconv.Itoa(n) }
 
 // titleBar holds the tabs the bar shows and where its clicks go.
 type titleBar struct {
-	tabs []AgentTab
+	tabs []Tab
 	// selectTab takes the tab that a click picked. It may be nil: the click is dropped.
-	selectTab func(AgentTab)
+	selectTab func(Tab)
+	// closeTab takes the plain tab whose close button was clicked. Nil: no close buttons.
+	closeTab func(Tab)
+	// newTab opens a plain terminal. Nil: the bar has no "+" button.
+	newTab func()
 	// toggleReview shows or hides the Review view. Nil: the bar has no Review button.
 	toggleReview func()
 	reviewOpen   bool
-	// collapsed shows only the icon and the id of each tab (D59): the PR pane takes the room.
-	collapsed bool
-	// newTab opens a plain terminal. Nil: the bar has no "+" button.
-	newTab func()
 	// choice is the index the tab list edits; model is the selected tab's index at the last build.
 	choice, model int
 }
 
 // setTabs takes in the tabs and tells whether they differ from the last ones.
-func (b *titleBar) setTabs(tabs []AgentTab) bool {
+func (b *titleBar) setTabs(tabs []Tab) bool {
 	if slices.Equal(b.tabs, tabs) {
 		return false
 	}
@@ -75,13 +67,14 @@ func (b *titleBar) syncChoice() {
 	b.choice = b.model
 }
 
-// build adds the bar's parts to the title bar row: the tabs, the drag stretch, the Review
-// button and the files toggle at the right edge. The toggle is pressed while the files show; it
+// build adds the bar's parts to the title bar row: the tabs, "+", the drag stretch, the diff
+// summary and the files toggle at the right edge. The toggle is pressed while the files show; it
 // is disabled while the window is too narrow for them.
 func (b *titleBar) build(c *ui.Context, filesOn, filesDisabled bool, toggleFiles func()) {
 	b.tabRow(c)
 	if b.newTab != nil {
-		b.newTabButton(c)
+		kit.IconButton(c, kit.IconButtonOpts{Icon: "plus", Label: LabelNewTab, Key: "⌘T", OnClick: b.newTab}).
+			MarginStart(theme.Space8)
 	}
 	ui.Box(c).Label(LabelTitleDrag).Grow(1).MinWidth(0).FillHeight().DragWindow()
 	if b.toggleReview != nil {
@@ -91,91 +84,97 @@ func (b *titleBar) build(c *ui.Context, filesOn, filesDisabled bool, toggleFiles
 		On: &filesOn, OnClick: toggleFiles, Disabled: filesDisabled})
 }
 
-// newTabButton is the "+" after the tabs. It stays visible with no tabs.
-func (b *titleBar) newTabButton(c *ui.Context) {
-	el := ui.ButtonBase(c).Label(LabelNewTab).Tooltip("New terminal").FillHeight().PaddingX(theme.TabPaddingX).Shrink(0).
-		Cursor(ui.CursorPointer).Center().OnClick(b.newTab)
-	color := uint32(theme.TextDim)
-	if el.Hovered() {
-		color = theme.Text
-	}
-	el.TextColor(theme.Color(color)).Children(func() { ui.Text(c, "+") })
-}
-
 // reviewButton is the "Review" toggle: it swaps the terminal area for the Review view. It is
-// white while the view shows (D37).
+// bright while the view shows (D37).
 func (b *titleBar) reviewButton(c *ui.Context) {
-	el := ui.ButtonBase(c).Label(LabelReviewToggle).Tooltip("Show or hide the Review view").FillHeight().PaddingX(theme.TabPaddingX).Shrink(0).
-		Cursor(ui.CursorPointer).Center().OnClick(b.toggleReview)
-	color := uint32(theme.TextDim)
+	p := theme.Current()
+	el := ui.ButtonBase(c).Label(LabelReviewToggle).Tooltip("Show or hide the Review view").Height(theme.SizeRowHeight).
+		Padding(0, theme.Space10).Shrink(0).Radius(theme.Radius8).Cursor(ui.CursorPointer).Center().OnClick(b.toggleReview)
+	ink := p.Ink50
 	if b.reviewOpen || el.Hovered() {
-		color = theme.Text
+		ink = p.Ink100
 	}
-	el.TextColor(theme.Color(color)).Children(func() { ui.Text(c, "Review") })
+	el.TextColor(ink).Children(func() {
+		s := theme.StyleRowSmall
+		ui.Text(c, "Review").Font(s.Stack()).FontSize(s.Size).FixedLineHeight(s.Line).FontWeight(s.Weight).NoWrap()
+	})
 }
 
-// tabRow shows the tabs of the open project in model order. When they do not fit, each tab
-// shrinks to TabMinWidth and its label ends in an ellipsis; the row clips what is left
-// (Rust D62).
+// tabRow shows the tabs in model order, space-2 apart. When they do not fit, each tab shrinks
+// toward zero and its title ends in an ellipsis; the row clips what is left.
 func (b *titleBar) tabRow(c *ui.Context) {
 	b.syncChoice()
 	tabs := ui.TabsBase(c.Key("agent tabs"), &b.choice, len(b.tabs))
-	tabs.List.Label(LabelTabs).FillHeight().MinWidth(0).Shrink(1).Clip().Children(func() {
+	tabs.List.Label(LabelTabs).FillHeight().MinWidth(0).Shrink(1).AlignItems(ui.Center).Gap(theme.Space2).Clip().Children(func() {
 		for i, t := range b.tabs {
 			b.tab(c, tabs.Tab(i), t)
 		}
 	})
 }
 
-// tab shows the status icon, the label and, on the first orchestrator, the needs badge. The
-// selected tab has the terminal's background and a white underline. An orchestrator tab has
-// the terminal's background too, with its mark before the name.
-func (b *titleBar) tab(c *ui.Context, tab ui.Element, t AgentTab) {
-	name := t.Label
-	label := name + ", " + t.Icon.Label()
-	if t.Orchestrator {
-		name = orchestratorMark + name
-		label = "orchestrator " + t.Label + ", " + t.Icon.Label()
-	}
-	if b.collapsed {
-		name = t.ID
-		if t.Orchestrator {
-			name = orchestratorMark + t.ID
-		}
-	}
-	minW := float32(theme.TabMinWidth)
-	if b.collapsed {
-		minW = 0
-	}
-	el := tab.Label(label).FillHeight().
-		MinWidth(minW).MaxWidth(theme.TabMaxWidth).Shrink(1).
-		PaddingX(theme.TabPaddingX).Gap(theme.TabGap).AlignItems(ui.Center)
-	color := uint32(theme.Text2)
-	if t.Selected || t.Orchestrator {
-		el = el.Background(theme.Color(theme.BgTerminal))
-	}
-	if t.Selected {
-		color = theme.Text
-	} else {
+// tab draws one tab: the glyph, the title and, on the selected plain terminal, the close button.
+func (b *titleBar) tab(c *ui.Context, tab ui.Element, t Tab) {
+	p := theme.Current()
+	el := tab.Label(t.Title).Height(theme.SizeRowHeight).MaxWidth(theme.SizeTabMaxWidth).MinWidth(0).Shrink(1).
+		Padding(0, theme.Space10).Gap(theme.Space8).AlignItems(ui.Center).Radius(theme.Radius8)
+	ink := p.Ink50
+	switch {
+	case t.Selected:
+		el = el.Background(p.Selected)
+		el = insetRing(el, p.ShadowSelected)
+		ink = p.Ink100
+	default:
 		el = el.Cursor(ui.CursorPointer)
 		if el.Hovered() {
-			color = theme.Text
+			el = el.Background(p.Hover)
 		}
 	}
-	el.TextColor(theme.Color(color)).Children(func() {
-		ui.Box(c).Shrink(0).Children(func() { icons.Sized(c, t.Icon, theme.IconSizeSmall) })
-		ui.Text(c, name).SingleLine().MinWidth(0).Shrink(1)
-		if t.Needs > 0 {
-			// White: the badge is what needs the owner (DESIGN rule).
-			ui.Box(c).Label(LabelNeedsBadge(t.Needs)).Shrink(0).PaddingX(theme.BadgePadX).
-				Radius(theme.BadgeRadius).Background(theme.Color(theme.Text)).
-				TextColor(theme.Color(theme.BgTerminal)).Children(func() {
-				ui.Text(c, strconv.Itoa(t.Needs))
-			})
-		}
-		if t.Selected {
-			ui.Box(c).Label(LabelTabActive).Absolute().Bottom(0).Left(0).Right(0).
-				Height(theme.TabUnderline).Background(theme.Color(theme.Text))
+	el.TextColor(ink).Children(func() {
+		b.glyph(c, t)
+		s := theme.StyleRowSmall
+		ui.Text(c, t.Title).Font(s.Stack()).FontSize(s.Size).FixedLineHeight(s.Line).FontWeight(s.Weight).
+			NoWrap().Ellipsis("…").MinWidth(0).Shrink(1)
+		if t.Selected && t.Closable() && b.closeTab != nil {
+			closeButton(c, func() { b.closeTab(t) })
 		}
 	})
+}
+
+// glyph is the leading part of a tab: the Claude mark for an orchestrator, the status glyph for
+// a worker, the terminal icon for a plain terminal.
+func (b *titleBar) glyph(c *ui.Context, t Tab) {
+	if t.Plain {
+		if s := icons.Line("terminal"); s != nil {
+			ui.Icon(c, s).Size(14, 14).Shrink(0)
+		}
+		return
+	}
+	kit.StatusGlyph(c, kit.GlyphOpts{State: t.State, Claude: t.Orchestrator, Small: true})
+}
+
+// closeButton is the 16px close button of the selected tab.
+func closeButton(c *ui.Context, onClick func()) {
+	p := theme.Current()
+	b := ui.ButtonBase(c).Label(LabelCloseTab).Size(16, 16).Shrink(0).Radius(theme.Radius4).
+		AlignItems(ui.Center).Justify(ui.Center).Cursor(ui.CursorPointer).OnClick(onClick)
+	ink := p.Ink45
+	if b.Hovered() || b.Pressed() {
+		b = b.Background(p.Press)
+		ink = p.Ink100
+	}
+	b.TextColor(ink).Children(func() {
+		if s := icons.Line("close"); s != nil {
+			ui.Icon(c, s).Size(10, 10)
+		}
+	})
+}
+
+// insetRing draws the layers of a token shadow that are inset, as MyGo's inset shadow.
+func insetRing(el ui.Element, sh theme.Shadow) ui.Element {
+	for _, l := range sh {
+		if l.Inset {
+			el = el.InsetShadow(l.X, l.Y, l.Blur, l.Wide, l.Color)
+		}
+	}
+	return el
 }

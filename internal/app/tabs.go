@@ -1,0 +1,143 @@
+package app
+
+// The model of the title bar tabs (docs/spec/Tab.md, TitleBar.md): the selected agent's own
+// hc terminal, then the plain terminals of its project. This file has no UI.
+
+import (
+	"path/filepath"
+
+	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/state"
+)
+
+// Tab is one tab of the title bar.
+type Tab struct {
+	// Address is the hc terminal address. It is the Selection ID.
+	Address string
+	// Title is the text shown.
+	Title        string
+	Orchestrator bool
+	// Plain is true for a plain terminal (a shell, not an agent). Only a plain tab closes (D85).
+	Plain bool
+	// State is the glyph state of an agent tab. A plain tab shows the terminal icon.
+	State    kit.GlyphState
+	Selected bool
+}
+
+// Closable tells whether the tab has a close button: a plain terminal, not an agent (D85).
+func (t Tab) Closable() bool { return t.Plain }
+
+// TitleTabs returns the tabs for agent, the address of the agent whose tabs show: its own tab
+// first, then the plain terminals of project. selected is the address of the selected tab, or "".
+// An agent that is not in the snapshot, or an ended worker, has no tab (D112).
+func TitleTabs(s agentstate.Snapshot, project, agent, selected string) []Tab {
+	var tabs []Tab
+	if w, ok := findAgent(s, agent); ok {
+		tabs = append(tabs, Tab{Address: w.Address, Title: tabTitle(w), Orchestrator: w.Orchestrator(),
+			State: tabState(w), Selected: selected != "" && w.Address == selected})
+	}
+	for _, w := range s.Terminals {
+		if w.Project == project {
+			tabs = append(tabs, Tab{Address: w.Address, Title: tabTitle(w), Plain: true,
+				Selected: selected != "" && w.Address == selected})
+		}
+	}
+	return tabs
+}
+
+// findAgent returns the orchestrator or live worker with an address.
+func findAgent(s agentstate.Snapshot, addr string) (agents.Worker, bool) {
+	if addr == "" {
+		return agents.Worker{}, false
+	}
+	for _, w := range s.Orchestrators {
+		if w.Address == addr {
+			return w, true
+		}
+	}
+	for _, w := range s.Workers {
+		if w.Address == addr && w.Live {
+			return w, true
+		}
+	}
+	return agents.Worker{}, false
+}
+
+// tabState is the glyph state of an agent: a program that ended is idle.
+func tabState(w agents.Worker) kit.GlyphState {
+	switch {
+	case !w.Live:
+		return kit.GlyphIdle
+	case w.Status == "blocked" || w.Status == "error":
+		return kit.GlyphNeedsYou
+	case w.Status == "working":
+		return kit.GlyphWorking
+	}
+	return kit.GlyphIdle
+}
+
+// tabTitle is the text of a tab: a plain terminal shows its title (set by the shell with OSC),
+// else "$ <folder>"; an orchestrator shows its name; a worker shows "<issue> · <worktree>", or
+// its name when it has no issue or no worktree.
+func tabTitle(w agents.Worker) string {
+	if w.Plain() {
+		if w.Title != "" {
+			return w.Title
+		}
+		if w.Worktree != "" {
+			return "$ " + filepath.Base(w.Worktree)
+		}
+		return w.Name
+	}
+	if w.Orchestrator() || w.Issue == "" || w.Worktree == "" {
+		return w.Name
+	}
+	return w.Issue + " · " + filepath.Base(w.Worktree)
+}
+
+// TabAgent returns the address of the agent whose tabs show. A selected orchestrator or live
+// worker is it. Any other selection (a plain terminal, a worktree, none) keeps keep while it is
+// still an agent of project; else it is the first orchestrator of project, then its first live
+// worker, then "".
+func TabAgent(s agentstate.Snapshot, sel state.Selected, ok bool, project, keep string) string {
+	if ok && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker) {
+		if _, found := findAgent(s, sel.ID); found {
+			return sel.ID
+		}
+	}
+	if w, found := findAgent(s, keep); found && w.Project == project {
+		return keep
+	}
+	for _, w := range s.Orchestrators {
+		if w.Project == project {
+			return w.Address
+		}
+	}
+	for _, w := range s.Workers {
+		if w.Project == project && w.Live {
+			return w.Address
+		}
+	}
+	return ""
+}
+
+// OpenProject returns the project the bar shows. A selected orchestrator or worker or plain
+// terminal that is in the snapshot gives its project. Any other selection, or none, keeps keep.
+// When keep is empty (at start) it is the project of the first orchestrator, or "".
+func OpenProject(s agentstate.Snapshot, sel state.Selected, ok bool, keep string) string {
+	if ok && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker || sel.Kind == state.KindTerminal) {
+		for _, list := range [][]agents.Worker{s.Orchestrators, s.Workers, s.Terminals} {
+			for _, w := range list {
+				if w.Address == sel.ID {
+					return w.Project
+				}
+			}
+		}
+	}
+	if keep == "" && len(s.Orchestrators) > 0 {
+		return s.Orchestrators[0].Project
+	}
+	return keep
+}

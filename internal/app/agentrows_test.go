@@ -142,25 +142,6 @@ func TestAgeTextMovesInMinutes(t *testing.T) {
 	}
 }
 
-func TestGlyphStates(t *testing.T) {
-	cases := []struct {
-		w    agents.Worker
-		want kit.GlyphState
-	}{
-		{agents.Worker{Live: true, Status: "working"}, kit.GlyphWorking},
-		{agents.Worker{Live: true, Status: "blocked"}, kit.GlyphNeedsYou},
-		{agents.Worker{Live: true, Status: "error"}, kit.GlyphNeedsYou},
-		{agents.Worker{Live: true, Status: "done"}, kit.GlyphIdle},
-		{agents.Worker{Live: true}, kit.GlyphIdle},
-		{agents.Worker{Status: "working"}, kit.GlyphIdle},
-	}
-	for _, c := range cases {
-		if got := glyphState(c.w); got != c.want {
-			t.Errorf("%+v: %v, want %v", c.w, got, c.want)
-		}
-	}
-}
-
 func TestANeedsYouAgentSaysSoInItsLabel(t *testing.T) {
 	h := newRows(t)
 	snap := h.live.get()
@@ -186,7 +167,8 @@ func TestAClickOnAnAgentRowSelectsItAndTheTabsFollow(t *testing.T) {
 		snap.Workers[i].Project = "alpha"
 	}
 	snap.Orchestrators[0].Project = "alpha"
-	for _, tab := range AgentTabs(snap, "alpha", sel.ID) {
+	agent := TabAgent(snap, sel, ok, "alpha", "")
+	for _, tab := range TitleTabs(snap, "alpha", agent, sel.ID) {
 		if tab.Selected {
 			chosen = append(chosen, tab.Address)
 		}
