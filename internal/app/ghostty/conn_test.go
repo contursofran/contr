@@ -685,6 +685,21 @@ func (s *fakeScreen) wait(t *testing.T, cols, rows int) {
 func startWatch(t *testing.T, src *fakeSource) (*Conn, *states, *fakeScreen) {
 	t.Helper()
 	fast(t)
+	return startWatchNow(t, src)
+}
+
+// startWatchSized is startWatch, but the first attach waits for the view's
+// size, as in the app. With the wait at zero, a loaded machine can attach at
+// the default size before the test gives the size (issue #369).
+func startWatchSized(t *testing.T, src *fakeSource) (*Conn, *states, *fakeScreen) {
+	t.Helper()
+	fast(t)
+	firstWait = time.Hour // fast restores it on cleanup
+	return startWatchNow(t, src)
+}
+
+func startWatchNow(t *testing.T, src *fakeSource) (*Conn, *states, *fakeScreen) {
+	t.Helper()
 	st := &states{ch: make(chan State, 256)}
 	c := NewConn(src, Options{OnState: st.on, Watch: true})
 	scr := &fakeScreen{}
@@ -697,7 +712,7 @@ func startWatch(t *testing.T, src *fakeSource) (*Conn, *states, *fakeScreen) {
 // core's size in order with the output (D91).
 func TestWatchKeepsTheCoreSize(t *testing.T) {
 	src := newFakeSource()
-	c, st, scr := startWatch(t, src)
+	c, st, scr := startWatchSized(t, src)
 	if err := c.ResizePixels(90, 20, 8, 16); err != nil {
 		t.Fatal(err)
 	}
@@ -732,7 +747,7 @@ func TestWatchKeepsTheCoreSize(t *testing.T) {
 // view's size; the key reaches the program, and the screen takes that size.
 func TestWatchTakesOverOnTheFirstKey(t *testing.T) {
 	src := newFakeSource()
-	c, st, scr := startWatch(t, src)
+	c, st, scr := startWatchSized(t, src)
 	if err := c.ResizePixels(90, 20, 8, 16); err != nil {
 		t.Fatal(err)
 	}
