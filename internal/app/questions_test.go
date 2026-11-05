@@ -117,20 +117,24 @@ func (r *qRig) y(text string) float32 {
 	return e.Y
 }
 
-func TestChipsPerItemInTheOrderOfTheNeedsRow(t *testing.T) {
+func TestChipsAreQuestionsThenTodosThenBlockedMenus(t *testing.T) {
 	r := newQRig(t, askSource())
-	r.open("D1")
-	// A blocked menu first, then the questions, then the to-dos (D124).
-	yb, y1, y2, yt := r.y("Allow rm?"), r.y("Which db?"), r.y("Ship now?"), r.y("Test the bag")
-	if yb != y1 || y1 != y2 || y2 != yt {
-		t.Fatalf("the chips should share a line: %v %v %v %v", yb, y1, y2, yt)
+	// The source lists the blocked menu first (the needs row order); the card
+	// puts the questions first, then the to-do, then the blocked menu (D124).
+	if got := keys(r.notch.Items()); !slices.Equal(got, []string{"D1", "D2", "T1", "b-2"}) {
+		t.Fatalf("items %v, want D1 D2 T1 b-2", got)
 	}
-	xb, _ := r.tt.Find("Allow rm?")
+	r.open("D1")
+	y1, y2, yt, yb := r.y("Which db?"), r.y("Ship now?"), r.y("Test the bag"), r.y("Allow rm?")
+	if y1 != y2 || y2 != yt || yt != yb {
+		t.Fatalf("the chips should share a line: %v %v %v %v", y1, y2, yt, yb)
+	}
 	x1, _ := r.tt.Find("Which db?")
 	x2, _ := r.tt.Find("Ship now?")
 	xt, _ := r.tt.Find("Test the bag")
-	if !(xb.X < x1.X && x1.X < x2.X && x2.X < xt.X) {
-		t.Errorf("chip order: blocked %v, D1 %v, D2 %v, T1 %v", xb.X, x1.X, x2.X, xt.X)
+	xb, _ := r.tt.Find("Allow rm?")
+	if !(x1.X < x2.X && x2.X < xt.X && xt.X < xb.X) {
+		t.Errorf("chip order: D1 %v, D2 %v, T1 %v, blocked %v", x1.X, x2.X, xt.X, xb.X)
 	}
 	if !r.tt.HasText(questionsVia) {
 		t.Errorf("%q missing: %q", questionsVia, r.tt.Texts())

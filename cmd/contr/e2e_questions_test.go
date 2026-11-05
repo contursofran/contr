@@ -54,6 +54,18 @@ func TestQuestionsCard(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// The sidebar lists an agent under the project of its repository (D137).
+	repo := filepath.Join(dir, "demo")
+	if err := os.MkdirAll(repo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	git := exec.Command("git", "init", "-q", "-b", "main")
+	git.Dir = repo
+	git.Env = append(os.Environ(), "HOME="+home, "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
+	if msg, err := git.CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, msg)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 	cl, err := hc.Dial(ctx, hc.Command("", core.Env))
@@ -104,9 +116,9 @@ func main() {
 	cfg.Profiles["fakeclaude"] = agents.Profile{Argv: []string{script}}
 	mgr := agents.New(agents.HC{Client: cl}, cfg)
 	for _, s := range []agents.Spec{
-		{Name: "lead", Profile: "claude-like", Role: agents.RoleOrchestrator, Project: "demo"},
-		{Name: "b-250-checks", Profile: "claude-like", Role: "builder", Project: "demo", Issue: "250"},
-		{Name: "b-252-cleanup", Profile: "fakeclaude", Role: "builder", Project: "demo", Issue: "252"},
+		{Name: "lead", Profile: "claude-like", Role: agents.RoleOrchestrator, Project: "demo", Worktree: repo},
+		{Name: "b-250-checks", Profile: "claude-like", Role: "builder", Project: "demo", Issue: "250", Worktree: repo},
+		{Name: "b-252-cleanup", Profile: "fakeclaude", Role: "builder", Project: "demo", Issue: "252", Worktree: repo},
 	} {
 		if _, err := mgr.Spawn(ctx, s); err != nil {
 			t.Fatalf("spawn %s: %v", s.Name, err)
@@ -189,36 +201,37 @@ func main() {
 		waitFor("the card", func() bool { return has(app.LabelQuestionsChips) })
 	}
 
-	// The card opens on the first item: the blocked menu.
+	// The card opens on the first question; the chips follow: the second
+	// question, the to-do, the blocked menu (D124, D140).
 	pick("Dark")
 	openCard()
-	waitFor("the menu", func() bool { return has("Yes") })
-	capture("dark-blocked")
-	click("b-250 checks: merge now?")
 	waitFor("the question", func() bool { return has(app.LabelQuestionsField) })
 	capture("dark-question")
 	click(app.LabelQuestionsDetails)
 	time.Sleep(600 * time.Millisecond)
 	capture("dark-details")
-	// Tab moves to the next chip: the first question, the second, the to-do.
 	c.key(t, "Tab")
 	time.Sleep(400 * time.Millisecond)
 	capture("dark-second-question")
 	c.key(t, "Tab")
 	time.Sleep(400 * time.Millisecond)
 	capture("dark-todo")
+	c.key(t, "Tab")
+	waitFor("the menu", func() bool { return has("Yes") })
+	capture("dark-blocked")
 	c.key(t, "Escape")
 	time.Sleep(400 * time.Millisecond)
 
 	pick("Light")
 	openCard()
-	capture("light-blocked")
-	click("b-250 checks: merge now?")
 	waitFor("the question", func() bool { return has(app.LabelQuestionsField) })
 	capture("light-question")
 	click(app.LabelQuestionsDetails)
 	time.Sleep(600 * time.Millisecond)
 	capture("light-details")
+	click("b-252-cleanup")
+	waitFor("the menu", func() bool { return has("Yes") })
+	capture("light-blocked")
 
 	// Answer the second question: the answer goes to the owner file, and the
 	// card moves on.

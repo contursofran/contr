@@ -179,8 +179,8 @@ func TestNotchClickOpensTheCardForTheFirstItem(t *testing.T) {
 	if err := r.tt.Click("2 items. Open"); err != nil {
 		t.Fatal(err)
 	}
-	if len(r.opened) != 1 || r.opened[0].Key != "b-250" {
-		t.Fatalf("opened %+v, want the blocked worker b-250 first (the order of the needs row)", r.opened)
+	if len(r.opened) != 1 || r.opened[0].Key != "D1" {
+		t.Fatalf("opened %+v, want the question D1 first, before the blocked worker b-250", r.opened)
 	}
 	// A second click closes the card.
 	if err := r.tt.Click("2 items. Open"); err != nil {

@@ -34,7 +34,11 @@ Width `notch-open-width` (600px), padding `space-12`, glass as the notch.
   `⌘J` sheet: `⌘J` opens and closes the card.
 - A to-do chip shows the to-do text. A blocked
   worker chip shows the question and the choices of the worker's menu (D51);
-  the answer is sent to the worker's terminal (D124).
+  the answer is sent to the worker's terminal (D124). The chips are in this
+  order: questions, to-dos, blocked menus (D140). The card opens on the first
+  question when there is one.
+- A blocked menu takes no ⏎: only `1`–`9` or a click on a choice sends, so a
+  stray key never approves a permission (D51).
 
 ## Data
 
@@ -42,7 +46,7 @@ Width `notch-open-width` (600px), padding `space-12`, glass as the notch.
 
 ## Keys and focus
 
-- `1`–`9` pick, ⏎ send and next, ⇥ next chip, Esc close (focus in the card only).
+- `1`–`9` pick, ⏎ send and next (not on a blocked menu), ⇥ next chip, Esc close (focus in the card only).
 
 ## Edge cases
 
