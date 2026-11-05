@@ -108,6 +108,21 @@ func DefaultConfig() Config {
 	}}
 }
 
+// ModelOf is the model that the profile starts: the value after --model in
+// its argv. It is "" for an unknown profile or one with no --model.
+func (c Config) ModelOf(profile string) string {
+	argv := c.Profiles[profile].Argv
+	for i, a := range argv {
+		if a == "--model" && i+1 < len(argv) {
+			return argv[i+1]
+		}
+		if v, ok := strings.CutPrefix(a, "--model="); ok {
+			return v
+		}
+	}
+	return ""
+}
+
 // LoadConfig reads a JSON config file over the defaults: a profile in the file
 // replaces the default of the same name. A missing file gives the defaults.
 func LoadConfig(path string) (Config, error) {

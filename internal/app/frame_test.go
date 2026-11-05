@@ -432,8 +432,8 @@ func TestAttachStartsAndStopsTheAgentState(t *testing.T) {
 	if f.Card == nil || f.Worker == nil || f.Needs == nil || f.Needs.Open == nil {
 		t.Error("Attach should wire the needs row, the questions card and the worker view")
 	}
-	if f.AgentsList == nil || len(f.AgentsList.snapshot().Workers) != 1 {
-		t.Fatal("the agents list should read the snapshot of StartAgents")
+	if f.SpacesList == nil || len(f.SpacesList.snapshot().Workers) != 1 {
+		t.Fatal("the sidebar list should read the snapshot of StartAgents")
 	}
 	before := w.queued()
 	notify()

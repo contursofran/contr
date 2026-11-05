@@ -2,13 +2,12 @@
 
 package app
 
-// The status bar along the bottom of the frame. Its left side shows each plan's usage as the
-// percent left and a bar. Its right side shows the message slot, host CPU and memory, the contr
-// version, and the hc core's version while contr follows the core.
+// The status bar along the bottom of the frame. It shows the message slot, host CPU and memory, the
+// contr version, and the hc core's version while contr follows the core. The plan usage moved to the
+// files panel (D126, UsageMeter); #352 removes the bar.
 //
 // The bar is cached: [statusBar.refresh] reads the sources and tells whether what the bar shows
-// changed. It changes only when the plan usage, the host reading, the message or the core version
-// changes. Its methods run on the UI thread.
+// changed. It changes only when the host reading, the message or the core version changes. Its methods run on the UI thread.
 
 import (
 	"slices"
@@ -18,7 +17,6 @@ import (
 	"github.com/contursofran/contr"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/host"
-	"github.com/contursofran/contr/internal/usage"
 )
 
 // Version is contr's version, shown in the status bar. It comes from the VERSION file (D107).
@@ -30,10 +28,8 @@ const TextUpdateReady = "update ready · restart"
 // noReading is shown in place of a reading that has not arrived yet.
 const noReading = "–"
 
-// Labels of the status bar parts. A plan's labels are "usage-<id>", "usage-<id>-bar",
-// "usage-<id>-fill" or "usage-<id>-low", and "usage-<id>-pct".
+// Labels of the status bar parts.
 const (
-	LabelUsage        = "usage"
 	LabelStatusRight  = "status-right"
 	LabelStatusMsg    = "status-message"
 	LabelHostCPU      = "host-cpu-status"
@@ -43,13 +39,10 @@ const (
 	LabelUpdateReady  = "update-ready"
 )
 
-// The sources that the bar reads. [host.Host], [usage.Sampler] and [state.StatusMessage] fit them.
+// The sources that the bar reads. [host.Host] and [state.StatusMessage] fit them.
 type (
 	hostSource interface {
 		Stats() (host.Stats, bool)
-	}
-	usageSource interface {
-		Left(plan usage.PlanID, now uint64) (float64, bool)
 	}
 	messageSource interface {
 		Text() (string, bool)
@@ -88,54 +81,19 @@ func (s segment) text() string {
 	return s.name + " " + s.value
 }
 
-// planSegment is one plan on the left side, for example "claude ▬ 62%". left is the percent left
-// and has is false without data.
-type planSegment struct {
-	plan usage.PlanID
-	left float64
-	has  bool
-}
-
-// text is the item as plain text, for example "claude 62%". The bar has no text.
-func (p planSegment) text() string { return p.plan.Label() + " " + usage.LeftLabel(p.left, p.has) }
-
-// isLow is true when the owner must act on a plan: its percent left is under
-// [theme.UsageLowLeft].
-func isLow(left float64) bool { return left < theme.UsageLowLeft }
-
-// pctColour is the colour of a plan's percent text. Under [theme.UsageLowLeft] it is white, like
-// the fill, so the low state shows at 0 to 2 % fill too (D74). Otherwise it is secondary text.
-func pctColour(left float64, has bool) uint32 {
-	if has && isLow(left) {
-		return theme.YouBg
-	}
-	return theme.Text2
-}
-
-// fillWidth is the filled part of a track: [theme.UsageBarWidth] × left / 100.
-func fillWidth(left float64) float32 {
-	return float32(theme.UsageBarWidth * min(max(left, 0), 100) / 100)
-}
-
 // barContent is everything that the bar shows. It can be compared with [slices.Equal] on its parts.
 type barContent struct {
-	plans []planSegment
 	right []segment
 }
 
-func (a barContent) equal(b barContent) bool {
-	return slices.Equal(a.plans, b.plans) && slices.Equal(a.right, b.right)
-}
+func (a barContent) equal(b barContent) bool { return slices.Equal(a.right, b.right) }
 
 // statusBar reads the sources and draws the bar.
 type statusBar struct {
 	host    hostSource
-	usage   usageSource
 	message messageSource
 	// core gives the hc core's version, and whether contr follows the core.
 	core func() (string, bool)
-	// now is the Unix time that the plan windows are read at.
-	now func() uint64
 	// updateReady tells whether a newer version waits (D115); install is the click on its item.
 	updateReady func() bool
 	install     func()
@@ -146,18 +104,7 @@ type statusBar struct {
 
 // content reads the sources. A nil source shows no reading.
 func (b *statusBar) content() barContent {
-	now := usage.UnixNow
-	if b.now != nil {
-		now = b.now
-	}
 	var c barContent
-	for _, plan := range usage.Plans {
-		p := planSegment{plan: plan}
-		if b.usage != nil {
-			p.left, p.has = b.usage.Left(plan, now())
-		}
-		c.plans = append(c.plans, p)
-	}
 	cpu, mem := noReading, noReading
 	if b.host != nil {
 		if stats, ok := b.host.Stats(); ok {
@@ -195,15 +142,6 @@ func (b *statusBar) refresh() bool {
 	return true
 }
 
-// leftTexts are the texts of the plans, in [usage.Plans] order, for example "claude 62%".
-func (b *statusBar) leftTexts() []string {
-	var out []string
-	for _, p := range b.content().plans {
-		out = append(out, p.text())
-	}
-	return out
-}
-
 // rightTexts are the texts of the right side's items in display order, without separators.
 func (b *statusBar) rightTexts() []string {
 	var out []string
@@ -217,14 +155,6 @@ func (b *statusBar) rightTexts() []string {
 func (b *statusBar) View(c *ui.Context) {
 	b.refresh()
 	ui.Row(c).Fill().AlignItems(ui.Center).PaddingX(theme.StatusPadX).Children(func() {
-		ui.Row(c).Label(LabelUsage).Shrink(0).AlignItems(ui.Center).Gap(theme.StatusGap).Children(func() {
-			for i, p := range b.shown.plans {
-				if i > 0 {
-					separator(c)
-				}
-				planView(c, p)
-			}
-		})
 		ui.Row(c).Label(LabelStatusRight).Grow(1).MinWidth(0).AlignItems(ui.Center).Justify(ui.End).
 			Gap(theme.StatusGap).Children(func() {
 			for i, s := range b.shown.right {
@@ -265,25 +195,4 @@ func (b *statusBar) segmentView(c *ui.Context, s segment) {
 			ui.Text(c, s.text()).TextColor(color(theme.TextDim2))
 		})
 	}
-}
-
-// planView draws the label, the track and the percent. The track is empty without data.
-func planView(c *ui.Context, p planSegment) {
-	id := p.plan.ID()
-	ui.Row(c).Label("usage-" + id).Shrink(0).AlignItems(ui.Center).Gap(theme.StatusGap).Children(func() {
-		ui.Text(c, p.plan.Label()).TextColor(color(theme.TextDim))
-		ui.Row(c).Label("usage-" + id + "-bar").Shrink(0).Width(theme.UsageBarWidth).Height(theme.UsageBarHeight).
-			Background(color(theme.Line)).Radius(theme.UsageBarRadius).Clip().Children(func() {
-			if !p.has {
-				return
-			}
-			label, fill := "usage-"+id+"-fill", uint32(theme.TextDim)
-			if isLow(p.left) {
-				label, fill = "usage-"+id+"-low", theme.YouBg
-			}
-			ui.Box(c).Label(label).Width(fillWidth(p.left)).FillHeight().Shrink(0).Background(color(fill))
-		})
-		ui.Text(c, usage.LeftLabel(p.left, p.has)).Label("usage-" + id + "-pct").
-			TextColor(color(pctColour(p.left, p.has)))
-	})
 }

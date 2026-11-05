@@ -28,9 +28,8 @@ Design system page: component ProjectRow. Shared rules: [README.md](README.md).
   checkout, or the folder of an empty project).
 - A click on the project that is already selected folds or opens it. The
   icon set has no chevron yet, so the row shows no fold mark; the state is
-  in the screen-reader label (expanded). A folded project hides its agents
-  from the agents list below the projects, until #344 puts them under the
-  project.
+  in the screen-reader label (expanded). A folded project hides its agent
+  rows, which sit under it in the same list (#344).
 - An empty project has a `+` icon button at the right of its row. It starts
   an orchestrator in the project folder (D116).
 

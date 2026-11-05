@@ -1,7 +1,6 @@
 package app
 
 import (
-	"math"
 	"reflect"
 	"slices"
 	"sync"
@@ -12,7 +11,6 @@ import (
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/host"
-	"github.com/contursofran/contr/internal/usage"
 )
 
 var contrText = "contr " + Version
@@ -39,18 +37,6 @@ func stats(cpu float32, used, total uint64) host.Stats {
 	return host.Stats{CPUPercent: cpu, MemUsed: used, MemTotal: total}
 }
 
-// fakeUsage gives the percent left per plan. A plan that is not in the map has no data.
-type fakeUsage struct{ left map[usage.PlanID]float64 }
-
-func (f *fakeUsage) Left(plan usage.PlanID, _ uint64) (float64, bool) {
-	v, ok := f.left[plan]
-	return v, ok
-}
-
-func plansLeft(claude, codex float64) *fakeUsage {
-	return &fakeUsage{left: map[usage.PlanID]float64{usage.PlanClaude: claude, usage.PlanCodex: codex}}
-}
-
 type fakeMessage struct {
 	text string
 	has  bool
@@ -75,15 +61,15 @@ func (f *fakeCore) version() (string, bool) { s := f.snap(); return s.CoreVersio
 
 // barFrame builds a frame of width x 900 whose agents follow a core of
 // version v ("" for none), with the fake sources.
-func barFrame(t *testing.T, h *fakeHost, v string, width int) (*Frame, *fakeCore, *fakeUsage, *fakeMessage, *ui.Tester) {
+func barFrame(t *testing.T, h *fakeHost, v string, width int) (*Frame, *fakeCore, *fakeMessage, *ui.Tester) {
 	t.Helper()
 	core := &fakeCore{v: v}
-	u, m := &fakeUsage{left: map[usage.PlanID]float64{}}, &fakeMessage{}
+	m := &fakeMessage{}
 	f := NewFrame()
 	f.agentSnap = core.snap
-	f.status.host, f.status.usage, f.status.message = h, u, m
+	f.status.host, f.status.message = h, m
 	tt := ui.NewTester(f.View, width, theme.WindowHeight)
-	return f, core, u, m, tt
+	return f, core, m, tt
 }
 
 func readingHost(s host.Stats) *fakeHost { return &fakeHost{stats: s, has: true} }
@@ -94,7 +80,7 @@ func rightTexts(f *Frame, tt *ui.Tester) []string {
 }
 
 func TestShowsCPUAndMemoryThenTheVersions(t *testing.T) {
-	f, _, _, _, tt := barFrame(t, readingHost(stats(37.6, 62, 100)), "0.1.18", theme.WindowWidth)
+	f, _, _, tt := barFrame(t, readingHost(stats(37.6, 62, 100)), "0.1.18", theme.WindowWidth)
 	want := []string{"CPU 38%", "MEM 62%", contrText, "hc 0.1.18"}
 	if got := rightTexts(f, tt); !reflect.DeepEqual(got, want) {
 		t.Errorf("right texts %q, want %q", got, want)
@@ -112,7 +98,7 @@ func TestShowsCPUAndMemoryThenTheVersions(t *testing.T) {
 }
 
 func TestNoReadingShowsDashes(t *testing.T) {
-	f, _, _, _, tt := barFrame(t, &fakeHost{}, "0.1.18", theme.WindowWidth)
+	f, _, _, tt := barFrame(t, &fakeHost{}, "0.1.18", theme.WindowWidth)
 	want := []string{"CPU –", "MEM –", contrText, "hc 0.1.18"}
 	if got := rightTexts(f, tt); !reflect.DeepEqual(got, want) {
 		t.Errorf("right texts %q, want %q", got, want)
@@ -120,7 +106,7 @@ func TestNoReadingShowsDashes(t *testing.T) {
 }
 
 func TestTheCoreVersionShowsAfterContr(t *testing.T) {
-	f, _, _, _, tt := barFrame(t, readingHost(stats(40, 50, 100)), "0.1.18", theme.WindowWidth)
+	f, _, _, tt := barFrame(t, readingHost(stats(40, 50, 100)), "0.1.18", theme.WindowWidth)
 	if got := rightTexts(f, tt)[3]; got != "hc 0.1.18" {
 		t.Errorf("fourth item %q, want the hc version", got)
 	}
@@ -131,7 +117,7 @@ func TestTheCoreVersionShowsAfterContr(t *testing.T) {
 }
 
 func TestNoCoreShowsNoVersion(t *testing.T) {
-	f, _, _, _, tt := barFrame(t, readingHost(stats(40, 50, 100)), "", theme.WindowWidth)
+	f, _, _, tt := barFrame(t, readingHost(stats(40, 50, 100)), "", theme.WindowWidth)
 	want := []string{"CPU 40%", "MEM 50%", contrText}
 	if got := rightTexts(f, tt); !reflect.DeepEqual(got, want) {
 		t.Errorf("right texts %q, want %q", got, want)
@@ -142,7 +128,7 @@ func TestNoCoreShowsNoVersion(t *testing.T) {
 }
 
 func TestTheCoreVersionFollowsTheAgents(t *testing.T) {
-	f, core, _, _, tt := barFrame(t, readingHost(stats(40, 50, 100)), "", theme.WindowWidth)
+	f, core, _, tt := barFrame(t, readingHost(stats(40, 50, 100)), "", theme.WindowWidth)
 	tt.Frame()
 	core.set("0.1.18")
 	tt.Frame()
@@ -159,7 +145,7 @@ func TestTheCoreVersionFollowsTheAgents(t *testing.T) {
 // version 0.1.18.
 func counted() (*statusBar, *fakeHost, *fakeCore) {
 	h, core := readingHost(stats(40, 50, 100)), &fakeCore{v: "0.1.18"}
-	b := &statusBar{host: h, usage: &fakeUsage{}, message: &fakeMessage{}, core: core.version}
+	b := &statusBar{host: h, message: &fakeMessage{}, core: core.version}
 	b.refresh()
 	return b, h, core
 }
@@ -196,92 +182,10 @@ func TestANewCoreVersionRepaintsTheBarOnce(t *testing.T) {
 	}
 }
 
-func fillOf(t *testing.T, tt *ui.Tester, label string) float32 {
-	t.Helper()
-	return box(t, tt, label).W
-}
-
-func TestEachPlanShowsItsLeftPercentAndABarToMatch(t *testing.T) {
-	f, _, u, _, tt := barFrame(t, readingHost(stats(40, 50, 100)), "0.1.18", theme.WindowWidth)
-	u.left = plansLeft(61.6, 40).left
-	tt.Frame()
-	if got, want := f.status.leftTexts(), []string{"claude 62%", "codex 40%"}; !reflect.DeepEqual(got, want) {
-		t.Errorf("left texts %q, want %q", got, want)
-	}
-	// The track is 36 px: 61.6 % of it is 22.2 px, 40 % is 14.4 px.
-	claude, codex := fillOf(t, tt, "usage-claude-fill"), fillOf(t, tt, "usage-codex-fill")
-	if math.Abs(float64(claude)-22.18) > 0.5 || math.Abs(float64(codex)-14.4) > 0.5 {
-		t.Errorf("fills %v and %v px, want 22.2 and 14.4", claude, codex)
-	}
-	box(t, tt, "usage-claude-pct")
-}
-
-func TestALowPlanFillsWhiteAndTheOthersStayGrey(t *testing.T) {
-	_, _, u, _, tt := barFrame(t, readingHost(stats(40, 50, 100)), "0.1.18", theme.WindowWidth)
-	// Claude 62 % left, Codex 12 % left (under 20).
-	u.left = plansLeft(62, 12).left
-	tt.Frame()
-	if absent(tt, "usage-codex-low") || !absent(tt, "usage-codex-fill") ||
-		!absent(tt, "usage-claude-low") || absent(tt, "usage-claude-fill") {
-		t.Errorf("only codex should be low; texts %q", tt.Texts())
-	}
-	// Exactly 20 % left is not under the limit.
-	u.left = plansLeft(62, 20).left
-	tt.Frame()
-	if !absent(tt, "usage-codex-low") || absent(tt, "usage-codex-fill") {
-		t.Error("20 % left should be grey")
-	}
-}
-
-func TestALowPlanShowsItsPercentInWhiteAndTheOthersInSecondaryGrey(t *testing.T) {
-	// At 0 to 2 % the fill is under 1 px, so the percent carries the low state.
-	for _, left := range []float64{0, 2, 19} {
-		if got := pctColour(left, true); got != theme.YouBg {
-			t.Errorf("%v %% left: colour %06x, want white", left, got)
-		}
-	}
-	// Exactly 20 % left is not under the limit, the same as the fill.
-	for _, left := range []float64{20, 100} {
-		if got := pctColour(left, true); got != theme.Text2 {
-			t.Errorf("%v %% left: colour %06x, want secondary", left, got)
-		}
-	}
-	// No data: no owner action, so no white.
-	if got := pctColour(0, false); got != theme.Text2 {
-		t.Errorf("no data: colour %06x, want secondary", got)
-	}
-}
-
-func TestAPlanWithoutDataShowsADashAndAnEmptyTrack(t *testing.T) {
-	f, _, u, _, tt := barFrame(t, readingHost(stats(40, 50, 100)), "0.1.18", theme.WindowWidth)
-	tt.Frame()
-	if got, want := f.status.leftTexts(), []string{"claude –", "codex –"}; !reflect.DeepEqual(got, want) {
-		t.Errorf("left texts %q, want %q", got, want)
-	}
-	box(t, tt, "usage-claude-bar")
-	if !absent(tt, "usage-claude-fill") || !absent(tt, "usage-claude-low") {
-		t.Error("an empty track has no fill")
-	}
-
-	u.left = map[usage.PlanID]float64{usage.PlanClaude: 62}
-	tt.Frame()
-	if got, want := f.status.leftTexts(), []string{"claude 62%", "codex –"}; !reflect.DeepEqual(got, want) {
-		t.Errorf("left texts %q, want %q", got, want)
-	}
-	u.left = nil
-	tt.Frame()
-	if got, want := f.status.leftTexts(), []string{"claude –", "codex –"}; !reflect.DeepEqual(got, want) {
-		t.Errorf("left texts %q, want %q", got, want)
-	}
-	if !absent(tt, "usage-claude-fill") {
-		t.Error("no fill without data")
-	}
-}
-
 // The Rust test also let the message time out. The Go message clears itself in state.StatusMessage,
 // and its test covers the time. Here the slot is a fake that the test empties.
 func TestMessageSitsLeftOfTheReadingsAndClearsAfterItsTTL(t *testing.T) {
-	f, _, _, m, tt := barFrame(t, readingHost(stats(40, 50, 100)), "0.1.18", theme.WindowWidth)
+	f, _, m, tt := barFrame(t, readingHost(stats(40, 50, 100)), "0.1.18", theme.WindowWidth)
 	m.text, m.has = "D7 → By type · sent", true
 	if got := rightTexts(f, tt)[0]; got != m.text {
 		t.Errorf("first item %q, want the message", got)
@@ -302,7 +206,7 @@ func TestMessageSitsLeftOfTheReadingsAndClearsAfterItsTTL(t *testing.T) {
 
 func TestNarrowWindowKeepsTheReadingsInsideTheBar(t *testing.T) {
 	const width = 960
-	_, _, _, m, tt := barFrame(t, readingHost(stats(40, 50, 100)), "0.1.18", width)
+	_, _, m, tt := barFrame(t, readingHost(stats(40, 50, 100)), "0.1.18", width)
 	m.text, m.has = strings20("a very long message "), true
 	tt.Frame()
 	msg, cpu := box(t, tt, LabelStatusMsg), box(t, tt, LabelHostCPU)
@@ -331,7 +235,7 @@ func strings20(s string) string {
 }
 
 func TestAnUpdateReadyItemShowsAndAClickInstalls(t *testing.T) {
-	f, _, _, _, tt := barFrame(t, readingHost(stats(37.6, 62, 100)), "0.1.18", theme.WindowWidth)
+	f, _, _, tt := barFrame(t, readingHost(stats(37.6, 62, 100)), "0.1.18", theme.WindowWidth)
 	u := &fakeUpdates{enabled: true}
 	f.Settings = &Settings{Updates: u, Run: Runner{Go: func(fn func()) { fn() }}}
 	if got := rightTexts(f, tt); slices.Contains(got, TextUpdateReady) {

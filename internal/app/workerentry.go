@@ -25,6 +25,9 @@ type WorkerEntry struct {
 	OpenPR func(dir string, n int)
 	// OpenIssue opens an issue in the browser, with the worktree and the number.
 	OpenIssue func(dir string, n int)
+	// OpenPRWeb opens a pull request in the browser, with the worktree and the number. The agent
+	// rows use it: they never open the PR pane (D127). It must not block the UI thread.
+	OpenPRWeb func(dir string, n int)
 }
 
 // For returns the label and the action for worker w: its pull request when it has one, else its

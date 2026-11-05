@@ -490,9 +490,8 @@ agent. With no selection it shows `Select a project`.
 
 ## Footer (26)
 
-`bg.bars`, top border `line`, 11 px dim. Left: plan usage, `claude` and
-`codex` with a 36×3 bar and the percent left (no OpenCode Go segment).
-Right: the message slot (errors from `+ new` and other actions), host CPU
+`bg.bars`, top border `line`, 11 px dim. The plan usage left the footer
+for the files panel (D126, D139). The footer has the message slot (errors from `+ new` and other actions), host CPU
 and memory, the contr version, and the hc core's version (`hc 0.1.18`)
 while contr follows the core (#245).
 
