@@ -154,14 +154,31 @@ type fakeWindow struct {
 	focus, blur      func()
 	show, hide       func()
 	minimize, restor func()
-	invalidated      int
 
-	mu      sync.Mutex
-	updates []func()
+	// mu guards visible, focused, invalidated and updates: the frame reads
+	// and writes them from more than one goroutine.
+	mu          sync.Mutex
+	invalidated int
+	updates     []func()
 }
 
-func (w *fakeWindow) IsVisible() bool { return w.visible }
-func (w *fakeWindow) IsFocused() bool { return w.focused }
+func (w *fakeWindow) IsVisible() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.visible
+}
+func (w *fakeWindow) IsFocused() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.focused
+}
+
+// setVisible changes what IsVisible reports. Goroutines of the frame read it.
+func (w *fakeWindow) setVisible(v bool) {
+	w.mu.Lock()
+	w.visible = v
+	w.mu.Unlock()
+}
 func (w *fakeWindow) OnFocus(fn func()) func() {
 	w.focus = fn
 	return func() { w.focus = nil }
@@ -170,7 +187,22 @@ func (w *fakeWindow) OnBlur(fn func()) func() {
 	w.blur = fn
 	return func() { w.blur = nil }
 }
-func (w *fakeWindow) Invalidate() { w.invalidated++ }
+
+// Invalidate counts a redraw. Goroutines of the frame call it, so mu guards
+// the count.
+func (w *fakeWindow) Invalidate() {
+	w.mu.Lock()
+	w.invalidated++
+	w.mu.Unlock()
+}
+
+// redraws is the number of Invalidate calls so far.
+func (w *fakeWindow) redraws() int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.invalidated
+}
+
 func (w *fakeWindow) Update(fn func()) {
 	w.mu.Lock()
 	w.updates = append(w.updates, fn)
@@ -229,11 +261,11 @@ func TestAttachWiresTheStateToTheWindow(t *testing.T) {
 	if f.Visibility.Visible() {
 		t.Error("Visibility should follow the window to hidden")
 	}
-	before := w.invalidated
+	before := w.redraws()
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "a1"})
 	f.Status.Show("hello")
-	if w.invalidated != before+2 {
-		t.Errorf("redraws %d, want 2 more", w.invalidated-before)
+	if got := w.redraws(); got != before+2 {
+		t.Errorf("redraws %d, want 2 more", got-before)
 	}
 	stop()
 	if w.hide != nil || w.show != nil {
