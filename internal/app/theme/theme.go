@@ -112,6 +112,11 @@ const (
 	TerminalMinWidth = 480
 	FilesHideBelow   = 1100
 	PanelGap         = Space10
+	// SidebarIconsBelow is the window width under which the sidebar is an
+	// icon column (D128); SidebarIconWidth is the width of that column. The
+	// stored sidebar width (D111) does not change.
+	SidebarIconsBelow = 800
+	SidebarIconWidth  = 56
 )
 
 // PR pane (D59)

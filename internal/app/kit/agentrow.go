@@ -33,6 +33,10 @@ type AgentRowOpts struct {
 	OnClick      func()
 	// Menu fills the context menu. Nil: no menu.
 	Menu func(m *ui.Menu)
+	// Compact draws the glyph alone, centered, with Tip as its tooltip, in an
+	// icon column (D128). The label, click and menu stay.
+	Compact bool
+	Tip     string
 }
 
 // AgentRowHeight is the height of an AgentRow: two lines and the padding.
@@ -50,6 +54,10 @@ func AgentRow(c *ui.Context, o AgentRowOpts) {
 	// The column takes the width; the margins sit inside it, so they count in
 	// the row's width (D40) and the age at the right is not cut off.
 	ui.Column(c).FillWidth().Shrink(0).Children(func() {
+		if o.Compact {
+			compactAgentButton(c, o)
+			return
+		}
 		if o.Orchestrator {
 			agentRowButton(c, o, theme.Space6)
 			return
@@ -110,4 +118,30 @@ func agentRowButton(c *ui.Context, o AgentRowOpts, marginX float32) {
 			})
 		})
 	})
+}
+
+// compactAgentButton is an agent in an icon column: the status glyph alone.
+// Only the fill shows the selection, as the glyph keeps the color of its state.
+func compactAgentButton(c *ui.Context, o AgentRowOpts) {
+	p := theme.Current()
+	row := ui.ButtonBase(c).Label(o.Label).Height(theme.SizeRowHeight).Shrink(0).Center().
+		MarginX(theme.Space6).Radius(theme.Radius8).Cursor(ui.CursorPointer).Selected(o.Selected)
+	switch {
+	case o.Selected:
+		row = row.Background(p.Selected)
+	case row.Hovered():
+		row = row.Background(p.Hover)
+	default:
+		row = row.Background(ui.Transparent)
+	}
+	if o.OnClick != nil {
+		row = row.OnClick(o.OnClick)
+	}
+	if o.Menu != nil {
+		row = row.ContextMenu(o.Menu)
+	}
+	if o.Tip != "" {
+		row = row.Tooltip(o.Tip)
+	}
+	row.Children(func() { StatusGlyph(c, GlyphOpts{State: o.State, Claude: o.Orchestrator}) })
 }

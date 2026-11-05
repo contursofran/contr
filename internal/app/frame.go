@@ -207,7 +207,9 @@ type Frame struct {
 	// sidebarW and panelW are the dragged widths (D111). A hidden side keeps
 	// its width. movedNow tells that a divider moved in this frame; saveTimer
 	// waits for the dividers to rest before the save.
-	sidebarW, panelW        float32
+	sidebarW, panelW float32
+	// icons tells that this frame draws the sidebar as an icon column (D128).
+	icons                   bool
 	movedNow, widthsTouched bool
 	// The Appearance setting (D119); see appearance.go.
 	appearance   mygo.ThemeSource
@@ -485,6 +487,10 @@ func (f *Frame) View(c *ui.Context) {
 		f.sidebarW = clampWidth(f.sidebarW, theme.SidebarMinWidth, theme.SidebarMaxWidth)
 		f.panelW = clampWidth(f.panelW, theme.PanelMinWidth, theme.PanelMaxWidth)
 		sidebar, files, showFiles := fitWidths(win, f.sidebarW, f.panelW, f.sidebarOpen, f.panelOpen)
+		f.icons = f.sidebarOpen && compactSidebar(win)
+		if f.SpacesList != nil {
+			f.SpacesList.compact = f.icons
+		}
 		f.Files.Sync() // the diff summary counts what the tree lists, also while the panel is hidden
 		f.titleBar(c, sidebar, narrowWindow(win))
 		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Padding(0, theme.PanelGap, theme.PanelGap).Children(func() {
@@ -512,13 +518,13 @@ func (f *Frame) panels(c *ui.Context, sidebar, files float32, showFiles bool) {
 			f.terminalPanel(c)
 			return
 		}
-		f.split(c, &f.panelW, files, theme.PanelMinWidth, theme.PanelMaxWidth, true, f.filesPanel, f.terminalPanel)
+		f.split(c, &f.panelW, files, theme.PanelMinWidth, theme.PanelMaxWidth, true, false, f.filesPanel, f.terminalPanel)
 	}
 	if !f.sidebarOpen {
 		terminal(c)
 		return
 	}
-	f.split(c, &f.sidebarW, sidebar, theme.SidebarMinWidth, theme.SidebarMaxWidth, false, f.sidebarPanel, terminal)
+	f.split(c, &f.sidebarW, sidebar, theme.SidebarMinWidth, theme.SidebarMaxWidth, false, f.icons, f.sidebarPanel, terminal)
 }
 
 func (f *Frame) sidebarPanel(c *ui.Context) {
@@ -589,8 +595,10 @@ func clampWidth(w, lo, hi float32) float32 { return min(max(w, lo), hi) }
 // wider than its panel by the half on its side. The divider is a line with no
 // color; it shows the grey of a hover or a drag only. The split builds under
 // a copy of the theme with those colors, and the panes build under the
-// window's theme again, so only the divider takes the copy.
-func (f *Frame) split(c *ui.Context, stored *float32, shown, lo, hi float32, rtl bool, first, second func(*ui.Context)) {
+// window's theme again, so only the divider takes the copy. With fixed, the
+// panel has the width of the window rule (the sidebar as icons, D128): a move
+// of the divider does not change *stored.
+func (f *Frame) split(c *ui.Context, stored *float32, shown, lo, hi float32, rtl, fixed bool, first, second func(*ui.Context)) {
 	p := theme.Current()
 	base := c.Theme()
 	line := *base
@@ -619,7 +627,7 @@ func (f *Frame) split(c *ui.Context, stored *float32, shown, lo, hi float32, rtl
 		size := shown + off
 		before := size
 		sp := ui.Split(c, &size, pane(firstPad, first), pane(secondPad, second)).Grow(1).MinWidth(0)
-		if sp.Changed() || size != before {
+		if (sp.Changed() || size != before) && !fixed {
 			*stored = clampWidth(size-off, lo, hi)
 			f.movedNow, f.widthsTouched = true, true
 		}
@@ -695,7 +703,9 @@ func (f *Frame) titleBar(c *ui.Context, sidebarW float32, narrow bool) {
 		if f.sidebarOpen {
 			// The window buttons sit over this corner. The row is as wide as the
 			// sidebar plus its gaps, so the tabs start at the terminal panel.
-			ui.Row(c).Width(sidebarW + 2*theme.PanelGap).FillHeight().Shrink(0).AlignItems(ui.Center).
+			// An icon column is narrower than the window buttons and the toggle.
+			corner := max(sidebarW+2*theme.PanelGap, theme.TrafficLightInset+theme.TitleButtonSize+theme.PanelGap)
+			ui.Row(c).Width(corner).FillHeight().Shrink(0).AlignItems(ui.Center).
 				PaddingStart(theme.TrafficLightInset).Children(func() {
 				toggleButton(c, LabelSidebarToggle, true, f.ToggleSidebar)
 			})
