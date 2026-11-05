@@ -37,7 +37,12 @@ Design system page: component Tab. Shared rules: [README.md](README.md).
 ## Keys and focus
 
 - `⌘W` closes a plain terminal tab. Arrows move between tabs (`TabsBase`).
-  Middle-click close and the context menu are not built yet (D131).
+- Middle-click closes a plain terminal tab; an agent tab ignores it (D85, D142).
+- Context menu: Close (plain terminal only; off on an agent tab) and Close
+  others (every plain terminal except this tab; an agent never closes).
+  There is no Rename: hc cannot store a name for a terminal (D142).
+- Drag a plain terminal tab onto another to take its place. The agent's own
+  tab stays first and does not drag. The order lasts for the session (D142).
 
 ## Edge cases
 
@@ -56,8 +61,8 @@ Design system page: component Tab. Shared rules: [README.md](README.md).
 
 - `TabsBase` with a custom tab view. The title is `Text(...).NoWrap().Ellipsis()`.
 - Close button: `ButtonBase` with the `close` icon, label "Close tab".
-- Middle-click and ⌘W close the tab. Drag to reorder if `TabsBase` gives it; else leave it out.
-- Context menu (`.ContextMenu(...)`): Rename, Close, Close others.
+- Middle-click (`HandleInput`, button 2) and ⌘W close the tab. Reorder with `Drag` and `Drop` on the tab.
+- Context menu (`.ContextMenu(...)`): Close, Close others. Rename waits for an hc name call (D142).
 
 ## Do and do not
 
@@ -74,6 +79,7 @@ Design system page: component Tab. Shared rules: [README.md](README.md).
 
 - View: each state (default, selected, blocked glyph).
 - View: close on a plain terminal tab; no close on an agent tab.
+- View: middle-click, menu and drag never close or move an agent tab.
 
 ## Replaces
 
