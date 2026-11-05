@@ -324,3 +324,55 @@ func TestSettingsInstallErrorReachesTheStatusMessage(t *testing.T) {
 		t.Errorf("status messages = %v", msgs)
 	}
 }
+
+func TestSetVisibleChecksAtOnceWhenNoCheckRan(t *testing.T) {
+	u := &fakeUpdates{enabled: true}
+	s := &Settings{Updates: u, Run: Runner{Go: func(f func()) { f() }}}
+	s.SetVisible(false)
+	if u.checks != 0 {
+		t.Fatal("a hiding window was checked")
+	}
+	s.SetVisible(true) // launch while hidden: no check ran yet
+	if u.checks != 1 {
+		t.Fatalf("checks = %d, want 1", u.checks)
+	}
+}
+
+func TestSetVisibleChecksOnlyWhenTheLastCheckIsOld(t *testing.T) {
+	u := &fakeUpdates{enabled: true}
+	now := time.Date(2026, 11, 4, 9, 0, 0, 0, time.UTC)
+	s := &Settings{Updates: u, Every: time.Hour, Now: func() time.Time { return now },
+		Run: Runner{Go: func(f func()) { f() }}}
+	s.autoCheck()
+	if u.checks != 1 {
+		t.Fatalf("checks = %d after the first check", u.checks)
+	}
+	now = now.Add(59 * time.Minute)
+	s.SetVisible(true)
+	if u.checks != 1 {
+		t.Errorf("a recent check ran again: %d", u.checks)
+	}
+	now = now.Add(2 * time.Minute) // 61 minutes: a scheduled check fell while hidden
+	s.SetVisible(true)
+	if u.checks != 2 {
+		t.Errorf("checks = %d, want 2 after the missed interval", u.checks)
+	}
+	s.SetVisible(true) // shown again at once: the schedule restarted
+	if u.checks != 2 {
+		t.Errorf("checks = %d, want 2 right after a check", u.checks)
+	}
+}
+
+func TestSkippedHiddenCheckDoesNotCountAsACheck(t *testing.T) {
+	u := &fakeUpdates{enabled: true}
+	hidden := false
+	s := &Settings{Updates: u, Visible: func() bool { return !hidden },
+		Run: Runner{Go: func(f func()) { f() }}}
+	hidden = true
+	s.autoCheck() // timer fires while hidden
+	hidden = false
+	s.SetVisible(true)
+	if u.checks != 1 {
+		t.Fatalf("checks = %d, want 1", u.checks)
+	}
+}

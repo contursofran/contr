@@ -71,6 +71,8 @@ type Settings struct {
 	Visible func() bool
 	// Every is the time between automatic checks; zero means CheckEvery.
 	Every time.Duration
+	// Now is the clock; nil means time.Now. Tests give it a fake.
+	Now func() time.Time
 	// Status shows a short message; may be nil.
 	Status func(string)
 
@@ -78,9 +80,11 @@ type Settings struct {
 	// enabled is known once the first Enabled call returns.
 	enabledKnown, enabled bool
 	checking, installing  bool
-	upToDate              bool
-	found                 *UpdateInfo
-	err                   string
+	// lastCheck is when the last check started; zero when none did.
+	lastCheck time.Time
+	upToDate  bool
+	found     *UpdateInfo
+	err       string
 	// percent is the install progress, 0 to 100, set from the install goroutine.
 	percent atomic.Int32
 	md      markdown.Options
@@ -131,17 +135,14 @@ func (s *Settings) probe() {
 }
 
 // StartChecks is the one place that holds the check schedule (owner answer D33): one check at
-// launch, then one every Every (4 hours). A check does not run while the window is hidden, and a
-// check that fails stays quiet. The timer sleeps between checks, so an idle contr uses no CPU.
+// launch, then one every Every (4 hours). A check does not run while the window is hidden; when the
+// window shows after a missed check, SetVisible runs it. A check that fails stays quiet. The timer sleeps between checks, so an idle contr uses no CPU.
 // The checks run off the UI thread. It returns the function that stops the schedule.
 func (s *Settings) StartChecks() (stop func()) {
 	if s.Updates == nil {
 		return func() {}
 	}
-	every := s.Every
-	if every <= 0 {
-		every = CheckEvery
-	}
+	every := s.interval()
 	done := make(chan struct{})
 	post := func(fn func()) {
 		if s.Run.Post == nil {
@@ -171,6 +172,33 @@ func (s *Settings) StartChecks() (stop func()) {
 	}
 }
 
+func (s *Settings) now() time.Time {
+	if s.Now != nil {
+		return s.Now()
+	}
+	return time.Now()
+}
+
+func (s *Settings) interval() time.Duration {
+	if s.Every > 0 {
+		return s.Every
+	}
+	return CheckEvery
+}
+
+// SetVisible tells Settings that the window shows or hides. It runs on the UI thread. When the
+// window shows and the last check is older than the interval (or none ran), it checks at once, so
+// a check that fell while the window was hidden is not lost. The schedule goes on as before.
+func (s *Settings) SetVisible(visible bool) {
+	if !visible || s.Updates == nil {
+		return
+	}
+	if !s.lastCheck.IsZero() && s.now().Sub(s.lastCheck) < s.interval() {
+		return
+	}
+	s.autoCheck()
+}
+
 // autoCheck is one scheduled check. It runs on the UI thread, where the window state is known.
 func (s *Settings) autoCheck() {
 	if s.Visible != nil && !s.Visible() {
@@ -180,6 +208,7 @@ func (s *Settings) autoCheck() {
 		return
 	}
 	s.checking = true
+	s.lastCheck = s.now()
 	s.Run.Do(func() func() {
 		var info *UpdateInfo
 		var err error
@@ -208,6 +237,7 @@ func (s *Settings) Check() {
 		return
 	}
 	s.checking, s.upToDate, s.found, s.err = true, false, nil, ""
+	s.lastCheck = s.now()
 	s.redraw()
 	s.Run.Do(func() func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
