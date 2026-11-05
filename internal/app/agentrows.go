@@ -215,7 +215,7 @@ func (l *SpacesList) SelectAgent(a agentLine) {
 
 // agentMenu fills the context menu of an agent row: Interrupt, Stop, Open PR.
 // The actions run off the UI thread. Open PR is off for an agent with no pull
-// request.
+// request. Open PR opens the browser, not the PR pane (D127).
 func (l *SpacesList) agentMenu(m *ui.Menu, a agentLine) {
 	if m.Item(MenuInterrupt).Disabled(l.Source == nil).Chosen() {
 		l.act(a.w, "interrupted", l.Source.Interrupt)
@@ -225,8 +225,8 @@ func (l *SpacesList) agentMenu(m *ui.Menu, a agentLine) {
 	}
 	m.Separator()
 	var open func()
-	if n := l.Entry.PRs.PR(a.w.Worktree); n > 0 && a.w.Worktree != "" && l.Entry.OpenPR != nil {
-		open = func() { l.Entry.OpenPR(a.w.Worktree, n) }
+	if n := l.Entry.PRs.PR(a.w.Worktree); n > 0 && a.w.Worktree != "" && l.Entry.OpenPRWeb != nil {
+		open = func() { l.Entry.OpenPRWeb(a.w.Worktree, n) }
 	}
 	if m.Item(MenuOpenPR).Disabled(open == nil).Chosen() && open != nil {
 		open()

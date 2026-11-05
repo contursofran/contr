@@ -235,7 +235,10 @@ func TestOpenPRFromTheContextMenu(t *testing.T) {
 	rig.w.Sync(liveWorker(h.cwds[0]))
 	rig.flush()
 	var opened [][2]any
-	h.list.Entry = WorkerEntry{PRs: rig.w, OpenPR: func(dir string, n int) { opened = append(opened, [2]any{dir, n}) }}
+	paneOpened := false
+	h.list.Entry = WorkerEntry{PRs: rig.w,
+		OpenPR:    func(string, int) { paneOpened = true },
+		OpenPRWeb: func(dir string, n int) { opened = append(opened, [2]any{dir, n}) }}
 	h.tt.Frame()
 	h.tt.RightClick("b-241, working, 241, sonnet")
 	if err := h.tt.ChooseMenuItem(MenuOpenPR); err != nil {
@@ -243,6 +246,9 @@ func TestOpenPRFromTheContextMenu(t *testing.T) {
 	}
 	if len(opened) != 1 || opened[0][0] != h.cwds[0] || opened[0][1] != 307 {
 		t.Errorf("opened %v", opened)
+	}
+	if paneOpened {
+		t.Error("Open PR opened the PR pane (D127)")
 	}
 }
 

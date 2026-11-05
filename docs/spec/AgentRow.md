@@ -36,8 +36,9 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
   open project has one). It stops when the window hides or no age shows.
   Ages also move on every state change, because each build reads the clock.
 - Context menu: Interrupt, Stop, Open PR. They call the agent source
-  (`internal/agents`) off the UI thread; Open PR is off while the agent has
-  no pull request. Stop asks for no second click: the menu choice is the
+  (`internal/agents`) off the UI thread; Open PR opens the pull request in the
+  browser (`gh pr view --web`), never in the PR pane (D127), and is off while
+  the agent has no pull request. A failure shows in the status message. Stop asks for no second click: the menu choice is the
   confirmation.
 - A selected agent that is gone leaves the selection.
 - The project row shows the selection for the project itself, and while the

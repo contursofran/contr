@@ -175,6 +175,9 @@ type Frame struct {
 	// OpenIssueWeb opens issue n of the repository in dir in the browser. [Frame.Attach] sets it;
 	// tests replace it.
 	OpenIssueWeb func(dir string, n int) error
+	// OpenPRWeb opens pull request n of the repository in dir in the browser. [Frame.Attach] sets
+	// it; tests replace it.
+	OpenPRWeb func(dir string, n int) error
 	// Host and Usage feed the status bar. [Frame.Attach] creates them when they are nil (tests set
 	// fakes first) and ends them with its stop function.
 	Host  *host.Host
@@ -295,6 +298,27 @@ func (f *Frame) OpenIssue(dir string, n int) {
 	if open == nil {
 		open = func(dir string, n int) error { return github.New(dir).OpenIssue(context.Background(), n) }
 	}
+	f.openWeb(open, dir, n)
+}
+
+// OpenPRInBrowser opens pull request n of the repository in dir in the browser, off the UI
+// thread. A failure shows in the status message. It does not open the PR pane (D127).
+func (f *Frame) OpenPRInBrowser(dir string, n int) {
+	open := f.OpenPRWeb
+	if open == nil {
+		open = func(dir string, n int) error { return github.New(dir).OpenPR(context.Background(), n) }
+	}
+	f.openWeb(open, dir, n)
+}
+
+// agentRowEntry is the entry of the agent rows. Its Open PR opens the browser; it has no
+// OpenPR, so the rows cannot reach the PR pane (D127).
+func (f *Frame) agentRowEntry() WorkerEntry {
+	return WorkerEntry{PRs: f.WorkerPRs, OpenIssue: f.OpenIssue, OpenPRWeb: f.OpenPRInBrowser}
+}
+
+// openWeb runs open off the UI thread and shows its error in the status message.
+func (f *Frame) openWeb(open func(dir string, n int) error, dir string, n int) {
 	run := Runner{}
 	if f.WorkerPRs != nil {
 		run = f.WorkerPRs.Run
@@ -970,7 +994,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.SpacesList.Host = f.Host
 	f.SpacesList.ModelOf = f.ModelOf
 	f.SpacesList.Run, f.SpacesList.Status = Runner{Post: w.Update}, f.Status.Show
-	f.SpacesList.Entry = WorkerEntry{PRs: f.WorkerPRs, OpenPR: f.OpenPR, OpenIssue: f.OpenIssue}
+	f.SpacesList.Entry = f.agentRowEntry()
 	f.SpacesList.Ages = &AgeClock{Tick: w.Invalidate}
 	if src != nil {
 		f.SpacesList.Source = src
