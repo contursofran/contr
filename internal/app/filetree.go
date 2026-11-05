@@ -64,6 +64,8 @@ type FileTree struct {
 	repo    review.Repo
 	changes []review.File
 	byPath  map[string]review.File
+	// changesOK is true when the last read of the changes worked.
+	changesOK bool
 	// loaded holds the entries of each folder that was read, by path ("" is
 	// the root); loading, the folders being read.
 	loaded  map[string][]review.Entry
@@ -114,6 +116,20 @@ func (t *FileTree) redraw() {
 	}
 }
 
+// Sync points the tree at the folder that Dir gives, even when no view draws it. The title bar
+// calls it, so the diff summary stays current while the files panel is hidden. Cheap when the
+// folder did not change; it reads on a goroutine.
+func (t *FileTree) Sync() { t.sync() }
+
+// Summary is the total of the changes that the tree lists: what the DiffSummary shows. ok is
+// false until the folder was read, and after a read that failed.
+func (t *FileTree) Summary() (sum review.Summary, ok bool) {
+	if t.dir == "" || !t.changesOK {
+		return review.Summary{}, false
+	}
+	return review.Total(t.changes), true
+}
+
 // Shown is the folder that the tree shows now.
 func (t *FileTree) Shown() string { return t.dir }
 
@@ -150,7 +166,7 @@ func (t *FileTree) setDir(dir string) {
 	t.mu.Unlock()
 	t.dir, t.gen, t.session = dir, t.gen+1, t.session+1
 	t.repo = review.Repo{Dir: dir, Base: reviewBase}
-	t.changes, t.byPath, t.err = nil, nil, ""
+	t.changes, t.byPath, t.err, t.changesOK = nil, nil, "", false
 	t.loaded, t.loading = map[string][]review.Entry{}, map[string]bool{}
 	t.opened, t.openFiltered = map[string]*bool{}, map[string]*bool{}
 	if dir == "" {
@@ -190,6 +206,7 @@ func (t *FileTree) read(rels []string) {
 				return
 			}
 			t.setChanges(changes)
+			t.changesOK = cerr == nil
 			for rel := range want {
 				delete(t.loading, rel)
 				t.loaded[rel] = entries[rel] // nil after an error, so it is not read again

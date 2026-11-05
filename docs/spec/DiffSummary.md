@@ -1,6 +1,6 @@
 # DiffSummary
 
-A mono button in the title bar that counts the changed lines and files of the selected project and opens the Review view.
+A mono button in the title bar that counts the changed lines and files of the selected agent and opens the Review view.
 
 Design system page: component DiffSummary. Shared rules: [README.md](README.md).
 
@@ -22,12 +22,20 @@ The counts sit `space-8` apart. The button has padding `4px 8px` and radius `rad
 
 ## Behavior
 
-- Click opens the Review view (D37) on the selected project.
+- Click opens the Review view (D37) on the selected agent. A click on a
+  tab shows the terminal again.
 
 ## Data
 
-- `internal/review` counts on a goroutine. Read again on a file watch event
-  in the project folder, or on a branch change from hc. No timer.
+- The counts are the totals of the file tree (FileTree.md, D131): `Repo.Changes`
+  of the selected agent's worktree, else the project folder. That is the work
+  tree against the merge base with `main` (committed, staged and unstaged
+  changes) plus the new files that git does not ignore. Other agents'
+  branches do not count. The title bar total and the tree always agree.
+- One read and one watch serve both. The tree reads on a goroutine and reads
+  again on a change of the work tree (`mygo.WatchFiles`, D131). No timer.
+  The title bar keeps the tree pointed at the folder, so the counts stay
+  current while the files panel is hidden.
 
 ## Keys and focus
 
@@ -49,7 +57,7 @@ The counts sit `space-8` apart. The button has padding `4px 8px` and radius `rad
 ## Build in MyGo
 
 - `ButtonBase` with three `Text` runs; the counts come from `kit.Counts`. Do not write a second counter.
-- Data: `internal/review` reads the counts on a goroutine; `Window.Update` sets them. Read again on a file watch event (`mygo.WatchFiles`), not on a timer.
+- Data: the file tree's changes (`FileTree.Summary`, `review.Total`). The summary has no read and no watch of its own.
 - Click opens the Review view (`editor.DiffView`).
 
 ## Do and do not
@@ -65,6 +73,7 @@ The counts sit `space-8` apart. The button has padding `4px 8px` and radius `rad
 ## Tests
 
 - View: counts render; zero hides; git error hides.
+- Unit: a repo with a committed change, an uncommitted change, an untracked file and a second agent's branch gives the same totals in the summary and in the tree rows.
 - Unit: the label text for each case.
 
 ## Replaces
