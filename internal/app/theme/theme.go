@@ -31,20 +31,11 @@ const FontSize = 12
 const LineHeight = 18
 const TerminalFontSize = 13
 const TerminalLineHeight = 20
-const TermPadding = 8 // space between the terminal view's edge and its grid
 
 // TerminalLineHeightScale is the row height of the terminal as a multiple of
 // the font's own line height: TerminalLineHeight over JetBrains Mono's 1.32
 // em at TerminalFontSize.
 const TerminalLineHeightScale = 1.165
-
-// TerminalPalette holds the 16 ANSI colors of programs: black, red, green,
-// yellow, blue, magenta, cyan and white, then the bright eight. Own values,
-// readable on BgTerminal. Greyscale applies to contr's own UI only (D10).
-var TerminalPalette = [16]uint32{
-	0x1E1E1E, 0xE06C6C, 0x8CC07A, 0xE0C070, 0x6CA8E8, 0xC080D8, 0x5CC0C8, 0xD0D0D0, 0x5C5C5C,
-	0xFF8080, 0xA8E090, 0xFFD890, 0x90C4FF, 0xDCA0F0, 0x80DCE4, 0xFFFFFF,
-}
 
 // Backgrounds
 const BgWindow = 0x141414 // window, panel
