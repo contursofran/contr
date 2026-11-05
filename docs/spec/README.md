@@ -43,14 +43,15 @@ tests, and what it replaces.
 ┌ glass window ─────────────────────────────────────────────────────────────────┐
 │ ● ● ●                    │ tab · tab · +      ··········  +120 −126 9 files ⧉ ⌕ ▣ │  title bar 46
 │┌ sidebar 312 ─────┐┌ terminal (fills) ─────────────────────┐┌ files 280 ──────┐│
-││ Servers        + ││          ╭ 2 questions ╮              ││ Files        ⧩  ││
-││ ▣ This Mac local ││                                       ││ ▸ internal      ││
-││                  ││                                   ── ││   app.go  +4 −1 ││
-││ Projects       + ││                                   ── ││                 ││
-││ ▢ contr     main ││                                    3 ││                 ││
-││  ✱ orchestrator  ││                                   ── ││                 ││
-││  │ ⠋ worker      ││ output                            ── ││ Context  45%    ││
-││  │ ⠶ worker      ││ prompt                                ││ ▬▬▬▬▬▬▬──────── ││
+││ Projects       + ││          ╭ 2 questions ╮              ││ Files        ⧩  ││
+││ ▢ contr     main ││                                       ││ ▸ internal      ││
+││  ✱ orchestrator  ││                                   ── ││   app.go  +4 −1 ││
+││  │ ⠋ worker      ││                                   ── ││                 ││
+││  │ ⠶ worker      ││                                    3 ││                 ││
+││                  ││                                   ── ││                 ││
+││ Servers        + ││                                   ── ││ Context  45%    ││
+││ ▣ This Mac local ││ output                                ││ ▬▬▬▬▬▬▬──────── ││
+││ ⚙                ││ prompt                                ││                 ││
 │└──────────────────┘└───────────────────────────────────────┘└─────────────────┘│
 └───────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -60,6 +61,18 @@ tests, and what it replaces.
   notch takes the questions, the files panel takes the usage.
 - Overlays (notch, card, outline, menus) float over the terminal. They
   never resize it (D67).
+
+## Screens
+
+The owner's from-zero canvas (https://claude.ai/artifact/9bmbRdJc8qDMSRXm6obEb3), Dark and Light. Each component spec also has its pictures. When a spec and a picture differ, tell the coordinator; do not guess.
+
+| Screen | Dark | Light |
+|---|---|---|
+| 1 · Orchestrator selected | ![](images/screen-1-dark.png) | ![](images/screen-1-light.png) |
+| 2 · Questions notch on every terminal of the project | ![](images/screen-2-dark.png) | ![](images/screen-2-light.png) |
+| 3 · Notch open: questions as tabs | ![](images/screen-3-dark.png) | ![](images/screen-3-light.png) |
+| 4 · Same notch on a worker | ![](images/screen-4-dark.png) | ![](images/screen-4-light.png) |
+| 5 · Orchestrator outline | ![](images/screen-5-dark.png) | ![](images/screen-5-light.png) |
 
 ## Themes
 

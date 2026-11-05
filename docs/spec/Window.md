@@ -4,6 +4,10 @@ The contr window is one glass sheet over a dark ground: a title bar on top, then
 
 Design system page: component Window. Shared rules: [README.md](README.md).
 
+| Dark | Light |
+|---|---|
+| ![Window, dark](images/Window-dark.png) | ![Window, light](images/Window-light.png) |
+
 ## Anatomy
 
 | Part | Value |

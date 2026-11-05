@@ -4,6 +4,10 @@ A small glass tab that hangs from the top of every terminal of the project while
 
 Design system page: component QuestionsNotch. Shared rules: [README.md](README.md).
 
+| Dark | Light |
+|---|---|
+| ![QuestionsNotch, dark](images/QuestionsNotch-dark.png) | ![QuestionsNotch, light](images/QuestionsNotch-light.png) |
+
 ## Anatomy
 
 | Part | Value |

@@ -4,6 +4,10 @@ The card that shows at the left of a hovered outline tick: the message headline,
 
 Design system page: component OutlineCard. Shared rules: [README.md](README.md).
 
+| Dark | Light |
+|---|---|
+| ![OutlineCard, dark](images/OutlineCard-dark.png) | ![OutlineCard, light](images/OutlineCard-light.png) |
+
 ## Anatomy
 
 | Part | Value |

@@ -4,6 +4,10 @@ A mono button in the title bar that counts the changed lines and files of the se
 
 Design system page: component DiffSummary. Shared rules: [README.md](README.md).
 
+| Dark | Light |
+|---|---|
+| ![DiffSummary, dark](images/DiffSummary-dark.png) | ![DiffSummary, light](images/DiffSummary-light.png) |
+
 ## Anatomy
 
 `+120  −126  9 files`, in style `value` (mono 11.5/16):

@@ -4,6 +4,10 @@ The terminal panel shows the hc terminal of the selected tab; it fills the space
 
 Design system page: component Terminal. Shared rules: [README.md](README.md).
 
+| Dark | Light |
+|---|---|
+| ![Terminal, dark](images/Terminal-dark.png) | ![Terminal, light](images/Terminal-light.png) |
+
 ## Anatomy
 
 | Part | Value |
