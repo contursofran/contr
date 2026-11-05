@@ -84,8 +84,10 @@ type Frame struct {
 	// Card is the answer card that the needs-you row opens. [Frame.Attach]
 	// makes it and puts its view in Slots.Card.
 	Card *FloatCard
-	// Sheet is the context sheet that ⌘J opens ([Frame.Attach] makes it).
+	// Sheet is the v0.2 context sheet. Nothing opens it now (D125); #352 removes it.
 	Sheet *Sheet
+	// Notch is the questions notch in the terminal overlay ([Frame.Attach] makes it).
+	Notch *Notch
 	// ProjectsModal is the projects modal (D110), made in Attach.
 	ProjectsModal *ProjectsModal
 	// Updates is the update service of the Settings modal (D115). Nil shows "updates are off".
@@ -389,8 +391,9 @@ func color(rgb uint32) ui.Color { return theme.Color(rgb) }
 func (f *Frame) View(c *ui.Context) {
 	theme.Apply(c)
 	p := theme.Current()
-	if f.Sheet != nil && c.Shortcut(ui.Cmd, ui.KeyJ) {
-		f.Sheet.Toggle()
+	// ⌘J opens or closes the card from the notch (D125); it no longer opens the context sheet.
+	if f.Notch != nil && c.Shortcut(ui.Cmd, ui.KeyJ) {
+		f.Notch.Toggle()
 	}
 	win, _ := c.Size()
 	if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyE) && !narrowWindow(win) {
@@ -949,6 +952,13 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	}
 	f.Needs.Collapsed = f.PROpen
 	f.Slots.Needs = f.Needs.View
+	f.Notch = &Notch{Snapshot: agentSnap, Project: func() string { return f.openProject }}
+	if src != nil {
+		f.Notch.Open = f.Card.Open
+		f.Notch.Close = f.Card.Close
+		f.Notch.Opened = func() bool { _, ok := f.Card.Opened(); return ok }
+	}
+	f.Overlay.Add(LabelNotchLayer, f.Notch.View)
 	f.Panel = &BoardPanel{Snapshot: agentSnap, Needs: f.Needs.Tabs}
 	f.Panel.OpenPR = f.OpenPR
 	f.Panel.OpenIssue = f.OpenIssue

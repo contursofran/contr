@@ -11,7 +11,7 @@ Design system page: component QuestionsNotch. Shared rules: [README.md](README.m
 | Box | height `notch-height` (30px), padding `0 16px 0 12px`, gap `space-9`, radius `0 0 radius-12 radius-12` |
 | Glass | `glass-float`, blur `glass-blur`, line `float-line`, shadow `shadow-notch` |
 | Glyph | StatusGlyph, needs-you, 14px |
-| Label | 12px, `ink-100`: "1 question", "2 questions"; with to-dos or blocked menus, "3 items" (D124) |
+| Label | 12px, `ink-100`: "1 question", "2 questions"; with to-dos or blocked menus, "3 items"; "1 item" for one to-do or menu alone (D124, D135) |
 
 ## States
 
@@ -40,7 +40,7 @@ Design system page: component QuestionsNotch. Shared rules: [README.md](README.m
 ## Edge cases
 
 - Questions, to-dos and blocked menus of another project: not counted here.
-- The questions file is broken: hide the notch and log the error.
+- The questions file is broken: hide the notch and log the error (once, by the agent state; D135).
 
 ## Accessibility
 
@@ -52,9 +52,9 @@ Design system page: component QuestionsNotch. Shared rules: [README.md](README.m
 
 ## Build in MyGo
 
-- `ButtonBase` in the terminal overlay; glass from `Material(...)` (glass plugin).
+- `ButtonBase` in the terminal overlay; glass from `Material(glass.Blur{...})` under a `glass-float` fill (glass plugin, D135).
 - It shows in each terminal of the project, orchestrator and workers alike, so the owner can answer from any of them.
-- Data: `internal/owner` (questions file). A worker question reaches the owner through the orchestrator.
+- Data: `internal/owner` (questions file), through the agent state (`agentstate`), which watches it and reads on a goroutine (D135). A worker question reaches the owner through the orchestrator.
 - Shortcut: ⌘J opens the card.
 
 ## Do and do not
