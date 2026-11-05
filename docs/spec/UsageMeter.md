@@ -27,7 +27,10 @@ Rows: "Context  90k of 200k  45%", then one meter per plan (Claude, Codex).
 
 ## Data
 
-- `internal/usage` on a goroutine; read again on a status line or log change.
+- Context: no source yet (D139). The line shows "—" and an empty meter until
+  #372 adds one (`contr statusline` writes it per terminal).
+- Plans: `internal/usage` on a goroutine; read again on a status line or log
+  change. The view reads the sampler's last result and touches no file.
 
 ## Keys and focus
 
