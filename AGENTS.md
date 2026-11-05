@@ -6,7 +6,8 @@ contr is a native macOS client for herdr-core (`hc`), with an agent board built 
 
 - The Rust app is at tag `rust-final`. Read it with
   `git show rust-final:<path>`. Do not change it.
-- `docs/DESIGN.md` is the source of truth for the UI.
+- `docs/spec/` is the source of truth for the UI (D118). `docs/DESIGN.md`
+  stays the source for the parts the specs do not cover yet.
 - `docs/DECISIONS.md` records why things are the way they are.
 - `docs/PORT-PLAN.md` records how the Go port was built.
 
@@ -38,7 +39,7 @@ How to find it:
 3. Search the API: `grep -n "^func " ui/api_gen.go` in the MyGo module.
 4. Search `internal/app/kit` for contr's shared parts.
 
-When MyGo's look is not contr's look (`docs/DESIGN.md`), use the unstyled
+When MyGo's look is not contr's look (`docs/spec/`), use the unstyled
 `*Base` version and style it. A `*Base` widget keeps the keyboard, focus,
 Escape, screen-reader labels and the automation hooks that e2e tests click.
 `ui/custom-widgets.md` lists them: `TabsBase`, `PopoverBase`,
@@ -110,9 +111,11 @@ Add packages under `internal/` when a change needs them.
   someone sees it. Do not add benchmarks, perf gates or tuning work.
 - No `panic` in non-test code: return errors. Do not drop errors silently:
   log them or show them.
-- The UI follows `docs/DESIGN.md` exactly: mono font, greys, white only for
-  what needs the owner, and hues only where D76 allows them (red for failed
-  and blocked, amber for working and worth a look, the two diff colors).
+- The UI follows `docs/spec/` exactly (D118), and `docs/DESIGN.md` for the
+  parts the specs do not cover. Views use token names only, never a color
+  value, so each theme works (D119). Sans for interface text, mono for
+  values and the terminal; greys (inks) with `ink-100` only for what is
+  selected or needs the owner; hues only `blocked` and `claude`.
 - Build views from `internal/app/kit` and MyGo's components (`ui.List`,
   `ui.Segmented`, `editor.DiffView`, `Text.NoWrap().Ellipsis`); do not build
   rows, clipping, scroll lists or code views by hand again.
@@ -178,7 +181,8 @@ Work is tracked in GitHub issues and pull requests.
 - Squash merge is the default. A reviewer approves the exact head. The
   coordinator merges that head once CI passes on it (owner, 2026-11-03).
   A builder does not merge its own PR.
-- When your change makes a doc wrong (`docs/DECISIONS.md`, `docs/DESIGN.md`),
+- When your change makes a doc wrong (`docs/DECISIONS.md`, `docs/DESIGN.md`,
+  `docs/spec/`),
   update it in the same PR. A new decision gets a new row in
   `docs/DECISIONS.md`. Do not delete old rows; mark them "Replaced by Dn".
 - Report the PR number, the head SHA, the check status and any deviation.
