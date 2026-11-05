@@ -31,6 +31,7 @@ type barTest struct {
 	picked    []Tab
 	closed    []Tab
 	news      int
+	searches  int
 	panelOpen bool
 	toggles   int
 }
@@ -41,6 +42,7 @@ func newBar(t *testing.T, tabs []Tab, panelOpen bool) *barTest {
 	b.bar.selectTab = func(tab Tab) { b.picked = append(b.picked, tab) }
 	b.bar.closeTab = func(tab Tab) { b.closed = append(b.closed, tab) }
 	b.bar.newTab = func() { b.news++ }
+	b.bar.search = func() { b.searches++ }
 	b.bar.setTabs(tabs)
 	b.tt = ui.NewTester(func(c *ui.Context) {
 		ui.Row(c).Label(LabelTitleBar).Fill().AlignItems(ui.Center).Background(theme.Current().Ground).
@@ -149,9 +151,9 @@ func TestNewTabButtonFollowsTheTabsAndStaysWithNoTabs(t *testing.T) {
 	}
 }
 
-func TestTheBarHasNoSplitNorSearchNorPRButton(t *testing.T) {
+func TestTheBarHasNoSplitNorPRButton(t *testing.T) {
 	b := newBar(t, tabsOf(), true)
-	for _, label := range []string{"Split", "Search", "Pull request", "Review"} {
+	for _, label := range []string{"Split", "Pull request", "Review"} {
 		if b.has(label) {
 			t.Errorf("the bar has a %q button", label)
 		}
@@ -492,5 +494,29 @@ func TestTheDiffSummaryClickOpensReviewInTheFrame(t *testing.T) {
 	tt.Frame()
 	if err := tt.Click("1 line added, 1 file. Open review"); err != nil || !f.ReviewOpen() {
 		t.Errorf("a second click closed Review (err %v)", err)
+	}
+}
+
+func TestSearchButtonSitsBeforeHideFilesAndOpensTheSearch(t *testing.T) {
+	b := newBar(t, tabsOf(), true)
+	search, files := b.rect(t, LabelSearch), b.rect(t, LabelFilesToggle)
+	if search.X+search.W > files.X || search.Y != files.Y {
+		t.Errorf("Search at %+v, Hide files at %+v: want Search left of it on the same row", search, files)
+	}
+	if diff := files.X - (search.X + search.W); diff != theme.Space8 {
+		t.Errorf("gap between Search and Hide files %v, want %v", diff, theme.Space8)
+	}
+	b.click(t, LabelSearch)
+	if b.searches != 1 {
+		t.Errorf("searches = %d, want 1", b.searches)
+	}
+}
+
+func TestNoSearchButtonWithoutASearchHandler(t *testing.T) {
+	b := newBar(t, tabsOf(), true)
+	b.bar.search = nil
+	b.tt.Frame()
+	if b.has(LabelSearch) {
+		t.Error("the bar has a Search button with no handler")
 	}
 }
