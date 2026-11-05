@@ -91,6 +91,7 @@ that code, move it to the MyGo part in its own small PR.
 | `internal/agents` | worker agents in hc terminals: profiles, spawn, list, send, interrupt, stop, read, watch |
 | `internal/mcp` | a small MCP server over stdio: tools only |
 | `internal/projects` | project order, hidden and recent projects, in one JSON file |
+| `internal/prefs` | settings the owner picks in Settings (Appearance), in one JSON file |
 | `internal/widths` | sidebar and panel widths the owner dragged, in one JSON file |
 | `internal/owner` | questions and to-dos for the owner, in one locked JSON file |
 | `assets` | fonts, status icons, app icon |

@@ -84,7 +84,8 @@ tests, and what it replaces.
 - The terminal has a 16-color ANSI palette per theme. The dark palette is
   today's `TerminalPalette`; the light palette is open point O9.
 - Settings has an **Appearance** row: System, Dark, Light. The value is
-  stored with the other settings.
+  stored with the other settings, in `settings.json` in the user config
+  folder (`internal/prefs`). An unknown stored value is System.
 
 ## Type
 

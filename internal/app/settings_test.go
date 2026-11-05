@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -375,4 +376,65 @@ func TestSkippedHiddenCheckDoesNotCountAsACheck(t *testing.T) {
 	if u.checks != 1 {
 		t.Fatalf("checks = %d, want 1", u.checks)
 	}
+}
+
+func TestSettingsAppearanceRowShowsTheThreeChoices(t *testing.T) {
+	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	r.open()
+	for _, name := range AppearanceNames {
+		if !r.has(name) {
+			t.Errorf("the Appearance row has no %q segment", name)
+		}
+	}
+	if !r.has(LabelAppearance) {
+		t.Error("the Appearance row has no label")
+	}
+}
+
+func TestSettingsAppearanceRowChangesTheSource(t *testing.T) {
+	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	cur := mygo.ThemeSystem
+	var set []mygo.ThemeSource
+	r.s.Appearance = func() mygo.ThemeSource { return cur }
+	r.s.SetAppearance = func(s mygo.ThemeSource) { set = append(set, s); cur = s }
+	r.open()
+	if err := r.tt.Click("Dark"); err != nil {
+		t.Fatal(err)
+	}
+	r.tt.Frame()
+	if err := r.tt.Click("Light"); err != nil {
+		t.Fatal(err)
+	}
+	r.tt.Frame()
+	if err := r.tt.Click("System"); err != nil {
+		t.Fatal(err)
+	}
+	r.tt.Frame()
+	want := []mygo.ThemeSource{mygo.ThemeDark, mygo.ThemeLight, mygo.ThemeSystem}
+	if !slices.Equal(set, want) {
+		t.Errorf("SetAppearance got %v, want %v", set, want)
+	}
+}
+
+func TestSettingsAppearanceRowDoesNotSetAgainForTheSameChoice(t *testing.T) {
+	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	calls := 0
+	r.s.Appearance = func() mygo.ThemeSource { return mygo.ThemeDark }
+	r.s.SetAppearance = func(mygo.ThemeSource) { calls++ }
+	r.open()
+	r.tt.Frame()
+	r.tt.Click("Dark")
+	r.tt.Frame()
+	if calls != 0 {
+		t.Errorf("SetAppearance ran %d times for the choice already in use", calls)
+	}
+}
+
+func TestSettingsAppearanceRowNeedsNoHandlers(t *testing.T) {
+	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	r.open()
+	if err := r.tt.Click("Light"); err != nil {
+		t.Fatal(err)
+	}
+	r.tt.Frame()
 }
