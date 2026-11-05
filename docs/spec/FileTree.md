@@ -30,6 +30,16 @@ Design system page: component FileTree. Shared rules: [README.md](README.md).
   only.
 - Click opens the file in the Review view; ⌘-click reveals it in Finder.
 
+## What "changed" means
+
+- A file is changed when the work tree differs from the merge base of `main`
+  and `HEAD`: committed, staged and unstaged edits, deleted files and new
+  files that git does not ignore (`review.Repo.Changes`). A deleted file is
+  put back in its folder, struck through. A new or deleted file shows one
+  count; a binary file shows none.
+- With the filter on, the tree is made from the changed paths only and its
+  folders start open.
+
 ## Data
 
 - `internal/review` on a goroutine; `mygo.WatchFiles` on the folder starts a
@@ -55,7 +65,11 @@ Design system page: component FileTree. Shared rules: [README.md](README.md).
 
 ## Build in MyGo
 
-- `ui.Tree` with `TreeItem`s; it gives the keys (← → open and close, ↑ ↓ move) and the screen-reader roles.
+- `ui.Tree` with `TreeItem`s (the row is a `TreeItem` with an empty label;
+  the icon, name and counts are added to it, and the guides are drawn over
+  it). MyGo's disclosure arrow stays in front of the icon, and the hover
+  fill is MyGo's `SurfaceHover` (`hover-strong`), not `hover`: `TreeItem`
+  gives no way to change either. It gives the keys (← → open and close, ↑ ↓ move) and the screen-reader roles.
 - Counts: `kit.Counts`.
 - Data: `internal/review` on a goroutine; `mygo.WatchFiles` triggers a new read.
 - Click opens the file in the Review view; ⌘-click reveals it in Finder.

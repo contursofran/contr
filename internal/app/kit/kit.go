@@ -97,9 +97,55 @@ func CountsText(added, removed int) string {
 
 // Counts shows "+added −removed" in the diff colors.
 func Counts(c *ui.Context, added, removed int) {
-	ui.Row(c).Label(CountsText(added, removed)).Gap(4).Shrink(0).Children(func() {
-		ui.Text(c, "+"+strconv.Itoa(added)).TextColor(theme.Color(theme.DiffAdded)).NoWrap()
-		ui.Text(c, "−"+strconv.Itoa(removed)).TextColor(theme.Color(theme.DiffDeleted)).NoWrap()
+	CountsWith(c, added, removed, CountsLook{
+		Added: theme.Color(theme.DiffAdded), Removed: theme.Color(theme.DiffDeleted), Gap: 4})
+}
+
+// CountsLook is how CountsWith draws the counts. Colors come from the
+// palette (a token, never a value of a view).
+type CountsLook struct {
+	Added, Removed ui.Color
+	// Gap is the space between the two counts.
+	Gap float32
+	// Style is the text style; the zero value keeps the window's text.
+	Style theme.TextStyle
+	// Only drops one count: "+N" only for a new file, "−N" only for a deleted one.
+	Only CountsOnly
+}
+
+// CountsOnly picks which counts show.
+type CountsOnly int
+
+// The values of CountsLook.Only.
+const (
+	CountsBoth CountsOnly = iota
+	CountsAddedOnly
+	CountsRemovedOnly
+)
+
+// CountsWith shows the counts in the look. The row is named by the counts
+// that show, for the screen reader.
+func CountsWith(c *ui.Context, added, removed int, look CountsLook) {
+	label := CountsText(added, removed)
+	switch look.Only {
+	case CountsAddedOnly:
+		label = "+" + strconv.Itoa(added)
+	case CountsRemovedOnly:
+		label = "−" + strconv.Itoa(removed)
+	}
+	text := func(s string, color ui.Color) {
+		t := ui.Text(c, s).TextColor(color).NoWrap()
+		if look.Style.Size > 0 {
+			t.Font(look.Style.Stack()).FontSize(look.Style.Size).FontWeight(look.Style.Weight)
+		}
+	}
+	ui.Row(c).Label(label).Gap(look.Gap).Shrink(0).Children(func() {
+		if look.Only != CountsRemovedOnly {
+			text("+"+strconv.Itoa(added), look.Added)
+		}
+		if look.Only != CountsAddedOnly {
+			text("−"+strconv.Itoa(removed), look.Removed)
+		}
 	})
 }
 
