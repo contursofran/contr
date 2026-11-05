@@ -147,12 +147,8 @@ const AgentRowPadX = 8
 const AgentGap = 8 // icon to name, name to detail, detail to link
 
 // Status bar (planner defaults; docs/DESIGN.md has no sizes for these)
-const StatusPadX = 12    // left and right padding
-const StatusGap = 8      // between label, bar and percent, and around the "·" separators
-const UsageBarWidth = 36 // plan usage track
-const UsageBarHeight = 4
-const UsageBarRadius = 2
-const UsageLowLeft = 20 // under this % left the fill and percent are white (owner acts)
+const StatusPadX = 12 // left and right padding
+const StatusGap = 8   // between label and value, and around the "·" separators
 
 // Title bar tabs and buttons (planner defaults; docs/DESIGN.md has no sizes for these)
 const TabPaddingX = 12
