@@ -23,26 +23,39 @@ func drag(tt *ui.Tester, fromX, toX float32) {
 	tt.Release(toX, y)
 }
 
+// sidebarDivider and filesDivider are the x of the two dividers. Each sits in the
+// gap between two panels: 5px from the panel on its first side.
+func sidebarDivider(t *testing.T, tt *ui.Tester) float32 {
+	t.Helper()
+	r := box(t, tt, LabelPanelSidebar)
+	return r.X + r.W + 5
+}
+
+func filesDivider(t *testing.T, tt *ui.Tester) float32 {
+	t.Helper()
+	return box(t, tt, LabelPanelFiles).X - 5
+}
+
 func TestDragSidebarDividerChangesWidth(t *testing.T) {
 	f, tt := newTester(t)
-	drag(tt, theme.SidebarWidth, 340)
-	if got := box(t, tt, LabelSidebar).W; got != 340 {
+	drag(tt, sidebarDivider(t, tt), sidebarDivider(t, tt)+28)
+	if got := box(t, tt, LabelPanelSidebar).W; got != 340 {
 		t.Errorf("sidebar width %v, want 340", got)
 	}
 	if f.sidebarW != 340 {
 		t.Errorf("kept width %v, want 340", f.sidebarW)
 	}
-	if got := box(t, tt, LabelPanel).W; got != theme.PanelWidth {
-		t.Errorf("panel width %v, want it unchanged", got)
+	if got := box(t, tt, LabelPanelFiles).W; got != theme.PanelWidth {
+		t.Errorf("files width %v, want it unchanged", got)
 	}
 }
 
-func TestDragPanelDividerChangesWidth(t *testing.T) {
+func TestDragFilesDividerChangesWidth(t *testing.T) {
 	f, tt := newTester(t)
-	panel := box(t, tt, LabelPanel)
-	drag(tt, panel.X-1, panel.X-81)
-	if got := box(t, tt, LabelPanel).W; got != theme.PanelWidth+80 {
-		t.Errorf("panel width %v, want %d", got, theme.PanelWidth+80)
+	x := filesDivider(t, tt)
+	drag(tt, x, x-80)
+	if got := box(t, tt, LabelPanelFiles).W; got != theme.PanelWidth+80 {
+		t.Errorf("files width %v, want %d", got, theme.PanelWidth+80)
 	}
 	if f.panelW != theme.PanelWidth+80 {
 		t.Errorf("kept width %v", f.panelW)
@@ -51,23 +64,19 @@ func TestDragPanelDividerChangesWidth(t *testing.T) {
 
 func TestDraggedWidthsStayInTheirLimits(t *testing.T) {
 	f, tt := newTester(t)
-	drag(tt, theme.SidebarWidth, 20)
-	if got := box(t, tt, LabelSidebar).W; got != theme.SidebarMinWidth {
+	drag(tt, sidebarDivider(t, tt), 20)
+	if got := box(t, tt, LabelPanelSidebar).W; got != theme.SidebarMinWidth {
 		t.Errorf("sidebar %v, want the minimum %d", got, theme.SidebarMinWidth)
 	}
-	drag(tt, theme.SidebarMinWidth, 900)
-	if got := box(t, tt, LabelSidebar).W; got != theme.SidebarMaxWidth {
+	drag(tt, sidebarDivider(t, tt), 900)
+	if got := f.sidebarW; got != theme.SidebarMaxWidth {
 		t.Errorf("sidebar %v, want the maximum %d", got, theme.SidebarMaxWidth)
 	}
-	panel := box(t, tt, LabelPanel)
-	drag(tt, panel.X-1, panel.X-700)
-	if got := box(t, tt, LabelPanel).W; got != theme.PanelMaxWidth {
-		t.Errorf("panel %v, want the maximum %d", got, theme.PanelMaxWidth)
-	}
-	panel = box(t, tt, LabelPanel)
-	drag(tt, panel.X-1, panel.X+500)
-	if got := box(t, tt, LabelPanel).W; got != theme.PanelMinWidth {
-		t.Errorf("panel %v, want the minimum %d", got, theme.PanelMinWidth)
+	f.sidebarW = theme.SidebarWidth
+	tt.Frame()
+	drag(tt, filesDivider(t, tt), 100)
+	if got := f.panelW; got != theme.PanelMaxWidth {
+		t.Errorf("files %v, want the maximum %d", got, theme.PanelMaxWidth)
 	}
 	f.sidebarW, f.panelW = 5, 5000
 	tt.Frame()
@@ -78,11 +87,11 @@ func TestDraggedWidthsStayInTheirLimits(t *testing.T) {
 
 func TestHiddenSidesKeepTheirWidths(t *testing.T) {
 	_, tt := newTester(t)
-	drag(tt, theme.SidebarWidth, 340)
-	panel := box(t, tt, LabelPanel)
-	drag(tt, panel.X-1, panel.X-61)
-	want := box(t, tt, LabelPanel).W
-	for _, toggle := range []string{LabelSidebarToggle, LabelPanelToggle} {
+	drag(tt, sidebarDivider(t, tt), sidebarDivider(t, tt)+28)
+	x := filesDivider(t, tt)
+	drag(tt, x, x-60)
+	want := box(t, tt, LabelPanelFiles).W
+	for _, toggle := range []string{LabelSidebarToggle, LabelFilesToggle} {
 		if err := tt.Click(toggle); err != nil {
 			t.Fatal(err)
 		}
@@ -90,20 +99,20 @@ func TestHiddenSidesKeepTheirWidths(t *testing.T) {
 	if err := tt.Click(LabelSidebarReopen); err != nil {
 		t.Fatal(err)
 	}
-	if err := tt.Click(LabelPanelToggle); err != nil {
+	if err := tt.Click(LabelFilesToggle); err != nil {
 		t.Fatal(err)
 	}
-	if got := box(t, tt, LabelSidebar).W; got != 340 {
+	if got := box(t, tt, LabelPanelSidebar).W; got != 340 {
 		t.Errorf("sidebar %v after show, want 340", got)
 	}
-	if got := box(t, tt, LabelPanel).W; got != want {
-		t.Errorf("panel %v after show, want %v", got, want)
+	if got := box(t, tt, LabelPanelFiles).W; got != want {
+		t.Errorf("files %v after show, want %v", got, want)
 	}
 }
 
 func TestDividerShowsAResizeCursor(t *testing.T) {
 	_, tt := newTester(t)
-	tt.Move(theme.SidebarWidth, 400)
+	tt.Move(sidebarDivider(t, tt), 400)
 	if got := tt.Cursor(); got != ui.CursorResizeEW {
 		t.Errorf("cursor %v over the divider, want resize", got)
 	}
@@ -125,16 +134,17 @@ func TestWidthsSaveAfterTheDragEnds(t *testing.T) {
 		return nil
 	}
 	y := float32(400)
-	tt.Move(theme.SidebarWidth, y)
-	tt.Press(theme.SidebarWidth, y)
-	tt.Move(320, y)
+	x := sidebarDivider(t, tt)
+	tt.Move(x, y)
+	tt.Press(x, y)
+	tt.Move(x+8, y)
 	mu.Lock()
 	n := len(saved)
 	mu.Unlock()
 	if n != 0 {
 		t.Fatalf("saved %d times during the drag, want 0", n)
 	}
-	tt.Release(320, y)
+	tt.Release(x+8, y)
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
@@ -149,7 +159,7 @@ func TestWidthsSaveAfterTheDragEnds(t *testing.T) {
 
 func TestNoSaverSavesNothing(t *testing.T) {
 	_, tt := newTester(t)
-	drag(tt, theme.SidebarWidth, 340) // must not panic with SaveWidths nil
+	drag(tt, sidebarDivider(t, tt), 340) // must not panic with SaveWidths nil
 	tt.Frame()
 }
 
@@ -204,16 +214,5 @@ func TestBadWidthsFileShowsAnErrorAndKeepsDefaults(t *testing.T) {
 	}
 	if f.sidebarW != theme.SidebarWidth || f.panelW != theme.PanelWidth {
 		t.Errorf("widths %v, %v; want the defaults", f.sidebarW, f.panelW)
-	}
-}
-
-func TestDividerIsTheDesignLine(t *testing.T) {
-	_, tt := newTester(t)
-	tt.Move(700, 400) // away from the dividers
-	img := tt.Image()
-	r, g, b, _ := img.At(theme.SidebarWidth, 400).RGBA()
-	wr, wg, wb := uint32(theme.Line>>16)*0x101, uint32(theme.Line>>8&0xff)*0x101, uint32(theme.Line&0xff)*0x101
-	if r != wr || g != wg || b != wb {
-		t.Errorf("divider pixel %x %x %x, want the line colour %x %x %x", r, g, b, wr, wg, wb)
 	}
 }

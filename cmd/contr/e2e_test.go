@@ -17,13 +17,14 @@ import (
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
 
-// TestFrameWindowCapture runs the built app against a scratch hc core, checks the
-// frame's elements and saves the window as tmp/e2e/frame.png (and
-// frame-no-panel.png after the panel toggle):
+// TestFrameWindowCapture runs the built app against a scratch hc core in Dark and in Light,
+// checks the three panels and the files toggle, and saves the window as
+// tmp/e2e/frame-<theme>.png (and frame-<theme>-no-files.png after the toggle):
 //
 //	go test -tags e2e -run TestFrameWindowCapture ./cmd/contr
 //
-// It never touches the owner's hc core.
+// HOME and the config folders are scratch folders, so the owner's settings and widths stay as
+// they are. It never touches the owner's hc core.
 func TestFrameWindowCapture(t *testing.T) {
 	if _, err := exec.LookPath("hc"); err != nil {
 		t.Skip("hc is not installed")
@@ -46,33 +47,59 @@ func TestFrameWindowCapture(t *testing.T) {
 
 	// A short path: macOS limits socket paths to 103 bytes.
 	core := hctest.New(t, "contr-fr", hctest.Session("fr"))
-	dir := core.Dir
-	sock := filepath.Join(dir, "a.sock")
-	app := exec.Command(bin)
-	// The app must not read the real usage files.
-	app.Env = append(os.Environ(), append(core.Env, "MYGO_AUTOMATION="+sock,
-		"CONTR_STATE_DIR="+filepath.Join(dir, "state"), "CODEX_HOME="+filepath.Join(dir, "codex"))...)
-	if err := app.Start(); err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = app.Process.Kill(); _ = app.Wait() }()
-
-	c := dial(t, sock)
-	defer c.conn.Close()
-	c.waitWindow(t)
-	c.call(t, "idle", map[string]any{"timeout": 10000})
-
-	labels := c.labels(t)
-	for _, want := range []string{"Toggle sidebar", "Toggle panel", "contr", "New terminal"} {
-		if !labels[want] {
-			t.Errorf("no element %q; labels %v", want, keys(labels))
+	for _, name := range []string{"dark", "light"} {
+		dir := filepath.Join(core.Dir, name)
+		home := filepath.Join(dir, "home")
+		cfg := filepath.Join(home, "Library", "Application Support", "contr")
+		if err := os.MkdirAll(cfg, 0o755); err != nil {
+			t.Fatal(err)
 		}
-	}
-	c.capture(t, filepath.Join(out, "frame.png"))
+		settings := `{"version": 1, "appearance": "` + name + `"}`
+		if err := os.WriteFile(filepath.Join(cfg, "settings.json"), []byte(settings), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		sock := filepath.Join(core.Dir, name[:1]+".sock")
+		app := exec.Command(bin)
+		// The app must not read the real usage files or settings.
+		app.Env = append(os.Environ(), append(core.Env, "MYGO_AUTOMATION="+sock, "HOME="+home,
+			"XDG_CONFIG_HOME="+filepath.Join(home, ".config"),
+			"CONTR_STATE_DIR="+filepath.Join(dir, "state"), "CODEX_HOME="+filepath.Join(dir, "codex"),
+			"CONTR_OWNER_FILE="+filepath.Join(dir, "owner.json"), "CONTR_AGENTS_CONFIG="+filepath.Join(dir, "agents.json"))...)
+		if err := app.Start(); err != nil {
+			t.Fatal(err)
+		}
+		func() {
+			defer func() { _ = app.Process.Kill(); _ = app.Wait() }()
+			c := dial(t, sock)
+			defer c.conn.Close()
+			c.waitWindow(t)
+			c.call(t, "idle", map[string]any{"timeout": 10000})
 
-	c.call(t, "act", map[string]any{"id": c.idOf(t, "Toggle panel"), "action": "press"})
-	c.call(t, "idle", map[string]any{"timeout": 10000})
-	c.capture(t, filepath.Join(out, "frame-no-panel.png"))
+			labels := c.labels(t)
+			for _, want := range []string{"Toggle sidebar", "Hide files", "Sidebar", "Terminal", "Files", "New terminal"} {
+				if !labels[want] {
+					t.Errorf("%s: no element %q; labels %v", name, want, keys(labels))
+				}
+			}
+			sidebar, files, term := c.boundsOf(t, "Sidebar"), c.boundsOf(t, "Files"), c.boundsOf(t, "Terminal")
+			if sidebar.Width != 312 || files.Width != 280 || term.Width < 480 || sidebar.X != 10 {
+				t.Errorf("%s: sidebar %+v, terminal %+v, files %+v", name, sidebar, term, files)
+			}
+			c.capture(t, filepath.Join(out, "frame-"+name+".png"))
+
+			c.call(t, "act", map[string]any{"id": c.idOf(t, "Hide files"), "action": "press"})
+			c.call(t, "idle", map[string]any{"timeout": 10000})
+			if c.labels(t)["Files"] {
+				t.Errorf("%s: the files panel shows after the toggle", name)
+			}
+			c.capture(t, filepath.Join(out, "frame-"+name+"-no-files.png"))
+			c.call(t, "act", map[string]any{"id": c.idOf(t, "Hide files"), "action": "press"})
+			c.call(t, "idle", map[string]any{"timeout": 10000})
+			if got := c.boundsOf(t, "Files").Width; got != 280 {
+				t.Errorf("%s: files %v wide after showing again, want 280", name, got)
+			}
+		}()
+	}
 }
 
 func (c *client) hasPrefix(t *testing.T, prefix string) bool {

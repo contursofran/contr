@@ -355,6 +355,20 @@ func TestTitlebarHidesTheSystemTitleBar(t *testing.T) {
 	}
 }
 
+func TestFrameWindowIsGlassWithCenteredTrafficLights(t *testing.T) {
+	f := windowOptions(false)
+	if f.Vibrancy != mygo.VibrancyGlass {
+		t.Errorf("vibrancy %q, want glass", f.Vibrancy)
+	}
+	// The close button is 12px high: it centers in the 46px title bar.
+	if f.TrafficLightPosition == nil || f.TrafficLightPosition.Y != (theme.TitleBarHeight-12)/2 {
+		t.Errorf("traffic lights at %+v", f.TrafficLightPosition)
+	}
+	if l := windowOptions(true); l.Vibrancy != "" || l.TrafficLightPosition != nil {
+		t.Errorf("the legend window has glass or moved controls: %+v", l)
+	}
+}
+
 func TestWindowOptionsSizeTheFrameAndTheLegend(t *testing.T) {
 	f := windowOptions(false)
 	if f.Width != theme.WindowWidth || f.Height != theme.WindowHeight || f.MinWidth != 960 || f.MinHeight != 600 {

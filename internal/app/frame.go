@@ -20,6 +20,7 @@ import (
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/ghostty"
+	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/git"
@@ -362,7 +363,6 @@ func (f *Frame) syncReview() {
 // Element labels. Tests and the e2e driver find the frame's parts by them.
 const (
 	LabelSidebar       = "sidebar"
-	LabelSidebarHeader = "sidebar header"
 	LabelSidebarToggle = "Toggle sidebar"
 	LabelSidebarReopen = "Show sidebar"
 	LabelTitleBar      = "title bar"
@@ -370,28 +370,44 @@ const (
 	LabelTerminalGrid  = "terminal grid"
 	LabelReview        = "review area"
 	LabelPanel         = "board panel"
-	LabelPanelToggle   = "Toggle panel"
+	// LabelFilesToggle is the title bar button that hides and shows the files panel.
+	LabelFilesToggle = "Hide files"
+	// The three panels of the window (docs/spec/Window.md): screen readers name them so.
+	LabelPanelSidebar  = "Sidebar"
+	LabelPanelTerminal = "Terminal"
+	LabelPanelFiles    = "Files"
 	LabelStatusBar     = "status bar"
 )
 
 func color(rgb uint32) ui.Color { return theme.Color(rgb) }
 
-// View builds the frame: the sidebar over the full height, the title bar,
-// the terminal and the panel to its right, and the status bar below them.
+// View builds the frame: one glass sheet with the title bar on top, the sidebar,
+// terminal and files panels in a row under it, and the v0.2 status bar below
+// (docs/spec/Window.md).
 func (f *Frame) View(c *ui.Context) {
 	theme.Apply(c)
+	p := theme.Current()
 	if f.Sheet != nil && c.Shortcut(ui.Cmd, ui.KeyJ) {
 		f.Sheet.Toggle()
 	}
-	ui.Column(c).Fill().Background(color(theme.BgWindow)).TextColor(color(theme.Text)).Children(func() {
+	win, _ := c.Size()
+	if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyE) && !narrowWindow(win) {
+		f.TogglePanel()
+	}
+	// The system draws the blur behind the view where the view paints nothing.
+	// Without it the sheet stands on the ground.
+	if c.Vibrancy() {
+		c.Root().Background(ui.Transparent)
+	} else {
+		c.Root().Background(p.Ground)
+	}
+	ui.Column(c).Fill().Background(p.GlassWindow).TextColor(p.Ink85).Children(func() {
 		f.sidebarW = clampWidth(f.sidebarW, theme.SidebarMinWidth, theme.SidebarMaxWidth)
 		f.panelW = clampWidth(f.panelW, theme.PanelMinWidth, theme.PanelMaxWidth)
-		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-			if f.sidebarOpen {
-				f.split(c, &f.sidebarW, false, f.sidebar, f.main)
-			} else {
-				f.main(c)
-			}
+		sidebar, files, showFiles := fitWidths(win, f.sidebarW, f.panelW, f.sidebarOpen, f.panelOpen)
+		f.titleBar(c, sidebar, narrowWindow(win))
+		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Padding(0, theme.PanelGap, theme.PanelGap).Children(func() {
+			f.panels(c, sidebar, files, showFiles)
 		})
 		f.saveWidthsAfterDrag()
 		ui.Box(c).Label(LabelStatusBar).FillWidth().Height(theme.StatusBarHeight).Shrink(0).
@@ -404,6 +420,38 @@ func (f *Frame) View(c *ui.Context) {
 			f.Settings.View(c)
 		}
 	})
+}
+
+// panels draws the three panels: the sidebar, the terminal and the files, with
+// a draggable divider between neighbors (D111). sidebar and files are the
+// drawn widths.
+func (f *Frame) panels(c *ui.Context, sidebar, files float32, showFiles bool) {
+	terminal := func(c *ui.Context) {
+		if !showFiles {
+			f.terminalPanel(c)
+			return
+		}
+		f.split(c, &f.panelW, files, theme.PanelMinWidth, theme.PanelMaxWidth, true, f.filesPanel, f.terminalPanel)
+	}
+	if !f.sidebarOpen {
+		terminal(c)
+		return
+	}
+	f.split(c, &f.sidebarW, sidebar, theme.SidebarMinWidth, theme.SidebarMaxWidth, false, f.sidebarPanel, terminal)
+}
+
+func (f *Frame) sidebarPanel(c *ui.Context) {
+	kit.Panel(c, kit.PanelOpts{Name: LabelPanelSidebar, Bare: true, Body: func() { f.sidebar(c) }})
+}
+
+func (f *Frame) terminalPanel(c *ui.Context) {
+	kit.Panel(c, kit.PanelOpts{Name: LabelPanelTerminal, Bare: true, Body: func() { f.content(c) }})
+}
+
+// filesPanel is the files slot. It shows the v0.2 right panel (board or
+// worker) until the file tree comes (#349).
+func (f *Frame) filesPanel(c *ui.Context) {
+	kit.Panel(c, kit.PanelOpts{Name: LabelPanelFiles, Bare: true, Body: func() { f.panelBox(c) }})
 }
 
 // statusBar draws the slot when one is set, and the status bar otherwise.
@@ -435,13 +483,7 @@ func (f *Frame) run(c *ui.Context, s Slot) {
 }
 
 func (f *Frame) sidebar(c *ui.Context) {
-	ui.Column(c).Label(LabelSidebar).FillWidth().FillHeight().
-		Background(color(theme.BgBars)).Children(func() {
-		ui.Row(c).Label(LabelSidebarHeader).FillWidth().Height(theme.TitleBarHeight).Shrink(0).
-			PaddingStart(theme.TrafficLightInset).Gap(theme.SpacesGap).DragWindow().Children(func() {
-			toggleButton(c, LabelSidebarToggle, true, f.ToggleSidebar)
-			ui.Text(c, "contr").TextColor(color(theme.Text2))
-		})
+	ui.Column(c).Label(LabelSidebar).FillWidth().FillHeight().Children(func() {
 		ui.Box(c).Grow(1).MinHeight(0).Children(func() { f.run(c, f.Slots.Spaces) })
 		// The agents section takes at most its share of the sidebar.
 		ui.Column(c).Shrink(0).MaxHeightPercent(theme.AgentsMaxShare * 100).Children(func() { f.run(c, f.Slots.Agents) })
@@ -452,32 +494,45 @@ func (f *Frame) sidebar(c *ui.Context) {
 func clampWidth(w, lo, hi float32) float32 { return min(max(w, lo), hi) }
 
 // split draws first and second side by side with a draggable divider (D111).
-// size is the width of first. With rtl, first is at the right (the panel).
-// The divider is DESIGN's 1 px line in grey: the split builds under a copy of
-// the theme with the line and the hover colors of contr, and the panes build
-// under the window's theme again, so only the divider takes the copy.
-func (f *Frame) split(c *ui.Context, size *float32, rtl bool, first, second func(*ui.Context)) {
+// *stored is the width the owner set for first's panel, between lo and hi;
+// shown is the width to draw, which may be less in a narrow window. With rtl,
+// first is at the right (the files panel). The panels are PanelGap apart: each
+// pane holds its panel and its half of the gap, so the pane of first is
+// wider than its panel by the half on its side. The divider is a line with no
+// color; it shows the grey of a hover or a drag only. The split builds under
+// a copy of the theme with those colors, and the panes build under the
+// window's theme again, so only the divider takes the copy.
+func (f *Frame) split(c *ui.Context, stored *float32, shown, lo, hi float32, rtl bool, first, second func(*ui.Context)) {
+	p := theme.Current()
 	base := c.Theme()
 	line := *base
-	line.Border = color(theme.Line)
-	line.Accent = color(theme.TextDim)
-	pane := func(fn func(*ui.Context)) func() {
+	line.Border = ui.Transparent
+	line.Accent = p.Ink22
+	// Both halves and the 1px divider make PanelGap: 5 + 1 + 4.
+	near, far := float32(theme.PanelGap/2), float32(theme.PanelGap/2-1)
+	firstPad, secondPad := [4]float32{0, near, 0, 0}, [4]float32{0, 0, 0, far} // top, right, bottom, left
+	off := near
+	dir := ui.LeftToRight
+	if rtl {
+		dir = ui.RightToLeft
+		firstPad, secondPad = [4]float32{0, 0, 0, far}, [4]float32{0, near, 0, 0}
+		off = far
+	}
+	pane := func(pad [4]float32, fn func(*ui.Context)) func() {
 		return func() {
-			ui.Themed(c, base).Background(ui.Transparent).FillWidth().FillHeight().
-				Direction(ui.LeftToRight).Children(func() { fn(c) })
+			ui.Themed(c, base).Background(ui.Transparent).FillWidth().FillHeight().AlignItems(ui.Stretch).
+				Padding(pad[0], pad[1], pad[2], pad[3]).Direction(ui.LeftToRight).Children(func() { fn(c) })
 		}
 	}
 	// The direction is set on the wrapper, before the split is built: the
 	// split reads it as it builds (right to left puts first at the right and
 	// reverses the drag).
-	dir := ui.LeftToRight
-	if rtl {
-		dir = ui.RightToLeft
-	}
 	ui.Themed(c, &line).Background(ui.Transparent).Grow(1).MinWidth(0).FillHeight().Direction(dir).Children(func() {
-		before := *size
-		sp := ui.Split(c, size, pane(first), pane(second)).Grow(1).MinWidth(0)
-		if sp.Changed() || *size != before {
+		size := shown + off
+		before := size
+		sp := ui.Split(c, &size, pane(firstPad, first), pane(secondPad, second)).Grow(1).MinWidth(0)
+		if sp.Changed() || size != before {
+			*stored = clampWidth(size-off, lo, hi)
 			f.movedNow, f.widthsTouched = true, true
 		}
 	})
@@ -511,17 +566,6 @@ func (f *Frame) saveWidthsAfterDrag() {
 	})
 }
 
-func (f *Frame) main(c *ui.Context) {
-	ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-		f.titleBar(c)
-		if f.panelOpen {
-			f.split(c, &f.panelW, true, f.panelBox, f.content)
-		} else {
-			f.content(c)
-		}
-	})
-}
-
 // content draws the terminal and the PR pane, left of the panel.
 func (f *Frame) content(c *ui.Context) {
 	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
@@ -535,10 +579,9 @@ func (f *Frame) content(c *ui.Context) {
 	})
 }
 
-// panelBox draws the panel, as wide as its divider sets (D111).
+// panelBox draws the v0.2 right panel, as wide as its divider sets (D111).
 func (f *Frame) panelBox(c *ui.Context) {
-	ui.Box(c).Label(LabelPanel).FillWidth().FillHeight().
-		Background(color(theme.BgWindow)).Children(func() { f.panel(c) })
+	ui.Box(c).Label(LabelPanel).FillWidth().FillHeight().Children(func() { f.panel(c) })
 }
 
 // panel draws the worker view while a worker is selected, and the slot (the
@@ -551,13 +594,22 @@ func (f *Frame) panel(c *ui.Context) {
 	f.run(c, f.Slots.Panel)
 }
 
-func (f *Frame) titleBar(c *ui.Context) {
-	ui.Row(c).Label(LabelTitleBar).FillWidth().Height(theme.TitleBarHeight).Shrink(0).
-		Background(color(theme.BgBars)).BorderWidth(0, 0, 1, 0).BorderColor(color(theme.Line)).
+// titleBar draws the 46px row at the top of the glass: a drag area that keeps
+// the room of the system traffic lights. The tabs start above the terminal
+// panel. The v0.2 tabs, Review and "+" come as they are, and the files toggle
+// is at the right edge (docs/spec/TitleBar.md). sidebarW is the drawn width of
+// the sidebar; narrow tells that the files panel is hidden by the window width.
+func (f *Frame) titleBar(c *ui.Context, sidebarW float32, narrow bool) {
+	ui.Row(c).Label(LabelTitleBar).FillWidth().Height(theme.TitleBarHeight).Shrink(0).AlignItems(ui.Center).
 		PaddingEnd(theme.TitleBarPadEnd).DragWindow().Children(func() {
-		if !f.sidebarOpen {
-			// The window buttons sit over this corner: keep the room, then
-			// show the toggle that opens the sidebar again.
+		if f.sidebarOpen {
+			// The window buttons sit over this corner. The row is as wide as the
+			// sidebar plus its gaps, so the tabs start at the terminal panel.
+			ui.Row(c).Width(sidebarW + 2*theme.PanelGap).FillHeight().Shrink(0).AlignItems(ui.Center).
+				PaddingStart(theme.TrafficLightInset).Children(func() {
+				toggleButton(c, LabelSidebarToggle, true, f.ToggleSidebar)
+			})
+		} else {
 			ui.Box(c).Width(theme.TrafficLightInset).Shrink(0)
 			toggleButton(c, LabelSidebarReopen, false, f.ToggleSidebar)
 		}
@@ -569,7 +621,7 @@ func (f *Frame) titleBar(c *ui.Context) {
 		if f.NewTerm != nil {
 			f.bar.newTab = f.newTerminal
 		}
-		f.bar.build(c, f.panelOpen, f.TogglePanel)
+		f.bar.build(c, f.panelOpen && !narrow, narrow, f.TogglePanel)
 	})
 }
 
@@ -689,31 +741,13 @@ func (f *Frame) selectTab(t AgentTab) {
 	f.Selection.Select(state.Selected{Kind: kind, ID: t.Address})
 }
 
-func panelToggle(c *ui.Context, open bool, onClick func()) {
-	toggleButton(c, LabelPanelToggle, open, onClick)
-}
-
-// toggleTip is the tip of a sidebar or panel toggle.
-func toggleTip(label string) string {
-	if label == LabelPanelToggle {
-		return "Show or hide the board panel"
-	}
-	return "Show or hide the sidebar"
-}
-
-// toggleButton draws the sidebar or panel toggle: a small outline with one
-// filled part. The sidebar's fill is on the left, the panel's on the right,
-// and the fill shows while the part is open.
+// toggleButton draws the sidebar toggle: a small outline with one filled
+// part on the left, which shows while the sidebar is open.
 func toggleButton(c *ui.Context, label string, open bool, onClick func()) {
-	left := label != LabelPanelToggle
-	ui.ButtonBase(c).Label(label).Tooltip(toggleTip(label)).Size(theme.TitleButtonSize, theme.TitleButtonSize).Shrink(0).
+	ui.ButtonBase(c).Label(label).Tooltip("Show or hide the sidebar").Size(theme.TitleButtonSize, theme.TitleButtonSize).Shrink(0).
 		Cursor(ui.CursorPointer).OnClick(onClick).Children(func() {
-		glyph := ui.Row(c).Size(theme.TitleGlyphWidth, theme.TitleGlyphHeight).
-			Border(1, color(theme.TextDim)).Radius(theme.SidebarToggleRadius)
-		if !left {
-			glyph = glyph.Reverse()
-		}
-		glyph.Children(func() {
+		ui.Row(c).Size(theme.TitleGlyphWidth, theme.TitleGlyphHeight).
+			Border(1, color(theme.TextDim)).Radius(theme.SidebarToggleRadius).Children(func() {
 			if open {
 				ui.Box(c).Width(theme.TitleGlyphFill).FillHeight().Background(color(theme.TextDim))
 			}

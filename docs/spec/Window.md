@@ -30,7 +30,8 @@ Design system page: component Window. Shared rules: [README.md](README.md).
   panel. A hidden panel keeps its width.
 - Narrow window (D128): below about 1100px the files panel hides. Below
   about 800px the sidebar collapses to icons. The terminal keeps its
-  minimum width.
+  minimum width: above 1100px the files panel gives way first, down to
+  220, then the sidebar, down to 200. The stored widths do not change.
 
 ## Data
 

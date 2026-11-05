@@ -102,16 +102,26 @@ const SpinFPS = 30
 // Window and frame sizes
 const WindowWidth = 1440
 const WindowHeight = 900
-const SidebarWidth = 280
-const TitleBarHeight = 40
-const PanelWidth = 440
+const SidebarWidth = SizeSidebarWidth
+const TitleBarHeight = SizeTitlebarHeight
+const PanelWidth = SizeFilesWidth
 
 // Limits of the widths the owner can drag (D111).
 const (
 	SidebarMinWidth = 200
 	SidebarMaxWidth = 480
-	PanelMinWidth   = 280
+	PanelMinWidth   = 220
 	PanelMaxWidth   = 720
+)
+
+// Window rules (docs/spec/Window.md). TerminalMinWidth is the least the
+// terminal keeps. Below FilesHideBelow window width the files panel hides
+// (O6); the owner's toggle keeps its state. PanelGap is the space between
+// panels and the window edge.
+const (
+	TerminalMinWidth = 480
+	FilesHideBelow   = 1100
+	PanelGap         = Space10
 )
 
 // PR pane (D59)
@@ -167,8 +177,8 @@ const TabUnderline = 2     // active tab, bottom edge
 const TitleButtonSize = 28 // "+", split, panel toggle: square hit areas
 const TitleGlyphWidth = 14 // split and panel glyphs, border included
 const TitleGlyphHeight = 12
-const TitleBarPadEnd = 8 // title bar: room right of the panel toggle
-const TitleGlyphFill = 4 // panel glyph: filled right part when the panel is open
+const TitleBarPadEnd = Space14 // title bar: room right of the files toggle
+const TitleGlyphFill = 4       // panel glyph: filled right part when the panel is open
 
 // Board panel (planner defaults; docs/DESIGN.md has no sizes for these). The "you" chip reuses
 // BADGE_PAD_X and BADGE_RADIUS.

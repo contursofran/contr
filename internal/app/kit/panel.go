@@ -18,12 +18,24 @@ type PanelOpts struct {
 	Footer func()
 	// Body builds the content, which scrolls inside the panel.
 	Body func()
+	// Bare draws only the box: no head, no padding and no scroll. The body
+	// fills the box and clips to its corners. For a body that has its own
+	// scroll, such as the terminal or a list.
+	Bare bool
 }
 
 // Panel builds a rounded area inside the window glass: a head, the content in
 // a ui.Scroll, and a footer. Only the content scrolls.
 func Panel(c *ui.Context, o PanelOpts) ui.Element {
 	p := theme.Current()
+	if o.Bare {
+		return ui.Column(c).Label(o.Name).Grow(1).MinWidth(0).MinHeight(0).Clip().
+			Background(p.Panel).Border(1, p.PanelLine).Radius(theme.Radius12).Children(func() {
+			if o.Body != nil {
+				o.Body()
+			}
+		})
+	}
 	return ui.Column(c).Label(o.Name).Grow(1).MinWidth(0).MinHeight(0).Padding(theme.Space12, theme.Space10, theme.Space10).
 		Background(p.Panel).Border(1, p.PanelLine).Radius(theme.Radius12).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(theme.Space4).Shrink(0).Padding(theme.Space2, theme.Space4, theme.Space4, theme.Space10).Children(func() {

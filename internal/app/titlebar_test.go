@@ -38,9 +38,9 @@ func newBar(t *testing.T, tabs []AgentTab, panelOpen bool) *barTest {
 	b.bar.selectTab = func(tab AgentTab) { b.picked = append(b.picked, tab) }
 	b.bar.setTabs(tabs)
 	b.tt = ui.NewTester(func(c *ui.Context) {
-		ui.Row(c).Label(LabelTitleBar).Fill().AlignItems(ui.Stretch).
+		ui.Row(c).Label(LabelTitleBar).Fill().AlignItems(ui.Stretch).Background(theme.Current().Ground).
 			PaddingEnd(theme.TitleBarPadEnd).Children(func() {
-			b.bar.build(c, b.panelOpen, func() { b.toggles++ })
+			b.bar.build(c, b.panelOpen, false, func() { b.toggles++ })
 		})
 	}, 1160, 40)
 	return b
@@ -129,7 +129,7 @@ func TestNoAgentsShowsOnlyReviewAndPanelToggle(t *testing.T) {
 	if b.has(LabelTabs) && b.rect(t, LabelTabs).W != 0 {
 		t.Errorf("the tabs row has width %v", b.rect(t, LabelTabs).W)
 	}
-	if !b.has(LabelPanelToggle) || !b.has(LabelTitleDrag) {
+	if !b.has(LabelFilesToggle) || !b.has(LabelTitleDrag) {
 		t.Error("the panel toggle and the drag stretch should show")
 	}
 	b.bar.toggleReview = func() {}
@@ -141,7 +141,7 @@ func TestNoAgentsShowsOnlyReviewAndPanelToggle(t *testing.T) {
 
 func TestPanelToggleEmitsTogglePanel(t *testing.T) {
 	b := newBar(t, tabsOf(), true)
-	b.click(t, LabelPanelToggle)
+	b.click(t, LabelFilesToggle)
 	if b.toggles != 1 || len(b.picked) != 0 {
 		t.Errorf("toggles %d, picked %v; want one toggle and no selection", b.toggles, b.picked)
 	}
@@ -160,22 +160,25 @@ func TestSetTabsNotifiesOnlyWhenTheTabsChange(t *testing.T) {
 	}
 }
 
-func TestPanelGlyphFollowsThePanelState(t *testing.T) {
-	// The open glyph has a filled part; the closed one has none. The bare bar has a white
-	// background, so the filled part is darker.
-	fill := func(open bool) uint32 {
+func TestFilesToggleIsPressedWhileTheFilesShow(t *testing.T) {
+	// A pressed toggle draws its icon in a brighter ink than a released one, so the
+	// pixels of its box differ.
+	ink := func(open bool) uint32 {
 		b := newBar(t, nil, open)
 		b.tt.Frame()
-		r := b.rect(t, LabelPanelToggle)
+		r := b.rect(t, LabelFilesToggle)
 		img := b.tt.Image()
-		// A point inside the right part of the glyph.
-		x := int(r.X+r.W/2) + theme.TitleGlyphWidth/2 - 2 // inside the filled part
-		y := int(r.Y + r.H/2)
-		red, green, blue, _ := img.At(x, y).RGBA()
-		return red + green + blue
+		var sum uint32
+		for y := int(r.Y); y < int(r.Y+r.H); y++ {
+			for x := int(r.X); x < int(r.X+r.W); x++ {
+				red, green, blue, _ := img.At(x, y).RGBA()
+				sum += red + green + blue
+			}
+		}
+		return sum
 	}
-	if open, closed := fill(true), fill(false); open >= closed {
-		t.Errorf("the open glyph is not filled on its right part: open %d, closed %d", open, closed)
+	if open, closed := ink(true), ink(false); open == closed {
+		t.Errorf("the toggle looks the same open and closed: %d", open)
 	}
 }
 
@@ -184,13 +187,13 @@ func TestPanelGlyphFollowsThePanelState(t *testing.T) {
 // the toggle follows the state and keeps its place.
 func TestThePanelToggleFollowsTheFrameAndKeepsItsPlace(t *testing.T) {
 	f, tt := newTester(t)
-	if err := tt.Click(LabelPanelToggle); err != nil {
+	if err := tt.Click(LabelFilesToggle); err != nil {
 		t.Fatal(err)
 	}
 	if f.PanelOpen() {
 		t.Error("the toggle should close the panel")
 	}
-	if got := box(t, tt, LabelPanelToggle).X + theme.TitleButtonSize; got != theme.WindowWidth-theme.TitleBarPadEnd {
+	if got := box(t, tt, LabelFilesToggle).X + theme.SizeIconButton; got != theme.WindowWidth-theme.TitleBarPadEnd {
 		t.Errorf("toggle right edge %v, want %d", got, theme.WindowWidth-theme.TitleBarPadEnd)
 	}
 }
@@ -216,9 +219,9 @@ func TestManyTabsShrinkToTheMinimumThenClip(t *testing.T) {
 	if last := b.rect(t, "agent-number-15, idle"); last.W >= theme.TabMinWidth || last.X+last.W > row.X+row.W {
 		t.Errorf("tab 15 %+v should be cut by the row %+v", last, row)
 	}
-	toggle := b.rect(t, LabelPanelToggle)
-	if toggle.X+toggle.W != 1160-theme.TitleBarPadEnd || toggle.W != theme.TitleButtonSize {
-		t.Errorf("toggle %+v, want %d wide at 8 px from the right edge", toggle, theme.TitleButtonSize)
+	toggle := b.rect(t, LabelFilesToggle)
+	if toggle.X+toggle.W != 1160-theme.TitleBarPadEnd || toggle.W != theme.SizeIconButton {
+		t.Errorf("toggle %+v, want %d wide at 14 px from the right edge", toggle, theme.SizeIconButton)
 	}
 }
 
@@ -337,7 +340,7 @@ func TestNoAgentSourceShowsNoTabs(t *testing.T) {
 	if !absent(tt, LabelTabs) && box(t, tt, LabelTabs).W != 0 {
 		t.Error("the tabs row shows without agents")
 	}
-	if absent(tt, LabelPanelToggle) {
+	if absent(tt, LabelFilesToggle) {
 		t.Error("the panel toggle should stay")
 	}
 }
