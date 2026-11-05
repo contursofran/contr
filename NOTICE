@@ -5,6 +5,10 @@ Bundled fonts: JetBrains Mono v2.304, Copyright 2020 The JetBrains Mono
 Project Authors, licensed under the SIL Open Font License 1.1; the full
 text is in assets/fonts/OFL.txt.
 
+Bundled fonts: Inter v4.1 (regular and medium), Copyright 2016 The Inter
+Project Authors, licensed under the SIL Open Font License 1.1; the full
+text is in assets/fonts/OFL-Inter.txt.
+
 MyGo (https://github.com/egoist/mygo) is used as a dependency under the MIT
 License.
 

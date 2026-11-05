@@ -246,12 +246,50 @@ func familyAndItalic(face []byte) (family string, italic, ok bool) {
 }
 
 func TestFontsAreTruetype(t *testing.T) {
-	if len(bundledFonts) != 4 {
-		t.Errorf("%d fonts; want regular, bold, italic, bold italic", len(bundledFonts))
+	if len(bundledFonts) != 6 {
+		t.Errorf("%d fonts; want 4 of JetBrains Mono and Inter regular and medium", len(bundledFonts))
 	}
-	for _, name := range bundledFonts {
-		if f := face(t, name); !bytes.HasPrefix(f, []byte{0, 1, 0, 0}) {
-			t.Errorf("%s is not TrueType", name)
+	for _, b := range bundledFonts {
+		if f := face(t, b.file); !bytes.HasPrefix(f, []byte{0, 1, 0, 0}) {
+			t.Errorf("%s is not TrueType", b.file)
+		}
+	}
+}
+
+func TestInterFacesAreTheSansFamily(t *testing.T) {
+	// Inter's own family name field (ID 1) of a static face holds the weight
+	// in it ("Inter Medium"); the app registers both under "Inter".
+	for _, name := range []string{"Inter-Regular.ttf", "Inter-Medium.ttf"} {
+		family, italic, ok := familyAndItalic(face(t, name))
+		if !ok || italic || !strings.HasPrefix(family, "Inter") {
+			t.Errorf("%s: family %q italic %v ok %v", name, family, italic, ok)
+		}
+	}
+	for _, b := range bundledFonts {
+		want := theme.FontFamily
+		if strings.HasPrefix(b.file, "Inter") {
+			want = "Inter"
+		}
+		if b.family != want || theme.FontFamilySans != "Inter" {
+			t.Errorf("%s registers under %q, want %q", b.file, b.family, want)
+		}
+	}
+}
+
+func TestInterFacesHaveTheWeightsOfTheTypeStyles(t *testing.T) {
+	// OS/2 usWeightClass is at byte 4. Styles use 400 and 500 only.
+	for name, want := range map[string]uint16{"Inter-Regular.ttf": 400, "Inter-Medium.ttf": 500} {
+		os2 := table(face(t, name), "OS/2")
+		if len(os2) < 6 {
+			t.Fatalf("%s has no OS/2 table", name)
+		}
+		if got := binary.BigEndian.Uint16(os2[4:6]); got != want {
+			t.Errorf("%s weight %d, want %d", name, got, want)
+		}
+	}
+	for n, s := range theme.Styles {
+		if !s.Mono && s.Weight != 400 && s.Weight != 500 {
+			t.Errorf("sans style %s has weight %d; only 400 and 500 are bundled", n, s.Weight)
 		}
 	}
 }
@@ -285,21 +323,16 @@ func TestAFaceCutShortHasNoFamily(t *testing.T) {
 }
 
 func TestRegisterFontsLoadsEveryFaceUnderTheFamily(t *testing.T) {
-	var families []string
+	count := map[string]int{}
 	registerFonts(assets.Fonts, func(data []byte, family string) error {
 		if len(data) == 0 {
 			t.Error("empty font")
 		}
-		families = append(families, family)
+		count[family]++
 		return nil
 	})
-	if len(families) != 4 {
-		t.Fatalf("%d faces registered", len(families))
-	}
-	for _, f := range families {
-		if f != theme.FontFamily {
-			t.Errorf("family %q", f)
-		}
+	if count[theme.FontFamily] != 4 || count[theme.FontFamilySans] != 2 || len(count) != 2 {
+		t.Fatalf("faces registered by family: %v", count)
 	}
 }
 
@@ -309,7 +342,7 @@ func TestRegisterFontsKeepsGoingAfterAFailure(t *testing.T) {
 		n++
 		return errors.New("bad font")
 	})
-	if n != 4 {
+	if n != len(bundledFonts) {
 		t.Errorf("%d tries", n)
 	}
 }

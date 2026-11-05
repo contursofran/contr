@@ -54,6 +54,9 @@ Generated from the design system `tokens.json`. Views use the names; `internal/a
 
 - sans: `Inter, -apple-system, system-ui, sans-serif`
 - mono: `"JetBrains Mono", ui-monospace, monospace`
+- Inter (regular 400, medium 500) and JetBrains Mono are bundled in
+  `assets/fonts` (D121); the rest of each stack is the fallback. In code:
+  `theme.Style(name)`, `TextStyle.Family()`, `TextStyle.Stack()`.
 
 | Style | Family | Size | Line | Weight | Use |
 |---|---|---|---|---|---|

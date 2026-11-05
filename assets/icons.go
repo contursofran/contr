@@ -10,7 +10,7 @@ import "embed"
 //go:embed icons/*.svg
 var Icons embed.FS
 
-// Fonts holds the four faces of JetBrains Mono as `fonts/<name>.ttf`.
+// Fonts holds the faces of JetBrains Mono and Inter as `fonts/<name>.ttf`.
 //
 //go:embed fonts/*.ttf
 var Fonts embed.FS

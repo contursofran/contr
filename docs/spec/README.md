@@ -92,8 +92,9 @@ tests, and what it replaces.
 - Two families: **sans** for interface text, **mono** for values, ids,
   counts, keys and the terminal. This replaces "mono font everywhere"
   (D118).
-- Sans: Inter, else the system font (open point O7). Mono: JetBrains Mono,
-  in `assets` today.
+- Sans: Inter, bundled in `assets/fonts` (regular 400 and medium 500; O7
+  settled, D121). The system font is the fallback if a face fails to load.
+  Mono: JetBrains Mono, in `assets` today.
 - Styles (size, line height, weight) are in [tokens.md](tokens.md). Use the
   style name, not a size.
 
@@ -195,8 +196,7 @@ The coordinator asks the owner these before the issues that need them.
    action messages go?
 5. **O5 PR viewer and Review.** Their place in the new frame.
 6. **O6 Narrow window.** Which panel hides first below which width.
-7. **O7 Sans font.** Bundle Inter (OFL, a `NOTICE` entry) or use the
-   system font.
+7. **O7 Sans font.** Settled: bundle Inter (OFL, a `NOTICE` entry), D121.
 8. **O8 Claude mark.** Which drawing, and the right to use it.
 9. **O9 Light terminal palette.** The 16 ANSI colors on the light panel.
 10. **O10 Ages.** The design system page moves ages once a minute while a
