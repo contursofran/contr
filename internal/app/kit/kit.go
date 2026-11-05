@@ -22,7 +22,7 @@ type RowOpts struct {
 	Label string
 	// Mark is a short leading mark, such as a file status (M, A, D).
 	Mark      string
-	MarkColor uint32 // theme.TextDim by default
+	MarkColor ui.Color // p.Ink50 by default (the zero Color)
 	// Text is the main line; Sub, if set, a second line in the meta color.
 	// Both clip with an ellipsis.
 	Text, Sub string
@@ -79,19 +79,20 @@ func Row(c *ui.Context, o RowOpts) {
 		label = o.Text
 	}
 	height := HeightOf(o)
-	border := uint32(theme.BgWindow)
+	p := theme.Current()
+	border := ui.Color{} // clear: selecting moves nothing
 	if o.Selected {
-		border = theme.CardBorder
+		border = p.SelectedLine
 	}
 	row := ui.ButtonBase(c).Label(label).Height(height).Shrink(0).
 		AlignItems(ui.Center).Gap(theme.SpacesGap).PaddingX(theme.SidebarPadX-theme.CardInsetX-1).
-		MarginX(theme.CardInsetX).Radius(theme.CardRadius).Border(1, theme.Color(border)).
+		MarginX(theme.CardInsetX).Radius(theme.CardRadius).Border(1, border).
 		Cursor(ui.CursorPointer).Selected(o.Selected)
 	if o.OnClick != nil {
 		row = row.OnClick(o.OnClick)
 	}
 	if o.Selected {
-		row = row.Background(theme.Color(theme.BgCard))
+		row = row.Background(p.Selected)
 	}
 	row.Children(func() {
 		if o.Lead != nil {
@@ -99,16 +100,16 @@ func Row(c *ui.Context, o RowOpts) {
 		}
 		if o.Mark != "" {
 			color := o.MarkColor
-			if color == 0 {
-				color = theme.TextDim
+			if color == (ui.Color{}) {
+				color = p.Ink50
 			}
-			ui.Text(c, o.Mark).TextColor(theme.Color(color)).NoWrap().Shrink(0)
+			ui.Text(c, o.Mark).TextColor(color).NoWrap().Shrink(0)
 		}
 		// SingleLine cuts with an ellipsis; NoWrap would keep the line whole.
 		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-			ui.Text(c, o.Text).Label(label + " text").Height(theme.LineHeight).TextColor(theme.Color(theme.Text)).SingleLine().MinWidth(0)
+			ui.Text(c, o.Text).Label(label + " text").Height(theme.LineHeight).TextColor(p.Ink95).SingleLine().MinWidth(0)
 			if o.Sub != "" {
-				ui.Text(c, o.Sub).Height(theme.LineHeight).TextColor(theme.Color(theme.TextDim2)).SingleLine().MinWidth(0)
+				ui.Text(c, o.Sub).Height(theme.LineHeight).TextColor(p.Ink42).SingleLine().MinWidth(0)
 			}
 		})
 		if o.Counts {
@@ -122,10 +123,11 @@ func CountsText(added, removed int) string {
 	return "+" + strconv.Itoa(added) + " −" + strconv.Itoa(removed)
 }
 
-// Counts shows "+added −removed" in the diff colors.
+// Counts shows "+added −removed": added in ink-42, removed in ink-30
+// (docs/spec/DiffSummary.md).
 func Counts(c *ui.Context, added, removed int) {
-	CountsWith(c, added, removed, CountsLook{
-		Added: theme.Color(theme.DiffAdded), Removed: theme.Color(theme.DiffDeleted), Gap: 4})
+	p := theme.Current()
+	CountsWith(c, added, removed, CountsLook{Added: p.Ink42, Removed: p.Ink30, Gap: 4})
 }
 
 // CountsLook is how CountsWith draws the counts. Colors come from the
@@ -177,18 +179,19 @@ func CountsWith(c *ui.Context, added, removed int, look CountsLook) {
 }
 
 // Switch is a segmented control: choice is the index of the chosen option.
-// Look (DESIGN.md): a #1A1A1A track, radius 7, padding 2; the chosen segment
-// has a #2A2A2A background and the primary text, the others secondary text.
+// Look: a hover track, radius 7, padding 2; the chosen segment has the
+// selected fill and ink-100, the others ink-62. Tokens of the current theme.
 // Each segment is labelled with its option.
 func Switch(c *ui.Context, label string, choice *int, options ...string) ui.Element {
+	p := theme.Current()
 	seg := ui.SegmentedBase(c, choice, len(options))
 	seg.Track.Label(label).Row().Padding(theme.SegmentPad).Radius(theme.SegmentRadius).
-		Background(theme.Color(theme.SegmentTrack)).Children(func() {
+		Background(p.Hover).Children(func() {
 		for i, o := range options {
 			s := seg.Segment(i).Label(o).PaddingY(3).PaddingX(10).Radius(theme.SegmentRadius - theme.SegmentPad).
-				Cursor(ui.CursorPointer).TextColor(theme.Color(theme.Text2))
+				Cursor(ui.CursorPointer).TextColor(p.Ink62)
 			if choice != nil && i == *choice {
-				s = s.Background(theme.Color(theme.SegmentSelected)).TextColor(theme.Color(theme.Text))
+				s = s.Background(p.Selected).TextColor(p.Ink100)
 			}
 			s.Children(func() { ui.Text(c, o).NoWrap() })
 		}
@@ -226,9 +229,12 @@ func SetWhole(d *editor.DiffState, whole bool) {
 // with contr's background and diff colors.
 func CodeTheme(c *ui.Context) *editor.Theme {
 	t := editor.DefaultTheme(c.Theme())
-	t.Background = theme.Color(theme.BgWindow)
-	t.Added = theme.Color(theme.DiffAdded)
-	t.Deleted = theme.Color(theme.DiffDeleted)
+	p := theme.Current()
+	t.Background = p.Ground
+	// Greys, not hues (AGENTS.md): the editor mixes these into the line
+	// backgrounds, so they are flattened over the ground first.
+	t.Added = theme.Over(p.Ink42, p.Ground)
+	t.Deleted = theme.Over(p.Ink30, p.Ground)
 	return t
 }
 

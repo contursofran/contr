@@ -479,11 +479,16 @@ func (m *ProjectsModal) View(c *ui.Context) {
 		return
 	}
 	open := true
+	p := theme.Current()
 	d := ui.DialogBase(c, &open, func(backdrop, panel ui.Element) {
-		backdrop.Background(ui.RGBA(8, 8, 8, 0.72)).Justify(ui.Start).AlignItems(ui.Center).Padding(theme.ModalTop, 0, 0, 0)
-		panel.Label(LabelProjects).Column().Width(theme.ModalWidth).Background(theme.Color(theme.BgOverlay)).
-			Border(1, theme.Color(theme.OverlayBorder)).Radius(theme.ModalRadius).
-			Shadow(0, 24, 80, 0, ui.RGBA(0, 0, 0, 0.6))
+		backdrop.Background(p.Ground.Alpha(0.72)).Justify(ui.Start).AlignItems(ui.Center).Padding(theme.ModalTop, 0, 0, 0)
+		panel.Label(LabelProjects).Column().Width(theme.ModalWidth).Background(p.Ground).
+			Border(1, p.FloatLine).Radius(theme.ModalRadius)
+		for _, l := range p.ShadowFloat {
+			if !l.Inset {
+				panel.Shadow(l.X, l.Y, l.Blur, l.Wide, l.Color)
+			}
+		}
 		panel.Children(func() { m.body(c) })
 	})
 	if d.Dismissed() || !open {
@@ -493,16 +498,17 @@ func (m *ProjectsModal) View(c *ui.Context) {
 }
 
 func (m *ProjectsModal) body(c *ui.Context) {
+	p := theme.Current()
 	groups := m.shown()
 	ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(8).Padding(16, theme.ModalPadX, 12, theme.ModalPadX).Children(func() {
-		ui.Text(c, "Projects").Bold().Shrink(0).TextColor(theme.Color(theme.Text))
-		ui.Text(c, strconv.Itoa(len(m.groupsAll()))+" open").Grow(1).TextColor(theme.Color(theme.TextDim))
-		cardButton(c, ProjectsEsc, ButtonPlain, theme.TextDim, m.Close)
+		ui.Text(c, "Projects").Bold().Shrink(0).TextColor(p.Ink95)
+		ui.Text(c, strconv.Itoa(len(m.groupsAll()))+" open").Grow(1).TextColor(p.Ink50)
+		cardButton(c, ProjectsEsc, ButtonPlain, p.Ink50, m.Close)
 	})
 	ui.TextInput(c, &m.filter).Label(LabelProjectsFilter).Placeholder("> filter projects…").
 		AutoFocus().Shrink(0).Margin(0, theme.ModalPadX, 12, theme.ModalPadX)
 	ui.Text(c, "open in contr · drag to reorder the sidebar").Shrink(0).
-		PaddingX(theme.ModalPadX).TextColor(theme.Color(theme.TextDim))
+		PaddingX(theme.ModalPadX).TextColor(p.Ink50)
 	m.list.Key = func(i int) any { return groups[i].CommonDir }
 	m.list.Label = func(i int) string { return ProjectsRow(groups[i].Name) }
 	m.list.Reorder = nil
@@ -515,63 +521,65 @@ func (m *ProjectsModal) body(c *ui.Context) {
 	m.recentSection(c)
 	m.cloneSection(c)
 	ui.Row(c).Shrink(0).AlignItems(ui.Center).Justify(ui.End).Gap(14).Padding(12, theme.ModalPadX).
-		BorderWidth(1, 0, 0, 0).BorderColor(theme.Color(theme.Line)).Children(func() {
+		BorderWidth(1, 0, 0, 0).BorderColor(p.Hairline).Children(func() {
 		if m.PickFolder != nil {
-			cardButton(c, ProjectsOpenFolder, ButtonOutlined, theme.Text, m.openFolder)
+			cardButton(c, ProjectsOpenFolder, ButtonOutlined, p.Ink95, m.openFolder)
 			ui.Spacer(c)
 		}
-		cardButton(c, ProjectsDone, ButtonFilled, theme.Text, m.Close)
+		cardButton(c, ProjectsDone, ButtonFilled, p.Ink95, m.Close)
 	})
 }
 
 // cloneSection is the clone part: the field, the destination preview and the
 // buttons. A busy state or the last error shows below.
 func (m *ProjectsModal) cloneSection(c *ui.Context) {
+	p := theme.Current()
 	if m.CloneParent == "" {
 		return
 	}
 	_, dest, perr := m.cloneDest()
 	ui.Column(c).Shrink(0).Padding(10, theme.ModalPadX).Gap(6).
-		BorderWidth(1, 0, 0, 0).BorderColor(theme.Color(theme.Line)).Children(func() {
-		ui.Text(c, "clone from GitHub").TextColor(theme.Color(theme.TextDim))
+		BorderWidth(1, 0, 0, 0).BorderColor(p.Hairline).Children(func() {
+		ui.Text(c, "clone from GitHub").TextColor(p.Ink50)
 		ui.Row(c).AlignItems(ui.Center).Gap(12).Children(func() {
 			if ui.TextInput(c, &m.remote).Label(LabelCloneRemote).Placeholder("owner/name or a URL").Grow(1).MinWidth(0).
 				Submitted() {
 				m.clone()
 			}
 			if m.PickParent != nil {
-				cardButton(c, ProjectsCloneFolder, ButtonOutlined, theme.Text, m.chooseParent)
+				cardButton(c, ProjectsCloneFolder, ButtonOutlined, p.Ink95, m.chooseParent)
 			}
 			label := ProjectsClone
 			if m.cloning {
 				label = "Cloning…"
 			}
-			cardButton(c, label, ButtonOutlined, theme.Text, m.clone)
+			cardButton(c, label, ButtonOutlined, p.Ink95, m.clone)
 		})
 		switch {
 		case m.cloneErr != "":
-			ui.Text(c, m.cloneErr).TextColor(theme.Color(theme.Failed))
+			ui.Text(c, m.cloneErr).TextColor(p.Blocked)
 		case perr != nil:
-			ui.Text(c, "not a repository yet").TextColor(theme.Color(theme.TextDim))
+			ui.Text(c, "not a repository yet").TextColor(p.Ink50)
 		case dest != "":
-			ui.Text(c, "→ "+dest).SingleLine().MinWidth(0).TextColor(theme.Color(theme.Text2))
+			ui.Text(c, "→ "+dest).SingleLine().MinWidth(0).TextColor(p.Ink62)
 		}
 	})
 }
 
 // recentSection lists the recent projects that are not open, each with `open`.
 func (m *ProjectsModal) recentSection(c *ui.Context) {
+	p := theme.Current()
 	recent := m.recent()
 	if len(recent) == 0 {
 		return
 	}
 	ui.Column(c).Label(LabelProjectsRecent).Shrink(0).Padding(10, theme.ModalPadX).Gap(4).Children(func() {
-		ui.Text(c, "recent").TextColor(theme.Color(theme.TextDim))
+		ui.Text(c, "recent").TextColor(p.Ink50)
 		for _, e := range recent {
 			name := storedName(e.Dir, e.Path)
 			ui.Row(c).AlignItems(ui.Center).Gap(12).Children(func() {
-				ui.Text(c, name).Grow(1).SingleLine().MinWidth(0).TextColor(theme.Color(theme.Text2))
-				cardButton(c, ProjectsOpenOf(name), ButtonOutlined, theme.Text, func() { m.openRecent(e) })
+				ui.Text(c, name).Grow(1).SingleLine().MinWidth(0).TextColor(p.Ink62)
+				cardButton(c, ProjectsOpenOf(name), ButtonOutlined, p.Ink95, func() { m.openRecent(e) })
 			})
 		}
 	})
@@ -585,17 +593,18 @@ func (m *ProjectsModal) groupsAll() []spaces.RepoGroup {
 }
 
 func (m *ProjectsModal) row(c *ui.Context, g spaces.RepoGroup) {
+	p := theme.Current()
 	ui.Row(c).Label(ProjectsRow(g.Name)).Height(theme.ModalRowHeight).AlignItems(ui.Center).Gap(12).
 		Padding(8, 10).Radius(8).Children(func() {
-		ui.Text(c, "⋮⋮").Shrink(0).TextColor(theme.Color(theme.ModalGrip))
+		ui.Text(c, "⋮⋮").Shrink(0).TextColor(p.Ink26)
 		ui.Box(c).Width(theme.ModalTile).Height(theme.ModalTile).Shrink(0).Radius(theme.ModalTileRadius).
-			Background(theme.Color(theme.ModalTileBg)).Center().Children(func() {
-			ui.Text(c, projectInitials(g.Name)).Bold().TextColor(theme.Color(theme.Text2))
+			Background(p.Hover).Center().Children(func() {
+			ui.Text(c, projectInitials(g.Name)).Bold().TextColor(p.Ink62)
 		})
 		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-			ui.Text(c, g.Name).Bold().SingleLine().MinWidth(0).TextColor(theme.Color(theme.Text))
-			ui.Text(c, projectSub(g)).SingleLine().MinWidth(0).TextColor(theme.Color(theme.ModalRowSub))
+			ui.Text(c, g.Name).Bold().SingleLine().MinWidth(0).TextColor(p.Ink95)
+			ui.Text(c, projectSub(g)).SingleLine().MinWidth(0).TextColor(p.Ink38)
 		})
-		cardButton(c, ProjectsCloseOf(g.Name), ButtonOutlined, theme.Text, func() { m.closeProject(g.CommonDir) })
+		cardButton(c, ProjectsCloseOf(g.Name), ButtonOutlined, p.Ink95, func() { m.closeProject(g.CommonDir) })
 	})
 }

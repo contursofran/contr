@@ -7,9 +7,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/spaces"
+	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/projects"
 )
 
@@ -306,4 +308,35 @@ func TestProjectsModalRecentOpensAProjectAgain(t *testing.T) {
 	if !slices.Equal(r.store.Folders(), []string{"/w/z/.git"}) || r.store.Recent()[0].Dir != "/w/z/.git" || len(r.saved) != 1 {
 		t.Errorf("folders = %v, recent = %v, saved = %d", r.store.Folders(), r.store.Recent(), len(r.saved))
 	}
+}
+
+// The open modal reads the palette on every build: after a switch to Light its card is the Light
+// ground and its Done button the Light ink-100 fill (#403, D157).
+func TestProjectsModalChangesWithTheTheme(t *testing.T) {
+	restoreTheme(t)
+	r := newModalRig(t)
+	r.open()
+	pixel := func(label string, dx, dy float32) [3]uint8 {
+		t.Helper()
+		b, ok := r.tt.Find(label)
+		if !ok {
+			t.Fatalf("no %q", label)
+		}
+		p := pixelAt(r.tt.Image(), b.X+dx, b.Y+dy)
+		return [3]uint8{p.R, p.G, p.B}
+	}
+	rgb := func(c ui.Color) [3]uint8 { return [3]uint8{c.R, c.G, c.B} }
+	check := func(p *theme.Palette) {
+		t.Helper()
+		if got := pixel(LabelProjects, 6, 6); got != rgb(p.Ground) {
+			t.Errorf("dark=%v card = %v, want ground %v", p.Dark, got, rgb(p.Ground))
+		}
+		if got := pixel(ProjectsDone, 3, 3); got != rgb(p.Ink100) {
+			t.Errorf("dark=%v Done fill = %v, want ink-100 %v", p.Dark, got, rgb(p.Ink100))
+		}
+	}
+	check(theme.Dark)
+	theme.Follow(&fakeTheme{}, &fakeWindow{}, mygo.ThemeLight).Stop()
+	r.tt.Frame()
+	check(theme.Light)
 }

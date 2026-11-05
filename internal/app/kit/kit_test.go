@@ -1,12 +1,16 @@
 package kit
 
 import (
+	"image"
 	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/egoist/mygo"
+
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/theme/themetest"
 	"github.com/egoist/mygo/ui/editor"
 )
 
@@ -138,7 +142,7 @@ func TestCodeViewFollowsLightAndDark(t *testing.T) {
 	if *d.Theme == light {
 		t.Error("the code theme did not change with dark mode")
 	}
-	if d.Theme.Added.R == 0 && d.Theme.Added.G == 0 {
+	if d.Theme.Added.A == 0 {
 		t.Error("no added color")
 	}
 }
@@ -160,12 +164,12 @@ func TestRowDrawsItsLeadAndHeightOfMatches(t *testing.T) {
 	}
 }
 
-// TestSwitchLook: the chosen segment has the selected background (#2A2A2A),
-// the other one shows the track (#1A1A1A), as in DESIGN.md.
+// TestSwitchLook: the chosen segment has the selected fill, the other one
+// shows the hover track, both over the ground.
 func TestSwitchLook(t *testing.T) {
 	choice := 1
 	tt := ui.NewTester(func(c *ui.Context) {
-		ui.Box(c).Fill().Background(theme.Color(theme.BgWindow)).Children(func() {
+		ui.Box(c).Fill().Background(theme.Dark.Ground).Children(func() {
 			Switch(c, "mode", &choice, "Whole branch", "By commit")
 		})
 	}, 400, 60)
@@ -180,11 +184,16 @@ func TestSwitchLook(t *testing.T) {
 		px := img.RGBAAt(int((r.X+2)*scale), int((r.Y+2)*scale))
 		return uint32(px.R)<<16 | uint32(px.G)<<8 | uint32(px.B)
 	}
-	if got := at("By commit"); got != theme.SegmentSelected {
-		t.Errorf("chosen segment = %06X, want %06X", got, theme.SegmentSelected)
+	track := theme.Over(theme.Dark.Hover, theme.Dark.Ground)
+	hex := func(c ui.Color) uint32 {
+		o := theme.Over(c, track)
+		return uint32(o.R)<<16 | uint32(o.G)<<8 | uint32(o.B)
 	}
-	if got := at("Whole branch"); got != theme.SegmentTrack {
-		t.Errorf("other segment = %06X, want %06X", got, theme.SegmentTrack)
+	if got, want := at("By commit"), hex(theme.Dark.Selected); got != want {
+		t.Errorf("chosen segment = %06X, want %06X", got, want)
+	}
+	if got, want := at("Whole branch"), hex(ui.Color{}); got != want {
+		t.Errorf("other segment = %06X, want %06X", got, want)
 	}
 }
 
@@ -209,5 +218,99 @@ func TestCountsWithShowsOnlyTheCountsAskedFor(t *testing.T) {
 	removed := build(CountsRemovedOnly)
 	if removed.HasText("+7") || !removed.HasText("−2") {
 		t.Errorf("removed only: %q", removed.Texts())
+	}
+}
+
+func pix(img *image.RGBA, x, y float32) [3]uint8 {
+	p := img.RGBAAt(int(x), int(y))
+	return [3]uint8{p.R, p.G, p.B}
+}
+
+// A selected row and a Switch read the palette on every build: in Light the selected fill and the
+// segment colours are the Light ones, not the Dark ones (#403, D157).
+func TestRowAndSwitchFollowTheTheme(t *testing.T) {
+	choice := 0
+	view := func(c *ui.Context) {
+		ui.Column(c).Width(240).Background(theme.Current().Ground).Children(func() {
+			Row(c, RowOpts{Label: "picked", Text: "fix-213", Selected: true})
+			Switch(c, "mode", &choice, "One", "Two")
+		})
+	}
+	fill := func() ([3]uint8, [3]uint8) {
+		tt := ui.NewTester(view, 300, 200)
+		tt.Frame()
+		r, ok := tt.Find("picked")
+		if !ok {
+			t.Fatal("no row")
+		}
+		s, ok := tt.Find("mode")
+		if !ok {
+			t.Fatal("no switch")
+		}
+		img := tt.Image()
+		return pix(img, r.X+r.W-6, r.Y+r.H/2), pix(img, s.X+s.W-3, s.Y+s.H/2)
+	}
+	want := func(p *theme.Palette) ([3]uint8, [3]uint8) {
+		over := func(top ui.Color) [3]uint8 {
+			c := theme.Over(top, p.Ground)
+			return [3]uint8{c.R, c.G, c.B}
+		}
+		return over(p.Selected), over(p.Hover)
+	}
+	themetest.Use(t, mygo.ThemeDark)
+	row, track := fill()
+	wr, wt := want(theme.Dark)
+	if row != wr || track != wt {
+		t.Fatalf("dark row %v track %v, want %v %v", row, track, wr, wt)
+	}
+	themetest.Use(t, mygo.ThemeLight)
+	row, track = fill()
+	wr, wt = want(theme.Light)
+	if row != wr || track != wt {
+		t.Errorf("light row %v track %v, want %v %v", row, track, wr, wt)
+	}
+}
+
+// Diff counts and the code theme use greys, not hues: added ink-42, removed
+// ink-30 (docs/spec/DiffSummary.md), in each theme (#403, D157).
+func TestCountsAndCodeThemeUseInks(t *testing.T) {
+	for _, tc := range []struct {
+		src mygo.ThemeSource
+		pal *theme.Palette
+	}{{mygo.ThemeDark, theme.Dark}, {mygo.ThemeLight, theme.Light}} {
+		themetest.Use(t, tc.src)
+		var th *editor.Theme
+		tt := ui.NewTester(func(c *ui.Context) {
+			th = CodeTheme(c)
+			ui.Column(c).Fill().Background(tc.pal.Ground).Children(func() { Counts(c, 3, 1) })
+		}, 200, 40)
+		tt.Frame()
+		if th.Added != theme.Over(tc.pal.Ink42, tc.pal.Ground) || th.Deleted != theme.Over(tc.pal.Ink30, tc.pal.Ground) {
+			t.Errorf("code theme added %v deleted %v", th.Added, th.Deleted)
+		}
+		r, ok := tt.Find(CountsText(3, 1))
+		if !ok {
+			t.Fatal("no counts")
+		}
+		// The "+" is the first glyph: its brightest pixel is the added color.
+		img := tt.Image()
+		var best [3]uint8
+		var most int
+		for y := int(r.Y); y < int(r.Y+r.H); y++ {
+			for x := int(r.X); x < int(r.X+r.W/4); x++ {
+				p := pix(img, float32(x), float32(y))
+				d := int(p[0]) - int(tc.pal.Ground.R)
+				if d < 0 {
+					d = -d
+				}
+				if d > most {
+					best, most = p, d
+				}
+			}
+		}
+		want := theme.Over(tc.pal.Ink42, tc.pal.Ground)
+		if diff := int(best[0]) - int(want.R); diff > 12 || diff < -12 {
+			t.Errorf("added count pixel %v, want grey near %v", best, want)
+		}
 	}
 }
