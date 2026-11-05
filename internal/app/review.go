@@ -51,6 +51,9 @@ type Review struct {
 	// (Window.Update). Tests replace start with a direct call.
 	start func(func())
 	post  func(func())
+	// want is a file that the next branch read should open, if the branch
+	// changes it ([Review.OpenFile]).
+	want string
 	// invalidate asks for a redraw. Nil in tests.
 	invalidate func()
 	// gen counts the reads started. A result of an older read is dropped.
@@ -103,7 +106,14 @@ func (r *Review) run(read func() func()) {
 
 // SetRepo shows the repository in dir. An empty dir shows "Select a
 // project" and runs no git.
-func (r *Review) SetRepo(dir string) {
+func (r *Review) SetRepo(dir string) { r.setRepo(dir, "") }
+
+// OpenFile shows the repository in dir on its current branch and opens the
+// file rel, when that branch changes it; else the first file.
+func (r *Review) OpenFile(dir, rel string) { r.setRepo(dir, rel) }
+
+func (r *Review) setRepo(dir, want string) {
+	r.want = want
 	r.repo = review.Repo{Dir: dir, Base: reviewBase}
 	r.branches, r.branch, r.files, r.file = nil, "", nil, ""
 	r.commits, r.commit, r.code, r.binary, r.err = nil, "", nil, false, ""
@@ -117,10 +127,20 @@ func (r *Review) SetRepo(dir string) {
 	repo := r.repo
 	r.run(func() func() {
 		bs, err := repo.Branches()
+		cur := ""
+		if want != "" {
+			cur = repo.Current()
+		}
 		return func() {
 			r.branches, r.err, r.branchesRead = bs, errText(err), true
 			if err == nil && len(bs) > 0 {
-				r.selectBranch(bs[0].Name)
+				name := bs[0].Name
+				for _, b := range bs {
+					if b.Name == cur {
+						name = cur
+					}
+				}
+				r.selectBranch(name)
 			}
 		}
 	})
@@ -149,7 +169,14 @@ func (r *Review) selectBranch(name string) {
 			if byCommit && len(cs) > 0 {
 				r.SelectCommit(cs[0].SHA)
 			} else if !byCommit && len(fs) > 0 {
-				r.SelectFile(fs[0].Path)
+				first := fs[0].Path
+				for _, f := range fs {
+					if f.Path == r.want {
+						first = r.want
+					}
+				}
+				r.want = ""
+				r.SelectFile(first)
 			}
 		}
 	})

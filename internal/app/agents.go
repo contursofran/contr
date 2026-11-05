@@ -9,6 +9,7 @@ package app
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -36,6 +37,9 @@ type AgentsList struct {
 	snap      func() agentstate.Snapshot
 	now       func() time.Time // the clock; tests replace it
 	selection *state.Selection
+	// Hidden tells whether the agent at an address is left out, as one in a
+	// folded project is. Nil hides none.
+	Hidden func(address string) bool
 }
 
 // NewAgentsList returns the list on snap, the state's snapshot (may be nil:
@@ -49,6 +53,14 @@ func (l *AgentsList) snapshot() agentstate.Snapshot {
 		return agentstate.Snapshot{}
 	}
 	return l.snap()
+}
+
+// shown is the workers of ws that Hidden does not leave out.
+func (l *AgentsList) shown(ws []agents.Worker) []agents.Worker {
+	if l.Hidden == nil {
+		return ws
+	}
+	return slices.DeleteFunc(slices.Clone(ws), func(w agents.Worker) bool { return l.Hidden(w.Address) })
 }
 
 // Sync follows a change of the state: a selected agent that is gone leaves
@@ -157,6 +169,7 @@ func (l *AgentsList) opts(w agents.Worker, kind state.SelectedKind, now time.Tim
 // View builds the sections: nothing while there is no agent.
 func (l *AgentsList) View(c *ui.Context) {
 	s := l.snapshot()
+	s.Orchestrators, s.Workers = l.shown(s.Orchestrators), l.shown(s.Workers)
 	if len(s.Orchestrators) == 0 && len(s.Workers) == 0 {
 		return
 	}

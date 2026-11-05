@@ -198,7 +198,7 @@ then Settings.
 - A `+` after the last tab opens a plain terminal in the open project, in
   the first orchestrator's folder, else the home folder. `⌘T` does the same.
   It is always shown, also with no tabs. The terminal area needs only hc;
-  the Spaces column shows the hc problem then (D82, D92).
+  the sidebar server row shows the hc problem then (D82, D92, D113).
 - `⌘W` closes the selected plain terminal and its tab (D85). The next tab is
   selected. An orchestrator or worker tab ignores it.
 - Right side: `Review` (D37), then the panel toggle. There is no tab row in
@@ -445,8 +445,8 @@ needs-you tabs show only the icon and the id, and the bottom row hides
 
 Slice 1 (#235, D59) builds the pane, the header lines 1 and 2, the state
 badge and the CI summary, the tabs and the Overview. The tab switch is
-`kit.Switch`, so the Review mode switch has the same look. It opens from the `#N` badge
-of a sidebar worktree row and the `#N` label of a board work row (the
+`kit.Switch`, so the Review mode switch has the same look. It opens from
+the `#N` label of a board work row (the
 worker's PR, found from its branch; with no PR the label opens the issue in
 the browser, D104). The worker panel and the answer card of a blocked
 worker have a button that does the same (`Open PR #N`, else `Open issue #N`,

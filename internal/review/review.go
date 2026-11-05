@@ -99,6 +99,16 @@ func (r Repo) Branches() ([]Branch, error) {
 	return list, nil
 }
 
+// Current is the branch that Dir has checked out, "" on a detached HEAD or
+// when git fails.
+func (r Repo) Current() string {
+	out, err := r.git("branch", "--show-current")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
+}
+
 // Files lists the files that branch changes against the merge base with the
 // base, like `git diff base...branch`. A rename shows as a delete and an add.
 func (r Repo) Files(branch string) ([]File, error) {

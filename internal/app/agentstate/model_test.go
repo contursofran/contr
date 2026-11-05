@@ -209,6 +209,25 @@ func TestOwnerFileBadJSONKeepsItems(t *testing.T) {
 	waitFor(t, "problem cleared", func() bool { return r.m.Snapshot().Problem == "" })
 }
 
+func TestOwnerProblemIsTheBadFileAlone(t *testing.T) {
+	r := newRig(t)
+	r.start(t)
+	if p := r.m.Snapshot().OwnerProblem; p != "" {
+		t.Fatalf("OwnerProblem = %q before any error", p)
+	}
+	writeAtomic(t, r.store.Path, `{garbage`)
+	waitFor(t, "owner problem", func() bool { return r.m.Snapshot().OwnerProblem != "" })
+	writeAtomic(t, r.store.Path, `{"questions":[]}`)
+	waitFor(t, "owner problem cleared", func() bool { return r.m.Snapshot().OwnerProblem == "" })
+	// An error of hc is not an owner problem.
+	r.m.mu.Lock()
+	r.m.hcProb = "hc: gone"
+	r.m.mu.Unlock()
+	if s := r.m.Snapshot(); s.Problem == "" || s.OwnerProblem != "" {
+		t.Errorf("hc error: Problem %q, OwnerProblem %q", s.Problem, s.OwnerProblem)
+	}
+}
+
 func ask(t *testing.T, r *rig, coordinator string) {
 	t.Helper()
 	if _, err := r.store.Ask(owner.Question{Project: "contr", Coordinator: coordinator, Question: "Ship?"}); err != nil {
