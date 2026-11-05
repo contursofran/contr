@@ -38,14 +38,14 @@ func (t Tab) Movable() bool { return t.Plain }
 // TitleTabs returns the tabs for agent, the address of the agent whose tabs show: its own tab
 // first, then the plain terminals of project. selected is the address of the selected tab, or "".
 // An agent that is not in the snapshot, or an ended worker, has no tab (D112).
-func TitleTabs(s agentstate.Snapshot, project, agent, selected string) []Tab {
+func TitleTabs(s agentstate.Snapshot, project, key, agent, selected string) []Tab {
 	var tabs []Tab
 	if w, ok := findAgent(s, agent); ok {
 		tabs = append(tabs, Tab{Address: w.Address, Title: tabTitle(w), Orchestrator: w.Orchestrator(),
 			State: tabState(w), Selected: selected != "" && w.Address == selected})
 	}
 	for _, w := range s.Terminals {
-		if w.Project == project {
+		if agentstate.SameProject(w, project, key) {
 			tabs = append(tabs, Tab{Address: w.Address, Title: tabTitle(w), Plain: true,
 				Selected: selected != "" && w.Address == selected})
 		}
@@ -107,22 +107,22 @@ func tabTitle(w agents.Worker) string {
 // worker is it. Any other selection (a plain terminal, a worktree, none) keeps keep while it is
 // still an agent of project; else it is the first orchestrator of project, then its first live
 // worker, then "".
-func TabAgent(s agentstate.Snapshot, sel state.Selected, ok bool, project, keep string) string {
+func TabAgent(s agentstate.Snapshot, sel state.Selected, ok bool, project, key, keep string) string {
 	if ok && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker) {
 		if _, found := findAgent(s, sel.ID); found {
 			return sel.ID
 		}
 	}
-	if w, found := findAgent(s, keep); found && w.Project == project {
+	if w, found := findAgent(s, keep); found && agentstate.SameProject(w, project, key) {
 		return keep
 	}
 	for _, w := range s.Orchestrators {
-		if w.Project == project {
+		if agentstate.SameProject(w, project, key) {
 			return w.Address
 		}
 	}
 	for _, w := range s.Workers {
-		if w.Project == project && w.Live {
+		if agentstate.SameProject(w, project, key) && w.Live {
 			return w.Address
 		}
 	}
@@ -133,19 +133,26 @@ func TabAgent(s agentstate.Snapshot, sel state.Selected, ok bool, project, keep 
 // terminal that is in the snapshot gives its project. Any other selection, or none, keeps keep.
 // When keep is empty (at start) it is the project of the first orchestrator, or "".
 func OpenProject(s agentstate.Snapshot, sel state.Selected, ok bool, keep string) string {
+	name, _ := OpenProjectKey(s, sel, ok, keep, "")
+	return name
+}
+
+// OpenProjectKey is OpenProject with the project key (the git common folder) that goes with the
+// name. keepKey is the last key; it is kept when the name is kept.
+func OpenProjectKey(s agentstate.Snapshot, sel state.Selected, ok bool, keep, keepKey string) (string, string) {
 	if ok && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker || sel.Kind == state.KindTerminal) {
 		for _, list := range [][]agents.Worker{s.Orchestrators, s.Workers, s.Terminals} {
 			for _, w := range list {
 				if w.Address == sel.ID {
-					return w.Project
+					return w.Project, w.ProjectKey
 				}
 			}
 		}
 	}
 	if keep == "" && len(s.Orchestrators) > 0 {
-		return s.Orchestrators[0].Project
+		return s.Orchestrators[0].Project, s.Orchestrators[0].ProjectKey
 	}
-	return keep
+	return keep, keepKey
 }
 
 // OrderTabs puts the plain tabs in the order of order, a list of addresses. The agent's own tab
