@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/icons"
@@ -79,4 +80,25 @@ func differs(a, b *image.RGBA, area image.Rectangle) bool {
 		}
 	}
 	return false
+}
+
+// The legend reads the palette on every build: in Light its ground is the Light one (#403, D157).
+func TestLegendChangesWithTheTheme(t *testing.T) {
+	restoreTheme(t)
+	tt := ui.NewTester((&Legend{}).View, 480, 420)
+	tt.Frame()
+	at := func() [3]uint8 {
+		p := pixelAt(tt.Image(), 470, 410)
+		return [3]uint8{p.R, p.G, p.B}
+	}
+	g := theme.Dark.Ground
+	if got := at(); got != [3]uint8{g.R, g.G, g.B} {
+		t.Fatalf("dark ground = %v", got)
+	}
+	theme.Follow(&fakeTheme{}, &fakeWindow{}, mygo.ThemeLight).Stop()
+	tt.Frame()
+	g = theme.Light.Ground
+	if got := at(); got != [3]uint8{g.R, g.G, g.B} {
+		t.Errorf("light ground = %v, want %v", got, [3]uint8{g.R, g.G, g.B})
+	}
 }

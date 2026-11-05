@@ -345,14 +345,15 @@ func (r *Review) fileList(c *ui.Context) {
 		r.fileState.Selected = &r.fileSel
 		ui.List(c.Key("filelist"), &r.fileState, len(r.files), func(i int) {
 			f := r.files[i]
-			mark := theme.TextDim
+			p := theme.Current()
+			mark := p.Ink50
 			switch f.Status {
 			case review.Added:
-				mark = theme.DiffAdded
+				mark = p.ANSI[2]
 			case review.Deleted:
-				mark = theme.DiffDeleted
+				mark = p.ANSI[1]
 			}
-			kit.Row(c, kit.RowOpts{Label: "file " + f.Path, Mark: string(f.Status), MarkColor: uint32(mark), Text: f.Path,
+			kit.Row(c, kit.RowOpts{Label: "file " + f.Path, Mark: string(f.Status), MarkColor: mark, Text: f.Path,
 				Counts: true, Added: f.Added, Removed: f.Removed,
 				Selected: f.Path == r.file, OnClick: func() { r.SelectFile(f.Path) }})
 		}).Fill()

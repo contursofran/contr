@@ -44,10 +44,10 @@ func ClearDone(c *ui.Context, label string, onClick ActionClick) {
 
 // TextLine adds one line of text across the panel: BoardLineHeight tall,
 // padded, and cut with an ellipsis. label names the line.
-func TextLine(c *ui.Context, label, text string, colour uint32) {
+func TextLine(c *ui.Context, label, text string, colour ui.Color) {
 	ui.Row(c).Label(label).FillWidth().Height(theme.BoardLineHeight).Shrink(0).
 		AlignItems(ui.Center).PaddingX(theme.PanelPadX).Children(func() {
-		ui.Text(c, text).TextColor(theme.Color(colour)).SingleLine().Ellipsis("…").MinWidth(0)
+		ui.Text(c, text).TextColor(colour).SingleLine().Ellipsis("…").MinWidth(0)
 	})
 }
 

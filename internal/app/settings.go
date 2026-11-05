@@ -369,7 +369,7 @@ func (s *Settings) View(c *ui.Context) {
 func (s *Settings) body(c *ui.Context) {
 	ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(8).Padding(16, theme.ModalPadX, 12, theme.ModalPadX).Children(func() {
 		ui.Text(c, "Settings").Bold().Grow(1).TextColor(theme.Color(theme.Text))
-		cardButton(c, SettingsEsc, ButtonPlain, theme.TextDim, s.Close)
+		cardButton(c, SettingsEsc, ButtonPlain, theme.Current().Ink50, s.Close)
 	})
 	s.appearanceRow(c)
 	busy := s.checking || s.installing
@@ -398,15 +398,15 @@ func (s *Settings) body(c *ui.Context) {
 		if live {
 			check = s.Check
 		}
-		cardButton(c, SettingsCheck, ButtonOutlined, theme.Text, check)
+		cardButton(c, SettingsCheck, ButtonOutlined, theme.Current().Ink95, check)
 		if s.found != nil {
 			var install ClickFn
 			if live {
 				install = s.Install
 			}
-			cardButton(c, SettingsInstall, ButtonFilled, theme.Text, install)
+			cardButton(c, SettingsInstall, ButtonFilled, theme.Current().Ink95, install)
 		}
-		cardButton(c, SettingsDone, ButtonPlain, theme.Text, s.Close)
+		cardButton(c, SettingsDone, ButtonPlain, theme.Current().Ink95, s.Close)
 	})
 }
 

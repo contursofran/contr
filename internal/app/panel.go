@@ -67,12 +67,12 @@ func (p *BoardPanel) Rows() []WorkRow {
 func (p *BoardPanel) View(c *ui.Context) {
 	ui.Column(c).Label(LabelBoardRoot).Fill().Children(func() {
 		if p.Snapshot == nil {
-			TextLine(c, LabelBoardEmpty, emptyNoAgents, theme.TextDim)
+			TextLine(c, LabelBoardEmpty, emptyNoAgents, theme.Current().Ink50)
 			return
 		}
 		WorkSection(c, p.Rows(), p.Select, p.OpenPR, p.OpenIssue)
 		if prob := p.Snapshot().Problem; prob != "" {
-			TextLine(c, LabelBoardProblem, prob, theme.TextDim)
+			TextLine(c, LabelBoardProblem, prob, theme.Current().Ink50)
 		}
 		var tabs []NeedTab
 		if p.Needs != nil {
