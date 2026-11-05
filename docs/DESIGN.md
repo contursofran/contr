@@ -181,8 +181,9 @@ then Settings.
   (D35, D40).
 - A click on a row selects that agent: the top bar selects its tab, the
   terminal shows its hc terminal (D80), the panel follows (D44).
-- **Bottom:** a divider, then `Settings` (gear icon). The settings screen is
-  not designed yet **(not built)**.
+- **Bottom:** the `Settings` gear button at the bottom left of the sidebar,
+  and at the bottom of the icon column (D147). It has the dot while an update
+  waits.
 
 ## Top bar (40)
 
@@ -219,7 +220,7 @@ then Settings.
   another viewer keeps its size. The first key makes contr's view size the
   terminal (D91).
 
-## Panel (380)
+## Panel (380) **(replaced by the files panel; the board and worker are hidden, D122, D147)**
 
 The panel follows the selected tab (D44). An orchestrator (or nothing)
 selected shows the board; a worker shows that worker.
@@ -328,7 +329,7 @@ right:
   1300 px it reads `panel ▴` (D77).
 - `⌘J` (dim): opens the context sheet for the picked item.
 
-## Answer card
+## Answer card **(replaced by the questions card, D140)**
 
 Floats over the bottom of the terminal, just above the bottom row and
 joined to the picked tab, `bg.answer`, padding 14×16, gap 12, fixed 168
@@ -353,7 +354,7 @@ cubic-bezier(0.2, 0.8, 0.2, 1) **(motion not built)**.
 - The answer goes to the coordinator that asked, as
   `Owner answered <ID>: <answer>` (D36).
 
-## Context sheet (⌘J)
+## Context sheet (⌘J) **(replaced: removed, D125, D147)**
 
 Opens from `⌘J`; `⌘J` again closes it. It is an overlay over the top 470 px
 of the terminal area (left edge to the panel, or to the PR pane when open),
@@ -376,7 +377,7 @@ terminal does not resize (D67). Esc closes it only while it has the focus
   recommended one (first), and its Answer button. Answer goes to the coordinator that asked (D108).
 - Not built: `Show in terminal` (#146), `Ask principal`, `undo`.
 
-## Board pop-up **(not built)**
+## Board pop-up **(hidden with the board, D122, D147)**
 
 `board ▴` on a worker tab floats the board over the terminal, right-aligned
 above the bottom row: 620 wide, 8 above the row, `bg.popup` with shadow
@@ -408,7 +409,7 @@ in, 0.22 s.
 - `close` hides the project in contr only (D70); the order, hidden and recent lists live in `projects.json` (D63). Esc (with the focus in the
   modal), `esc` or `Done` closes the modal.
 
-## PR viewer (#151–#154) **(being built)**
+## PR viewer (#151–#154) **(hidden until it is redesigned, D127, D147)**
 
 A PR number (card header, sheet refs, a board link, the worker panel) opens
 the PR in a 560 wide pane at the right of the terminal (D74). The pane
@@ -495,7 +496,7 @@ agent. With no selection it shows `Select a project`.
 
 The footer is gone. CPU and memory are on the `This Mac` row, the contr and
 hc versions and the update are in Settings (a dot on the Settings button
-while an update waits), and action messages are toasts. This section is kept
+while an update waits; the button is at the bottom left of the sidebar, D147), and action messages are toasts. This section is kept
 as history.
 
 `bg.bars`, top border `line`, 11 px dim. The plan usage left the footer

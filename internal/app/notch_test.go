@@ -339,16 +339,13 @@ func TestFrameShowsTheNotchInEveryTerminalOfTheProject(t *testing.T) {
 	}
 }
 
-func TestFrameCmdJOpensTheQuestionsCardNotTheSheet(t *testing.T) {
+func TestFrameCmdJOpensTheQuestionsCard(t *testing.T) {
 	f, tt, _ := notchFrame(t)
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "wa"})
 	tt.Frame()
 	tt.Key(ui.Cmd, ui.KeyJ)
 	if !f.Card.IsOpen() || f.Card.key != "D1" {
 		t.Fatalf("⌘J: card key %q open=%v, want D1", f.Card.key, f.Card.IsOpen())
-	}
-	if f.Sheet.Opened() {
-		t.Error("⌘J opened the context sheet (D125)")
 	}
 	tt.Key(ui.Cmd, ui.KeyJ)
 	if f.Card.IsOpen() {

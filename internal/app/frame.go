@@ -41,7 +41,6 @@ type Slot func(c *ui.Context)
 type Slots struct {
 	Spaces   Slot // sidebar, under its header
 	Terminal Slot // the selected hc terminal
-	Sheet    Slot // context sheet, floating at the top of the terminal area
 	Panel    Slot // board panel, shown while it is open
 }
 
@@ -79,8 +78,6 @@ type Frame struct {
 	// Card is the questions card. The notch and the board
 	// panel open it; the notch builds it ([Frame.Attach] makes it).
 	Card *QuestionsCard
-	// Sheet is the v0.2 context sheet. Nothing opens it now (D125); #352 removes it.
-	Sheet *Sheet
 	// Notch is the questions notch in the terminal overlay ([Frame.Attach] makes it).
 	Notch *Notch
 	// ProjectsModal is the projects modal (D110), made in Attach.
@@ -261,13 +258,23 @@ func (f *Frame) ToggleSidebar() { f.sidebarOpen = !f.sidebarOpen }
 func (f *Frame) TogglePanel() { f.panelOpen = !f.panelOpen }
 
 // OpenPR shows pull request n of the repository in dir.
+// It does nothing while the viewers are hidden (D147, [viewersEnabled]).
 func (f *Frame) OpenPR(dir string, n int) {
-	if f.PR != nil {
+	if viewersEnabled && f.PR != nil {
 		f.PR.Open(dir, n)
 		if f.agentSnap != nil {
 			f.PR.Item = itemOf(f.agentSnap().Workers, dir)
 		}
 	}
+}
+
+// paneOpener is [Frame.OpenPR] while the viewers are shown, else nil: a button or row that
+// would open the PR pane is then not built (D147).
+func (f *Frame) paneOpener() func(dir string, n int) {
+	if !viewersEnabled {
+		return nil
+	}
+	return f.OpenPR
 }
 
 // prOrchestrator gives the address of the orchestrator terminal of the project of a PR's
@@ -465,7 +472,7 @@ func color(rgb uint32) ui.Color { return theme.Color(rgb) }
 func (f *Frame) View(c *ui.Context) {
 	theme.Apply(c)
 	p := theme.Current()
-	// ⌘J opens or closes the card from the notch (D125); it no longer opens the context sheet.
+	// ⌘J opens or closes the questions card from the notch (D125, D147).
 	if f.Notch != nil && c.Shortcut(ui.Cmd, ui.KeyJ) {
 		f.Notch.Toggle()
 	}
@@ -638,22 +645,24 @@ func (f *Frame) saveWidthsAfterDrag() {
 	})
 }
 
-// content draws the terminal and the PR pane, left of the panel.
+// content draws the terminal, and the PR pane while the viewers are shown (D147).
 func (f *Frame) content(c *ui.Context) {
 	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
 		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 			f.terminal(c)
 		})
-		if f.PR != nil {
+		if viewersEnabled && f.PR != nil {
 			f.PR.View(c)
 		}
 	})
 }
 
-// panelBox draws the v0.2 right panel (board or worker). Nothing calls it
-// while the board is disabled (D122); issue #352 decides about the code.
-// It is as wide as its divider sets (D111). as wide as its divider sets (D111).
+// panelBox draws the v0.2 right panel (board or worker). It draws nothing while the viewers
+// are hidden (D147, [viewersEnabled]); the redesign (#333) decides where it goes.
 func (f *Frame) panelBox(c *ui.Context) {
+	if !viewersEnabled {
+		return
+	}
 	ui.Box(c).Label(LabelPanel).FillWidth().FillHeight().Children(func() { f.panel(c) })
 }
 
@@ -719,11 +728,6 @@ func (f *Frame) terminal(c *ui.Context) {
 	// No background: the terminal is clear over the panel (docs/spec/Terminal.md).
 	col := ui.Column(c).Label(LabelTerminal).Grow(1).MinWidth(0).Center()
 	col.Children(func() {
-		// The sheet floats over the top edge of this strip (D67: no resize).
-		if f.Sheet != nil {
-			f.Sheet.Anchor = ui.Box(c).FillWidth().Height(0).Shrink(0)
-		}
-		f.run(c, f.Slots.Sheet)
 		f.run(c, f.Slots.Terminal)
 	})
 }
@@ -880,7 +884,7 @@ type Window interface {
 	Update(fn func())
 }
 
-// scope is the project the board and the sheet show: the selected orchestrator's,
+// scope is the project the board shows: the selected orchestrator's,
 // or "" (all projects) when none is selected.
 func (f *Frame) scope(src AgentSource) string {
 	sel, ok := f.Selection.Current()
@@ -996,12 +1000,10 @@ func (f *Frame) Attach(w Window) (stop func()) {
 			}}
 		f.CloseTerm = &CloseTerminal{Stop: src.Close, Run: run, Status: f.Toasts.Show, Closed: f.terminalClosed}
 		setCloseTerminalHandler(func() { w.Update(f.closeSelectedTerminal) })
-		entry := WorkerEntry{PRs: f.WorkerPRs, OpenPR: f.OpenPR, OpenIssue: f.OpenIssue}
+		entry := WorkerEntry{PRs: f.WorkerPRs, OpenPR: f.paneOpener(), OpenIssue: f.OpenIssue}
 		f.Card.Entry = entry
 		f.Worker = &WorkerPanel{Entry: entry, Source: src, Selection: f.Selection, Run: run, Status: f.Toasts.Show, Invalidate: w.Invalidate}
 		f.PR.Orchestrator, f.PR.Send = f.prOrchestrator, src.Send
-		f.Sheet = &Sheet{Source: src, Run: run, Invalidate: w.Invalidate, OpenPR: f.OpenPR, OpenIssue: f.OpenIssue, OpenURL: openURL}
-		f.Slots.Sheet = f.Sheet.View
 	}
 	removeOutline := func() {}
 	if agentSnap != nil {
@@ -1069,7 +1071,6 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	var scope func() string
 	if src != nil {
 		scope = func() string { return f.scope(src) }
-		f.Sheet.Scope = scope
 	}
 	f.Notch = &Notch{Snapshot: agentSnap, Project: func() string { return f.openProject }}
 	if src != nil {
@@ -1080,7 +1081,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	}
 	f.Overlay.Add(LabelNotchLayer, f.Notch.View)
 	f.Panel = &BoardPanel{Snapshot: agentSnap, Needs: NeedItems(agentSnap, scope)}
-	f.Panel.OpenPR = f.OpenPR
+	f.Panel.OpenPR = f.paneOpener()
 	f.Panel.OpenIssue = f.OpenIssue
 	f.Panel.PRs = f.WorkerPRs
 	f.syncWorkerPRs()

@@ -18,8 +18,8 @@ import (
 
 // TestNoFooter runs the built app against a scratch hc core with an orchestrator of the project
 // "demo", a scratch owner file that does not parse, and a scratch projects file that does not
-// parse. It checks that the window has no footer and no needs row, that the Settings button of the
-// Servers head opens Settings with the contr and hc versions, that the owner file problem shows
+// parse. It checks that the window has no footer and no needs row, that the Settings button at the bottom
+// left of the sidebar (D147) opens Settings with the contr and hc versions, that the owner file problem shows
 // in the notch place, and that the projects file error shows as a toast. PNGs go to
 // tmp/e2e/footer-*.png:
 //
@@ -169,6 +169,14 @@ func TestNoFooter(t *testing.T) {
 			if has(gone) {
 				t.Errorf("%s: the v0.2 part %q is still in the window", theme, gone)
 			}
+		}
+		for _, hidden := range []string{app.LabelPRPane, app.LabelBoardRoot, app.LabelWorkerPanel, app.LabelPanel} {
+			if has(hidden) {
+				t.Errorf("%s: the hidden viewer %q shows (D147)", theme, hidden)
+			}
+		}
+		if b, side := c.boundsOf(t, app.LabelSettingsOpen), c.boundsOf(t, app.LabelProjectList); b.Y < side.Y+side.Height-1 || b.X > 40 {
+			t.Errorf("%s: Settings at %v, not at the bottom left of the sidebar (list %v)", theme, b, side)
 		}
 		c.capture(t, filepath.Join(out, "footer-"+theme+"-window.png"))
 		openSettings()
