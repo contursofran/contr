@@ -10,7 +10,6 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/github"
 )
@@ -222,21 +221,6 @@ func TestPRTextHelpers(t *testing.T) {
 	}
 	if got := StateText(github.PR{State: "OPEN", ReviewDecision: "CHANGES_REQUESTED"}); got != "open" {
 		t.Error(got)
-	}
-}
-
-func TestSidebarBadgeOpensPR(t *testing.T) {
-	h, wt1, _ := heldWorktree(t)
-	var gotDir string
-	var gotN int
-	h.list.OpenPR = func(dir string, n int) { gotDir, gotN = dir, n }
-	h.list.groups[0].Rows[0].Badge = &spaces.Badge{Kind: spaces.BadgePR, PR: 640}
-	h.tt.Frame()
-	if err := h.tt.Click(LabelBadge); err != nil {
-		t.Fatal(err)
-	}
-	if gotDir != wt1 || gotN != 640 {
-		t.Errorf("OpenPR(%q, %d)", gotDir, gotN)
 	}
 }
 

@@ -10,7 +10,6 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -98,6 +97,16 @@ func (r Repo) Branches() ([]Branch, error) {
 		list = append(list, b)
 	}
 	return list, nil
+}
+
+// Current is the branch that Dir has checked out, "" on a detached HEAD or
+// when git fails.
+func (r Repo) Current() string {
+	out, err := r.git("branch", "--show-current")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
 }
 
 // Files lists the files that branch changes against the merge base with the
@@ -238,49 +247,21 @@ func lines(s string) []string {
 	return strings.Split(s, "\n")
 }
 
-// Summary is the size of all the work that the Review view lists: the sum of
-// the branches ahead of the base.
+// Summary is the size of a list of changed files: the lines added and
+// removed, and the number of files.
 type Summary struct {
 	Added   int
 	Removed int
-	Files   int // distinct paths over all the branches
+	Files   int
 }
 
-// Summary adds up the branches ahead of the base. A branch with no commits
-// ahead is left out, like the Review view does. A folder that is not a
-// repository gives an error.
-func (r Repo) Summary() (Summary, error) {
-	branches, err := r.Branches()
-	if err != nil {
-		return Summary{}, err
+// Total adds up the files that [Repo.Changes] lists. The file tree and the
+// title bar's diff summary both use it, so their totals agree.
+func Total(files []File) Summary {
+	s := Summary{Files: len(files)}
+	for _, f := range files {
+		s.Added += f.Added
+		s.Removed += f.Removed
 	}
-	var s Summary
-	paths := map[string]bool{}
-	for _, b := range branches {
-		if b.Ahead == 0 {
-			continue
-		}
-		s.Added += b.Added
-		s.Removed += b.Removed
-		files, err := r.Files(b.Name)
-		if err != nil {
-			return Summary{}, err
-		}
-		for _, f := range files {
-			paths[f.Path] = true
-		}
-	}
-	s.Files = len(paths)
-	return s, nil
-}
-
-// RefsDir is the folder that holds the branch files of the repository. It is
-// shared by all the worktrees. A change in it means a commit, a new branch
-// or a deleted one.
-func (r Repo) RefsDir() (string, error) {
-	out, err := r.git("rev-parse", "--path-format=absolute", "--git-common-dir")
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(strings.TrimSpace(out), "refs"), nil
+	return s
 }

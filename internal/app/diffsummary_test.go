@@ -1,11 +1,10 @@
 package app
 
 import (
-	"context"
 	"errors"
-	"sync"
+	"path/filepath"
+	"strconv"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -14,76 +13,19 @@ import (
 	"github.com/contursofran/contr/internal/review"
 )
 
-// uiQueue stands for the window's Update: it holds what goroutines post, and the test runs it
-// on its own goroutine, the "UI thread".
-type uiQueue struct {
-	mu sync.Mutex
-	fn []func()
-}
-
-func (q *uiQueue) post(f func()) { q.mu.Lock(); q.fn = append(q.fn, f); q.mu.Unlock() }
-
-// wait runs the posted functions until n have run, or fails after a second.
-func (q *uiQueue) wait(t *testing.T, n int) {
-	t.Helper()
-	for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); time.Sleep(time.Millisecond) {
-		q.mu.Lock()
-		fns := q.fn
-		q.fn = nil
-		q.mu.Unlock()
-		for _, f := range fns {
-			f()
-			n--
+// readyDiff is a DiffSummary over a tree that has read sum.Files files; the first one carries
+// the counts.
+func readyDiff(sum review.Summary) *DiffSummary {
+	t := &FileTree{dir: "/x", changesOK: true}
+	for i := 0; i < sum.Files; i++ {
+		f := review.File{Path: "f" + strconv.Itoa(i), Status: review.Modified}
+		if i == 0 {
+			f.Added, f.Removed = sum.Added, sum.Removed
 		}
-		if n <= 0 {
-			return
-		}
+		t.changes = append(t.changes, f)
 	}
-	t.Fatalf("%d posted functions never came", n)
+	return &DiffSummary{Tree: t}
 }
-
-// fakeWatch calls fn once, as the real watch does, and returns the function that fires another
-// batch. It blocks until ctx ends.
-type fakeWatch struct {
-	mu   sync.Mutex
-	fire map[string]func()
-	stop map[string]bool
-}
-
-func (w *fakeWatch) watch(ctx context.Context, dir string, fn func()) error {
-	w.mu.Lock()
-	if w.fire == nil {
-		w.fire, w.stop = map[string]func(){}, map[string]bool{}
-	}
-	w.fire[dir] = fn
-	w.mu.Unlock()
-	fn()
-	<-ctx.Done()
-	w.mu.Lock()
-	w.stop[dir] = true
-	w.mu.Unlock()
-	return nil
-}
-
-func (w *fakeWatch) change(t *testing.T, dir string) {
-	t.Helper()
-	w.mu.Lock()
-	fn := w.fire[dir]
-	w.mu.Unlock()
-	if fn == nil {
-		t.Fatalf("no watch of %q", dir)
-	}
-	fn()
-}
-
-func (w *fakeWatch) stopped(dir string) bool {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return w.stop[dir]
-}
-
-// readyDiff is a DiffSummary that already holds sum.
-func readyDiff(sum review.Summary) *DiffSummary { return &DiffSummary{sum: sum, ok: true} }
 
 func diffTester(d *DiffSummary, open func()) *ui.Tester {
 	return ui.NewTester(func(c *ui.Context) {
@@ -124,178 +66,97 @@ func TestDiffSummaryHidesTheRemovedCountWithOnlyAdditions(t *testing.T) {
 	}
 }
 
-func TestDiffSummaryReadsOffTheUIThreadAndShowsTheResultOnTheUIThread(t *testing.T) {
-	q := &uiQueue{}
-	release := make(chan struct{})
-	reading := make(chan struct{})
-	w := &fakeWatch{}
-	d := &DiffSummary{
-		Read: func(dir string) (review.Summary, error) {
-			close(reading)
-			<-release // a slow git: SetDir must not wait for it
-			return review.Summary{Added: 2, Removed: 1, Files: 1}, nil
-		},
-		Watch: w.watch, Post: q.post,
+func TestDiffSummaryHidesBeforeTheFirstReadWithNoFolderAndAfterAReadError(t *testing.T) {
+	for name, d := range map[string]*DiffSummary{
+		"nil":          nil,
+		"no tree":      {},
+		"no folder":    {Tree: &FileTree{}},
+		"not read yet": {Tree: &FileTree{dir: "/x", changes: []review.File{{Path: "a", Added: 1}}}},
+	} {
+		if _, ok := d.Summary(); ok {
+			t.Errorf("%s: the summary shows", name)
+		}
 	}
-	done := make(chan struct{})
-	go func() { d.SetDir("/repo"); close(done) }()
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("SetDir waits for the read: git runs on the UI thread")
-	}
-	<-reading
-	if d.ok {
-		t.Fatal("the counts show before the read ended")
-	}
-	close(release)
-	q.wait(t, 1)
-	if !d.ok || d.sum.Added != 2 {
-		t.Errorf("sum %+v ok %v after the read", d.sum, d.ok)
-	}
-	d.Stop()
-}
-
-func TestDiffSummaryReadsAgainOnAWatchEventNotOnTime(t *testing.T) {
-	q := &uiQueue{}
-	w := &fakeWatch{}
-	var mu sync.Mutex
-	reads, added := 0, 1
-	d := &DiffSummary{
-		Read: func(string) (review.Summary, error) {
-			mu.Lock()
-			defer mu.Unlock()
-			reads++
-			return review.Summary{Added: added, Files: 1}, nil
-		},
-		Watch: w.watch, Post: q.post,
-	}
-	d.SetDir("/repo")
-	q.wait(t, 1)
-	time.Sleep(30 * time.Millisecond)
-	mu.Lock()
-	if reads != 1 {
-		t.Errorf("%d reads with no event, want 1", reads)
-	}
-	added = 7
-	mu.Unlock()
-	w.change(t, "/repo")
-	q.wait(t, 1)
-	if d.sum.Added != 7 {
-		t.Errorf("Added = %d after a watch event, want 7", d.sum.Added)
-	}
-	d.Stop()
-}
-
-func TestDiffSummaryHidesAndLogsOnAGitError(t *testing.T) {
-	q := &uiQueue{}
-	w := &fakeWatch{}
-	d := &DiffSummary{
-		Read:  func(string) (review.Summary, error) { return review.Summary{}, errors.New("not a git repository") },
-		Watch: w.watch, Post: q.post,
-	}
-	d.SetDir("/not-a-repo")
-	q.wait(t, 1)
-	if d.ok {
-		t.Error("the counts show after a git error")
-	}
-	if tt := diffTester(d, nil); len(tt.Texts()) != 0 {
-		t.Errorf("the button shows after a git error: %q", tt.Texts())
-	}
-	d.Stop()
-}
-
-func TestDiffSummaryDropsTheResultOfAnOlderFolderAndStopsItsWatch(t *testing.T) {
-	q := &uiQueue{}
-	w := &fakeWatch{}
-	slow := make(chan struct{})
-	d := &DiffSummary{
-		Read: func(dir string) (review.Summary, error) {
-			if dir == "/a" {
-				<-slow
-				return review.Summary{Added: 1, Files: 1}, nil
-			}
-			return review.Summary{Added: 5, Files: 2}, nil
-		},
-		Watch: w.watch, Post: q.post,
-	}
-	d.SetDir("/a")
-	d.SetDir("/b")
-	q.wait(t, 1) // /b
-	close(slow)
-	q.wait(t, 1) // the late /a result
-	if d.sum.Added != 5 {
-		t.Errorf("Added = %d, want the 5 of /b: the late result of /a won", d.sum.Added)
-	}
-	for deadline := time.Now().Add(time.Second); !w.stopped("/a") && time.Now().Before(deadline); time.Sleep(time.Millisecond) {
-	}
-	if !w.stopped("/a") {
-		t.Error("the watch of /a runs after the folder changed")
-	}
-	d.Stop()
-}
-
-func TestDiffSummaryWithAnEmptyFolderHidesAndStartsNoWatch(t *testing.T) {
-	q := &uiQueue{}
-	w := &fakeWatch{}
-	d := readyDiff(review.Summary{Added: 1, Files: 1})
-	d.Watch, d.Post = w.watch, q.post
-	d.dir = "/old"
-	d.SetDir("")
-	if d.ok {
-		t.Error("the counts stay with no folder")
-	}
-	if len(w.fire) != 0 {
-		t.Error("a watch started for an empty folder")
+	// A git error keeps the tree's old list but the summary hides.
+	dir := t.TempDir()
+	ft := NewFileTree(func() string { return dir })
+	ft.Debounce = -1
+	ft.Watch = func(string, func()) (func(), error) { return func() {}, nil }
+	ft.Start = func(fn func()) { fn() }
+	ft.Sync()
+	ft.changesOK = false
+	ft.fail(errors.New("git: boom"))
+	if _, ok := (&DiffSummary{Tree: ft}).Summary(); ok {
+		t.Error("the summary shows after a failed read")
 	}
 }
 
-func TestDiffSummarySameFolderDoesNotRestartTheWatch(t *testing.T) {
-	q := &uiQueue{}
-	w := &fakeWatch{}
-	var mu sync.Mutex
-	reads := 0
-	d := &DiffSummary{
-		Read: func(string) (review.Summary, error) {
-			mu.Lock()
-			reads++
-			mu.Unlock()
-			return review.Summary{Added: 1, Files: 1}, nil
-		},
-		Watch: w.watch, Post: q.post,
-	}
-	d.SetDir("/repo")
-	q.wait(t, 1)
-	d.SetDir("/repo")
-	d.SetDir("/repo")
-	time.Sleep(30 * time.Millisecond)
-	mu.Lock()
-	defer mu.Unlock()
-	if reads != 1 {
-		t.Errorf("%d reads for one folder, want 1", reads)
-	}
-	d.Stop()
-}
+// TestDiffSummaryAndFileTreeAgreeOnAWorkTreeWithASecondAgentsBranch is the rule of D131: the
+// title bar counts what the tree lists, for the selected agent only. The repository has a
+// committed change, an uncommitted change and an untracked file in the work tree, and a second
+// agent's branch with its own commit that must not count.
+func TestDiffSummaryAndFileTreeAgreeOnAWorkTreeWithASecondAgentsBranch(t *testing.T) {
+	s := reviewScratch(t)
+	write(t, s.dir, "mod.go", "1\n2\n3\n")
+	write(t, s.dir, "edit.go", "a\nb\n")
+	s.git("add", "-A")
+	s.git("commit", "-m", "files")
+	// The second agent: its own worktree and branch, one commit ahead of main.
+	other := filepath.Join(t.TempDir(), "other")
+	s.git("worktree", "add", "-b", "agent/other", other)
+	write(t, other, "theirs.go", "x\ny\nz\nw\nv\n")
+	runGit(t, other, "add", "-A")
+	runGit(t, other, "commit", "-m", "theirs")
+	// The selected agent: a committed change, an uncommitted one and an untracked file.
+	s.git("checkout", "-b", "feature")
+	write(t, s.dir, "mod.go", "1\n2\n3\n4\n5\n6\n") // committed: +3
+	s.git("add", "-A")
+	s.git("commit", "-m", "mod")
+	write(t, s.dir, "edit.go", "a\n")           // uncommitted: −1
+	write(t, s.dir, "fresh.go", "a\nb\nc\nd\n") // untracked: +4
 
-// The real watch reads again when a branch moves, in a real scratch repository.
-func TestWatchBranchesFiresOnACommit(t *testing.T) {
-	dir := scratchRepo(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	fired := make(chan struct{}, 8)
-	go WatchBranches(ctx, dir, func() { fired <- struct{}{} })
-	select {
-	case <-fired: // the first read, at start
-	case <-time.After(5 * time.Second):
-		t.Fatal("no first read")
+	r := newTreeRig(t, s.dir)
+	r.ft.onlyChanged = true
+	r.frame()
+	d := &DiffSummary{Tree: r.ft}
+	got, ok := d.Summary()
+	if !ok {
+		t.Fatal("the summary is not ready after the tree read")
 	}
-	time.Sleep(300 * time.Millisecond) // let the watch settle
-	runGit(t, dir, "checkout", "-b", "feature")
-	runGit(t, dir, "commit", "--allow-empty", "-m", "work")
-	select {
-	case <-fired:
-	case <-time.After(5 * time.Second):
-		t.Fatal("a new branch did not fire the watch")
+	if want := (review.Summary{Added: 7, Removed: 1, Files: 3}); got != want {
+		t.Errorf("summary = %+v, want %+v (the second agent's file must not count)", got, want)
+	}
+	if r.has("theirs.go") || r.has("theirs.go, +5") {
+		t.Error("the tree lists the second agent's file")
+	}
+	// What the tree draws adds up to the same totals.
+	var tree review.Summary
+	for _, row := range []struct {
+		label        string
+		added, rmved int
+	}{{"mod.go, +3 −0", 3, 0}, {"edit.go, +0 −1", 0, 1}, {"fresh.go, +4", 4, 0}} {
+		if !r.has(row.label) {
+			t.Errorf("the tree has no row %q; texts %q", row.label, r.tt.Texts())
+			continue
+		}
+		tree.Added += row.added
+		tree.Removed += row.rmved
+		tree.Files++
+	}
+	if tree != got {
+		t.Errorf("the tree rows add up to %+v, the title bar shows %+v", tree, got)
+	}
+	// The button's own label carries the same numbers.
+	tt := diffTester(d, nil)
+	if _, ok := tt.Find("7 lines added, 1 removed, 3 files. Open review"); !ok {
+		t.Errorf("title bar label wrong; texts %q", tt.Texts())
+	}
+	// A change in the work tree and a new read: both move together.
+	write(t, s.dir, "fresh.go", "a\n")
+	r.notify()
+	r.frame()
+	if got, _ := d.Summary(); got != (review.Summary{Added: 4, Removed: 1, Files: 3}) {
+		t.Errorf("after an edit the summary is %+v", got)
 	}
 }
 

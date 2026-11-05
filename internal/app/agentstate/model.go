@@ -6,6 +6,7 @@ package agentstate
 import (
 	"context"
 	"fmt"
+	"log"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -24,6 +25,9 @@ type Snapshot struct {
 	Todos         []owner.Todo     // open only, in file order
 	Resolved      []string         // ids resolved in this run, until ClearDone
 	Problem       string           // last error of hc or owner.json; empty when fine
+	// OwnerProblem is the last error of owner.json alone; empty when the file
+	// reads fine. The questions notch hides while it is set.
+	OwnerProblem string
 	// CoreVersion is the hc core's version while the model follows it;
 	// empty after an hc error.
 	CoreVersion string
@@ -42,6 +46,7 @@ type Model struct {
 	hcProb   string // last hc error
 	version  string // the core's version, from SetCoreVersion
 	fileProb string // last owner.json error
+	readProb string // last error of reading owner.json, cleared by the next good read
 	actProb  string // last answer or done error
 	// resolvedItems keeps what was resolved, so the views can strike it
 	// through until ClearDone.
@@ -107,9 +112,12 @@ func (m *Model) reload() {
 	st, err := m.store.Read()
 	m.mu.Lock()
 	if err != nil {
-		m.fileProb = err.Error()
+		if m.readProb != err.Error() {
+			log.Printf("agentstate: %v", err)
+		}
+		m.fileProb, m.readProb = err.Error(), err.Error()
 	} else {
-		m.state, m.fileProb = st, ""
+		m.state, m.fileProb, m.readProb = st, "", ""
 	}
 	m.mu.Unlock()
 	m.notify()
@@ -151,6 +159,7 @@ func (m *Model) Snapshot() Snapshot {
 		}
 	}
 	s.Resolved = slices.Clone(m.resolved)
+	s.OwnerProblem = m.readProb
 	if m.hcProb == "" {
 		s.CoreVersion = m.version
 	}

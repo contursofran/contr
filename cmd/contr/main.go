@@ -132,6 +132,7 @@ func openWindow(icons bool) int {
 	} else {
 		frame = app.NewFrame()
 		frame.StartAgents = startAgents(os.Getenv)
+		frame.WatchHead = app.WatchFile
 		frame.LoadProjects = func() (*projects.Store, error) {
 			path, err := projects.Path()
 			if err != nil {

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"slices"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -453,39 +452,29 @@ func TestTheCloseButtonStopsAPlainTerminalAndNeverAnAgent(t *testing.T) {
 	}
 }
 
-func TestTheDiffSummaryFollowsTheSelectedWorktreeAndReadsOffTheUIThread(t *testing.T) {
+func TestTheDiffSummaryFollowsTheSelectedAgentAndReadsOnlyThroughTheTree(t *testing.T) {
+	repo := reviewScratch(t)
+	repo.git("checkout", "-b", "feature")
+	write(t, repo.dir, "new.go", "a\nb\nc\n") // untracked: +3
 	snap := tabSnap()
-	snap.Orchestrators[0].Worktree = "/work/p"
-	snap.Workers[0].Worktree = "/work/p-wt"
+	snap.Workers[0].Worktree = repo.dir
 	f, tt := agentFrame(t, &snap)
-	q := &uiQueue{}
-	w := &fakeWatch{}
-	release := make(chan struct{})
-	f.Diff = &DiffSummary{
-		Read: func(dir string) (review.Summary, error) {
-			<-release
-			return review.Summary{Added: 8, Removed: 2, Files: 3}, nil
-		},
-		Watch: w.watch, Post: q.post, Invalidate: func() {},
-	}
+	f.panelOpen = false // the files panel is hidden: the summary still reads
+	f.Files.Watch = func(string, func()) (func(), error) { return func() {}, nil }
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "w1"})
-	done := make(chan struct{})
-	go func() { tt.Frame(); close(done) }()
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("building the frame waits for git")
-	}
-	if f.Diff.dir != "/work/p-wt" {
-		t.Errorf("the summary reads %q, want the selected worker's worktree", f.Diff.dir)
-	}
-	close(release)
-	q.wait(t, 1)
 	tt.Frame()
-	if absent(tt, "8 lines added, 2 removed, 3 files. Open review") {
-		t.Errorf("no diff summary; texts %q", tt.Texts())
+	tt.Frame()
+	if got := f.Files.Shown(); got != repo.dir {
+		t.Fatalf("the tree reads %q, want the selected worker's worktree", got)
 	}
-	f.Diff.Stop()
+	if err := tt.Click("3 lines added, 1 file. Open review"); err != nil {
+		t.Fatalf("no diff summary; texts %q: %v", tt.Texts(), err)
+	}
+	sum, ok := f.Diff.Summary()
+	if want := (review.Summary{Added: 3, Files: 1}); !ok || sum != want {
+		t.Errorf("summary = %+v, %v; want %+v", sum, ok, want)
+	}
+	f.Files.Close()
 }
 
 func TestTheDiffSummaryClickOpensReviewInTheFrame(t *testing.T) {

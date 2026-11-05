@@ -71,6 +71,9 @@ type Frame struct {
 	Slots Slots
 	// Overlay is the layer above the terminal for the notch and the outline.
 	Overlay TerminalOverlay
+	// Outline is the message ticks of the orchestrator terminal. [Frame.Attach]
+	// makes it when there is an agent source. Nil otherwise.
+	Outline *Outline
 	// Visibility, Selection and Status are the app state. The frame holds
 	// them for the views in its slots.
 	Visibility *state.Visibility
@@ -84,8 +87,10 @@ type Frame struct {
 	// Card is the answer card that the needs-you row opens. [Frame.Attach]
 	// makes it and puts its view in Slots.Card.
 	Card *FloatCard
-	// Sheet is the context sheet that ⌘J opens ([Frame.Attach] makes it).
+	// Sheet is the v0.2 context sheet. Nothing opens it now (D125); #352 removes it.
 	Sheet *Sheet
+	// Notch is the questions notch in the terminal overlay ([Frame.Attach] makes it).
+	Notch *Notch
 	// ProjectsModal is the projects modal (D110), made in Attach.
 	ProjectsModal *ProjectsModal
 	// Updates is the update service of the Settings modal (D115). Nil shows "updates are off".
@@ -126,6 +131,9 @@ type Frame struct {
 	// SaveProjects writes a copy of the store (D110). It runs on a goroutine.
 	// Nil saves nothing.
 	SaveProjects func(*projects.Store) error
+	// WatchHead watches a repo's HEAD file for the sidebar's branch (see
+	// SpacesList.WatchHead). Nil: the branch is read when the terminals change.
+	WatchHead func(ctx context.Context, path string, changed func()) error
 	// LoadWidths reads the widths of the sidebar and the panel (D111). It
 	// runs on a goroutine. Nil means the defaults and no file.
 	LoadWidths func() (widths.Widths, error)
@@ -151,8 +159,12 @@ type Frame struct {
 	// Nil shows no terminal.
 	TerminalSource func(address string) ghostty.Source
 	// Panel is the board panel. [Frame.Attach] makes it and puts its view in
-	// Slots.Panel.
+	// Slots.Panel. The board is disabled (D122): the files panel does not show it.
 	Panel *BoardPanel
+	// Files is the tree of the files panel. [NewFrame] makes it.
+	Files *FileTree
+	// Diff is the title bar's diff summary. It shows the totals of Files. [NewFrame] makes it.
+	Diff *DiffSummary
 	// Review is the Review view. [Frame.Attach] makes it. While the Review toggle is on, it
 	// replaces the terminal area, and it follows the selected project.
 	Review *Review
@@ -162,8 +174,6 @@ type Frame struct {
 	// PR is the pull request pane. [Frame.Attach] makes it. [Frame.OpenPR] opens it at the
 	// right of the terminal area, and the title bar tabs shrink to icon and id (D59).
 	PR *PRPane
-	// Diff holds the counts of the title bar's diff summary. [Frame.Attach] makes it.
-	Diff *DiffSummary
 	// WorkerPRs finds the pull request of each worker's branch (D104). [Frame.Attach] makes it.
 	WorkerPRs *WorkerPRs
 	// OpenIssueWeb opens issue n of the repository in dir in the browser. [Frame.Attach] sets it;
@@ -229,8 +239,13 @@ type Frame struct {
 // NewFrame returns a frame with the sidebar and the panel open and
 // placeholder slots.
 func NewFrame() *Frame {
-	return &Frame{Slots: PlaceholderSlots(), sidebarOpen: true, panelOpen: true,
+	f := &Frame{Slots: PlaceholderSlots(), sidebarOpen: true, panelOpen: true,
 		sidebarW: theme.SidebarWidth, panelW: theme.PanelWidth}
+	f.Files = NewFileTree(f.filesDir)
+	f.Diff = &DiffSummary{Tree: f.Files}
+	f.Files.Open = f.openFileInReview
+	f.Files.Reveal = func(abs string) { mygo.Shell.ShowItemInFolder(abs) }
+	return f
 }
 
 // SidebarOpen tells whether the sidebar shows.
@@ -308,6 +323,44 @@ func (f *Frame) ClosePR() {
 
 // PROpen tells whether the pull request pane shows.
 func (f *Frame) PROpen() bool { return f.PR != nil && f.PR.IsOpen() }
+
+// filesDir is the folder of the file tree: the worktree of the selected agent
+// or worktree row, else the folder of the open project.
+func (f *Frame) filesDir() string {
+	if dir := f.reviewTarget(); dir != "" {
+		return dir
+	}
+	if f.SpacesList == nil || f.openProject == "" {
+		return ""
+	}
+	for _, g := range f.SpacesList.Groups() {
+		if g.Name != f.openProject {
+			continue
+		}
+		if g.Path != "" {
+			return g.Path
+		}
+		for _, r := range g.Rows {
+			if r.IsMain {
+				return r.Root
+			}
+		}
+		if len(g.Rows) > 0 {
+			return g.Rows[0].Root
+		}
+	}
+	return ""
+}
+
+// openFileInReview shows the Review view on the repository in dir, at the file rel.
+func (f *Frame) openFileInReview(dir, rel string) {
+	if f.Review == nil {
+		return
+	}
+	f.reviewOpen = true
+	f.reviewDir, f.reviewSet = dir, true
+	f.Review.OpenFile(dir, rel)
+}
 
 // ReviewOpen tells whether the Review view replaces the terminal area.
 func (f *Frame) ReviewOpen() bool { return f.reviewOpen }
@@ -392,8 +445,9 @@ func color(rgb uint32) ui.Color { return theme.Color(rgb) }
 func (f *Frame) View(c *ui.Context) {
 	theme.Apply(c)
 	p := theme.Current()
-	if f.Sheet != nil && c.Shortcut(ui.Cmd, ui.KeyJ) {
-		f.Sheet.Toggle()
+	// ⌘J opens or closes the card from the notch (D125); it no longer opens the context sheet.
+	if f.Notch != nil && c.Shortcut(ui.Cmd, ui.KeyJ) {
+		f.Notch.Toggle()
 	}
 	win, _ := c.Size()
 	if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyE) && !narrowWindow(win) {
@@ -410,6 +464,7 @@ func (f *Frame) View(c *ui.Context) {
 		f.sidebarW = clampWidth(f.sidebarW, theme.SidebarMinWidth, theme.SidebarMaxWidth)
 		f.panelW = clampWidth(f.panelW, theme.PanelMinWidth, theme.PanelMaxWidth)
 		sidebar, files, showFiles := fitWidths(win, f.sidebarW, f.panelW, f.sidebarOpen, f.panelOpen)
+		f.Files.Sync() // the diff summary counts what the tree lists, also while the panel is hidden
 		f.titleBar(c, sidebar, narrowWindow(win))
 		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Padding(0, theme.PanelGap, theme.PanelGap).Children(func() {
 			f.panels(c, sidebar, files, showFiles)
@@ -453,10 +508,12 @@ func (f *Frame) terminalPanel(c *ui.Context) {
 	kit.Panel(c, kit.PanelOpts{Name: LabelPanelTerminal, Bare: true, Body: func() { f.content(c) }})
 }
 
-// filesPanel is the files slot. It shows the v0.2 right panel (board or
-// worker) until the file tree comes (#349).
+// filesPanel is the files slot: the file tree. The v0.2 board and worker panel
+// stay in the code but are not shown (D122); see panelBox.
 func (f *Frame) filesPanel(c *ui.Context) {
-	kit.Panel(c, kit.PanelOpts{Name: LabelPanelFiles, Bare: true, Body: func() { f.panelBox(c) }})
+	kit.Panel(c, kit.PanelOpts{Name: LabelPanelFiles,
+		Head: func() { f.Files.Head(c) },
+		Body: func() { f.Files.View(c) }})
 }
 
 // statusBar draws the slot when one is set, and the status bar otherwise.
@@ -584,7 +641,9 @@ func (f *Frame) content(c *ui.Context) {
 	})
 }
 
-// panelBox draws the v0.2 right panel, as wide as its divider sets (D111).
+// panelBox draws the v0.2 right panel (board or worker). Nothing calls it
+// while the board is disabled (D122); issue #352 decides about the code.
+// It is as wide as its divider sets (D111). as wide as its divider sets (D111).
 func (f *Frame) panelBox(c *ui.Context) {
 	ui.Box(c).Label(LabelPanel).FillWidth().FillHeight().Children(func() { f.panel(c) })
 }
@@ -625,7 +684,6 @@ func (f *Frame) titleBar(c *ui.Context, sidebarW float32, narrow bool) {
 			f.bar.newTab = f.newTerminal
 		}
 		f.bar.diff, f.bar.openReview = f.Diff, f.openReviewView
-		f.syncDiff()
 		f.bar.build(c, f.panelOpen && !narrow, narrow, f.TogglePanel)
 	})
 }
@@ -636,21 +694,6 @@ func (f *Frame) openReviewView() {
 	if !f.reviewOpen {
 		f.ToggleReview()
 	}
-}
-
-// syncDiff points the diff summary at the repository of the selected project. The summary
-// reads git on a goroutine, and only when the folder changes.
-func (f *Frame) syncDiff() {
-	if f.Diff == nil {
-		return
-	}
-	dir := f.reviewTarget()
-	if dir == "" && f.agentSnap != nil {
-		if w, ok := findAgent(f.agentSnap(), f.tabAgent); ok {
-			dir = w.Worktree
-		}
-	}
-	f.Diff.SetDir(dir)
 }
 
 // terminal shows the terminal slot and the answer card, or the Review view.
@@ -898,11 +941,9 @@ func (f *Frame) syncWorkerPRs() {
 func (f *Frame) Attach(w Window) (stop func()) {
 	f.Selection = state.NewSelection(func() { w.Invalidate(); f.syncReview(); f.syncTerminal() })
 	f.Review = NewReview(w.Update, w.Invalidate)
-	if f.Diff == nil {
-		f.Diff = &DiffSummary{}
-	}
-	f.Diff.Post, f.Diff.Invalidate = w.Update, w.Invalidate
+	f.Files.Post, f.Files.Invalidate = w.Update, w.Invalidate
 	f.Status = state.NewStatusMessage(w.Invalidate)
+	f.Files.Status = f.Status.Show
 	f.PR = &PRPane{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate, OpenURL: openURL}
 	f.WorkerPRs = &WorkerPRs{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate}
 	var agentSnap func() agentstate.Snapshot
@@ -933,6 +974,11 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		f.Sheet = &Sheet{Source: src, Run: run, Invalidate: w.Invalidate, OpenPR: f.OpenPR, OpenIssue: f.OpenIssue, OpenURL: openURL}
 		f.Slots.Sheet = f.Sheet.View
 	}
+	removeOutline := func() {}
+	if agentSnap != nil {
+		f.Outline = NewOutline(agentSnap, f.Selection, w.Invalidate)
+		removeOutline = f.Overlay.Add(LabelOutline, f.Outline.View)
+	}
 	f.AgentsList = NewAgentsList(agentSnap, f.Selection)
 	f.Slots.Agents = f.AgentsList.View
 	if f.Host == nil {
@@ -940,10 +986,11 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	}
 	// The git scan runs on a goroutine and lands through Window.Update.
 	if f.SpacesList == nil {
-		f.SpacesList = NewSpacesList(agentSnap, f.Selection,
-			func() bool { return f.Visibility == nil || f.Visibility.Visible() }, w.Update)
+		f.SpacesList = NewSpacesList(agentSnap, f.Selection, w.Update)
 	}
-	f.SpacesList.OpenPR = f.OpenPR
+	f.SpacesList.Host = f.Host
+	f.SpacesList.WatchHead = f.WatchHead
+	f.SpacesList.OnError = func(err error) { f.Status.Show(err.Error()) }
 	if f.PickFolder != nil && f.SpawnOrchestrator != nil {
 		f.NewOrch = &NewOrchestrator{Pick: f.PickFolder, Spawn: f.SpawnOrchestrator,
 			Run: Runner{Post: w.Update}, Status: f.Status.Show}
@@ -968,6 +1015,8 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		Save: f.SaveProjects, Run: Runner{Post: w.Update}, Status: f.Status.Show, Invalidate: w.Invalidate,
 	}
 	f.SpacesList.OnProjects = f.ProjectsModal.Toggle
+	f.SpacesList.OnReordered = f.ProjectsModal.changed
+	f.AgentsList.Hidden = f.SpacesList.AgentFolded
 	f.lateWin.set(w)
 	if f.themeErr != nil {
 		f.Status.Show(f.themeErr.Error())
@@ -990,6 +1039,13 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	}
 	f.Needs.Collapsed = f.PROpen
 	f.Slots.Needs = f.Needs.View
+	f.Notch = &Notch{Snapshot: agentSnap, Project: func() string { return f.openProject }}
+	if src != nil {
+		f.Notch.Open = f.Card.Open
+		f.Notch.Close = f.Card.Close
+		f.Notch.Opened = func() bool { _, ok := f.Card.Opened(); return ok }
+	}
+	f.Overlay.Add(LabelNotchLayer, f.Notch.View)
 	f.Panel = &BoardPanel{Snapshot: agentSnap, Needs: f.Needs.Tabs}
 	f.Panel.OpenPR = f.OpenPR
 	f.Panel.OpenIssue = f.OpenIssue
@@ -1009,7 +1065,6 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.Visibility = state.NewVisibility(func(visible bool) {
 		f.Host.SetVisible(visible)
 		f.Usage.SetVisible(visible)
-		f.SpacesList.SetVisible(visible)
 		w.Update(func() {
 			if f.conn != nil {
 				f.conn.SetVisible(visible)
@@ -1024,7 +1079,6 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	// reports. The samplers start hidden: tell them the window state now.
 	f.Host.SetVisible(w.IsVisible())
 	f.Usage.SetVisible(w.IsVisible())
-	f.SpacesList.SetVisible(w.IsVisible())
 	unwatch := f.Visibility.Watch(w)
 	term := f.attachTerminal(w)
 	return func() {
@@ -1032,10 +1086,11 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		setCloseTerminalHandler(nil)
 		setSettingsHandler(nil)
 		stopChecks()
+		f.Files.Close()
 		unwatch()
 		term()
+		removeOutline()
 		stopAgents()
-		f.Diff.Stop()
 		f.SpacesList.Close()
 		f.Host.Close()
 		f.Usage.Close()
@@ -1066,11 +1121,22 @@ func (f *Frame) attachTerminal(w Window) (stop func()) {
 
 func (f *Frame) setTerminalFocus(focused bool) {
 	f.winFocused = focused
+	f.syncOutlineFocus()
 	if f.conn != nil {
 		if err := f.conn.SetFocus(focused); err != nil {
 			slog.Debug("terminal focus not sent", "err", err)
 		}
 	}
+}
+
+// syncOutlineFocus tells the outline which terminal has the focus: the shown
+// one while the window has the focus.
+func (f *Frame) syncOutlineFocus() {
+	addr := ""
+	if f.winFocused {
+		addr = f.termAddr
+	}
+	f.Outline.Focus(addr)
 }
 
 // terminalOptions are the plugin's options: contr's colors, JetBrains Mono at
@@ -1130,6 +1196,7 @@ func (f *Frame) syncTerminal() {
 	}
 	f.closeTerminal()
 	f.termAddr, f.termSet = addr, true
+	f.syncOutlineFocus()
 	f.termState, f.termErr = ghostty.State{Kind: ghostty.Connecting}, ""
 	f.invalidate()
 	if addr == "" {

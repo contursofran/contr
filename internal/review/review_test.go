@@ -279,71 +279,24 @@ func TestUnicodePath(t *testing.T) {
 	}
 }
 
-func TestSummaryAddsUpBranchesAheadAndCountsDistinctFiles(t *testing.T) {
+func TestTotalAddsUpTheChangesOfTheWorkTree(t *testing.T) {
 	s := scratch(t)
-	s.commit("root", map[string]string{"a.txt": "1\n"})
+	s.commit("root", map[string]string{"a.txt": "1\n2\n3\n", "b.txt": "x\n"})
 	s.git("checkout", "-b", "one")
-	s.commit("one", map[string]string{"a.txt": "1\n2\n3\n", "b.txt": "x\n"})
-	s.git("checkout", "main")
-	s.git("checkout", "-b", "two")
-	s.commit("two", map[string]string{"a.txt": "1\n9\n", "c.txt": "y\nz\n"})
-	s.git("checkout", "-b", "empty", "main")
-	got, err := s.repo().Summary()
+	s.commit("one", map[string]string{"a.txt": "1\n"}) // committed: -2
+	s.write("b.txt", "x\ny\n")                         // uncommitted: +1
+	s.write("c.txt", "p\nq\n")                         // untracked: +2
+	files, err := s.repo().Changes()
 	if err != nil {
 		t.Fatal(err)
 	}
-	// one: +3 (a: +2, b: +1); two: +4 (a: +1, c: +2). a.txt counts once.
-	if want := (Summary{Added: 6, Removed: 0, Files: 3}); got != want {
-		t.Errorf("Summary = %+v, want %+v", got, want)
+	if got, want := Total(files), (Summary{Added: 3, Removed: 2, Files: 3}); got != want {
+		t.Errorf("Total = %+v, want %+v", got, want)
 	}
 }
 
-func TestSummaryCountsRemovedLines(t *testing.T) {
-	s := scratch(t)
-	s.commit("root", map[string]string{"a.txt": "1\n2\n3\n"})
-	s.git("checkout", "-b", "one")
-	s.commit("one", map[string]string{"a.txt": "1\n"})
-	got, err := s.repo().Summary()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want := (Summary{Added: 0, Removed: 2, Files: 1}); got != want {
-		t.Errorf("Summary = %+v, want %+v", got, want)
-	}
-}
-
-func TestSummaryNoBranchAheadIsZero(t *testing.T) {
-	s := scratch(t)
-	s.commit("root", map[string]string{"a.txt": "1\n"})
-	got, err := s.repo().Summary()
-	if err != nil || got != (Summary{}) {
-		t.Errorf("Summary = %+v, %v; want zero", got, err)
-	}
-}
-
-func TestSummaryOutsideARepositoryFails(t *testing.T) {
-	if _, err := (Repo{Dir: t.TempDir(), Base: "main"}).Summary(); err == nil {
-		t.Error("no error for a folder that is not a repository")
-	}
-}
-
-func TestRefsDirIsSharedByWorktrees(t *testing.T) {
-	s := scratch(t)
-	s.commit("root", map[string]string{"a.txt": "1\n"})
-	wt := filepath.Join(t.TempDir(), "wt")
-	s.git("worktree", "add", "-b", "feature", wt)
-	want, err := s.repo().RefsDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, err := (Repo{Dir: wt, Base: "main"}).RefsDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	// macOS temp folders are symlinks; compare what the folders are.
-	a, _ := filepath.EvalSymlinks(want)
-	b, _ := filepath.EvalSymlinks(got)
-	if a != b || filepath.Base(a) != "refs" {
-		t.Errorf("RefsDir of a worktree = %q, of the repository = %q", got, want)
+func TestTotalOfNoFilesIsZero(t *testing.T) {
+	if got := Total(nil); got != (Summary{}) {
+		t.Errorf("Total(nil) = %+v, want zero", got)
 	}
 }

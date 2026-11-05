@@ -55,12 +55,9 @@ func TestSidebarLeavesHiddenGroupsOut(t *testing.T) {
 	h, _ := twoRepos(t)
 	s := &projects.Store{}
 	s.Hide(h.group(0).CommonDir)
-	change := h.list.SetProjects(s)
+	h.list.SetProjects(s)
 	if got := strings.Join(groupNames(h.list.Groups()), ","); got != "beta" {
 		t.Errorf("groups %s, want beta", got)
-	}
-	if !change.Rebuilt {
-		t.Errorf("hiding a group did not report a change: %+v", change)
 	}
 }
 
