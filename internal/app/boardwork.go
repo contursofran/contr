@@ -174,7 +174,7 @@ func WorkSection(c *ui.Context, rows []WorkRow, onPick func(address string), onP
 			}
 		})
 		if len(rows) == 0 {
-			TextLine(c, LabelWorkEmpty, LabelWorkEmpty, theme.TextDim)
+			TextLine(c, LabelWorkEmpty, LabelWorkEmpty, theme.Current().Ink50)
 			return
 		}
 		ui.Scroll(c).Label(LabelWorkRows).FillWidth().MinHeight(0).Children(func() {

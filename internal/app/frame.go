@@ -55,7 +55,7 @@ func PlaceholderSlots() Slots {
 
 func placeholder(name string) Slot {
 	return func(c *ui.Context) {
-		ui.Text(c, "["+name+"]").TextColor(theme.Color(theme.TextDim2))
+		ui.Text(c, "["+name+"]").TextColor(theme.Current().Ink42)
 	}
 }
 
@@ -472,8 +472,6 @@ const (
 	LabelPanelFiles    = "Files"
 )
 
-func color(rgb uint32) ui.Color { return theme.Color(rgb) }
-
 // View builds the frame: one glass sheet with the title bar on top, the sidebar,
 // terminal and files panels in a row under it (docs/spec/Window.md). The window
 // has no footer (D146); messages are toasts.
@@ -743,7 +741,7 @@ func (f *Frame) openReviewView() {
 func (f *Frame) terminal(c *ui.Context) {
 	if f.reviewOpen && f.Review != nil {
 		ui.Box(c).Label(LabelReview).Grow(1).MinWidth(0).FillHeight().
-			Background(color(theme.BgWindow)).Children(func() { f.Review.View(c) })
+			Background(theme.Current().Ground).Children(func() { f.Review.View(c) })
 		return
 	}
 	// No background: the terminal is clear over the panel (docs/spec/Terminal.md).
@@ -884,12 +882,13 @@ func (f *Frame) moveTab(from, to string) {
 // toggleButton draws the sidebar toggle: a small outline with one filled
 // part on the left, which shows while the sidebar is open.
 func toggleButton(c *ui.Context, label string, open bool, onClick func()) {
+	p := theme.Current()
 	ui.ButtonBase(c).Label(label).Tooltip("Show or hide the sidebar").Size(theme.TitleButtonSize, theme.TitleButtonSize).Shrink(0).
 		Cursor(ui.CursorPointer).OnClick(onClick).Children(func() {
 		ui.Row(c).Size(theme.TitleGlyphWidth, theme.TitleGlyphHeight).
-			Border(1, color(theme.TextDim)).Radius(theme.SidebarToggleRadius).Children(func() {
+			Border(1, p.Ink50).Radius(theme.SidebarToggleRadius).Children(func() {
 			if open {
-				ui.Box(c).Width(theme.TitleGlyphFill).FillHeight().Background(color(theme.TextDim))
+				ui.Box(c).Width(theme.TitleGlyphFill).FillHeight().Background(p.Ink50)
 			}
 		})
 	})

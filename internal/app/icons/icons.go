@@ -55,28 +55,28 @@ func (s Status) Slug() string { return slugs[s] }
 
 // glyph returns the file name and color of the static glyph. Working returns
 // its ring: the arc turns on top of it.
-func (s Status) glyph() (file string, color uint32) {
+func (s Status) glyph(p *theme.Palette) (file string, color ui.Color) {
 	switch s {
 	case NeedsYou:
-		return "needs_you", theme.IconYou
+		return "needs_you", p.Ink100
 	case Decide:
-		return "decide", theme.IconYou
+		return "decide", p.Ink100
 	case Do:
-		return "do", theme.IconYou
+		return "do", p.Ink100
 	case Blocked:
-		return "blocked", theme.IconYou
+		return "blocked", p.Ink100
 	case Working:
-		return "working_ring", theme.IconFaint
+		return "working_ring", p.Ink30
 	case Waiting:
-		return "waiting", theme.IconGrey
+		return "waiting", p.Ink50
 	case Idle:
-		return "idle", theme.IconGrey
+		return "idle", p.Ink50
 	case Done:
-		return "done", theme.IconGrey
+		return "done", p.Ink50
 	case Fyi:
-		return "fyi", theme.IconGrey
+		return "fyi", p.Ink50
 	default:
-		return "not_started", theme.IconFaint
+		return "not_started", p.Ink30
 	}
 }
 
@@ -137,19 +137,20 @@ func Icon(c *ui.Context, s Status) ui.Element { return Sized(c, s, theme.IconSiz
 // "Animation"). Each frame still costs the process CPU, so the arc does not
 // ask for the display's rate (AnimationFrame).
 func Sized(c *ui.Context, s Status, size float32) ui.Element {
-	file, color := s.glyph()
+	pal := theme.Current()
+	file, color := s.glyph(pal)
 	if svg(file) == nil || (s == Working && svg("working_arc") == nil) {
 		return ui.Box(c).Size(size, size).Label(s.Label()) // file missing, logged
 	}
 	if s != Working {
-		return ui.Icon(c, svg(file)).Size(size, size).TextColor(theme.Color(color)).Label(s.Label())
+		return ui.Icon(c, svg(file)).Size(size, size).TextColor(color).Label(s.Label())
 	}
 	ring, arc := svg(file), svg("working_arc")
 	return ui.Box(c).Size(size, size).Label(s.Label()).Draw(func(p *ui.Painter, r ui.Rect) {
 		p.AnimationFrameRate(theme.SpinFPS)
-		p.Icon(ring, r, theme.Color(color))
+		p.Icon(ring, r, color)
 		p.Transform(ui.Rotation(SpinAngle(p.Now())), r.X+r.W/2, r.Y+r.H/2, func() {
-			p.Icon(arc, r, theme.Color(theme.IconYou))
+			p.Icon(arc, r, pal.Ink100)
 		})
 	})
 }

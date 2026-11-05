@@ -56,7 +56,7 @@ func NeedsSection(c *ui.Context, tabs []NeedTab, onOpen func(NeedTab)) {
 		})
 		ui.Scroll(c).Label(LabelNeedsRows).FillWidth().Grow(1).MinHeight(0).Children(func() {
 			if len(tabs) == 0 {
-				TextLine(c, LabelNeedsEmpty, LabelNeedsEmpty, theme.TextDim)
+				TextLine(c, LabelNeedsEmpty, LabelNeedsEmpty, theme.Current().Ink50)
 				return
 			}
 			for _, t := range tabs {

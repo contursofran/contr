@@ -36,29 +36,30 @@ func OptionStyle(recommended bool) ButtonStyle {
 // cardButton is a card button. With click nil the board takes no actions:
 // the button is dim and does nothing. The button's accessible name is its
 // label. colour is the text colour of a live plain button.
-func cardButton(c *ui.Context, label string, style ButtonStyle, colour uint32, click ClickFn) {
+func cardButton(c *ui.Context, label string, style ButtonStyle, colour ui.Color, click ClickFn) {
 	live := click != nil
 	el := ui.ButtonBase(c).Label(label).Height(theme.AnswerButtonHeight).Shrink(0).
 		PaddingX(theme.AnswerButtonPadX).AlignItems(ui.Center).Radius(theme.AnswerButtonRadius)
-	text := uint32(theme.TextDim)
+	p := theme.Current()
+	text := p.Ink50
 	switch {
 	case style == ButtonFilled && live:
-		el = el.Background(theme.Color(theme.YouBg))
-		text = theme.YouText
+		el = el.Background(p.Ink100)
+		text = p.Ground // the inverse of ink-100 in both themes
 	case style == ButtonPlain:
 		if live {
 			text = colour
 		}
 	default:
-		el = el.Border(1, theme.Color(theme.CardBorder))
+		el = el.Border(1, p.InputLine)
 		if live {
-			text = theme.Text
+			text = p.Ink95
 		}
 	}
 	if live {
 		el = el.Cursor(ui.CursorPointer).OnClick(click)
 	}
-	el = el.TextColor(theme.Color(text))
+	el = el.TextColor(text)
 	el.Children(func() {
 		t := ui.Text(c, label)
 		if style == ButtonFilled && live {

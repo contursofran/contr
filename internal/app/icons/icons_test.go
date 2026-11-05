@@ -8,7 +8,10 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/assets"
+	"github.com/egoist/mygo"
+
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/theme/themetest"
 )
 
 func one(s Status, size float32) func(*ui.Context) {
@@ -56,7 +59,7 @@ func TestSVGsParse(t *testing.T) {
 		t.Error("ParseSVG accepted broken input")
 	}
 	for _, s := range All {
-		file, _ := s.glyph()
+		file, _ := s.glyph(theme.Dark)
 		if svg(file) == nil {
 			t.Errorf("%s has no glyph %q", s.Label(), file)
 		}
@@ -159,5 +162,26 @@ func TestSpinAngleTurnsOncePerPeriod(t *testing.T) {
 	}
 	if spinSteps != 42 {
 		t.Errorf("%d steps a turn, want 42 (1.4 s at 30 a second)", spinSteps)
+	}
+}
+
+// A status icon reads the palette on every build: needs-you is ink-100 in each theme (#403, D157).
+func TestIconFollowsTheTheme(t *testing.T) {
+	for _, src := range []mygo.ThemeSource{mygo.ThemeDark, mygo.ThemeLight} {
+		themetest.Use(t, src)
+		p := theme.Current()
+		file, got := NeedsYou.glyph(p)
+		if file == "" || got != p.Ink100 {
+			t.Errorf("%v: needs-you color = %v, want ink-100 %v", src, got, p.Ink100)
+		}
+		if _, grey := Idle.glyph(p); grey != p.Ink50 {
+			t.Errorf("%v: idle color = %v, want ink-50 %v", src, grey, p.Ink50)
+		}
+	}
+	themetest.Use(t, mygo.ThemeDark)
+	d := theme.Current()
+	themetest.Use(t, mygo.ThemeLight)
+	if _, l := NeedsYou.glyph(theme.Current()); l == d.Ink100 {
+		t.Error("needs-you is the same in both themes")
 	}
 }
