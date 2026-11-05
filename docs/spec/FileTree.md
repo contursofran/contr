@@ -77,4 +77,4 @@ Design system page: component FileTree. Shared rules: [README.md](README.md).
 
 ## Replaces
 
-- The v0.2 right panel (board and worker) for the space; see O1.
+- The v0.2 right panel (board and worker). The right panel shows only files (D122).
