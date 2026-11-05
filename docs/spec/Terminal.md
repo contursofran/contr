@@ -43,7 +43,26 @@ Design system page: component Terminal. Shared rules: [README.md](README.md).
 
 - Keys go to the terminal while it has the focus. Esc is never taken by contr.
 - `⌘F` opens MyGo's `FindBar` over the terminal text (D130). Esc in the
-  `FindBar` closes it and returns the focus to the terminal. There is no split.
+  `FindBar` closes it, ends the search and returns the focus to the terminal.
+  `⌘F` while the bar shows gives its field the focus again. There is no split.
+- The `FindBar` takes keys only while it shows; a closed bar builds nothing.
+  Its Enter, Shift+Enter, `⌘G` and `⇧⌘G` go to the next and the previous
+  match; the plugin's `SearchNext` and `SearchPrevious` select it.
+
+## Search
+
+- The plugin searches (D143): `Terminal.Search` reads the terminal's own
+  screen and scrollback, highlights every match, selects the newest and
+  scrolls to the selected one, clear of the bar. It goes through a long
+  scrollback in the frames after, a few milliseconds each, so the UI thread
+  does not block. Nothing goes to hc.
+- The bar's count is the plugin's status (`OnSearch`): "1 of 3" counts from
+  the newest match; "No matches" shows for a query with none.
+- The bar sits at the top right of the terminal, in the overlay layer; it is
+  a `FindBar` with the glass-float look.
+- Matches are `press` over the panel; the selected match is `ink-95` with panel
+  text. The plugin's amber and orange are replaced (D143).
+- Selecting another terminal closes the bar.
 
 ## Edge cases
 
@@ -60,7 +79,7 @@ Design system page: component Terminal. Shared rules: [README.md](README.md).
 
 ## Tokens
 
-`terminal`, `terminal-text`, `ink-42`, `ink-38`, `ink-95` (cursor), `ansi-*`, `space-18`, `space-26`, `space-10`, `panel`.
+`terminal`, `terminal-text`, `ink-42`, `ink-38`, `ink-95` (cursor, selected search match), `press` (search matches), `ansi-*`, `space-18`, `space-26`, `space-10`, `panel`.
 
 ## Build in MyGo
 
@@ -81,7 +100,10 @@ Design system page: component Terminal. Shared rules: [README.md](README.md).
 ## Tests
 
 - View: palette per theme; overlays do not take keys.
-- View: `⌘F` shows the `FindBar` over the terminal; Esc closes it.
+- View: `⌘F` and the Search button show the `FindBar` over the terminal; typing
+  finds the matches of a fake terminal text; Enter and Shift+Enter go to the
+  next and previous match; Esc closes the bar and the terminal gets the
+  focus back; a closed bar takes no key.
 - e2e: type in a scratch core terminal and read the text back.
 
 ## Replaces

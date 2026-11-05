@@ -25,6 +25,14 @@ func TestTerminalThemeHasThePaletteOfEachTheme(t *testing.T) {
 			t.Errorf("%s: foreground %v, background %v, cursor %v", name, got.Foreground, got.Background, got.Cursor)
 		}
 	}
+	for name, p := range map[string]*theme.Palette{"dark": theme.Dark, "light": theme.Light} {
+		got := terminalTheme(p)
+		if got.Search == (ui.Color{}) || got.SearchSelected != p.Ink95 || got.SearchSelectedText != p.PanelBase() ||
+			got.SearchText != p.TerminalForeground() {
+			t.Errorf("%s: search colors %v %v %v %v are not the grey tokens", name, got.Search, got.SearchText,
+				got.SearchSelected, got.SearchSelectedText)
+		}
+	}
 	if terminalTheme(theme.Dark).Palette == terminalTheme(theme.Light).Palette {
 		t.Error("dark and light have the same palette")
 	}
@@ -204,11 +212,12 @@ func attachesAfter(w *fakeWindow, tt *ui.Tester, src *scriptSource, n int) int {
 
 func TestEmptyOverlayBuildsNothingAndKeysReachTheTerminal(t *testing.T) {
 	f, w, tt, src := keyFrame(t)
-	if !f.Overlay.Empty() {
-		t.Fatal("a new frame has an overlay layer")
+	// The only layer is the find bar's (attachTerminal); it builds nothing while the bar is closed.
+	if len(f.Overlay.layers) != 1 || f.Overlay.layers[0].name != LabelFindLayer {
+		t.Fatalf("layers %v, want only the find bar layer", f.Overlay.layers)
 	}
-	if !absent(tt, LabelTerminalOverlay) {
-		t.Error("an empty overlay draws an element")
+	if !absent(tt, LabelTerminalOverlay) || !absent(tt, LabelFind) {
+		t.Error("a closed find bar layer draws an element")
 	}
 	tt.Type("x")
 	if n := attachesAfter(w, tt, src, 2); n < 2 {
@@ -236,7 +245,7 @@ func TestOverlayLayerTakesKeysOnlyWhileFocused(t *testing.T) {
 	}
 	remove()
 	tt.Frame()
-	if !f.Overlay.Empty() || !absent(tt, "overlay field") {
+	if len(f.Overlay.layers) != 1 || !absent(tt, "overlay field") {
 		t.Error("remove left the layer")
 	}
 }
