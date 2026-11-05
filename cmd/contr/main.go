@@ -207,12 +207,14 @@ func openWindow(icons bool) int {
 		}
 		opts.Content = ui.View(frame.View)
 	}
+	backgroundOptions(&opts)
 	mygo.App.WhenReady(func() {
 		if frame != nil {
 			// The stored appearance applies before the window shows (D119).
 			frame.StartTheme()
 		}
 		win := mygo.NewWindow(opts)
+		backgroundShow(win)
 		if frame != nil {
 			stop := frame.Attach(win)
 			win.OnClosed(stop)
