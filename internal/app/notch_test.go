@@ -179,8 +179,8 @@ func TestNotchClickOpensTheCardForTheFirstItem(t *testing.T) {
 	if err := r.tt.Click("2 items. Open"); err != nil {
 		t.Fatal(err)
 	}
-	if len(r.opened) != 1 || r.opened[0].Key != "b-250" {
-		t.Fatalf("opened %+v, want the blocked worker b-250 first (the order of the needs row)", r.opened)
+	if len(r.opened) != 1 || r.opened[0].Key != "D1" {
+		t.Fatalf("opened %+v, want the question D1 first, before the blocked worker b-250", r.opened)
 	}
 	// A second click closes the card.
 	if err := r.tt.Click("2 items. Open"); err != nil {
@@ -339,25 +339,25 @@ func TestFrameShowsTheNotchInEveryTerminalOfTheProject(t *testing.T) {
 	}
 }
 
-func TestFrameCmdJOpensTheAnswerCardNotTheSheet(t *testing.T) {
+func TestFrameCmdJOpensTheQuestionsCardNotTheSheet(t *testing.T) {
 	f, tt, _ := notchFrame(t)
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "wa"})
 	tt.Frame()
 	tt.Key(ui.Cmd, ui.KeyJ)
-	if tab, ok := f.Card.Opened(); !ok || tab.Key != "D1" {
-		t.Fatalf("⌘J: card %+v open=%v, want D1", tab, ok)
+	if !f.Card.IsOpen() || f.Card.key != "D1" {
+		t.Fatalf("⌘J: card key %q open=%v, want D1", f.Card.key, f.Card.IsOpen())
 	}
 	if f.Sheet.Opened() {
 		t.Error("⌘J opened the context sheet (D125)")
 	}
 	tt.Key(ui.Cmd, ui.KeyJ)
-	if _, ok := f.Card.Opened(); ok {
+	if f.Card.IsOpen() {
 		t.Error("the second ⌘J left the card open")
 	}
 	if err := tt.Click("2 questions. Open"); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := f.Card.Opened(); !ok {
+	if !f.Card.IsOpen() {
 		t.Error("a click on the notch did not open the card")
 	}
 }

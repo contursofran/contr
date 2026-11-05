@@ -7,7 +7,6 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
-	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 )
@@ -82,26 +81,6 @@ func TestWorkerPanelNoEntryWithoutIssueOrPR(t *testing.T) {
 	}
 	if _, open := entry.For(w); open != nil {
 		t.Error("worker with no worktree should have no entry")
-	}
-}
-
-func TestAnswerCardOpensWorkerPR(t *testing.T) {
-	entry, calls := entryRig(307)
-	src := &source{snap: agentstate.Snapshot{Workers: []agents.Worker{entryWorker}}}
-	r := newCardRig(t, src)
-	r.card.Entry = entry
-	r.open(NeedTab{Kind: NeedBlocked, Key: "b-1", Title: "Allow rm?", Icon: icons.Blocked, Address: "t1"})
-	if !r.tt.HasText(CardFocusWorker) {
-		t.Fatalf("existing label lost: %q", r.tt.Texts())
-	}
-	if err := r.tt.Click("Open PR #307"); err != nil {
-		t.Fatalf("%v; texts %q", err, r.tt.Texts())
-	}
-	if len(calls.prs) != 1 || calls.prs[0] != [2]any{"/wt/a", 307} {
-		t.Errorf("calls %v", calls.prs)
-	}
-	if _, open := r.card.Opened(); open {
-		t.Error("the card should close after the PR opens")
 	}
 }
 

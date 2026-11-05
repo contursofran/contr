@@ -1,12 +1,10 @@
 package app
 
-// Parts that the answer card and the worker panel share: the button styles,
-// the head line and the card text.
+// The button that cards and panels share: the button styles and cardButton.
 
 import (
 	"github.com/egoist/mygo/ui"
 
-	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/theme"
 )
 
@@ -33,39 +31,6 @@ func OptionStyle(recommended bool) ButtonStyle {
 		return ButtonFilled
 	}
 	return ButtonOutlined
-}
-
-// headLine is the head line: a status icon (items only), the title in bold
-// (cut with an ellipsis, struck through when resolved), and meta in dim text
-// on the right.
-func headLine(c *ui.Context, icon *icons.Status, title string, resolved bool, meta string) {
-	ui.Row(c).Height(theme.LineHeight).Shrink(0).AlignItems(ui.Center).Gap(theme.NeedGap).Children(func() {
-		if icon != nil {
-			ui.Box(c).Shrink(0).Children(func() { icons.Sized(c, *icon, theme.IconSizeSmall) })
-		}
-		t := ui.Text(c, title).Bold().SingleLine().Grow(1).MinWidth(0).TextColor(theme.Color(theme.Text))
-		if resolved {
-			t.Strikethrough()
-		}
-		if meta != "" {
-			ui.Text(c, meta).Shrink(0).TextColor(theme.Color(theme.TextDim))
-		}
-	})
-}
-
-// cardText is the text of the card, in Text2, at most three lines. A longer
-// text is clipped. The text takes the room that the actions line does not,
-// so the actions stay at the bottom.
-func cardText(c *ui.Context, text *string) {
-	ui.Box(c).Grow(1).MinHeight(0).Clip().Children(func() {
-		s := ""
-		if text != nil {
-			s = *text
-		}
-		ui.Column(c).MaxHeight(theme.AnswerTextHeight).Clip().Children(func() {
-			ui.Text(c, s).TextColor(theme.Color(theme.Text2)).Wrap()
-		})
-	})
 }
 
 // cardButton is a card button. With click nil the board takes no actions:
@@ -104,6 +69,3 @@ func cardButton(c *ui.Context, label string, style ButtonStyle, colour uint32, c
 		}
 	})
 }
-
-// stopper is a timer that can be stopped. [time.Timer] fits it.
-type stopper interface{ Stop() bool }

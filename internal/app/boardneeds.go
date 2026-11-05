@@ -2,7 +2,7 @@ package app
 
 // The needs-you section of the board: the same tabs as the needs-you row
 // under the terminal, in the same order (blocked workers, questions, to-dos),
-// one line each. A click opens the answer card (#162, S6).
+// one line each. A click opens the questions card (#347).
 
 import (
 	"strconv"
