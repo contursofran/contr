@@ -13,10 +13,12 @@ import (
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/ghostty"
+	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/host"
+	"github.com/contursofran/contr/internal/review"
 	"github.com/contursofran/contr/internal/usage"
 )
 
@@ -406,11 +408,12 @@ func TestFrameReviewHiddenNoReads(t *testing.T) {
 func TestFrameReviewReplacesTerminal(t *testing.T) {
 	f := NewFrame()
 	f.Review, _ = newTestReview()
+	f.Diff = readyDiff(review.Summary{Added: 3, Removed: 1, Files: 2})
 	tt := ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)
 	if _, ok := tt.Find(LabelReview); ok {
 		t.Fatal("review area shows before the toggle")
 	}
-	tt.Click(LabelReviewToggle)
+	tt.Click(kit.DiffSummaryLabel(kit.DiffSummaryOpts{Added: 3, Removed: 1, Files: 2}))
 	box(t, tt, LabelReview)
 	if _, ok := tt.Find(LabelTerminal); ok {
 		t.Fatal("terminal area still shows with Review on")

@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -235,4 +236,51 @@ func lines(s string) []string {
 		return nil
 	}
 	return strings.Split(s, "\n")
+}
+
+// Summary is the size of all the work that the Review view lists: the sum of
+// the branches ahead of the base.
+type Summary struct {
+	Added   int
+	Removed int
+	Files   int // distinct paths over all the branches
+}
+
+// Summary adds up the branches ahead of the base. A branch with no commits
+// ahead is left out, like the Review view does. A folder that is not a
+// repository gives an error.
+func (r Repo) Summary() (Summary, error) {
+	branches, err := r.Branches()
+	if err != nil {
+		return Summary{}, err
+	}
+	var s Summary
+	paths := map[string]bool{}
+	for _, b := range branches {
+		if b.Ahead == 0 {
+			continue
+		}
+		s.Added += b.Added
+		s.Removed += b.Removed
+		files, err := r.Files(b.Name)
+		if err != nil {
+			return Summary{}, err
+		}
+		for _, f := range files {
+			paths[f.Path] = true
+		}
+	}
+	s.Files = len(paths)
+	return s, nil
+}
+
+// RefsDir is the folder that holds the branch files of the repository. It is
+// shared by all the worktrees. A change in it means a commit, a new branch
+// or a deleted one.
+func (r Repo) RefsDir() (string, error) {
+	out, err := r.git("rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(strings.TrimSpace(out), "refs"), nil
 }

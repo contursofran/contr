@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/review"
 )
 
 // tabsOf is the tabs of project p: the orchestrator "lead" (selected), a plain terminal with a
@@ -150,7 +152,7 @@ func TestNewTabButtonFollowsTheTabsAndStaysWithNoTabs(t *testing.T) {
 
 func TestTheBarHasNoSplitNorSearchNorPRButton(t *testing.T) {
 	b := newBar(t, tabsOf(), true)
-	for _, label := range []string{"Split", "Search", "Pull request"} {
+	for _, label := range []string{"Split", "Search", "Pull request", "Review"} {
 		if b.has(label) {
 			t.Errorf("the bar has a %q button", label)
 		}
@@ -164,17 +166,6 @@ func TestNoTabsShowsOnlyPlusAndTheFilesToggle(t *testing.T) {
 	}
 	if !b.has(LabelFilesToggle) || !b.has(LabelTitleDrag) || !b.has(LabelNewTab) {
 		t.Errorf("a part is missing; texts %q", b.tt.Texts())
-	}
-}
-
-func TestTheReviewButtonTogglesTheReviewView(t *testing.T) {
-	b := newBar(t, tabsOf(), true)
-	reviews := 0
-	b.bar.toggleReview = func() { reviews++ }
-	b.tt.Frame()
-	b.click(t, LabelReviewToggle)
-	if reviews != 1 {
-		t.Errorf("the Review button ran %d times, want 1", reviews)
 	}
 }
 
@@ -459,5 +450,58 @@ func TestTheCloseButtonStopsAPlainTerminalAndNeverAnAgent(t *testing.T) {
 	}
 	if !slices.Equal(cf.stopped, []string{"tp"}) {
 		t.Errorf("stopped %v, want [tp]", cf.stopped)
+	}
+}
+
+func TestTheDiffSummaryFollowsTheSelectedWorktreeAndReadsOffTheUIThread(t *testing.T) {
+	snap := tabSnap()
+	snap.Orchestrators[0].Worktree = "/work/p"
+	snap.Workers[0].Worktree = "/work/p-wt"
+	f, tt := agentFrame(t, &snap)
+	q := &uiQueue{}
+	w := &fakeWatch{}
+	release := make(chan struct{})
+	f.Diff = &DiffSummary{
+		Read: func(dir string) (review.Summary, error) {
+			<-release
+			return review.Summary{Added: 8, Removed: 2, Files: 3}, nil
+		},
+		Watch: w.watch, Post: q.post, Invalidate: func() {},
+	}
+	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "w1"})
+	done := make(chan struct{})
+	go func() { tt.Frame(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("building the frame waits for git")
+	}
+	if f.Diff.dir != "/work/p-wt" {
+		t.Errorf("the summary reads %q, want the selected worker's worktree", f.Diff.dir)
+	}
+	close(release)
+	q.wait(t, 1)
+	tt.Frame()
+	if absent(tt, "8 lines added, 2 removed, 3 files. Open review") {
+		t.Errorf("no diff summary; texts %q", tt.Texts())
+	}
+	f.Diff.Stop()
+}
+
+func TestTheDiffSummaryClickOpensReviewInTheFrame(t *testing.T) {
+	snap := tabSnap()
+	f, tt := agentFrame(t, &snap)
+	f.Review, _ = newTestReview()
+	f.Diff = readyDiff(review.Summary{Added: 1, Files: 1})
+	tt.Frame()
+	if err := tt.Click("1 line added, 1 file. Open review"); err != nil {
+		t.Fatal(err)
+	}
+	if !f.ReviewOpen() {
+		t.Error("the click did not open Review")
+	}
+	tt.Frame()
+	if err := tt.Click("1 line added, 1 file. Open review"); err != nil || !f.ReviewOpen() {
+		t.Errorf("a second click closed Review (err %v)", err)
 	}
 }

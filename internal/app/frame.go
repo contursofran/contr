@@ -160,6 +160,8 @@ type Frame struct {
 	// PR is the pull request pane. [Frame.Attach] makes it. [Frame.OpenPR] opens it at the
 	// right of the terminal area, and the title bar tabs shrink to icon and id (D59).
 	PR *PRPane
+	// Diff holds the counts of the title bar's diff summary. [Frame.Attach] makes it.
+	Diff *DiffSummary
 	// WorkerPRs finds the pull request of each worker's branch (D104). [Frame.Attach] makes it.
 	WorkerPRs *WorkerPRs
 	// OpenIssueWeb opens issue n of the repository in dir in the browser. [Frame.Attach] sets it;
@@ -620,9 +622,33 @@ func (f *Frame) titleBar(c *ui.Context, sidebarW float32, narrow bool) {
 		if f.NewTerm != nil {
 			f.bar.newTab = f.newTerminal
 		}
-		f.bar.toggleReview, f.bar.reviewOpen = f.ToggleReview, f.reviewOpen
+		f.bar.diff, f.bar.openReview = f.Diff, f.openReviewView
+		f.syncDiff()
 		f.bar.build(c, f.panelOpen && !narrow, narrow, f.TogglePanel)
 	})
+}
+
+// openReviewView shows the Review view. A second click on the diff summary does nothing: a tab
+// brings the terminal back.
+func (f *Frame) openReviewView() {
+	if !f.reviewOpen {
+		f.ToggleReview()
+	}
+}
+
+// syncDiff points the diff summary at the repository of the selected project. The summary
+// reads git on a goroutine, and only when the folder changes.
+func (f *Frame) syncDiff() {
+	if f.Diff == nil {
+		return
+	}
+	dir := f.reviewTarget()
+	if dir == "" && f.agentSnap != nil {
+		if w, ok := findAgent(f.agentSnap(), f.tabAgent); ok {
+			dir = w.Worktree
+		}
+	}
+	f.Diff.SetDir(dir)
 }
 
 // terminal shows the terminal slot and the answer card, or the Review view.
@@ -870,6 +896,10 @@ func (f *Frame) syncWorkerPRs() {
 func (f *Frame) Attach(w Window) (stop func()) {
 	f.Selection = state.NewSelection(func() { w.Invalidate(); f.syncReview(); f.syncTerminal() })
 	f.Review = NewReview(w.Update, w.Invalidate)
+	if f.Diff == nil {
+		f.Diff = &DiffSummary{}
+	}
+	f.Diff.Post, f.Diff.Invalidate = w.Update, w.Invalidate
 	f.Status = state.NewStatusMessage(w.Invalidate)
 	f.PR = &PRPane{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate, OpenURL: openURL}
 	f.WorkerPRs = &WorkerPRs{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate}
@@ -1003,6 +1033,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		unwatch()
 		term()
 		stopAgents()
+		f.Diff.Stop()
 		f.SpacesList.Close()
 		f.Host.Close()
 		f.Usage.Close()

@@ -22,12 +22,15 @@ The counts sit `space-8` apart. The button has padding `4px 8px` and radius `rad
 
 ## Behavior
 
-- Click opens the Review view (D37) on the selected project.
+- Click opens the Review view (D37) on the selected project. A click on a
+  tab shows the terminal again.
 
 ## Data
 
-- `internal/review` counts on a goroutine. Read again on a file watch event
-  in the project folder, or on a branch change from hc. No timer.
+- `internal/review` counts on a goroutine: `Repo.Summary` adds up the
+  branches ahead of `main`, the same ones the Review view lists, and counts
+  each file once (D131). Read again when a branch file of the repository
+  changes (`Repo.RefsDir`, `mygo.WatchFiles`). No timer.
 
 ## Keys and focus
 
