@@ -24,6 +24,10 @@ func init() {
 }
 
 func backgroundOptions(opts *mygo.WindowOptions) {
+	// No glass in e2e builds (D150): over the glass, captures take the color of
+	// what is behind the window, and Dark came out washed grey. Without it the
+	// frame stands on the theme's ground token, so a capture shows the palette.
+	opts.Vibrancy = mygo.VibrancyNone
 	if foreground() {
 		return
 	}
