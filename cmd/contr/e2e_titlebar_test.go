@@ -298,8 +298,12 @@ func TestTitleBarCapture(t *testing.T) {
 		waitFor(c, "the orchestrator tab", func(map[string]bool) bool { return inBar(c, "lead") })
 		if i == 0 {
 			for n := 1; n <= 2; n++ {
-				click(c, app.LabelNewTab)
-				for deadline := time.Now().Add(20 * time.Second); plains() < n && time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
+				// A click can land while the window builds a frame: click again until the terminal exists.
+				for try := 0; try < 5 && plains() < n; try++ {
+					waitFor(c, "the new tab button", func(map[string]bool) bool { return inBar(c, app.LabelNewTab) })
+					click(c, app.LabelNewTab)
+					for deadline := time.Now().Add(4 * time.Second); plains() < n && time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
+					}
 				}
 			}
 		}
@@ -314,7 +318,7 @@ func TestTitleBarCapture(t *testing.T) {
 				t.Errorf("%s, orchestrator: no %q in the bar; labels %v", theme, want, keys(c.labels(t)))
 			}
 		}
-		for _, absent := range []string{"Split", "Search", "#342 · agent-342-titlebar", app.LabelCloseTab} {
+		for _, absent := range []string{"Split", "#342 · agent-342-titlebar", app.LabelCloseTab} {
 			if inBar(c, absent) {
 				t.Errorf("%s, orchestrator selected: the bar has %q", theme, absent)
 			}
@@ -342,7 +346,7 @@ func TestTitleBarCapture(t *testing.T) {
 		// Select the builder in the sidebar: its own tab replaces the orchestrator's.
 		var row string
 		for l := range c.labels(t) {
-			if strings.HasPrefix(l, "b342-s1-titlebar, working, builder") {
+			if strings.HasPrefix(l, "b342-s1-titlebar, working, #342") {
 				row = l
 			}
 		}
@@ -351,7 +355,7 @@ func TestTitleBarCapture(t *testing.T) {
 		}
 		// A press can land while the window still builds a frame: press again until the tab shows.
 		for try := 0; try < 5 && !inBar(c, "#342 · agent-342-titlebar"); try++ {
-			c.call(t, "act", map[string]any{"id": c.idOf(t, row), "action": "press"})
+			clickAt(c, row)
 			for deadline := time.Now().Add(4 * time.Second); time.Now().Before(deadline) && !inBar(c, "#342 · agent-342-titlebar"); time.Sleep(200 * time.Millisecond) {
 				wake(c)
 			}

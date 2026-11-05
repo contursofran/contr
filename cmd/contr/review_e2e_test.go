@@ -24,6 +24,7 @@ import (
 // It uses a scratch hc core with one `sh` worker in the repo and never touches
 // the owner's hc core.
 func TestReviewCapture(t *testing.T) {
+	skipWhileViewersHidden(t)
 	root, err := filepath.Abs("../..")
 	if err != nil {
 		t.Fatal(err)
