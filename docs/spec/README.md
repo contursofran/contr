@@ -79,8 +79,7 @@ tests, and what it replaces.
   with `Context.SetTheme`, so MyGo's own widgets match.
 - `mygo.Theme.Preferences()`:
   - **ReduceMotion:** every StatusGlyph is still; no enter motions.
-  - **ReduceTransparency:** glass becomes a solid fill (open point O13).
-  - **HighContrast:** open point O13.
+  - **ReduceTransparency** and **HighContrast:** ignored for now (D138); the glass and inks stay the same.
 - The terminal has a 16-color ANSI palette per theme. The dark palette is
   today's `TerminalPalette`; the light palette is a known light palette (D129).
 - Settings has an **Appearance** row: System, Dark, Light. The value is
@@ -204,12 +203,12 @@ The coordinator asks the owner these before the issues that need them.
 9. **O9 Light terminal palette.** Settled (D129): a known light palette
    (Ghostty or macOS Terminal style), tuned for contrast on the light
    panel. The values come in #345.
-10. **O10 Ages.** The design system page moves ages once a minute while a
-    row shows. D35 and D40 forbid a timer. Until the owner decides, ages
-    follow D35.
+10. **O10 Ages.** Settled (D137): ages move once a minute through one
+    shared timer that runs only while the window is visible and an age is on
+    screen. D35 and D40 stay for everything else.
 11. **O11 Servers.** Settled (D132): the Servers section shows with only
     This Mac until remote servers have a source (#149). The `+` stays hidden.
 12. **O12 Split and search.** Settled (D130): split is dropped for now.
     Search uses MyGo's `FindBar` over the terminal text.
-13. **O13 Reduce transparency and high contrast.** The fill and ink values
-    for each.
+13. **O13 Reduce transparency and high contrast.** Settled (D138): both are
+    ignored for now; the glass and inks stay the same.

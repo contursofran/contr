@@ -262,3 +262,13 @@ func TestOpenIssueRunsWeb(t *testing.T) {
 		t.Errorf("dir %q args %v", f.dir, f.args)
 	}
 }
+
+func TestOpenPRRunsWeb(t *testing.T) {
+	f := &fakeRunner{}
+	if err := (Client{R: f, Dir: "/w"}).OpenPR(context.Background(), 307); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(f.args, " ") != "pr view 307 --web" || f.dir != "/w" {
+		t.Errorf("dir %q args %v", f.dir, f.args)
+	}
+}

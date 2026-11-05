@@ -49,7 +49,7 @@ Design system page: component Window. Shared rules: [README.md](README.md).
   it. It returns when the window grows, unless the owner hid it.
 - Window below about 800px: the sidebar shows icons only (project and agent
   glyphs, no text); the tooltips keep the names.
-- Reduce transparency: solid fills (O13, open).
+- Reduce Transparency and Increase Contrast: ignored for now (O13, D138); the glass and inks stay the same.
 
 ## Accessibility
 

@@ -39,7 +39,6 @@ type Slot func(c *ui.Context)
 // Slots are the views of the frame. A nil slot is left empty.
 type Slots struct {
 	Spaces    Slot // sidebar, under its header
-	Agents    Slot // sidebar, at the bottom
 	Terminal  Slot // the selected hc terminal
 	Needs     Slot // needs-you row, under the terminal; draws nothing when empty
 	Card      Slot // answer card, floating at the bottom of the terminal area
@@ -52,7 +51,6 @@ type Slots struct {
 func PlaceholderSlots() Slots {
 	return Slots{
 		Spaces:    placeholder("spaces"),
-		Agents:    placeholder("agents"),
 		Terminal:  placeholder("terminal"),
 		Panel:     placeholder("panel"),
 		StatusBar: nil,
@@ -102,9 +100,6 @@ type Frame struct {
 	// Worker is the panel's worker view. [Frame.Attach] makes it. The panel
 	// shows it while a worker is selected.
 	Worker *WorkerPanel
-	// AgentsList is the agents section. [Frame.Attach] makes it and puts
-	// its view in Slots.Agents.
-	AgentsList *AgentsList
 	// StartAgents follows the agents. [Frame.Attach] calls it once, with a
 	// notify function that is safe from any goroutine, and uses the source
 	// and the stop function it returns. Nil means no agents.
@@ -131,6 +126,9 @@ type Frame struct {
 	// SaveProjects writes a copy of the store (D110). It runs on a goroutine.
 	// Nil saves nothing.
 	SaveProjects func(*projects.Store) error
+	// ModelOf names the model that an agent profile starts, for line 2 of the
+	// agent rows. Nil shows no model.
+	ModelOf func(profile string) string
 	// WatchHead watches a repo's HEAD file for the sidebar's branch (see
 	// SpacesList.WatchHead). Nil: the branch is read when the terminals change.
 	WatchHead func(ctx context.Context, path string, changed func()) error
@@ -179,7 +177,10 @@ type Frame struct {
 	// OpenIssueWeb opens issue n of the repository in dir in the browser. [Frame.Attach] sets it;
 	// tests replace it.
 	OpenIssueWeb func(dir string, n int) error
-	// Host and Usage feed the status bar. [Frame.Attach] creates them when they are nil (tests set
+	// OpenPRWeb opens pull request n of the repository in dir in the browser. [Frame.Attach] sets
+	// it; tests replace it.
+	OpenPRWeb func(dir string, n int) error
+	// Host feeds the status bar and Usage the plan meters of the files panel. [Frame.Attach] creates them when they are nil (tests set
 	// fakes first) and ends them with its stop function.
 	Host  *host.Host
 	Usage *usage.Sampler
@@ -300,6 +301,27 @@ func (f *Frame) OpenIssue(dir string, n int) {
 	if open == nil {
 		open = func(dir string, n int) error { return github.New(dir).OpenIssue(context.Background(), n) }
 	}
+	f.openWeb(open, dir, n)
+}
+
+// OpenPRInBrowser opens pull request n of the repository in dir in the browser, off the UI
+// thread. A failure shows in the status message. It does not open the PR pane (D127).
+func (f *Frame) OpenPRInBrowser(dir string, n int) {
+	open := f.OpenPRWeb
+	if open == nil {
+		open = func(dir string, n int) error { return github.New(dir).OpenPR(context.Background(), n) }
+	}
+	f.openWeb(open, dir, n)
+}
+
+// agentRowEntry is the entry of the agent rows. Its Open PR opens the browser; it has no
+// OpenPR, so the rows cannot reach the PR pane (D127).
+func (f *Frame) agentRowEntry() WorkerEntry {
+	return WorkerEntry{PRs: f.WorkerPRs, OpenIssue: f.OpenIssue, OpenPRWeb: f.OpenPRInBrowser}
+}
+
+// openWeb runs open off the UI thread and shows its error in the status message.
+func (f *Frame) openWeb(open func(dir string, n int) error, dir string, n int) {
 	run := Runner{}
 	if f.WorkerPRs != nil {
 		run = f.WorkerPRs.Run
@@ -508,12 +530,22 @@ func (f *Frame) terminalPanel(c *ui.Context) {
 	kit.Panel(c, kit.PanelOpts{Name: LabelPanelTerminal, Bare: true, Body: func() { f.content(c) }})
 }
 
-// filesPanel is the files slot: the file tree. The v0.2 board and worker panel
+// filesPanel is the files slot: the file tree, with the usage meters in its footer. The v0.2 board and worker panel
 // stay in the code but are not shown (D122); see panelBox.
 func (f *Frame) filesPanel(c *ui.Context) {
 	kit.Panel(c, kit.PanelOpts{Name: LabelPanelFiles,
-		Head: func() { f.Files.Head(c) },
-		Body: func() { f.Files.View(c) }})
+		Head:   func() { f.Files.Head(c) },
+		Body:   func() { f.Files.View(c) },
+		Footer: func() { kit.UsageMeter(c, usageMeters(f.planUsage())) }})
+}
+
+// planUsage is the usage sampler as the meters read it. A nil sampler (a
+// frame without one) reads as an interface that holds nothing.
+func (f *Frame) planUsage() planPercent {
+	if f.Usage == nil {
+		return nil
+	}
+	return f.Usage
 }
 
 // statusBar draws the slot when one is set, and the status bar otherwise.
@@ -528,9 +560,6 @@ func (f *Frame) statusBar(c *ui.Context) {
 	}
 	if f.Host != nil {
 		f.status.host = f.Host
-	}
-	if f.Usage != nil {
-		f.status.usage = f.Usage
 	}
 	if f.Status != nil {
 		f.status.message = f.Status
@@ -547,8 +576,6 @@ func (f *Frame) run(c *ui.Context, s Slot) {
 func (f *Frame) sidebar(c *ui.Context) {
 	ui.Column(c).Label(LabelSidebar).FillWidth().FillHeight().Children(func() {
 		ui.Box(c).Grow(1).MinHeight(0).Children(func() { f.run(c, f.Slots.Spaces) })
-		// The agents section takes at most its share of the sidebar.
-		ui.Column(c).Shrink(0).MaxHeightPercent(theme.AgentsMaxShare * 100).Children(func() { f.run(c, f.Slots.Agents) })
 	})
 }
 
@@ -866,9 +893,6 @@ func (f *Frame) syncAgents() {
 	if f.Worker != nil {
 		f.Worker.Sync()
 	}
-	if f.AgentsList != nil {
-		f.AgentsList.Sync()
-	}
 	if f.SpacesList != nil {
 		f.SpacesList.Sync()
 	}
@@ -979,8 +1003,6 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		f.Outline = NewOutline(agentSnap, f.Selection, w.Invalidate)
 		removeOutline = f.Overlay.Add(LabelOutline, f.Outline.View)
 	}
-	f.AgentsList = NewAgentsList(agentSnap, f.Selection)
-	f.Slots.Agents = f.AgentsList.View
 	if f.Host == nil {
 		f.Host = host.NewSystem(w.Invalidate)
 	}
@@ -989,6 +1011,13 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		f.SpacesList = NewSpacesList(agentSnap, f.Selection, w.Update)
 	}
 	f.SpacesList.Host = f.Host
+	f.SpacesList.ModelOf = f.ModelOf
+	f.SpacesList.Run, f.SpacesList.Status = Runner{Post: w.Update}, f.Status.Show
+	f.SpacesList.Entry = f.agentRowEntry()
+	f.SpacesList.Ages = &AgeClock{Tick: w.Invalidate}
+	if src != nil {
+		f.SpacesList.Source = src
+	}
 	f.SpacesList.WatchHead = f.WatchHead
 	f.SpacesList.OnError = func(err error) { f.Status.Show(err.Error()) }
 	if f.PickFolder != nil && f.SpawnOrchestrator != nil {
@@ -1016,7 +1045,6 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	}
 	f.SpacesList.OnProjects = f.ProjectsModal.Toggle
 	f.SpacesList.OnReordered = f.ProjectsModal.changed
-	f.AgentsList.Hidden = f.SpacesList.AgentFolded
 	f.lateWin.set(w)
 	if f.themeErr != nil {
 		f.Status.Show(f.themeErr.Error())
@@ -1063,6 +1091,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		f.Usage = usage.NewFileSampler(w.Invalidate)
 	}
 	f.Visibility = state.NewVisibility(func(visible bool) {
+		f.SpacesList.Ages.SetVisible(visible)
 		f.Host.SetVisible(visible)
 		f.Usage.SetVisible(visible)
 		w.Update(func() {
@@ -1079,6 +1108,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	// reports. The samplers start hidden: tell them the window state now.
 	f.Host.SetVisible(w.IsVisible())
 	f.Usage.SetVisible(w.IsVisible())
+	f.SpacesList.Ages.SetVisible(w.IsVisible())
 	unwatch := f.Visibility.Watch(w)
 	term := f.attachTerminal(w)
 	return func() {
