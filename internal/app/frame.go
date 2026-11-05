@@ -126,6 +126,9 @@ type Frame struct {
 	// SaveProjects writes a copy of the store (D110). It runs on a goroutine.
 	// Nil saves nothing.
 	SaveProjects func(*projects.Store) error
+	// WatchHead watches a repo's HEAD file for the sidebar's branch (see
+	// SpacesList.WatchHead). Nil: the branch is read when the terminals change.
+	WatchHead func(ctx context.Context, path string, changed func()) error
 	// LoadWidths reads the widths of the sidebar and the panel (D111). It
 	// runs on a goroutine. Nil means the defaults and no file.
 	LoadWidths func() (widths.Widths, error)
@@ -949,10 +952,11 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	}
 	// The git scan runs on a goroutine and lands through Window.Update.
 	if f.SpacesList == nil {
-		f.SpacesList = NewSpacesList(agentSnap, f.Selection,
-			func() bool { return f.Visibility == nil || f.Visibility.Visible() }, w.Update)
+		f.SpacesList = NewSpacesList(agentSnap, f.Selection, w.Update)
 	}
-	f.SpacesList.OpenPR = f.OpenPR
+	f.SpacesList.Host = f.Host
+	f.SpacesList.WatchHead = f.WatchHead
+	f.SpacesList.OnError = func(err error) { f.Status.Show(err.Error()) }
 	if f.PickFolder != nil && f.SpawnOrchestrator != nil {
 		f.NewOrch = &NewOrchestrator{Pick: f.PickFolder, Spawn: f.SpawnOrchestrator,
 			Run: Runner{Post: w.Update}, Status: f.Status.Show}
@@ -977,6 +981,8 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		Save: f.SaveProjects, Run: Runner{Post: w.Update}, Status: f.Status.Show, Invalidate: w.Invalidate,
 	}
 	f.SpacesList.OnProjects = f.ProjectsModal.Toggle
+	f.SpacesList.OnReordered = f.ProjectsModal.changed
+	f.AgentsList.Hidden = f.SpacesList.AgentFolded
 	f.lateWin.set(w)
 	if f.themeErr != nil {
 		f.Status.Show(f.themeErr.Error())
@@ -1018,7 +1024,6 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.Visibility = state.NewVisibility(func(visible bool) {
 		f.Host.SetVisible(visible)
 		f.Usage.SetVisible(visible)
-		f.SpacesList.SetVisible(visible)
 		w.Update(func() {
 			if f.conn != nil {
 				f.conn.SetVisible(visible)
@@ -1033,7 +1038,6 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	// reports. The samplers start hidden: tell them the window state now.
 	f.Host.SetVisible(w.IsVisible())
 	f.Usage.SetVisible(w.IsVisible())
-	f.SpacesList.SetVisible(w.IsVisible())
 	unwatch := f.Visibility.Watch(w)
 	term := f.attachTerminal(w)
 	return func() {

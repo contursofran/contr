@@ -207,8 +207,8 @@ The coordinator asks the owner these before the issues that need them.
 10. **O10 Ages.** The design system page moves ages once a minute while a
     row shows. D35 and D40 forbid a timer. Until the owner decides, ages
     follow D35.
-11. **O11 Servers.** Remote servers need a source (#149). Only this Mac
-    shows now.
+11. **O11 Servers.** Settled (D132): the Servers section shows with only
+    This Mac until remote servers have a source (#149). The `+` stays hidden.
 12. **O12 Split and search.** Settled (D130): split is dropped for now.
     Search uses MyGo's `FindBar` over the terminal text.
 13. **O13 Reduce transparency and high contrast.** The fill and ink values

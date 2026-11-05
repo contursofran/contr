@@ -21,12 +21,13 @@ Design system page: component ServerRow. Shared rules: [README.md](README.md).
 
 ## Behavior
 
-- The Servers section is at the top of the sidebar. Only this Mac shows
-  (O11, #149). Its meta is "local".
+- The Servers section is at the top of the sidebar. Only this Mac shows,
+  under the heading "Servers" (O11 settled, D132; remote servers wait for
+  #149). Its meta is "local".
 - The row of this Mac also shows its CPU and memory use (D126). They sit in
-  the meta, in `ink-38`, and use no new color.
+  the meta, in `ink-38`, and use no new color: "local · 12% CPU · 48% MEM".
 - Click selects the machine; the projects under it are its projects.
-- `+` in the head is hidden until #149.
+- `+` in the head is hidden until #149 (D132).
 
 ## Data
 
