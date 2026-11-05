@@ -67,7 +67,7 @@ Design system page: component Window. Shared rules: [README.md](README.md).
 
 ## Build in MyGo
 
-- Window: set `Vibrancy` to `VibrancyGlassClear` (clear glass, barely frosted) so macOS draws the real backdrop blur, and call `SetActiveAppearance(true)` so the glass stays clear when the window is not the key window (D153). Also set `Transparent: true`: in an opaque window the glass shows only the window's own grey background, not the desktop (D158). The CSS glows only stand in for the desktop behind the window. Do not paint glows in the app.
+- Window: set `Vibrancy` to `VibrancyGlass` (regular glass, frosted: text in windows behind is not readable) so macOS draws the real backdrop blur, and call `SetActiveAppearance(true)` so the glass keeps its look when the window is not the key window (D153, D159). Also set `Transparent: true`: in an opaque window the glass shows only the window's own grey background, not the desktop (D158). The CSS glows only stand in for the desktop behind the window. Do not paint glows in the app.
 - Hide the system title bar and draw the title bar in the view (see TitleBar). Keep the system traffic lights.
 - Body: a row with `ui.Split` between the panels, so the owner can drag the sidebar and files widths. Store the widths with `internal/widths`.
 - Use `Material(...)` (glass plugin, `docs/plugins/glass.md`) only where MyGo needs a material for a floating part, not for each panel.
