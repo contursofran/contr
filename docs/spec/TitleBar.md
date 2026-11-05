@@ -18,7 +18,9 @@ Height `titlebar-height` (46px), gap `space-8`, right padding `space-14`. Items 
 
 ## States
 
-- The tabs follow the selected agent row in the sidebar.
+- The tabs follow the selected agent row in the sidebar: the agent's own
+  tab first, then the plain terminals of its project (D131). Selecting a
+  plain terminal keeps the last agent.
 - DiffSummary hides when the project has no changes.
 - Hide files is pressed (`aria-pressed`) while the files panel shows.
 
@@ -40,6 +42,8 @@ Height `titlebar-height` (46px), gap `space-8`, right padding `space-14`. Items 
 ## Keys and focus
 
 - `⌘T` new tab, `⌘W` close tab (plain terminals only, D85), `⌘F` search, `⌘⇧E` files.
+  `⌘T` and `⌘W` are the File menu items, which hold the key (D131); `⌘⇧E`
+  is `c.Shortcut`.
 - The tooltips show each key.
 
 ## Edge cases
@@ -60,7 +64,7 @@ Height `titlebar-height` (46px), gap `space-8`, right padding `space-14`. Items 
 - Draw the bar in the view; mark the empty parts as the window drag area so the window moves and a double-click zooms.
 - Tabs: `TabsBase` (keeps arrow keys, focus and the automation hooks).
 - Buttons: IconButton (`ButtonBase`).
-- Shortcuts: `c.Shortcut(...)` for new tab (⌘T), close tab (⌘W), search (⌘F), files (⌘⇧E). Show them in the tooltips.
+- Shortcuts: new tab (⌘T) and close tab (⌘W) are File menu items; search (⌘F) and files (⌘⇧E) are `c.Shortcut(...)`. Show them in the tooltips.
 
 ## Do and do not
 

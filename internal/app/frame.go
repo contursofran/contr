@@ -195,9 +195,10 @@ type Frame struct {
 	status statusBar
 	bar    titleBar
 	// agentSnap gives the agents; nil before Attach or without agents. openProject is the
-	// project the title bar shows (D50).
+	// project the title bar shows, and tabAgent the address of the agent whose tabs show.
 	agentSnap   func() agentstate.Snapshot
 	openProject string
+	tabAgent    string
 	sidebarOpen bool
 	panelOpen   bool
 	reviewOpen  bool
@@ -661,10 +662,10 @@ func (f *Frame) panel(c *ui.Context) {
 }
 
 // titleBar draws the 46px row at the top of the glass: a drag area that keeps
-// the room of the system traffic lights. The tabs start above the terminal
-// panel. The v0.2 tabs, Review and "+" come as they are, and the files toggle
-// is at the right edge (docs/spec/TitleBar.md). sidebarW is the drawn width of
-// the sidebar; narrow tells that the files panel is hidden by the window width.
+// the room of the system traffic lights, with the sidebar toggle in it. The tabs
+// start above the terminal panel; the diff summary and the files toggle are at
+// the right edge (docs/spec/TitleBar.md). sidebarW is the drawn width of the
+// sidebar; narrow tells that the files panel is hidden by the window width.
 func (f *Frame) titleBar(c *ui.Context, sidebarW float32, narrow bool) {
 	ui.Row(c).Label(LabelTitleBar).FillWidth().Height(theme.TitleBarHeight).Shrink(0).AlignItems(ui.Center).
 		PaddingEnd(theme.TitleBarPadEnd).DragWindow().Children(func() {
@@ -679,14 +680,13 @@ func (f *Frame) titleBar(c *ui.Context, sidebarW float32, narrow bool) {
 			ui.Box(c).Width(theme.TrafficLightInset).Shrink(0)
 			toggleButton(c, LabelSidebarReopen, false, f.ToggleSidebar)
 		}
-		f.bar.setTabs(f.agentTabs())
-		f.bar.selectTab = f.selectTab
-		f.bar.toggleReview, f.bar.reviewOpen = f.ToggleReview, f.reviewOpen
-		f.bar.collapsed = f.PROpen()
+		f.bar.setTabs(f.titleTabs())
+		f.bar.selectTab, f.bar.closeTab = f.selectTab, f.closeTab
 		f.bar.newTab = nil
 		if f.NewTerm != nil {
 			f.bar.newTab = f.newTerminal
 		}
+		f.bar.toggleReview, f.bar.reviewOpen = f.ToggleReview, f.reviewOpen
 		f.bar.build(c, f.panelOpen && !narrow, narrow, f.TogglePanel)
 	})
 }
@@ -716,9 +716,10 @@ func (f *Frame) terminal(c *ui.Context) {
 	})
 }
 
-// agentTabs returns the tabs of the open project. The open project follows the selected
-// orchestrator, worker or plain terminal, and keeps its last value for any other selection.
-func (f *Frame) agentTabs() []AgentTab {
+// titleTabs returns the tabs of the selected agent. The open project follows the selected
+// orchestrator, worker or plain terminal, and keeps its last value for any other selection; the
+// agent keeps its last value while a plain terminal or a worktree is selected.
+func (f *Frame) titleTabs() []Tab {
 	if f.agentSnap == nil {
 		return nil
 	}
@@ -729,11 +730,12 @@ func (f *Frame) agentTabs() []AgentTab {
 		sel, ok = f.Selection.Current()
 	}
 	f.openProject = OpenProject(snap, sel, ok, f.openProject)
+	f.tabAgent = TabAgent(snap, sel, ok, f.openProject, f.tabAgent)
 	selected := ""
 	if ok && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker || sel.Kind == state.KindTerminal) {
 		selected = sel.ID
 	}
-	return AgentTabs(snap, f.openProject, selected)
+	return TitleTabs(snap, f.openProject, f.tabAgent, selected)
 }
 
 // newTerminal opens a plain terminal in the open project (D82). Its folder is
@@ -766,7 +768,7 @@ func (f *Frame) terminalClosed(addr string) {
 	if !ok || sel.Kind != state.KindTerminal || sel.ID != addr {
 		return
 	}
-	for _, t := range f.agentTabs() {
+	for _, t := range f.titleTabs() {
 		if t.Address != addr {
 			f.selectTab(t)
 			return
@@ -792,11 +794,13 @@ func (f *Frame) terminalDir(project string) string {
 	return home
 }
 
-// selectTab selects the terminal of a title bar tab.
-func (f *Frame) selectTab(t AgentTab) {
+// selectTab selects the terminal of a title bar tab. A tab shows its terminal, so it closes the
+// Review view.
+func (f *Frame) selectTab(t Tab) {
 	if f.Selection == nil {
 		return
 	}
+	f.reviewOpen = false
 	kind := state.KindWorker
 	switch {
 	case t.Orchestrator:
@@ -805,6 +809,13 @@ func (f *Frame) selectTab(t AgentTab) {
 		kind = state.KindTerminal
 	}
 	f.Selection.Select(state.Selected{Kind: kind, ID: t.Address})
+}
+
+// closeTab closes a plain terminal tab (D85). An agent tab has no close button.
+func (f *Frame) closeTab(t Tab) {
+	if f.CloseTerm != nil && t.Closable() {
+		f.CloseTerm.Start(t.Address)
+	}
 }
 
 // toggleButton draws the sidebar toggle: a small outline with one filled

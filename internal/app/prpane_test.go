@@ -10,7 +10,6 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/github"
 )
@@ -221,32 +220,6 @@ func TestPRTextHelpers(t *testing.T) {
 		t.Error(got)
 	}
 	if got := StateText(github.PR{State: "OPEN", ReviewDecision: "CHANGES_REQUESTED"}); got != "open" {
-		t.Error(got)
-	}
-}
-
-func TestTabsCollapseWhilePRIsOpen(t *testing.T) {
-	tabs := tabsOf()
-	for i := range tabs {
-		tabs[i].ID = []string{"lead", "#5", "b2"}[i]
-	}
-	b := newBar(t, tabs, true)
-	b.tt.Frame()
-	if !slices.Contains(b.tt.Texts(), "#5 · fix-x") {
-		t.Fatalf("expanded tab text missing: %q", b.tt.Texts())
-	}
-	b.bar.collapsed = true
-	b.tt.Frame()
-	if slices.Contains(b.tt.Texts(), "#5 · fix-x") || !slices.Contains(b.tt.Texts(), "#5") || !slices.Contains(b.tt.Texts(), orchestratorMark+"lead") {
-		t.Errorf("collapsed texts %q", b.tt.Texts())
-	}
-}
-
-func TestTabIDIsTheIssueOrTheName(t *testing.T) {
-	if got := tabID(agents.Worker{Name: "b-1", Issue: "151", Role: "builder"}); got != "#151" {
-		t.Error(got)
-	}
-	if got := tabID(agents.Worker{Name: "b-1"}); got != "b-1" {
 		t.Error(got)
 	}
 }
