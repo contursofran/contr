@@ -52,6 +52,8 @@ type titleBar struct {
 	moveTab func(from, to string)
 	// newTab opens a plain terminal. Nil: the bar has no "+" button.
 	newTab func()
+	// search opens the find bar over the terminal. Nil: the bar has no Search button.
+	search func()
 	// diff is the diff summary and openReview its click. Nil diff: none.
 	diff       *DiffSummary
 	openReview func()
@@ -85,7 +87,7 @@ func (b *titleBar) syncChoice() {
 }
 
 // build adds the bar's parts to the title bar row: the tabs, "+", the drag stretch, the diff
-// summary and the files toggle at the right edge. The toggle is pressed while the files show; it
+// summary, Search and the files toggle at the right edge. The toggle is pressed while the files show; it
 // is disabled while the window is too narrow for them.
 func (b *titleBar) build(c *ui.Context, filesOn, filesDisabled bool, toggleFiles func()) {
 	b.tabRow(c)
@@ -96,6 +98,10 @@ func (b *titleBar) build(c *ui.Context, filesOn, filesDisabled bool, toggleFiles
 	ui.Box(c).Label(LabelTitleDrag).Grow(1).MinWidth(0).FillHeight().DragWindow()
 	if b.diff != nil {
 		ui.Row(c).Shrink(0).MarginEnd(theme.Space8).Children(func() { b.diff.View(c, b.openReview) })
+	}
+	if b.search != nil {
+		kit.IconButton(c, kit.IconButtonOpts{Icon: "search", Label: LabelSearch, Key: "⌘F", OnClick: b.search}).
+			MarginEnd(theme.Space8)
 	}
 	kit.IconButton(c, kit.IconButtonOpts{Icon: "sidebar-right", Label: LabelFilesToggle, Key: "⌘⇧E",
 		On: &filesOn, OnClick: toggleFiles, Disabled: filesDisabled})
