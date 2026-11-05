@@ -25,7 +25,13 @@ Design system page: component Terminal. Shared rules: [README.md](README.md).
 - The background is clear over `panel`; the text color is
   `terminal-text`; the ANSI palette is the theme's (README Themes). The
   Light palette is a known light palette tuned for contrast on the light
-  panel (D129).
+  panel (D129). The 16 colors and their contrast ratios are in
+  [tokens.md](tokens.md), ANSI. The plugin draws solid colors, so contr gives
+  it `terminal-text` and `panel` flattened over the ground (D133).
+- The overlay layer (`TerminalOverlay` in `internal/app`) builds nothing
+  while no overlay is set. A layer draws small floating elements placed with
+  `Absolute`; it never covers the grid, so the terminal keeps the pointer and
+  the keys. A layer gets keys only while one of its elements has the focus.
 - Overlays: QuestionsNotch in every terminal of a project with an open
   question, to-do or blocked worker menu (D124); Outline in the orchestrator terminal only.
 
@@ -44,6 +50,9 @@ Design system page: component Terminal. Shared rules: [README.md](README.md).
 - No selection: "select an agent to see its terminal" in `ink-42`.
 - The process ends: a last line in `ink-38`.
 - Theme change: the palette changes without a reconnect.
+- The text sits at the bottom: the first key sizes the terminal to the panel
+  (D91), so the grid fills the padded area. Until then the grid keeps the
+  core's size, at the top left.
 
 ## Accessibility
 
@@ -51,7 +60,7 @@ Design system page: component Terminal. Shared rules: [README.md](README.md).
 
 ## Tokens
 
-`terminal`, `terminal-text`, `ink-42`, `space-18`, `space-26`, `space-10`, `panel`.
+`terminal`, `terminal-text`, `ink-42`, `ink-38`, `ink-95` (cursor), `ansi-*`, `space-18`, `space-26`, `space-10`, `panel`.
 
 ## Build in MyGo
 

@@ -56,6 +56,11 @@ type Palette struct {
 	FocusRing    ui.Color `token:"focus-ring"`
 	Lights       ui.Color `token:"lights"`
 
+	// ANSI is the 16-color palette of programs in the terminal, in ANSIName
+	// order (docs/spec/tokens.md, ANSI). A program draws these colors itself,
+	// so they are not chrome tokens.
+	ANSI [16]ui.Color
+
 	ShadowWindowTop Shadow `token:"shadow-window-top"`
 	ShadowSelected  Shadow `token:"shadow-selected"`
 	ShadowFloat     Shadow `token:"shadow-float"`
@@ -72,6 +77,22 @@ type ShadowLayer struct {
 
 // Shadow is a stack of layers, first on top.
 type Shadow []ShadowLayer
+
+// ANSIName is the token name of each ANSI color: the eight normal colors,
+// then the eight bright ones.
+var ANSIName = [16]string{
+	"ansi-black", "ansi-red", "ansi-green", "ansi-yellow", "ansi-blue", "ansi-magenta", "ansi-cyan", "ansi-white",
+	"ansi-bright-black", "ansi-bright-red", "ansi-bright-green", "ansi-bright-yellow",
+	"ansi-bright-blue", "ansi-bright-magenta", "ansi-bright-cyan", "ansi-bright-white",
+}
+
+// ansi turns 16 0xRRGGBB values into colors.
+func ansi(v [16]uint32) (out [16]ui.Color) {
+	for i, rgb := range v {
+		out[i] = Color(rgb)
+	}
+	return out
+}
 
 func white(a float32) ui.Color { return ui.RGBA(255, 255, 255, a) }
 func black(a float32) ui.Color { return ui.RGBA(0, 0, 0, a) }
@@ -125,6 +146,12 @@ var Dark = &Palette{
 	Claude:       ui.Hex("#d97757"),
 	FocusRing:    white(0.5),
 	Lights:       white(0.14),
+
+	// The palette the v0.2 terminal had (TerminalPalette).
+	ANSI: ansi([16]uint32{
+		0x1E1E1E, 0xE06C6C, 0x8CC07A, 0xE0C070, 0x6CA8E8, 0xC080D8, 0x5CC0C8, 0xD0D0D0,
+		0x5C5C5C, 0xFF8080, 0xA8E090, 0xFFD890, 0x90C4FF, 0xDCA0F0, 0x80DCE4, 0xFFFFFF,
+	}),
 
 	ShadowWindowTop: Shadow{{Inset: true, Y: 1, Color: white(0.05)}},
 	ShadowSelected:  Shadow{{Inset: true, Wide: 1, Color: white(0.06)}},
@@ -184,6 +211,14 @@ var Light = &Palette{
 	Claude:       ui.Hex("#c15f3c"),
 	FocusRing:    black(0.45),
 	Lights:       black(0.14),
+
+	// Ghostty's GitHub Light Default, tuned for the Light panel (D129): the
+	// dim yellow and the white colors are darker, so each of the 16 colors
+	// but black has at least 4.5:1 on the panel.
+	ANSI: ansi([16]uint32{
+		0x24292F, 0xCF222E, 0x116329, 0x7D4E00, 0x0969DA, 0x8250DF, 0x1B7C83, 0x656D76,
+		0x57606A, 0xA40E26, 0x1A7F37, 0x633C01, 0x0550AE, 0x6639BA, 0x0E6B78, 0x424A53,
+	}),
 
 	ShadowWindowTop: Shadow{{Inset: true, Y: 1, Color: white(0.7)}},
 	ShadowSelected:  Shadow{{Inset: true, Wide: 1, Color: black(0.06)}},
