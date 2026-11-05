@@ -455,6 +455,19 @@ func TestEmptyFieldSendsNothing(t *testing.T) {
 	}
 }
 
+// Enter in an empty field sends nothing, even with the field focused.
+func TestEnterInTheFocusedEmptyFieldSendsNothing(t *testing.T) {
+	src := askSource()
+	r := newQRig(t, src)
+	r.open("D2")
+	r.tt.Click(LabelQuestionsField)
+	r.tt.Key(0, ui.KeyEnter)
+	r.tt.Frame()
+	if len(src.answers) != 0 {
+		t.Errorf("answers %v", src.answers)
+	}
+}
+
 func TestQuestionAnsweredElsewhereLeavesTheChips(t *testing.T) {
 	src := askSource()
 	r := newQRig(t, src)
