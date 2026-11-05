@@ -52,26 +52,26 @@ Generated from the design system `tokens.json`. Views use the names; `internal/a
 
 ## ANSI
 
-The 16 colors a program in the terminal asks for (SGR 30-37, 90-97, palette 0-15). The terminal plugin takes the palette of the theme (docs/spec/Terminal.md); a theme change swaps it with no reconnect. Dark is the v0.2 `TerminalPalette`. Light is Ghostty's GitHub Light Default tuned for contrast on the light panel (D129): the dim yellow is a dark ochre, and white and bright white are mid and dark greys, because a light grey would not show on a light panel. Each Light color has at least 4.5:1 on the flattened panel (`panel` over `glass-window` over `ground`: #f1f2f4 in Light, #151618 in Dark); black has 13.8:1. Dark black and bright black are below 4.5:1 on purpose: programs use them as fills and dim text, as in the v0.2 palette.
+The 16 colors a program in the terminal asks for (SGR 30-37, 90-97, palette 0-15). The terminal plugin takes the palette of the theme (docs/spec/Terminal.md); a theme change swaps it with no reconnect. Dark is the v0.2 `TerminalPalette`. Light is Ghostty's GitHub Light Default tuned for contrast on the light panel (D129): the dim yellow is a dark ochre, and white and bright white are mid and dark greys, because a light grey would not show on a light panel. Each Light color has at least 4.5:1 on the flattened panel (`panel` over `glass-window` over `ground`: #f1f2f5 in Light, #161718 in Dark); black has 13.8:1. Dark black and bright black are below 4.5:1 on purpose: programs use them as fills and dim text, as in the v0.2 palette.
 
 | Token | Dark | Light | Contrast on panel |
 |---|---|---|---|
 | `ansi-black` | `#1e1e1e` | `#24292f` | Dark 1.1:1, Light 13.1:1 on panel. |
 | `ansi-red` | `#e06c6c` | `#cf222e` | Dark 5.6:1, Light 4.8:1 on panel. |
-| `ansi-green` | `#8cc07a` | `#116329` | Dark 8.6:1, Light 6.6:1 on panel. |
-| `ansi-yellow` | `#e0c070` | `#7d4e00` | Dark 10.3:1, Light 6.3:1 on panel. |
-| `ansi-blue` | `#6ca8e8` | `#0969da` | Dark 7.3:1, Light 4.6:1 on panel. |
+| `ansi-green` | `#8cc07a` | `#116329` | Dark 8.5:1, Light 6.6:1 on panel. |
+| `ansi-yellow` | `#e0c070` | `#7d4e00` | Dark 10.2:1, Light 6.3:1 on panel. |
+| `ansi-blue` | `#6ca8e8` | `#0969da` | Dark 7.2:1, Light 4.6:1 on panel. |
 | `ansi-magenta` | `#c080d8` | `#8250df` | Dark 6.3:1, Light 4.5:1 on panel. |
-| `ansi-cyan` | `#5cc0c8` | `#1a7980` | Dark 8.5:1, Light 4.6:1 on panel. |
-| `ansi-white` | `#d0d0d0` | `#656d76` | Dark 11.8:1, Light 4.7:1 on panel. |
+| `ansi-cyan` | `#5cc0c8` | `#1a7980` | Dark 8.4:1, Light 4.6:1 on panel. |
+| `ansi-white` | `#d0d0d0` | `#656d76` | Dark 11.6:1, Light 4.7:1 on panel. |
 | `ansi-bright-black` | `#5c5c5c` | `#57606a` | Dark 2.7:1, Light 5.7:1 on panel. |
-| `ansi-bright-red` | `#ff8080` | `#a40e26` | Dark 7.5:1, Light 7.0:1 on panel. |
-| `ansi-bright-green` | `#a8e090` | `#1a7f37` | Dark 11.9:1, Light 4.5:1 on panel. |
-| `ansi-bright-yellow` | `#ffd890` | `#633c01` | Dark 13.4:1, Light 8.6:1 on panel. |
-| `ansi-bright-blue` | `#90c4ff` | `#0550ae` | Dark 10.0:1, Light 6.8:1 on panel. |
-| `ansi-bright-magenta` | `#dca0f0` | `#6639ba` | Dark 8.9:1, Light 6.6:1 on panel. |
-| `ansi-bright-cyan` | `#80dce4` | `#0e6b78` | Dark 11.5:1, Light 5.5:1 on panel. |
-| `ansi-bright-white` | `#ffffff` | `#424a53` | Dark 18.1:1, Light 8.0:1 on panel. |
+| `ansi-bright-red` | `#ff8080` | `#a40e26` | Dark 7.4:1, Light 7.0:1 on panel. |
+| `ansi-bright-green` | `#a8e090` | `#1a7f37` | Dark 11.7:1, Light 4.5:1 on panel. |
+| `ansi-bright-yellow` | `#ffd890` | `#633c01` | Dark 13.2:1, Light 8.6:1 on panel. |
+| `ansi-bright-blue` | `#90c4ff` | `#0550ae` | Dark 9.9:1, Light 6.8:1 on panel. |
+| `ansi-bright-magenta` | `#dca0f0` | `#6639ba` | Dark 8.8:1, Light 6.6:1 on panel. |
+| `ansi-bright-cyan` | `#80dce4` | `#0e6b78` | Dark 11.3:1, Light 5.5:1 on panel. |
+| `ansi-bright-white` | `#ffffff` | `#424a53` | Dark 18.0:1, Light 8.0:1 on panel. |
 
 ## Type
 
