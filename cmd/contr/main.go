@@ -101,8 +101,8 @@ func registerFonts(files fs.FS, register func([]byte, string) error) {
 
 // windowOptions are the options of the frame window, or of the legend when
 // icons is set. TitleBarHidden keeps the system controls over the 46px title bar the
-// view draws; the controls are centered in it. VibrancyGlass makes macOS draw the glass
-// behind the view (docs/spec/Window.md).
+// view draws; the controls are centered in it. VibrancyGlassClear makes macOS draw the clear
+// glass, barely frosted, behind the view (docs/spec/Window.md, D153).
 func windowOptions(icons bool) mygo.WindowOptions {
 	opts := mygo.WindowOptions{
 		Title:         "contr",
@@ -114,13 +114,25 @@ func windowOptions(icons bool) mygo.WindowOptions {
 	}
 	if !icons {
 		opts.TrafficLightPosition = &mygo.Point{X: 14, Y: (theme.TitleBarHeight - 12) / 2}
-		opts.Vibrancy = mygo.VibrancyGlass
+		opts.Vibrancy = mygo.VibrancyGlassClear
 	}
 	if icons {
 		opts.Width, opts.Height = legendWidth, legendHeight
 		opts.MinWidth, opts.MinHeight = 0, 0
 	}
 	return opts
+}
+
+// activeAppearer is the part of a window that keeps its active look.
+type activeAppearer interface{ SetActiveAppearance(bool) }
+
+// keepGlassActive keeps the glass clear when the window is not the key window
+// (D153). Without glass, as in e2e builds (D150), there is nothing to keep.
+func keepGlassActive(w activeAppearer, opts mygo.WindowOptions) {
+	if opts.Vibrancy == mygo.VibrancyNone || opts.Vibrancy == "" {
+		return
+	}
+	w.SetActiveAppearance(true)
 }
 
 // openWindow opens the frame, or the legend with icons, and runs until the
@@ -214,6 +226,7 @@ func openWindow(icons bool) int {
 			frame.StartTheme()
 		}
 		win := mygo.NewWindow(opts)
+		keepGlassActive(win, opts)
 		backgroundShow(win)
 		if frame != nil {
 			stop := frame.Attach(win)

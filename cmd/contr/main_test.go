@@ -357,8 +357,8 @@ func TestTitlebarHidesTheSystemTitleBar(t *testing.T) {
 
 func TestFrameWindowIsGlassWithCenteredTrafficLights(t *testing.T) {
 	f := windowOptions(false)
-	if f.Vibrancy != mygo.VibrancyGlass {
-		t.Errorf("vibrancy %q, want glass", f.Vibrancy)
+	if f.Vibrancy != mygo.VibrancyGlassClear {
+		t.Errorf("vibrancy %q, want clear glass", f.Vibrancy)
 	}
 	// The close button is 12px high: it centers in the 46px title bar.
 	if f.TrafficLightPosition == nil || f.TrafficLightPosition.Y != (theme.TitleBarHeight-12)/2 {
@@ -366,6 +366,29 @@ func TestFrameWindowIsGlassWithCenteredTrafficLights(t *testing.T) {
 	}
 	if l := windowOptions(true); l.Vibrancy != "" || l.TrafficLightPosition != nil {
 		t.Errorf("the legend window has glass or moved controls: %+v", l)
+	}
+}
+
+type fakeActive struct{ calls []bool }
+
+func (f *fakeActive) SetActiveAppearance(v bool) { f.calls = append(f.calls, v) }
+
+func TestGlassStaysActiveWhenTheWindowIsNotKey(t *testing.T) {
+	w := &fakeActive{}
+	keepGlassActive(w, windowOptions(false))
+	if len(w.calls) != 1 || !w.calls[0] {
+		t.Errorf("calls %v, want one SetActiveAppearance(true)", w.calls)
+	}
+}
+
+func TestNoGlassKeepsNoActiveAppearance(t *testing.T) {
+	w := &fakeActive{}
+	opts := windowOptions(false)
+	opts.Vibrancy = mygo.VibrancyNone // as in e2e builds (D150)
+	keepGlassActive(w, opts)
+	keepGlassActive(w, windowOptions(true)) // the legend has no glass
+	if len(w.calls) != 0 {
+		t.Errorf("calls %v, want none", w.calls)
 	}
 }
 
