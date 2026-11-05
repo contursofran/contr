@@ -9,16 +9,25 @@ import "github.com/contursofran/contr/internal/app/theme"
 // narrow.
 func narrowWindow(win float32) bool { return win > 0 && win < theme.FilesHideBelow }
 
+// compactSidebar tells that a window of width win is too narrow for the
+// sidebar text: the sidebar is an icon column (D128). An unknown width (0) is
+// not narrow.
+func compactSidebar(win float32) bool { return win > 0 && win < theme.SidebarIconsBelow }
+
 // fitWidths returns the widths to draw for a window of width win, and whether
 // the files panel shows. sidebar and files are the widths the owner set; they
 // stay as they are, and only the drawn widths give way so that the terminal
 // keeps TerminalMinWidth: the files panel first, down to its minimum, then
-// the sidebar down to its own. A closed sidebar draws nothing; its width is
-// returned as it is. An unknown window width (0) changes nothing.
+// the sidebar down to its own. In a window under SidebarIconsBelow an open
+// sidebar is drawn SidebarIconWidth wide (the files panel is hidden there).
+// A closed sidebar draws nothing; its width is returned as it is. An unknown window width (0) changes nothing.
 func fitWidths(win, sidebar, files float32, sidebarOpen, filesOpen bool) (s, f float32, showFiles bool) {
 	showFiles = filesOpen && !narrowWindow(win)
 	if win <= 0 {
 		return sidebar, files, showFiles
+	}
+	if sidebarOpen && compactSidebar(win) {
+		return theme.SidebarIconWidth, files, false
 	}
 	gaps := float32(2 * theme.PanelGap)
 	room := win - gaps - theme.TerminalMinWidth // what the sidebar and files share

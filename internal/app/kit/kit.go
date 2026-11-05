@@ -49,6 +49,10 @@ type RowOpts struct {
 	Expanded *bool
 	// Trail draws a trailing part, such as an icon button, after the meta.
 	Trail func()
+	// Compact makes a flat row show Lead only, centered, with Tip as its
+	// tooltip (D128). The name, the meta and Trail are not drawn.
+	Compact bool
+	Tip     string
 }
 
 // HeightOf is the height Row gives to a row with these options.

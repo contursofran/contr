@@ -47,6 +47,19 @@ func flatRow(c *ui.Context, o RowOpts) {
 	if o.OnClick != nil {
 		row = row.OnClick(o.OnClick)
 	}
+	if o.Compact {
+		// An icon column: the icon alone, centered, named by the tooltip and the label.
+		row = row.PaddingX(0).Center()
+		if o.Tip != "" {
+			row = row.Tooltip(o.Tip)
+		}
+		row.Children(func() {
+			if o.Lead != nil {
+				o.Lead()
+			}
+		})
+		return
+	}
 	row.Children(func() {
 		if o.Lead != nil {
 			o.Lead()

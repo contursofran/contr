@@ -29,7 +29,7 @@ Design system page: component Window. Shared rules: [README.md](README.md).
 - The files toggle (`⌘⇧E`, the title bar button) hides and shows the files
   panel. A hidden panel keeps its width.
 - Narrow window (D128): below about 1100px the files panel hides. Below
-  about 800px the sidebar collapses to icons. The terminal keeps its
+  about 800px the sidebar collapses to an icon column, 56px wide (D141). The terminal keeps its
   minimum width: above 1100px the files panel gives way first, down to
   220, then the sidebar, down to 200. The stored widths do not change.
 
@@ -48,7 +48,9 @@ Design system page: component Window. Shared rules: [README.md](README.md).
 - Window below about 1100px: the files panel hides, and `⌘⇧E` does not show
   it. It returns when the window grows, unless the owner hid it.
 - Window below about 800px: the sidebar shows icons only (project and agent
-  glyphs, no text); the tooltips keep the names.
+  glyphs, no text); the tooltips keep the names. The rows keep their click,
+  context menu and label. A divider drag there does not change the stored
+  width (D141).
 - Reduce Transparency and Increase Contrast: ignored for now (O13, D138); the glass and inks stay the same.
 
 ## Accessibility
