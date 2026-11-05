@@ -1,8 +1,8 @@
 package app
 
 // The sidebar head part (docs/spec/ServerRow.md, docs/spec/ProjectRow.md):
-// the Servers section with the This Mac row, then the Projects head and one
-// row for each project, with its agents, in one ui.List of kit.Row. The model is in spaces.go.
+// the Projects head and one row for each project, with its agents, in one
+// ui.List of kit.Row, then the Servers section with the This Mac row (D154). The model is in spaces.go.
 
 import (
 	"github.com/egoist/mygo/ui"
@@ -79,19 +79,21 @@ func (l *SpacesList) View(c *ui.Context) {
 		}
 		if l.compact {
 			// An icon column (D128): no section names or problem line; the
-			// project buttons stay, one above the other.
-			l.serverRow(c)
+			// project buttons stay, one above the other. Same order (D154).
 			ui.Column(c).FillWidth().Shrink(0).AlignItems(ui.Center).Gap(theme.Space2).
 				Padding(theme.Space6, 0, theme.Space6, 0).Children(buttons)
 			l.projectList(c)
+			l.serverRow(c)
 			l.settingsFoot(c)
 			return
 		}
+		// Projects take the free height and scroll; Servers and Settings stay
+		// at the bottom (D154).
+		l.head(c, LabelProjectsHead, buttons)
+		l.projectList(c)
 		l.head(c, LabelServersHead, nil)
 		l.serverRow(c)
 		l.coreLine(c)
-		l.head(c, LabelProjectsHead, buttons)
-		l.projectList(c)
 		l.settingsFoot(c)
 	})
 }
