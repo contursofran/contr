@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -10,16 +11,15 @@ import (
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
-	"github.com/contursofran/contr/internal/owner"
 )
 
-// tabsOf is the tabs of project p: orchestrator "lead" (selected), workers b1 (working, issue
-// #5 in worktree .../fix-x) and b2 (blocked, no issue).
-func tabsOf() []AgentTab {
-	return []AgentTab{
-		{Address: "o", Label: "lead", Orchestrator: true, Icon: workerIcon(agents.Worker{Status: "idle", Live: true}), Selected: true},
-		{Address: "w1", Label: "#5 · fix-x", Icon: workerIcon(agents.Worker{Status: "working", Live: true})},
-		{Address: "w2", Label: "b2", Icon: workerIcon(agents.Worker{Status: "blocked", Live: true})},
+// tabsOf is the tabs of project p: the orchestrator "lead" (selected), a plain terminal with a
+// title and a plain terminal with none.
+func tabsOf() []Tab {
+	return []Tab{
+		{Address: "o", Title: "lead", Orchestrator: true, Selected: true},
+		{Address: "t1", Title: "go test ./...", Plain: true},
+		{Address: "t2", Title: "$ repo", Plain: true},
 	}
 }
 
@@ -27,18 +27,22 @@ func tabsOf() []AgentTab {
 type barTest struct {
 	bar       *titleBar
 	tt        *ui.Tester
-	picked    []AgentTab
+	picked    []Tab
+	closed    []Tab
+	news      int
 	panelOpen bool
 	toggles   int
 }
 
-func newBar(t *testing.T, tabs []AgentTab, panelOpen bool) *barTest {
+func newBar(t *testing.T, tabs []Tab, panelOpen bool) *barTest {
 	t.Helper()
 	b := &barTest{bar: &titleBar{}, panelOpen: panelOpen}
-	b.bar.selectTab = func(tab AgentTab) { b.picked = append(b.picked, tab) }
+	b.bar.selectTab = func(tab Tab) { b.picked = append(b.picked, tab) }
+	b.bar.closeTab = func(tab Tab) { b.closed = append(b.closed, tab) }
+	b.bar.newTab = func() { b.news++ }
 	b.bar.setTabs(tabs)
 	b.tt = ui.NewTester(func(c *ui.Context) {
-		ui.Row(c).Label(LabelTitleBar).Fill().AlignItems(ui.Stretch).Background(theme.Current().Ground).
+		ui.Row(c).Label(LabelTitleBar).Fill().AlignItems(ui.Center).Background(theme.Current().Ground).
 			PaddingEnd(theme.TitleBarPadEnd).Children(func() {
 			b.bar.build(c, b.panelOpen, false, func() { b.toggles++ })
 		})
@@ -60,104 +64,146 @@ func (b *barTest) rect(t *testing.T, label string) ui.Rect {
 	return box(t, b.tt, label)
 }
 
-func inside(outer, inner ui.Rect) bool {
-	return inner.X >= outer.X && inner.Y >= outer.Y &&
-		inner.X+inner.W <= outer.X+outer.W && inner.Y+inner.H <= outer.Y+outer.H
-}
-
-func TestTabsShowOrchestratorFirstWithItsMark(t *testing.T) {
+func TestTabsShowTheirTitlesAndGlyphs(t *testing.T) {
 	b := newBar(t, tabsOf(), true)
-	lead := b.rect(t, "orchestrator lead, idle")
-	w1 := b.rect(t, "#5 · fix-x, working")
-	if lead.X >= w1.X {
-		t.Errorf("orchestrator tab %+v is not left of the worker tab %+v", lead, w1)
+	lead, t1 := b.rect(t, "lead"), b.rect(t, "go test ./...")
+	if lead.X >= t1.X {
+		t.Errorf("agent tab %+v is not left of the plain tab %+v", lead, t1)
 	}
-	if !b.tt.HasText(orchestratorMark + "lead") {
-		t.Errorf("no mark before the orchestrator name; texts %q", b.tt.Texts())
+	if lead.H != theme.SizeRowHeight {
+		t.Errorf("tab is %v high, want %d", lead.H, theme.SizeRowHeight)
 	}
-	if b.tt.HasText(orchestratorMark + "b2") {
-		t.Error("a worker shows the mark")
+	for _, text := range []string{"lead", "go test ./...", "$ repo"} {
+		if !b.tt.HasText(text) {
+			t.Errorf("no text %q; texts %q", text, b.tt.Texts())
+		}
 	}
-}
-
-func TestOnlyTheSelectedTabIsUnderlined(t *testing.T) {
-	b := newBar(t, tabsOf(), true)
-	lead := b.rect(t, "orchestrator lead, idle")
-	underline := b.rect(t, LabelTabActive)
-	if underline.H != theme.TabUnderline || underline.Y+underline.H != lead.Y+lead.H || !inside(lead, underline) {
-		t.Errorf("underline %+v, want %d high at the bottom of the selected tab %+v", underline, theme.TabUnderline, lead)
-	}
-	tabs := tabsOf()
-	tabs[0].Selected, tabs[2].Selected = false, true
-	b2 := newBar(t, tabs, true)
-	if got, want := b2.rect(t, LabelTabActive), b2.rect(t, "b2, blocked"); !inside(want, got) {
-		t.Errorf("underline %+v is not under the b2 tab %+v", got, want)
+	// The orchestrator shows the Claude glyph, which says its state.
+	if !b.has("idle") {
+		t.Error("the orchestrator tab has no status glyph")
 	}
 }
 
-func TestClickingATabSelectsItsAgent(t *testing.T) {
+func TestAWorkerTabGlyphSaysItsState(t *testing.T) {
+	tabs := []Tab{{Address: "w", Title: "#5 · fix-x", State: tabState(agents.Worker{Status: "blocked", Live: true}), Selected: true}}
+	b := newBar(t, tabs, true)
+	if !b.has("needs you") {
+		t.Errorf("a blocked agent shows no needs-you glyph; texts %q", b.tt.Texts())
+	}
+}
+
+func TestClickingATabSelectsIt(t *testing.T) {
 	b := newBar(t, tabsOf(), true)
-	b.click(t, "b2, blocked")
-	if len(b.picked) != 1 || b.picked[0].Address != "w2" || b.picked[0].Orchestrator {
-		t.Errorf("picked %+v, want the w2 worker tab", b.picked)
+	b.click(t, "go test ./...")
+	if len(b.picked) != 1 || b.picked[0].Address != "t1" || !b.picked[0].Plain {
+		t.Errorf("picked %+v, want the t1 plain tab", b.picked)
 	}
 }
 
 func TestClickingTheSelectedTabDoesNothing(t *testing.T) {
 	b := newBar(t, tabsOf(), true)
-	b.click(t, "orchestrator lead, idle")
+	b.click(t, "lead")
 	if len(b.picked) != 0 {
 		t.Errorf("picked %+v", b.picked)
 	}
 }
 
-func TestNeedsBadgeShowsTheCountAndHidesAtZero(t *testing.T) {
-	tabs := tabsOf()
-	tabs[0].Needs = 3
-	b := newBar(t, tabs, true)
-	lead := b.rect(t, "orchestrator lead, idle")
-	if badge := b.rect(t, LabelNeedsBadge(3)); !inside(lead, badge) || !b.tt.HasText("3") {
-		t.Errorf("badge %+v is not in the orchestrator tab %+v; texts %q", badge, lead, b.tt.Texts())
+func TestOnlyTheSelectedPlainTabHasACloseButton(t *testing.T) {
+	// The selected agent tab: no close button (D85).
+	if b := newBar(t, tabsOf(), true); b.has(LabelCloseTab) {
+		t.Error("an agent tab has a close button")
 	}
-	if b0 := newBar(t, tabsOf(), true); b0.has(LabelNeedsBadge(0)) || b0.tt.HasText("0") {
-		t.Error("the badge shows at 0")
+	// A selected plain tab: one close button; it closes that tab and selects nothing.
+	tabs := tabsOf()
+	tabs[0].Selected, tabs[1].Selected = false, true
+	b := newBar(t, tabs, true)
+	t1 := b.rect(t, "go test ./...")
+	if closeBtn := b.rect(t, LabelCloseTab); !inside(t1, closeBtn) || closeBtn.W != 16 || closeBtn.H != 16 {
+		t.Errorf("close button %+v is not a 16px box in the selected tab %+v", closeBtn, t1)
+	}
+	b.click(t, LabelCloseTab)
+	if len(b.closed) != 1 || b.closed[0].Address != "t1" || len(b.picked) != 0 {
+		t.Errorf("closed %+v, picked %+v; want t1 closed and nothing picked", b.closed, b.picked)
 	}
 }
 
-func TestNoAgentsShowsOnlyReviewAndPanelToggle(t *testing.T) {
+func TestNewTabButtonFollowsTheTabsAndStaysWithNoTabs(t *testing.T) {
+	b := newBar(t, tabsOf(), true)
+	row, plus := b.rect(t, LabelTabs), b.rect(t, LabelNewTab)
+	if plus.X < row.X+row.W-0.5 || plus.W != theme.SizeIconButton {
+		t.Errorf("the + button %+v is not right after the tabs %+v", plus, row)
+	}
+	b.click(t, LabelNewTab)
+	if b.news != 1 {
+		t.Errorf("+ ran newTab %d times", b.news)
+	}
+	if e := newBar(t, nil, true); !e.has(LabelNewTab) {
+		t.Error("the + button hides with no tabs")
+	}
+	none := newBar(t, nil, true)
+	none.bar.newTab = nil
+	none.tt.Frame()
+	if none.has(LabelNewTab) {
+		t.Error("the + button shows with no newTab action")
+	}
+}
+
+func TestTheBarHasNoSplitNorSearchNorPRButton(t *testing.T) {
+	b := newBar(t, tabsOf(), true)
+	for _, label := range []string{"Split", "Search", "Pull request"} {
+		if b.has(label) {
+			t.Errorf("the bar has a %q button", label)
+		}
+	}
+}
+
+func TestNoTabsShowsOnlyPlusAndTheFilesToggle(t *testing.T) {
 	b := newBar(t, nil, true)
 	if b.has(LabelTabs) && b.rect(t, LabelTabs).W != 0 {
 		t.Errorf("the tabs row has width %v", b.rect(t, LabelTabs).W)
 	}
-	if !b.has(LabelFilesToggle) || !b.has(LabelTitleDrag) {
-		t.Error("the panel toggle and the drag stretch should show")
+	if !b.has(LabelFilesToggle) || !b.has(LabelTitleDrag) || !b.has(LabelNewTab) {
+		t.Errorf("a part is missing; texts %q", b.tt.Texts())
 	}
-	b.bar.toggleReview = func() {}
+}
+
+func TestTheReviewButtonTogglesTheReviewView(t *testing.T) {
+	b := newBar(t, tabsOf(), true)
+	reviews := 0
+	b.bar.toggleReview = func() { reviews++ }
 	b.tt.Frame()
-	if !b.has(LabelReviewToggle) {
-		t.Error("the Review button should show")
+	b.click(t, LabelReviewToggle)
+	if reviews != 1 {
+		t.Errorf("the Review button ran %d times, want 1", reviews)
 	}
 }
 
 func TestPanelToggleEmitsTogglePanel(t *testing.T) {
-	b := newBar(t, tabsOf(), true)
+	b := newBar(t, nil, true)
 	b.click(t, LabelFilesToggle)
-	if b.toggles != 1 || len(b.picked) != 0 {
-		t.Errorf("toggles %d, picked %v; want one toggle and no selection", b.toggles, b.picked)
+	if b.toggles != 1 {
+		t.Errorf("toggles = %d, want 1", b.toggles)
 	}
 }
 
 func TestSetTabsNotifiesOnlyWhenTheTabsChange(t *testing.T) {
-	b := &titleBar{}
-	if !b.setTabs(tabsOf()) {
-		t.Error("new tabs should change the bar")
+	var bar titleBar
+	if !bar.setTabs(tabsOf()) {
+		t.Error("new tabs did not report a change")
 	}
-	if b.setTabs(tabsOf()) {
-		t.Error("equal tabs should not change the bar")
+	if bar.setTabs(tabsOf()) {
+		t.Error("equal tabs reported a change")
 	}
-	if !b.setTabs(nil) {
-		t.Error("no tabs should change the bar")
+	changed := tabsOf()
+	changed[1].Title = "vim"
+	if !bar.setTabs(changed) {
+		t.Error("a changed title did not report a change")
 	}
+}
+
+func inside(outer, inner ui.Rect) bool {
+	return inner.X >= outer.X && inner.Y >= outer.Y &&
+		inner.X+inner.W <= outer.X+outer.W && inner.Y+inner.H <= outer.Y+outer.H
 }
 
 func TestFilesToggleIsPressedWhileTheFilesShow(t *testing.T) {
@@ -182,9 +228,8 @@ func TestFilesToggleIsPressedWhileTheFilesShow(t *testing.T) {
 	}
 }
 
-// The Rust bar held its own panel state and redrew only when the value changed. In the Go
-// frame the state is the frame's and MyGo builds the view for each frame, so this checks that
-// the toggle follows the state and keeps its place.
+// The state of the toggle is the frame's, and MyGo builds the view for each frame, so this
+// checks that the toggle follows the state and keeps its place.
 func TestThePanelToggleFollowsTheFrameAndKeepsItsPlace(t *testing.T) {
 	f, tt := newTester(t)
 	if err := tt.Click(LabelFilesToggle); err != nil {
@@ -198,30 +243,28 @@ func TestThePanelToggleFollowsTheFrameAndKeepsItsPlace(t *testing.T) {
 	}
 }
 
-func TestManyTabsShrinkToTheMinimumThenClip(t *testing.T) {
-	// 17 tabs at the minimum (17 x 72 = 1224) do not fit the 1124 px left after the buttons,
-	// so the row clips.
-	var tabs []AgentTab
-	for n := range 17 {
-		tabs = append(tabs, AgentTab{Address: fmt.Sprintf("a%d", n), Label: fmt.Sprintf("agent-number-%d", n),
-			Icon: workerIcon(agents.Worker{Status: "idle", Live: true}), Selected: n == 0})
+func TestManyTabsShrinkThenClip(t *testing.T) {
+	var tabs []Tab
+	for n := range 40 {
+		tabs = append(tabs, Tab{Address: fmt.Sprintf("t%d", n), Title: fmt.Sprintf("terminal-number-%d", n), Plain: true, Selected: n == 0})
 	}
 	b := newBar(t, tabs, true)
-	// MyGo reports the visible part of a clipped element: a tab that fits is at least the
-	// minimum wide, and the row cuts the tabs that do not.
 	row := b.rect(t, LabelTabs)
-	for n := range 15 {
-		tab := b.rect(t, fmt.Sprintf("agent-number-%d, idle", n))
-		if tab.W < theme.TabMinWidth {
-			t.Errorf("tab %d is %v wide, want at least %d", n, tab.W, theme.TabMinWidth)
-		}
-	}
-	if last := b.rect(t, "agent-number-15, idle"); last.W >= theme.TabMinWidth || last.X+last.W > row.X+row.W {
-		t.Errorf("tab 15 %+v should be cut by the row %+v", last, row)
+	last, ok := b.tt.Find("terminal-number-39")
+	if ok && last.X+last.W > row.X+row.W {
+		t.Errorf("the last tab %+v sticks out of the row %+v", last, row)
 	}
 	toggle := b.rect(t, LabelFilesToggle)
 	if toggle.X+toggle.W != 1160-theme.TitleBarPadEnd || toggle.W != theme.SizeIconButton {
-		t.Errorf("toggle %+v, want %d wide at 14 px from the right edge", toggle, theme.SizeIconButton)
+		t.Errorf("toggle %+v, want %d wide at %d px from the right edge", toggle, theme.SizeIconButton, theme.TitleBarPadEnd)
+	}
+}
+
+func TestATabTitleLongerThanTheMaxWidthIsCut(t *testing.T) {
+	long := "a-very-long-terminal-title-that-goes-past-the-maximum-width-of-a-tab"
+	b := newBar(t, []Tab{{Address: "t", Title: long, Plain: true, Selected: true}}, true)
+	if w := b.rect(t, long).W; w > theme.SizeTabMaxWidth {
+		t.Errorf("tab is %v wide, want at most %d", w, theme.SizeTabMaxWidth)
 	}
 }
 
@@ -236,6 +279,8 @@ func agentFrame(t *testing.T, snap *agentstate.Snapshot) (*Frame, *ui.Tester) {
 	return f, tt
 }
 
+// tabSnap is project p with the orchestrator lead and the workers b1 (working) and b2 (idle),
+// and project q with the worker b3.
 func tabSnap() agentstate.Snapshot {
 	w1 := workW("w1", "b1", "p")
 	w1.Status = "working"
@@ -248,38 +293,69 @@ func tabSnap() agentstate.Snapshot {
 	return agentstate.Snapshot{Orchestrators: []agents.Worker{o}, Workers: []agents.Worker{w1, w2, other}}
 }
 
-func TestTheBarShowsTheTabsOfTheStartProject(t *testing.T) {
-	snap := tabSnap()
-	_, tt := agentFrame(t, &snap)
-	tt.Frame()
-	for _, label := range []string{"orchestrator lead, idle", "b1, working", "b2, idle"} {
-		if absent(tt, label) {
-			t.Errorf("no tab %q; texts %q", label, tt.Texts())
+func tabTexts(tt *ui.Tester) []string {
+	var out []string
+	for _, s := range tt.Texts() {
+		if slices.Contains([]string{"lead", "b1", "b2", "b3", "$ repo", "$ other"}, s) {
+			out = append(out, s)
 		}
 	}
-	if !absent(tt, "b3, idle") {
-		t.Error("a worker of another project shows")
+	return slices.Compact(out) // the title is both the label and the text
+}
+
+func TestTheBarShowsTheTabsOfTheStartAgent(t *testing.T) {
+	snap := tabSnap()
+	snap.Terminals = []agents.Worker{termW("t1", "term-1", "p", "/work/repo"), termW("tq", "term-q", "q", "/work/other")}
+	_, tt := agentFrame(t, &snap)
+	tt.Frame()
+	if got := tabTexts(tt); !slices.Equal(got, []string{"lead", "$ repo"}) {
+		t.Errorf("tabs %q, want the orchestrator and the plain terminal of p", got)
 	}
-	if !absent(tt, LabelTabActive) {
-		t.Error("a tab is underlined with no selection")
+}
+
+func TestTabsFollowTheSelectedAgent(t *testing.T) {
+	snap := tabSnap()
+	snap.Workers[2] = workW("w3", "b3", "p")
+	snap.Terminals = []agents.Worker{termW("t1", "term-1", "p", "/work/repo")}
+	f, tt := agentFrame(t, &snap)
+	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "w1"})
+	tt.Frame()
+	if got := tabTexts(tt); !slices.Equal(got, []string{"b1", "$ repo"}) {
+		t.Fatalf("tabs %q, want b1 and the terminal", got)
+	}
+	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "w3"})
+	tt.Frame()
+	if got := tabTexts(tt); !slices.Equal(got, []string{"b3", "$ repo"}) {
+		t.Fatalf("tabs %q, want b3 and the terminal", got)
+	}
+	// A plain terminal keeps the agent whose tabs show.
+	f.Selection.Select(state.Selected{Kind: state.KindTerminal, ID: "t1"})
+	tt.Frame()
+	if got := tabTexts(tt); !slices.Equal(got, []string{"b3", "$ repo"}) {
+		t.Errorf("tabs %q after selecting the terminal, want b3 kept", got)
+	}
+	// An agent of another project shows its own project's terminals.
+	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "w4"})
+	snap.Workers = append(snap.Workers, workW("w4", "b4", "q"))
+	tt.Frame()
+	if slices.Contains(tabTexts(tt), "$ repo") {
+		t.Errorf("a plain terminal of project p shows for project q: %q", tt.Texts())
 	}
 }
 
 func TestClickingATabInTheFrameSelectsIt(t *testing.T) {
 	snap := tabSnap()
+	snap.Terminals = []agents.Worker{termW("t1", "term-1", "p", "/work/repo")}
 	f, tt := agentFrame(t, &snap)
 	tt.Frame()
-	if err := tt.Click("b1, working"); err != nil {
+	if err := tt.Click("$ repo"); err != nil {
 		t.Fatal(err)
 	}
-	if sel, ok := f.Selection.Current(); !ok || sel != (state.Selected{Kind: state.KindWorker, ID: "w1"}) {
+	if sel, ok := f.Selection.Current(); !ok || sel != (state.Selected{Kind: state.KindTerminal, ID: "t1"}) {
 		t.Errorf("selection %+v %v", sel, ok)
 	}
 	tt.Frame()
-	if absent(tt, LabelTabActive) {
-		t.Error("the selected tab is not underlined")
-	}
-	if err := tt.Click("orchestrator lead, idle"); err != nil {
+	if err := tt.Click("lead"); err != nil {
 		t.Fatal(err)
 	}
 	if sel, _ := f.Selection.Current(); sel != (state.Selected{Kind: state.KindOrchestrator, ID: "o"}) {
@@ -287,51 +363,34 @@ func TestClickingATabInTheFrameSelectsIt(t *testing.T) {
 	}
 }
 
-func TestSelectingAWorktreeKeepsTheOpenProjectTabs(t *testing.T) {
-	snap := tabSnap()
-	f, tt := agentFrame(t, &snap)
-	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "w3"})
-	tt.Frame()
-	if absent(tt, "b3, idle") || !absent(tt, "b1, working") {
-		t.Fatalf("the bar should show project q; texts %q", tt.Texts())
-	}
-	f.Selection.Select(state.Selected{Kind: state.KindWorktree, ID: "/repo/wt"})
-	tt.Frame()
-	if absent(tt, "b3, idle") || !absent(tt, LabelTabActive) {
-		t.Errorf("a worktree selection should keep project q and underline nothing; texts %q", tt.Texts())
-	}
-}
-
 func TestAWorkerGoneFromTheSnapshotLeavesTheBar(t *testing.T) {
 	snap := tabSnap()
-	_, tt := agentFrame(t, &snap)
+	f, tt := agentFrame(t, &snap)
+	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "w1"})
 	tt.Frame()
+	if !slices.Contains(tabTexts(tt), "b1") {
+		t.Fatalf("tabs %q", tabTexts(tt))
+	}
 	snap.Workers = snap.Workers[1:]
 	tt.Frame()
-	if !absent(tt, "b1, working") || absent(tt, "b2, idle") {
-		t.Errorf("texts %q", tt.Texts())
+	if slices.Contains(tabTexts(tt), "b1") {
+		t.Errorf("tabs %q still show the gone worker", tabTexts(tt))
 	}
 }
 
-func TestAStatusChangeInTheSnapshotRedrawsTheIcon(t *testing.T) {
+func TestAStatusChangeInTheSnapshotRedrawsTheGlyph(t *testing.T) {
 	snap := tabSnap()
-	_, tt := agentFrame(t, &snap)
+	f, tt := agentFrame(t, &snap)
+	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "w1"})
 	tt.Frame()
+	if absent(tt, "working") {
+		t.Fatal("a working worker shows no working glyph")
+	}
 	snap.Workers = append([]agents.Worker(nil), snap.Workers...)
 	snap.Workers[0].Status = "blocked"
 	tt.Frame()
-	if absent(tt, "b1, blocked") || !absent(tt, "b1, working") {
-		t.Errorf("the tab should show blocked; texts %q", tt.Texts())
-	}
-}
-
-func TestTheFrameBadgeCountsTheOpenItemsOfTheProject(t *testing.T) {
-	snap := tabSnap()
-	snap.Questions = []owner.Question{{ID: "D1", Project: "p", Title: "open"}}
-	_, tt := agentFrame(t, &snap)
-	tt.Frame()
-	if absent(tt, LabelNeedsBadge(1)) {
-		t.Errorf("no badge; texts %q", tt.Texts())
+	if absent(tt, "needs you") || !absent(tt, "working") {
+		t.Errorf("the tab should show needs you; texts %q", tt.Texts())
 	}
 }
 
@@ -341,15 +400,64 @@ func TestNoAgentSourceShowsNoTabs(t *testing.T) {
 		t.Error("the tabs row shows without agents")
 	}
 	if absent(tt, LabelFilesToggle) {
-		t.Error("the panel toggle should stay")
+		t.Error("the files toggle should stay")
 	}
 }
 
-func TestArrowKeysChooseTheNextTabAndSelectItsAgent(t *testing.T) {
-	b := newBar(t, tabsOf(), true)
-	b.click(t, "orchestrator lead, idle")
-	b.tt.Key(0, ui.KeyRight)
-	if len(b.picked) != 1 || b.picked[0].Address != "w1" {
-		t.Errorf("picked %+v, want the next tab after the arrow key", b.picked)
+func TestArrowKeysChooseTheNextTabAndSelectIt(t *testing.T) {
+	snap := tabSnap()
+	snap.Terminals = []agents.Worker{termW("t1", "term-1", "p", "/work/repo")}
+	f, tt := agentFrame(t, &snap)
+	f.Selection.Select(state.Selected{Kind: state.KindOrchestrator, ID: "o"})
+	tt.Frame()
+	if err := tt.Click("lead"); err != nil { // focus the tab list
+		t.Fatal(err)
+	}
+	tt.Frame()
+	tt.Key(0, ui.KeyRight)
+	tt.Frame()
+	if sel, _ := f.Selection.Current(); sel != (state.Selected{Kind: state.KindTerminal, ID: "t1"}) {
+		t.Errorf("selection %+v, want the plain terminal", sel)
+	}
+}
+
+func TestSelectingATabClosesTheReviewView(t *testing.T) {
+	snap := tabSnap()
+	snap.Terminals = []agents.Worker{termW("t1", "term-1", "p", "/work/repo")}
+	f, tt := agentFrame(t, &snap)
+	f.Review, _ = newTestReview()
+	f.ToggleReview()
+	tt.Frame()
+	if err := tt.Click("$ repo"); err != nil {
+		t.Fatal(err)
+	}
+	if f.ReviewOpen() {
+		t.Error("the Review view stays open after a tab click")
+	}
+}
+
+// ---- Close tab and the diff summary through the frame ----
+
+func TestTheCloseButtonStopsAPlainTerminalAndNeverAnAgent(t *testing.T) {
+	snap := termSnap()
+	cf := newCloseFrame(t, &snap)
+	// The agent's own tab is selected: no close button, so no way to stop it from the bar.
+	cf.Selection.Select(state.Selected{Kind: state.KindOrchestrator, ID: "o"})
+	cf.tt.Frame()
+	if !absent(cf.tt, LabelCloseTab) {
+		t.Fatal("an agent tab has a close button")
+	}
+	cf.closeTab(Tab{Address: "o", Orchestrator: true}) // even a direct call stops nothing
+	if len(cf.stopped) != 0 {
+		t.Errorf("stopped %v", cf.stopped)
+	}
+	// The plain terminal's tab is selected: the button stops it.
+	cf.Selection.Select(state.Selected{Kind: state.KindTerminal, ID: "tp"})
+	cf.tt.Frame()
+	if err := cf.tt.Click(LabelCloseTab); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(cf.stopped, []string{"tp"}) {
+		t.Errorf("stopped %v, want [tp]", cf.stopped)
 	}
 }
