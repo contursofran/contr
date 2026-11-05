@@ -4,7 +4,7 @@ package app
 // that shows one open question with its full text and its options. The owner
 // pages through the open questions with ‹ and ›; the paging stops at the ends.
 // An answer goes to the coordinator that asked, through [AgentSource.Answer],
-// as the answer card does. The sheet is an overlay, so the terminal keeps its
+// as the questions card does. The sheet is an overlay, so the terminal keeps its
 // size (D67). Esc closes it only while it has the focus (D72).
 
 import (

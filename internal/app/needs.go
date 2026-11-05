@@ -4,7 +4,7 @@ package app
 // the owner. Blocked workers come first, then questions (D7), then to-dos
 // (T12). Resolved items stay, struck through, until "clear done". The row is
 // hidden when nothing waits. A click on a tab picks it; it opens the
-// answer card (#162, S5).
+// questions card (#347).
 
 import (
 	"cmp"
@@ -82,7 +82,7 @@ type NeedsRow struct {
 	ClearDone func()
 	// Scope returns the project to show, or "" for all projects.
 	Scope func() string
-	// Open runs when a tab is clicked. The frame opens the answer card here.
+	// Open runs when a tab is clicked. The frame opens the questions card here.
 	Open func(NeedTab)
 	// Collapsed, when it returns true, shows only the icon and the id of
 	// each tab: the PR pane is open and takes the room (DESIGN.md, PR viewer).

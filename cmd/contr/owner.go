@@ -26,7 +26,7 @@ Flags of ask (each of option, impact and ref can repeat):
   --ref R           what helps to decide: "PR 12", "#12" or "issue 12", an http(s) URL, a file path
   --source S        a short excerpt of the text that raised the question
 
-answer and done do what the answer card does: the owner file changes first, then the
+answer and done do what the questions card does: the owner file changes first, then the
 coordinator that asked gets "Owner answered <id>: <answer>" or
 "Owner did <id>: <text>". When the coordinator cannot be reached the change
 stays saved and the command exits 1.
