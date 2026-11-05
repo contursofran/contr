@@ -198,3 +198,9 @@ func (c Client) OpenIssue(ctx context.Context, n int) error {
 	_, err := c.run(ctx, "issue", "view", fmt.Sprint(n), "--web")
 	return err
 }
+
+// OpenPR opens pull request n of the repository of c.Dir in the web browser.
+func (c Client) OpenPR(ctx context.Context, n int) error {
+	_, err := c.run(ctx, "pr", "view", fmt.Sprint(n), "--web")
+	return err
+}

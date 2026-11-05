@@ -8,6 +8,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/github"
 )
 
@@ -230,6 +231,39 @@ func TestFrameOpenIssueRunsOffThreadAndShowsAnError(t *testing.T) {
 	queued[0]()
 	if gotDir != "/wt/a" || gotN != 151 {
 		t.Errorf("opened %q #%d", gotDir, gotN)
+	}
+}
+
+func TestAgentRowOpenPRGoesToTheBrowserNotThePane(t *testing.T) {
+	r := newPRRig(t)
+	f := NewFrame()
+	f.PR = r.pane
+	var gotDir string
+	var gotN int
+	var queued []func()
+	f.WorkerPRs = &WorkerPRs{Run: Runner{Go: func(fn func()) { queued = append(queued, fn) }}}
+	f.Status = state.NewStatusMessage(func() {})
+	f.OpenPRWeb = func(d string, n int) error { gotDir, gotN = d, n; return errors.New("gh: no browser") }
+	e := f.agentRowEntry()
+	if e.OpenPR != nil {
+		t.Error("the agent rows can reach the PR pane")
+	}
+	if e.OpenPRWeb == nil {
+		t.Fatal("no browser open")
+	}
+	e.OpenPRWeb("/wt/a", 307)
+	if gotN != 0 || len(queued) != 1 {
+		t.Fatal("the pull request opened on the calling thread")
+	}
+	queued[0]()
+	if gotDir != "/wt/a" || gotN != 307 {
+		t.Errorf("opened %q #%d", gotDir, gotN)
+	}
+	if f.PROpen() {
+		t.Error("the PR pane opened")
+	}
+	if msg, ok := f.Status.Text(); !ok || msg != "gh: no browser" {
+		t.Errorf("status %q, %v", msg, ok)
 	}
 }
 

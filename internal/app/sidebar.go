@@ -2,7 +2,7 @@ package app
 
 // The sidebar head part (docs/spec/ServerRow.md, docs/spec/ProjectRow.md):
 // the Servers section with the This Mac row, then the Projects head and one
-// row for each project in one ui.List of kit.Row. The model is in spaces.go.
+// row for each project, with its agents, in one ui.List of kit.Row. The model is in spaces.go.
 
 import (
 	"github.com/egoist/mygo/ui"
@@ -10,6 +10,7 @@ import (
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/spaces"
+	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 )
 
@@ -119,18 +120,33 @@ func (l *SpacesList) coreLine(c *ui.Context) {
 		PaddingX(theme.Space16).PaddingY(theme.Space2)
 }
 
-// projectList is the projects, in the owner's order, in one ui.List. A drag
-// reorders them (D109).
+// projectList is the projects, in the owner's order, with the agents of each
+// under it, in one ui.List. A drag reorders the projects (D109).
 func (l *SpacesList) projectList(c *ui.Context) {
-	groups := l.groups
-	l.list.Key = func(i int) any { return groups[i].CommonDir }
-	l.list.Label = func(i int) string { return ProjectLabel(groups[i]) }
+	items := l.items()
+	l.list.Key = func(i int) any {
+		if a := items[i].agent; a != nil {
+			return a.w.Address
+		}
+		return l.groups[items[i].group].CommonDir
+	}
+	l.list.Label = func(i int) string {
+		if a := items[i].agent; a != nil {
+			return AgentLabel(a.w, issueText(*a), l.modelOf(a.w))
+		}
+		return ProjectLabel(l.groups[items[i].group])
+	}
 	l.list.Reorder = nil
 	if l.projects != nil {
 		l.list.Reorder = l.Reorder
 	}
-	ui.List(c.Key("projects"), &l.list, len(groups), func(i int) { l.projectRow(c, groups[i]) }).
-		Label(LabelProjectList).FillWidth().Grow(1).MinHeight(0)
+	ui.List(c.Key("projects"), &l.list, len(items), func(i int) {
+		if a := items[i].agent; a != nil {
+			l.agentRow(c, *a)
+			return
+		}
+		l.projectRow(c, l.groups[items[i].group])
+	}).Label(LabelProjectList).FillWidth().Grow(1).MinHeight(0)
 }
 
 // projectRow is one ProjectRow. An empty project (D116) has a dim name, the
@@ -146,7 +162,9 @@ func (l *SpacesList) projectRow(c *ui.Context, g spaces.RepoGroup) {
 	}
 	if l.selection != nil {
 		if sel, ok := l.selection.Current(); ok {
-			o.Selected = l.holds(g, sel)
+			// An open project shows the selection on the agent row; the project
+			// row shows it for the project itself and while the agents are folded.
+			o.Selected = l.holds(g, sel) && (sel.Kind == state.KindWorktree || !open)
 		}
 	}
 	if g.Path != "" {

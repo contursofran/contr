@@ -10,13 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/ui"
-
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/state"
-	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/projects"
 )
@@ -217,40 +214,21 @@ func TestAClickOnTheSelectedProjectFoldsAndOpensIt(t *testing.T) {
 	dir := h.group(0).CommonDir
 	h.tt.Click("alpha, main") // selects
 	h.tt.Frame()
-	if h.list.Folded(dir) || h.list.AgentFolded("lead") {
+	if h.list.Folded(dir) || !h.tt.HasText("lead") {
 		t.Fatal("the first click folded the project")
 	}
 	h.tt.Click("alpha, main") // folds
 	h.tt.Frame()
-	if !h.list.Folded(dir) || !h.list.AgentFolded("lead") {
-		t.Error("the second click did not fold")
+	if !h.list.Folded(dir) || h.tt.HasText("lead") {
+		t.Error("the second click did not fold, or its agent still shows")
 	}
-	if h.list.AgentFolded("w1:p2") {
+	if !h.tt.HasText("w1:p2") {
 		t.Error("a fold hid the agent of another project")
 	}
 	h.tt.Click("alpha, main") // opens
 	h.tt.Frame()
-	if h.list.Folded(dir) || h.list.AgentFolded("lead") {
+	if h.list.Folded(dir) || !h.tt.HasText("lead") {
 		t.Error("the third click did not open")
-	}
-}
-
-func TestAFoldedProjectHidesItsAgentsFromTheAgentsList(t *testing.T) {
-	h, cwds := twoRepos(t)
-	snap := agentstate.Snapshot{CoreVersion: "0.1.18",
-		Orchestrators: []agents.Worker{orchestratorIn("lead", cwds[0])},
-		Workers:       []agents.Worker{spPane("w1:p2", cwds[1], nil)}}
-	h.send(snap)
-	list := NewAgentsList(func() agentstate.Snapshot { return snap }, h.sel)
-	list.Hidden = h.list.AgentFolded
-	tt := ui.NewTester(list.View, theme.SidebarWidth, theme.WindowHeight)
-	if !tt.HasText("lead") || !tt.HasText("w1:p2") {
-		t.Fatalf("texts %q", tt.Texts())
-	}
-	h.list.Fold(h.group(0).CommonDir)
-	tt.Frame()
-	if tt.HasText("lead") || !tt.HasText("w1:p2") {
-		t.Errorf("texts %q: want only the other project's agent", tt.Texts())
 	}
 }
 
