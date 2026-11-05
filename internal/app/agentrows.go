@@ -186,8 +186,13 @@ func issueText(a agentLine) string {
 // agentRow is one AgentRow.
 func (l *SpacesList) agentRow(c *ui.Context, a agentLine) {
 	issue, model := issueText(a), l.modelOf(a.w)
+	ci := !a.orchestrator && a.w.Live && a.w.Status != "working" && l.Entry.PRs.Waiting(a.w.Worktree)
+	label := AgentLabel(a.w, issue, model)
+	if ci {
+		label += ", waiting on CI"
+	}
 	o := kit.AgentRowOpts{
-		Label: AgentLabel(a.w, issue, model), Title: a.w.Name, Issue: issue, Model: model,
+		CI: ci, Label: label, Title: a.w.Name, Issue: issue, Model: model,
 		Age: agentAge(a.w, l.clock()), State: tabState(a.w), Orchestrator: a.orchestrator,
 		OnClick: func() { l.SelectAgent(a) },
 		Menu:    func(m *ui.Menu) { l.agentMenu(m, a) },
@@ -287,4 +292,116 @@ func (l *SpacesList) dropGoneSelection() {
 		}
 	}
 	l.selection.Clear()
+}
+
+// itemSelected tells whether the selection sel shows on the row it. An open
+// project shows the selection on the agent row; the project row shows it for
+// the project itself and while the project is folded.
+func (l *SpacesList) itemSelected(it sideItem, sel state.Selected) bool {
+	if a := it.agent; a != nil {
+		return sel.ID == a.w.Address && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker)
+	}
+	g := l.groups[it.group]
+	open := !l.Folded(g.CommonDir)
+	return l.holds(g, sel) && (sel.Kind == state.KindWorktree || !open)
+}
+
+// selectedIndex is the row that shows the selection, or -1.
+func (l *SpacesList) selectedIndex(items []sideItem) int {
+	if l.selection == nil {
+		return -1
+	}
+	sel, ok := l.selection.Current()
+	if !ok {
+		return -1
+	}
+	for i, it := range items {
+		if l.itemSelected(it, sel) {
+			return i
+		}
+	}
+	return -1
+}
+
+// target is the selection that a row stands for: an agent, a project's
+// orchestrator, else the project folder.
+func (l *SpacesList) target(it sideItem) state.Selected {
+	if a := it.agent; a != nil {
+		kind := state.KindWorker
+		if a.orchestrator {
+			kind = state.KindOrchestrator
+		}
+		return state.Selected{Kind: kind, ID: a.w.Address}
+	}
+	g := l.groups[it.group]
+	for _, o := range l.snapshot().Orchestrators {
+		if l.holdsAddress(g, o.Address) {
+			return state.Selected{Kind: state.KindOrchestrator, ID: o.Address}
+		}
+	}
+	return state.Selected{Kind: state.KindWorktree, ID: projectRoot(g)}
+}
+
+// syncCursor keeps the key cursor on its row while that row still stands for
+// the selection (a project row stands for its orchestrator, which an open
+// project shows on the agent row); else it moves to the row that shows the
+// selection.
+func (l *SpacesList) syncCursor(items []sideItem) {
+	if l.selection != nil && l.cursor >= 0 && l.cursor < len(items) {
+		if sel, ok := l.selection.Current(); ok && l.target(items[l.cursor]) == sel {
+			return
+		}
+	}
+	l.cursor = l.selectedIndex(items)
+}
+
+// choose makes a row the selection, as the arrow keys do. A project row does
+// not fold: that stays a click on the selected project.
+func (l *SpacesList) choose(it sideItem) {
+	if l.selection == nil {
+		return
+	}
+	if l.ByKey != nil {
+		l.ByKey(func() { l.selection.Select(l.target(it)) })
+		return
+	}
+	l.selection.Select(l.target(it))
+}
+
+func (l *SpacesList) groupIndex(g spaces.RepoGroup) int {
+	for i := range l.groups {
+		if l.groups[i].CommonDir == g.CommonDir {
+			return i
+		}
+	}
+	return 0
+}
+
+// move is Up (-1) or Down (+1) in the list: the row next to the cursor becomes
+// the selection. The first and last rows stay where they are.
+func (l *SpacesList) move(items []sideItem, d int) {
+	if len(items) == 0 {
+		return
+	}
+	next := l.cursor + d
+	if l.cursor < 0 {
+		next = 0 // nothing selected: the first key chooses the first row
+	}
+	if next < 0 || next >= len(items) {
+		return
+	}
+	l.cursor = next
+	l.choose(items[next])
+}
+
+// open is Enter in the list: the row under the cursor becomes the selection
+// and the terminal takes the focus.
+func (l *SpacesList) open(items []sideItem) {
+	if l.cursor < 0 || l.cursor >= len(items) {
+		return
+	}
+	l.choose(items[l.cursor])
+	if l.OnOpen != nil {
+		l.OnOpen()
+	}
 }

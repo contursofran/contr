@@ -97,6 +97,13 @@ type SpacesList struct {
 	scans int
 	// list is the state of the project list.
 	list ui.ListState
+	// cursor is the row the arrow keys are on: -1, or the selected row.
+	cursor int
+	// ByKey (may be nil) wraps a selection made by the keys, so the frame knows
+	// the new terminal must not take the focus from the list (D145).
+	ByKey func(do func())
+	// OnOpen runs on Enter in the list: the terminal takes the focus.
+	OnOpen func()
 	// heads holds the cancel func of the HEAD watch of each repo.
 	heads  map[string]context.CancelFunc
 	closed bool

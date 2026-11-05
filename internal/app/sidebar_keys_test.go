@@ -1,0 +1,104 @@
+package app
+
+import (
+	"testing"
+
+	"github.com/egoist/mygo/ui"
+)
+
+func selID(h *rowsHarness) string {
+	sel, _ := h.sel.Current()
+	return sel.ID
+}
+
+func TestArrowKeysMoveTheSelectionOverAgentRows(t *testing.T) {
+	h := newRows(t)
+	if err := h.tt.Click("lead, idle, opus"); err != nil {
+		t.Fatal(err)
+	}
+	h.tt.Key(0, ui.KeyDown)
+	if got := selID(h); got != "b-241" {
+		t.Fatalf("after Down: %q, want b-241", got)
+	}
+	h.tt.Key(0, ui.KeyDown)
+	if got := selID(h); got != "b-242" {
+		t.Fatalf("after Down: %q, want b-242", got)
+	}
+	h.tt.Key(0, ui.KeyUp)
+	if got := selID(h); got != "b-241" {
+		t.Fatalf("after Up: %q, want b-241", got)
+	}
+}
+
+func TestUpFromTheFirstAgentReachesTheProjectRowAndDownComesBack(t *testing.T) {
+	h := newRows(t)
+	h.tt.Click("lead, idle, opus")
+	h.tt.Key(0, ui.KeyUp) // the project row: it stands for its orchestrator
+	if got := selID(h); got != "lead" {
+		t.Fatalf("on the project row: %q, want lead", got)
+	}
+	h.tt.Key(0, ui.KeyDown)
+	h.tt.Key(0, ui.KeyDown)
+	if got := selID(h); got != "b-241" {
+		t.Fatalf("two Down from the project row: %q, want b-241", got)
+	}
+}
+
+func TestDownCrossesIntoTheNextProject(t *testing.T) {
+	h := newRows(t)
+	h.tt.Click("b-242, working, sonnet")
+	h.tt.Key(0, ui.KeyDown)
+	sel, ok := h.sel.Current()
+	if !ok || sel.ID == "b-242" || sel.ID == "" {
+		t.Fatalf("selection %+v, want the next project", sel)
+	}
+}
+
+func TestEnterOpensTheSelectedRow(t *testing.T) {
+	h := newRows(t)
+	opened := 0
+	h.list.OnOpen = func() { opened++ }
+	h.tt.Click("b-241, working, 241, sonnet")
+	h.tt.Key(0, ui.KeyDown)
+	h.tt.Key(0, ui.KeyEnter)
+	if opened != 1 || selID(h) != "b-242" {
+		t.Errorf("opened %d, selection %q; want 1, b-242", opened, selID(h))
+	}
+}
+
+func TestArrowKeysAndEnterWorkInTheIconColumn(t *testing.T) {
+	h := compactRows(t)
+	opened := 0
+	h.list.OnOpen = func() { opened++ }
+	if err := h.tt.Click("lead, idle, opus"); err != nil {
+		t.Fatal(err)
+	}
+	h.tt.Key(0, ui.KeyDown)
+	if got := selID(h); got != "b-241" {
+		t.Fatalf("after Down: %q, want b-241", got)
+	}
+	h.tt.Key(0, ui.KeyEnter)
+	if opened != 1 {
+		t.Errorf("opened %d, want 1", opened)
+	}
+}
+
+func TestAnIdleWorkerWithPendingChecksShowsCIOnLineTwo(t *testing.T) {
+	h := newRows(t)
+	rig := newPRSourceRig(map[string]string{h.cwds[0]: `{"number":307,"state":"OPEN","statusCheckRollup":[{"status":"IN_PROGRESS"}]}`})
+	rig.w.Sync(liveWorker(h.cwds[0]))
+	rig.flush()
+	h.list.Entry = WorkerEntry{PRs: rig.w}
+	snap := h.live.get()
+	snap.Workers[0].Status = "idle"
+	h.send(snap)
+	if !h.has("b-241, idle, 241, sonnet, waiting on CI") {
+		t.Error("idle worker with pending checks has no CI label")
+	}
+	if !h.has("b-242, working, sonnet") {
+		t.Error("a working worker must not show CI")
+	}
+	if _, ok := h.tt.Find("CI"); !ok {
+		t.Error("no CI text on line 2")
+	}
+}

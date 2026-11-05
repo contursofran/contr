@@ -217,7 +217,7 @@ func TestBranchPRReadsNumberInDir(t *testing.T) {
 	if err != nil || n != 307 {
 		t.Fatalf("got %d, %v", n, err)
 	}
-	if f.dir != "/w" || strings.Join(f.args, " ") != "pr view --json number,state" {
+	if f.dir != "/w" || strings.Join(f.args, " ") != "pr view --json number,state,statusCheckRollup" {
 		t.Errorf("dir %q args %v", f.dir, f.args)
 	}
 }
@@ -270,5 +270,29 @@ func TestOpenPRRunsWeb(t *testing.T) {
 	}
 	if strings.Join(f.args, " ") != "pr view 307 --web" || f.dir != "/w" {
 		t.Errorf("dir %q args %v", f.dir, f.args)
+	}
+}
+
+func TestBranchStateCountsPendingChecks(t *testing.T) {
+	f := &fakeRunner{out: []byte(`{"number":307,"state":"OPEN","statusCheckRollup":[
+{"status":"COMPLETED","conclusion":"SUCCESS"},
+{"status":"IN_PROGRESS","conclusion":""},
+{"status":"QUEUED","conclusion":""},
+{"state":"PENDING"},
+{"status":"COMPLETED","conclusion":"FAILURE"}]}`)}
+	st, err := Client{R: f}.BranchState(context.Background())
+	if err != nil || st.Number != 307 || st.Pending != 3 {
+		t.Fatalf("got %+v, %v; want 307 with 3 pending", st, err)
+	}
+}
+
+func TestBranchStateOfAFinishedOrMissingPRHasNoPending(t *testing.T) {
+	f := &fakeRunner{out: []byte(`{"number":307,"state":"MERGED","statusCheckRollup":[{"status":"IN_PROGRESS"}]}`)}
+	if st, err := (Client{R: f}).BranchState(context.Background()); err != nil || st != (BranchState{}) {
+		t.Errorf("merged: %+v, %v", st, err)
+	}
+	f = &fakeRunner{err: errors.New(`no pull requests found for branch "x"`)}
+	if st, err := (Client{R: f}).BranchState(context.Background()); err != nil || st != (BranchState{}) {
+		t.Errorf("missing: %+v, %v", st, err)
 	}
 }
