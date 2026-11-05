@@ -331,11 +331,16 @@ func TestUIThemeGetsPaletteValues(t *testing.T) {
 			{"Border", u.Border, p.InputLine}, {"Text", u.Text, p.Ink95},
 			{"TextMuted", u.TextMuted, p.Ink50}, {"Danger", u.Danger, p.Blocked},
 			{"Focus", u.Focus, p.FocusRing}, {"Selection", u.Selection, p.Selected},
+			{"Warning", u.Warning, p.Ink85},
 		}
 		for _, c := range checks {
 			if c.got != c.want {
 				t.Errorf("dark=%v: %s = %v, want %v", p.Dark, c.name, c.got, c.want)
 			}
+		}
+		// D76 keeps the claude hue for Claude identity, not for warnings.
+		if u.Warning == p.Claude {
+			t.Errorf("dark=%v: Warning is the claude color", p.Dark)
 		}
 		if u.Dark != p.Dark {
 			t.Errorf("Dark = %v for the palette dark=%v", u.Dark, p.Dark)

@@ -110,7 +110,7 @@ func UITheme(p *Palette) *ui.Theme {
 		AccentPressed:  p.Ink90,
 		AccentText:     p.Ground,
 		Danger:         p.Blocked,
-		Warning:        p.Claude,
+		Warning:        p.Ink85,
 		Success:        p.Ink60,
 		Selection:      p.Selected,
 		Focus:          p.FocusRing,

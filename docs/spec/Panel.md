@@ -45,7 +45,7 @@ Design system page: component Panel. Shared rules: [README.md](README.md).
 ## Build in MyGo
 
 - A plain container view with `Background`, `Border` and `CornerRadius`; there is no MyGo widget to wrap.
-- The panel head: a row with `Text(...).NoWrap().Ellipsis()` and IconButtons.
+- The panel head: a row with `Text(...).SingleLine()` (it cuts with an ellipsis; `NoWrap` keeps the line whole) and IconButtons. The footer line is a 1px `hairline` box above the footer row.
 - Put the panels in `ui.Split` (see Window).
 
 ## Do and do not
