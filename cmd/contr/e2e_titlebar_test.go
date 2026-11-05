@@ -298,8 +298,12 @@ func TestTitleBarCapture(t *testing.T) {
 		waitFor(c, "the orchestrator tab", func(map[string]bool) bool { return inBar(c, "lead") })
 		if i == 0 {
 			for n := 1; n <= 2; n++ {
-				click(c, app.LabelNewTab)
-				for deadline := time.Now().Add(20 * time.Second); plains() < n && time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
+				// A click can land while the window builds a frame: click again until the terminal exists.
+				for try := 0; try < 5 && plains() < n; try++ {
+					waitFor(c, "the new tab button", func(map[string]bool) bool { return inBar(c, app.LabelNewTab) })
+					click(c, app.LabelNewTab)
+					for deadline := time.Now().Add(4 * time.Second); plains() < n && time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
+					}
 				}
 			}
 		}
