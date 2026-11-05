@@ -35,7 +35,7 @@ const (
 // The smallest frame window, and the width it opens with. Variables so that an
 // e2e build can open a narrow window (automation_e2e.go).
 var (
-	minWidth    = 960
+	minWidth    = 640
 	windowWidth = theme.WindowWidth
 )
 
