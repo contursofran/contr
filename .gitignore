@@ -6,3 +6,4 @@
 *.test
 .DS_Store
 /mygo.json
+RESULT.md
