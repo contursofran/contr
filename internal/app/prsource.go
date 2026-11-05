@@ -30,8 +30,9 @@ const (
 type prKey struct{ dir, branch string }
 
 type prAnswer struct {
-	n  int
-	at time.Time
+	n       int
+	pending int // checks of the head commit not finished (D145)
+	at      time.Time
 }
 
 // WorkerPRs maps a worker's worktree to the number of its pull request. Use it on the UI thread.
@@ -58,8 +59,8 @@ type WorkerPRs struct {
 // fresh reports whether an answer needs no new read.
 func (w *WorkerPRs) fresh(a prAnswer) bool {
 	ttl := prMissTTL
-	if a.n > 0 {
-		ttl = prHitTTL
+	if a.n > 0 && a.pending == 0 {
+		ttl = prHitTTL // pending checks end soon: ask again like a miss
 	}
 	return w.now().Sub(a.at) < ttl
 }
@@ -82,6 +83,16 @@ func (w *WorkerPRs) PR(dir string) int {
 		return 0
 	}
 	return w.answers[prKey{dir, b}].n
+}
+
+// Waiting reports whether the pull request of the worktree dir has checks that have not
+// finished, as of the last read (D145).
+func (w *WorkerPRs) Waiting(dir string) bool {
+	if w == nil || dir == "" {
+		return false
+	}
+	b, ok := w.branch[dir]
+	return ok && w.answers[prKey{dir, b}].pending > 0
 }
 
 // Sync starts a read for each worktree of live workers that has none running and no fresh
@@ -133,13 +144,13 @@ func (w *WorkerPRs) read(dir string) {
 				return
 			}
 			w.gh(func() func() {
-				n, err := mk(dir).BranchPR(context.Background())
+				st, err := mk(dir).BranchState(context.Background())
 				return func() {
 					delete(w.inflight, dir)
 					if old := w.answers[key]; err != nil {
-						n = old.n // an error keeps a known number; else none
+						st = github.BranchState{Number: old.n, Pending: old.pending} // an error keeps what is known
 					}
-					w.answers[key] = prAnswer{n, w.now()}
+					w.answers[key] = prAnswer{st.Number, st.Pending, w.now()}
 					w.redraw()
 				}
 			})

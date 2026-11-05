@@ -346,3 +346,42 @@ func TestWorkerPRBoundsGHRuns(t *testing.T) {
 		t.Errorf("active %d, waiting %d at the end", r.w.active, len(r.w.waiting))
 	}
 }
+
+func TestWorkerPRWaitingTracksPendingChecksAndAsksSoonerThenIdles(t *testing.T) {
+	pending := `{"number":307,"state":"OPEN","statusCheckRollup":[{"status":"IN_PROGRESS"}]}`
+	r := newPRSourceRig(map[string]string{"/wt/a": pending})
+	ws := liveWorker("/wt/a")
+	if r.w.Waiting("/wt/a") {
+		t.Fatal("waiting before any read")
+	}
+	r.w.Sync(ws)
+	r.flush()
+	if !r.w.Waiting("/wt/a") {
+		t.Fatal("not waiting with a check in progress")
+	}
+	// Pending checks hold like a miss: a minute, not five.
+	r.now = r.now.Add(prMissTTL + time.Second)
+	r.runner.out["/wt/a"] = `{"number":307,"state":"OPEN","statusCheckRollup":[{"status":"COMPLETED","conclusion":"SUCCESS"}]}`
+	r.w.Sync(ws)
+	r.flush()
+	if r.w.Waiting("/wt/a") {
+		t.Error("still waiting after the checks passed")
+	}
+	if r.runner.calls != 2 {
+		t.Errorf("gh ran %d times, want 2", r.runner.calls)
+	}
+}
+
+func TestWorkerPRKeepsPendingWhenGhFails(t *testing.T) {
+	r := newPRSourceRig(map[string]string{"/wt/a": `{"number":307,"state":"OPEN","statusCheckRollup":[{"status":"QUEUED"}]}`})
+	ws := liveWorker("/wt/a")
+	r.w.Sync(ws)
+	r.flush()
+	r.runner.err = errors.New("gh: offline")
+	r.now = r.now.Add(prMissTTL + time.Second)
+	r.w.Sync(ws)
+	r.flush()
+	if !r.w.Waiting("/wt/a") || r.w.PR("/wt/a") != 307 {
+		t.Error("a failed read lost what was known")
+	}
+}
