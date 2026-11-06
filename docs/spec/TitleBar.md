@@ -1,6 +1,6 @@
 # TitleBar
 
-The title bar holds the traffic lights, the tabs of the selected agent, the diff summary and three icon buttons; it is also the drag area of the window.
+The title bar holds the traffic lights, the tabs of the selected agent, the update pill, the diff summary and three icon buttons; it is also the drag area of the window.
 
 Design system page: component TitleBar. Shared rules: [README.md](README.md).
 
@@ -15,8 +15,9 @@ From left to right:
 1. Traffic-light area, as wide as the sidebar plus its gap (328px with the default sidebar), so the tabs start above the terminal. It holds only the window buttons: there is no sidebar button next to them (D172). With the sidebar hidden or as icons, the area is 78px, so the tabs stay clear of the window buttons.
 2. Tabs (see Tab) and a "New tab" icon button.
 3. Flexible space (drags the window).
-4. DiffSummary of the selected project.
-5. Icon buttons: Search, Hide files (pressed while files show).
+4. UpdatePill (see UpdatePill), only while an update is ready (D176).
+5. DiffSummary of the selected project.
+6. Icon buttons: Search, Hide files (pressed while files show).
 
 Height `titlebar-height` (38px: a 30px tab, 4px above and below, D168), gap `space-8`, right padding `space-14`. Items center on the vertical axis.
 
@@ -26,6 +27,7 @@ Height `titlebar-height` (38px: a 30px tab, 4px above and below, D168), gap `spa
   tab first, then the plain terminals of its project (D131). Selecting a
   plain terminal keeps the last agent.
 - DiffSummary hides when the project has no changes.
+- UpdatePill shows from the end of a background install until the restart (D176).
 - Hide files is pressed (`aria-pressed`) while the files panel shows.
 
 ## Behavior
