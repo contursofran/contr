@@ -494,17 +494,17 @@ func TestFramePanelStaysTheFileTreeWhateverIsSelected(t *testing.T) {
 	}
 }
 
-// The files panel head shows the project name; the panel stays "Files" for
-// the screen reader (docs/spec/FileTree.md, Anatomy).
-func TestFilesPanelHeadShowsTheProjectName(t *testing.T) {
+// The head says "Files", not the project name, now that the agent's todos
+// and artifacts sit above it (D197).
+func TestFilesPanelHeadSaysFiles(t *testing.T) {
 	f, tt := newTester(t)
 	f.Files.Start = func(fn func()) { fn() }
 	f.Files.Watch = func(string, func()) (func(), error) { return func() {}, nil }
 	f.openProject = "contr"
 	tt.Frame()
-	box(t, tt, "contr name")
-	if !absent(tt, LabelPanelFiles+" name") {
-		t.Errorf("the head still says Files: %q", tt.Texts())
+	box(t, tt, LabelPanelFiles+" name")
+	if !absent(tt, "contr name") {
+		t.Errorf("the head still shows the project: %q", tt.Texts())
 	}
 	box(t, tt, LabelPanelFiles) // the group keeps its name
 }
