@@ -948,7 +948,9 @@ func (f *Frame) loadProjects(w Window) {
 			if err != nil {
 				f.Toasts.Show(err.Error())
 			}
-			if store != nil {
+			if store == nil {
+				f.SpacesList.ReleaseLaunch()
+			} else {
 				f.Projects = store
 				f.SpacesList.Adopt = err == nil
 				f.SpacesList.SetProjects(store)
@@ -1092,6 +1094,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.SpacesList.UpdateReady = f.Settings.Ready
 	stopChecks := f.Settings.StartChecks()
 	f.Slots.Spaces = f.SpacesList.View
+	f.SpacesList.HoldLaunch = f.LoadProjects != nil
 	f.SpacesList.Sync()
 	f.loadProjects(w)
 	f.loadWidths(w)
