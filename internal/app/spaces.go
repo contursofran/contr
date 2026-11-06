@@ -71,10 +71,15 @@ type SpacesList struct {
 	Entry WorkerEntry
 	// ModelOf names the model of an agent profile for line 2. Nil: none.
 	ModelOf func(profile string) string
+	// EffortOf names the effort of an agent profile for line 2. Nil: none.
+	EffortOf func(profile string) string
 	// StatusModel gives the model that Claude Code's status line reported for
 	// the agent in hc terminal address, for an agent with no --model (D174).
 	// Nil: none.
 	StatusModel func(address string) string
+	// StatusEffort gives the effort that Claude Code's status line reported
+	// for the terminal at address, or "" (D189).
+	StatusEffort func(address string) string
 	// Titles gives the issue titles of the worker rows. Nil: none.
 	Titles *IssueTitles
 	// Ages is the one timer of all ages (D137). Nil: ages move on a state
