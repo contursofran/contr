@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// Flow is how the orchestrator takes an issue to a merge (D177). It is saved
+// Flow is how the orchestrator takes an issue to a merge (D185). It is saved
 // as the flow key of agents.json.
 type Flow struct {
 	// Plan is when a planner runs first: never, when-needed or always.

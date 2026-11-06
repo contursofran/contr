@@ -658,3 +658,22 @@ func TestTheSelectedTabIsAPillInBothThemes(t *testing.T) {
 		}
 	}
 }
+
+// The tab row has 8pt above and 8pt below it in the title bar (D177): the panels start
+// where the title bar ends.
+func TestTabRowHasEqualSpaceAboveAndBelow(t *testing.T) {
+	bar := &titleBar{selectTab: func(Tab) {}, closeTab: func(Tab) {}, newTab: func() {}, search: func() {}}
+	bar.setTabs(tabsOf())
+	tt := ui.NewTester(func(c *ui.Context) {
+		ui.Row(c).Label(LabelTitleBar).FillWidth().Height(theme.TitleBarHeight).AlignItems(ui.Center).Children(func() {
+			bar.build(c, true, false, func() {})
+		})
+	}, 1160, 100)
+	tab, ok := tt.Find("lead")
+	if !ok {
+		t.Fatalf("no lead tab; texts %q", tt.Texts())
+	}
+	if tab.Y != theme.PanelGap || theme.TitleBarHeight-(tab.Y+tab.H) != theme.PanelGap || tab.H != theme.SizeRowHeight {
+		t.Errorf("tab %+v in a %v bar, want %v above and below", tab, theme.TitleBarHeight, theme.PanelGap)
+	}
+}
