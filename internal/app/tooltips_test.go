@@ -9,14 +9,14 @@ import (
 // Keyboard focus shows the tip of an icon-only button at once.
 func TestIconButtonShowsTipOnFocus(t *testing.T) {
 	_, tt := newTester(t)
-	const tip = "Show or hide the sidebar"
+	const tip = "Search  ⌘F"
 	if tt.HasText(tip) {
 		t.Fatalf("tip shows before focus; texts %q", tt.Texts())
 	}
-	for i := 0; i < 6 && !tt.HasText(tip); i++ {
+	for i := 0; i < 12 && !tt.HasText(tip); i++ {
 		tt.Key(0, ui.KeyTab)
 	}
 	if !tt.HasText(tip) {
-		t.Errorf("no tip for the sidebar toggle; texts %q", tt.Texts())
+		t.Errorf("no tip for the search button; texts %q", tt.Texts())
 	}
 }

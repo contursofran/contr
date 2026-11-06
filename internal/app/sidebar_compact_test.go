@@ -55,7 +55,6 @@ func TestNarrowWindowDrawsTheSidebarAsIconsAndRestoresIt(t *testing.T) {
 	if f.sidebarW != theme.SidebarWidth {
 		t.Errorf("a drag in the icon column stored %v", f.sidebarW)
 	}
-	box(t, tt, LabelSidebarToggle)
 	tt.SetSize(900, 800)
 	if got := box(t, tt, LabelPanelSidebar).W; got != theme.SidebarWidth {
 		t.Errorf("sidebar %v wide at 900, want the stored %d", got, theme.SidebarWidth)
@@ -76,14 +75,12 @@ func TestFilesPanelRuleStaysAt1100(t *testing.T) {
 	}
 }
 
-// The title bar keeps the sidebar toggle clear of the window buttons in the
-// icon column.
-func TestTheSidebarToggleStaysInsideTheIconColumnCorner(t *testing.T) {
+// In the icon column the tabs still start clear of the window buttons.
+func TestTabsStayClearOfTheWindowButtonsInTheIconColumn(t *testing.T) {
 	_, tt := newTester(t)
 	tt.SetSize(760, 800)
-	r := box(t, tt, LabelSidebarToggle)
-	if r.X < theme.TrafficLightInset || r.X+r.W > float32(760) {
-		t.Errorf("toggle %+v is over the window buttons or outside the window", r)
+	if r := box(t, tt, LabelTabs); r.X < theme.TrafficLightInset {
+		t.Errorf("tabs %+v are over the window buttons", r)
 	}
 }
 

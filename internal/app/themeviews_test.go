@@ -85,26 +85,6 @@ func wantInk(t *testing.T, name string, img *image.RGBA, r ui.Rect, bg, ink ui.C
 	}
 }
 
-func TestSidebarToggleFollowsTheTheme(t *testing.T) {
-	for _, tc := range themeCases {
-		themetest.Use(t, tc.src)
-		tt := ui.NewTester(func(c *ui.Context) {
-			ui.Row(c).Fill().Background(theme.Current().Ground).Children(func() {
-				toggleButton(c, LabelSidebarToggle, true, func() {})
-			})
-		}, 120, 80)
-		tt.Frame()
-		b := box(t, tt, LabelSidebarToggle)
-		cx, cy := b.X+b.W/2, b.Y+b.H/2
-		img := tt.Image()
-		fill := rgb(img, cx-theme.TitleGlyphWidth/2+3, cy)
-		inside := rgb(img, cx+theme.TitleGlyphWidth/2-4, cy)
-		if want := theme.Over(tc.pal.Ink50, inside); !near(fill, want, 2) {
-			t.Errorf("%s: toggle fill %v, want %v (ink-50 over %v)", tc.name, fill, want, inside)
-		}
-	}
-}
-
 func TestPlaceholderFollowsTheTheme(t *testing.T) {
 	for _, tc := range themeCases {
 		themetest.Use(t, tc.src)
