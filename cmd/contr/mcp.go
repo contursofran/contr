@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -182,7 +183,11 @@ func agentTools(m *managers, parent string) []mcp.Tool {
 	run := func(f func(context.Context, *agents.Manager, args) (string, error)) func(context.Context, json.RawMessage) (string, error) {
 		return func(ctx context.Context, raw json.RawMessage) (string, error) {
 			var a args
-			if err := json.Unmarshal(raw, &a); err != nil {
+			// An unknown argument is an error, so a misnamed field (message
+			// for text) does not become an empty value (#483, D200).
+			dec := json.NewDecoder(bytes.NewReader(raw))
+			dec.DisallowUnknownFields()
+			if err := dec.Decode(&a); err != nil {
 				return "", fmt.Errorf("bad arguments: %w", err)
 			}
 			return m.do(ctx, func(mgr *agents.Manager) (string, error) { return f(ctx, mgr, a) })

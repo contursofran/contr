@@ -893,3 +893,46 @@ func TestWorkerModelAndEffortFromArgvElseLabels(t *testing.T) {
 		t.Errorf("argv wins: model %q effort %q", w.Model, w.Effort)
 	}
 }
+
+// TestSendKeepsTheWholeText: a long text with backticks, quotes and newlines,
+// and a short one, reach terminal.send unchanged (#483).
+func TestSendKeepsTheWholeText(t *testing.T) {
+	long := strings.Repeat("Fix `go test ./...` (see \"docs/x.md\", it's 'quoted')\nthen $HOME & <tag>\n", 12)
+	for _, text := range []string{long, "Read tmp/fix.md."} {
+		f := &fakeCore{handle: map[string]func(map[string]any) (any, error){
+			"terminal.send": func(map[string]any) (any, error) { return map[string]any{"sent": true}, nil },
+		}}
+		if err := New(f, DefaultConfig()).Send(context.Background(), "w1", text); err != nil {
+			t.Fatal(err)
+		}
+		if got := f.last().Params["text"]; got != text {
+			t.Errorf("text = %q, want %q", got, text)
+		}
+	}
+}
+
+// TestSendRefusesBlankText: hc would submit its sender tag alone, an empty
+// message, so blank text is an error and nothing is sent (#483, D200).
+func TestSendRefusesBlankText(t *testing.T) {
+	for _, text := range []string{"", " \n\t"} {
+		f := &fakeCore{}
+		if err := New(f, DefaultConfig()).Send(context.Background(), "w1", text); err == nil || !strings.Contains(err.Error(), "no text") {
+			t.Errorf("send %q err = %v", text, err)
+		}
+		if len(f.calls) != 0 {
+			t.Errorf("calls = %v", f.calls)
+		}
+	}
+}
+
+// TestSendReportsARefusedSend: sent false from hc is an error with its reason.
+func TestSendReportsARefusedSend(t *testing.T) {
+	for reason, want := range map[string]string{"blocked": "blocked", "": "no reason given"} {
+		f := &fakeCore{handle: map[string]func(map[string]any) (any, error){
+			"terminal.send": func(map[string]any) (any, error) { return map[string]any{"sent": false, "reason": reason}, nil },
+		}}
+		if err := New(f, DefaultConfig()).Send(context.Background(), "w1", "hi"); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("err = %v, want %q", err, want)
+		}
+	}
+}
