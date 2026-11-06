@@ -1,14 +1,19 @@
 # contr
 
-A minimal native macOS client for herdr-core (`hc`), with an agent board built in. It is written in Go and uses MyGo's native UI.
+> **Work in progress.** contr changes every day. Expect missing parts and
+> breaking changes until a 1.0 release.
 
-- **Left:** spaces, repos and worktrees, and the running agents, each with a
-  status icon.
-- **Middle:** the hc terminal of the selected agent, with its tabs in the
-  title bar.
-- **Right:** the board: one row per issue or PR with its stages, what needs
-  you, and a box to answer it.
-- **Bottom:** plan usage (Claude, Codex), CPU and memory.
+A native macOS client for herdr-core (`hc`), made to run and watch many
+coding agents at once. It is written in Go and uses MyGo's native UI, in a
+frosted glass window with Dark and Light themes.
+
+- **Left:** your projects, each with its orchestrator and the workers it
+  started, and their state. Servers and Settings are at the bottom.
+- **Middle:** the terminal of the selected agent, with its tabs and search.
+  A notch at the top collects the questions, to-dos and blocked prompts of
+  all agents, so you can answer them from any terminal.
+- **Right:** the file tree of the agent's worktree with each file's changes,
+  the agent's context and the Claude and Codex plan usage.
 
 ## Requirements
 
