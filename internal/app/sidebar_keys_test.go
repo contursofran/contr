@@ -189,3 +189,35 @@ func TestEnterOnAProjectWithAgentsStillOpensIt(t *testing.T) {
 		t.Errorf("opened %d, started %v", opened, *started)
 	}
 }
+
+func TestAClickOnAnAgentRowFocusesTheTerminal(t *testing.T) {
+	h := newRows(t)
+	picked, opened := 0, 0
+	h.list.OnPick = func() { picked++ }
+	h.list.OnOpen = func() { opened++ }
+	if err := h.tt.Click("b-241, working, 241, sonnet"); err != nil {
+		t.Fatal(err)
+	}
+	if picked != 1 || opened != 0 || selID(h) != "b-241" {
+		t.Fatalf("picked %d, opened %d, selection %q; want 1, 0, b-241", picked, opened, selID(h))
+	}
+	// A click on the row that is already selected focuses the terminal again.
+	if err := h.tt.Click("b-241, working, 241, sonnet"); err != nil {
+		t.Fatal(err)
+	}
+	if picked != 2 {
+		t.Errorf("picked %d after a second click, want 2", picked)
+	}
+}
+
+func TestArrowKeysDoNotFocusTheTerminal(t *testing.T) {
+	h := newRows(t)
+	picked := 0
+	h.tt.Click("lead, idle, opus")
+	h.list.OnPick = func() { picked++ }
+	h.tt.Key(0, ui.KeyDown)
+	h.tt.Key(0, ui.KeyUp)
+	if picked != 0 {
+		t.Errorf("picked %d after arrow keys, want 0", picked)
+	}
+}

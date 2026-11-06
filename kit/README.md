@@ -52,7 +52,7 @@ The `--plugin-dir` sessions below still work with the plugin installed.
 ## Todos and artifacts
 
 In an hc terminal (`HC_TERMINAL_ID` set), two hooks keep the agent's todo
-list and artifacts in `<state dir>/session/<terminal>.json` (D188):
+list and artifacts in `<state dir>/session/<terminal>.json` (D189):
 
 - PostToolUse (`contr hook post-tool`): `TodoWrite` replaces the todos;
   `TaskCreate` and `TaskUpdate` add or change one by id; an
