@@ -170,9 +170,9 @@ var Light = &Palette{
 	GlowUmber:    ui.Hex("#ebcfa9"),
 	GlowGraphite: ui.Hex("#cdd2db"),
 
-	GlassWindow:  ui.RGBA(246, 246, 248, 0.75),
+	GlassWindow:  ui.RGBA(246, 246, 248, 0.6),
 	GlassFloat:   ui.RGBA(252, 252, 253, 0.8),
-	Panel:        white(0.9),
+	Panel:        white(0.7),
 	PanelLine:    black(0.06),
 	WindowLine:   black(0.1),
 	FloatLine:    black(0.08),

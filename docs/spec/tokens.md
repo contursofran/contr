@@ -10,9 +10,9 @@ Generated from the design system `tokens.json`. Views use the names; `internal/a
 | `glow-slate` | `#3a5a8c` | `#b2c3e0` | Canvas only: a blurred desktop glow behind the glass, top left. Never paint it in the app. |
 | `glow-umber` | `#6b4a2a` | `#ebcfa9` | Canvas only: a blurred desktop glow behind the glass, bottom right. Never paint it in the app. |
 | `glow-graphite` | `#2c3240` | `#cdd2db` | Canvas only: a blurred desktop glow behind the terminal. Never paint it in the app. |
-| `glass-window` | `rgba(20,21,24,0.7)` | `rgba(246,246,248,0.75)` | Window fill over the vibrancy material, under every panel. With glass-blur and glass-saturate. The owner can tune its alpha in Settings (D162); the value here is the default. |
+| `glass-window` | `rgba(20,21,24,0.7)` | `rgba(246,246,248,0.6)` | Window fill over the vibrancy material, under every panel. With glass-blur and glass-saturate. The owner can tune its alpha in Settings (D162); the value here is the default. |
 | `glass-float` | `rgba(34,35,40,0.72)` | `rgba(252,252,253,0.8)` | Floating glass over the terminal: the questions notch and the outline card. With glass-blur and glass-saturate. |
-| `panel` | `rgba(20,21,24,0.85)` | `rgba(255,255,255,0.9)` | Fill of the three panels: sidebar, terminal, files. The owner can tune its alpha in Settings (D162); the value here is the default. |
+| `panel` | `rgba(20,21,24,0.85)` | `rgba(255,255,255,0.7)` | Fill of the three panels: sidebar, terminal, files. The owner can tune its alpha in Settings (D162); the value here is the default. |
 | `panel-line` | `rgba(255,255,255,0.065)` | `rgba(0,0,0,0.06)` | 1px border of the three panels. |
 | `window-line` | `rgba(255,255,255,0.09)` | `rgba(0,0,0,0.1)` | 1px border of the window. |
 | `float-line` | `rgba(255,255,255,0.075)` | `rgba(0,0,0,0.08)` | 1px border of floating glass (notch: no top border). |
@@ -52,26 +52,26 @@ Generated from the design system `tokens.json`. Views use the names; `internal/a
 
 ## ANSI
 
-The 16 colors a program in the terminal asks for (SGR 30-37, 90-97, palette 0-15). The terminal plugin takes the palette of the theme (docs/spec/Terminal.md); a theme change swaps it with no reconnect. Dark is the v0.2 `TerminalPalette`. Light is Ghostty's GitHub Light Default tuned for contrast on the light panel (D129): the dim yellow is a dark ochre, and white and bright white are mid and dark greys, because a light grey would not show on a light panel. Each Light color has at least 4.5:1 on the flattened panel (`panel` over `glass-window` over `ground`: #fefefe in Light, #141518 in Dark); black has 14.5:1. Dark black and bright black are below 4.5:1 on purpose: programs use them as fills and dim text, as in the v0.2 palette.
+The 16 colors a program in the terminal asks for (SGR 30-37, 90-97, palette 0-15). The terminal plugin takes the palette of the theme (docs/spec/Terminal.md); a theme change swaps it with no reconnect. Dark is the v0.2 `TerminalPalette`. Light is Ghostty's GitHub Light Default tuned for contrast on the light panel (D129): the dim yellow is a dark ochre, and white and bright white are mid and dark greys, because a light grey would not show on a light panel. Each Light color has at least 4.5:1 on the flattened panel (`panel` over `glass-window` over `ground`: #fafbfb in Light, #141518 in Dark); black has 14.1:1. Dark black and bright black are below 4.5:1 on purpose: programs use them as fills and dim text, as in the v0.2 palette.
 
 | Token | Dark | Light | Contrast on panel |
 |---|---|---|---|
-| `ansi-black` | `#1e1e1e` | `#24292f` | Dark 1.1:1, Light 14.5:1 on panel. |
-| `ansi-red` | `#e06c6c` | `#cf222e` | Dark 5.7:1, Light 5.3:1 on panel. |
-| `ansi-green` | `#8cc07a` | `#116329` | Dark 8.6:1, Light 7.3:1 on panel. |
-| `ansi-yellow` | `#e0c070` | `#7d4e00` | Dark 10.4:1, Light 7.0:1 on panel. |
-| `ansi-blue` | `#6ca8e8` | `#0969da` | Dark 7.3:1, Light 5.1:1 on panel. |
-| `ansi-magenta` | `#c080d8` | `#8250df` | Dark 6.4:1, Light 5.0:1 on panel. |
-| `ansi-cyan` | `#5cc0c8` | `#1a7980` | Dark 8.5:1, Light 5.1:1 on panel. |
-| `ansi-white` | `#d0d0d0` | `#656d76` | Dark 11.8:1, Light 5.2:1 on panel. |
-| `ansi-bright-black` | `#5c5c5c` | `#57606a` | Dark 2.7:1, Light 6.3:1 on panel. |
-| `ansi-bright-red` | `#ff8080` | `#a40e26` | Dark 7.5:1, Light 7.8:1 on panel. |
-| `ansi-bright-green` | `#a8e090` | `#1a7f37` | Dark 11.9:1, Light 5.0:1 on panel. |
-| `ansi-bright-yellow` | `#ffd890` | `#633c01` | Dark 13.5:1, Light 9.6:1 on panel. |
-| `ansi-bright-blue` | `#90c4ff` | `#0550ae` | Dark 10.0:1, Light 7.5:1 on panel. |
-| `ansi-bright-magenta` | `#dca0f0` | `#6639ba` | Dark 9.0:1, Light 7.3:1 on panel. |
-| `ansi-bright-cyan` | `#80dce4` | `#0e6b78` | Dark 11.5:1, Light 6.1:1 on panel. |
-| `ansi-bright-white` | `#ffffff` | `#424a53` | Dark 18.3:1, Light 8.9:1 on panel. |
+| `ansi-black` | `#1e1e1e` | `#24292f` | Dark 1.1:1, Light 14.1:1 on panel. |
+| `ansi-red` | `#e06c6c` | `#cf222e` | Dark 5.7:1, Light 5.2:1 on panel. |
+| `ansi-green` | `#8cc07a` | `#116329` | Dark 8.6:1, Light 7.1:1 on panel. |
+| `ansi-yellow` | `#e0c070` | `#7d4e00` | Dark 10.4:1, Light 6.8:1 on panel. |
+| `ansi-blue` | `#6ca8e8` | `#0969da` | Dark 7.3:1, Light 5.0:1 on panel. |
+| `ansi-magenta` | `#c080d8` | `#8250df` | Dark 6.4:1, Light 4.9:1 on panel. |
+| `ansi-cyan` | `#5cc0c8` | `#1a7980` | Dark 8.5:1, Light 5.0:1 on panel. |
+| `ansi-white` | `#d0d0d0` | `#656d76` | Dark 11.8:1, Light 5.1:1 on panel. |
+| `ansi-bright-black` | `#5c5c5c` | `#57606a` | Dark 2.7:1, Light 6.2:1 on panel. |
+| `ansi-bright-red` | `#ff8080` | `#a40e26` | Dark 7.5:1, Light 7.6:1 on panel. |
+| `ansi-bright-green` | `#a8e090` | `#1a7f37` | Dark 11.9:1, Light 4.9:1 on panel. |
+| `ansi-bright-yellow` | `#ffd890` | `#633c01` | Dark 13.5:1, Light 9.3:1 on panel. |
+| `ansi-bright-blue` | `#90c4ff` | `#0550ae` | Dark 10.0:1, Light 7.3:1 on panel. |
+| `ansi-bright-magenta` | `#dca0f0` | `#6639ba` | Dark 9.0:1, Light 7.1:1 on panel. |
+| `ansi-bright-cyan` | `#80dce4` | `#0e6b78` | Dark 11.5:1, Light 6.0:1 on panel. |
+| `ansi-bright-white` | `#ffffff` | `#424a53` | Dark 18.3:1, Light 8.7:1 on panel. |
 
 ## Type
 

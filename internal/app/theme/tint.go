@@ -14,7 +14,7 @@ import (
 // tintDefaults are the token alphas of Dark and Light (D161), as fractions.
 // A test keeps them equal to the palettes.
 var tintDefaults = [2]struct{ window, panel float64 }{
-	{window: 0.75, panel: 0.90}, // Light
+	{window: 0.60, panel: 0.70}, // Light
 	{window: 0.70, panel: 0.85}, // Dark
 }
 

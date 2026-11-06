@@ -64,8 +64,8 @@ func TestTintOverridesApplyPerTheme(t *testing.T) {
 func TestTintAppliesAtOnceAndClears(t *testing.T) {
 	useTheme(t, mygo.ThemeLight)
 	w, p := TintValues()
-	if w != 0.75 || p != 0.90 {
-		t.Errorf("defaults %v %v, want 0.75 0.90", w, p)
+	if w != 0.60 || p != 0.70 {
+		t.Errorf("defaults %v %v, want 0.60 0.70", w, p)
 	}
 	SetTint(false, f64(0.5), f64(0.5))
 	if got := Current().Panel.A; got != 128 {
