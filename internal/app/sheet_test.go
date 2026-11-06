@@ -18,7 +18,7 @@ import (
 	"github.com/contursofran/contr/internal/app/theme/themetest"
 )
 
-// sheetPart is one spec'd component that the spec sheet draws (#458, D178):
+// sheetPart is one spec'd component that the spec sheet draws (#458, D179):
 // the name of its spec and its image in docs/spec, the size of the box it
 // gets, in points, and the view. The data copies the spec image, so the two
 // can be compared.

@@ -161,7 +161,7 @@ Add packages under `internal/` when a change needs them.
   window as a PNG. To check a visible change, capture the window and look at
   the PNG yourself (decision D5).
 - To compare a component with its spec, run `scripts/sheet.sh [Part…]`
-  (D178). It draws each part of `sheetParts` (`internal/app/sheet_test.go`)
+  (D179). It draws each part of `sheetParts` (`internal/app/sheet_test.go`)
   under its image in `docs/spec/images`, in Dark and Light, and writes
   `tmp/sheet/<Part>-<theme>.png`. It needs no window and no hc. Run it for
   the parts your change touches, look at each sheet, and give the paths in

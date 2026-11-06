@@ -1,6 +1,6 @@
 #!/bin/sh
 # Draws each spec'd component under its spec image, in Dark and Light
-# (#458, D178), and writes tmp/sheet/<part>-<theme>.png. It needs no window
+# (#458, D179), and writes tmp/sheet/<part>-<theme>.png. It needs no window
 # and no hc. Compare the two by eye: it is not a pixel test (D5).
 #
 #   scripts/sheet.sh                   every part
