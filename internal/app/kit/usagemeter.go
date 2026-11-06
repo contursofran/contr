@@ -79,7 +79,7 @@ func meterBar(c *ui.Context, m Meter) ui.Element {
 // PlanUsageWidth is the width of a bar of [PlanUsage].
 const PlanUsageWidth = 44
 
-// PlanUsage builds the plan meters of the sidebar foot (D189): for each plan,
+// PlanUsage builds the plan meters of the sidebar foot (D196): for each plan,
 // inline, its label, a 44px bar and its value ("Claude ▬ 38%  Codex ▬ 12%").
 func PlanUsage(c *ui.Context, meters []Meter) ui.Element {
 	p := theme.Current()

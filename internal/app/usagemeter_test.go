@@ -82,7 +82,7 @@ func TestPlanMetersWithoutDataHaveNone(t *testing.T) {
 	}
 }
 
-// The files panel keeps only the Context meter; the plans are in the sidebar foot (D189).
+// The files panel keeps only the Context meter; the plans are in the sidebar foot (D196).
 func TestTheFilesPanelShowsOnlyTheContextUnderTheTree(t *testing.T) {
 	f, tt := newTester(t)
 	f.Usage = usage.NewSampler(func() usage.Reading {
@@ -120,7 +120,7 @@ func TestTheFilesPanelShowsADashWithoutASampler(t *testing.T) {
 	}
 }
 
-// The sidebar foot shows the plan meters inline, left of the Settings button (D189).
+// The sidebar foot shows the plan meters inline, left of the Settings button (D196).
 func TestTheSidebarFootShowsThePlansLeftOfSettings(t *testing.T) {
 	h := newSpaces(t, spTree())
 	h.list.Plans = func() []kit.Meter { return planMeters(fakeLeft{usage.PlanClaude: 62}) }

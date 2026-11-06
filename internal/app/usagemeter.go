@@ -23,7 +23,7 @@ type planPercent interface {
 
 // contextMeter is the info block of the files panel: the context of the
 // selected agent (docs/spec/UsageMeter.md). Plan usage is global, so it is in
-// the sidebar foot (D189, [planMeters]).
+// the sidebar foot (D196, [planMeters]).
 //
 // terminal is the hc terminal of the selected agent ("" for none). Its context
 // comes from the status line it runs (D144); without one the line shows no data.
@@ -38,7 +38,7 @@ func contextMeter(src planPercent, terminal string) kit.Meter {
 }
 
 // planMeters is one meter per plan with its percent used, for the sidebar
-// foot (D189).
+// foot (D196).
 func planMeters(src planPercent) []kit.Meter {
 	var out []kit.Meter
 	for _, plan := range usage.Plans {

@@ -49,7 +49,7 @@ type SpacesList struct {
 	OnSettings  func()
 	UpdateReady func() bool
 	// Plans gives the plan meters of the sidebar foot, left of the Settings
-	// button (D189). Nil: no meters.
+	// button (D196). Nil: no meters.
 	Plans func() []kit.Meter
 	// OnNewIn runs when `+ new` of an empty project is clicked, with the
 	// project's folder (D116). Nil: the button does nothing.
@@ -75,10 +75,15 @@ type SpacesList struct {
 	Entry WorkerEntry
 	// ModelOf names the model of an agent profile for line 2. Nil: none.
 	ModelOf func(profile string) string
+	// EffortOf names the effort of an agent profile for line 2. Nil: none.
+	EffortOf func(profile string) string
 	// StatusModel gives the model that Claude Code's status line reported for
 	// the agent in hc terminal address, for an agent with no --model (D174).
 	// Nil: none.
 	StatusModel func(address string) string
+	// StatusEffort gives the effort that Claude Code's status line reported
+	// for the terminal at address, or "" (D189).
+	StatusEffort func(address string) string
 	// Titles gives the issue titles of the worker rows. Nil: none.
 	Titles *IssueTitles
 	// Ages is the one timer of all ages (D137). Nil: ages move on a state
@@ -134,6 +139,9 @@ type SpacesList struct {
 	ByKey func(do func())
 	// OnOpen runs on Enter in the list: the terminal takes the focus.
 	OnOpen func()
+	// OnPick runs after a click on an agent row: the terminal takes the
+	// focus, so the next key goes to the agent's prompt (#465).
+	OnPick func()
 	// heads holds the cancel func of the HEAD watch of each repo.
 	heads  map[string]context.CancelFunc
 	closed bool

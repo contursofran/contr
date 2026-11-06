@@ -113,7 +113,7 @@ func (l *SpacesList) addMenu(m *ui.Menu) {
 	}
 }
 
-// settingsFoot is the foot row of the sidebar: the plan meters at the left (D189)
+// settingsFoot is the foot row of the sidebar: the plan meters at the left (D196)
 // and the Settings button at the right; the icon column shows only the button,
 // centered (D147). The dot shows while an update waits (D146).
 func (l *SpacesList) settingsFoot(c *ui.Context) {

@@ -18,7 +18,7 @@ import (
 // TestPlanUsageInTheSidebarFoot starts the built app on a scratch core with
 // scratch plan data (Claude 38%, Codex 12% used) and checks that the plan
 // meters show in the sidebar foot, left of Settings, in Dark and Light
-// (D189). PNGs go to tmp/e2e/planusage-*.png. It never touches the owner's core:
+// (D196). PNGs go to tmp/e2e/planusage-*.png. It never touches the owner's core:
 //
 //	go test -tags e2e -run TestPlanUsageInTheSidebarFoot ./cmd/contr
 func TestPlanUsageInTheSidebarFoot(t *testing.T) {
