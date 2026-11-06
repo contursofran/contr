@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/usage"
 )
 
 const hookUsage = `Usage:
@@ -30,7 +32,8 @@ terminal with role orchestrator): once the context passes CONTR_SAVE_AT
 tokens (default 220000), it keeps the turn going one time and asks the
 coordinator to update COORDINATOR-STATE.md before Claude Code compacts.
 In any hc session that is not a worker it also labels the terminal with the
-context size (contr.context, contr.context-limit) for the status strip.
+context size (contr.context, contr.context-limit) for the status strip, and
+with the model and effort (contr.model, contr.effort) for the sidebar row.
 
 session-start, after a compaction in a coordinator: prints the playbook,
 the state file to read, the live workers it started, its open owner
@@ -67,6 +70,11 @@ type hookInput struct {
 	LastAssistantMessage string `json:"last_assistant_message"`
 	StopHookActive       bool   `json:"stop_hook_active"`
 	Source               string `json:"source"` // SessionStart: startup, resume, clear or compact
+	// Effort is the session's effort level (low … max). Claude Code leaves it
+	// out for a model with no effort setting.
+	Effort *struct {
+		Level string `json:"level"`
+	} `json:"effort"`
 }
 
 // hook is one run of a hook command.
@@ -149,11 +157,11 @@ func (h *hook) coordinatorStop() error {
 	if h.in.StopHookActive || h.in.TranscriptPath == "" {
 		return nil
 	}
-	tokens, err := agents.ContextTokens(h.in.TranscriptPath)
+	tokens, model, err := agents.ContextAndModel(h.in.TranscriptPath)
 	if err != nil {
 		return err
 	}
-	h.showContext(tokens)
+	h.showContext(tokens, h.modelLabels(model))
 	if tokens < h.saveAt() || h.asked() {
 		return nil
 	}
@@ -176,7 +184,7 @@ func (h *hook) sessionStart() error {
 		return nil
 	}
 	h.clearAsked()
-	h.showContext(0) // the size before the compaction is stale; the next turn's Stop sets it again
+	h.showContext(0, nil) // the size before the compaction is stale; the next turn's Stop sets it again
 	coord, err := h.coordinator()
 	if err != nil || !coord {
 		return err
@@ -185,16 +193,37 @@ func (h *hook) sessionStart() error {
 	return err
 }
 
+// modelLabels are the model and effort labels of the session (D189): the
+// short name of the transcript's model, and the effort of the hook input,
+// else $CLAUDE_EFFORT. A value that is not known is left out, so the label
+// keeps its last value.
+func (h *hook) modelLabels(model string) map[string]string {
+	labels := map[string]string{}
+	if model != "" {
+		labels[agents.LabelModel] = usage.ShortModel(model, "")
+	}
+	effort := h.getenv("CLAUDE_EFFORT")
+	if h.in.Effort != nil && h.in.Effort.Level != "" {
+		effort = h.in.Effort.Level
+	}
+	if effort != "" {
+		labels[agents.LabelEffort] = effort
+	}
+	return labels
+}
+
 // showContext puts the session's context size on its own hc terminal, for
 // the status strip: contr.context (tokens) and contr.context-limit (the
-// compaction window). 0 removes contr.context. Best effort: a failure never
-// fails the hook.
-func (h *hook) showContext(tokens int) {
+// compaction window). 0 removes contr.context. extra are more labels to set
+// in the same call (modelLabels). Best effort: a failure never fails the
+// hook.
+func (h *hook) showContext(tokens int, extra map[string]string) {
 	self := h.getenv("HC_TERMINAL_ID")
 	if self == "" {
 		return
 	}
 	labels := map[string]string{"contr.context": ""}
+	maps.Copy(labels, extra)
 	if tokens > 0 {
 		labels["contr.context"] = strconv.Itoa(tokens)
 		labels["contr.context-limit"] = strconv.Itoa(h.compactAt())

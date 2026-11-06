@@ -181,6 +181,7 @@ func openWindow(icons bool) int {
 		// that does not read is reported by the agent state; the defaults serve here.
 		cfg, _ := agents.LoadConfig(configPath(os.Getenv))
 		frame.ModelOf = cfg.ModelOf
+		frame.EffortOf = cfg.EffortOf
 		frame.LoadProjects = func() (*projects.Store, error) {
 			path, err := projects.Path()
 			if err != nil {
@@ -233,6 +234,7 @@ func openWindow(icons bool) int {
 		frame.PickFolder = pickFolder
 		frame.Updates = updateService()
 		frame.Relaunch = func() { mygo.App.Relaunch() }
+		frame.AgentsConfig = configPath(os.Getenv)
 		frame.OpenFolder = openFolder
 		frame.ProjectKey = projectKey
 		home, _ := os.UserHomeDir()

@@ -33,6 +33,9 @@ type Context struct {
 	// for line 2 of an agent row that contr did not start (D174). Empty when
 	// the input had none.
 	Model string `json:"model,omitempty"`
+	// Effort is the effort level from the status line ("high"), empty when
+	// the input had none (D189).
+	Effort string `json:"effort,omitempty"`
 }
 
 // Percent is the whole percent of the window used, from 0 to 100.
@@ -74,12 +77,15 @@ type contextLine struct {
 		ID          string `json:"id"`
 		DisplayName string `json:"display_name"`
 	} `json:"model"`
+	Effort *struct {
+		Level string `json:"level"`
+	} `json:"effort"`
 }
 
-// shortModel is the family word of a model: "sonnet" for "claude-sonnet-5-5"
+// ShortModel is the family word of a model: "sonnet" for "claude-sonnet-5-5"
 // or "Sonnet 5.5". An unknown model gives its display name in lower case,
 // else its id.
-func shortModel(id, display string) string {
+func ShortModel(id, display string) string {
 	for _, fam := range []string{"opus", "sonnet", "haiku"} {
 		if strings.Contains(strings.ToLower(id+" "+display), fam) {
 			return fam
@@ -106,7 +112,10 @@ func ParseContext(stdinJSON string, now uint64) *Context {
 	u := w.CurrentUsage
 	c := &Context{Schema: schema, UpdatedAt: now, Size: w.Size, Tokens: u.Input + u.CacheCreation + u.CacheRead}
 	if in.Model != nil {
-		c.Model = shortModel(in.Model.ID, in.Model.DisplayName)
+		c.Model = ShortModel(in.Model.ID, in.Model.DisplayName)
+	}
+	if in.Effort != nil {
+		c.Effort = in.Effort.Level
 	}
 	return c
 }
@@ -135,7 +144,7 @@ func WriteContext(dir, id string, c *Context) (bool, error) {
 	if path == "" {
 		return false, errors.New("no terminal id")
 	}
-	if old := readContext(path); old != nil && old.Tokens == c.Tokens && old.Size == c.Size && old.Model == c.Model {
+	if old := readContext(path); old != nil && old.Tokens == c.Tokens && old.Size == c.Size && old.Model == c.Model && old.Effort == c.Effort {
 		return false, nil
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

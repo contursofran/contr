@@ -160,6 +160,15 @@ Add packages under `internal/` when a change needs them.
   `//go:build e2e`. The plugin lists elements, clicks, types and captures a
   window as a PNG. To check a visible change, capture the window and look at
   the PNG yourself (decision D5).
+- To look at the app, run `scripts/see.sh <fixture> [dark|light] [label…]`
+  (D178). It starts a fixture against a scratch core, presses the labels in
+  order, and writes `tmp/see/<fixture>-<theme>.png` and a `.txt` of the
+  elements. Check the data in the `.txt`; open the PNG for layout and color.
+  `scripts/see.sh` alone lists the fixtures. Add a fixture in
+  `cmd/contr/e2e_see_test.go` when none shows your state.
+- New e2e tests use the harness in `cmd/contr/e2e_harness_test.go`
+  (`newHarness`, `h.spawn`, `h.owner`, `h.theme`, `h.launch`, `c.press`).
+  Do not set up the scratch home and env by hand.
 - To compare a component with its spec, run `scripts/sheet.sh [Part…]`
   (D179). It draws each part of `sheetParts` (`internal/app/sheet_test.go`)
   under its image in `docs/spec/images`, in Dark and Light, and writes

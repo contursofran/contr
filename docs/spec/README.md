@@ -32,6 +32,7 @@ what the redesign does not settle.
 | [OutlineCard.md](OutlineCard.md) | the card of a hovered tick |
 | [FileTree.md](FileTree.md) | the files panel tree with +/− counts |
 | [UsageMeter.md](UsageMeter.md) | context and plan usage under the file tree |
+| [SettingsAgents.md](SettingsAgents.md) | Settings tab bar and the Roles of the Agents tab |
 
 Each component spec has these sections: purpose, anatomy, states,
 behavior, data, keys and focus, edge cases, accessibility, build in MyGo,
@@ -126,7 +127,7 @@ The owner's from-zero canvas (https://claude.ai/artifact/9bmbRdJc8qDMSRXm6obEb3)
   (`ui.Icon`), so a state changes only the text color.
 - Names: `project`, `computer`, `server`, `folder`, `folder-open`,
   `file-go`, `file-md`, `file`, `close`, `plus`, `search`,
-  `sidebar-right`, `filter` (three lines), `terminal`, `settings`, `download`. They go in `assets`.
+  `sidebar-right`, `filter` (three lines), `terminal`, `settings`, `download`, `chevron-down` (dropdowns). They go in `assets`.
 - The Claude mark is the official Claude mark (O8 settled, D123): `claude.svg`, one filled shape.
 
 ## Data

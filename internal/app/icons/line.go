@@ -8,7 +8,7 @@ import "github.com/egoist/mygo/ui"
 var LineNames = [...]string{
 	"project", "computer", "server", "folder", "folder-open", "file-go",
 	"file-md", "file", "close", "plus", "split", "search", "sidebar-right",
-	"filter", "terminal", "settings", "download",
+	"filter", "terminal", "settings", "download", "chevron-down",
 }
 
 // Line returns the line icon with this name, or nil when the file is missing
