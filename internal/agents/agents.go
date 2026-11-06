@@ -29,6 +29,11 @@ const (
 	LabelProfile  = "profile"
 	LabelWorktree = "worktree"
 	LabelProject  = "project"
+	// LabelModel and LabelEffort are set by the kit's Stop hook on a Claude
+	// Code session's own terminal: the short model name ("opus") and the
+	// effort level ("high"), for line 2 of its row (D189).
+	LabelModel  = "contr.model"
+	LabelEffort = "contr.effort"
 )
 
 // RoleOrchestrator is the role label of an orchestrator agent.
@@ -114,16 +119,22 @@ func DefaultConfig() Config {
 // ModelOf is the model that the profile starts: the value after --model in
 // its argv. It is "" for an unknown profile or one with no --model.
 func (c Config) ModelOf(profile string) string {
-	return modelFromArgv(c.Profiles[profile].Argv)
+	return flagValue(c.Profiles[profile].Argv, "--model")
 }
 
-// modelFromArgv is the value after --model (or --model=) in argv, or "".
-func modelFromArgv(argv []string) string {
+// EffortOf is the effort that the profile starts: the value after --effort
+// in its argv. It is "" for an unknown profile or one with no --effort.
+func (c Config) EffortOf(profile string) string {
+	return flagValue(c.Profiles[profile].Argv, "--effort")
+}
+
+// flagValue is the value after flag (or flag=) in argv, or "".
+func flagValue(argv []string, flag string) string {
 	for i, a := range argv {
-		if a == "--model" && i+1 < len(argv) {
+		if a == flag && i+1 < len(argv) {
 			return argv[i+1]
 		}
-		if v, ok := strings.CutPrefix(a, "--model="); ok {
+		if v, ok := strings.CutPrefix(a, flag+"="); ok {
 			return v
 		}
 	}
@@ -203,9 +214,13 @@ type Worker struct {
 	Title    string `json:"title,omitempty"`
 	ExitCode *int   `json:"exit_code,omitempty"`
 	// Model is the --model of the program's own command line, when it has
-	// one. A terminal contr did not start has no profile, so this is how its
-	// row knows the model (D169).
+	// one, else the model that the kit's Stop hook put on the terminal. A
+	// terminal contr did not start has no profile, so this is how its row
+	// knows the model (D169, D189).
 	Model string `json:"model,omitempty"`
+	// Effort is the --effort of the program's own command line, else the
+	// effort that the kit's Stop hook put on the terminal (D189).
+	Effort string `json:"effort,omitempty"`
 	// Task is what a worker is doing, for line 1 of its row: the cleaned
 	// terminal title. Set by the agent model; empty when the title is not
 	// usable (D169).
@@ -270,7 +285,8 @@ func (t terminal) worker() Worker {
 		Turn:     t.Turn,
 		Title:    t.Title,
 		ExitCode: t.ExitCode,
-		Model:    modelFromArgv(t.Argv),
+		Model:    orText(flagValue(t.Argv, "--model"), t.Labels[LabelModel]),
+		Effort:   orText(flagValue(t.Argv, "--effort"), t.Labels[LabelEffort]),
 	}
 	if t.Name != nil {
 		w.Name = *t.Name
@@ -705,4 +721,12 @@ func sortWorkers(ws []Worker) {
 		}
 		return ws[i].Address < ws[j].Address
 	})
+}
+
+// orText is s, else other when s is empty.
+func orText(s, other string) string {
+	if s != "" {
+		return s
+	}
+	return other
 }

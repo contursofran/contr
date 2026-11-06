@@ -163,19 +163,30 @@ func (l *SpacesList) modelOf(w agents.Worker) string {
 	return l.ModelOf(w.Profile)
 }
 
-// modelFor is the model of line 2: the profile's, else the --model of the
-// program's own command line (an orchestrator contr did not start, D169).
+// modelFor is the model of line 2 with its effort ("opus high", D189). The
+// model is the profile's, else the --model of the program's own command
+// line or the hook's label (an orchestrator contr did not start, D169), else
+// the status line's. The effort comes from the same places, in the same
+// order; "" when not known.
 func (l *SpacesList) modelFor(w agents.Worker) string {
-	if m := l.modelOf(w); m != "" {
-		return m
+	model := l.modelOf(w)
+	if model == "" {
+		model = w.Model
 	}
-	if w.Model != "" {
-		return w.Model
+	if model == "" && l.StatusModel != nil {
+		model = l.StatusModel(w.Address)
 	}
-	if l.StatusModel != nil {
-		return l.StatusModel(w.Address)
+	effort := ""
+	if l.EffortOf != nil {
+		effort = l.EffortOf(w.Profile)
 	}
-	return ""
+	if effort == "" {
+		effort = w.Effort
+	}
+	if effort == "" && l.StatusEffort != nil {
+		effort = l.StatusEffort(w.Address)
+	}
+	return strings.TrimSpace(model + " " + effort)
 }
 
 // issueTitle is the title of the issue of a worker row, "" when none is known (D174).

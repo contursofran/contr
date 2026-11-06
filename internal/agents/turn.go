@@ -109,31 +109,39 @@ func reports(b block) bool {
 // tailBytes is how much of the end of a transcript ContextTokens reads.
 const tailBytes = 1 << 20
 
-// ContextTokens returns the size of the context at the last assistant reply
-// of the transcript at path: its input tokens, cache reads and cache writes.
-// It reads only the end of the file. It returns 0 when no reply has usage.
+// ContextTokens is the context size of the session at path: the input
+// tokens of its last assistant message. See [ContextAndModel].
 func ContextTokens(path string) (int, error) {
+	tokens, _, err := ContextAndModel(path)
+	return tokens, err
+}
+
+// ContextAndModel reads the end of the transcript at path. It gives the
+// input tokens (cache included) of the last assistant message with usage,
+// and the model id of the last assistant message ("claude-opus-5-5"), or ""
+// (D189). Only the last tailBytes are read.
+func ContextAndModel(path string) (tokens int, model string, err error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	defer func() { _ = f.Close() }()
 	fi, err := f.Stat()
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	if off := fi.Size() - tailBytes; off > 0 {
 		if _, err := f.Seek(off, io.SeekStart); err != nil {
-			return 0, err
+			return 0, "", err
 		}
 	}
-	tokens := 0
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 64*1024), 64*1024*1024)
 	for sc.Scan() {
 		var e struct {
 			Type    string `json:"type"`
 			Message struct {
+				Model string `json:"model"`
 				Usage *struct {
 					Input       int `json:"input_tokens"`
 					CacheRead   int `json:"cache_read_input_tokens"`
@@ -142,13 +150,18 @@ func ContextTokens(path string) (int, error) {
 			} `json:"message"`
 		}
 		// The first line after a seek is cut; it does not parse and is skipped.
-		if json.Unmarshal(sc.Bytes(), &e) != nil || e.Type != "assistant" || e.Message.Usage == nil {
+		if json.Unmarshal(sc.Bytes(), &e) != nil || e.Type != "assistant" {
 			continue
 		}
-		u := e.Message.Usage
-		tokens = u.Input + u.CacheRead + u.CacheCreate
+		// Claude Code writes "<synthetic>" for messages it made itself.
+		if m := e.Message.Model; m != "" && !strings.HasPrefix(m, "<") {
+			model = m
+		}
+		if u := e.Message.Usage; u != nil {
+			tokens = u.Input + u.CacheRead + u.CacheCreate
+		}
 	}
-	return tokens, sc.Err()
+	return tokens, model, sc.Err()
 }
 
 // RanCommand tells whether the transcript at path holds a run of the slash

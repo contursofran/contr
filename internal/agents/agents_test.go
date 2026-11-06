@@ -887,3 +887,28 @@ func TestAPlainTerminalRunningClaudeIsASession(t *testing.T) {
 		t.Errorf("after Claude exits: %+v", w)
 	}
 }
+
+func TestConfigEffortOf(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Profiles["inline"] = Profile{Argv: []string{"claude", "--effort=max"}}
+	for profile, want := range map[string]string{"builder": "medium", "debugger": "xhigh", "inline": "max", "missing": ""} {
+		if got := cfg.EffortOf(profile); got != want {
+			t.Errorf("EffortOf(%q) = %q, want %q", profile, got, want)
+		}
+	}
+}
+
+func TestWorkerModelAndEffortFromArgvElseLabels(t *testing.T) {
+	tm := term("t1", "a", "live", map[string]string{LabelModel: "opus", LabelEffort: "high"}, nil)
+	w, err := decodeWorker(raw(tm))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Model != "opus" || w.Effort != "high" {
+		t.Errorf("from labels: model %q effort %q", w.Model, w.Effort)
+	}
+	tm["argv"] = []string{"claude", "--model", "sonnet", "--effort", "low"}
+	if w, _ = decodeWorker(raw(tm)); w.Model != "sonnet" || w.Effort != "low" {
+		t.Errorf("argv wins: model %q effort %q", w.Model, w.Effort)
+	}
+}

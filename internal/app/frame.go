@@ -122,6 +122,9 @@ type Frame struct {
 	// ModelOf names the model that an agent profile starts, for line 2 of the
 	// agent rows. Nil shows no model.
 	ModelOf func(profile string) string
+	// EffortOf names the effort that an agent profile starts, for line 2 of
+	// the agent rows (D189). Nil: none.
+	EffortOf func(profile string) string
 	// WatchHead watches a repo's HEAD file for the sidebar's branch (see
 	// SpacesList.WatchHead). Nil: the branch is read when the terminals change.
 	WatchHead func(ctx context.Context, path string, changed func()) error
@@ -997,6 +1000,16 @@ func (f *Frame) statusModel(address string) string {
 	return c.Model
 }
 
+// statusEffort is the effort that Claude Code's status line reported for
+// the terminal at address, or "" (D189).
+func (f *Frame) statusEffort(address string) string {
+	if f.Usage == nil {
+		return ""
+	}
+	c, _ := f.Usage.Context(address)
+	return c.Effort
+}
+
 // syncWorkerPRs starts the pull request reads for the workers now (D104).
 func (f *Frame) syncWorkerPRs() {
 	if f.WorkerPRs != nil && f.agentSnap != nil {
@@ -1058,6 +1071,8 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.SpacesList.OnOpen = func() { f.focusTerm = true; w.Invalidate() }
 	f.SpacesList.OnPick = f.SpacesList.OnOpen
 	f.SpacesList.ModelOf = f.ModelOf
+	f.SpacesList.EffortOf = f.EffortOf
+	f.SpacesList.StatusEffort = f.statusEffort
 	f.SpacesList.StatusModel = f.statusModel
 	f.SpacesList.Titles = f.IssueTitles
 	f.SpacesList.Run, f.SpacesList.Status = Runner{Post: w.Update}, f.Toasts.Show
