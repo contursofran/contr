@@ -72,10 +72,10 @@ func TestANSIContrastNumbersInTokensMd(t *testing.T) {
 func ratio(v float64) string { return strconv.FormatFloat(v, 'f', 1, 64) + ":1" }
 
 func TestPanelBaseIsTheFlatPanel(t *testing.T) {
-	if got, want := Light.PanelBase(), ui.RGB(241, 242, 245); got != want {
+	if got, want := Light.PanelBase(), ui.RGB(243, 244, 246); got != want {
 		t.Errorf("Light panel = %v, want %v", got, want)
 	}
-	if got, want := Dark.PanelBase(), ui.RGB(22, 23, 24); got != want {
+	if got, want := Dark.PanelBase(), ui.RGB(23, 23, 26); got != want {
 		t.Errorf("Dark panel = %v, want %v", got, want)
 	}
 }
