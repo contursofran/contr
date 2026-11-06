@@ -74,8 +74,11 @@ const (
 	TextCoreOff    = "hc not connected"
 )
 
-// CheckEvery is the time between the automatic update checks (D115).
-const CheckEvery = 4 * time.Hour
+// CheckEvery is the time between the automatic update checks (D115, D198).
+const CheckEvery = 15 * time.Minute
+
+// ActiveAfter is the age of the last check after which the app becoming active checks again (D198).
+const ActiveAfter = 10 * time.Minute
 
 // UpdateInfo is a newer version of contr.
 type UpdateInfo struct {
@@ -141,7 +144,7 @@ type Settings struct {
 	// enabled is known once the first Enabled call returns.
 	enabledKnown, enabled bool
 	checking, installing  bool
-	// lastCheck is when the last check started; zero when none did.
+	// lastCheck is when the last good check started, on the wall clock; zero when none did.
 	lastCheck time.Time
 	upToDate  bool
 	found     *UpdateInfo
@@ -222,14 +225,17 @@ func (s *Settings) probe() {
 }
 
 // StartChecks is the one place that holds the check schedule (owner answer D33): one check at
-// launch, then one every Every (4 hours). A check does not run while the window is hidden; when the
-// window shows after a missed check, SetVisible runs it. A check that fails stays quiet. The timer sleeps between checks, so an idle contr uses no CPU.
+// launch, then one when the last good check is Every (15 minutes) old on the wall clock (D198). The
+// timer ticks at a sixth of Every and compares wall time, so a Mac sleep counts and a failed check
+// tries again at the next tick. A check does not run while the window is hidden; when the window
+// shows after a missed check, SetVisible runs it. A check that fails stays quiet. The timer sleeps
+// between ticks, so an idle contr uses no CPU.
 // The checks run off the UI thread. It returns the function that stops the schedule.
 func (s *Settings) StartChecks() (stop func()) {
 	if s.Updates == nil {
 		return func() {}
 	}
-	every := s.interval()
+	tick := s.interval() / 6
 	done := make(chan struct{})
 	post := func(fn func()) {
 		if s.Run.Post == nil {
@@ -246,8 +252,8 @@ func (s *Settings) StartChecks() (stop func()) {
 			case <-done:
 				return
 			case <-t.C:
-				post(s.autoCheck)
-				t.Reset(every)
+				post(s.dueCheck)
+				t.Reset(tick)
 			}
 		}
 	}()
@@ -259,11 +265,32 @@ func (s *Settings) StartChecks() (stop func()) {
 	}
 }
 
+// now returns the wall clock without its monotonic reading, so an age includes a Mac sleep (D198).
 func (s *Settings) now() time.Time {
 	if s.Now != nil {
-		return s.Now()
+		return s.Now().Round(0)
 	}
-	return time.Now()
+	return time.Now().Round(0)
+}
+
+// olderThan tells if no good check ran in the last d.
+func (s *Settings) olderThan(d time.Duration) bool {
+	return s.lastCheck.IsZero() || s.now().Sub(s.lastCheck) >= d
+}
+
+// dueCheck is one timer tick: it checks when the last good check is Every old.
+func (s *Settings) dueCheck() {
+	if s.olderThan(s.interval()) {
+		s.autoCheck()
+	}
+}
+
+// Activated runs on the UI thread when the app becomes active (focus or wake). It checks when the
+// last good check is older than ActiveAfter (D198).
+func (s *Settings) Activated() {
+	if s.Updates != nil && s.olderThan(ActiveAfter) {
+		s.autoCheck()
+	}
 }
 
 func (s *Settings) interval() time.Duration {
@@ -280,10 +307,9 @@ func (s *Settings) SetVisible(visible bool) {
 	if !visible || s.Updates == nil {
 		return
 	}
-	if !s.lastCheck.IsZero() && s.now().Sub(s.lastCheck) < s.interval() {
-		return
+	if s.olderThan(s.interval()) {
+		s.autoCheck()
 	}
-	s.autoCheck()
 }
 
 // autoCheck is one scheduled check. It runs on the UI thread, where the window state is known.
@@ -295,7 +321,7 @@ func (s *Settings) autoCheck() {
 		return
 	}
 	s.checking = true
-	s.lastCheck = s.now()
+	started := s.now()
 	s.Run.Do(func() func() {
 		var info *UpdateInfo
 		var err error
@@ -309,10 +335,14 @@ func (s *Settings) autoCheck() {
 			s.enabled, s.enabledKnown = on, true
 			s.checking = false
 			if err != nil {
+				// The age stays, so the next tick tries again (D198).
 				log.Printf("contr: update check failed: %v", err)
-			} else if info != nil {
-				s.found = info
-				s.background()
+			} else {
+				s.lastCheck = started
+				if info != nil {
+					s.found = info
+					s.background()
+				}
 			}
 			s.redraw()
 		}

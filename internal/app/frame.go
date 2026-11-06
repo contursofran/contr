@@ -1128,6 +1128,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.SpacesList.UpdateReady = f.Settings.Ready
 	f.SpacesList.Plans = func() []kit.Meter { return planMeters(f.planUsage()) }
 	stopChecks := f.Settings.StartChecks()
+	offActive := mygo.App.OnDidBecomeActive(func() { w.Update(f.Settings.Activated) })
 	f.Slots.Spaces = f.SpacesList.View
 	f.SpacesList.HoldLaunch = f.LoadProjects != nil
 	f.SpacesList.Sync()
@@ -1189,6 +1190,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		setCloseTerminalHandler(nil)
 		setSettingsHandler(nil)
 		stopChecks()
+		offActive()
 		f.Files.Close()
 		f.Session.Close()
 		unwatch()
