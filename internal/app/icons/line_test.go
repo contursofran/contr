@@ -15,7 +15,7 @@ import (
 // docs/spec/README.md (Icons) names seventeen line icons.
 func TestEveryLineIconLoads(t *testing.T) {
 	want := []string{"project", "computer", "server", "folder", "folder-open", "file-go",
-		"file-md", "file", "close", "plus", "split", "search", "sidebar-right", "filter", "terminal", "settings", "download"}
+		"file-md", "file", "close", "plus", "split", "search", "sidebar-right", "filter", "terminal", "settings", "download", "chevron-down"}
 	if len(LineNames) != len(want) {
 		t.Fatalf("%d line names, want %d", len(LineNames), len(want))
 	}

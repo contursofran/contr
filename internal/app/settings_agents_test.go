@@ -20,10 +20,29 @@ func (r *settingsRig) openAgents(path string) {
 
 func (r *settingsRig) click(label string) {
 	r.t.Helper()
+	r.reveal(label)
 	if err := r.tt.Click(label); err != nil {
 		r.t.Fatalf("click %q: %v; texts %q", label, err, r.texts())
 	}
 	r.tt.Frame()
+}
+
+// reveal scrolls the Agents area until label is in the window, as the owner does.
+func (r *settingsRig) reveal(label string) {
+	r.t.Helper()
+	for range 20 {
+		el, ok := r.tt.Find(label)
+		area, inArea := r.tt.Find(LabelAgentsScroll)
+		if !ok || !inArea || el.Y+el.H <= area.Y+area.H && el.Y >= area.Y {
+			return
+		}
+		dy := float32(120)
+		if el.Y < area.Y {
+			dy = -120
+		}
+		r.tt.Scroll(area.X+area.W/2, area.Y+area.H/2, 0, dy)
+		r.tt.Frame()
+	}
 }
 
 // pick opens a role dropdown and picks one item.
@@ -197,5 +216,67 @@ func TestSetFlagAddsAMissingFlag(t *testing.T) {
 	got = setFlag([]string{"claude", "--model=opus"}, "--model", "haiku")
 	if !slices.Equal(got, []string{"claude", "--model=haiku"}) {
 		t.Fatalf("%q", got)
+	}
+}
+
+func flowOf(t *testing.T, path string) agents.Flow {
+	t.Helper()
+	cfg, err := agents.LoadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg.Flow
+}
+
+func TestSettingsFlowLoadsFromAgentsJSON(t *testing.T) {
+	path := writeAgents(t, `{"flow":{"plan":"always","review":"every","debugger_after":3,"workers":2,"merge":"auto"}}`)
+	r := newSettingsRig(t, nil)
+	r.openAgents(path)
+	for _, s := range []string{"debugger after 3", "every PR", "when CI and review pass"} {
+		if !r.hasText(s) {
+			t.Errorf("no %q; texts %q", s, r.texts())
+		}
+	}
+	if r.hasText(FlowDocsNote) {
+		t.Error("Every PR shows the docs-only note")
+	}
+}
+
+func TestSettingsFlowChangeIsSavedAndKeepsOtherKeys(t *testing.T) {
+	path := writeAgents(t, `{"profiles":{"builder":{"argv":["codex"]}},"extra":{"a":1}}`)
+	r := newSettingsRig(t, nil)
+	r.openAgents(path)
+	r.click("Plan, build, review")
+	r.click("When CI and review pass")
+	f := flowOf(t, path)
+	if f.Plan != "always" || f.Review != "code" || f.Merge != "auto" || f.Workers != 4 {
+		t.Fatalf("flow %+v", f)
+	}
+	data, _ := os.ReadFile(path)
+	if !strings.Contains(string(data), `"extra"`) || !slices.Equal(argvOf(t, path, "builder"), []string{"codex"}) {
+		t.Fatalf("file %s", data)
+	}
+}
+
+func TestSettingsFlowBadValueShowsTheReadError(t *testing.T) {
+	path := writeAgents(t, `{"flow":{"plan":"sometimes"}}`)
+	r := newSettingsRig(t, nil)
+	r.openAgents(path)
+	if !r.hasText("read failed") || r.hasText(LabelFlowPreset) {
+		t.Fatalf("texts %q", r.texts())
+	}
+	data, _ := os.ReadFile(path)
+	if !strings.Contains(string(data), "sometimes") {
+		t.Fatalf("the file changed: %s", data)
+	}
+}
+
+func TestSettingsResetPutsTheDefaultFlowBack(t *testing.T) {
+	path := writeAgents(t, `{"flow":{"plan":"never","review":"none","debugger_after":5,"workers":1,"merge":"auto"}}`)
+	r := newSettingsRig(t, nil)
+	r.openAgents(path)
+	r.click(AgentsReset)
+	if f := flowOf(t, path); f != agents.DefaultFlow() {
+		t.Fatalf("flow %+v", f)
 	}
 }

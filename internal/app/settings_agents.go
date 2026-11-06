@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/theme"
 )
 
@@ -214,12 +215,29 @@ func (s *Settings) saveAgents() {
 
 // agentsTab builds the Agents tab.
 func (s *Settings) agentsTab(c *ui.Context) {
-	p := theme.Current()
 	if !s.ag.loaded && s.ag.err == "" {
 		s.loadAgents()
 	}
+	// The sections scroll when the window is short; the foot stays.
+	ui.Scroll(c).Label(LabelAgentsScroll).FillWidth().Grow(1).Shrink(1).MinHeight(0).Children(func() {
+		s.agentsSections(c)
+	})
+	s.agentsFoot(c)
+}
+
+// LabelAgentsScroll names the scroll area of the Agents tab.
+const LabelAgentsScroll = "Agents settings"
+
+// agentsSections builds the Flow and Roles sections.
+func (s *Settings) agentsSections(c *ui.Context) {
+	p := theme.Current()
 	ui.Column(c).Shrink(0).Gap(12).PaddingX(theme.ModalPadX).Children(func() {
-		// Flow section (slice 3 of #452): the Flow section goes here, above Roles.
+		if s.ag.loaded {
+			FlowSection(c, s.ag.cfg.Flow, func(f agents.Flow) {
+				s.ag.cfg.Flow = f
+				s.saveAgents()
+			})
+		}
 		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
 			ui.Text(c, "Roles").Bold().TextColor(p.Ink95)
 			ui.Text(c, TextRolesHint).Grow(1).TextColor(p.Ink50)
@@ -240,6 +258,11 @@ func (s *Settings) agentsTab(c *ui.Context) {
 			s.roleRow(c, r)
 		}
 	})
+}
+
+// agentsFoot is the foot of the Agents tab: the note, Reset to defaults and Done.
+func (s *Settings) agentsFoot(c *ui.Context) {
+	p := theme.Current()
 	ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(14).Padding(12, theme.ModalPadX).Margin(12, 0, 0, 0).
 		BorderWidth(1, 0, 0, 0).BorderColor(p.Hairline).Children(func() {
 		ui.Text(c, TextAgentsFoot).Grow(1).TextColor(p.Ink50)
@@ -247,6 +270,7 @@ func (s *Settings) agentsTab(c *ui.Context) {
 		if s.ag.loaded {
 			reset = func() {
 				resetRoles(&s.ag.cfg)
+				s.ag.cfg.Flow = agents.DefaultFlow()
 				s.saveAgents()
 			}
 		}
@@ -308,9 +332,12 @@ func roleSelect(c *ui.Context, label string, width float32, cur, empty string, o
 			shown, color = o[1], p.Ink95
 		}
 	}
-	sel.Trigger.Label(label).Width(width).Padding(4, 8).Radius(theme.CardRadius).Border(1, p.InputLine).
-		Cursor(ui.CursorPointer).Children(func() {
-		ui.Text(c, shown).SingleLine().Ellipsis("…").MinWidth(0).TextColor(color)
+	sel.Trigger.Label(label).Width(width).Padding(4, 6, 4, 8).Radius(theme.CardRadius).Border(1, p.InputLine).
+		AlignItems(ui.Center).Justify(ui.Start).Gap(4).Cursor(ui.CursorPointer).Children(func() {
+		ui.Text(c, shown).SingleLine().Ellipsis("…").MinWidth(0).Grow(1).TextAlign(ui.Start).TextColor(color)
+		if ic := icons.Line("chevron-down"); ic != nil {
+			ui.Icon(c, ic).Size(12, 12).Shrink(0).TextColor(p.Ink50)
+		}
 	})
 	sel.Popup(func(panel ui.Element) {
 		panel.Margin(4, 0, 0, 0).Padding(4).Radius(theme.CardRadius).Background(p.Ground).Border(1, p.FloatLine)
