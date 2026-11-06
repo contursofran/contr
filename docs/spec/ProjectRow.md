@@ -13,15 +13,16 @@ Design system page: component ProjectRow. Shared rules: [README.md](README.md).
 | Part | Value |
 |---|---|
 | Row | height `row-height` (30px), padding `0 10px`, gap `space-10`, radius `radius-8` |
-| Icon | `project` icon at 15px, in the text color |
-| Name | `body-strong`, `ink-85` |
+| Icon | `folder` outline icon at 15px, `ink-85` (`ink-100` selected) |
+| Name | `body` (regular), `ink-85` |
 | Meta | `small` (12px), `ink-26`, right side: branch, or "nothing open" |
 
 ## States
 
 - **Default.**
 - **Hover:** fill `hover`.
-- **Empty project:** name `ink-42`, meta "nothing open"; it is a stored project with no terminal.
+- **Empty project:** name and icon `ink-42`, meta "nothing open", no `+`; it is a stored project with no terminal.
+- **Groups:** a project row after the first has 12px of air above it (D171).
 - **Collapsed:** the agent rows hide.
 
 ## Behavior
@@ -34,8 +35,11 @@ Design system page: component ProjectRow. Shared rules: [README.md](README.md).
   icon set has no chevron yet, so the row shows no fold mark; the state is
   in the screen-reader label (expanded). A folded project hides its agent
   rows, which sit under it in the same list (#344).
-- An empty project has a `+` icon button at the right of its row. It starts
-  an orchestrator in the project folder (D116).
+- An empty project has no `+` on its row (D171). Its context menu has "New
+  orchestrator in <name>": it starts an orchestrator in the project folder
+  (D116).
+- The Projects head has one `+` button. Its menu has "New orchestrator" and
+  "Open projects" (D171). The icon column keeps both as buttons.
 
 ## Data
 
@@ -57,7 +61,7 @@ Design system page: component ProjectRow. Shared rules: [README.md](README.md).
 
 ## Tokens
 
-`row-height`, `radius-8`, `space-10`, `hover`, `ink-85`, `ink-42`, `ink-26`, `body-strong`, `small`.
+`row-height`, `radius-8`, `space-10`, `space-12`, `hover`, `ink-85`, `ink-100`, `ink-42`, `ink-26`, `body`, `small`.
 
 ## Build in MyGo
 
@@ -78,7 +82,7 @@ Design system page: component ProjectRow. Shared rules: [README.md](README.md).
 
 ## Tests
 
-- View: empty project style; fold and open; drag order writes the store.
+- View: empty project style and menu; air between groups; the `+` menu; fold and open; drag order writes the store.
 - e2e: select a project on a scratch core and see its orchestrator selected.
 
 ## Replaces

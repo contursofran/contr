@@ -34,6 +34,9 @@ type IconButtonOpts struct {
 	// has something that waits for the owner (D126). Name it in Label too,
 	// for the screen reader.
 	Dot bool
+	// Menu, when set, makes the button open a menu drawn in the window
+	// (MyGo's PopoverMenuButton) instead of calling OnClick.
+	Menu func(m *ui.Menu)
 }
 
 // SizeIconButtonDot is the width of the dot of an IconButton.
@@ -88,6 +91,9 @@ func IconButton(c *ui.Context, o IconButtonOpts) ui.Element {
 	b = b.Label(o.Label).Size(size, size).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).
 		Radius(theme.Radius8).TextColor(ink).Disabled(o.Disabled)
 	b = b.Tooltip(TipText(o)).FocusRing(false)
+	if o.Menu != nil {
+		b = b.PopoverMenuButton(o.Menu)
+	}
 	if !o.Disabled {
 		b = b.Cursor(ui.CursorPointer)
 		if fill != (ui.Color{}) {

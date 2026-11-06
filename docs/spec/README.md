@@ -206,7 +206,7 @@ The coordinator asks the owner these before the issues that need them.
 4. **O4 Footer.** Settled (D126): CPU and memory go on the `This computer`
    row; versions and the update go in Settings, with a dot when an update
    is ready; action messages are toasts. Built in D146 and moved by D147: the Settings
-   entry is a gear button at the bottom left of the sidebar (at the bottom of
+   entry is a gear button at the bottom right of the sidebar (D171) (at the bottom of
    the icon column), with the dot on it.
 5. **O5 PR viewer and Review.** Settled (D127): the PR viewer is disabled
    until it is redesigned; Review keeps its place, restyled with the
