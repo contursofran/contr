@@ -45,14 +45,14 @@ func twoAgents() agentstate.Snapshot {
 	}
 }
 
-func TestTitleTabsAreTheAgentThenThePlainTerminalsOfItsProject(t *testing.T) {
+func TestTitleTabsAreTheSessionsThenTheWorkerThenThePlainTerminals(t *testing.T) {
 	s := twoAgents()
 	if got := addrs(TitleTabs(s, "p", "", "o", "")); !slices.Equal(got, []string{"o", "t1", "t2"}) {
 		t.Fatalf("tabs of o = %v, want [o t1 t2]", got)
 	}
-	// Another agent of the same project: its own tab, the same plain terminals.
-	if got := addrs(TitleTabs(s, "p", "", "a", "")); !slices.Equal(got, []string{"a", "t1", "t2"}) {
-		t.Fatalf("tabs of a = %v, want [a t1 t2]", got)
+	// A worker of the same project: the sessions, its own tab, the same plain terminals.
+	if got := addrs(TitleTabs(s, "p", "", "a", "")); !slices.Equal(got, []string{"o", "a", "t1", "t2"}) {
+		t.Fatalf("tabs of a = %v, want [o a t1 t2]", got)
 	}
 	// An agent of another project: its own project's terminals.
 	if got := addrs(TitleTabs(s, "q", "", "x", "")); !slices.Equal(got, []string{"x", "tq"}) {
@@ -76,10 +76,10 @@ func TestTitleTabsMarkKindAndSelection(t *testing.T) {
 	}
 }
 
-func TestTitleTabsWithoutAnAgentKeepThePlainTerminals(t *testing.T) {
+func TestTitleTabsWithoutAnAgentKeepTheSessionsAndPlainTerminals(t *testing.T) {
 	got := addrs(TitleTabs(twoAgents(), "p", "", "", ""))
-	if !slices.Equal(got, []string{"t1", "t2"}) {
-		t.Fatalf("tabs = %v, want the plain terminals only", got)
+	if !slices.Equal(got, []string{"o", "t1", "t2"}) {
+		t.Fatalf("tabs = %v, want the session and the plain terminals", got)
 	}
 	if got := TitleTabs(agentstate.Snapshot{}, "", "", "", ""); len(got) != 0 {
 		t.Fatalf("tabs with no agents = %v", got)
@@ -90,7 +90,7 @@ func TestTitleTabsWithoutAnAgentKeepThePlainTerminals(t *testing.T) {
 func TestTitleTabsSkipAnEndedWorker(t *testing.T) {
 	s := twoAgents()
 	s.Workers[0].Live = false
-	if got := addrs(TitleTabs(s, "p", "", "a", "")); !slices.Equal(got, []string{"t1", "t2"}) {
+	if got := addrs(TitleTabs(s, "p", "", "a", "")); !slices.Equal(got, []string{"o", "t1", "t2"}) {
 		t.Errorf("tabs of an ended worker = %v", got)
 	}
 	s.Orchestrators[0].Live = false
@@ -222,5 +222,20 @@ func TestForeignRowLabelUsesTheReadableName(t *testing.T) {
 	}
 	if got := rowTip(w); got != "contr · t1nh" {
 		t.Errorf("tip %q", got)
+	}
+}
+
+// Every Claude session of the project is a tab, the same set whichever is selected (D190).
+func TestTitleTabsShareEverySessionOfTheProject(t *testing.T) {
+	s := twoAgents()
+	s.Orchestrators = append(s.Orchestrators, orchW("o2", "orch-2", "p"), orchW("oq", "orch-q", "q"))
+	for _, agent := range []string{"o", "o2"} {
+		if got := addrs(TitleTabs(s, "p", "", agent, agent)); !slices.Equal(got, []string{"o", "o2", "t1", "t2"}) {
+			t.Errorf("tabs with %s selected = %v, want [o o2 t1 t2]", agent, got)
+		}
+	}
+	tabs := TitleTabs(s, "p", "", "o2", "o2")
+	if tabs[0].Selected || !tabs[1].Selected {
+		t.Errorf("selection marks: %+v", tabs[:2])
 	}
 }

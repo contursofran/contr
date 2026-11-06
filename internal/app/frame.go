@@ -788,14 +788,21 @@ func (f *Frame) newTerminal() {
 }
 
 // closeSelectedTerminal stops the selected plain terminal (S4, D85). A worker
-// or orchestrator tab, or no selection, does nothing. UI thread.
+// or orchestrator tab, or no selection, does nothing. A plain terminal that
+// now runs Claude Code is a session (D190) and does not close either, though
+// its selection is still a terminal. UI thread.
 func (f *Frame) closeSelectedTerminal() {
 	if f.CloseTerm == nil || f.Selection == nil {
 		return
 	}
-	if sel, ok := f.Selection.Current(); ok && sel.Kind == state.KindTerminal {
-		f.CloseTerm.Start(sel.ID)
+	sel, ok := f.Selection.Current()
+	if !ok || sel.Kind != state.KindTerminal {
+		return
 	}
+	if f.agentSnap != nil && !slices.ContainsFunc(f.agentSnap().Terminals, func(w agents.Worker) bool { return w.Address == sel.ID }) {
+		return
+	}
+	f.CloseTerm.Start(sel.ID)
 }
 
 // terminalClosed moves the selection off a closed terminal: to the first other

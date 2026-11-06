@@ -1,6 +1,6 @@
 # TitleBar
 
-The title bar holds the traffic lights, the tabs of the selected agent, the update pill, the diff summary and three icon buttons; it is also the drag area of the window.
+The title bar holds the traffic lights, the tabs of the open project, the update pill, the diff summary and three icon buttons; it is also the drag area of the window.
 
 Design system page: component TitleBar. Shared rules: [README.md](README.md).
 
@@ -23,17 +23,25 @@ Height `titlebar-height` (46px: a 30px tab, 8px above and below, D177; the panel
 
 ## States
 
-- The tabs follow the selected agent row in the sidebar: the agent's own
-  tab first, then the plain terminals of its project (D131). Selecting a
-  plain terminal keeps the last agent.
+- The tabs are one shared set of the open project (D190): every Claude
+  session of the project first (orchestrators, Claude sessions contr did
+  not start, and plain terminals that run Claude Code), in the sidebar's
+  order; then the selected worker's tab; then the plain terminals. The set
+  is the same whichever session is selected. Selecting a plain terminal
+  keeps the last worker.
 - DiffSummary hides when the project has no changes.
 - UpdatePill shows from the end of a background install until the restart (D176).
 - Hide files is pressed (`aria-pressed`) while the files panel shows.
 
 ## Behavior
 
-- The tabs are the hc terminals of the agent selected in the sidebar
-  (orchestrator or worker), plus its plain terminals.
+- The tabs are the Claude sessions of the open project, the worker selected
+  in the sidebar, and the project's plain terminals (D190). A tab and its
+  sidebar row select each other.
+- A plain terminal where the owner runs Claude Code becomes a Claude
+  session while Claude Code is in the foreground: Claude glyph, a row in the
+  sidebar, its name from its title, and no close button. When Claude Code
+  exits it is a plain terminal again (D190).
 - `+` (New tab) opens a plain terminal in the folder of the selected agent
   (D82).
 - DiffSummary counts the selected project.
