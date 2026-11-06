@@ -9,6 +9,20 @@ import (
 	"github.com/contursofran/contr/internal/session"
 )
 
+// runSessionEnv runs one session hook in terminal t1 with extra env.
+func runSessionEnv(t *testing.T, dir, name, input string, extra map[string]string) string {
+	t.Helper()
+	env := map[string]string{"HC_TERMINAL_ID": "t1", "CONTR_STATE_DIR": dir}
+	for k, v := range extra {
+		env[k] = v
+	}
+	var out bytes.Buffer
+	if code := runHook([]string{name}, strings.NewReader(input), &out, &out, nil, func(k string) string { return env[k] }); code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	return out.String()
+}
+
 // runSession runs one session hook in terminal t1 with a temp state dir.
 func runSession(t *testing.T, dir, name, input string) (string, string) {
 	t.Helper()
@@ -60,9 +74,9 @@ func TestPostToolTasks(t *testing.T) {
 
 func TestPostToolArtifacts(t *testing.T) {
 	dir := t.TempDir()
-	runSession(t, dir, "post-tool", `{"tool_name":"mcp__claude-artifacts__publish","tool_input":{"slug":"a","title":"Board"},"tool_response":[{"type":"text","text":"{\"url\":\"https://x/a\"}"}]}`)
-	runSession(t, dir, "post-tool", `{"tool_name":"mcp__claude-artifacts__read","tool_input":{"slug":"b"},"tool_response":{"title":"B","url":"https://x/b"}}`)
-	runSession(t, dir, "post-tool", `{"tool_name":"mcp__claude-artifacts__edit","tool_input":{"slug":"a"}}`)
+	runSession(t, dir, "post-tool", `{"tool_name":"mcp__claude-artifacts__publish_version","tool_input":{"slug":"a","title":"Board"},"tool_response":[{"type":"text","text":"{\"url\":\"https://x/a\"}"}]}`)
+	runSession(t, dir, "post-tool", `{"tool_name":"mcp__claude-artifacts__get_artifact","tool_input":{"slug":"b"},"tool_response":{"title":"B","url":"https://x/b"}}`)
+	runSession(t, dir, "post-tool", `{"tool_name":"mcp__claude-artifacts__edit_version","tool_input":{"slug":"a"}}`)
 	runSession(t, dir, "post-tool", `{"tool_name":"mcp__claude-artifacts__guide","tool_input":{}}`)
 	s := readSession(t, dir)
 	if len(s.Artifacts) != 2 || s.Artifacts[0].Slug != "a" || s.Artifacts[0].Title != "Board" || s.Artifacts[0].URL != "https://x/a" || s.Artifacts[1].URL != "https://x/b" {
@@ -108,5 +122,37 @@ func TestPromptHook(t *testing.T) {
 	}
 	if _, e := runSession(t, dir, "prompt", `nope`); !strings.Contains(e, "bad hook input") {
 		t.Fatalf("stderr %q", e)
+	}
+}
+
+func TestPostToolArtifactTextBlocks(t *testing.T) {
+	dir := t.TempDir()
+	// A new publish: no slug in the input, the result only in a text block.
+	runSession(t, dir, "post-tool", `{"tool_name":"mcp__claude-artifacts__publish_version","tool_input":{"content":"<p>x</p>"},"tool_response":{"content":[{"type":"text","text":"{\"slug\":\"new\",\"title\":\"New\",\"url\":\"https://x/new\"}"}]}}`)
+	// read_artifact: JSON, then HTML.
+	runSession(t, dir, "post-tool", `{"tool_name":"mcp__claude-artifacts__read_artifact","tool_input":{},"tool_response":[{"type":"text","text":"{\"slug\":\"r\",\"title\":\"R\"}\n<html><body>{x}</body></html>"}]}`)
+	// list_artifacts records nothing.
+	runSession(t, dir, "post-tool", `{"tool_name":"mcp__claude-artifacts__list_artifacts","tool_input":{},"tool_response":[{"type":"text","text":"{\"slug\":\"l\"}"}]}`)
+	// A slug that is a link is the URL too.
+	runSession(t, dir, "post-tool", `{"tool_name":"mcp__claude-artifacts__get_artifact","tool_input":{"slug":"https://claude.ai/artifact/abc"}}`)
+	s := readSession(t, dir)
+	if len(s.Artifacts) != 3 {
+		t.Fatalf("got %+v", s.Artifacts)
+	}
+	link, r, n := s.Artifacts[0], s.Artifacts[1], s.Artifacts[2]
+	if link.Slug != "https://claude.ai/artifact/abc" || link.URL != link.Slug {
+		t.Fatalf("link %+v", link)
+	}
+	if r.Slug != "r" || r.Title != "R" {
+		t.Fatalf("read %+v", r)
+	}
+	if n.Slug != "new" || n.Title != "New" || n.URL != "https://x/new" {
+		t.Fatalf("new %+v", n)
+	}
+}
+
+func TestPromptHookWorker(t *testing.T) {
+	if out := runSessionEnv(t, t.TempDir(), "prompt", `{"prompt":"fix the bug"}`, map[string]string{"CONTR_COORDINATOR": "c1"}); out != "" {
+		t.Fatalf("worker got %q", out)
 	}
 }

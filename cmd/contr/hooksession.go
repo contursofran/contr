@@ -19,6 +19,14 @@ import (
 // artifactsPrefix starts the tool names of the artifacts MCP server.
 const artifactsPrefix = "mcp__claude-artifacts__"
 
+// artifactTools are the artifacts tools (name after artifactsPrefix) that
+// record an artifact. Other artifacts tools record nothing.
+var artifactTools = map[string]bool{
+	"publish_version": true, "publish_files": true, "edit_version": true,
+	"read_artifact": true, "get_artifact": true, "create_from_type": true,
+	"read_file": true, "list_files": true,
+}
+
 // youContext is the context the prompt hook gives Claude.
 const youContext = "contr: before you start, add each new request in this prompt to your todo list (TodoWrite or TaskCreate). Start the text of each such item with \"" + session.YouPrefix + "\"."
 
@@ -38,6 +46,10 @@ func runSessionHook(name string, stdin io.Reader, stdout, stderr io.Writer, gete
 	}
 	var err error
 	if name == "prompt" {
+		if getenv("CONTR_COORDINATOR") != "" {
+			// A worker: its prompts come from the coordinator, not the owner.
+			return 0
+		}
 		err = promptHook(stdin, stdout)
 	} else {
 		err = postToolHook(stdin, stateDir, id, uint64(now.Unix()))
@@ -83,7 +95,7 @@ func postToolHook(stdin io.Reader, stateDir, id string, now uint64) error {
 		changed, err = taskCreate(s, in.ToolInput, in.ToolResponse)
 	case in.ToolName == "TaskUpdate":
 		changed, err = taskUpdate(s, in.ToolInput)
-	case strings.HasPrefix(in.ToolName, artifactsPrefix):
+	case artifactTools[strings.TrimPrefix(in.ToolName, artifactsPrefix)] && strings.HasPrefix(in.ToolName, artifactsPrefix):
 		changed = artifactCall(s, in.ToolInput, in.ToolResponse, now)
 	}
 	if err != nil || !changed {
@@ -191,12 +203,17 @@ func artifactCall(s *session.Session, raw, resp json.RawMessage, now uint64) boo
 	if a.Slug == "" {
 		return false
 	}
+	if a.URL == "" && strings.HasPrefix(a.Slug, "https://") {
+		// The slug input may be a claude.ai link.
+		a.URL = a.Slug
+	}
 	s.AddArtifact(a)
 	return true
 }
 
 // findArtifact fills empty fields of a from the first "slug", "title" and
-// "url" keys in v. MCP text content that holds JSON is read too.
+// "url" keys in v. MCP text content is read too: the first JSON value at the
+// start of a text is decoded and the text after it is ignored.
 func findArtifact(v any, a *session.Artifact, depth int) {
 	if depth > 6 {
 		return
@@ -218,7 +235,7 @@ func findArtifact(v any, a *session.Artifact, depth int) {
 	case string:
 		if t := strings.TrimSpace(x); strings.HasPrefix(t, "{") {
 			var inner any
-			if json.Unmarshal([]byte(t), &inner) == nil {
+			if json.NewDecoder(strings.NewReader(t)).Decode(&inner) == nil {
 				findArtifact(inner, a, depth+1)
 			}
 		}
