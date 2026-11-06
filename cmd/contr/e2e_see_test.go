@@ -57,7 +57,7 @@ func seeWorkers(t *testing.T, h *harness) {
 	)
 }
 
-// TestSee is scripts/see.sh (#457, D177). It starts the fixture CONTR_SEE
+// TestSee is scripts/see.sh (#457, D178). It starts the fixture CONTR_SEE
 // names, in the themes of CONTR_SEE_THEME (dark, light or both), presses the
 // labels of CONTR_SEE_PRESS (one per line) in order, and writes
 // tmp/see/<fixture>-<theme>.png and tmp/see/<fixture>-<theme>.txt, the tree

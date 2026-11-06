@@ -161,7 +161,7 @@ Add packages under `internal/` when a change needs them.
   window as a PNG. To check a visible change, capture the window and look at
   the PNG yourself (decision D5).
 - To look at the app, run `scripts/see.sh <fixture> [dark|light] [label…]`
-  (D177). It starts a fixture against a scratch core, presses the labels in
+  (D178). It starts a fixture against a scratch core, presses the labels in
   order, and writes `tmp/see/<fixture>-<theme>.png` and a `.txt` of the
   elements. Check the data in the `.txt`; open the PNG for layout and color.
   `scripts/see.sh` alone lists the fixtures. Add a fixture in

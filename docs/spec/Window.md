@@ -14,8 +14,8 @@ Design system page: component Window. Shared rules: [README.md](README.md).
 |---|---|
 | Ground | `ground` with three soft glows (`glow-slate`, `glow-umber`, `glow-graphite`) behind the glass |
 | Glass sheet | `glass-window`, blur `glass-blur`, saturate `glass-saturate`, radius `radius-14`, border `window-line`, inner top line `shadow-window-top` |
-| Title bar | `titlebar-height` (38px), see TitleBar |
-| Body | row of panels, gap `space-8`, padding `8px` on every side: the gap under the title bar, to the left, right and bottom edge, and between the panels are all `space-8` (D168) |
+| Title bar | `titlebar-height` (46px: 8px, the 30px tab row, 8px; D177), see TitleBar |
+| Body | row of panels, gap `space-8`, padding `8px` to the left, right and bottom edge and between the panels; no top padding: the title bar keeps `space-8` under the tab row, so the window top → tab and tab → panel spaces are both `space-8` (D177) |
 | Panels | sidebar `sidebar-width` (312px), terminal (fills), files `files-width` (280px) |
 
 ## States

@@ -22,7 +22,7 @@ import (
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
 
-// harness is one scratch run of the app for an e2e test (#457, D177): a scratch
+// harness is one scratch run of the app for an e2e test (#457, D178): a scratch
 // hc core, a scratch home, scratch config files and the app built with the
 // automation plugin. It never touches the owner's core, home or settings.
 //

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Shows the app in a known state (#457, D177). It starts the app on a fixture
+# Shows the app in a known state (#457, D178). It starts the app on a fixture
 # against a scratch hc core, presses the given labels in order, and writes
 # the window as tmp/see/<fixture>-<theme>.png and its elements as
 # tmp/see/<fixture>-<theme>.txt. Check the data in the .txt; open the PNG
