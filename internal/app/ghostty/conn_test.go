@@ -923,3 +923,32 @@ func TestWatchKeyDuringTheFirstAttach(t *testing.T) {
 		}
 	}
 }
+
+// A resize frame that comes before the view's first size does not fit the
+// core to the 80x24 default: the fit waits for the view's size (D199).
+func TestWatchFitWaitsForTheViewSize(t *testing.T) {
+	src := newFakeSource()
+	c, st, _ := startWatch(t, src)
+	st.wait(t, Live)
+	obs := src.stream(t, 0)
+	go func() {
+		buf := make([]byte, 8)
+		for {
+			if _, err := c.Read(buf); err != nil {
+				return
+			}
+		}
+	}()
+	obs.events <- hc.StreamEvent{Resize: &hc.Size{Cols: 200, Rows: 120}}
+	time.Sleep(50 * time.Millisecond)
+	if n := src.attachCount(); n != 1 {
+		t.Fatalf("attaches before the view's size = %d, want 1", n)
+	}
+	if err := c.ResizePixels(124, 47, 8, 16); err != nil {
+		t.Fatal(err)
+	}
+	waitAttaches(t, src, 2)
+	if p := src.param(1); p.Observe || p.Cols != 124 || p.Rows != 47 {
+		t.Errorf("fit attach %+v", p)
+	}
+}

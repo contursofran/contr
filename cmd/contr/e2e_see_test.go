@@ -50,13 +50,12 @@ var seeFixtures = map[string]seeFixture{
 		ready: "lead, ",
 	},
 	"wide": {
-		about: "the workers fixture; the core sized a third worker's terminal to 300x60 before the app shows it (#481)",
+		about: "the core sized a worker's terminal to 300x60 before the app shows it (#481)",
 		setup: func(t *testing.T, h *harness) {
-			seeWorkers(t, h)
-			h.spawn(t, agents.Spec{Name: "b203-wide", Profile: "sizer", Role: "builder", Issue: "203", Project: "demo", Worktree: filepath.Join(h.dir, "demo")})
+			h.spawn(t, agents.Spec{Name: "b203-wide", Profile: "sizer", Role: "builder", Issue: "203", Project: "demo", Worktree: h.repo(t, "demo", "main")})
 			h.sizeTerminal(t, "b203-wide", 300, 60)
 		},
-		ready: "lead, ",
+		ready: "b203-wide",
 	},
 	"session": {
 		about: "the orchestrator lead with the todos and artifacts of canvas board 11 (D197)",
@@ -185,6 +184,9 @@ func TestSee(t *testing.T) {
 		if len(press) > 0 {
 			c.settle(t)
 		}
+		// The capture can lag the element tree by a frame or more: wait for a repaint.
+		time.Sleep(time.Second)
+		c.settle(t)
 		base := filepath.Join(out, name+"-"+th)
 		c.capture(t, base+".png")
 		c.dump(t, base+".txt")

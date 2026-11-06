@@ -140,6 +140,7 @@ type Conn struct {
 	takeover  bool     // Write closed the observer stream to attach with input
 	fitting   bool     // attached with input only to fit the view: no focus until a key (D199)
 	core      *hc.Size // the core's size seen while watching
+	sized     bool     // the view gave its size: before it, cols and rows are the default
 	screen    Screen   // nil until SetScreen
 	pending   *hc.Size // a size this viewer set, for Read to give the screen
 	wake      chan struct{}
@@ -281,6 +282,7 @@ func (c *Conn) ResizePixels(cols, rows, cellW, cellH int) error {
 	c.mu.Lock()
 	changed := c.cols != uint16(cols) || c.rows != uint16(rows)
 	c.cols, c.rows, c.cell = uint16(cols), uint16(rows), [2]int{cellW, cellH}
+	c.sized = true
 	s, tried, watching := c.stream, c.tried, c.watching
 	c.mu.Unlock()
 	if s == nil {
@@ -306,10 +308,11 @@ func (c *Conn) ResizePixels(cols, rows, cellW, cellH int) error {
 
 // fitIfNeeded ends the observer stream s when the core's size differs from
 // the view's, so that run attaches with input at the view's size (D199). It
-// sends no input; the focus waits for the first key.
+// sends no input; the focus waits for the first key. It waits for the
+// view's first size.
 func (c *Conn) fitIfNeeded(s Stream) {
 	c.mu.Lock()
-	if !c.watching || c.stream != s || c.core == nil ||
+	if !c.watching || c.stream != s || c.core == nil || !c.sized ||
 		(c.core.Cols == c.cols && c.core.Rows == c.rows) {
 		c.mu.Unlock()
 		return
