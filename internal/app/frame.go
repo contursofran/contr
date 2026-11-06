@@ -548,7 +548,7 @@ func (f *Frame) terminalPanel(c *ui.Context) {
 // filesPanel is the files slot: the file tree, with the usage meters in its footer. The v0.2 board and worker panel
 // stay in the code but are not shown (D122); see panelBox.
 func (f *Frame) filesPanel(c *ui.Context) {
-	kit.Panel(c, kit.PanelOpts{Name: LabelPanelFiles,
+	kit.Panel(c, kit.PanelOpts{Name: LabelPanelFiles, Title: f.openProject,
 		Head:   func() { f.Files.Head(c) },
 		Body:   func() { f.Files.View(c) },
 		Footer: func() { kit.UsageMeter(c, usageMeters(f.planUsage(), f.selectedTerminal())) }})
