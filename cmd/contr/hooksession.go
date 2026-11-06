@@ -1,5 +1,5 @@
 // contr hook post-tool and contr hook prompt: the agent's todos and
-// artifacts, one session file per hc terminal (D189).
+// artifacts, one session file per hc terminal (D195).
 
 package main
 

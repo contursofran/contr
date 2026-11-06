@@ -1,5 +1,5 @@
 // Package session keeps the todo list and the artifacts of one Claude Code
-// agent, in one JSON file per hc terminal (D189). The kit's hooks write it;
+// agent, in one JSON file per hc terminal (D195). The kit's hooks write it;
 // the app reads it. The file is keyed by HC_TERMINAL_ID under the state dir,
 // as the context files of D144.
 package session
