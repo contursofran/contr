@@ -11,10 +11,10 @@ import (
 // follows. The contrast numbers of docs/spec/tokens.md hold for the defaults
 // only.
 
-// tintDefaults are the token alphas of Dark and Light (D163), as fractions.
+// tintDefaults are the token alphas of Dark and Light (D163, D164), as fractions.
 // A test keeps them equal to the palettes.
 var tintDefaults = [2]struct{ window, panel float64 }{
-	{window: 0.35, panel: 0.60}, // Light
+	{window: 0.60, panel: 0.70}, // Light
 	{window: 0.70, panel: 0.85}, // Dark
 }
 
