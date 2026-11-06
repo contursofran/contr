@@ -140,3 +140,62 @@ func TestSetAppearanceKeepsAnUnknownValueOut(t *testing.T) {
 		t.Errorf("platform %q, frame %q; want system", p.src, f.Appearance())
 	}
 }
+
+func tintFrame(t *testing.T, stored prefs.Prefs) (*Frame, chan prefs.Prefs) {
+	t.Helper()
+	f, _ := themeFrame(t, func() (prefs.Prefs, error) { return stored, nil })
+	t.Cleanup(theme.ClearTints)
+	saved := make(chan prefs.Prefs, 8)
+	f.SavePrefs = func(v prefs.Prefs) error { saved <- v; return nil }
+	f.StartTheme()
+	return f, saved
+}
+
+func pf(v float64) *float64 { return &v }
+
+func TestStartThemeAppliesTheStoredTint(t *testing.T) {
+	f, _ := tintFrame(t, prefs.Prefs{Appearance: mygo.ThemeDark,
+		Tint: prefs.Tints{Dark: prefs.Tint{Window: pf(0.8)}, Light: prefs.Tint{Panel: pf(0.1)}}})
+	if w, p := f.Tint(); w != 80 || p != 55 {
+		t.Errorf("Tint = %v %v, want 80 55", w, p)
+	}
+	if theme.Current().GlassWindow.A != 204 {
+		t.Error("the palette does not have the stored window alpha")
+	}
+}
+
+func TestSetTintAppliesAtOnceAndStoresOnceAfterTheDrag(t *testing.T) {
+	f, saved := tintFrame(t, prefs.Prefs{Appearance: mygo.ThemeDark})
+	for _, v := range []float64{10, 20, 30, 40} {
+		f.SetTint(v, 60)
+	}
+	if theme.Current().GlassWindow.A != 102 || theme.Current().Panel.A != 153 {
+		t.Errorf("window %d panel %d, want 102 and 153 at once", theme.Current().GlassWindow.A, theme.Current().Panel.A)
+	}
+	select {
+	case v := <-saved:
+		if v.Tint.Dark.Window == nil || *v.Tint.Dark.Window != 0.4 || v.Appearance != mygo.ThemeDark {
+			t.Errorf("saved %+v, want the last value and the appearance", v)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the tint was not stored")
+	}
+	select {
+	case v := <-saved:
+		t.Errorf("a second write: %+v", v)
+	case <-time.After(2 * TintDelay):
+	}
+}
+
+func TestResetTintPutsBackTheDefaultsOfTheCurrentTheme(t *testing.T) {
+	f, saved := tintFrame(t, prefs.Prefs{Appearance: mygo.ThemeDark,
+		Tint: prefs.Tints{Dark: prefs.Tint{Window: pf(0.9), Panel: pf(0.9)}, Light: prefs.Tint{Window: pf(0.2)}}})
+	f.ResetTint()
+	if w, p := f.Tint(); w != 30 || p != 55 {
+		t.Errorf("Tint = %v %v, want the Dark defaults 30 55", w, p)
+	}
+	v := <-saved
+	if v.Tint.Dark != (prefs.Tint{}) || v.Tint.Light.Window == nil {
+		t.Errorf("saved %+v: Dark must be empty and Light kept", v.Tint)
+	}
+}

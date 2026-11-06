@@ -5,7 +5,9 @@ package app
 // SetAppearance, which applies it at once and stores it.
 
 import (
+	"math"
 	"sync"
+	"time"
 
 	"github.com/egoist/mygo"
 
@@ -48,6 +50,9 @@ func (f *Frame) StartTheme() {
 			f.themeErr = err
 		} else {
 			src = p.Source()
+			f.tint = p.Tint
+			theme.SetTint(true, f.tint.Dark.Window, f.tint.Dark.Panel)
+			theme.SetTint(false, f.tint.Light.Window, f.tint.Light.Panel)
 		}
 	}
 	f.appearance = src
@@ -72,20 +77,71 @@ func (f *Frame) SetAppearance(src mygo.ThemeSource) {
 	if f.invalidate != nil {
 		f.invalidate()
 	}
+	f.persist(0)
+}
+
+// TintDelay is how long the settings file waits after the last slider move
+// before it is written.
+const TintDelay = 300 * time.Millisecond
+
+// persist writes the settings to the file after delay, on a goroutine. A new call
+// replaces a write that waits. Writes go one at a time, and each writes the latest
+// values, so quick changes end with the last choice on disk.
+func (f *Frame) persist(delay time.Duration) {
 	save, post := f.SavePrefs, f.post
 	if save == nil {
 		return
 	}
-	go func() {
-		// Writes go one at a time, and each writes the latest value, so quick clicks end with
-		// the last choice on disk.
+	f.appearanceMu.Lock()
+	defer f.appearanceMu.Unlock()
+	if f.prefsTimer != nil {
+		f.prefsTimer.Stop()
+	}
+	f.prefsTimer = time.AfterFunc(delay, func() {
 		f.saveMu.Lock()
 		defer f.saveMu.Unlock()
 		f.appearanceMu.Lock()
-		cur := f.appearance
+		cur := prefs.Prefs{Appearance: f.appearance, Tint: f.tint}
 		f.appearanceMu.Unlock()
-		if err := save(prefs.Prefs{Appearance: cur}); err != nil && post != nil {
+		if err := save(cur); err != nil && post != nil {
 			post(func() { f.Toasts.Show(err.Error()) })
 		}
-	}()
+	})
+}
+
+// Tint returns the alpha of the window ground and of the panels, in percent, for the
+// current theme (D162).
+func (f *Frame) Tint() (window, panel float64) {
+	w, p := theme.TintValues()
+	return math.Round(w * 100), math.Round(p * 100)
+}
+
+// SetTint sets the window and panel alpha, in percent, for the current theme. It applies
+// at once and stores the values after a short wait, so a drag writes the file once.
+func (f *Frame) SetTint(window, panel float64) {
+	w, p := window/100, panel/100
+	dark := theme.Current().Dark
+	f.storeTint(dark, &w, &p)
+	f.persist(TintDelay)
+}
+
+// ResetTint puts the token defaults back for the current theme.
+func (f *Frame) ResetTint() {
+	f.storeTint(theme.Current().Dark, nil, nil)
+	f.persist(TintDelay)
+}
+
+func (f *Frame) storeTint(dark bool, w, p *float64) {
+	t := prefs.Tint{Window: w, Panel: p}
+	f.appearanceMu.Lock()
+	if dark {
+		f.tint.Dark = t
+	} else {
+		f.tint.Light = t
+	}
+	f.appearanceMu.Unlock()
+	theme.SetTint(dark, w, p)
+	if f.invalidate != nil {
+		f.invalidate()
+	}
 }

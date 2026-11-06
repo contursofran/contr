@@ -12,7 +12,10 @@ import (
 // reads the appearance.
 var current atomic.Pointer[Palette]
 
-func init() { current.Store(Dark) }
+func init() {
+	tintState.dark = true
+	current.Store(Dark)
+}
 
 // Current returns the palette of the current theme. Views read tokens from
 // it; they never keep it across a theme change.
@@ -89,7 +92,7 @@ func (f *Follower) refresh() {
 	default:
 		dark = f.p.IsDark()
 	}
-	current.Store(For(dark))
+	publish(dark)
 }
 
 // UITheme returns MyGo's theme for a palette, so MyGo's own widgets match the
@@ -123,14 +126,23 @@ func UITheme(p *Palette) *ui.Theme {
 	}
 }
 
-var uiThemes = [2]*ui.Theme{UITheme(Light), UITheme(Dark)}
+// uiCache keeps MyGo's theme of the last palette, so a build that finds the
+// same palette does not make a new one.
+var uiCache atomic.Pointer[uiEntry]
+
+type uiEntry struct {
+	p *Palette
+	t *ui.Theme
+}
 
 // Apply gives MyGo the theme of the current palette (Context.SetTheme). Call
 // it first in the root view, on every build.
 func Apply(c *ui.Context) {
-	idx := 0
-	if Current().Dark {
-		idx = 1
+	p := Current()
+	e := uiCache.Load()
+	if e == nil || e.p != p {
+		e = &uiEntry{p: p, t: UITheme(p)}
+		uiCache.Store(e)
 	}
-	c.SetTheme(uiThemes[idx])
+	c.SetTheme(e.t)
 }
