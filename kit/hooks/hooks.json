@@ -1,5 +1,5 @@
 {
-  "description": "Workers: a turn that ends without hc send still reports to the coordinator. Coordinators: save the state before a compaction and get the playbook back after it.",
+  "description": "Workers: a turn that ends without hc send still reports to the coordinator. Coordinators: save the state before a compaction and get the playbook back after it. In any hc terminal: save the todo list and artifacts for contr's panel.",
   "hooks": {
     "Stop": [
       {
@@ -20,6 +20,29 @@
             "type": "command",
             "command": "[ -z \"$HC_TERMINAL_ID\" ] || contr hook session-start || exit 1",
             "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "TodoWrite|TaskCreate|TaskUpdate|mcp__claude-artifacts__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -z \"$HC_TERMINAL_ID\" ] || contr hook post-tool || true",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -z \"$HC_TERMINAL_ID\" ] || contr hook prompt || true",
+            "timeout": 10
           }
         ]
       }
