@@ -36,5 +36,5 @@ Shared rules: [README.md](README.md). Design: board 10 of the from-zero canvas.
 
 ## Data
 
-- `FlowSection(c, flow, onChange)`: the caller loads the flow, saves it off the UI thread, and
+- `FlowSection(c, flow, onChange)`: the Agents tab (`Settings.agentsTab`) loads the flow, saves it off the UI thread, and
   builds the section again with the saved flow.

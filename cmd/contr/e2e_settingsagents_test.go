@@ -15,7 +15,7 @@ import (
 )
 
 // TestSettingsAgentsTab opens Settings in the built app and captures the Agents and Updates tabs
-// in Dark and Light (D186). PNGs go to tmp/e2e/settings-<tab>-<theme>.png. HOME is a scratch
+// in Dark and Light (D186, D187), the Agents tab also scrolled to the Roles. PNGs go to tmp/e2e/settings-<tab>-<theme>.png. HOME is a scratch
 // folder, agents.json a scratch file with a custom reviewer. It never touches the owner's core:
 //
 //	go test -tags e2e -run TestSettingsAgentsTab ./cmd/contr
@@ -44,7 +44,7 @@ func TestSettingsAgentsTab(t *testing.T) {
 	if err := os.MkdirAll(home, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "agents.json"), []byte(`{"profiles":{"reviewer":{"argv":["codex","-m","gpt-6.1"]}}}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "agents.json"), []byte(`{"profiles":{"reviewer":{"argv":["codex","-m","gpt-6.1"]}},"flow":{"plan":"when-needed","review":"code","debugger_after":3,"workers":2,"merge":"ask"}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	sock := filepath.Join(dir, "a.sock")
@@ -96,6 +96,13 @@ func TestSettingsAgentsTab(t *testing.T) {
 		for _, tab := range []string{"Agents", "Updates"} {
 			click(tab)
 			c.capture(t, filepath.Join(out, "settings-"+tab+"-"+theme+".png"))
+			if tab == "Agents" {
+				// The Flow section is on top; scroll to the Roles below it.
+				b := c.boundsOf(t, app.LabelAgentsScroll)
+				c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "wheel", "x": b.X + b.Width/2, "y": b.Y + b.Height/2, "dy": 600, "precise": true}}})
+				time.Sleep(600 * time.Millisecond)
+				c.capture(t, filepath.Join(out, "settings-Agents-roles-"+theme+".png"))
+			}
 		}
 	}
 }

@@ -458,8 +458,8 @@ func (s *Settings) View(c *ui.Context) {
 	p := theme.Current()
 	d := ui.DialogBase(c, &open, func(backdrop, panel ui.Element) {
 		// The veil is the ground of the theme, so Light stays light behind the card.
-		backdrop.Background(p.Ground.Alpha(0.72)).Justify(ui.Start).AlignItems(ui.Center).Padding(theme.ModalTop, 0, 0, 0)
-		panel.Label(LabelSettings).Column().Width(theme.ModalWidth).Background(p.Ground).
+		backdrop.Background(p.Ground.Alpha(0.72)).Justify(ui.Start).AlignItems(ui.Center).Padding(theme.ModalTop, 0, theme.ModalTop, 0)
+		panel.Label(LabelSettings).Column().Width(theme.ModalWidth).MaxHeightPercent(100).Background(p.Ground).
 			Border(1, p.FloatLine).Radius(theme.ModalRadius)
 		for _, l := range p.ShadowFloat {
 			if !l.Inset {

@@ -1,7 +1,7 @@
 # SettingsAgents
 
 The tab bar of the Settings modal and its Agents tab: the Roles section (D186). The Flow
-section of the same tab has its own spec (slice 3 of #452).
+section of the same tab has its own spec: [FlowSection.md](FlowSection.md) (D187).
 
 Shared rules: [README.md](README.md). Design: board 10 of the from-zero canvas.
 
@@ -15,12 +15,14 @@ Shared rules: [README.md](README.md). Design: board 10 of the from-zero canvas.
 - **Updates:** the versions, the update status, the notes, and the buttons `Check for updates`,
   `Install and restart` or `Restart now` (D176), `Done`.
 - **Agents**, from top to bottom:
-  1. The slot of the Flow section (slice 3).
+  1. The Flow section ([FlowSection.md](FlowSection.md)). Items 1 to 4 scroll when the window
+     is short; the foot stays.
   2. Head: `Roles` (bold, `ink-95`) and the hint `Saved to agents.json · new workers use it`
      (`ink-50`).
   3. Column heads `Role`, `CLI`, `Model`, `Effort` (`ink-50`).
   4. One row per role, a `hairline` above each: the name (`ink-95`) over what it does
-     (`ink-50`), then three dropdowns (`SelectBase`: `input-line` border, card radius; the
+     (`ink-50`), then three dropdowns (`SelectBase`: `input-line` border, card radius, the value left-aligned and a
+     `chevron-down` icon (12px, `ink-50`) at the right; the
      popup on `ground` with `float-line`; the chosen and highlighted items on `selected`).
      Under the row, the command line in mono (`value` style, `ink-62`), one line with an
      ellipsis.
@@ -57,7 +59,9 @@ Shared rules: [README.md](README.md). Design: board 10 of the from-zero canvas.
   pick on a profile of another program, or on a missing one, starts from the role's default.
   Then the config is saved off the UI thread.
 - `Reset to defaults` puts each role back to `DefaultConfig`, and an orchestrator that exists
-  to the suggested default. A missing orchestrator stays missing.
+  to the suggested default. A missing orchestrator stays missing. The flow goes back to
+  `DefaultFlow`.
+- A change in the Flow section is saved the same way as a role pick.
 - Saving writes only profiles that the file had or that differ from `DefaultConfig`, and keeps
   keys that contr does not know.
 
