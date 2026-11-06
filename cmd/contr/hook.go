@@ -33,8 +33,8 @@ In any hc session that is not a worker it also labels the terminal with the
 context size (contr.context, contr.context-limit) for the status strip.
 
 session-start, after a compaction in a coordinator: prints the playbook,
-the state file to read, the live workers it started and its open owner
-items, which Claude Code adds to the new context.
+the state file to read, the live workers it started, its open owner
+items and the flow (contr agents flow), which Claude Code adds to the new context.
 `
 
 // saidMax is the most characters of the worker's last words in a report.
@@ -295,6 +295,8 @@ func (h *hook) restoreText() string {
 	b.WriteString(h.workersText())
 	b.WriteString("\n")
 	b.WriteString(h.ownerText())
+	b.WriteString("\n")
+	b.WriteString(flowText(h.getenv))
 	b.WriteString("\nThe playbook:\n\n")
 	b.WriteString(h.playbook())
 	return cut(b.String(), restoreMax)
