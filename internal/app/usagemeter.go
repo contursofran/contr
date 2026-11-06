@@ -21,20 +21,26 @@ type planPercent interface {
 	Context(id string) (usage.Context, bool)
 }
 
-// usageMeters is the info block of the files panel: the context of the
-// selected agent, then one line per plan with its percent used
-// (docs/spec/UsageMeter.md).
+// contextMeter is the info block of the files panel: the context of the
+// selected agent (docs/spec/UsageMeter.md). Plan usage is global, so it is in
+// the sidebar foot (D189, [planMeters]).
 //
 // terminal is the hc terminal of the selected agent ("" for none). Its context
 // comes from the status line it runs (D144); without one the line shows no data.
-func usageMeters(src planPercent, terminal string) []kit.Meter {
-	ctxLine := kit.Meter{Label: LabelContext}
+func contextMeter(src planPercent, terminal string) kit.Meter {
+	m := kit.Meter{Label: LabelContext}
 	if src != nil && terminal != "" {
 		if c, ok := src.Context(terminal); ok {
-			ctxLine.Percent, ctxLine.Has, ctxLine.Value = c.Percent(), true, c.Label()
+			m.Percent, m.Has, m.Value = c.Percent(), true, c.Label()
 		}
 	}
-	out := []kit.Meter{ctxLine}
+	return m
+}
+
+// planMeters is one meter per plan with its percent used, for the sidebar
+// foot (D189).
+func planMeters(src planPercent) []kit.Meter {
+	var out []kit.Meter
 	for _, plan := range usage.Plans {
 		m := kit.Meter{Label: planLabels[plan]}
 		if src != nil {

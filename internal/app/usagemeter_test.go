@@ -31,28 +31,30 @@ type fakeCtx struct {
 
 func (f fakeCtx) Context(id string) (usage.Context, bool) { c, ok := f.ctx[id]; return c, ok }
 
-func TestUsageMetersShowTheContextOfTheSelectedTerminal(t *testing.T) {
+func TestContextMeterShowsTheContextOfTheSelectedTerminal(t *testing.T) {
 	src := fakeCtx{fakeLeft{}, map[string]usage.Context{"t1": {Tokens: 90000, Size: 200000}, "t2": {Tokens: 200000, Size: 200000}}}
-	got := usageMeters(src, "t1")[0]
+	got := contextMeter(src, "t1")
 	want := kit.Meter{Label: "Context", Value: "90k of 200k  45%", Percent: 45, Has: true}
 	if got != want {
 		t.Errorf("context %+v, want %+v", got, want)
 	}
-	if got := usageMeters(src, "t2")[0]; got.Percent != 100 || got.Value != "200k of 200k  100%" {
+	if got := contextMeter(src, "t2"); got.Percent != 100 || got.Value != "200k of 200k  100%" {
 		t.Errorf("full context %+v", got)
 	}
-	// No terminal selected, or a terminal with no file: no data.
+	// No terminal selected, a terminal with no file, or no sampler: no data.
 	for _, id := range []string{"", "t3"} {
-		if got := usageMeters(src, id)[0]; got.Has || got.Value != "" {
+		if got := contextMeter(src, id); got.Has || got.Value != "" {
 			t.Errorf("terminal %q: context %+v has data", id, got)
 		}
 	}
+	if got := contextMeter(nil, "t1"); got.Has {
+		t.Errorf("nil source: context %+v has data", got)
+	}
 }
 
-func TestUsageMetersShowThePercentUsedOfEachPlan(t *testing.T) {
-	got := usageMeters(fakeLeft{usage.PlanClaude: 62, usage.PlanCodex: 0}, "")
+func TestPlanMetersShowThePercentUsedOfEachPlan(t *testing.T) {
+	got := planMeters(fakeLeft{usage.PlanClaude: 62, usage.PlanCodex: 0})
 	want := []kit.Meter{
-		{Label: "Context"},
 		{Label: "Claude", Value: "38%", Percent: 38, Has: true},
 		{Label: "Codex", Value: "100%", Percent: 100, Has: true},
 	}
@@ -66,22 +68,22 @@ func TestUsageMetersShowThePercentUsedOfEachPlan(t *testing.T) {
 	}
 }
 
-func TestUsageMetersWithoutDataHaveNone(t *testing.T) {
+func TestPlanMetersWithoutDataHaveNone(t *testing.T) {
 	for name, src := range map[string]planPercent{"nil": nil, "empty": fakeLeft{}} {
-		for _, m := range usageMeters(src, "t1") {
+		for _, m := range planMeters(src) {
 			if m.Has || m.Value != "" || m.Percent != 0 {
 				t.Errorf("%s source: meter %+v has data", name, m)
 			}
 		}
 	}
-	// One plan with data leaves the other plan and the context empty.
-	got := usageMeters(fakeLeft{usage.PlanClaude: 75}, "")
-	if !got[1].Has || got[2].Has || got[0].Has {
+	got := planMeters(fakeLeft{usage.PlanClaude: 75})
+	if !got[0].Has || got[1].Has {
 		t.Errorf("meters %+v, want only Claude with data", got)
 	}
 }
 
-func TestTheFilesPanelShowsTheMetersUnderTheTree(t *testing.T) {
+// The files panel keeps only the Context meter; the plans are in the sidebar foot (D189).
+func TestTheFilesPanelShowsOnlyTheContextUnderTheTree(t *testing.T) {
 	f, tt := newTester(t)
 	f.Usage = usage.NewSampler(func() usage.Reading {
 		r := usage.Unread()
@@ -96,23 +98,55 @@ func TestTheFilesPanelShowsTheMetersUnderTheTree(t *testing.T) {
 	if meters.Y < tree.Y+tree.H-1 {
 		t.Errorf("meters %+v are not under the tree %+v", meters, tree)
 	}
-	for _, want := range []string{"Context", "Claude", "Codex", "42%", kit.NoValue} {
-		if !tt.HasText(want) {
-			t.Errorf("no text %q; texts %q", want, tt.Texts())
+	if !tt.HasText("Context") {
+		t.Errorf("no Context; texts %q", tt.Texts())
+	}
+	for _, gone := range []string{"Claude meter", "Codex meter", "Claude line", "Codex line"} {
+		if !absent(tt, gone) {
+			t.Errorf("the files panel still has %q", gone)
 		}
 	}
-	// The context and Codex have no data.
-	if n := countText(tt.Texts(), kit.NoValue); n != 2 {
-		t.Errorf("%d dashes, want 2 (context and codex)", n)
+	if tt.HasText("42%") {
+		t.Error("the files panel still shows the Claude percent")
 	}
 }
 
-func TestTheFilesPanelShowsDashesWithoutASampler(t *testing.T) {
+func TestTheFilesPanelShowsADashWithoutASampler(t *testing.T) {
 	f, tt := newTester(t)
 	f.Usage = nil
 	tt.Frame()
-	if n := countText(tt.Texts(), kit.NoValue); n != 3 {
-		t.Errorf("%d dashes, want 3; texts %q", n, tt.Texts())
+	if n := countText(tt.Texts(), kit.NoValue); n != 1 {
+		t.Errorf("%d dashes, want 1; texts %q", n, tt.Texts())
+	}
+}
+
+// The sidebar foot shows the plan meters inline, left of the Settings button (D189).
+func TestTheSidebarFootShowsThePlansLeftOfSettings(t *testing.T) {
+	h := newSpaces(t, spTree())
+	h.list.Plans = func() []kit.Meter { return planMeters(fakeLeft{usage.PlanClaude: 62}) }
+	h.tt.Frame()
+	for _, want := range []string{"Claude", "Codex", "38%", kit.NoValue} {
+		if !h.tt.HasText(want) {
+			t.Errorf("no text %q; texts %q", want, h.tt.Texts())
+		}
+	}
+	gear := box(t, h.tt, LabelSettingsOpen)
+	claude, codex := box(t, h.tt, "Claude meter"), box(t, h.tt, "Codex meter")
+	if claude.W != kit.PlanUsageWidth || codex.W != kit.PlanUsageWidth {
+		t.Errorf("bar widths %v and %v, want %v", claude.W, codex.W, kit.PlanUsageWidth)
+	}
+	if !(claude.X < codex.X && codex.X+codex.W < gear.X) {
+		t.Errorf("order: Claude %+v, Codex %+v, gear %+v", claude, codex, gear)
+	}
+	midGear, midBar := gear.Y+gear.H/2, claude.Y+claude.H/2
+	if d := midGear - midBar; d > 2 || d < -2 {
+		t.Errorf("meters at y %v, gear at y %v: not one row", midBar, midGear)
+	}
+	// The icon column has no room: the button only.
+	h.list.compact = true
+	h.tt.Frame()
+	if !absent(h.tt, "Claude meter") {
+		t.Error("the icon column shows the plan meters")
 	}
 }
 
@@ -211,5 +245,21 @@ func TestTheContextLineFollowsTheSelectedTerminal(t *testing.T) {
 	tt.Frame()
 	if tt.HasText("90k of 200k  45%") {
 		t.Error("the context of w1 shows for w2")
+	}
+}
+
+// At the narrowest sidebar the meters clip; the Settings button stays inside.
+func TestTheSidebarFootKeepsSettingsInAtTheNarrowestWidth(t *testing.T) {
+	h := newSpaces(t, spTree())
+	h.list.Plans = func() []kit.Meter { return planMeters(fakeLeft{usage.PlanClaude: 62, usage.PlanCodex: 88}) }
+	tt := h.tt
+	tt.SetSize(theme.SidebarMinWidth, theme.WindowHeight)
+	tt.Frame()
+	gear, group := box(t, tt, LabelSettingsOpen), box(t, tt, "plan usage")
+	if gear.X+gear.W > theme.SidebarMinWidth {
+		t.Errorf("Settings ends at %v, past the sidebar %v", gear.X+gear.W, theme.SidebarMinWidth)
+	}
+	if group.X+group.W > gear.X {
+		t.Errorf("plan meters end at %v, over Settings at %v", group.X+group.W, gear.X)
 	}
 }

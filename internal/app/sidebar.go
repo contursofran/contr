@@ -113,8 +113,9 @@ func (l *SpacesList) addMenu(m *ui.Menu) {
 	}
 }
 
-// settingsFoot is the Settings button at the bottom left of the sidebar, and at the bottom of
-// the icon column (D147). The dot shows while an update waits (D146).
+// settingsFoot is the foot row of the sidebar: the plan meters at the left (D189)
+// and the Settings button at the right; the icon column shows only the button,
+// centered (D147). The dot shows while an update waits (D146).
 func (l *SpacesList) settingsFoot(c *ui.Context) {
 	label, ready := LabelSettingsOpen, l.UpdateReady != nil && l.UpdateReady()
 	if ready {
@@ -125,12 +126,21 @@ func (l *SpacesList) settingsFoot(c *ui.Context) {
 	p := theme.Current()
 	row := ui.Row(c).FillWidth().Shrink(0).AlignItems(ui.Center).Justify(ui.End).
 		Padding(theme.Space6, 0, theme.Space6, 0).BorderWidth(1, 0, 0, 0).BorderColor(p.Hairline)
-	if l.compact {
+	plans := !l.compact && l.Plans != nil
+	switch {
+	case l.compact:
 		row = row.Justify(ui.Center)
+	case plans:
+		// The meters at the left, a spacer, then the button.
+		row = row.Justify(ui.Start)
 	}
 	// The wrapper insets the divider; a margin on a full-width row would overflow.
 	ui.Column(c).FillWidth().Shrink(0).Padding(theme.Space6, theme.Space10, 0, theme.Space10).Children(func() {
 		row.Children(func() {
+			if plans {
+				kit.PlanUsage(c, l.Plans())
+				ui.Box(c).Grow(1)
+			}
 			kit.IconButton(c, kit.IconButtonOpts{Icon: "settings", Label: label, Small: true, Dot: ready,
 				Key: "⌘,", OnClick: l.OnSettings})
 		})
