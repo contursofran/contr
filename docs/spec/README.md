@@ -41,7 +41,7 @@ tests, and what it replaces.
 
 ```
 ┌ glass window ─────────────────────────────────────────────────────────────────┐
-│ ● ● ●                    │ tab · tab · +      ··········  +120 −126 9 files ⧉ ⌕ ▣ │  title bar 46
+│ ● ● ●                    │ tab · tab · +      ··········  +120 −126 9 files ⧉ ⌕ ▣ │  title bar 38
 │┌ sidebar 312 ─────┐┌ terminal (fills) ─────────────────────┐┌ files 280 ──────┐│
 ││ Projects       + ││          ╭ 2 questions ╮              ││ Files        ⧩  ││
 ││ ▢ contr     main ││                                       ││ ▸ internal      ││
@@ -181,7 +181,7 @@ Esc is never a window shortcut: it interrupts Claude Code in the terminal.
 
 | v0.2 part (`docs/DESIGN.md`) | v0.3 part | Status |
 |---|---|---|
-| Top bar 40: tabs of the open project | TitleBar 46: tabs of the selected agent | replaced |
+| Top bar 40: tabs of the open project | TitleBar 38: tabs of the selected agent | replaced |
 | Sidebar: Spaces, `This computer` header | ServerRow section, then ProjectRow | replaced |
 | Sidebar: Agents section in state groups | AgentRow under its project: orchestrator first, workers on a rail | replaced |
 | Panel 380: board or worker | Files panel 280: FileTree and UsageMeter | replaced; the board and worker detail are disabled (D122) |
