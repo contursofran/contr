@@ -77,7 +77,7 @@ Design system page: component Window. Shared rules: [README.md](README.md).
 
 **Do**
 
-- Keep 10px between all panels and the window edge.
+- Keep `space-8` (8px) between all panels and the window edge (D168).
 - Keep the default widths 312 and 280; let the owner drag them.
 
 **Don't**
