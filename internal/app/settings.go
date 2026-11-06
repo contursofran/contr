@@ -33,10 +33,12 @@ var Version = contr.Version()
 const (
 	LabelSettings      = "settings modal"
 	LabelSettingsNotes = "update notes"
-	SettingsEsc        = "esc"
-	SettingsDone       = "Done"
-	SettingsCheck      = "Check for updates"
-	SettingsInstall    = "Install and restart"
+	// LabelSettingsTabs names the tab bar (D178); its tabs are named by SettingsTabs.
+	LabelSettingsTabs = "settings tabs"
+	SettingsEsc       = "esc"
+	SettingsDone      = "Done"
+	SettingsCheck     = "Check for updates"
+	SettingsInstall   = "Install and restart"
 	// SettingsRestart relaunches contr into an update that is ready (D176).
 	SettingsRestart = "Restart now"
 	// LabelAppearance names the Appearance row (D119); its segments are named by AppearanceNames.
@@ -45,6 +47,16 @@ const (
 	LabelBackground = "Background"
 	LabelPanels     = "Panels"
 	TintReset       = "Reset"
+)
+
+// SettingsTabs are the tabs of Settings, in order (D178).
+var SettingsTabs = [...]string{"General", "Agents", "Updates"}
+
+// The indexes of SettingsTabs.
+const (
+	TabGeneral = iota
+	TabAgents
+	TabUpdates
 )
 
 // AppearanceSources are the choices of the Appearance row, in order (D119).
@@ -114,6 +126,13 @@ type Settings struct {
 	Tint      func() (window, panel float64)
 	SetTint   func(window, panel float64)
 	ResetTint func()
+	// AgentsConfig is the path of agents.json, which the Agents tab edits (D178). Empty shows
+	// an error in that tab.
+	AgentsConfig string
+
+	// tab is the tab that shows: SettingsTabs[tab].
+	tab int
+	ag  agentsState
 
 	// tintWin and tintPan are the values the sliders edit; the Seen ones are what the last build showed.
 	tintWin, tintPan, tintSeenWin, tintSeenPan float64
@@ -142,6 +161,7 @@ func (s *Settings) Toggle() {
 		return
 	}
 	s.open = true
+	s.ag = agentsState{}
 	s.probe()
 	s.redraw()
 }
@@ -460,8 +480,57 @@ func (s *Settings) body(c *ui.Context) {
 		ui.Text(c, "Settings").Bold().Grow(1).TextColor(p.Ink95)
 		settingsButton(c, SettingsEsc, ButtonPlain, s.Close)
 	})
-	s.appearanceRow(c)
-	s.tintRows(c)
+	s.tabBar(c)
+	switch s.tab {
+	case TabAgents:
+		s.agentsTab(c)
+	case TabUpdates:
+		s.updatesTab(c)
+	default:
+		s.appearanceRow(c)
+		s.tintRows(c)
+		ui.Row(c).Shrink(0).Justify(ui.End).Padding(12, theme.ModalPadX).Margin(12, 0, 0, 0).
+			BorderWidth(1, 0, 0, 0).BorderColor(p.Hairline).Children(func() {
+			settingsButton(c, SettingsDone, ButtonPlain, s.Close)
+		})
+	}
+}
+
+// SelectTab shows one of SettingsTabs.
+func (s *Settings) SelectTab(i int) {
+	if i >= 0 && i < len(SettingsTabs) {
+		s.tab = i
+		s.redraw()
+	}
+}
+
+// tabBar is the tab bar on TabsBase. The Updates tab has the dot of D146 while an update waits.
+func (s *Settings) tabBar(c *ui.Context) {
+	p := theme.Current()
+	ui.Row(c).Shrink(0).Padding(0, theme.ModalPadX, 12, theme.ModalPadX).Children(func() {
+		tabs := ui.TabsBase(c.Key("settings-tabs"), &s.tab, len(SettingsTabs))
+		tabs.List.Label(LabelSettingsTabs).Gap(2).Padding(2).Radius(theme.CardRadius).Background(p.Hover).Children(func() {
+			for i, name := range SettingsTabs {
+				t := tabs.Tab(i).Label(name).Row().AlignItems(ui.Center).Gap(6).Padding(4, 12).Radius(theme.CardRadius)
+				text := p.Ink62
+				if i == s.tab {
+					t.Background(p.Selected)
+					text = p.Ink100
+				}
+				t.Children(func() {
+					ui.Text(c, name).TextColor(text)
+					if i == TabUpdates && s.Ready() {
+						ui.Box(c).Label("update dot").Size(6, 6).Radius(3).Background(p.Ink100)
+					}
+				})
+			}
+		})
+	})
+}
+
+// updatesTab is the Updates tab: the versions, the update status and its buttons.
+func (s *Settings) updatesTab(c *ui.Context) {
+	p := theme.Current()
 	busy := s.checking || s.installing
 	live := s.Updates != nil && s.enabled && !busy
 	ui.Column(c).Shrink(0).Gap(8).PaddingX(theme.ModalPadX).Children(func() {
