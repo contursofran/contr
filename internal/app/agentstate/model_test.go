@@ -396,3 +396,20 @@ func TestSnapshotCoreVersion(t *testing.T) {
 		t.Errorf("version %q after an hc error, want none", v)
 	}
 }
+
+func TestOrchestratingIsTheLabelOrALiveWorker(t *testing.T) {
+	o := agents.Worker{Address: "o", Role: agents.RoleOrchestrator, Live: true}
+	s := Snapshot{Orchestrators: []agents.Worker{o},
+		Workers: []agents.Worker{{Address: "d", Parent: "o", Live: false}, {Address: "x", Parent: "", Live: true}}}
+	if s.Orchestrating(o) || s.LiveWorkersOf("o") != 0 || s.LiveWorkersOf("") != 0 {
+		t.Errorf("no label and no live worker: orchestrating")
+	}
+	s.Workers = append(s.Workers, agents.Worker{Address: "w", Parent: "o", Live: true})
+	if !s.Orchestrating(o) || s.LiveWorkersOf("o") != 1 {
+		t.Errorf("a live worker: not orchestrating")
+	}
+	o.Orchestrating = true
+	if !(Snapshot{}).Orchestrating(o) {
+		t.Errorf("the label: not orchestrating")
+	}
+}

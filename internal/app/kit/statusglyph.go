@@ -159,6 +159,9 @@ type GlyphOpts struct {
 	// Claude draws the Claude mark, for an orchestrator, in place of the
 	// braille spinner.
 	Claude bool
+	// Grey draws the Claude mark in ink-45: a Claude session that does not
+	// orchestrate (D191). The claude hue stays for orchestrators.
+	Grey bool
 	// Small draws the 14px glyph of tabs and the notch; else 16px (rows).
 	Small bool
 	// Color draws a braille glyph in this ink in place of the state's ink.
@@ -188,6 +191,15 @@ func GlyphColor(p *theme.Palette, s GlyphState, claude bool) ui.Color {
 	default:
 		return p.Ink100
 	}
+}
+
+// optsColor is GlyphColor, with a grey Claude mark for a Claude session that
+// does not orchestrate (Grey, D191). Needs you keeps its hue.
+func optsColor(p *theme.Palette, o GlyphOpts) ui.Color {
+	if o.Claude && o.Grey && o.State != GlyphNeedsYou {
+		return p.Ink45
+	}
+	return GlyphColor(p, o.State, o.Claude)
 }
 
 var (
@@ -252,7 +264,7 @@ func StatusGlyph(c *ui.Context, o GlyphOpts) ui.Element {
 	state := o.State
 	still := c.Preferences().ReduceMotion
 	runs := Runs(state, o.Claude, still)
-	color := GlyphColor(pal, state, o.Claude)
+	color := optsColor(pal, o)
 	if o.Color != (ui.Color{}) && !o.Claude {
 		color = o.Color
 	}

@@ -225,6 +225,27 @@ func TestForeignRowLabelUsesTheReadableName(t *testing.T) {
 	}
 }
 
+// The tab of a Claude session that does not orchestrate has a grey mark; one
+// that ran /contr:orchestrate, or has workers, keeps the claude hue (D191).
+func TestTheTabOfASessionThatDoesNotOrchestrateIsGrey(t *testing.T) {
+	s := twoAgents()
+	if tab := TitleTabs(s, "p", "", "o", "")[0]; !tab.Grey {
+		t.Errorf("session with no workers: %+v", tab)
+	}
+	s.Orchestrators[0].Orchestrating = true
+	if tab := TitleTabs(s, "p", "", "o", "")[0]; tab.Grey {
+		t.Errorf("session that ran /contr:orchestrate: %+v", tab)
+	}
+	s = twoAgents()
+	s.Workers[0].Parent = "o"
+	if tab := TitleTabs(s, "p", "", "o", "")[0]; tab.Grey {
+		t.Errorf("session with a worker: %+v", tab)
+	}
+	if tab := TitleTabs(s, "p", "", "a", "")[0]; tab.Grey {
+		t.Errorf("a worker tab is never grey: %+v", tab)
+	}
+}
+
 // Every Claude session of the project is a tab, the same set whichever is selected (D190).
 func TestTitleTabsShareEverySessionOfTheProject(t *testing.T) {
 	s := twoAgents()

@@ -172,7 +172,11 @@ func (h *hook) coordinatorStop() error {
 	if err != nil {
 		return err
 	}
-	h.showContext(tokens, h.modelLabels(model))
+	labels := h.modelLabels(model)
+	if h.ranOrchestrate() {
+		labels[agents.LabelOrchestrating] = "1"
+	}
+	h.showContext(tokens, labels)
 	if tokens < h.saveAt() || h.asked() {
 		return nil
 	}
@@ -292,6 +296,16 @@ func (h *hook) clearAsked() {
 	if h.in.SessionID != "" {
 		_ = os.Remove(h.marker())
 	}
+}
+
+// ranOrchestrate tells whether the session's transcript holds
+// /contr:orchestrate. An error counts as no: the label is best effort.
+func (h *hook) ranOrchestrate() bool {
+	if h.in.TranscriptPath == "" {
+		return false
+	}
+	ran, err := agents.RanCommand(h.in.TranscriptPath, orchestrateCommand)
+	return err == nil && ran
 }
 
 // coordinator tells whether the session is a coordinator: it ran

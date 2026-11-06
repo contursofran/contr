@@ -11,7 +11,7 @@ Design system page: component StatusGlyph. Shared rules: [README.md](README.md).
 ## Anatomy
 
 - Braille glyph: mono `glyph` style (17/18), 16px wide; 14px inside tabs and the notch.
-- Claude glyph: 16px icon of the official Claude mark in `claude`. The mark is one filled shape (`assets/icons/claude.svg`, D123), so "stroke" below means its color.
+- Claude glyph: 16px icon of the official Claude mark in `claude`. A Claude session that does not orchestrate draws it in `ink-45`; needs you stays `blocked` (D191). The mark is one filled shape (`assets/icons/claude.svg`, D123), so "stroke" below means its color.
 
 ## States
 

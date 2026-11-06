@@ -13,9 +13,9 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
 | Part | Value |
 |---|---|
 | Row | orchestrator padding `7px 10px`, worker padding `5px 10px`, gap `space-10`, radius `radius-8` |
-| Leading | Claude glyph (orchestrator) or braille StatusGlyph (worker) |
+| Leading | Claude glyph (orchestrator; grey `ink-45` for a Claude session that does not orchestrate, D191) or braille StatusGlyph (worker) |
 | Line 1 | title in `body`, `ink-60`; one line, ellipsis. A worker shows its issue title, else its task (the terminal title); an orchestrator its name |
-| Line 2 | mono `meta` (11px), `ink-42`, items `space-10` apart: worker name, model and effort, then the age at the right ("b-241  sonnet medium  6m") |
+| Line 2 | mono `meta` (11px), `ink-42`, items `space-10` apart: worker name, model and effort, then the age at the right ("b-241  sonnet medium  6m"). An orchestrator shows its role in place of the name: "2 workers", or "orchestrator" with no workers yet; a Claude session that does not orchestrate shows none (D191) |
 | Indent | the orchestrator row sits 16px in from its project row (D169) |
 | Kids rail | workers indent a further 17px with 9px padding; a 1px `rail` line on the left |
 

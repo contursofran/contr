@@ -35,6 +35,10 @@ const (
 	// effort level ("high"), for line 2 of its row (D189).
 	LabelModel  = "contr.model"
 	LabelEffort = "contr.effort"
+	// LabelOrchestrating is set by the kit's Stop hook on a Claude Code
+	// session that ran /contr:orchestrate, so its row shows that it
+	// orchestrates before it has workers (D191).
+	LabelOrchestrating = "contr.orchestrating"
 )
 
 // RoleOrchestrator is the role label of an orchestrator agent.
@@ -222,6 +226,9 @@ type Worker struct {
 	// Effort is the --effort of the program's own command line, else the
 	// effort that the kit's Stop hook put on the terminal (D189).
 	Effort string `json:"effort,omitempty"`
+	// Orchestrating is true when the kit's Stop hook saw /contr:orchestrate
+	// in the session (LabelOrchestrating, D191).
+	Orchestrating bool `json:"orchestrating,omitempty"`
 	// Task is what a worker is doing, for line 1 of its row: the cleaned
 	// terminal title. Set by the agent model; empty when the title is not
 	// usable (D169).
@@ -288,6 +295,8 @@ func (t terminal) worker() Worker {
 		ExitCode: t.ExitCode,
 		Model:    orText(flagValue(t.Argv, "--model"), t.Labels[LabelModel]),
 		Effort:   orText(flagValue(t.Argv, "--effort"), t.Labels[LabelEffort]),
+
+		Orchestrating: t.Labels[LabelOrchestrating] != "",
 	}
 	if t.Name != nil {
 		w.Name = *t.Name

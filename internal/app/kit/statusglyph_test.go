@@ -342,3 +342,19 @@ func join(s []string) string {
 	}
 	return b.String()
 }
+
+// A Claude session that does not orchestrate has a grey mark; the claude hue
+// stays for orchestrators, and needs you keeps its hue (D191).
+func TestTheMarkOfAPlainSessionIsGrey(t *testing.T) {
+	for _, p := range []*theme.Palette{theme.Dark, theme.Light} {
+		if got := optsColor(p, GlyphOpts{State: GlyphWorking, Claude: true, Grey: true}); got != p.Ink45 {
+			t.Errorf("dark=%v plain session %v, want ink-45", p.Dark, got)
+		}
+		if got := optsColor(p, GlyphOpts{State: GlyphWorking, Claude: true}); got != p.Claude {
+			t.Errorf("dark=%v orchestrator %v, want claude", p.Dark, got)
+		}
+		if got := optsColor(p, GlyphOpts{State: GlyphNeedsYou, Claude: true, Grey: true}); got != p.Blocked {
+			t.Errorf("dark=%v plain session needs you %v, want blocked", p.Dark, got)
+		}
+	}
+}

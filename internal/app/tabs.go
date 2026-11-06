@@ -23,6 +23,8 @@ type Tab struct {
 	// Tip is the tooltip: for a terminal contr did not start it holds the hc address (D156).
 	Tip          string
 	Orchestrator bool
+	// Grey is true for a Claude session that does not orchestrate: its mark is grey (D191).
+	Grey bool
 	// Plain is true for a plain terminal (a shell, not an agent). Only a plain tab closes (D85).
 	Plain bool
 	// State is the glyph state of an agent tab. A plain tab shows the terminal icon.
@@ -48,7 +50,7 @@ func TitleTabs(s agentstate.Snapshot, project, key, agent, selected string) []Ta
 	var tabs []Tab
 	add := func(w agents.Worker) {
 		tabs = append(tabs, Tab{Address: w.Address, Title: tabTitle(w), Tip: tabTip(w), Orchestrator: w.Orchestrator(),
-			State: tabState(w), Selected: selected != "" && w.Address == selected})
+			Grey: w.Orchestrator() && !s.Orchestrating(w), State: tabState(w), Selected: selected != "" && w.Address == selected})
 	}
 	for _, w := range s.Orchestrators {
 		if agentstate.SameProject(w, project, key) {

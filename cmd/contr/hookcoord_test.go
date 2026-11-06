@@ -240,3 +240,19 @@ func TestHookStopLabelsTheModelAndEffort(t *testing.T) {
 		t.Errorf("effort label with no effort: %v", l2)
 	}
 }
+
+func TestHookStopLabelsASessionThatOrchestrates(t *testing.T) {
+	r := newCoordRig(t, orchestrateLine, usageLine(10))
+	if code, _, errs := r.run("stop", nil); code != 0 {
+		t.Fatalf("stop: %d %q", code, errs)
+	}
+	if l := r.core.params[0]["labels"].(map[string]any); l["contr.orchestrating"] != "1" {
+		t.Errorf("labels %v; want contr.orchestrating 1", l)
+	}
+	// A session that did not run /contr:orchestrate gets no label.
+	r2 := newCoordRig(t, usageLine(10))
+	r2.run("stop", nil)
+	if _, ok := r2.core.params[0]["labels"].(map[string]any)["contr.orchestrating"]; ok {
+		t.Errorf("orchestrating label without the command: %v", r2.core.params[0])
+	}
+}
