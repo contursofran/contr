@@ -12,10 +12,10 @@ import (
 	"github.com/contursofran/contr/assets"
 )
 
-// docs/spec/README.md (Icons) names sixteen line icons.
+// docs/spec/README.md (Icons) names seventeen line icons.
 func TestEveryLineIconLoads(t *testing.T) {
 	want := []string{"project", "computer", "server", "folder", "folder-open", "file-go",
-		"file-md", "file", "close", "plus", "split", "search", "sidebar-right", "filter", "terminal", "settings"}
+		"file-md", "file", "close", "plus", "split", "search", "sidebar-right", "filter", "terminal", "settings", "download"}
 	if len(LineNames) != len(want) {
 		t.Fatalf("%d line names, want %d", len(LineNames), len(want))
 	}
