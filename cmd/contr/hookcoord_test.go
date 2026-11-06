@@ -210,3 +210,33 @@ func TestHookStopLabelsTheContextSize(t *testing.T) {
 		t.Errorf("hc down: %d %q", code, errs)
 	}
 }
+
+func TestHookStopLabelsTheModelAndEffort(t *testing.T) {
+	model := `{"type":"assistant","message":{"model":"claude-opus-5-5","content":[],"usage":{"input_tokens":5}}}`
+	synthetic := `{"type":"assistant","message":{"model":"<synthetic>","content":[]}}`
+	r := newCoordRig(t, model, synthetic)
+	if code, _, errs := r.run("stop", map[string]any{"effort": map[string]any{"level": "high"}}); code != 0 {
+		t.Fatalf("stop: %d %q", code, errs)
+	}
+	l := r.core.params[0]["labels"].(map[string]any)
+	if l["contr.model"] != "opus" || l["contr.effort"] != "high" {
+		t.Errorf("labels %v; want contr.model opus, contr.effort high", l)
+	}
+	// No effort in the input: $CLAUDE_EFFORT.
+	r.env["CLAUDE_EFFORT"] = "max"
+	r.run("stop", nil)
+	if l := r.core.params[1]["labels"].(map[string]any); l["contr.effort"] != "max" {
+		t.Errorf("effort from the env: %v", l)
+	}
+	// Nothing known: the labels are not sent, so hc keeps the last values.
+	delete(r.env, "CLAUDE_EFFORT")
+	r2 := newCoordRig(t, usageLine(10))
+	r2.run("stop", nil)
+	l2 := r2.core.params[0]["labels"].(map[string]any)
+	if _, ok := l2["contr.model"]; ok {
+		t.Errorf("model label with no model: %v", l2)
+	}
+	if _, ok := l2["contr.effort"]; ok {
+		t.Errorf("effort label with no effort: %v", l2)
+	}
+}

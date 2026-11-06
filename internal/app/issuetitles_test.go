@@ -265,3 +265,33 @@ func TestSyncDropsTheAnswersOfGoneWorkers(t *testing.T) {
 		t.Errorf("answers of a gone worker stay: %v", r.t.answers)
 	}
 }
+
+func TestLineTwoShowsTheEffortAfterTheModel(t *testing.T) {
+	h := newRows(t)
+	h.list.ModelOf = func(string) string { return "" }
+	h.list.EffortOf = func(string) string { return "" }
+	h.list.StatusEffort = func(addr string) string {
+		if addr == "lead" {
+			return "medium"
+		}
+		return ""
+	}
+	snap := h.live.get()
+	snap.Orchestrators[0].Model = "opus"
+	h.send(snap)
+	if !h.tt.HasText("opus medium") {
+		t.Errorf("no effort from the status line in %q", h.tt.Texts())
+	}
+	// The hook's label (Worker.Effort) wins over the status line.
+	snap.Orchestrators[0].Effort = "high"
+	h.send(snap)
+	if !h.tt.HasText("opus high") {
+		t.Errorf("no effort from the label in %q", h.tt.Texts())
+	}
+	// The profile's effort wins over both.
+	h.list.EffortOf = func(string) string { return "low" }
+	h.send(snap)
+	if !h.tt.HasText("opus low") {
+		t.Errorf("no effort from the profile in %q", h.tt.Texts())
+	}
+}

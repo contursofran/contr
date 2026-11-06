@@ -15,7 +15,7 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
 | Row | orchestrator padding `7px 10px`, worker padding `5px 10px`, gap `space-10`, radius `radius-8` |
 | Leading | Claude glyph (orchestrator) or braille StatusGlyph (worker) |
 | Line 1 | title in `body`, `ink-60`; one line, ellipsis. A worker shows its issue title, else its task (the terminal title); an orchestrator its name |
-| Line 2 | mono `meta` (11px), `ink-42`, items `space-10` apart: worker name, model, then the age at the right ("b-241  sonnet  6m") |
+| Line 2 | mono `meta` (11px), `ink-42`, items `space-10` apart: worker name, model and effort, then the age at the right ("b-241  sonnet medium  6m") |
 | Indent | the orchestrator row sits 16px in from its project row (D169) |
 | Kids rail | workers indent a further 17px with 9px padding; a 1px `rail` line on the left |
 
@@ -40,6 +40,11 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
   it, and for an orchestrator. The model is the `--model` of the agent's
   profile, else the `--model` of the terminal's own command line (D169), else
   the model that Claude Code's status line reported for the terminal (D174).
+  The kit's Stop hook labels each Claude Code session's terminal with its
+  model and effort (`contr.model`, `contr.effort`), and these labels come
+  after the command line and before the status line, so a session shows
+  them after its first turn with no status line set up (D189). The effort
+  follows the model, from the same places in the same order ("opus high").
   The issue id is in the accessibility label only. The age is the time since the last hc event for the terminal,
   as "now" (under a minute), "6m" or "2h".
 - Ages (D137, O10): one shared 1-minute timer moves them. It runs only
