@@ -11,6 +11,9 @@ type PanelOpts struct {
 	// Name is the head text. It is lower-case where it is a name, and clips
 	// with an ellipsis. The panel is a group named by it.
 	Name string
+	// Title is the head text when it differs from Name, such as the project
+	// name over the files. Name stays the label of the group.
+	Title string
 	// Head builds the icon buttons at the right of the head. Nil for none.
 	Head func()
 	// Footer builds the 24px icon buttons at the right of the footer. Nil
@@ -39,7 +42,11 @@ func Panel(c *ui.Context, o PanelOpts) ui.Element {
 	return ui.Column(c).Label(o.Name).Grow(1).MinWidth(0).MinHeight(0).Padding(theme.Space12, theme.Space10, theme.Space10).
 		Background(p.Panel).Border(1, p.PanelLine).Radius(theme.Radius12).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(theme.Space4).Shrink(0).Padding(theme.Space2, theme.Space4, theme.Space4, theme.Space10).Children(func() {
-			ui.Text(c, o.Name).Label(o.Name + " name").SingleLine().Grow(1).MinWidth(0).
+			title := o.Title
+			if title == "" {
+				title = o.Name
+			}
+			ui.Text(c, title).Label(title + " name").SingleLine().Grow(1).MinWidth(0).
 				TextColor(p.Ink45).FontSize(theme.StyleLabel.Size).FontWeight(theme.StyleLabel.Weight)
 			if o.Head != nil {
 				o.Head()
