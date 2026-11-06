@@ -157,6 +157,9 @@ type Frame struct {
 	Panel *BoardPanel
 	// Files is the tree of the files panel. [NewFrame] makes it.
 	Files *FileTree
+	// Session shows the selected agent's todos and artifacts over the file
+	// tree (D197). [NewFrame] makes it; [Frame.Attach] gives it the state dir.
+	Session *SessionPanel
 	// Diff is the title bar's diff summary. It shows the totals of Files. [NewFrame] makes it.
 	Diff *DiffSummary
 	// Review is the Review view. [Frame.Attach] makes it. While the Review toggle is on, it
@@ -259,6 +262,7 @@ func NewFrame() *Frame {
 		sidebarW: theme.SidebarWidth, panelW: theme.PanelWidth}
 	f.Files = NewFileTree(f.filesDir)
 	f.Diff = &DiffSummary{Tree: f.Files}
+	f.Session = &SessionPanel{Terminal: f.selectedTerminal}
 	f.Files.Open = f.openFileInReview
 	f.Files.Reveal = func(abs string) { mygo.Shell.ShowItemInFolder(abs) }
 	return f
@@ -552,10 +556,12 @@ func (f *Frame) terminalPanel(c *ui.Context) {
 	kit.Panel(c, kit.PanelOpts{Name: LabelPanelTerminal, Bare: true, Body: func() { f.content(c) }})
 }
 
-// filesPanel is the files slot: the file tree, with the usage meters in its footer. The v0.2 board and worker panel
+// filesPanel is the files slot: the agent's todos and artifacts (D197), the file tree under the
+// head "Files", and the usage meters in its footer. The v0.2 board and worker panel
 // stay in the code but are not shown (D122); see panelBox.
 func (f *Frame) filesPanel(c *ui.Context) {
-	kit.Panel(c, kit.PanelOpts{Name: LabelPanelFiles, Title: f.openProject,
+	kit.Panel(c, kit.PanelOpts{Name: LabelPanelFiles,
+		Top:    func() { f.Session.View(c) },
 		Head:   func() { f.Files.Head(c) },
 		Body:   func() { f.Files.View(c) },
 		Footer: func() { kit.UsageMeter(c, usageMeters(f.planUsage(), f.selectedTerminal())) }})
@@ -1019,6 +1025,10 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.Files.Post, f.Files.Invalidate = w.Update, w.Invalidate
 	f.Toasts = state.NewToasts(w.Invalidate)
 	f.Files.Status = f.Toasts.Show
+	f.Session.Post, f.Session.Invalidate, f.Session.OpenURL = w.Update, w.Invalidate, openURL
+	if f.Session.StateDir == "" {
+		f.Session.StateDir = usage.StateDir()
+	}
 	f.PR = &PRPane{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate, OpenURL: openURL}
 	f.WorkerPRs = &WorkerPRs{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate}
 	f.IssueTitles = &IssueTitles{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate}
@@ -1178,6 +1188,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		setSettingsHandler(nil)
 		stopChecks()
 		f.Files.Close()
+		f.Session.Close()
 		unwatch()
 		term()
 		removeOutline()

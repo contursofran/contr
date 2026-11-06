@@ -9,8 +9,10 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/session"
 )
 
 // seeFixture is a state of the app that scripts/see.sh can show.
@@ -46,6 +48,42 @@ var seeFixtures = map[string]seeFixture{
 		},
 		ready: "lead, ",
 	},
+	"session": {
+		about: "the orchestrator lead with the todos and artifacts of canvas board 11 (D197)",
+		setup: seeSession,
+		ready: "lead, ",
+	},
+}
+
+// seeSession spawns lead and writes the session file of its terminal, as the
+// kit's hooks do (D195).
+func seeSession(t *testing.T, h *harness) {
+	repo := h.repo(t, "demo", "main")
+	w, err := h.mgr.Spawn(h.ctx, agents.Spec{Name: "lead", Profile: "claude-idle", Role: agents.RoleOrchestrator, Project: "demo", Worktree: repo})
+	if err != nil {
+		t.Fatalf("spawn lead: %v", err)
+	}
+	now := uint64(time.Now().Unix())
+	todo := func(text, status string, you bool) session.Todo {
+		return session.Todo{Text: text, Active: text, Status: status, You: you}
+	}
+	s := &session.Session{UpdatedAt: now, Todos: []session.Todo{
+		todo("Merge #453, the flow key", session.Completed, false),
+		todo("Send the canvas backdrop as a PNG", session.Completed, true),
+		{Text: "Design the todos and artifacts panel", Active: "Designing the todos and artifacts panel", Status: session.InProgress, You: true},
+		todo("Merge #460 after CI passes", session.Pending, false),
+		todo("Start step 2 of #456 (Flow section)", session.Pending, false),
+		todo("Move plan usage to the left sidebar", session.Pending, true),
+		todo("Open an issue for the todo hook", session.Pending, true),
+	}, Artifacts: []session.Artifact{
+		{Slug: "https://claude.ai/artifact/9bmb", Title: "contr · from-zero canvas", UpdatedAt: now},
+		{Slug: "9bmb", Title: "contr · from-zero canvas", UpdatedAt: now - 60},
+		{Slug: "design-system", Title: "contr design system", URL: "https://claude.ai/artifact/45Kp", UpdatedAt: now - 38*60},
+		{Slug: "native-final", Title: "Native · final", URL: "https://claude.ai/artifact/LU6P", UpdatedAt: now - 2*86400},
+	}}
+	if err := session.Write(filepath.Join(h.dir, "state"), w.Address, s); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func seeWorkers(t *testing.T, h *harness) {
