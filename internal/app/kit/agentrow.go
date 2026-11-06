@@ -105,11 +105,12 @@ func agentRowButton(c *ui.Context, o AgentRowOpts, marginEnd, marginStart float3
 		StatusGlyph(c, GlyphOpts{State: o.State, Claude: o.Orchestrator})
 		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 			ui.Text(c, o.Title).Label(o.Label + " title").SingleLine().MinWidth(0).
-				Font(theme.StyleBody.Family()).FontSize(theme.StyleBody.Size).FontWeight(theme.StyleBody.Weight).TextColor(titleInk)
+				Font(theme.StyleBody.Family()).FontSize(theme.StyleBody.Size).FixedLineHeight(theme.StyleBody.Line).
+				FontWeight(theme.StyleBody.Weight).TextColor(titleInk)
 			ui.Row(c).FillWidth().Gap(theme.Space10).MinWidth(0).Children(func() {
 				meta := func(s string) {
 					ui.Text(c, s).SingleLine().
-						Font(theme.StyleMeta.Family()).FontSize(theme.StyleMeta.Size).TextColor(metaInk)
+						Font(theme.StyleMeta.Family()).FontSize(theme.StyleMeta.Size).FixedLineHeight(theme.StyleMeta.Line).TextColor(metaInk)
 				}
 				if o.Name != "" {
 					meta(o.Name)

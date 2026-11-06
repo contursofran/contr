@@ -12,7 +12,7 @@ Design system page: component FileTree. Shared rules: [README.md](README.md).
 
 | Part | Value |
 |---|---|
-| Head | the project name (`contr`), not "Files"; the filter button at the right uses the `filter` icon: three lines, long to short |
+| Head | "Files", under the agent's todos and artifacts ([SessionPanel.md](SessionPanel.md), D197); the filter button at the right uses the `filter` icon: three lines, long to short |
 | Row | height `file-row-height` (26px), padding `0 8px`, gap `space-7`, radius `radius-6` |
 | Icon | `folder`, `folder-open`, `file-go`, `file-md`, `file` at 15px, `ink-38` |
 | Name | `row-small` (12.5px), `ink-50`; ellipsis |

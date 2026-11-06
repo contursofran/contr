@@ -95,9 +95,11 @@ var sheetParts = []sheetPart{
 
 var sheetFonts sync.Once
 
-// sheetView is a part as the app shows it: on the ground, in the app's fonts.
+// sheetView is a part as the app shows it: on the ground, in the app's fonts
+// and MyGo theme.
 func sheetView(p sheetPart) func(c *ui.Context) {
 	return func(c *ui.Context) {
+		theme.Apply(c)
 		ui.Column(c).Width(float32(p.w + 2*sheetPad)).Height(float32(p.h + 2*sheetPad)).Padding(sheetPad).
 			Background(theme.Current().Ground).Font(theme.FontFamilySans).
 			FontSize(theme.FontSize).Children(func() { p.view(c) })

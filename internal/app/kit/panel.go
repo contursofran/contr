@@ -19,6 +19,9 @@ type PanelOpts struct {
 	// Footer builds the 24px icon buttons at the right of the footer. Nil
 	// for no footer.
 	Footer func()
+	// Top builds sections above the head, such as the agent's todos over
+	// the files. They do not scroll. Nil for none.
+	Top func()
 	// Body builds the content, which scrolls inside the panel.
 	Body func()
 	// Bare draws only the box: no head, no padding and no scroll. The body
@@ -41,6 +44,9 @@ func Panel(c *ui.Context, o PanelOpts) ui.Element {
 	}
 	return ui.Column(c).Label(o.Name).Grow(1).MinWidth(0).MinHeight(0).Padding(theme.Space12, theme.Space10, theme.Space10).
 		Background(p.Panel).Border(1, p.PanelLine).Radius(theme.Radius12).Children(func() {
+		if o.Top != nil {
+			o.Top()
+		}
 		ui.Row(c).AlignItems(ui.Center).Gap(theme.Space4).Shrink(0).Padding(theme.Space2, theme.Space4, theme.Space4, theme.Space10).Children(func() {
 			title := o.Title
 			if title == "" {
