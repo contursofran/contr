@@ -209,6 +209,8 @@ type Frame struct {
 	appearance   mygo.ThemeSource
 	appearanceMu sync.Mutex
 	saveMu       sync.Mutex
+	prefsTimer   *time.Timer
+	tint         prefs.Tints
 	follower     *theme.Follower
 	lateWin      lateWindow
 	themeErr     error
@@ -1083,7 +1085,8 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	}
 	f.Settings = &Settings{Updates: f.Updates, Version: Version, CoreVersion: f.coreVersion, Run: Runner{Post: w.Update},
 		Relaunch: f.Relaunch, Invalidate: w.Invalidate, Visible: func() bool { return f.Visibility == nil || f.Visibility.Visible() },
-		Status: f.Toasts.Show, Appearance: f.Appearance, SetAppearance: f.SetAppearance}
+		Status: f.Toasts.Show, Appearance: f.Appearance, SetAppearance: f.SetAppearance,
+		Tint: f.Tint, SetTint: f.SetTint, ResetTint: f.ResetTint}
 	setSettingsHandler(func() { w.Update(f.Settings.Toggle) })
 	f.SpacesList.OnSettings = func() { f.Settings.Toggle() }
 	f.SpacesList.UpdateReady = f.Settings.Ready

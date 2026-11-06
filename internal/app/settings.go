@@ -9,6 +9,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"slices"
 	"strconv"
@@ -36,6 +37,10 @@ const (
 	SettingsInstall    = "Install and restart"
 	// LabelAppearance names the Appearance row (D119); its segments are named by AppearanceNames.
 	LabelAppearance = "Appearance"
+	// LabelBackground, LabelPanels and TintReset name the transparency sliders and their reset button (D162).
+	LabelBackground = "Background"
+	LabelPanels     = "Panels"
+	TintReset       = "Reset"
 )
 
 // AppearanceSources are the choices of the Appearance row, in order (D119).
@@ -98,6 +103,14 @@ type Settings struct {
 	// stores a new one when the owner picks a segment; nil makes the row do nothing (D119).
 	Appearance    func() mygo.ThemeSource
 	SetAppearance func(mygo.ThemeSource)
+	// Tint returns the window and panel alpha in percent for the current theme; SetTint applies
+	// new ones and ResetTint puts the token defaults back (D162). Nil makes the rows do nothing.
+	Tint      func() (window, panel float64)
+	SetTint   func(window, panel float64)
+	ResetTint func()
+
+	// tintWin and tintPan are the values the sliders edit; the Seen ones are what the last build showed.
+	tintWin, tintPan, tintSeenWin, tintSeenPan float64
 
 	open bool
 	// enabled is known once the first Enabled call returns.
@@ -379,6 +392,7 @@ func (s *Settings) body(c *ui.Context) {
 		settingsButton(c, SettingsEsc, ButtonPlain, s.Close)
 	})
 	s.appearanceRow(c)
+	s.tintRows(c)
 	busy := s.checking || s.installing
 	live := s.Updates != nil && s.enabled && !busy
 	ui.Column(c).Shrink(0).Gap(8).PaddingX(theme.ModalPadX).Children(func() {
@@ -486,5 +500,56 @@ func settingsButton(c *ui.Context, label string, style ButtonStyle, click ClickF
 		if style == ButtonPlain && live && el.Hovered() {
 			t.Underline()
 		}
+	})
+}
+
+// tintRows are the Background and Panels sliders, with a Reset button (D162). Each slider sets
+// the alpha, in percent, of glass-window or of panel for the current theme and applies it at
+// once; the value shows beside it.
+func (s *Settings) tintRows(c *ui.Context) {
+	if s.Tint == nil {
+		return
+	}
+	// The sliders write into fields, which keep their address between builds. A value that
+	// differs from the one seen at the last build was moved by the owner.
+	if (s.tintWin != s.tintSeenWin || s.tintPan != s.tintSeenPan) && s.SetTint != nil {
+		s.SetTint(s.tintWin, s.tintPan)
+	}
+	s.tintWin, s.tintPan = s.Tint()
+	s.tintSeenWin, s.tintSeenPan = s.tintWin, s.tintPan
+	ui.Column(c).Shrink(0).Gap(8).Padding(0, theme.ModalPadX, 12, theme.ModalPadX).Children(func() {
+		tintSlider(c, LabelBackground, &s.tintWin)
+		tintSlider(c, LabelPanels, &s.tintPan)
+		ui.Row(c).AlignItems(ui.Center).Justify(ui.End).Children(func() {
+			var reset ClickFn
+			if s.ResetTint != nil {
+				reset = s.ResetTint
+			}
+			settingsButton(c, TintReset, ButtonPlain, reset)
+		})
+	})
+}
+
+// tintSlider is one row: the label, a slider from 0 to 100 on SliderBase drawn from the
+// palette, and its value in percent.
+func tintSlider(c *ui.Context, label string, v *float64) {
+	p := theme.Current()
+	const trackH, thumb = 4, 14
+	ui.Row(c).AlignItems(ui.Center).Gap(12).Children(func() {
+		ui.Text(c, label).Width(90).TextColor(p.Ink50)
+		sl := ui.SliderBase(c.Key("tint-"+label), v, 0, 100).Step(1).Label(label + " alpha").Grow(1).Height(24).PaddingX(thumb / 2)
+		at := float32(*v / 100)
+		if c.Direction() == ui.RightToLeft {
+			at = 1 - at
+		}
+		sl.Draw(func(pt *ui.Painter, r ui.Rect) {
+			x0, w := r.X+thumb/2, r.W-thumb
+			y := r.Y + (r.H-trackH)/2
+			pt.Fill(ui.Rect{X: x0, Y: y, W: w, H: trackH}, p.MeterTrack, 2)
+			pt.Fill(ui.Rect{X: x0, Y: y, W: w * at, H: trackH}, p.MeterFill, 2)
+			pt.Fill(ui.Rect{X: x0 + w*at - thumb/2, Y: r.Y + (r.H-thumb)/2, W: thumb, H: thumb}, p.Ink85, thumb/2)
+		})
+		ui.Text(c, fmt.Sprintf("%.0f%%", *v)).Width(40).TextAlign(ui.End).
+			Font(theme.StyleValue.Family()).FontSize(theme.StyleValue.Size).TextColor(p.Ink85)
 	})
 }

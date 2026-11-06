@@ -67,3 +67,49 @@ func TestSaveWritesSystemForABadValue(t *testing.T) {
 		t.Fatalf("Load = %+v, %v; want system", got, err)
 	}
 }
+
+func f64(v float64) *float64 { return &v }
+
+func TestTintSaveThenLoad(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	in := Prefs{Appearance: mygo.ThemeDark, Tint: Tints{
+		Dark:  Tint{Window: f64(0.2), Panel: f64(0.7)},
+		Light: Tint{Panel: f64(0)},
+	}}
+	if err := Save(path, in); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, l := got.Tint.Dark, got.Tint.Light
+	if d.Window == nil || *d.Window != 0.2 || d.Panel == nil || *d.Panel != 0.7 {
+		t.Errorf("dark tint = %+v, want 0.2 and 0.7", d)
+	}
+	if l.Window != nil || l.Panel == nil || *l.Panel != 0 {
+		t.Errorf("light tint = %+v, want no window and panel 0", l)
+	}
+}
+
+func TestOldFileWithoutTintLoadsWithDefaults(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(`{"version":1,"appearance":"light"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(path)
+	if err != nil || got.Source() != mygo.ThemeLight || got.Tint != (Tints{}) {
+		t.Fatalf("Load = %+v, %v; want light and no tint values", got, err)
+	}
+}
+
+func TestTintValuesAreLimitedToZeroToOne(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(`{"version":1,"tint":{"dark":{"window":1.5,"panel":-2}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(path)
+	if err != nil || *got.Tint.Dark.Window != 1 || *got.Tint.Dark.Panel != 0 {
+		t.Fatalf("Load = %+v, %v; want 1 and 0", got.Tint.Dark, err)
+	}
+}

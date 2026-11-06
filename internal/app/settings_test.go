@@ -510,3 +510,73 @@ func TestOpenSettingsDialogChangesWithTheTheme(t *testing.T) {
 		t.Errorf("dark again = %v, want %v", got, want(theme.Dark))
 	}
 }
+
+func TestSettingsShowsTheTintSlidersWithValues(t *testing.T) {
+	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	r.s.Tint = func() (float64, float64) { return 30, 55 }
+	r.open()
+	for _, want := range []string{LabelBackground, LabelPanels, "30%", "55%", TintReset} {
+		if !r.hasText(want) {
+			t.Errorf("Settings has no %q: %v", want, r.texts())
+		}
+	}
+}
+
+func TestSettingsTintSliderCallsSetTint(t *testing.T) {
+	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	win, pan := 30.0, 55.0
+	var calls [][2]float64
+	r.s.Tint = func() (float64, float64) { return win, pan }
+	r.s.SetTint = func(w, p float64) { win, pan = w, p; calls = append(calls, [2]float64{w, p}) }
+	r.open()
+	if err := r.tt.Click(LabelBackground + " alpha"); err != nil {
+		t.Fatal(err)
+	}
+	r.tt.Key(0, ui.KeyHome)
+	r.tt.Frame()
+	r.tt.Frame()
+	if len(calls) == 0 || win != 0 || pan != 55 {
+		t.Fatalf("SetTint calls %v, win %v pan %v; want Background 0 and Panels kept", calls, win, pan)
+	}
+	if !r.hasText("0%") {
+		t.Errorf("the value did not follow: %v", r.texts())
+	}
+}
+
+func TestSettingsTintResetCallsResetTint(t *testing.T) {
+	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	resets := 0
+	r.s.Tint = func() (float64, float64) { return 30, 55 }
+	r.s.ResetTint = func() { resets++ }
+	r.open()
+	if err := r.tt.Click(TintReset); err != nil {
+		t.Fatal(err)
+	}
+	if resets != 1 {
+		t.Errorf("ResetTint ran %d times, want 1", resets)
+	}
+}
+
+func TestSettingsWithoutTintHandlersHasNoSliders(t *testing.T) {
+	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	r.open()
+	if r.hasText(LabelBackground) {
+		t.Error("sliders show without a Tint source")
+	}
+}
+
+func TestSettingsTintSliderFollowsAClickOnTheTrack(t *testing.T) {
+	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	win, pan := 30.0, 55.0
+	r.s.Tint = func() (float64, float64) { return win, pan }
+	r.s.SetTint = func(w, p float64) { win, pan = w, p }
+	r.open()
+	if err := r.tt.Click(LabelPanels + " alpha"); err != nil {
+		t.Fatal(err)
+	}
+	r.tt.Frame()
+	r.tt.Frame()
+	if pan < 45 || pan > 55 || pan == 55 || win != 30 {
+		t.Errorf("after a click at the middle: Background %v Panels %v; want Panels near 50", win, pan)
+	}
+}

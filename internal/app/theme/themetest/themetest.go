@@ -24,5 +24,8 @@ func (window) Update(fn func()) { fn() }
 func Use(t *testing.T, src mygo.ThemeSource) {
 	t.Helper()
 	theme.Follow(platform{}, window{}, src).Stop()
-	t.Cleanup(func() { theme.Follow(platform{}, window{}, mygo.ThemeDark).Stop() })
+	t.Cleanup(func() {
+		theme.ClearTints()
+		theme.Follow(platform{}, window{}, mygo.ThemeDark).Stop()
+	})
 }

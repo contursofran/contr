@@ -10,9 +10,9 @@ Generated from the design system `tokens.json`. Views use the names; `internal/a
 | `glow-slate` | `#3a5a8c` | `#b2c3e0` | Canvas only: a blurred desktop glow behind the glass, top left. Never paint it in the app. |
 | `glow-umber` | `#6b4a2a` | `#ebcfa9` | Canvas only: a blurred desktop glow behind the glass, bottom right. Never paint it in the app. |
 | `glow-graphite` | `#2c3240` | `#cdd2db` | Canvas only: a blurred desktop glow behind the terminal. Never paint it in the app. |
-| `glass-window` | `rgba(20,21,24,0.3)` | `rgba(246,246,248,0.35)` | Window fill over the vibrancy material, under every panel. With glass-blur and glass-saturate. |
+| `glass-window` | `rgba(20,21,24,0.3)` | `rgba(246,246,248,0.35)` | Window fill over the vibrancy material, under every panel. With glass-blur and glass-saturate. The owner can tune its alpha in Settings (D162); the value here is the default. |
 | `glass-float` | `rgba(34,35,40,0.72)` | `rgba(252,252,253,0.8)` | Floating glass over the terminal: the questions notch and the outline card. With glass-blur and glass-saturate. |
-| `panel` | `rgba(20,21,24,0.55)` | `rgba(255,255,255,0.6)` | Fill of the three panels: sidebar, terminal, files. |
+| `panel` | `rgba(20,21,24,0.55)` | `rgba(255,255,255,0.6)` | Fill of the three panels: sidebar, terminal, files. The owner can tune its alpha in Settings (D162); the value here is the default. |
 | `panel-line` | `rgba(255,255,255,0.065)` | `rgba(0,0,0,0.06)` | 1px border of the three panels. |
 | `window-line` | `rgba(255,255,255,0.09)` | `rgba(0,0,0,0.1)` | 1px border of the window. |
 | `float-line` | `rgba(255,255,255,0.075)` | `rgba(0,0,0,0.08)` | 1px border of floating glass (notch: no top border). |
