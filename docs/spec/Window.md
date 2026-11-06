@@ -15,7 +15,7 @@ Design system page: component Window. Shared rules: [README.md](README.md).
 | Ground | `ground` with three soft glows (`glow-slate`, `glow-umber`, `glow-graphite`) behind the glass |
 | Glass sheet | `glass-window`, blur `glass-blur`, saturate `glass-saturate`, radius `radius-14`, border `window-line`, inner top line `shadow-window-top` |
 | Title bar | `titlebar-height` (46px), see TitleBar |
-| Body | row of panels, gap `space-10`, padding `0 10px 10px` |
+| Body | row of panels, gap `space-10`, padding `10px` on every side: the gap under the title bar, to the left, right and bottom edge, and between the panels are all `space-10` (D167) |
 | Panels | sidebar `sidebar-width` (312px), terminal (fills), files `files-width` (280px) |
 
 ## States
@@ -26,7 +26,7 @@ Design system page: component Window. Shared rules: [README.md](README.md).
 
 ## Behavior
 
-- The window opens at its last size. The sidebar and files widths are the
+- The window opens at the visible frame of the screen (menu bar and Dock excluded), inset 20px on every side, and at least 640 x 600 (D167). It does not keep the last size yet. The sidebar and files widths are the
   ones the owner dragged (D111), else the defaults here.
 - Limits: sidebar 200–480 (D111), files 220–720. The terminal keeps at least
   480.

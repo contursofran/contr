@@ -39,6 +39,28 @@ var (
 	windowWidth = theme.WindowWidth
 )
 
+// screenInset is the gap between the frame window and the edges of the visible frame of
+// its screen when it opens (D167). It is the same as the gap between the panels.
+const screenInset = 20
+
+// fillScreen makes the frame window open at the screen's visible frame, inset. An e2e
+// build with CONTR_E2E_WIDTH keeps its own size (automation_e2e.go).
+var fillScreen = true
+
+// insetFrame is the frame the window opens at: work, the visible frame of the screen
+// (menu bar and Dock excluded), inset on every side, and not smaller than the minimum
+// size. A screen smaller than the minimum gets the minimum, at the corner of work.
+func insetFrame(work mygo.Rectangle, inset, minW, minH int) mygo.Rectangle {
+	r := mygo.Rectangle{X: work.X + inset, Y: work.Y + inset, Width: work.Width - 2*inset, Height: work.Height - 2*inset}
+	if r.Width < minW {
+		r.Width, r.X = minW, work.X
+	}
+	if r.Height < minH {
+		r.Height, r.Y = minH, work.Y
+	}
+	return r
+}
+
 // runStatusline is usage.RunStatusline. Tests replace it.
 var runStatusline = usage.RunStatusline
 
@@ -228,6 +250,11 @@ func openWindow(icons bool) int {
 		if frame != nil {
 			// The stored appearance applies before the window shows (D119).
 			frame.StartTheme()
+		}
+		if frame != nil && fillScreen {
+			// contr keeps no window frame between runs, so every start fills the screen.
+			r := insetFrame(mygo.Screen.PrimaryDisplay().WorkArea, screenInset, opts.MinWidth, opts.MinHeight)
+			opts.X, opts.Y, opts.Width, opts.Height = r.X, r.Y, r.Width, r.Height
 		}
 		win := mygo.NewWindow(opts)
 		keepGlassActive(win, opts)

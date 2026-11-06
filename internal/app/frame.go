@@ -505,7 +505,7 @@ func (f *Frame) View(c *ui.Context) {
 		}
 		f.Files.Sync() // the diff summary counts what the tree lists, also while the panel is hidden
 		f.titleBar(c, sidebar, narrowWindow(win))
-		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Padding(0, theme.PanelGap, theme.PanelGap).Children(func() {
+		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Padding(theme.PanelGap, theme.PanelGap, theme.PanelGap).Children(func() {
 			f.panels(c, sidebar, files, showFiles)
 		})
 		f.saveWidthsAfterDrag()

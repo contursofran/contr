@@ -412,3 +412,27 @@ func TestHookArgumentSelectsTheHook(t *testing.T) {
 	same(t, parse("contr", "hook", "stop"), Command{Kind: kindHook, Then: []string{"stop"}})
 	same(t, parse("contr", "hook"), Command{Kind: kindHook, Then: []string{}})
 }
+
+func TestInsetFrameFillsTheVisibleFrameWithAGap(t *testing.T) {
+	// A 1728x1117 screen with the menu bar (38 high) at the top.
+	got := insetFrame(mygo.Rectangle{X: 0, Y: 38, Width: 1728, Height: 1079}, 20, 640, 600)
+	want := mygo.Rectangle{X: 20, Y: 58, Width: 1688, Height: 1039}
+	if got != want {
+		t.Errorf("frame %+v, want %+v", got, want)
+	}
+	// A second screen to the left has negative coordinates.
+	got = insetFrame(mygo.Rectangle{X: -1920, Y: 0, Width: 1920, Height: 1055}, 20, 640, 600)
+	if want = (mygo.Rectangle{X: -1900, Y: 20, Width: 1880, Height: 1015}); got != want {
+		t.Errorf("frame %+v, want %+v", got, want)
+	}
+}
+
+func TestInsetFrameIsNotSmallerThanTheMinimum(t *testing.T) {
+	// 700 wide: the inset width 660 is fine; 650 wide gives 610 < 640, so the minimum, at the corner.
+	if got := insetFrame(mygo.Rectangle{X: 0, Y: 25, Width: 650, Height: 560}, 20, 640, 600); got != (mygo.Rectangle{X: 0, Y: 25, Width: 640, Height: 600}) {
+		t.Errorf("frame %+v, want the minimum size at the corner", got)
+	}
+	if got := insetFrame(mygo.Rectangle{X: 0, Y: 0, Width: 700, Height: 700}, 20, 640, 600); got != (mygo.Rectangle{X: 20, Y: 20, Width: 660, Height: 660}) {
+		t.Errorf("frame %+v", got)
+	}
+}
