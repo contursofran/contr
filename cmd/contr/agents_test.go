@@ -360,3 +360,30 @@ func TestAgentsRmEnded(t *testing.T) {
 		}
 	}
 }
+
+func TestAgentsFlowPrintsTheFlow(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agents.json")
+	if err := os.WriteFile(path, []byte(`{"flow":{"plan":"always","merge":"auto"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	env := map[string]string{"CONTR_AGENTS_CONFIG": path}
+	code, out, _ := run(t, &cliCore{}, env, "flow")
+	if code != 0 || !strings.Contains(out, "The flow:\n- Plan first: always.") || !strings.Contains(out, "Merge: merge yourself") {
+		t.Fatalf("code %d out %q", code, out)
+	}
+	if code, out, _ := run(t, &cliCore{}, env, "help"); code != 0 || !strings.Contains(out, "Plan first: always.") {
+		t.Fatalf("help: code %d out %q", code, out)
+	}
+	if code, _, _ := run(t, &cliCore{}, env, "flow", "x"); code != 2 {
+		t.Fatalf("flow x: code %d", code)
+	}
+	if err := os.WriteFile(path, []byte(`{"flow":{"plan":"sometimes"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, errs := run(t, &cliCore{}, env, "flow"); code != 1 || !strings.Contains(errs, "sometimes") {
+		t.Fatalf("bad flow: code %d err %q", code, errs)
+	}
+	if code, out, _ := run(t, &cliCore{}, env, "help"); code != 0 || !strings.Contains(out, "could not be read") || !strings.Contains(out, "Plan first: when needed.") {
+		t.Fatalf("help with a bad flow: code %d out %q", code, out)
+	}
+}
