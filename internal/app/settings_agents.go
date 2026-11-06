@@ -1,6 +1,6 @@
 package app
 
-// The Agents tab of Settings (D178): the Roles section edits the profiles of agents.json. Only
+// The Agents tab of Settings (D186): the Roles section edits the profiles of agents.json. Only
 // Claude Code is in the dropdowns for now. A profile that the dropdowns cannot show is "Custom":
 // it shows its command line and stays as it is until the owner picks a value. Reads and writes
 // of agents.json run off the UI thread (Runner).

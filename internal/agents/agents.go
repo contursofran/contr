@@ -90,7 +90,7 @@ type Config struct {
 	Profiles map[string]Profile `json:"profiles"`
 	Kit      string             `json:"kit,omitempty"`
 	Setup    map[string]string  `json:"setup,omitempty"`
-	// Flow is how the orchestrator takes an issue to a merge (D177).
+	// Flow is how the orchestrator takes an issue to a merge (D185).
 	Flow Flow `json:"flow"`
 }
 

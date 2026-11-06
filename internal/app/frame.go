@@ -86,7 +86,7 @@ type Frame struct {
 	Updates Updates
 	// Relaunch restarts contr after an update installs.
 	Relaunch func()
-	// AgentsConfig is the path of agents.json that the Agents tab of Settings edits (D178).
+	// AgentsConfig is the path of agents.json that the Agents tab of Settings edits (D186).
 	AgentsConfig string
 	// Settings is the Settings modal, made in Attach.
 	Settings *Settings
@@ -509,7 +509,7 @@ func (f *Frame) View(c *ui.Context) {
 		}
 		f.Files.Sync() // the diff summary counts what the tree lists, also while the panel is hidden
 		f.titleBar(c, sidebar, narrowWindow(win))
-		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Padding(theme.PanelGap, theme.PanelGap, theme.PanelGap).Children(func() {
+		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Padding(0, theme.PanelGap, theme.PanelGap).Children(func() {
 			f.panels(c, sidebar, files, showFiles)
 		})
 		f.saveWidthsAfterDrag()

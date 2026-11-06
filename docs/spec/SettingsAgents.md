@@ -1,6 +1,6 @@
 # SettingsAgents
 
-The tab bar of the Settings modal and its Agents tab: the Roles section (D178). The Flow
+The tab bar of the Settings modal and its Agents tab: the Roles section (D186). The Flow
 section of the same tab has its own spec (slice 3 of #452).
 
 Shared rules: [README.md](README.md). Design: board 10 of the from-zero canvas.

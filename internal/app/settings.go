@@ -33,7 +33,7 @@ var Version = contr.Version()
 const (
 	LabelSettings      = "settings modal"
 	LabelSettingsNotes = "update notes"
-	// LabelSettingsTabs names the tab bar (D178); its tabs are named by SettingsTabs.
+	// LabelSettingsTabs names the tab bar (D186); its tabs are named by SettingsTabs.
 	LabelSettingsTabs = "settings tabs"
 	SettingsEsc       = "esc"
 	SettingsDone      = "Done"
@@ -49,7 +49,7 @@ const (
 	TintReset       = "Reset"
 )
 
-// SettingsTabs are the tabs of Settings, in order (D178).
+// SettingsTabs are the tabs of Settings, in order (D186).
 var SettingsTabs = [...]string{"General", "Agents", "Updates"}
 
 // The indexes of SettingsTabs.
@@ -126,7 +126,7 @@ type Settings struct {
 	Tint      func() (window, panel float64)
 	SetTint   func(window, panel float64)
 	ResetTint func()
-	// AgentsConfig is the path of agents.json, which the Agents tab edits (D178). Empty shows
+	// AgentsConfig is the path of agents.json, which the Agents tab edits (D186). Empty shows
 	// an error in that tab.
 	AgentsConfig string
 

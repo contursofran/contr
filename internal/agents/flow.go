@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// Flow is how the orchestrator takes an issue to a merge (D177). It is saved
+// Flow is how the orchestrator takes an issue to a merge (D185). It is saved
 // as the flow key of agents.json.
 type Flow struct {
 	// Plan is when a planner runs first: never, when-needed or always.
@@ -91,7 +91,7 @@ func (f Flow) Text() string {
 // Save writes the config to path. Keys in the file that Config does not know
 // stay as they are. A profile goes to the file only when the file had it or
 // when it differs from DefaultConfig, so the file does not freeze today's
-// defaults (D178).
+// defaults (D186).
 func (c Config) Save(path string) error {
 	raw := map[string]json.RawMessage{}
 	data, err := os.ReadFile(path)

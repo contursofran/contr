@@ -15,7 +15,7 @@ import (
 )
 
 // TestSettingsAgentsTab opens Settings in the built app and captures the Agents and Updates tabs
-// in Dark and Light (D178). PNGs go to tmp/e2e/settings-<tab>-<theme>.png. HOME is a scratch
+// in Dark and Light (D186). PNGs go to tmp/e2e/settings-<tab>-<theme>.png. HOME is a scratch
 // folder, agents.json a scratch file with a custom reviewer. It never touches the owner's core:
 //
 //	go test -tags e2e -run TestSettingsAgentsTab ./cmd/contr
