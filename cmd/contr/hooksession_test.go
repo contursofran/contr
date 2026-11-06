@@ -110,4 +110,3 @@ func TestPromptHook(t *testing.T) {
 		t.Fatalf("stderr %q", e)
 	}
 }
-
