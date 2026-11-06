@@ -148,7 +148,7 @@ func (b *titleBar) tab(c *ui.Context, tab ui.Element, t Tab) {
 	ink := p.Ink50
 	switch {
 	case t.Selected:
-		// The selected tab looks like a panel: panel fill, panel-line edge (D164).
+		// The selected tab looks like a panel: panel fill, panel-line edge (D165).
 		el = el.Background(p.Panel).InsetShadow(0, 0, 0, 1, p.PanelLine)
 		ink = p.Ink100
 	default:

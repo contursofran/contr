@@ -21,7 +21,7 @@ Design system page: component Tab. Shared rules: [README.md](README.md).
 
 - **Default:** no fill, title `ink-50`.
 - **Hover:** fill `hover`.
-- **Selected:** fill `panel` and a 1px inset `panel-line` edge, as the panels (D164); title `ink-100`, close button shows.
+- **Selected:** fill `panel` and a 1px inset `panel-line` edge, as the panels (D165); title `ink-100`, close button shows.
 - **Close hover:** fill `press`, icon `ink-100`.
 - **Blocked agent:** the glyph turns `blocked`; the tab is not otherwise colored.
 

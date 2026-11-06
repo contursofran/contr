@@ -522,7 +522,7 @@ func TestNoSearchButtonWithoutASearchHandler(t *testing.T) {
 }
 
 func TestTheSelectedTabLooksLikeAPanel(t *testing.T) {
-	// D164: the selected tab has the panel fill, not the selected-row fill.
+	// D165: the selected tab has the panel fill, not the selected-row fill.
 	b := newBar(t, tabsOf(), true)
 	b.tt.Frame()
 	lead, t1 := b.rect(t, "lead"), b.rect(t, "go test ./...")
