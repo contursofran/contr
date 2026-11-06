@@ -869,6 +869,25 @@ func TestConfigModelOf(t *testing.T) {
 	}
 }
 
+// A plain terminal of contr with Claude Code in front is a Claude session; it is plain again
+// when Claude Code exits (D190).
+func TestAPlainTerminalRunningClaudeIsASession(t *testing.T) {
+	labels := map[string]string{LabelApp: AppAgent, LabelRole: RoleTerminal, LabelProject: "p"}
+	tm := term("t9", "term-0101", "live", labels, nil)
+	tm["foreground"] = map[string]any{"name": "2.1.30"}
+	w, err := decodeWorker(raw(tm))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !w.Orchestrator() || !w.Session || w.Foreign || w.Project != "p" {
+		t.Errorf("with Claude in front: %+v", w)
+	}
+	tm["foreground"] = map[string]any{"name": "zsh"}
+	if w, _ = decodeWorker(raw(tm)); !w.Plain() || w.Session {
+		t.Errorf("after Claude exits: %+v", w)
+	}
+}
+
 func TestConfigEffortOf(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Profiles["inline"] = Profile{Argv: []string{"claude", "--effort=max"}}

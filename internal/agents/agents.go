@@ -235,6 +235,10 @@ type Worker struct {
 	// Shown is the readable name of a foreign terminal, set by the agent
 	// model (D156). Empty when Name is already readable.
 	Shown string `json:"-"`
+	// Session is true for a plain terminal of contr that runs Claude Code
+	// in the foreground: its role is orchestrator while Claude Code runs,
+	// and it is named from its title, as a foreign terminal (D190).
+	Session bool `json:"session,omitempty"`
 }
 
 // DisplayName is the name the UI shows: Shown when set, else Name.
@@ -289,6 +293,10 @@ func (t terminal) worker() Worker {
 	}
 	if t.Labels[LabelApp] != AppAgent {
 		t.foreign(&w)
+	} else if w.Role == RoleTerminal && t.claudeInFront() {
+		// The owner ran Claude Code in a plain terminal: while it runs, it is
+		// a Claude session (D190).
+		w.Role, w.Session = RoleOrchestrator, true
 	}
 	if t.Parent != nil {
 		w.Parent = *t.Parent
@@ -325,15 +333,20 @@ var versionName = regexp.MustCompile(`^\d+\.\d+\.\d+`)
 // foreground program (by name or by its version), the program in argv, or the
 // terminal has an hc status, which only an agent sets.
 func (t terminal) runsClaude() bool {
-	if t.Status != nil {
+	if t.Status != nil || t.claudeInFront() {
 		return true
 	}
-	if t.Foreground != nil {
-		if n := filepath.Base(t.Foreground.Name); n == "claude" || versionName.MatchString(n) {
-			return true
-		}
-	}
 	return len(t.Argv) > 0 && filepath.Base(t.Argv[0]) == "claude"
+}
+
+// claudeInFront tells if Claude Code is the foreground program, by name or
+// by its version. In a shell this is false again once Claude Code exits.
+func (t terminal) claudeInFront() bool {
+	if t.Foreground == nil {
+		return false
+	}
+	n := filepath.Base(t.Foreground.Name)
+	return n == "claude" || versionName.MatchString(n)
 }
 
 // command is the foreground program's name, else the base of argv[0], or

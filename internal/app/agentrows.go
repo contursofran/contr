@@ -269,7 +269,7 @@ func (l *SpacesList) agentRow(c *ui.Context, a agentLine) {
 	}
 	if l.selection != nil {
 		if sel, ok := l.selection.Current(); ok {
-			o.Selected = sel.ID == a.w.Address && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker)
+			o.Selected = sel.ID == a.w.Address && sel.Kind != state.KindWorktree
 		}
 	}
 	kit.AgentRow(c, o)
@@ -372,7 +372,9 @@ func (l *SpacesList) dropGoneSelection() {
 // the project itself and while the project is folded.
 func (l *SpacesList) itemSelected(it sideItem, sel state.Selected) bool {
 	if a := it.agent; a != nil {
-		return sel.ID == a.w.Address && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker)
+		// A plain terminal that now runs Claude Code keeps its terminal
+		// selection (D190), so the kind is not checked.
+		return sel.ID == a.w.Address && sel.Kind != state.KindWorktree
 	}
 	g := l.groups[it.group]
 	open := !l.Folded(g.CommonDir)

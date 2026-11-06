@@ -135,3 +135,19 @@ func TestNameForeignNumbersAreStable(t *testing.T) {
 	check(names("ta", "t10"), map[string]string{"ta": "contr 2", "t10": "contr 3"})
 	check(names("ta", "t10", "tb"), map[string]string{"ta": "contr 2", "t10": "contr 3", "tb": "contr"})
 }
+
+// A plain terminal of contr that runs Claude Code is named from its title; with no usable
+// title it keeps its name (D190).
+func TestNameForeignNamesASessionFromItsTitle(t *testing.T) {
+	ws := []agents.Worker{
+		{Address: "t1", Name: "term-0101", Title: "✳ Contr issue report", Session: true},
+		{Address: "t2", Name: "term-0102", Title: "✳ Claude Code", Session: true},
+	}
+	nameForeign(ws, nil)
+	if got := ws[0].DisplayName(); got != "Contr issue report" {
+		t.Errorf("session with a title: %q", got)
+	}
+	if got := ws[1].DisplayName(); got != "term-0102" {
+		t.Errorf("session with no usable title: %q", got)
+	}
+}
