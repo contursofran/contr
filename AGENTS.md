@@ -169,6 +169,12 @@ Add packages under `internal/` when a change needs them.
 - New e2e tests use the harness in `cmd/contr/e2e_harness_test.go`
   (`newHarness`, `h.spawn`, `h.owner`, `h.theme`, `h.launch`, `c.press`).
   Do not set up the scratch home and env by hand.
+- To compare a component with its spec, run `scripts/sheet.sh [Part…]`
+  (D179). It draws each part of `sheetParts` (`internal/app/sheet_test.go`)
+  under its image in `docs/spec/images`, in Dark and Light, and writes
+  `tmp/sheet/<Part>-<theme>.png`. It needs no window and no hc. Run it for
+  the parts your change touches, look at each sheet, and give the paths in
+  your report. Add a part when you build a spec'd component that has none.
 - Run the app only against a scratch hc core and a scratch project under
   `/tmp`, never against the owner's core.
 - On the owner's Mac, run one heavy job at a time: an app run with a scratch core,
