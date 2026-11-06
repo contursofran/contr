@@ -11,6 +11,7 @@ import (
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/theme/themetest"
 	"github.com/contursofran/contr/internal/review"
 )
 
@@ -518,5 +519,26 @@ func TestNoSearchButtonWithoutASearchHandler(t *testing.T) {
 	b.tt.Frame()
 	if b.has(LabelSearch) {
 		t.Error("the bar has a Search button with no handler")
+	}
+}
+
+// The selected tab is a pill: the `selected` fill over the glass, and no fill on a tab that is not
+// selected (docs/spec/Tab.md, #437).
+func TestTheSelectedTabIsAPillInBothThemes(t *testing.T) {
+	for _, tc := range themeCases {
+		themetest.Use(t, tc.src)
+		b := newBar(t, tabsOf(), true)
+		b.tt.Frame()
+		img := b.tt.Image()
+		sel, other := b.rect(t, "lead"), b.rect(t, "go test ./...")
+		// A point at the right edge inside the tab, clear of the glyph and the title.
+		at := func(r ui.Rect) ui.Color { return rgb(img, r.X+r.W-3, r.Y+r.H/2) }
+		ground := tc.pal.Ground
+		if want := theme.Over(tc.pal.Selected, ground); !near(at(sel), want, 14) {
+			t.Errorf("%s: selected tab %v, want the selected fill %v", tc.name, at(sel), want)
+		}
+		if !near(at(other), ground, 3) {
+			t.Errorf("%s: tab that is not selected %v, want the bare ground %v", tc.name, at(other), ground)
+		}
 	}
 }

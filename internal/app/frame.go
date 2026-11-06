@@ -458,14 +458,12 @@ func (f *Frame) syncReview() {
 
 // Element labels. Tests and the e2e driver find the frame's parts by them.
 const (
-	LabelSidebar       = "sidebar"
-	LabelSidebarToggle = "Toggle sidebar"
-	LabelSidebarReopen = "Show sidebar"
-	LabelTitleBar      = "title bar"
-	LabelTerminal      = "terminal area"
-	LabelTerminalGrid  = "terminal grid"
-	LabelReview        = "review area"
-	LabelPanel         = "board panel"
+	LabelSidebar      = "sidebar"
+	LabelTitleBar     = "title bar"
+	LabelTerminal     = "terminal area"
+	LabelTerminalGrid = "terminal grid"
+	LabelReview       = "review area"
+	LabelPanel        = "board panel"
 	// LabelFilesToggle is the title bar button that hides and shows the files panel.
 	LabelFilesToggle = "Hide files"
 	// The three panels of the window (docs/spec/Window.md): screen readers name them so.
@@ -698,26 +696,22 @@ func (f *Frame) panel(c *ui.Context) {
 }
 
 // titleBar draws the 46px row at the top of the glass: a drag area that keeps
-// the room of the system traffic lights, with the sidebar toggle in it. The tabs
+// the room of the system traffic lights. The tabs
 // start above the terminal panel; the diff summary and the files toggle are at
 // the right edge (docs/spec/TitleBar.md). sidebarW is the drawn width of the
 // sidebar; narrow tells that the files panel is hidden by the window width.
 func (f *Frame) titleBar(c *ui.Context, sidebarW float32, narrow bool) {
 	ui.Row(c).Label(LabelTitleBar).FillWidth().Height(theme.TitleBarHeight).Shrink(0).AlignItems(ui.Center).
 		PaddingEnd(theme.TitleBarPadEnd).DragWindow().Children(func() {
+		// The window buttons sit over this corner and nothing else (the mock has no
+		// toggle there). With the sidebar open the corner is as wide as the sidebar plus
+		// its gaps, so the tabs start at the terminal panel; an icon column is narrower
+		// than the window buttons, so they set the least width.
+		corner := float32(theme.TrafficLightInset)
 		if f.sidebarOpen {
-			// The window buttons sit over this corner. The row is as wide as the
-			// sidebar plus its gaps, so the tabs start at the terminal panel.
-			// An icon column is narrower than the window buttons and the toggle.
-			corner := max(sidebarW+2*theme.PanelGap, theme.TrafficLightInset+theme.TitleButtonSize+theme.PanelGap)
-			ui.Row(c).Width(corner).FillHeight().Shrink(0).AlignItems(ui.Center).
-				PaddingStart(theme.TrafficLightInset).Children(func() {
-				toggleButton(c, LabelSidebarToggle, true, f.ToggleSidebar)
-			})
-		} else {
-			ui.Box(c).Width(theme.TrafficLightInset).Shrink(0)
-			toggleButton(c, LabelSidebarReopen, false, f.ToggleSidebar)
+			corner = max(sidebarW+2*theme.PanelGap, corner)
 		}
+		ui.Box(c).Width(corner).FillHeight().Shrink(0)
 		f.bar.setTabs(f.titleTabs())
 		f.bar.selectTab, f.bar.closeTab = f.selectTab, f.closeTab
 		f.bar.closeOthers, f.bar.moveTab = f.closeOtherTabs, f.moveTab
@@ -879,21 +873,6 @@ func (f *Frame) moveTab(from, to string) {
 		}
 	}
 	f.tabOrder = order
-}
-
-// toggleButton draws the sidebar toggle: a small outline with one filled
-// part on the left, which shows while the sidebar is open.
-func toggleButton(c *ui.Context, label string, open bool, onClick func()) {
-	p := theme.Current()
-	ui.ButtonBase(c).Label(label).Tooltip("Show or hide the sidebar").Size(theme.TitleButtonSize, theme.TitleButtonSize).Shrink(0).
-		Cursor(ui.CursorPointer).OnClick(onClick).Children(func() {
-		ui.Row(c).Size(theme.TitleGlyphWidth, theme.TitleGlyphHeight).
-			Border(1, p.Ink50).Radius(theme.SidebarToggleRadius).Children(func() {
-			if open {
-				ui.Box(c).Width(theme.TitleGlyphFill).FillHeight().Background(p.Ink50)
-			}
-		})
-	})
 }
 
 // Window is the part of a MyGo window that [Frame.Attach] uses.
@@ -1088,6 +1067,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		Status: f.Toasts.Show, Appearance: f.Appearance, SetAppearance: f.SetAppearance,
 		Tint: f.Tint, SetTint: f.SetTint, ResetTint: f.ResetTint}
 	setSettingsHandler(func() { w.Update(f.Settings.Toggle) })
+	setSidebarHandler(func() { w.Update(f.ToggleSidebar) })
 	f.SpacesList.OnSettings = func() { f.Settings.Toggle() }
 	f.SpacesList.UpdateReady = f.Settings.Ready
 	stopChecks := f.Settings.StartChecks()
@@ -1146,6 +1126,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	term := f.attachTerminal(w)
 	return func() {
 		setNewTerminalHandler(nil)
+		setSidebarHandler(nil)
 		setCloseTerminalHandler(nil)
 		setSettingsHandler(nil)
 		stopChecks()

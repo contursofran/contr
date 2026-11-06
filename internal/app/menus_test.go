@@ -76,7 +76,7 @@ func TestTheEditMenuHasCopyPasteAndSelectAllAsOsActions(t *testing.T) {
 }
 
 func TestTheWindowMenuHasMinimize(t *testing.T) {
-	window := BuildMenus().Items()[3]
+	window := BuildMenus().Items()[4]
 	if window.Label != "Window" {
 		t.Fatalf("name = %q", window.Label)
 	}
@@ -96,7 +96,7 @@ func TestInstallPutsTheMenusInTheMenuBar(t *testing.T) {
 	for _, m := range BuildMenus().Items() {
 		names = append(names, m.Label)
 	}
-	if want := []string{"contr", "File", "Edit", "Window"}; !slices.Equal(names, want) {
+	if want := []string{"contr", "File", "Edit", "View", "Window"}; !slices.Equal(names, want) {
 		t.Fatalf("menus = %v, want %v", names, want)
 	}
 }
@@ -185,5 +185,24 @@ func TestTheAppMenuHasSettingsOnCmdCommaAndCallsTheFramesHandler(t *testing.T) {
 	it.Click(it, nil)
 	if n != 1 {
 		t.Errorf("handler ran after it was cleared")
+	}
+}
+
+func TestTheViewMenuHasToggleSidebarOnCmdB(t *testing.T) {
+	view := BuildMenus().Items()[3]
+	if view.Label != "View" {
+		t.Fatalf("name = %q", view.Label)
+	}
+	it := find(t, view.Submenu, "Toggle Sidebar")
+	if it.Accelerator != "Cmd+B" || it.Click == nil {
+		t.Errorf("accelerator %q, click set %v", it.Accelerator, it.Click != nil)
+	}
+	it.Click(it, nil) // no window: must not panic
+	n := 0
+	setSidebarHandler(func() { n++ })
+	defer setSidebarHandler(nil)
+	it.Click(it, nil)
+	if n != 1 {
+		t.Errorf("handler ran %d times, want 1", n)
 	}
 }

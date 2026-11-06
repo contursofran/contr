@@ -146,6 +146,7 @@ The owner's from-zero canvas (https://claude.ai/artifact/9bmbRdJc8qDMSRXm6obEb3)
 | `⌘W` | close the selected tab when it is a plain terminal (D85) | window |
 | `⌘F` | search in the terminal, `FindBar` (D130) | window |
 | `⌘⇧E` | show or hide the files panel | window |
+| `⌘B` | show or hide the sidebar (View menu, D172) | window |
 | `⌘J` | open or close the questions card | window, while a question is open |
 | `1`–`9` | pick that choice | questions card, with the focus |
 | `⏎` | send the typed answer, else the picked choice; go to the next question | questions card |

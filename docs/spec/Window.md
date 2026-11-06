@@ -30,6 +30,7 @@ Design system page: component Window. Shared rules: [README.md](README.md).
   ones the owner dragged (D111), else the defaults here.
 - Limits: sidebar 200–480 (D111), files 220–720. The terminal keeps at least
   480.
+- The sidebar has no title bar button (D172): show or hide it with `⌘B` or View > Toggle Sidebar.
 - The files toggle (`⌘⇧E`, the title bar button) hides and shows the files
   panel. A hidden panel keeps its width.
 - Narrow window (D128): below about 1100px the files panel hides. Below

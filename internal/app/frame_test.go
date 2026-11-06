@@ -73,38 +73,34 @@ func TestFrameMatchesDesignSizes(t *testing.T) {
 	}
 }
 
-func TestToggleSitsRightOfTheWindowButtons(t *testing.T) {
-	_, tt := newTester(t)
-	button := box(t, tt, LabelSidebarToggle)
-	if button.X != theme.TrafficLightInset {
-		t.Errorf("toggle at x %v, want %d", button.X, theme.TrafficLightInset)
-	}
-	if !absent(tt, LabelSidebarReopen) {
-		t.Error("reopen button shows while the sidebar is open")
-	}
-}
-
-func TestToggleHidesAndReopensTheSidebar(t *testing.T) {
+func TestTitleBarHasNoSidebarToggle(t *testing.T) {
 	f, tt := newTester(t)
-	if err := tt.Click(LabelSidebarToggle); err != nil {
-		t.Fatal(err)
+	for _, label := range []string{"Toggle sidebar", "Show sidebar"} {
+		if !absent(tt, label) {
+			t.Errorf("the title bar has a %q button; the mock has none", label)
+		}
 	}
-	if f.SidebarOpen() || !absent(tt, LabelPanelSidebar) || !absent(tt, LabelSidebarToggle) {
+	// The corner is as wide as the sidebar and its gaps, so the tabs start at the terminal.
+	if tabs, term := box(t, tt, LabelTabs), box(t, tt, LabelPanelTerminal); tabs.X < term.X {
+		t.Errorf("tabs at %v, left of the terminal panel at %v", tabs.X, term.X)
+	}
+	f.ToggleSidebar()
+	tt.Frame()
+	if !absent(tt, LabelPanelSidebar) {
 		t.Error("the sidebar should be hidden")
 	}
-	if absent(tt, LabelSidebarReopen) {
-		t.Error("reopen button should show")
+	if absent(tt, LabelTitleBar) || !absent(tt, "Show sidebar") {
+		t.Error("a hidden sidebar must not bring a title bar button")
+	}
+	// The tabs keep clear of the window buttons.
+	if tabs := box(t, tt, LabelTabs); tabs.X < theme.TrafficLightInset {
+		t.Errorf("tabs at %v, over the window buttons (%d)", tabs.X, theme.TrafficLightInset)
 	}
 	if term := box(t, tt, LabelPanelTerminal); term.W != 1136 || term.X != 8 {
 		t.Errorf("terminal %+v, want 1136 wide from x 8", term)
 	}
-
-	if err := tt.Click(LabelSidebarReopen); err != nil {
-		t.Fatal(err)
-	}
-	if !absent(tt, LabelSidebarReopen) {
-		t.Error("reopen button should go")
-	}
+	f.ToggleSidebar()
+	tt.Frame()
 	if got := box(t, tt, LabelPanelSidebar).W; got != theme.SidebarWidth {
 		t.Errorf("sidebar width %v, want 312", got)
 	}

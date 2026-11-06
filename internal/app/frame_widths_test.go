@@ -86,19 +86,17 @@ func TestDraggedWidthsStayInTheirLimits(t *testing.T) {
 }
 
 func TestHiddenSidesKeepTheirWidths(t *testing.T) {
-	_, tt := newTester(t)
+	f, tt := newTester(t)
 	drag(tt, sidebarDivider(t, tt), sidebarDivider(t, tt)+28)
 	x := filesDivider(t, tt)
 	drag(tt, x, x-60)
 	want := box(t, tt, LabelPanelFiles).W
-	for _, toggle := range []string{LabelSidebarToggle, LabelFilesToggle} {
-		if err := tt.Click(toggle); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := tt.Click(LabelSidebarReopen); err != nil {
+	f.ToggleSidebar()
+	if err := tt.Click(LabelFilesToggle); err != nil {
 		t.Fatal(err)
 	}
+	f.ToggleSidebar()
+	tt.Frame()
 	if err := tt.Click(LabelFilesToggle); err != nil {
 		t.Fatal(err)
 	}
