@@ -37,7 +37,7 @@ func newCoordRig(t *testing.T, lines ...string) *coordRig {
 	if err := os.WriteFile(r.tr, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	r.env = map[string]string{"HC_TERMINAL_ID": "t1", "CONTR_OWNER_FILE": filepath.Join(r.dir, "owner.json")}
+	r.env = map[string]string{"HC_TERMINAL_ID": "t1", "CONTR_OWNER_FILE": filepath.Join(r.dir, "owner.json"), "CONTR_AGENTS_CONFIG": filepath.Join(r.dir, "agents.json")}
 	return r
 }
 
@@ -132,6 +132,9 @@ func TestHookSessionStartRestores(t *testing.T) {
 	if _, err := store.Pin(owner.Todo{Coordinator: "t1", Kind: "do", Text: "Test the bag"}); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(r.env["CONTR_AGENTS_CONFIG"], []byte(`{"flow":{"review":"none","workers":2}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	code, out, errs := r.run("session-start", map[string]any{"source": "compact"})
 	if code != 0 {
 		t.Fatalf("code %d err %q", code, errs)
@@ -141,6 +144,7 @@ func TestHookSessionStartRestores(t *testing.T) {
 		"- b-12 (t7) builder, working, issue 158, /w/a",
 		"Ship it?", "[do] Test the bag",
 		"You coordinate worker agents", "Goal: (see the state file)",
+		"The flow:\n- Plan first: when needed.", "- Review: none.", "- Workers at once: at most 2,", "- Merge: ask the owner",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("restore text lacks %q:\n%s", want, out)
