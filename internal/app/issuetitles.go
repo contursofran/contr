@@ -70,6 +70,18 @@ func (t *IssueTitles) Title(dir, issue string) string {
 // Sync starts a read for the issue of each live worker that has none running and no fresh
 // answer.
 func (t *IssueTitles) Sync(workers []agents.Worker) {
+	// Drop the answers of workers that are gone, so the cache stays small.
+	keep := map[titleKey]bool{}
+	for _, w := range workers {
+		if n, ok := issueNumber(w.Issue); ok && w.Worktree != "" {
+			keep[titleKey{w.Worktree, n}] = true
+		}
+	}
+	for k := range t.answers {
+		if !keep[k] {
+			delete(t.answers, k)
+		}
+	}
 	for _, w := range workers {
 		if n, ok := issueNumber(w.Issue); ok && w.Live && w.Worktree != "" && !w.Orchestrator() {
 			t.read(titleKey{w.Worktree, n})

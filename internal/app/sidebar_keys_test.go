@@ -141,14 +141,14 @@ func moveToEmpty(t *testing.T, h *rowsHarness) {
 	t.Fatalf("the cursor never reached the empty project: row %d", h.list.cursor)
 }
 
-func TestEnterOnAnEmptyProjectStartsAnOrchestratorThere(t *testing.T) {
+func TestEnterOnAnEmptyProjectStartsNothing(t *testing.T) {
 	h, started := emptyProjectRig(t)
 	opened := 0
 	h.list.OnOpen = func() { opened++ }
 	moveToEmpty(t, h)
 	h.tt.Key(0, ui.KeyEnter)
-	if !slices.Equal(*started, []string{"/proj/gamma"}) {
-		t.Errorf("started %v", *started)
+	if len(*started) != 0 {
+		t.Errorf("Enter started %v", *started)
 	}
 	if opened != 0 {
 		t.Error("Enter on an empty project gave the focus to a terminal")

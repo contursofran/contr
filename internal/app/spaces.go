@@ -483,13 +483,55 @@ func (l *SpacesList) Reorder(rows []int, to int) {
 			break
 		}
 	}
-	to = target
-	dirs := make([]string, len(l.groups))
-	for i, g := range l.groups {
-		dirs[i] = g.CommonDir
+	if target == len(l.groups) {
+		// At the end: before the empty projects, which show last.
+		for i, g := range l.groups {
+			if g.Path != "" {
+				target = i
+				break
+			}
+		}
 	}
-	l.projects.SetOrder(dirs)
-	l.projects.Move(rows, to)
+	// The stored order holds the empty projects at their own place. Move the
+	// dragged projects there, before the project they were dropped on, and
+	// not in the displayed order (D109, D174).
+	shown := make([]string, len(l.groups))
+	for i, g := range l.groups {
+		shown[i] = g.CommonDir
+	}
+	stored := l.projects.Order(shown)
+	drag := map[string]bool{}
+	var dragged []string
+	for _, r := range rows {
+		if r >= 0 && r < len(l.groups) && !drag[l.groups[r].CommonDir] {
+			drag[l.groups[r].CommonDir] = true
+		}
+	}
+	before := ""
+	if target < len(l.groups) {
+		before = l.groups[target].CommonDir
+	}
+	out := make([]string, 0, len(stored))
+	insert := func() { out = append(out, dragged...) }
+	for _, d := range stored {
+		if drag[d] {
+			dragged = append(dragged, d)
+		}
+	}
+	placed := false
+	for _, d := range stored {
+		if d == before && !placed {
+			insert()
+			placed = true
+		}
+		if !drag[d] {
+			out = append(out, d)
+		}
+	}
+	if !placed {
+		insert()
+	}
+	l.projects.SetOrder(out)
 	if l.OnReordered != nil {
 		l.OnReordered()
 		return

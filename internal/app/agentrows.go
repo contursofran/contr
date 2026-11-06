@@ -459,12 +459,9 @@ func (l *SpacesList) open(items []sideItem) {
 		return
 	}
 	if it := items[l.cursor]; it.agent == nil {
-		// An empty project has no terminal to focus: Enter does the one thing its menu
-		// offers, a new orchestrator in its folder (#443, D174).
-		if g := l.groups[it.group]; g.Path != "" {
-			if l.OnNewIn != nil {
-				l.OnNewIn(g.Path)
-			}
+		// An empty project has no terminal to focus, and Enter starts nothing: its menu
+		// (menu key, right-click) offers the new orchestrator (#443, D174).
+		if l.groups[it.group].Path != "" {
 			return
 		}
 	}

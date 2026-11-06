@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -556,5 +557,34 @@ func TestAttachStartsTheWindowHiddenWithNoClock(t *testing.T) {
 	f.SpacesList.Ages.SetShown(true)
 	if f.SpacesList.Ages.Running() {
 		t.Error("the clock runs in a window that started hidden")
+	}
+}
+
+func TestADragKeepsTheStoredPlaceOfAnEmptyProject(t *testing.T) {
+	h := newRows(t)
+	alpha, beta, gamma := h.group(0).CommonDir, h.group(1).CommonDir, "/proj/gamma/.git"
+	s := &projects.Store{}
+	// Stored order: gamma (empty) first, then beta, alpha. It shows last.
+	s.AddFolder(gamma, "/proj/gamma")
+	s.SetOrder([]string{gamma, beta, alpha})
+	h.list.SetProjects(s)
+	h.list.OnReordered = func() { h.list.SetProjects(s) }
+	h.tt.Frame()
+	if got := strings.Join(groupNames(h.list.Groups()), ","); got != "beta,alpha,gamma" {
+		t.Fatalf("shown %s", got)
+	}
+	row := -1
+	for i, it := range h.list.items() {
+		if it.agent == nil && h.list.groups[it.group].CommonDir == alpha {
+			row = i
+		}
+	}
+	h.list.Reorder([]int{row}, 0)
+	got := s.Order([]string{alpha, beta, gamma})
+	if want := []string{gamma, alpha, beta}; !slices.Equal(got, want) {
+		t.Errorf("stored order %v, want %v", got, want)
+	}
+	if got := strings.Join(groupNames(h.list.Groups()), ","); got != "alpha,beta,gamma" {
+		t.Errorf("shown %s", got)
 	}
 }

@@ -252,3 +252,16 @@ func TestTheModelComesFromTheStatusLineWhenArgvHasNone(t *testing.T) {
 		t.Errorf("no model from argv in %q", h.tt.Texts())
 	}
 }
+
+func TestSyncDropsTheAnswersOfGoneWorkers(t *testing.T) {
+	r := newTitleRig()
+	r.t.Sync(issueWorker("/wt/a", "241"))
+	r.flush()
+	if r.t.Title("/wt/a", "241") == "" {
+		t.Fatal("no title read")
+	}
+	r.t.Sync(nil)
+	if len(r.t.answers) != 0 {
+		t.Errorf("answers of a gone worker stay: %v", r.t.answers)
+	}
+}
