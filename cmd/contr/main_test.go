@@ -357,8 +357,8 @@ func TestTitlebarHidesTheSystemTitleBar(t *testing.T) {
 
 func TestFrameWindowIsGlassWithCenteredTrafficLights(t *testing.T) {
 	f := windowOptions(false)
-	if f.Vibrancy != mygo.VibrancyGlassClear {
-		t.Errorf("vibrancy %q, want clear glass", f.Vibrancy)
+	if f.Vibrancy != mygo.VibrancyGlass {
+		t.Errorf("vibrancy %q, want the regular, frosted glass (D159)", f.Vibrancy)
 	}
 	// Without a transparent window the glass shows only the window's own
 	// background, not the desktop (D158).
