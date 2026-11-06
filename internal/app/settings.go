@@ -5,7 +5,9 @@ package app
 // Settings button of the sidebar open it. The checks and the install run on goroutines (D63); the
 // modal reads their results on the UI thread. StartChecks checks at launch and every CheckEvery
 // while the window shows; a newer version puts a dot on the Settings button (see
-// [SpacesList.UpdateReady]). contr never installs without a click.
+// [SpacesList.UpdateReady]). When a scheduled check finds one, contr downloads and installs it in
+// the background, without a relaunch (D176): MyGo keeps the running app as it is and swaps the bundle
+// once the app exits. The title bar then shows the update pill until the owner restarts.
 
 import (
 	"context"
@@ -35,6 +37,8 @@ const (
 	SettingsDone       = "Done"
 	SettingsCheck      = "Check for updates"
 	SettingsInstall    = "Install and restart"
+	// SettingsRestart relaunches contr into an update that is ready (D176).
+	SettingsRestart = "Restart now"
 	// LabelAppearance names the Appearance row (D119); its segments are named by AppearanceNames.
 	LabelAppearance = "Appearance"
 	// LabelBackground, LabelPanels and TintReset name the transparency sliders and their reset button (D162).
@@ -89,6 +93,8 @@ type Settings struct {
 	Run         Runner
 	// Relaunch restarts contr after an install. It runs on the UI thread.
 	Relaunch func()
+	// OnReady runs on the UI thread when a background install ends well (D176). May be nil.
+	OnReady func(UpdateInfo)
 	// Invalidate redraws the window; may be nil.
 	Invalidate func()
 	// Visible tells whether the window shows; nil means it does. Hidden windows get no checks.
@@ -120,7 +126,10 @@ type Settings struct {
 	lastCheck time.Time
 	upToDate  bool
 	found     *UpdateInfo
-	err       string
+	// ready is set when the found version is installed and waits for a restart; readyAt is when.
+	ready   bool
+	readyAt time.Time
+	err     string
 	// percent is the install progress, 0 to 100, set from the install goroutine.
 	percent atomic.Int32
 	md      markdown.Options
@@ -149,6 +158,27 @@ func (s *Settings) Opened() bool { return s.open }
 // Ready tells whether a newer version waits for the owner to install it. The Settings button
 // shows a dot while it does.
 func (s *Settings) Ready() bool { return s.found != nil }
+
+// Installed returns the version that was installed in the background and waits for a restart,
+// and when its install ended (D176). ok is false while no update is ready.
+func (s *Settings) Installed() (info UpdateInfo, at time.Time, ok bool) {
+	if !s.ready || s.found == nil {
+		return UpdateInfo{}, time.Time{}, false
+	}
+	return *s.found, s.readyAt, true
+}
+
+// RestartNow relaunches contr into the update that is ready. Before that, it installs and
+// restarts as "Install and restart" does.
+func (s *Settings) RestartNow() {
+	if !s.ready {
+		s.Install()
+		return
+	}
+	if s.Relaunch != nil {
+		s.Relaunch()
+	}
+}
 
 func (s *Settings) redraw() {
 	if s.Invalidate != nil {
@@ -262,6 +292,43 @@ func (s *Settings) autoCheck() {
 				log.Printf("contr: update check failed: %v", err)
 			} else if info != nil {
 				s.found = info
+				s.background()
+			}
+			s.redraw()
+		}
+	})
+}
+
+// background installs the found version off the UI thread, without a relaunch (D176). A failed
+// install is logged and shows in Settings, not as a toast; the owner can try "Install and
+// restart" there.
+func (s *Settings) background() {
+	if s.Updates == nil || s.found == nil || s.installing || s.ready {
+		return
+	}
+	s.installing, s.err = true, ""
+	s.percent.Store(0)
+	info := *s.found
+	s.Run.Do(func() func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		err := s.Updates.Install(ctx, func(done, total int64) {
+			if total > 0 {
+				s.percent.Store(int32(done * 100 / total))
+				s.redraw()
+			}
+		})
+		return func() {
+			s.installing = false
+			if err != nil {
+				log.Printf("contr: update download failed: %v", err)
+				s.err = "download failed: " + err.Error()
+				s.redraw()
+				return
+			}
+			s.ready, s.readyAt = true, s.now()
+			if s.OnReady != nil {
+				s.OnReady(info)
 			}
 			s.redraw()
 		}
@@ -270,7 +337,7 @@ func (s *Settings) autoCheck() {
 
 // Check looks for a newer version. The "Check for updates" button runs it.
 func (s *Settings) Check() {
-	if s.Updates == nil || !s.enabled || s.checking || s.installing {
+	if s.Updates == nil || !s.enabled || s.checking || s.installing || s.ready {
 		return
 	}
 	s.checking, s.upToDate, s.found, s.err = true, false, nil, ""
@@ -352,6 +419,8 @@ func (s *Settings) status() string {
 		return TextInstalling + " " + strconv.Itoa(int(s.percent.Load())) + "%"
 	case s.checking:
 		return TextChecking
+	case s.ready && s.found != nil:
+		return "contr " + s.found.Version + " is ready: restart to update"
 	case s.found != nil:
 		return "contr " + s.found.Version + " is available"
 	case s.upToDate:
@@ -419,8 +488,13 @@ func (s *Settings) body(c *ui.Context) {
 		if live {
 			check = s.Check
 		}
+		if s.ready {
+			check = nil
+		}
 		settingsButton(c, SettingsCheck, ButtonOutlined, check)
-		if s.found != nil {
+		if s.ready {
+			settingsButton(c, SettingsRestart, ButtonFilled, s.RestartNow)
+		} else if s.found != nil {
 			var install ClickFn
 			if live {
 				install = s.Install

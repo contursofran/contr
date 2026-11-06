@@ -29,10 +29,15 @@ func (f *Frame) toastView(c *ui.Context) {
 			c.AddToast(ui.Toast{ID: m, Title: m})
 		}
 	}
+	f.queueUpdateToast(c)
 	p := theme.Current()
 	ui.ToastViewportBase(c, func(viewport ui.Element, toasts []ui.Toast) {
 		viewport.Label(LabelToastViewport).Padding(0, 0, theme.Space16, 0).AlignItems(ui.Center).Gap(theme.Space8)
 		for _, t := range toasts {
+			if _, ok := t.Data.(updateToastData); ok {
+				f.updateToast(c, t)
+				continue
+			}
 			toast := ui.ToastBase(c, t)
 			toast.Root.Row().AlignItems(ui.Center).Gap(theme.Space10).MaxWidth(toastMaxWidth).
 				Padding(theme.Space8, theme.Space8, theme.Space8, theme.Space16).Radius(theme.Radius12).

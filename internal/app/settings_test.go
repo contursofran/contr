@@ -243,19 +243,65 @@ func waitFor(t *testing.T, ch chan struct{}) {
 	}
 }
 
-func TestStartChecksChecksAtLaunchAndShowsTheUpdateWithoutInstalling(t *testing.T) {
+func TestStartChecksInstallsTheUpdateInTheBackgroundWithoutARelaunch(t *testing.T) {
 	u := &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}}
 	s, redrawn, _ := scheduleRig(t, u, time.Hour, nil)
+	relaunch := 0
+	s.Relaunch = func() { relaunch++ }
 	waitFor(t, redrawn)
 	if !s.Ready() {
 		t.Fatal("a newer version does not make the update ready")
 	}
-	if u.installs != 0 {
-		t.Error("contr installed without a click")
+	for range 20 {
+		if _, _, ok := s.Installed(); ok {
+			break
+		}
+		waitFor(t, redrawn)
 	}
-	s.Install() // the click on the status bar item
-	if u.installs != 1 {
-		t.Errorf("installs = %d after the click", u.installs)
+	info, _, ok := s.Installed()
+	if !ok || info.Version != "1.3.0" || u.installs != 1 {
+		t.Fatalf("installed %v %q after %d installs; want 1.3.0 after 1", ok, info.Version, u.installs)
+	}
+	if relaunch != 0 {
+		t.Error("a background install relaunched contr")
+	}
+	s.RestartNow()
+	if relaunch != 1 || u.installs != 1 {
+		t.Errorf("Restart now: relaunch %d, installs %d; want 1 and 1", relaunch, u.installs)
+	}
+}
+
+func TestABackgroundInstallErrorShowsInSettingsOnly(t *testing.T) {
+	u := &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}, installErr: errors.New("disk full")}
+	r := newSettingsRig(t, u)
+	status := 0
+	r.s.Status = func(string) { status++ }
+	r.s.autoCheck()
+	if _, _, ok := r.s.Installed(); ok {
+		t.Fatal("a failed download is ready")
+	}
+	if status != 0 {
+		t.Error("a failed download showed a toast")
+	}
+	r.open()
+	if !r.hasText("download failed: disk full") || !r.has(SettingsInstall) {
+		t.Errorf("Settings does not show the failed download: %q", r.texts())
+	}
+}
+
+func TestSettingsOffersRestartNowWhenAnUpdateIsReady(t *testing.T) {
+	u := &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}}
+	r := newSettingsRig(t, u)
+	r.s.autoCheck()
+	r.open()
+	if !r.has(SettingsRestart) || r.has(SettingsInstall) {
+		t.Fatalf("no Restart now in Settings: %q", r.texts())
+	}
+	if err := r.tt.Click(SettingsRestart); err != nil {
+		t.Fatal(err)
+	}
+	if r.relaunch != 1 {
+		t.Errorf("relaunch = %d after Restart now", r.relaunch)
 	}
 }
 
