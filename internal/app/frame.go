@@ -1062,6 +1062,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.SpacesList.Host = f.Host
 	f.SpacesList.ByKey = func(do func()) { f.keyNav = true; do(); f.keyNav = false }
 	f.SpacesList.OnOpen = func() { f.focusTerm = true; w.Invalidate() }
+	f.SpacesList.OnPick = f.SpacesList.OnOpen
 	f.SpacesList.ModelOf = f.ModelOf
 	f.SpacesList.EffortOf = f.EffortOf
 	f.SpacesList.StatusEffort = f.statusEffort
