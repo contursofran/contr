@@ -1,11 +1,22 @@
-# contr
+<p align="center">
+  <img src="assets/app/icon.png" width="128" height="128" alt="contr icon">
+</p>
+
+<h1 align="center">contr</h1>
+
+<p align="center">
+  Run and watch many coding agents at once, in one native macOS window.
+</p>
+
+<p align="center">
+  <img src="docs/images/screenshot.png" alt="contr: projects with their agents, the orchestrator's terminal and the file tree">
+</p>
 
 > **Work in progress.** contr changes every day. Expect missing parts and
 > breaking changes until a 1.0 release.
 
-A native macOS client for herdr-core (`hc`), made to run and watch many
-coding agents at once. It is written in Go and uses MyGo's native UI, in a
-frosted glass window with Dark and Light themes.
+contr is a native macOS client for herdr-core (`hc`). It is written in Go and
+uses MyGo's native UI, in a frosted glass window with Dark and Light themes.
 
 - **Left:** your projects, each with its orchestrator and the workers it
   started, and their state. Servers and Settings are at the bottom.
