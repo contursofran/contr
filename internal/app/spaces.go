@@ -127,6 +127,11 @@ type SpacesList struct {
 	// heads holds the cancel func of the HEAD watch of each repo.
 	heads  map[string]context.CancelFunc
 	closed bool
+	// HoldLaunch makes the launch pick wait for the stored project order
+	// ([SpacesList.ReleaseLaunch]). The frame sets it while it loads the store.
+	HoldLaunch bool
+	// launched is true once the launch pick ran, or the owner chose first.
+	launched bool
 }
 
 // NewSpacesList returns the list. snap (may be nil) gives the hc terminals,
@@ -153,7 +158,48 @@ func (l *SpacesList) Online() (bool, string) { return l.online, l.line }
 // rebuilds the list. Call it on the UI thread.
 func (l *SpacesList) SetProjects(s *projects.Store) {
 	l.projects = s
+	l.HoldLaunch = false
 	l.rebuild()
+}
+
+// ReleaseLaunch ends the wait of the launch pick when the store could not be
+// read, and tries the pick with the order that it has.
+func (l *SpacesList) ReleaseLaunch() {
+	l.HoldLaunch = false
+	l.pickLaunch()
+}
+
+// pickLaunch selects, once, the first live orchestrator in sidebar order, else
+// the first live worker (D173). It does nothing when the owner chose a row
+// first, and it stays quiet while nothing live shows, so a later sync tries
+// again. After the pick the owner's choices are never replaced.
+func (l *SpacesList) pickLaunch() {
+	if l.launched || l.HoldLaunch || l.selection == nil {
+		return
+	}
+	if _, ok := l.selection.Current(); ok {
+		l.launched = true
+		return
+	}
+	var worker *agentLine
+	for _, it := range l.items() {
+		a := it.agent
+		if a == nil || !a.w.Live {
+			continue
+		}
+		if a.orchestrator {
+			l.launched = true
+			l.selection.Select(l.target(it))
+			return
+		}
+		if worker == nil {
+			worker = a
+		}
+	}
+	if worker != nil {
+		l.launched = true
+		l.selection.Select(state.Selected{Kind: state.KindWorker, ID: worker.w.Address})
+	}
 }
 
 // applyProjects puts groups in the stored order and leaves the hidden ones
@@ -301,6 +347,7 @@ func (l *SpacesList) rebuild() {
 	l.groups = groups
 	l.syncHeads()
 	l.syncAges()
+	l.pickLaunch()
 	if adopted && l.OnAdopted != nil {
 		l.OnAdopted()
 	}
