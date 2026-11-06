@@ -93,3 +93,15 @@ func TestRanCommand(t *testing.T) {
 		t.Errorf("tag in a tool result: ran = %v, %v", ran, err)
 	}
 }
+
+func TestContextAndModelGivesTheLastRealModel(t *testing.T) {
+	opus := `{"type":"assistant","message":{"model":"claude-opus-5-5","content":[],"usage":{"input_tokens":4}}}`
+	synthetic := `{"type":"assistant","message":{"model":"<synthetic>","content":[]}}`
+	n, m, err := ContextAndModel(writeTranscript(t, prompt, opus, synthetic))
+	if err != nil || n != 4 || m != "claude-opus-5-5" {
+		t.Errorf("ContextAndModel = %d, %q, %v; want 4, claude-opus-5-5", n, m, err)
+	}
+	if _, m, _ := ContextAndModel(writeTranscript(t, prompt, usage(1, 0, 0))); m != "" {
+		t.Errorf("no model field: %q", m)
+	}
+}

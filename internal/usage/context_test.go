@@ -217,3 +217,13 @@ func TestAChangedModelIsWritten(t *testing.T) {
 		t.Errorf("read %+v", got)
 	}
 }
+
+func TestParseContextKeepsTheEffort(t *testing.T) {
+	in := `{"effort":{"level":"xhigh"},"context_window":{"context_window_size":200000,"current_usage":{"input_tokens":1}}}`
+	if c := ParseContext(in, 1); c == nil || c.Effort != "xhigh" {
+		t.Errorf("effort: %+v", c)
+	}
+	if c := ParseContext(ctxLine, 1); c == nil || c.Effort != "" {
+		t.Errorf("input with no effort: %+v", c)
+	}
+}

@@ -181,6 +181,7 @@ func openWindow(icons bool) int {
 		// that does not read is reported by the agent state; the defaults serve here.
 		cfg, _ := agents.LoadConfig(configPath(os.Getenv))
 		frame.ModelOf = cfg.ModelOf
+		frame.EffortOf = cfg.EffortOf
 		frame.LoadProjects = func() (*projects.Store, error) {
 			path, err := projects.Path()
 			if err != nil {
