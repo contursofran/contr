@@ -12,6 +12,9 @@ const (
 	RailIndent = 17
 	// RailPad is the space between the rail line and a worker row.
 	RailPad = 9
+	// OrchestratorIndent is how far an orchestrator row sits in from its
+	// project row; its workers sit RailIndent further in.
+	OrchestratorIndent = 16
 	// OrchestratorPadY and WorkerPadY are the vertical padding of the rows.
 	OrchestratorPadY = 7
 	WorkerPadY       = 5
@@ -23,8 +26,9 @@ type AgentRowOpts struct {
 	Label string
 	// Title is line 1.
 	Title string
-	// Issue, Model and Age are the items of line 2. An empty item is left out.
-	Issue, Model, Age string
+	// Name, Model and Age are the items of line 2 ("b-241  sonnet  6m"). An
+	// empty item is left out; the age stays at the right.
+	Name, Model, Age string
 	// CI adds "CI" to line 2 after the model: the worker waits for checks.
 	CI    bool
 	State GlyphState
@@ -61,17 +65,17 @@ func AgentRow(c *ui.Context, o AgentRowOpts) {
 			return
 		}
 		if o.Orchestrator {
-			agentRowButton(c, o, theme.Space6)
+			agentRowButton(c, o, theme.Space6, theme.Space6+OrchestratorIndent)
 			return
 		}
-		ui.Row(c).Shrink(0).MarginStart(theme.Space6+RailIndent).MarginEnd(theme.Space6).
+		ui.Row(c).Shrink(0).MarginStart(theme.Space6+OrchestratorIndent+RailIndent).MarginEnd(theme.Space6).
 			PaddingStart(RailPad).BorderWidth(0, 0, 0, 1).BorderColor(theme.Current().Rail).Children(func() {
-			agentRowButton(c, o, 0)
+			agentRowButton(c, o, 0, 0)
 		})
 	})
 }
 
-func agentRowButton(c *ui.Context, o AgentRowOpts, marginX float32) {
+func agentRowButton(c *ui.Context, o AgentRowOpts, marginEnd, marginStart float32) {
 	p := theme.Current()
 	titleInk, metaInk := p.Ink60, p.Ink42
 	if o.Selected {
@@ -82,7 +86,7 @@ func agentRowButton(c *ui.Context, o AgentRowOpts, marginX float32) {
 		padY = OrchestratorPadY
 	}
 	row := ui.ButtonBase(c).Label(o.Label).Shrink(0).AlignItems(ui.Center).Grow(1).MinWidth(0).
-		Gap(theme.Space10).Padding(padY, theme.Space10).MarginX(marginX).Radius(theme.Radius8).
+		Gap(theme.Space10).Padding(padY, theme.Space10).MarginStart(marginStart).MarginEnd(marginEnd).Radius(theme.Radius8).
 		TextColor(titleInk).Cursor(ui.CursorPointer).Selected(o.Selected)
 	// ButtonBase paints a selected button in the accent color; the explicit
 	// background keeps it flat: only the ink shows the selection.
@@ -107,8 +111,8 @@ func agentRowButton(c *ui.Context, o AgentRowOpts, marginX float32) {
 					ui.Text(c, s).SingleLine().
 						Font(theme.StyleMeta.Family()).FontSize(theme.StyleMeta.Size).TextColor(metaInk)
 				}
-				if o.Issue != "" {
-					meta(o.Issue)
+				if o.Name != "" {
+					meta(o.Name)
 				}
 				if o.Model != "" {
 					meta(o.Model)
@@ -116,8 +120,10 @@ func agentRowButton(c *ui.Context, o AgentRowOpts, marginX float32) {
 				if o.CI {
 					meta("CI")
 				}
+				// The spacer is always there, so line 2 keeps its height and
+				// the age stays at the right, whatever else line 2 holds.
+				ui.Spacer(c)
 				if o.Age != "" {
-					ui.Spacer(c)
 					meta(o.Age)
 				}
 			})

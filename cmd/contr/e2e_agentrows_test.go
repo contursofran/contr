@@ -76,12 +76,18 @@ func TestAgentRows(t *testing.T) {
 
 	// What a Claude Code agent shows, with the --model that the row reads.
 	script := `printf '\n\342\227\217 Reading the spec before I start.\n\n\342\225\255\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\225\256\n\342\224\202 > _      \342\224\202\n\342\225\260\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\225\257\n'; exec sleep 600`
-	claude := func(model string) agents.Profile {
-		return agents.Profile{Argv: []string{"sh", "-c", script, "claude", "--model", model, "--effort", "medium"}}
+	// A title set by an OSC sequence is the worker's task on line 1 of its row.
+	claude := func(model, title string) agents.Profile {
+		s := script
+		if title != "" {
+			s = `printf '\033]0;` + title + `\007'; ` + script
+		}
+		return agents.Profile{Argv: []string{"sh", "-c", s, "claude", "--model", model, "--effort", "medium"}}
 	}
 	cfg := agents.DefaultConfig()
-	cfg.Profiles["orchestrator"] = claude("opus")
-	cfg.Profiles["builder"] = claude("sonnet")
+	cfg.Profiles["orchestrator"] = claude("opus", "")
+	cfg.Profiles["builder"] = claude("sonnet", "Agent rows on ui.List")
+	cfg.Profiles["builder-bare"] = claude("sonnet", "") // no title: line 1 is the name
 	cfgPath := filepath.Join(dir, "agents.json")
 	data, _ := json.Marshal(cfg)
 	if err := os.WriteFile(cfgPath, data, 0o600); err != nil {
@@ -153,7 +159,7 @@ func TestAgentRows(t *testing.T) {
 	}
 	for _, s := range []agents.Spec{
 		{Name: "b-241", Profile: "builder", Role: "builder", Project: "demo", Issue: "241", Worktree: wt241, Parent: lead.Address},
-		{Name: "b-242", Profile: "builder", Role: "builder", Project: "demo", Issue: "242", Worktree: wt242, Parent: lead.Address},
+		{Name: "b-242", Profile: "builder-bare", Role: "builder", Project: "demo", Issue: "242", Worktree: wt242, Parent: lead.Address},
 	} {
 		if _, err := mgr.Spawn(ctx, s); err != nil {
 			t.Fatalf("spawn %s: %v", s.Name, err)
