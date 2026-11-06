@@ -105,9 +105,9 @@ var Dark = &Palette{
 	GlowUmber:    ui.Hex("#6b4a2a"),
 	GlowGraphite: ui.Hex("#2c3240"),
 
-	GlassWindow:  ui.RGBA(20, 21, 24, 0.3),
+	GlassWindow:  ui.RGBA(20, 21, 24, 0.7),
 	GlassFloat:   ui.RGBA(34, 35, 40, 0.72),
-	Panel:        ui.RGBA(20, 21, 24, 0.55),
+	Panel:        ui.RGBA(20, 21, 24, 0.85),
 	PanelLine:    white(0.065),
 	WindowLine:   white(0.09),
 	FloatLine:    white(0.075),
@@ -170,9 +170,9 @@ var Light = &Palette{
 	GlowUmber:    ui.Hex("#ebcfa9"),
 	GlowGraphite: ui.Hex("#cdd2db"),
 
-	GlassWindow:  ui.RGBA(246, 246, 248, 0.35),
+	GlassWindow:  ui.RGBA(246, 246, 248, 0.75),
 	GlassFloat:   ui.RGBA(252, 252, 253, 0.8),
-	Panel:        white(0.6),
+	Panel:        white(0.9),
 	PanelLine:    black(0.06),
 	WindowLine:   black(0.1),
 	FloatLine:    black(0.08),
