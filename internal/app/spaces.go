@@ -13,6 +13,7 @@ package app
 
 import (
 	"context"
+	"github.com/contursofran/contr/internal/app/kit"
 	"path/filepath"
 	"slices"
 	"time"
@@ -47,6 +48,9 @@ type SpacesList struct {
 	// contr waits; the button shows a dot then. Nil: no dot.
 	OnSettings  func()
 	UpdateReady func() bool
+	// Plans gives the plan meters of the sidebar foot, left of the Settings
+	// button (D196). Nil: no meters.
+	Plans func() []kit.Meter
 	// OnNewIn runs when `+ new` of an empty project is clicked, with the
 	// project's folder (D116). Nil: the button does nothing.
 	OnNewIn func(dir string)

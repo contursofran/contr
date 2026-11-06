@@ -1,6 +1,6 @@
 # UsageMeter
 
-The info block at the bottom of the files panel shows the context of the selected agent and how much of each plan is used.
+The info block at the bottom of the files panel shows the context of the selected agent. The plan meters (how much of each plan is used) are in the sidebar foot, left of the Settings button (D196).
 
 Design system page: component UsageMeter. Shared rules: [README.md](README.md).
 
@@ -16,7 +16,18 @@ Design system page: component UsageMeter. Shared rules: [README.md](README.md).
 | Row | label `small`, `ink-42`; value mono `value`, `ink-62`, at the right |
 | Meter | height `meter-height` (4px), track `meter-track`, fill `meter-fill`, radius `radius-2` |
 
-Rows: "Context  90k of 200k  45%", then one meter per plan (Claude, Codex).
+Rows: "Context  90k of 200k  45%" only.
+
+Plan meters, in the sidebar foot row (D196):
+
+| Part | Value |
+|---|---|
+| Group | one row, inline, gap `space-7`; `space-6` more between two plans |
+| Label | `small`, `ink-42` |
+| Meter | width 44px, the meter above |
+| Value | mono `value`, `ink-62` |
+
+"Claude ▬ 38%  Codex ▬ 12%", then free space, then the Settings button.
 
 ## States
 
@@ -26,8 +37,10 @@ Rows: "Context  90k of 200k  45%", then one meter per plan (Claude, Codex).
 
 ## Behavior
 
-- Under the file tree: Context of the selected agent, then one meter per
-  plan (Claude, Codex), as percent used.
+- Under the file tree: Context of the selected agent.
+- Sidebar foot: one meter per plan (Claude, Codex), as percent used. Plan
+  usage is global, so it does not follow the selection (D196). The icon
+  column (D128) has no room: it shows only the Settings button.
 
 ## Data
 
@@ -74,6 +87,7 @@ Rows: "Context  90k of 200k  45%", then one meter per plan (Claude, Codex).
 ## Tests
 
 - View: values, no data, 100%.
+- The files panel has only Context; the sidebar foot has Claude, then Codex, then the gear, in one row; the icon column has no plan meters.
 
 ## Replaces
 
