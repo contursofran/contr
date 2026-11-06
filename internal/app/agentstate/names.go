@@ -73,6 +73,12 @@ func nameForeign(ws []agents.Worker, num Numbering) {
 	}
 	byBase := map[string][]int{}
 	for i, w := range ws {
+		if w.Session { // contr's own name ("term-…") tells nothing: the title, else the name
+			if usableTitle(w.Title, w) {
+				ws[i].Shown = cleanTitle(w.Title)
+			}
+			continue
+		}
 		if !w.Foreign {
 			continue
 		}

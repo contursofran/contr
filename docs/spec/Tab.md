@@ -1,6 +1,6 @@
 # Tab
 
-A tab is one hc terminal of the selected agent: a status glyph, a title clipped with an ellipsis, and a close button on the selected tab.
+A tab is one hc terminal of the open project (a Claude session, the selected worker or a plain terminal; D190): a status glyph, a title clipped with an ellipsis, and a close button on the selected tab.
 
 Design system page: component Tab. Shared rules: [README.md](README.md).
 

@@ -224,3 +224,19 @@ func TestAttachWiresCmdWToTheSourceClose(t *testing.T) {
 		t.Error("the Close Terminal item still runs after the frame stopped")
 	}
 }
+
+// A plain terminal that now runs Claude Code is a session: Cmd-W does not end it, though its
+// selection is still a terminal (D190).
+func TestCloseTerminalKeepsAPlainTerminalThatRunsClaude(t *testing.T) {
+	snap := termSnap()
+	cf := newCloseFrame(t, &snap)
+	cf.Selection.Select(state.Selected{Kind: state.KindTerminal, ID: "tp"})
+	s := snap.Terminals[0]
+	s.Role, s.Session = agents.RoleOrchestrator, true
+	snap.Terminals = nil
+	snap.Orchestrators = append(snap.Orchestrators, s)
+	cf.closeSelectedTerminal()
+	if len(cf.stopped) != 0 {
+		t.Errorf("stopped %v, want none", cf.stopped)
+	}
+}

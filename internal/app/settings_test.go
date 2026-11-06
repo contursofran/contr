@@ -636,3 +636,85 @@ func TestSettingsTintSliderFollowsAClickOnTheTrack(t *testing.T) {
 		t.Errorf("after a click at the middle: Background %v Panels %v; want Panels near 50", win, pan)
 	}
 }
+
+func fakeClockSettings(u *fakeUpdates, now *time.Time) *Settings {
+	return &Settings{Updates: u, Now: func() time.Time { return *now },
+		Run: Runner{Go: func(f func()) { f() }}}
+}
+
+func TestCheckEveryIsFifteenMinutes(t *testing.T) {
+	if CheckEvery != 15*time.Minute || ActiveAfter != 10*time.Minute {
+		t.Errorf("CheckEvery %v, ActiveAfter %v; want 15m and 10m", CheckEvery, ActiveAfter)
+	}
+}
+
+func TestATickAfterASleepChecksOnTheWallClock(t *testing.T) {
+	u := &fakeUpdates{enabled: true}
+	now := time.Now()
+	s := fakeClockSettings(u, &now)
+	s.dueCheck()
+	if u.checks != 1 {
+		t.Fatalf("checks = %d at the first tick", u.checks)
+	}
+	now = now.Add(14 * time.Minute)
+	s.dueCheck()
+	if u.checks != 1 {
+		t.Fatalf("a tick inside 15 minutes checked: %d", u.checks)
+	}
+	now = now.Add(5 * time.Hour) // the Mac slept: wall time jumps
+	s.dueCheck()
+	if u.checks != 2 {
+		t.Errorf("checks = %d after a sleep, want 2", u.checks)
+	}
+}
+
+func TestActivatedChecksOnlyAfterTenMinutes(t *testing.T) {
+	u := &fakeUpdates{enabled: true}
+	now := time.Now()
+	s := fakeClockSettings(u, &now)
+	s.Activated()
+	if u.checks != 1 {
+		t.Fatalf("checks = %d on the first activation", u.checks)
+	}
+	now = now.Add(9 * time.Minute)
+	s.Activated()
+	if u.checks != 1 {
+		t.Errorf("an activation inside 10 minutes checked: %d", u.checks)
+	}
+	now = now.Add(2 * time.Minute)
+	s.Activated()
+	if u.checks != 2 {
+		t.Errorf("checks = %d after 11 minutes, want 2", u.checks)
+	}
+	(&Settings{}).Activated() // no service: nothing
+}
+
+func TestAFailedCheckDoesNotResetTheAge(t *testing.T) {
+	u := &fakeUpdates{enabled: true, checkErr: errors.New("offline")}
+	now := time.Now()
+	s := fakeClockSettings(u, &now)
+	s.dueCheck()
+	now = now.Add(time.Minute)
+	s.dueCheck() // the next tick tries again
+	if u.checks != 2 {
+		t.Fatalf("checks = %d, want 2: a failed check reset the age", u.checks)
+	}
+	u.checkErr = nil
+	now = now.Add(time.Minute)
+	s.dueCheck()
+	now = now.Add(time.Minute)
+	s.dueCheck()
+	if u.checks != 3 {
+		t.Errorf("checks = %d, want 3: a good check did not reset the age", u.checks)
+	}
+}
+
+func TestADueCheckThatFindsAnUpdateInstallsInTheBackground(t *testing.T) {
+	u := &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}}
+	now := time.Now()
+	s := fakeClockSettings(u, &now)
+	s.Activated()
+	if _, _, ok := s.Installed(); !ok || u.installs != 1 {
+		t.Errorf("installed %v after %d installs; want a background install", ok, u.installs)
+	}
+}

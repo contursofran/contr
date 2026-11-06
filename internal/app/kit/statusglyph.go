@@ -164,6 +164,9 @@ type GlyphOpts struct {
 	Grey bool
 	// Small draws the 14px glyph of tabs and the notch; else 16px (rows).
 	Small bool
+	// Color draws a braille glyph in this ink in place of the state's ink.
+	// The zero value keeps GlyphColor.
+	Color ui.Color
 }
 
 // GlyphSize is the width of a StatusGlyph in DIPs: 16, or 14 when small.
@@ -262,6 +265,9 @@ func StatusGlyph(c *ui.Context, o GlyphOpts) ui.Element {
 	still := c.Preferences().ReduceMotion
 	runs := Runs(state, o.Claude, still)
 	color := optsColor(pal, o)
+	if o.Color != (ui.Color{}) && !o.Claude {
+		color = o.Color
+	}
 	size := GlyphSize(o.Small)
 	box := ui.Box(c).Size(size, size).Shrink(0).Label(state.Label())
 

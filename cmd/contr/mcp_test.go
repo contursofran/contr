@@ -123,6 +123,28 @@ func TestMCPListsAndRunsTheAgentTools(t *testing.T) {
 	}
 }
 
+// TestMCPMessageNeedsItsText: a misnamed argument (message for text) and a
+// blank text are tool errors, and nothing is typed into the worker (#483).
+func TestMCPMessageNeedsItsText(t *testing.T) {
+	core := &cliCore{}
+	dial := func(context.Context, func(string) string) (agentsCore, error) { return core, nil }
+	_, r := mcpRun(t, dial, nil,
+		callLine(1, "message", map[string]any{"name": "w", "message": "fix it"}),
+		callLine(2, "message", map[string]any{"name": "w", "text": "  "}),
+	)
+	if got, isErr := toolText(t, r["1"]); !isErr || !strings.Contains(got, `unknown field "message"`) {
+		t.Errorf("misnamed = %q, %v", got, isErr)
+	}
+	if got, isErr := toolText(t, r["2"]); !isErr || !strings.Contains(got, "no text") {
+		t.Errorf("blank = %q, %v", got, isErr)
+	}
+	for _, m := range core.calls {
+		if m == "terminal.send" {
+			t.Errorf("calls = %v", core.calls)
+		}
+	}
+}
+
 func TestMCPConnectsAgainAfterTheCoreGoesAway(t *testing.T) {
 	dials := 0
 	gone := &cliCore{errs: map[string]error{"terminal.send": hc.ErrClosed}}

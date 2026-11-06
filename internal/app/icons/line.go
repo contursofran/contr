@@ -9,6 +9,7 @@ var LineNames = [...]string{
 	"project", "computer", "server", "folder", "folder-open", "file-go",
 	"file-md", "file", "close", "plus", "split", "search", "sidebar-right",
 	"filter", "terminal", "settings", "download", "chevron-down",
+	"todo", "todo-done", "artifact",
 }
 
 // Line returns the line icon with this name, or nil when the file is missing

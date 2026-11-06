@@ -5,6 +5,7 @@
 package agents
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -242,6 +243,10 @@ type Worker struct {
 	// Shown is the readable name of a foreign terminal, set by the agent
 	// model (D156). Empty when Name is already readable.
 	Shown string `json:"-"`
+	// Session is true for a plain terminal of contr that runs Claude Code
+	// in the foreground: its role is orchestrator while Claude Code runs,
+	// and it is named from its title, as a foreign terminal (D190).
+	Session bool `json:"session,omitempty"`
 }
 
 // DisplayName is the name the UI shows: Shown when set, else Name.
@@ -298,6 +303,10 @@ func (t terminal) worker() Worker {
 	}
 	if t.Labels[LabelApp] != AppAgent {
 		t.foreign(&w)
+	} else if w.Role == RoleTerminal && t.claudeInFront() {
+		// The owner ran Claude Code in a plain terminal: while it runs, it is
+		// a Claude session (D190).
+		w.Role, w.Session = RoleOrchestrator, true
 	}
 	if t.Parent != nil {
 		w.Parent = *t.Parent
@@ -334,15 +343,20 @@ var versionName = regexp.MustCompile(`^\d+\.\d+\.\d+`)
 // foreground program (by name or by its version), the program in argv, or the
 // terminal has an hc status, which only an agent sets.
 func (t terminal) runsClaude() bool {
-	if t.Status != nil {
+	if t.Status != nil || t.claudeInFront() {
 		return true
 	}
-	if t.Foreground != nil {
-		if n := filepath.Base(t.Foreground.Name); n == "claude" || versionName.MatchString(n) {
-			return true
-		}
-	}
 	return len(t.Argv) > 0 && filepath.Base(t.Argv[0]) == "claude"
+}
+
+// claudeInFront tells if Claude Code is the foreground program, by name or
+// by its version. In a shell this is false again once Claude Code exits.
+func (t terminal) claudeInFront() bool {
+	if t.Foreground == nil {
+		return false
+	}
+	n := filepath.Base(t.Foreground.Name)
+	return n == "claude" || versionName.MatchString(n)
 }
 
 // command is the foreground program's name, else the base of argv[0], or
@@ -538,11 +552,26 @@ func (m *Manager) List(ctx context.Context, all bool) ([]Worker, error) {
 	return out, nil
 }
 
-// Send types text into a worker and presses Enter.
+// Send types text into a worker and presses Enter. Blank text is an error:
+// hc would still submit its sender tag, an empty message (#483, D200). A send
+// that hc refuses (sent false) is an error with hc's reason.
 func (m *Manager) Send(ctx context.Context, name, text string) error {
+	if strings.TrimSpace(text) == "" {
+		return errors.New("agents: no text to send")
+	}
 	params := m.looking(name)
 	params["text"] = text
-	return m.core.Call(ctx, "terminal.send", params, nil)
+	var res struct {
+		Sent   *bool  `json:"sent"`
+		Reason string `json:"reason"`
+	}
+	if err := m.core.Call(ctx, "terminal.send", params, &res); err != nil {
+		return err
+	}
+	if res.Sent != nil && !*res.Sent {
+		return fmt.Errorf("agents: %s did not take the text: %s", name, cmp.Or(res.Reason, "no reason given"))
+	}
+	return nil
 }
 
 // WithConfig returns a copy of m on the same core with the profiles of cfg.

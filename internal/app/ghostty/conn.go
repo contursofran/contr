@@ -138,6 +138,9 @@ type Conn struct {
 	state     State
 	watching  bool     // attach as an observer: no size, focus or input
 	takeover  bool     // Write closed the observer stream to attach with input
+	fitting   bool     // attached with input only to fit the view: no focus until a key (D199)
+	core      *hc.Size // the core's size seen while watching
+	sized     bool     // the view gave its size: before it, cols and rows are the default
 	screen    Screen   // nil until SetScreen
 	pending   *hc.Size // a size this viewer set, for Read to give the screen
 	wake      chan struct{}
@@ -254,12 +257,18 @@ func (c *Conn) Write(p []byte) (int, error) {
 			return 0, ErrNotRunning
 		}
 		c.held = append(c.held, p...)
+		c.fitting = false // a key: run sends the focus after the held input
 		c.mu.Unlock()
 		c.retry(false)
 		return len(p), nil
 	}
 	s := c.stream
+	focus := c.fitting && c.focused
+	c.fitting = false
 	c.mu.Unlock()
+	if focus { // the owner types: the focus held back by the fit goes now
+		_ = s.Focus(true)
+	}
 	return s.Write(p)
 }
 
@@ -273,6 +282,7 @@ func (c *Conn) ResizePixels(cols, rows, cellW, cellH int) error {
 	c.mu.Lock()
 	changed := c.cols != uint16(cols) || c.rows != uint16(rows)
 	c.cols, c.rows, c.cell = uint16(cols), uint16(rows), [2]int{cellW, cellH}
+	c.sized = true
 	s, tried, watching := c.stream, c.tried, c.watching
 	c.mu.Unlock()
 	if s == nil {
@@ -281,7 +291,11 @@ func (c *Conn) ResizePixels(cols, rows, cellW, cellH int) error {
 		}
 		return nil
 	}
-	if !changed || watching {
+	if watching {
+		c.fitIfNeeded(s)
+		return nil
+	}
+	if !changed {
 		return nil
 	}
 	if err := s.Resize(uint16(cols), uint16(rows)); err != nil {
@@ -290,6 +304,22 @@ func (c *Conn) ResizePixels(cols, rows, cellW, cellH int) error {
 	// The core sends no resize frame to the viewer that resized (D43).
 	c.setSize(uint16(cols), uint16(rows))
 	return nil
+}
+
+// fitIfNeeded ends the observer stream s when the core's size differs from
+// the view's, so that run attaches with input at the view's size (D199). It
+// sends no input; the focus waits for the first key. It waits for the
+// view's first size.
+func (c *Conn) fitIfNeeded(s Stream) {
+	c.mu.Lock()
+	if !c.watching || c.stream != s || c.core == nil || !c.sized ||
+		(c.core.Cols == c.cols && c.core.Rows == c.rows) {
+		c.mu.Unlock()
+		return
+	}
+	c.watching, c.live, c.takeover, c.fitting = false, false, true, true
+	c.mu.Unlock()
+	_ = s.Close() // run attaches again once the pump ends
 }
 
 // setSize marks a size this viewer gave the core, for Read to give the
@@ -345,7 +375,7 @@ func (c *Conn) deliver(ch chunk) bool {
 func (c *Conn) SetFocus(focused bool) error {
 	c.mu.Lock()
 	c.focused = focused
-	s, watching := c.stream, c.watching
+	s, watching := c.stream, c.watching || c.fitting
 	c.mu.Unlock()
 	if s == nil || watching {
 		return nil
@@ -511,7 +541,8 @@ func (c *Conn) run() {
 		return
 	}
 	c.stream, c.attaching, c.resumed, c.noRetry = s, false, true, false
-	cols, rows, focused := c.cols, c.rows, c.focused
+	fitting := c.fitting
+	cols, rows, focused := c.cols, c.rows, c.focused && !fitting
 	c.mu.Unlock()
 	if !p.Observe {
 		if cols != p.Cols || rows != p.Rows { // the view's size changed during the attach
@@ -524,6 +555,12 @@ func (c *Conn) run() {
 		c.setSize(cols, rows)
 	}
 	c.flushHeld(s)
+	c.mu.Lock()
+	late := fitting && !c.fitting && c.focused && c.stream == s // a key came during the fit
+	c.mu.Unlock()
+	if late {
+		_ = s.Focus(true)
+	}
 	c.setState(State{Kind: Live})
 	c.pump(s)
 
@@ -600,8 +637,17 @@ func (c *Conn) pump(s Stream) {
 			c.mu.Lock()
 			c.failures = 0 // data came: the connection works
 			c.mu.Unlock()
-			if ev.Resize != nil && !c.deliver(chunk{size: ev.Resize}) {
-				return
+			if ev.Resize != nil {
+				if !c.deliver(chunk{size: ev.Resize}) {
+					return
+				}
+				c.mu.Lock()
+				if c.watching {
+					sz := *ev.Resize
+					c.core = &sz
+				}
+				c.mu.Unlock()
+				c.fitIfNeeded(s)
 			}
 			if len(ev.Data) > 0 && !c.deliver(chunk{data: ev.Data}) {
 				return

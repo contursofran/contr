@@ -1,7 +1,8 @@
 package app
 
-// The model of the title bar tabs (docs/spec/Tab.md, TitleBar.md): the selected agent's own
-// hc terminal, then the plain terminals of its project. This file has no UI.
+// The model of the title bar tabs (docs/spec/Tab.md, TitleBar.md): the Claude sessions of the
+// open project, the selected worker, then the plain terminals of the project (D190). This file
+// has no UI.
 
 import (
 	"path/filepath"
@@ -39,14 +40,25 @@ func (t Tab) Closable() bool { return t.Plain }
 // own tab stays first.
 func (t Tab) Movable() bool { return t.Plain }
 
-// TitleTabs returns the tabs for agent, the address of the agent whose tabs show: its own tab
-// first, then the plain terminals of project. selected is the address of the selected tab, or "".
-// An agent that is not in the snapshot, or an ended worker, has no tab (D112).
+// TitleTabs returns the tabs of project (D190): one shared set, the same whichever of them is
+// selected. First every Claude session of the project (the orchestrators, and the plain
+// terminals that run Claude Code), in the sidebar's order; then the tab of agent when it is a
+// live worker (the one the owner chose), or an agent of another project; then the plain
+// terminals of project. selected is the address of the selected tab, or "". An agent that is
+// not in the snapshot, or an ended worker, has no tab (D112).
 func TitleTabs(s agentstate.Snapshot, project, key, agent, selected string) []Tab {
 	var tabs []Tab
-	if w, ok := findAgent(s, agent); ok {
+	add := func(w agents.Worker) {
 		tabs = append(tabs, Tab{Address: w.Address, Title: tabTitle(w), Tip: tabTip(w), Orchestrator: w.Orchestrator(),
 			Grey: w.Orchestrator() && !s.Orchestrating(w), State: tabState(w), Selected: selected != "" && w.Address == selected})
+	}
+	for _, w := range s.Orchestrators {
+		if agentstate.SameProject(w, project, key) {
+			add(w)
+		}
+	}
+	if w, ok := findAgent(s, agent); ok && !slices.ContainsFunc(tabs, func(t Tab) bool { return t.Address == w.Address }) {
+		add(w)
 	}
 	for _, w := range s.Terminals {
 		if agentstate.SameProject(w, project, key) {
@@ -92,7 +104,7 @@ func tabState(w agents.Worker) kit.GlyphState {
 // else "$ <folder>"; an orchestrator shows its name; a worker shows "<issue> · <worktree>", or
 // its name when it has no issue or no worktree.
 func tabTitle(w agents.Worker) string {
-	if w.Foreign { // named by hc name, title or project (D156)
+	if w.Foreign || w.Session { // named by hc name, title or project (D156, D190)
 		return w.DisplayName()
 	}
 	if w.Plain() {
@@ -167,8 +179,8 @@ func OpenProjectKey(s agentstate.Snapshot, sel state.Selected, ok bool, keep, ke
 	return keep, keepKey
 }
 
-// OrderTabs puts the plain tabs in the order of order, a list of addresses. The agent's own tab
-// stays first. A plain tab that order does not name goes after the ones it names, in the order it
+// OrderTabs puts the plain tabs in the order of order, a list of addresses. The agent tabs stay
+// first. A plain tab that order does not name goes after the ones it names, in the order it
 // came in. The result is a new slice.
 func OrderTabs(tabs []Tab, order []string) []Tab {
 	out := make([]Tab, 0, len(tabs))

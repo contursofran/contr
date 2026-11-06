@@ -30,6 +30,7 @@ what the redesign does not settle.
 | [QuestionsCard.md](QuestionsCard.md) | the open notch: one question, its choices, a free answer |
 | [Outline.md](Outline.md) | message ticks on the right edge of the orchestrator terminal |
 | [OutlineCard.md](OutlineCard.md) | the card of a hovered tick |
+| [SessionPanel.md](SessionPanel.md) | the agent's todos and artifacts over the file tree |
 | [FileTree.md](FileTree.md) | the files panel tree with +/− counts |
 | [UsageMeter.md](UsageMeter.md) | context and plan usage under the file tree |
 | [SettingsAgents.md](SettingsAgents.md) | Settings tab bar and the Roles of the Agents tab |
@@ -59,7 +60,8 @@ tests, and what it replaces.
 
 - One glass sheet: the title bar row, then three panels in a row.
 - No top bar, bottom row or footer: the title bar takes the tabs, the
-  notch takes the questions, the files panel takes the usage.
+  notch takes the questions, the files panel takes the context, and the
+  sidebar foot takes the plan usage (D196).
 - Overlays (notch, card, outline, menus) float over the terminal. They
   never resize it (D67).
 
@@ -127,7 +129,7 @@ The owner's from-zero canvas (https://claude.ai/artifact/9bmbRdJc8qDMSRXm6obEb3)
   (`ui.Icon`), so a state changes only the text color.
 - Names: `project`, `computer`, `server`, `folder`, `folder-open`,
   `file-go`, `file-md`, `file`, `close`, `plus`, `search`,
-  `sidebar-right`, `filter` (three lines), `terminal`, `settings`, `download`, `chevron-down` (dropdowns). They go in `assets`.
+  `sidebar-right`, `filter` (three lines), `terminal`, `settings`, `download`, `chevron-down` (dropdowns), `todo`, `todo-done` and `artifact` (SessionPanel). They go in `assets`.
 - The Claude mark is the official Claude mark (O8 settled, D123): `claude.svg`, one filled shape.
 
 ## Data

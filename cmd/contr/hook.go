@@ -20,6 +20,8 @@ import (
 const hookUsage = `Usage:
   contr hook stop            the kit's Stop hook
   contr hook session-start   the kit's SessionStart hook (matcher compact)
+  contr hook post-tool       the kit's PostToolUse hook (todos, artifacts)
+  contr hook prompt          the kit's UserPromptSubmit hook
 
 Claude Code runs them and gives them the hook input on stdin.
 
@@ -38,6 +40,12 @@ with the model and effort (contr.model, contr.effort) for the sidebar row.
 session-start, after a compaction in a coordinator: prints the playbook,
 the state file to read, the live workers it started, its open owner
 items and the flow (contr agents flow), which Claude Code adds to the new context.
+
+post-tool and prompt run only in an hc terminal (HC_TERMINAL_ID). post-tool
+saves the todo list (TodoWrite, TaskCreate, TaskUpdate) and the artifacts
+(mcp__claude-artifacts__ calls) in the terminal's session file. prompt asks
+Claude to add each request of the owner to its todos with "[you] ". Prompts
+that start with "<hc from=" are skipped. Both always exit 0.
 `
 
 // saidMax is the most characters of the worker's last words in a report.
@@ -92,6 +100,9 @@ type hook struct {
 // for a Stop hook, 2 blocks the turn and sends stderr to the model. With 1,
 // Claude Code shows the error and the turn ends.
 func runHook(args []string, stdin io.Reader, stdout, stderr io.Writer, dial func(context.Context, func(string) string) (agentsCore, error), getenv func(string) string) int {
+	if len(args) == 1 && (args[0] == "post-tool" || args[0] == "prompt") {
+		return runSessionHook(args[0], stdin, stdout, stderr, getenv, sessionStateDir(getenv), time.Now())
+	}
 	if len(args) != 1 || (args[0] != "stop" && args[0] != "session-start") {
 		_, _ = io.WriteString(stderr, hookUsage)
 		return 1
