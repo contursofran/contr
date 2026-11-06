@@ -160,6 +160,12 @@ Add packages under `internal/` when a change needs them.
   `//go:build e2e`. The plugin lists elements, clicks, types and captures a
   window as a PNG. To check a visible change, capture the window and look at
   the PNG yourself (decision D5).
+- To compare a component with its spec, run `scripts/sheet.sh [Part…]`
+  (D178). It draws each part of `sheetParts` (`internal/app/sheet_test.go`)
+  under its image in `docs/spec/images`, in Dark and Light, and writes
+  `tmp/sheet/<Part>-<theme>.png`. It needs no window and no hc. Run it for
+  the parts your change touches, look at each sheet, and give the paths in
+  your report. Add a part when you build a spec'd component that has none.
 - Run the app only against a scratch hc core and a scratch project under
   `/tmp`, never against the owner's core.
 - On the owner's Mac, run one heavy job at a time: an app run with a scratch core,
