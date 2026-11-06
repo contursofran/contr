@@ -315,7 +315,7 @@ func roleSelect(c *ui.Context, label string, width float32, cur, empty string, o
 	sel.Popup(func(panel ui.Element) {
 		panel.Margin(4, 0, 0, 0).Padding(4).Radius(theme.CardRadius).Background(p.Ground).Border(1, p.FloatLine)
 		for _, o := range opts {
-			item := sel.Item(o[0]).Label(label + " " + o[1]).Padding(4, 8).Radius(theme.CardRadius)
+			item := sel.Item(o[0]).Label(label+" "+o[1]).Padding(4, 8).Radius(theme.CardRadius)
 			text := p.Ink62
 			if item.Highlighted() || o[0] == cur {
 				item.Background(p.Selected)
