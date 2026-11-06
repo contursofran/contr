@@ -75,7 +75,7 @@ func TestPanelBaseIsTheFlatPanel(t *testing.T) {
 	if got, want := Light.PanelBase(), ui.RGB(247, 247, 249); got != want {
 		t.Errorf("Light panel = %v, want %v", got, want)
 	}
-	if got, want := Dark.PanelBase(), ui.RGB(17, 18, 20); got != want {
+	if got, want := Dark.PanelBase(), ui.RGB(20, 21, 24); got != want {
 		t.Errorf("Dark panel = %v, want %v", got, want)
 	}
 }

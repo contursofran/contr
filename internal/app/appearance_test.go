@@ -156,8 +156,8 @@ func pf(v float64) *float64 { return &v }
 func TestStartThemeAppliesTheStoredTint(t *testing.T) {
 	f, _ := tintFrame(t, prefs.Prefs{Appearance: mygo.ThemeDark,
 		Tint: prefs.Tints{Dark: prefs.Tint{Window: pf(0.8)}, Light: prefs.Tint{Panel: pf(0.1)}}})
-	if w, p := f.Tint(); w != 80 || p != 55 {
-		t.Errorf("Tint = %v %v, want 80 55", w, p)
+	if w, p := f.Tint(); w != 80 || p != 85 {
+		t.Errorf("Tint = %v %v, want 80 85", w, p)
 	}
 	if theme.Current().GlassWindow.A != 204 {
 		t.Error("the palette does not have the stored window alpha")
@@ -191,8 +191,8 @@ func TestResetTintPutsBackTheDefaultsOfTheCurrentTheme(t *testing.T) {
 	f, saved := tintFrame(t, prefs.Prefs{Appearance: mygo.ThemeDark,
 		Tint: prefs.Tints{Dark: prefs.Tint{Window: pf(0.9), Panel: pf(0.9)}, Light: prefs.Tint{Window: pf(0.2)}}})
 	f.ResetTint()
-	if w, p := f.Tint(); w != 30 || p != 55 {
-		t.Errorf("Tint = %v %v, want the Dark defaults 30 55", w, p)
+	if w, p := f.Tint(); w != 70 || p != 85 {
+		t.Errorf("Tint = %v %v, want the Dark defaults 70 85", w, p)
 	}
 	v := <-saved
 	if v.Tint.Dark != (prefs.Tint{}) || v.Tint.Light.Window == nil {
