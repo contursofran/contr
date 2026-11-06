@@ -14,8 +14,8 @@ Design system page: component Window. Shared rules: [README.md](README.md).
 |---|---|
 | Ground | `ground` with three soft glows (`glow-slate`, `glow-umber`, `glow-graphite`) behind the glass |
 | Glass sheet | `glass-window`, blur `glass-blur`, saturate `glass-saturate`, radius `radius-14`, border `window-line`, inner top line `shadow-window-top` |
-| Title bar | `titlebar-height` (46px), see TitleBar |
-| Body | row of panels, gap `space-10`, padding `10px` on every side: the gap under the title bar, to the left, right and bottom edge, and between the panels are all `space-10` (D167) |
+| Title bar | `titlebar-height` (38px), see TitleBar |
+| Body | row of panels, gap `space-8`, padding `8px` on every side: the gap under the title bar, to the left, right and bottom edge, and between the panels are all `space-8` (D168) |
 | Panels | sidebar `sidebar-width` (312px), terminal (fills), files `files-width` (280px) |
 
 ## States
@@ -63,7 +63,7 @@ Design system page: component Window. Shared rules: [README.md](README.md).
 
 ## Tokens
 
-`ground`, `glow-*`, `glass-window`, `window-line`, `shadow-window-top`, `radius-14`, `space-10`, `titlebar-height`, `sidebar-width`, `files-width`.
+`ground`, `glow-*`, `glass-window`, `window-line`, `shadow-window-top`, `radius-14`, `space-8`, `titlebar-height`, `sidebar-width`, `files-width`.
 
 ## Build in MyGo
 

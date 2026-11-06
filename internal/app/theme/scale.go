@@ -109,7 +109,7 @@ const (
 
 // Size
 const (
-	SizeTitlebarHeight   = 46
+	SizeTitlebarHeight   = 38
 	SizeSidebarWidth     = 312
 	SizeFilesWidth       = 280
 	SizeRowHeight        = 30

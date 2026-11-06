@@ -26,7 +26,7 @@ func TestSidebarIconRuleBothWays(t *testing.T) {
 	}{
 		{799, 312, true, theme.SidebarIconWidth},
 		{600, 480, true, theme.SidebarIconWidth},
-		{800, 312, true, 290}, // the sidebar gives way for the terminal minimum, as before
+		{800, 312, true, 296}, // the sidebar gives way for the terminal minimum, as before
 		{900, 312, true, 312},
 		{799, 312, false, 312},
 	} {

@@ -46,25 +46,25 @@ func absent(tt *ui.Tester, label string) bool {
 func TestFrameMatchesDesignSizes(t *testing.T) {
 	_, tt := newTester(t)
 	bar := box(t, tt, LabelTitleBar)
-	if bar.X != 0 || bar.Y != 0 || bar.W != theme.WindowWidth || bar.H != 46 {
-		t.Errorf("title bar %+v, want 46 high at the top over the full width", bar)
+	if bar.X != 0 || bar.Y != 0 || bar.W != theme.WindowWidth || bar.H != 38 {
+		t.Errorf("title bar %+v, want 38 high at the top over the full width", bar)
 	}
-	// 10px between all panels and the window edge (docs/spec/Window.md).
+	// 8px between all panels and the window edge (docs/spec/Window.md).
 	sidebar := box(t, tt, LabelPanelSidebar)
-	if sidebar.X != 10 || sidebar.Y != 46+theme.PanelGap || sidebar.W != 312 {
-		t.Errorf("sidebar %+v, want 312 wide at x 10, a gap under the title bar", sidebar)
+	if sidebar.X != 8 || sidebar.Y != 38+theme.PanelGap || sidebar.W != 312 {
+		t.Errorf("sidebar %+v, want 312 wide at x 8, a gap under the title bar", sidebar)
 	}
 	files := box(t, tt, LabelPanelFiles)
-	if files.W != 280 || files.X+files.W != theme.WindowWidth-10 {
-		t.Errorf("files %+v, want 280 wide, 10 from the right edge", files)
+	if files.W != 280 || files.X+files.W != theme.WindowWidth-8 {
+		t.Errorf("files %+v, want 280 wide, 8 from the right edge", files)
 	}
 	term := box(t, tt, LabelPanelTerminal)
-	if term.X != sidebar.X+sidebar.W+10 || term.X+term.W != files.X-10 {
-		t.Errorf("terminal %+v, want 10 from the sidebar and 10 from the files", term)
+	if term.X != sidebar.X+sidebar.W+8 || term.X+term.W != files.X-8 {
+		t.Errorf("terminal %+v, want 8 from the sidebar and 8 from the files", term)
 	}
 	for _, r := range []ui.Rect{sidebar, term, files} {
-		if r.Y+r.H != theme.WindowHeight-10 {
-			t.Errorf("panel %+v should end 10 above the window edge (no footer, D126)", r)
+		if r.Y+r.H != theme.WindowHeight-8 {
+			t.Errorf("panel %+v should end 8 above the window edge (no footer, D126)", r)
 		}
 	}
 	// The tabs start above the terminal panel.
@@ -95,8 +95,8 @@ func TestToggleHidesAndReopensTheSidebar(t *testing.T) {
 	if absent(tt, LabelSidebarReopen) {
 		t.Error("reopen button should show")
 	}
-	if term := box(t, tt, LabelPanelTerminal); term.W != 1130 || term.X != 10 {
-		t.Errorf("terminal %+v, want 1130 wide from x 10", term)
+	if term := box(t, tt, LabelPanelTerminal); term.W != 1136 || term.X != 8 {
+		t.Errorf("terminal %+v, want 1136 wide from x 8", term)
 	}
 
 	if err := tt.Click(LabelSidebarReopen); err != nil {
@@ -108,8 +108,8 @@ func TestToggleHidesAndReopensTheSidebar(t *testing.T) {
 	if got := box(t, tt, LabelPanelSidebar).W; got != theme.SidebarWidth {
 		t.Errorf("sidebar width %v, want 312", got)
 	}
-	if got := box(t, tt, LabelPanelTerminal).W; got != 808 {
-		t.Errorf("terminal width %v, want 808", got)
+	if got := box(t, tt, LabelPanelTerminal).W; got != 816 {
+		t.Errorf("terminal width %v, want 816", got)
 	}
 }
 
@@ -121,8 +121,8 @@ func TestPanelToggleHidesAndShowsThePanel(t *testing.T) {
 	if f.PanelOpen() || !absent(tt, LabelPanelFiles) {
 		t.Error("the files panel should be hidden")
 	}
-	if got := box(t, tt, LabelPanelTerminal).W; got != 1098 {
-		t.Errorf("terminal width %v, want 1098", got)
+	if got := box(t, tt, LabelPanelTerminal).W; got != 1104 {
+		t.Errorf("terminal width %v, want 1104", got)
 	}
 	if err := tt.Click(LabelFilesToggle); err != nil {
 		t.Fatal(err)
@@ -130,8 +130,8 @@ func TestPanelToggleHidesAndShowsThePanel(t *testing.T) {
 	if got := box(t, tt, LabelPanelFiles).W; got != theme.PanelWidth {
 		t.Errorf("files width %v, want 280", got)
 	}
-	if got := box(t, tt, LabelPanelTerminal).W; got != 808 {
-		t.Errorf("terminal width %v, want 808", got)
+	if got := box(t, tt, LabelPanelTerminal).W; got != 816 {
+		t.Errorf("terminal width %v, want 816", got)
 	}
 }
 
@@ -638,7 +638,7 @@ func TestSyncTerminalAttachesAPlainTerminal(t *testing.T) {
 }
 
 // TestPanelGapsAreEqual: the gap between two panels, between a panel and the window
-// edge (left, right, bottom) and between the title bar and the panels is PanelGap (D167).
+// edge (left, right, bottom) and between the title bar and the panels is PanelGap (D168).
 func TestPanelGapsAreEqual(t *testing.T) {
 	_, tt := newTester(t)
 	bar := box(t, tt, LabelTitleBar)

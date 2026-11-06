@@ -32,12 +32,12 @@ func TestFitWidths(t *testing.T) {
 	}{
 		{"unknown width changes nothing", 0, 312, 280, true, true, 312, 280, true},
 		{"roomy window keeps the widths", 1440, 312, 280, true, true, 312, 280, true},
-		{"files give way first", 1100, 312, 280, true, true, 312, 268, true},
-		{"files stop at their minimum, then the sidebar gives way", 1100, 480, 280, true, true, 1100 - 40 - term - 220, 220, true},
+		{"files give way first", 1100, 312, 280, true, true, 312, 276, true},
+		{"files stop at their minimum, then the sidebar gives way", 1100, 480, 280, true, true, 1100 - 32 - term - 220, 220, true},
 		{"narrow window hides files", 1099, 312, 280, true, true, 312, 280, false},
 		{"files off", 1440, 312, 280, true, false, 312, 280, false},
 		{"hidden sidebar keeps its width", 1440, 312, 280, false, true, 312, 280, true},
-		{"wide sidebar gives way for the terminal", 960, 480, 280, true, true, 960 - 20 - 10 - term, 280, false},
+		{"wide sidebar gives way for the terminal", 960, 480, 280, true, true, 960 - 16 - 8 - term, 280, false},
 	} {
 		s, f, files := fitWidths(tc.win, tc.sidebar, tc.files, tc.sidebarOpen, tc.filesOn)
 		if s != tc.wantS || (files && f != tc.wantF) || files != tc.wantFiles {
@@ -72,7 +72,7 @@ func TestNarrowWindowHidesTheFilesPanel(t *testing.T) {
 	if !f.PanelOpen() {
 		t.Error("the narrow window changed the owner's toggle")
 	}
-	if got := box(t, tt, LabelPanelTerminal).W; got != 1099-10-312-10-10 {
+	if got := box(t, tt, LabelPanelTerminal).W; got != 1099-8-312-8-8 {
 		t.Errorf("terminal %v wide, want the room the files left", got)
 	}
 	// The button is there but cannot do anything; the key does nothing either.

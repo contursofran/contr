@@ -131,7 +131,7 @@ The 16 colors a program in the terminal asks for (SGR 30-37, 90-97, palette 0-15
 
 | Token | Value | Use |
 |---|---|---|
-| `titlebar-height` | `46px` | Title bar, drawn by the view, with the tabs. |
+| `titlebar-height` | `38px` | Title bar, drawn by the view, with the tabs. |
 | `sidebar-width` | `312px` | Sidebar panel at rest; the owner can drag it. |
 | `files-width` | `280px` | Files panel at rest; the owner can drag it. |
 | `row-height` | `30px` | One-line sidebar rows and tabs. |

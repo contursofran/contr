@@ -608,7 +608,7 @@ func (f *Frame) split(c *ui.Context, stored *float32, shown, lo, hi float32, rtl
 	line := *base
 	line.Border = ui.Transparent
 	line.Accent = p.Ink22
-	// Both halves and the 1px divider make PanelGap: 5 + 1 + 4.
+	// Both halves and the 1px divider make PanelGap: 4 + 1 + 3.
 	near, far := float32(theme.PanelGap/2), float32(theme.PanelGap/2-1)
 	firstPad, secondPad := [4]float32{0, near, 0, 0}, [4]float32{0, 0, 0, far} // top, right, bottom, left
 	off := near

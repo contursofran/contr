@@ -12,13 +12,13 @@ Design system page: component TitleBar. Shared rules: [README.md](README.md).
 
 From left to right:
 
-1. Traffic-light area, as wide as the sidebar plus its gap (346px in the 1710px window), so the tabs start above the terminal.
+1. Traffic-light area, as wide as the sidebar plus its gap (328px with the default sidebar), so the tabs start above the terminal.
 2. Tabs (see Tab) and a "New tab" icon button.
 3. Flexible space (drags the window).
 4. DiffSummary of the selected project.
 5. Icon buttons: Search, Hide files (pressed while files show).
 
-Height `titlebar-height` (46px), gap `space-8`, right padding `space-14`. Items center on the vertical axis.
+Height `titlebar-height` (38px: a 30px tab, 4px above and below, D168), gap `space-8`, right padding `space-14`. Items center on the vertical axis.
 
 ## States
 

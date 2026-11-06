@@ -67,6 +67,11 @@ func TestWindowGaps(t *testing.T) {
 	has := func(label string) bool { return c.labels(t)[label] }
 	for deadline := time.Now().Add(20 * time.Second); !has(app.LabelNewTab) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
 	}
+	// A plain terminal gives the tab row a tab to measure.
+	nb := c.boundsOf(t, app.LabelNewTab)
+	c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "click", "x": nb.X + nb.Width/2, "y": nb.Y + nb.Height/2}}})
+	for deadline := time.Now().Add(20 * time.Second); c.boundsOf(t, app.LabelTabs).Width == 0 && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+	}
 	c.call(t, "menu", map[string]any{"path": []string{"contr", "Settings…"}})
 	for deadline := time.Now().Add(20 * time.Second); !has(app.LabelSettings) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
 	}
@@ -150,6 +155,31 @@ func measureGaps(t *testing.T, c *client, path string) {
 	}
 	t.Logf("pixel column gaps under the title bar (points, top to bottom): %.1f", cols)
 	wantGaps(t, "column", cols, 2)
+	// The tab row (D168): down a column through the first tab, in points: the glass above the tab
+	// (window rim to the tab), the tab, and the glass below it to the terminal panel's border.
+	tabs := c.boundsOf(t, app.LabelTabs)
+	tx := int((tabs.X + 16) * scale) // past the panel's corner radius
+	var seg []float64
+	run, last := 0, false
+	for y := 0; y < b.Dy() && float64(y) < (tm.Y+4)*scale; y++ {
+		g := near(img.At(tx, y), gap)
+		if g != last && y > 0 {
+			seg = append(seg, float64(run)/scale)
+			run = 0
+		}
+		run++
+		last = g
+	}
+	t.Logf("pixel column through the first tab (points, glass/tab/glass, down to the panel top %.1f): %.1f", tm.Y, seg)
+	if len(seg) < 3 {
+		t.Fatalf("tab column: %d segments %.1f, want glass, tab, glass", len(seg), seg)
+	}
+	if top := seg[0]; math.Abs(top-(bar.Height-theme.SizeRowHeight)/2) > 0.5 {
+		t.Errorf("rim to tab %.1f points, want %.1f", top, (bar.Height-theme.SizeRowHeight)/2)
+	}
+	if h := seg[1]; math.Abs(h-theme.SizeRowHeight) > 0.5 {
+		t.Errorf("tab %.1f points high, want %d", h, theme.SizeRowHeight)
+	}
 }
 
 // wantGaps checks that the runs of gap color, 1 point or more (a thinner run is the edge of a
