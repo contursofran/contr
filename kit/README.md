@@ -49,6 +49,22 @@ The `--plugin-dir` sessions below still work with the plugin installed.
    playbook, the state file to read, the coordinator's live workers and its
    open owner items. Claude Code's own auto-compaction stays on.
 
+## Todos and artifacts
+
+In an hc terminal (`HC_TERMINAL_ID` set), two hooks keep the agent's todo
+list and artifacts in `<state dir>/session/<terminal>.json` (D188):
+
+- PostToolUse (`contr hook post-tool`): `TodoWrite` replaces the todos;
+  `TaskCreate` and `TaskUpdate` add or change one by id; an
+  `mcp__claude-artifacts__` call that names a slug moves that artifact to the
+  top (at most 20).
+- UserPromptSubmit (`contr hook prompt`): asks Claude to add each request of
+  the owner to its todos, starting with `[you] `. Prompts that start with
+  `<hc from=` are skipped.
+
+Both hooks log errors to stderr and always exit 0, so they never block
+Claude Code.
+
 ## Metrics
 
 `scripts/agent-metrics.py --days 7` reports the tokens and cost of coordinator
