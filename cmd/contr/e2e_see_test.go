@@ -51,7 +51,7 @@ var seeFixtures = map[string]seeFixture{
 	"session": {
 		about: "the orchestrator lead with the todos and artifacts of canvas board 11 (D197)",
 		setup: seeSession,
-		ready: "lead, ",
+		ready: "Todos",
 	},
 }
 
