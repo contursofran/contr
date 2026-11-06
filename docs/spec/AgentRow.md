@@ -32,7 +32,9 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
 - The orchestrator row is first under its project. Its workers list under
   it on the rail.
 - Click selects the agent: the title bar shows its tabs, the terminal
-  shows its main terminal, the files panel shows its worktree.
+  shows its main terminal, the files panel shows its worktree. The terminal
+  takes the keyboard focus, also on a click on the row that is already
+  selected, so the owner can type at once (D188).
 - Line 1 of a worker is the title of its issue (D174); with none known, its
   task: the terminal title without its status glyph, when it is usable (not
   a path or a program name); else the worker name (D169).

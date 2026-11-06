@@ -265,7 +265,8 @@ func (l *SpacesList) agentRow(c *ui.Context, a agentLine) {
 }
 
 // SelectAgent is a click on an agent row: the agent becomes the selection,
-// and the tabs, the terminal and the files panel follow it.
+// and the tabs, the terminal and the files panel follow it. The terminal then
+// takes the focus (OnPick), also when the row was already selected.
 func (l *SpacesList) SelectAgent(a agentLine) {
 	if l.selection == nil {
 		return
@@ -275,6 +276,9 @@ func (l *SpacesList) SelectAgent(a agentLine) {
 		kind = state.KindOrchestrator
 	}
 	l.selection.Select(state.Selected{Kind: kind, ID: a.w.Address})
+	if l.OnPick != nil {
+		l.OnPick()
+	}
 }
 
 // agentMenu fills the context menu of an agent row: Interrupt, Stop, Open PR.
