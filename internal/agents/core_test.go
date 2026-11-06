@@ -275,3 +275,39 @@ func TestRealCoreStopAndRemove(t *testing.T) {
 		t.Errorf("after remove: %+v, %v; want none", ws, err)
 	}
 }
+
+// TestRealCoreSendWholeText: a long text with backticks and quotes reaches
+// the program in full, and blank text sends nothing (#483).
+func TestRealCoreSendWholeText(t *testing.T) {
+	env := isolatedCore(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cl, err := hc.Dial(ctx, hc.Command("", env))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cl.Close()
+	agent := []string{"sh", "-c", `printf '\033]7501;state=idle\033\134'; exec cat`}
+	m := New(HC{cl}, Config{Profiles: map[string]Profile{"agent": {Argv: agent}}})
+	if _, err := m.Spawn(ctx, Spec{Name: "w1", Profile: "agent"}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	if err := m.Send(ctx, "w1", " "); err == nil {
+		t.Error("blank text was sent")
+	}
+	text := strings.Repeat("Fix `go vet` (see \"docs/x.md\", it's 'quoted') ", 15) + "end."
+	if err := m.Send(ctx, "w1", text); err != nil {
+		t.Fatal(err)
+	}
+	var screen string
+	for i := 0; i < 50 && !strings.Contains(strings.ReplaceAll(screen, "\n", ""), "end."); i++ {
+		time.Sleep(100 * time.Millisecond)
+		if screen, err = m.Read(ctx, "w1", 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := strings.Count(screen, "`go vet`"); got < 15 {
+		t.Errorf("screen has %d of 15 parts: %q", got, screen)
+	}
+}

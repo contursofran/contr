@@ -5,6 +5,7 @@
 package agents
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -542,11 +543,26 @@ func (m *Manager) List(ctx context.Context, all bool) ([]Worker, error) {
 	return out, nil
 }
 
-// Send types text into a worker and presses Enter.
+// Send types text into a worker and presses Enter. Blank text is an error:
+// hc would still submit its sender tag, an empty message (#483, D200). A send
+// that hc refuses (sent false) is an error with hc's reason.
 func (m *Manager) Send(ctx context.Context, name, text string) error {
+	if strings.TrimSpace(text) == "" {
+		return errors.New("agents: no text to send")
+	}
 	params := m.looking(name)
 	params["text"] = text
-	return m.core.Call(ctx, "terminal.send", params, nil)
+	var res struct {
+		Sent   *bool  `json:"sent"`
+		Reason string `json:"reason"`
+	}
+	if err := m.core.Call(ctx, "terminal.send", params, &res); err != nil {
+		return err
+	}
+	if res.Sent != nil && !*res.Sent {
+		return fmt.Errorf("agents: %s did not take the text: %s", name, cmp.Or(res.Reason, "no reason given"))
+	}
+	return nil
 }
 
 // WithConfig returns a copy of m on the same core with the profiles of cfg.
