@@ -35,8 +35,11 @@ type AgentRowOpts struct {
 	// Orchestrator draws the Claude glyph and the larger padding; a worker
 	// draws a braille glyph and sits on the rail.
 	Orchestrator bool
-	Selected     bool
-	OnClick      func()
+	// Grey draws the Claude glyph in grey: a Claude session that does not
+	// orchestrate (D191).
+	Grey     bool
+	Selected bool
+	OnClick  func()
 	// Menu fills the context menu. Nil: no menu.
 	Menu func(m *ui.Menu)
 	// Compact draws the glyph alone, centered, with Tip as its tooltip, in an
@@ -102,7 +105,7 @@ func agentRowButton(c *ui.Context, o AgentRowOpts, marginEnd, marginStart float3
 		row = row.ContextMenu(o.Menu)
 	}
 	row.Children(func() {
-		StatusGlyph(c, GlyphOpts{State: o.State, Claude: o.Orchestrator})
+		StatusGlyph(c, GlyphOpts{State: o.State, Claude: o.Orchestrator, Grey: o.Grey})
 		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 			ui.Text(c, o.Title).Label(o.Label + " title").SingleLine().MinWidth(0).
 				Font(theme.StyleBody.Family()).FontSize(theme.StyleBody.Size).FontWeight(theme.StyleBody.Weight).TextColor(titleInk)
@@ -154,5 +157,5 @@ func compactAgentButton(c *ui.Context, o AgentRowOpts) {
 	if o.Tip != "" {
 		row = row.Tooltip(o.Tip)
 	}
-	row.Children(func() { StatusGlyph(c, GlyphOpts{State: o.State, Claude: o.Orchestrator}) })
+	row.Children(func() { StatusGlyph(c, GlyphOpts{State: o.State, Claude: o.Orchestrator, Grey: o.Grey}) })
 }

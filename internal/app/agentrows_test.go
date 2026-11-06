@@ -588,3 +588,38 @@ func TestADragKeepsTheStoredPlaceOfAnEmptyProject(t *testing.T) {
 		t.Errorf("shown %s", got)
 	}
 }
+
+func TestRoleText(t *testing.T) {
+	cases := []struct {
+		orch    bool
+		workers int
+		want    string
+	}{{false, 0, ""}, {true, 0, "orchestrator"}, {false, 1, "1 worker"}, {true, 3, "3 workers"}}
+	for _, c := range cases {
+		if got := roleText(c.orch, c.workers); got != c.want {
+			t.Errorf("roleText(%v, %d) = %q, want %q", c.orch, c.workers, got, c.want)
+		}
+	}
+}
+
+// Line 2 of an orchestrator row says what it runs; a Claude session that does
+// not orchestrate shows no role (D191).
+func TestLineTwoOfAnOrchestratorShowsItsRole(t *testing.T) {
+	h := newRows(t)
+	if !slices.Contains(h.tt.Texts(), "2 workers") {
+		t.Errorf("lead with two workers: texts %v", h.tt.Texts())
+	}
+	solo := orchestratorIn("solo", h.cwds[1])
+	solo.Profile = "orchestrator"
+	h.send(agentstate.Snapshot{CoreVersion: "0.1.18", Orchestrators: []agents.Worker{solo}})
+	for _, s := range h.tt.Texts() {
+		if s == "orchestrator" || strings.HasSuffix(s, " workers") {
+			t.Errorf("a plain session shows the role %q", s)
+		}
+	}
+	solo.Orchestrating = true
+	h.send(agentstate.Snapshot{CoreVersion: "0.1.18", Orchestrators: []agents.Worker{solo}})
+	if !slices.Contains(h.tt.Texts(), "orchestrator") {
+		t.Errorf("a session that ran /contr:orchestrate: texts %v", h.tt.Texts())
+	}
+}

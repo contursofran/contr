@@ -37,6 +37,23 @@ type AgentActions interface {
 type agentLine struct {
 	w            agents.Worker
 	orchestrator bool
+	// role is line 2's role of an orchestrator row: "orchestrator", or its
+	// worker count ("2 workers"). Empty for a Claude session that does not
+	// orchestrate, which shows a grey glyph (D191).
+	role string
+}
+
+// roleText is the role of an orchestrator row on line 2 (D191).
+func roleText(orchestrating bool, workers int) string {
+	switch {
+	case workers == 1:
+		return "1 worker"
+	case workers > 1:
+		return strconv.Itoa(workers) + " workers"
+	case orchestrating:
+		return "orchestrator"
+	}
+	return ""
 }
 
 // sideItem is one row of the sidebar list: a project (agent is nil) or one of
@@ -112,8 +129,8 @@ func agentLines(g spaces.RepoGroup, s agentstate.Snapshot) []agentLine {
 	}
 	var out []agentLine
 	for i, o := range orchs {
-		out = append(out, agentLine{w: o, orchestrator: true})
 		kids := byParent[o.Address]
+		out = append(out, agentLine{w: o, orchestrator: true, role: roleText(o.Orchestrating, len(kids))})
 		if i == 0 {
 			kids = append(kids, loose...)
 		}
@@ -216,7 +233,10 @@ func titleOf(a agentLine, issueTitle string) string {
 // nameOf is the name on line 2 of a worker row: "b-241" in "b-241  sonnet".
 // It is left out when line 1 already shows it, and for an orchestrator.
 func nameOf(a agentLine, issueTitle string) string {
-	if a.orchestrator || titleOf(a, issueTitle) == a.w.DisplayName() {
+	if a.orchestrator {
+		return a.role
+	}
+	if titleOf(a, issueTitle) == a.w.DisplayName() {
 		return ""
 	}
 	return a.w.DisplayName()
@@ -263,6 +283,7 @@ func (l *SpacesList) agentRow(c *ui.Context, a agentLine) {
 	o := kit.AgentRowOpts{
 		CI: ci, Label: label, Title: titleOf(a, it), Name: nameOf(a, it), Model: model,
 		Age: agentAge(a.w, l.clock()), State: tabState(a.w), Orchestrator: a.orchestrator,
+		Grey:    a.orchestrator && a.role == "",
 		OnClick: func() { l.SelectAgent(a) },
 		Menu:    func(m *ui.Menu) { l.agentMenu(m, a) },
 		Compact: l.compact, Tip: rowTip(a.w),

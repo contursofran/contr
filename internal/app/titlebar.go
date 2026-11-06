@@ -238,7 +238,7 @@ func (b *titleBar) glyph(c *ui.Context, t Tab) {
 		}
 		return
 	}
-	kit.StatusGlyph(c, kit.GlyphOpts{State: t.State, Claude: t.Orchestrator, Small: true})
+	kit.StatusGlyph(c, kit.GlyphOpts{State: t.State, Claude: t.Orchestrator, Grey: t.Grey, Small: true})
 }
 
 // closeButton is the 16px close button of the selected tab.

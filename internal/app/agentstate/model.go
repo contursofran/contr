@@ -362,3 +362,20 @@ func (m *Model) Stop(name string) error {
 func (m *Model) Close(name string) error {
 	return m.mgr.Stop(context.Background(), name, false)
 }
+
+// LiveWorkersOf is the number of live workers whose parent is addr.
+func (s Snapshot) LiveWorkersOf(addr string) int {
+	n := 0
+	for _, w := range s.Workers {
+		if w.Live && addr != "" && w.Parent == addr {
+			n++
+		}
+	}
+	return n
+}
+
+// Orchestrating tells whether the Claude session w orchestrates: it ran
+// /contr:orchestrate (the hook's label) or it has live workers (D191).
+func (s Snapshot) Orchestrating(w agents.Worker) bool {
+	return w.Orchestrating || s.LiveWorkersOf(w.Address) > 0
+}

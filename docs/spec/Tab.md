@@ -13,7 +13,7 @@ Design system page: component Tab. Shared rules: [README.md](README.md).
 | Part | Value |
 |---|---|
 | Box | height `row-height` (30px), padding `0 10px`, gap `space-8`, radius `radius-8`, max width `tab-max-width` (180px); tabs sit `space-2` apart |
-| Leading | StatusGlyph at 14px (worker), Claude glyph (orchestrator), or the bare `>_` prompt icon at 14px, with no box (plain terminal; D172) |
+| Leading | StatusGlyph at 14px (worker), Claude glyph (orchestrator; grey `ink-45` for a Claude session that does not orchestrate, D191), or the bare `>_` prompt icon at 14px, with no box (plain terminal; D172) |
 | Title | `row-small` (12.5px), `ink-50`; one line, ellipsis |
 | Close | 16px box, radius `radius-4`, 10px `close` icon in `ink-45`; only on the selected tab |
 

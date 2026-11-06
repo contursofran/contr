@@ -893,3 +893,14 @@ func TestWorkerModelAndEffortFromArgvElseLabels(t *testing.T) {
 		t.Errorf("argv wins: model %q effort %q", w.Model, w.Effort)
 	}
 }
+
+func TestWorkerOrchestratingFromTheHookLabel(t *testing.T) {
+	tm := term("t1", "a", "live", map[string]string{LabelOrchestrating: "1"}, nil)
+	if w, err := decodeWorker(raw(tm)); err != nil || !w.Orchestrating {
+		t.Errorf("with the label: %+v %v", w, err)
+	}
+	tm = term("t1", "a", "live", nil, nil)
+	if w, _ := decodeWorker(raw(tm)); w.Orchestrating {
+		t.Errorf("without the label: %+v", w)
+	}
+}
