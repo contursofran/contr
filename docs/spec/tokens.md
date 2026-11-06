@@ -52,7 +52,7 @@ Generated from the design system `tokens.json`. Views use the names; `internal/a
 
 ## ANSI
 
-The 16 colors a program in the terminal asks for (SGR 30-37, 90-97, palette 0-15). The terminal plugin takes the palette of the theme (docs/spec/Terminal.md); a theme change swaps it with no reconnect. Dark is the v0.2 `TerminalPalette`. Light is Ghostty's GitHub Light Default tuned for contrast on the light panel (D129): the dim yellow is a dark ochre, and white and bright white are mid and dark greys, because a light grey would not show on a light panel. Each Light color has at least 4.5:1 on the flattened panel (`panel` over `glass-window` over `ground`: #f7f7f9 in Light, #111214 in Dark); black has 13.7:1. Dark black and bright black are below 4.5:1 on purpose: programs use them as fills and dim text, as in the v0.2 palette.
+The 16 colors a program in the terminal asks for (SGR 30-37, 90-97, palette 0-15). The terminal plugin takes the palette of the theme (docs/spec/Terminal.md); a theme change swaps it with no reconnect. Dark is the v0.2 `TerminalPalette`. Light is Ghostty's GitHub Light Default tuned for contrast on the light panel (D129): the dim yellow is a dark ochre, and white and bright white are mid and dark greys, because a light grey would not show on a light panel. Each Light color has at least 4.5:1 on the flattened panel (`panel` over `glass-window` over `ground`: #fafbfb in Light, #141518 in Dark); black has 14.1:1. Dark black and bright black are below 4.5:1 on purpose: programs use them as fills and dim text, as in the v0.2 palette.
 
 | Token | Dark | Light | Contrast on panel |
 |---|---|---|---|
