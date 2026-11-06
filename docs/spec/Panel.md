@@ -56,6 +56,7 @@ Design system page: component Panel. Shared rules: [README.md](README.md).
 
 **Do**
 
+- The head text may differ from the panel name (`Title`): the files panel shows the project name and stays the group "Files".
 - Keep head names short and lower-case where they are names (project name "contr").
 
 **Don't**

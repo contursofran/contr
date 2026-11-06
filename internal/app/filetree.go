@@ -359,7 +359,9 @@ func (t *FileTree) View(c *ui.Context) {
 			return
 		}
 		shown := 0
-		ui.Tree(c, func() { shown = t.level(c, "", 0) })
+		ui.Themed(c, treeTheme(c.Theme())).Background(ui.Transparent).FillWidth().Children(func() {
+			ui.Tree(c, func() { shown = t.level(c, "", 0) })
+		})
 		if shown == 0 && t.ready() {
 			if t.onlyChanged {
 				t.note(c, "No changes")
@@ -368,6 +370,21 @@ func (t *FileTree) View(c *ui.Context) {
 			}
 		}
 	})
+}
+
+// treeArrow is the width of MyGo's disclosure arrow, which ui.Tree always
+// builds in front of the row.
+const treeArrow = 16
+
+// treeTheme hides the disclosure arrow of ui.Tree (the mock has none: a
+// folder shows its open or closed icon) and gives the row its hover fill.
+// The arrow takes TextMuted, the hover fill SurfaceHover. Colors of the rows
+// are set on the rows themselves.
+func treeTheme(base *ui.Theme) *ui.Theme {
+	t := *base
+	t.TextMuted = ui.Transparent
+	t.SurfaceHover = theme.Current().Hover
+	return &t
 }
 
 // ready tells whether the root has been read, so an empty tree is empty and
@@ -537,7 +554,8 @@ func (t *FileTree) item(c *ui.Context, rel string, e review.Entry, depth int) {
 		}
 	})
 	row.Children(func() {
-		ui.Row(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(theme.Space7).Children(func() {
+		// The margin takes back the room of the hidden arrow.
+		ui.Row(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(theme.Space7).MarginStart(-treeArrow).Children(func() {
 			if s := icons.Line(fileIcon(e.Name, e.Dir, isOpen)); s != nil {
 				ui.Icon(c, s).Size(15, 15).Shrink(0).TextColor(icon)
 			}
