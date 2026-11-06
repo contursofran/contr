@@ -29,6 +29,10 @@ type Context struct {
 	// Tokens is the size of the context now. Size is the window, in tokens.
 	Tokens uint64 `json:"tokens"`
 	Size   uint64 `json:"size"`
+	// Model is the short model name from the status line ("sonnet", "opus"),
+	// for line 2 of an agent row that contr did not start (D174). Empty when
+	// the input had none.
+	Model string `json:"model,omitempty"`
 }
 
 // Percent is the whole percent of the window used, from 0 to 100.
@@ -66,6 +70,25 @@ type contextLine struct {
 			CacheRead     uint64 `json:"cache_read_input_tokens"`
 		} `json:"current_usage"`
 	} `json:"context_window"`
+	Model *struct {
+		ID          string `json:"id"`
+		DisplayName string `json:"display_name"`
+	} `json:"model"`
+}
+
+// shortModel is the family word of a model: "sonnet" for "claude-sonnet-5-5"
+// or "Sonnet 5.5". An unknown model gives its display name in lower case,
+// else its id.
+func shortModel(id, display string) string {
+	for _, fam := range []string{"opus", "sonnet", "haiku"} {
+		if strings.Contains(strings.ToLower(id+" "+display), fam) {
+			return fam
+		}
+	}
+	if display != "" {
+		return strings.ToLower(display)
+	}
+	return id
 }
 
 // ParseContext reads the context from Claude Code's status line JSON. It
@@ -81,7 +104,11 @@ func ParseContext(stdinJSON string, now uint64) *Context {
 		return nil
 	}
 	u := w.CurrentUsage
-	return &Context{Schema: schema, UpdatedAt: now, Size: w.Size, Tokens: u.Input + u.CacheCreation + u.CacheRead}
+	c := &Context{Schema: schema, UpdatedAt: now, Size: w.Size, Tokens: u.Input + u.CacheCreation + u.CacheRead}
+	if in.Model != nil {
+		c.Model = shortModel(in.Model.ID, in.Model.DisplayName)
+	}
+	return c
 }
 
 // contextPath is the file of terminal id. The id is cleaned to one safe file
@@ -108,7 +135,7 @@ func WriteContext(dir, id string, c *Context) (bool, error) {
 	if path == "" {
 		return false, errors.New("no terminal id")
 	}
-	if old := readContext(path); old != nil && old.Tokens == c.Tokens && old.Size == c.Size {
+	if old := readContext(path); old != nil && old.Tokens == c.Tokens && old.Size == c.Size && old.Model == c.Model {
 		return false, nil
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

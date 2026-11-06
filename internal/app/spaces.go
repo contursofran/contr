@@ -71,6 +71,12 @@ type SpacesList struct {
 	Entry WorkerEntry
 	// ModelOf names the model of an agent profile for line 2. Nil: none.
 	ModelOf func(profile string) string
+	// StatusModel gives the model that Claude Code's status line reported for
+	// the agent in hc terminal address, for an agent with no --model (D174).
+	// Nil: none.
+	StatusModel func(address string) string
+	// Titles gives the issue titles of the worker rows. Nil: none.
+	Titles *IssueTitles
 	// Ages is the one timer of all ages (D137). Nil: ages move on a state
 	// change only.
 	Ages *AgeClock
@@ -219,12 +225,17 @@ func (l *SpacesList) applyProjects(groups []spaces.RepoGroup) []spaces.RepoGroup
 		byDir[g.CommonDir] = g
 	}
 	out := make([]spaces.RepoGroup, 0, len(groups))
+	var empty []spaces.RepoGroup
 	for _, d := range l.projects.Order(dirs) {
-		if !l.projects.Hidden(d) {
-			out = append(out, byDir[d])
+		switch g := byDir[d]; {
+		case l.projects.Hidden(d):
+		case g.Path != "":
+			empty = append(empty, g) // nothing open: after the others (#443, D174)
+		default:
+			out = append(out, g)
 		}
 	}
-	return out
+	return append(out, empty...)
 }
 
 // withStored adds an empty group for each stored project that no hc terminal

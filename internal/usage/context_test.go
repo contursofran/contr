@@ -181,3 +181,39 @@ func TestSamplerReadsTheContexts(t *testing.T) {
 		t.Errorf("notified %d times after a change, want 2", f.notified)
 	}
 }
+
+func TestParseContextKeepsTheShortModel(t *testing.T) {
+	for _, tc := range []struct{ model, want string }{
+		{`{"id":"claude-sonnet-5-5","display_name":"Sonnet 5.5"}`, "sonnet"},
+		{`{"id":"claude-opus-5-5"}`, "opus"},
+		{`{"id":"x-1","display_name":"Mystery 2"}`, "mystery 2"},
+		{`{"id":"x-1"}`, "x-1"},
+	} {
+		in := `{"model":` + tc.model + `,"context_window":{"context_window_size":200000,"current_usage":{"input_tokens":1}}}`
+		if c := ParseContext(in, 1); c == nil || c.Model != tc.want {
+			t.Errorf("model %s: got %+v, want %q", tc.model, c, tc.want)
+		}
+	}
+	if c := ParseContext(ctxLine, 1); c == nil || c.Model != "" {
+		t.Errorf("input with no model: %+v", c)
+	}
+}
+
+func TestAChangedModelIsWritten(t *testing.T) {
+	dir := t.TempDir()
+	c := &Context{Schema: schema, Size: 200000, Tokens: 10, Model: "sonnet"}
+	if w, err := WriteContext(dir, "t1", c); err != nil || !w {
+		t.Fatalf("first write %v %v", w, err)
+	}
+	if w, _ := WriteContext(dir, "t1", c); w {
+		t.Error("same numbers and model were written again")
+	}
+	c2 := *c
+	c2.Model = "opus"
+	if w, _ := WriteContext(dir, "t1", &c2); !w {
+		t.Error("a new model was not written")
+	}
+	if got := ReadContext(dir, "t1"); got == nil || got.Model != "opus" {
+		t.Errorf("read %+v", got)
+	}
+}

@@ -165,6 +165,8 @@ type Frame struct {
 	PR *PRPane
 	// WorkerPRs finds the pull request of each worker's branch (D104). [Frame.Attach] makes it.
 	WorkerPRs *WorkerPRs
+	// IssueTitles reads the issue title of each worker for line 1 of its row (D174). [Frame.Attach] makes it.
+	IssueTitles *IssueTitles
 	// OpenIssueWeb opens issue n of the repository in dir in the browser. [Frame.Attach] sets it;
 	// tests replace it.
 	OpenIssueWeb func(dir string, n int) error
@@ -911,6 +913,7 @@ func (f *Frame) syncAgents() {
 		f.PR.OnAgentsSync(f.agentSnap().Workers)
 	}
 	f.syncWorkerPRs()
+	f.syncIssueTitles()
 }
 
 // loadProjects reads the projects store off the UI thread and gives it to the
@@ -966,6 +969,22 @@ func (f *Frame) loadWidths(w Window) {
 	}()
 }
 
+// syncIssueTitles starts the issue title reads for the workers (D174).
+func (f *Frame) syncIssueTitles() {
+	if f.IssueTitles != nil && f.agentSnap != nil {
+		f.IssueTitles.Sync(f.agentSnap().Workers)
+	}
+}
+
+// statusModel is the model that the status line of the agent in terminal address reported.
+func (f *Frame) statusModel(address string) string {
+	if f.Usage == nil {
+		return ""
+	}
+	c, _ := f.Usage.Context(address)
+	return c.Model
+}
+
 // syncWorkerPRs starts the pull request reads for the workers now (D104).
 func (f *Frame) syncWorkerPRs() {
 	if f.WorkerPRs != nil && f.agentSnap != nil {
@@ -984,6 +1003,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.Files.Status = f.Toasts.Show
 	f.PR = &PRPane{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate, OpenURL: openURL}
 	f.WorkerPRs = &WorkerPRs{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate}
+	f.IssueTitles = &IssueTitles{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate}
 	var agentSnap func() agentstate.Snapshot
 	var src AgentSource
 	stopAgents := func() {}
@@ -1025,6 +1045,8 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.SpacesList.ByKey = func(do func()) { f.keyNav = true; do(); f.keyNav = false }
 	f.SpacesList.OnOpen = func() { f.focusTerm = true; w.Invalidate() }
 	f.SpacesList.ModelOf = f.ModelOf
+	f.SpacesList.StatusModel = f.statusModel
+	f.SpacesList.Titles = f.IssueTitles
 	f.SpacesList.Run, f.SpacesList.Status = Runner{Post: w.Update}, f.Toasts.Show
 	f.SpacesList.Entry = f.agentRowEntry()
 	f.SpacesList.Ages = &AgeClock{Tick: w.Invalidate}
@@ -1095,6 +1117,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.Panel.OpenIssue = f.OpenIssue
 	f.Panel.PRs = f.WorkerPRs
 	f.syncWorkerPRs()
+	f.syncIssueTitles()
 	if src != nil {
 		f.Panel.Scope = scope
 		f.Panel.Open = f.Card.Open

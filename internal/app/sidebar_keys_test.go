@@ -1,9 +1,13 @@
 package app
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"github.com/contursofran/contr/internal/app/spaces"
+	"github.com/contursofran/contr/internal/projects"
 )
 
 func selID(h *rowsHarness) string {
@@ -100,5 +104,88 @@ func TestAnIdleWorkerWithPendingChecksShowsCIOnLineTwo(t *testing.T) {
 	}
 	if _, ok := h.tt.Find("CI"); !ok {
 		t.Error("no CI text on line 2")
+	}
+}
+
+// emptyProjectRig is the sidebar with the projects alpha and beta and an empty project gamma.
+func emptyProjectRig(t *testing.T) (*rowsHarness, *[]string) {
+	t.Helper()
+	h := newRows(t)
+	s := &projects.Store{}
+	s.AddFolder("/proj/gamma/.git", "/proj/gamma")
+	h.list.SetProjects(s)
+	var started []string
+	h.list.OnNewIn = func(dir string) { started = append(started, dir) }
+	h.tt.Frame()
+	return h, &started
+}
+
+// moveToEmpty puts the key cursor on the empty project, the last row.
+func moveToEmpty(t *testing.T, h *rowsHarness) {
+	t.Helper()
+	// The list has the focus by Tab (D145); the keys then move the cursor.
+	for i := 0; i < 20 && !h.tt.Focused(LabelProjectList); i++ {
+		h.tt.Key(0, ui.KeyTab)
+	}
+	if !h.tt.Focused(LabelProjectList) {
+		t.Fatal("the project list never took the focus")
+	}
+	for range 12 {
+		h.tt.Key(0, ui.KeyDown)
+		if h.list.cursor >= 0 && h.list.cursor < len(h.list.items()) {
+			if it := h.list.items()[h.list.cursor]; it.agent == nil && h.list.groups[it.group].Path != "" {
+				return
+			}
+		}
+	}
+	t.Fatalf("the cursor never reached the empty project: row %d", h.list.cursor)
+}
+
+func TestEnterOnAnEmptyProjectStartsAnOrchestratorThere(t *testing.T) {
+	h, started := emptyProjectRig(t)
+	opened := 0
+	h.list.OnOpen = func() { opened++ }
+	moveToEmpty(t, h)
+	h.tt.Key(0, ui.KeyEnter)
+	if !slices.Equal(*started, []string{"/proj/gamma"}) {
+		t.Errorf("started %v", *started)
+	}
+	if opened != 0 {
+		t.Error("Enter on an empty project gave the focus to a terminal")
+	}
+}
+
+func TestTheMenuKeyOnAnEmptyProjectOpensItsMenu(t *testing.T) {
+	h, started := emptyProjectRig(t)
+	moveToEmpty(t, h)
+	h.tt.Key(0, ui.KeyContextMenu)
+	if err := h.tt.ChooseMenuItem(LabelNewIn(spaces.RepoGroup{Name: "gamma"})); err != nil {
+		t.Fatalf("no menu on the menu key: %v", err)
+	}
+	if !slices.Equal(*started, []string{"/proj/gamma"}) {
+		t.Errorf("started %v", *started)
+	}
+}
+
+func TestTheMenuKeyOnAProjectWithAgentsOpensNoMenu(t *testing.T) {
+	h, _ := emptyProjectRig(t)
+	for i := 0; i < 20 && !h.tt.Focused(LabelProjectList); i++ {
+		h.tt.Key(0, ui.KeyTab)
+	}
+	h.tt.Key(0, ui.KeyDown) // the first row: a project with agents
+	h.tt.Key(0, ui.KeyContextMenu)
+	if err := h.tt.ChooseMenuItem(LabelNewIn(spaces.RepoGroup{Name: "gamma"})); err == nil {
+		t.Error("a menu opened for a row with agents")
+	}
+}
+
+func TestEnterOnAProjectWithAgentsStillOpensIt(t *testing.T) {
+	h, started := emptyProjectRig(t)
+	opened := 0
+	h.list.OnOpen = func() { opened++ }
+	h.tt.Click("lead, idle, opus")
+	h.tt.Key(0, ui.KeyEnter)
+	if opened != 1 || len(*started) != 0 {
+		t.Errorf("opened %d, started %v", opened, *started)
 	}
 }

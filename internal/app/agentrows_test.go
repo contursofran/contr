@@ -136,15 +136,15 @@ func TestAWorkerShowsItsTaskOnLineOneAndItsNameOnLineTwo(t *testing.T) {
 	snap.Workers[0].Task = "Agent rows on ui.List"
 	h.send(snap)
 	a := agentLine{w: snap.Workers[0]}
-	if titleOf(a) != "Agent rows on ui.List" || nameOf(a) != "b-241" {
-		t.Errorf("line 1 %q, name on line 2 %q", titleOf(a), nameOf(a))
+	if titleOf(a, "") != "Agent rows on ui.List" || nameOf(a, "") != "b-241" {
+		t.Errorf("line 1 %q, name on line 2 %q", titleOf(a, ""), nameOf(a, ""))
 	}
 	title, name := box(t, h.tt, "b-241, working, 241, sonnet title"), box(t, h.tt, "b-241")
 	if name.Y <= title.Y {
 		t.Errorf("the name %+v is not under the title %+v", name, title)
 	}
-	if o := (agentLine{w: snap.Orchestrators[0], orchestrator: true}); nameOf(o) != "" || titleOf(o) != "lead" {
-		t.Errorf("orchestrator: title %q, name %q", titleOf(o), nameOf(o))
+	if o := (agentLine{w: snap.Orchestrators[0], orchestrator: true}); nameOf(o, "") != "" || titleOf(o, "") != "lead" {
+		t.Errorf("orchestrator: title %q, name %q", titleOf(o, ""), nameOf(o, ""))
 	}
 }
 

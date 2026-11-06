@@ -37,7 +37,10 @@ Design system page: component ProjectRow. Shared rules: [README.md](README.md).
   rows, which sit under it in the same list (#344).
 - An empty project has no `+` on its row (D171). Its context menu has "New
   orchestrator in <name>": it starts an orchestrator in the project folder
-  (D116).
+  (D116). With the list focused and the key cursor on an empty project, the
+  menu key opens that menu, and Enter starts the orchestrator (D174).
+- Empty projects sit after the projects with agents; the others keep the
+  dragged order (D174).
 - The Projects head has one `+` button. Its menu has "New orchestrator" and
   "Open projects" (D171). The icon column keeps both as buttons.
 
@@ -74,7 +77,7 @@ Design system page: component ProjectRow. Shared rules: [README.md](README.md).
 
 **Do**
 
-- Show the projects in the owner's order.
+- Show the projects in the owner's order, empty ones last.
 
 **Don't**
 

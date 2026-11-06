@@ -229,3 +229,18 @@ func (c Client) OpenPR(ctx context.Context, n int) error {
 	_, err := c.run(ctx, "pr", "view", fmt.Sprint(n), "--web")
 	return err
 }
+
+// IssueTitle reads the title of issue n of the repository of c.Dir.
+func (c Client) IssueTitle(ctx context.Context, n int) (string, error) {
+	out, err := c.run(ctx, "issue", "view", fmt.Sprint(n), "--json", "title")
+	if err != nil {
+		return "", err
+	}
+	var v struct {
+		Title string `json:"title"`
+	}
+	if err := json.Unmarshal(out, &v); err != nil {
+		return "", fmt.Errorf("gh: issue title: %w", err)
+	}
+	return strings.TrimSpace(v.Title), nil
+}
