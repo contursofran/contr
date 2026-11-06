@@ -181,7 +181,7 @@ type Frame struct {
 	// OpenPRWeb opens pull request n of the repository in dir in the browser. [Frame.Attach] sets
 	// it; tests replace it.
 	OpenPRWeb func(dir string, n int) error
-	// Host feeds the This Mac row and Usage the plan meters of the files panel. [Frame.Attach] creates them when they are nil (tests set
+	// Host feeds the This Mac row and Usage the Context meter of the files panel and the plan meters of the sidebar foot. [Frame.Attach] creates them when they are nil (tests set
 	// fakes first) and ends them with its stop function.
 	Host  *host.Host
 	Usage *usage.Sampler
@@ -557,14 +557,15 @@ func (f *Frame) terminalPanel(c *ui.Context) {
 }
 
 // filesPanel is the files slot: the agent's todos and artifacts (D197), the file tree under the
-// head "Files", and the usage meters in its footer. The v0.2 board and worker panel
+// head "Files", and the Context meter in its footer (the plan meters are in the sidebar foot,
+// D196). The v0.2 board and worker panel
 // stay in the code but are not shown (D122); see panelBox.
 func (f *Frame) filesPanel(c *ui.Context) {
 	kit.Panel(c, kit.PanelOpts{Name: LabelPanelFiles,
 		Top:    func() { f.Session.View(c) },
 		Head:   func() { f.Files.Head(c) },
 		Body:   func() { f.Files.View(c) },
-		Footer: func() { kit.UsageMeter(c, usageMeters(f.planUsage(), f.selectedTerminal())) }})
+		Footer: func() { kit.UsageMeter(c, []kit.Meter{contextMeter(f.planUsage(), f.selectedTerminal())}) }})
 }
 
 // selectedTerminal is the hc terminal of the selected orchestrator, worker or
@@ -1125,6 +1126,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	setSidebarHandler(func() { w.Update(f.ToggleSidebar) })
 	f.SpacesList.OnSettings = func() { f.Settings.Toggle() }
 	f.SpacesList.UpdateReady = f.Settings.Ready
+	f.SpacesList.Plans = func() []kit.Meter { return planMeters(f.planUsage()) }
 	stopChecks := f.Settings.StartChecks()
 	f.Slots.Spaces = f.SpacesList.View
 	f.SpacesList.HoldLaunch = f.LoadProjects != nil

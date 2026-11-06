@@ -60,7 +60,8 @@ tests, and what it replaces.
 
 - One glass sheet: the title bar row, then three panels in a row.
 - No top bar, bottom row or footer: the title bar takes the tabs, the
-  notch takes the questions, the files panel takes the usage.
+  notch takes the questions, the files panel takes the context, and the
+  sidebar foot takes the plan usage (D196).
 - Overlays (notch, card, outline, menus) float over the terminal. They
   never resize it (D67).
 
