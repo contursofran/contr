@@ -58,6 +58,8 @@ type titleBar struct {
 	// diff is the diff summary and openReview its click. Nil diff: none.
 	diff       *DiffSummary
 	openReview func()
+	// update builds the update pill left of the diff summary (D176). Nil: none.
+	update func(c *ui.Context)
 	// choice is the index the tab list edits; model is the selected tab's index at the last build.
 	choice, model int
 }
@@ -97,6 +99,9 @@ func (b *titleBar) build(c *ui.Context, filesOn, filesDisabled bool, toggleFiles
 			MarginStart(theme.Space8)
 	}
 	ui.Box(c).Label(LabelTitleDrag).Grow(1).MinWidth(0).FillHeight().DragWindow()
+	if b.update != nil {
+		b.update(c)
+	}
 	if b.diff != nil {
 		ui.Row(c).Shrink(0).MarginEnd(theme.Space8).Children(func() { b.diff.View(c, b.openReview) })
 	}

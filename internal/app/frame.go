@@ -189,6 +189,8 @@ type Frame struct {
 	CloseTerm *CloseTerminal
 
 	bar titleBar
+	// upd is the update pill, its panel and its toast (D176).
+	upd updateUI
 	// agentSnap gives the agents; nil before Attach or without agents. openProject is the
 	// project the title bar shows, and tabAgent the address of the agent whose tabs show.
 	agentSnap   func() agentstate.Snapshot
@@ -723,6 +725,7 @@ func (f *Frame) titleBar(c *ui.Context, sidebarW float32, narrow bool) {
 		}
 		f.bar.diff, f.bar.openReview = f.Diff, f.openReviewView
 		f.bar.search = f.openFind
+		f.bar.update = f.updatePill
 		f.bar.build(c, f.panelOpen && !narrow, narrow, f.TogglePanel)
 	})
 }
@@ -1087,7 +1090,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		f.themeErr = nil
 	}
 	f.Settings = &Settings{Updates: f.Updates, Version: Version, CoreVersion: f.coreVersion, Run: Runner{Post: w.Update},
-		Relaunch: f.Relaunch, Invalidate: w.Invalidate, Visible: func() bool { return f.Visibility == nil || f.Visibility.Visible() },
+		Relaunch: f.Relaunch, OnReady: f.updateReady, Invalidate: w.Invalidate, Visible: func() bool { return f.Visibility == nil || f.Visibility.Visible() },
 		Status: f.Toasts.Show, Appearance: f.Appearance, SetAppearance: f.SetAppearance,
 		Tint: f.Tint, SetTint: f.SetTint, ResetTint: f.ResetTint}
 	setSettingsHandler(func() { w.Update(f.Settings.Toggle) })
