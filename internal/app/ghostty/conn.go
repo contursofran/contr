@@ -96,10 +96,12 @@ type Options struct {
 // size changed, in order with the output.
 type Screen interface{ Resize(cols, rows int) }
 
-// chunk is one item from the pump to Read: output, or a new size.
+// chunk is one item from the pump to Read: output, or a new size. seq is the
+// place of the size in the order of all sizes Conn learned (see nextSize).
 type chunk struct {
 	data []byte
 	size *hc.Size
+	seq  uint64
 }
 
 // Conn is a terminal.Options.Conn over an hc terminal: the plugin reads the
@@ -142,8 +144,11 @@ type Conn struct {
 	core      *hc.Size // the core's size seen while watching
 	sized     bool     // the view gave its size: before it, cols and rows are the default
 	screen    Screen   // nil until SetScreen
-	pending   *hc.Size // a size this viewer set, for Read to give the screen
+	pending   *hc.Size // the newest size, for Read to give the screen
+	sizes     uint64   // the seq of the last size Conn learned
+	newest    uint64   // the seq of pending, or of the size the screen has
 	wake      chan struct{}
+	taken     func() // tests only: Read calls it after it takes a chunk
 }
 
 // NewConn returns a Conn for src. It never blocks: the attach and the watch
@@ -201,18 +206,22 @@ func (c *Conn) SetScreen(s Screen) {
 
 // Read gives the program's output. It waits through a lost connection and
 // returns io.EOF only after Close. A new size from the stream resizes the
-// screen here, after the output before it was read.
+// screen here, after the output before it was read, unless Conn learned a
+// newer size meanwhile.
 func (c *Conn) Read(p []byte) (int, error) {
 	c.rmu.Lock()
 	defer c.rmu.Unlock()
 	for len(c.buf) == 0 {
 		select {
 		case <-c.wake:
-			c.resizeScreen(nil)
+			c.resizeScreen(nil, 0)
 		case ch := <-c.out:
-			c.resizeScreen(nil) // a size this viewer set comes before later output
+			if c.taken != nil {
+				c.taken()
+			}
+			// A size this viewer set comes before later output.
+			c.resizeScreen(ch.size, ch.seq)
 			if ch.size != nil {
-				c.resizeScreen(ch.size)
 				continue
 			}
 			c.buf = ch.data
@@ -327,8 +336,18 @@ func (c *Conn) fitIfNeeded(s Stream) {
 func (c *Conn) setSize(cols, rows uint16) {
 	c.mu.Lock()
 	c.pending = &hc.Size{Cols: cols, Rows: rows}
+	c.newest = c.nextSize()
 	c.mu.Unlock()
 	c.poke()
+}
+
+// nextSize gives the seq of a size Conn learns now: a resize frame when the
+// pump reads it, or a size this viewer sets. A size frame can reach Read after
+// a size that Conn learned later; the seq lets Read drop it (D199, #486).
+// c.mu must be held.
+func (c *Conn) nextSize() uint64 {
+	c.sizes++
+	return c.sizes
 }
 
 // poke wakes Read to give the screen the pending size.
@@ -339,25 +358,25 @@ func (c *Conn) poke() {
 	}
 }
 
-// resizeScreen gives the screen size, or the pending size when size is nil.
-// Without a screen yet, the size waits as the pending one. Read calls it.
-func (c *Conn) resizeScreen(size *hc.Size) {
+// resizeScreen gives the screen the newest size: size, with its seq, when it
+// is newer than the pending size and the screen's size, else the pending size.
+// An older size is dropped, so a frame of a closed observer stream never comes
+// after the fit size. A nil size gives only the pending size. Without a screen
+// yet, the newest size waits as the pending one. Read calls it.
+func (c *Conn) resizeScreen(size *hc.Size, seq uint64) {
 	c.mu.Lock()
+	if size != nil && seq > c.newest {
+		c.pending, c.newest = size, seq
+	}
 	scr := c.screen
-	if scr == nil {
-		if size != nil {
-			c.pending = size
-		}
+	size = c.pending
+	if scr == nil || size == nil {
 		c.mu.Unlock()
 		return
 	}
-	if size == nil {
-		size, c.pending = c.pending, nil
-	}
+	c.pending = nil
 	c.mu.Unlock()
-	if size != nil {
-		scr.Resize(int(size.Cols), int(size.Rows))
-	}
+	scr.Resize(int(size.Cols), int(size.Rows))
 }
 
 // deliver gives ch to Read, unless Conn closes first.
@@ -636,9 +655,13 @@ func (c *Conn) pump(s Stream) {
 			}
 			c.mu.Lock()
 			c.failures = 0 // data came: the connection works
+			var seq uint64
+			if ev.Resize != nil {
+				seq = c.nextSize()
+			}
 			c.mu.Unlock()
 			if ev.Resize != nil {
-				if !c.deliver(chunk{size: ev.Resize}) {
+				if !c.deliver(chunk{size: ev.Resize, seq: seq}) {
 					return
 				}
 				c.mu.Lock()

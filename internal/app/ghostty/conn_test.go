@@ -356,7 +356,13 @@ func TestInputBeforeTheFirstAttachIsHeld(t *testing.T) {
 	if _, err := c.Write([]byte("ls")); err != nil { // starts the attach, as a size does
 		t.Fatal(err)
 	}
-	if got := src.stream(t, 0).wrote(); got != "ls" {
+	// The stream exists before run writes the held input to it.
+	s := src.stream(t, 0)
+	deadline := time.Now().Add(2 * time.Second)
+	for s.wrote() != "ls" && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if got := s.wrote(); got != "ls" {
 		t.Errorf("the stream got %q, want ls", got)
 	}
 }
@@ -803,6 +809,85 @@ func TestWatchFitsTheViewWhenTheCoreIsWider(t *testing.T) {
 	}
 	if n := src.attachCount(); n != 2 {
 		t.Errorf("%d attaches, want 2", n)
+	}
+}
+
+// Read takes the observer's last size frame, and the fit attach sets the
+// view's size before Read gives that frame to the screen. The frame is older
+// than the fit size, so the screen keeps the view's size (#486).
+func TestWatchFitIsNotUndoneByTheObserversLastFrame(t *testing.T) {
+	src := newFakeSource()
+	c, st, scr := startWatchSized(t, src)
+	if err := c.ResizePixels(90, 20, 8, 16); err != nil {
+		t.Fatal(err)
+	}
+	st.wait(t, Live)
+	obs := src.stream(t, 0)
+	fitSet := func() bool {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		return c.pending != nil
+	}
+	var once sync.Once
+	held := make(chan bool, 1)
+	c.taken = func() { // Read holds the 120x40 frame until the fit set 90x20
+		once.Do(func() {
+			deadline := time.Now().Add(2 * time.Second)
+			for !fitSet() && time.Now().Before(deadline) {
+				time.Sleep(time.Millisecond)
+			}
+			held <- fitSet()
+		})
+	}
+	obs.events <- hc.StreamEvent{Resize: &hc.Size{Cols: 120, Rows: 40}}
+	go func() {
+		buf := make([]byte, 8)
+		for {
+			if _, err := c.Read(buf); err != nil {
+				return
+			}
+		}
+	}()
+	select {
+	case ok := <-held:
+		if !ok {
+			t.Fatal("the fit attach set no size while Read held the frame")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Read took no chunk")
+	}
+	scr.wait(t, 90, 20)
+	time.Sleep(20 * time.Millisecond) // a late 120x40 would come now
+	scr.mu.Lock()
+	sizes := append([][2]int(nil), scr.sizes...)
+	scr.mu.Unlock()
+	if len(sizes) != 1 || sizes[0] != [2]int{90, 20} {
+		t.Errorf("screen sizes %v, want only the fit's 90x20", sizes)
+	}
+}
+
+// Read gives the screen only the newest size Conn learned, also when the
+// screen comes later; a newer frame still resizes it.
+func TestResizeScreenDropsAnOlderSize(t *testing.T) {
+	c := &Conn{wake: make(chan struct{}, 1)}
+	c.mu.Lock()
+	old := c.nextSize() // the pump reads a frame
+	c.mu.Unlock()
+	c.setSize(90, 20) // the viewer sets its size after it
+	c.resizeScreen(&hc.Size{Cols: 120, Rows: 40}, old)
+	scr := &fakeScreen{}
+	c.SetScreen(scr)
+	c.resizeScreen(nil, 0)
+	c.resizeScreen(&hc.Size{Cols: 120, Rows: 40}, old)
+	c.mu.Lock()
+	newer := c.nextSize()
+	c.mu.Unlock()
+	c.resizeScreen(&hc.Size{Cols: 100, Rows: 30}, newer)
+	c.resizeScreen(nil, 0)
+	scr.mu.Lock()
+	defer scr.mu.Unlock()
+	if want := [][2]int{{90, 20}, {100, 30}}; len(scr.sizes) != 2 || scr.sizes[0] != want[0] || scr.sizes[1] != want[1] {
+		t.Errorf("screen sizes %v, want %v", scr.sizes, want)
 	}
 }
 
