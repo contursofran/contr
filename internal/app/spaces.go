@@ -130,6 +130,9 @@ type SpacesList struct {
 	ByKey func(do func())
 	// OnOpen runs on Enter in the list: the terminal takes the focus.
 	OnOpen func()
+	// OnPick runs after a click on an agent row: the terminal takes the
+	// focus, so the next key goes to the agent's prompt (#465).
+	OnPick func()
 	// heads holds the cancel func of the HEAD watch of each repo.
 	heads  map[string]context.CancelFunc
 	closed bool
