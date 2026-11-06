@@ -16,6 +16,6 @@ import (
 // plugin cannot resize a window. Release builds do not read it.
 func init() {
 	if w, err := strconv.Atoi(os.Getenv("CONTR_E2E_WIDTH")); err == nil && w > 0 {
-		windowWidth, minWidth = w, min(w, minWidth)
+		windowWidth, minWidth, fillScreen = w, min(w, minWidth), false
 	}
 }

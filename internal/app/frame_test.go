@@ -51,8 +51,8 @@ func TestFrameMatchesDesignSizes(t *testing.T) {
 	}
 	// 10px between all panels and the window edge (docs/spec/Window.md).
 	sidebar := box(t, tt, LabelPanelSidebar)
-	if sidebar.X != 10 || sidebar.Y != 46 || sidebar.W != 312 {
-		t.Errorf("sidebar %+v, want 312 wide at x 10 under the title bar", sidebar)
+	if sidebar.X != 10 || sidebar.Y != 46+theme.PanelGap || sidebar.W != 312 {
+		t.Errorf("sidebar %+v, want 312 wide at x 10, a gap under the title bar", sidebar)
 	}
 	files := box(t, tt, LabelPanelFiles)
 	if files.W != 280 || files.X+files.W != theme.WindowWidth-10 {
@@ -634,5 +634,30 @@ func TestSyncTerminalAttachesAPlainTerminal(t *testing.T) {
 	}
 	if srcs["tp"] == nil {
 		t.Error("no source made for tp")
+	}
+}
+
+// TestPanelGapsAreEqual: the gap between two panels, between a panel and the window
+// edge (left, right, bottom) and between the title bar and the panels is PanelGap (D167).
+func TestPanelGapsAreEqual(t *testing.T) {
+	_, tt := newTester(t)
+	bar := box(t, tt, LabelTitleBar)
+	sb, tm, fl := box(t, tt, LabelPanelSidebar), box(t, tt, LabelPanelTerminal), box(t, tt, LabelPanelFiles)
+	gap := float32(theme.PanelGap)
+	for name, got := range map[string]float32{
+		"left edge to sidebar":   sb.X,
+		"sidebar to terminal":    tm.X - (sb.X + sb.W),
+		"terminal to files":      fl.X - (tm.X + tm.W),
+		"files to right edge":    theme.WindowWidth - (fl.X + fl.W),
+		"title bar to panels":    tm.Y - (bar.Y + bar.H),
+		"panels to bottom edge":  theme.WindowHeight - (tm.Y + tm.H),
+		"title bar to sidebar":   sb.Y - (bar.Y + bar.H),
+		"title bar to files":     fl.Y - (bar.Y + bar.H),
+		"sidebar to bottom edge": theme.WindowHeight - (sb.Y + sb.H),
+		"files to bottom edge":   theme.WindowHeight - (fl.Y + fl.H),
+	} {
+		if got != gap {
+			t.Errorf("%s = %v, want %v", name, got, gap)
+		}
 	}
 }
