@@ -70,7 +70,9 @@ Design system page: component Terminal. Shared rules: [README.md](README.md).
 
 ## Edge cases
 
-- No selection: "select an agent to see its terminal" in `ink-42`.
+- No selection: "select an agent to see its terminal" in `ink-42`. At launch the app selects
+  the first live orchestrator in sidebar order, else the first live worker, so this line shows
+  only when nothing is live, or after the owner clears the selection (D173).
 - The process ends: a last line in `ink-38`.
 - Theme change: the palette changes without a reconnect.
 - The text sits at the bottom: the first key sizes the terminal to the panel

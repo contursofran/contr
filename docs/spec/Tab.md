@@ -13,7 +13,7 @@ Design system page: component Tab. Shared rules: [README.md](README.md).
 | Part | Value |
 |---|---|
 | Box | height `row-height` (30px), padding `0 10px`, gap `space-8`, radius `radius-8`, max width `tab-max-width` (180px); tabs sit `space-2` apart |
-| Leading | StatusGlyph at 14px, Claude glyph, or the terminal icon at 14px |
+| Leading | StatusGlyph at 14px (worker), Claude glyph (orchestrator), or the bare `>_` prompt icon at 14px, with no box (plain terminal; D172) |
 | Title | `row-small` (12.5px), `ink-50`; one line, ellipsis |
 | Close | 16px box, radius `radius-4`, 10px `close` icon in `ink-45`; only on the selected tab |
 
@@ -21,7 +21,7 @@ Design system page: component Tab. Shared rules: [README.md](README.md).
 
 - **Default:** no fill, title `ink-50`.
 - **Hover:** fill `hover`.
-- **Selected:** fill `selected`, ring `shadow-selected`, title `ink-100`, close button shows.
+- **Selected:** a pill: fill `selected`, ring `shadow-selected`, title `ink-100`, close button shows (plain terminal only, D85).
 - **Close hover:** fill `press`, icon `ink-100`.
 - **Blocked agent:** the glyph turns `blocked`; the tab is not otherwise colored.
 
