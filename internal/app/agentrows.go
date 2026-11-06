@@ -163,6 +163,33 @@ func (l *SpacesList) modelOf(w agents.Worker) string {
 	return l.ModelOf(w.Profile)
 }
 
+// modelFor is the model of line 2: the profile's, else the --model of the
+// program's own command line (an orchestrator contr did not start, D169).
+func (l *SpacesList) modelFor(w agents.Worker) string {
+	if m := l.modelOf(w); m != "" {
+		return m
+	}
+	return w.Model
+}
+
+// titleOf is line 1 of an agent row. A worker shows its task (the terminal
+// title); with none usable it shows its name. An orchestrator shows its name.
+func titleOf(a agentLine) string {
+	if !a.orchestrator && a.w.Task != "" {
+		return a.w.Task
+	}
+	return a.w.DisplayName()
+}
+
+// nameOf is the name on line 2 of a worker row: "b-241" in "b-241  sonnet".
+// It is left out when line 1 already shows it, and for an orchestrator.
+func nameOf(a agentLine) string {
+	if a.orchestrator || titleOf(a) == a.w.DisplayName() {
+		return ""
+	}
+	return a.w.DisplayName()
+}
+
 // AgentLabel is the label of an agent row: "<title>, <state>, <issue>, <model>".
 func AgentLabel(w agents.Worker, issue, model string) string {
 	parts := []string{w.DisplayName(), tabState(w).Label()}
@@ -195,14 +222,14 @@ func issueText(a agentLine) string {
 
 // agentRow is one AgentRow.
 func (l *SpacesList) agentRow(c *ui.Context, a agentLine) {
-	issue, model := issueText(a), l.modelOf(a.w)
+	issue, model := issueText(a), l.modelFor(a.w)
 	ci := !a.orchestrator && a.w.Live && a.w.Status != "working" && l.Entry.PRs.Waiting(a.w.Worktree)
 	label := AgentLabel(a.w, issue, model)
 	if ci {
 		label += ", waiting on CI"
 	}
 	o := kit.AgentRowOpts{
-		CI: ci, Label: label, Title: a.w.DisplayName(), Issue: issue, Model: model,
+		CI: ci, Label: label, Title: titleOf(a), Name: nameOf(a), Model: model,
 		Age: agentAge(a.w, l.clock()), State: tabState(a.w), Orchestrator: a.orchestrator,
 		OnClick: func() { l.SelectAgent(a) },
 		Menu:    func(m *ui.Menu) { l.agentMenu(m, a) },
