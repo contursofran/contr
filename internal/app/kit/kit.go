@@ -53,6 +53,8 @@ type RowOpts struct {
 	// tooltip (D128). The name, the meta and Trail are not drawn.
 	Compact bool
 	Tip     string
+	// Menu fills the context menu of a flat row. Nil: no menu.
+	Menu func(m *ui.Menu)
 }
 
 // HeightOf is the height Row gives to a row with these options.

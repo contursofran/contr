@@ -141,7 +141,8 @@ func TestSidebarShowsStoredProjectWithoutTerminalAsEmptyGroup(t *testing.T) {
 	var started []string
 	h.list.OnNewIn = func(dir string) { started = append(started, dir) }
 	h.tt.Frame()
-	h.tt.Click(LabelNewIn(g))
+	h.tt.RightClick(ProjectLabel(g))
+	h.tt.ChooseMenuItem(LabelNewIn(g))
 	if len(started) != 1 || started[0] != "/proj/gamma" {
 		t.Errorf("started %v", started)
 	}

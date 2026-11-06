@@ -151,7 +151,10 @@ func newSpaces(t *testing.T, live agentstate.Snapshot) *spacesHarness {
 		return nil
 	}
 	h.list.Sync()
-	h.tt = ui.NewTester(h.list.View, theme.SidebarWidth, theme.WindowHeight)
+	// On the window background, so a pixel read is the color the owner sees.
+	h.tt = ui.NewTester(func(c *ui.Context) {
+		ui.Column(c).Fill().Background(theme.Color(theme.BgWindow)).Children(func() { h.list.View(c) })
+	}, theme.SidebarWidth, theme.WindowHeight)
 	return h
 }
 

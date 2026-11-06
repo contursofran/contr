@@ -20,6 +20,8 @@ const (
 	LabelProjectList  = "project list"
 	LabelProjectsOpen = "Open projects"
 	LabelProjectsNew  = "New orchestrator"
+	// LabelProjectsAdd names the `+` button of the Projects head; its menu has the two above.
+	LabelProjectsAdd = "Add"
 	// LabelSettings names the Settings button at the bottom of the sidebar (D126, D147).
 	LabelSettingsOpen = "Settings"
 	// LabelSettingsUpdate names it while an update waits.
@@ -67,21 +69,20 @@ func projectMeta(g spaces.RepoGroup) string {
 	return g.Branch
 }
 
-// LabelNewIn is the label of the `+ new` button of an empty project.
+// LabelNewIn is the menu item of an empty project that starts an orchestrator there.
 func LabelNewIn(g spaces.RepoGroup) string { return "New orchestrator in " + g.Name }
 
 // View builds the sidebar head part.
 func (l *SpacesList) View(c *ui.Context) {
 	ui.Column(c).FillWidth().FillHeight().Padding(theme.Space10, 0, 0, 0).Children(func() {
-		buttons := func() {
-			kit.IconButton(c, kit.IconButtonOpts{Icon: "folder", Label: LabelProjectsOpen, Small: true, OnClick: l.OnProjects})
-			kit.IconButton(c, kit.IconButtonOpts{Icon: "plus", Label: LabelProjectsNew, Small: true, OnClick: l.OnNew})
-		}
 		if l.compact {
 			// An icon column (D128): no section names or problem line; the
 			// project buttons stay, one above the other. Same order (D154).
 			ui.Column(c).FillWidth().Shrink(0).AlignItems(ui.Center).Gap(theme.Space2).
-				Padding(theme.Space6, 0, theme.Space6, 0).Children(buttons)
+				Padding(theme.Space6, 0, theme.Space6, 0).Children(func() {
+				kit.IconButton(c, kit.IconButtonOpts{Icon: "folder", Label: LabelProjectsOpen, Small: true, OnClick: l.OnProjects})
+				kit.IconButton(c, kit.IconButtonOpts{Icon: "plus", Label: LabelProjectsNew, Small: true, OnClick: l.OnNew})
+			})
 			l.projectList(c)
 			l.serverRow(c)
 			l.settingsFoot(c)
@@ -89,13 +90,27 @@ func (l *SpacesList) View(c *ui.Context) {
 		}
 		// Projects take the free height and scroll; Servers and Settings stay
 		// at the bottom (D154).
-		l.head(c, LabelProjectsHead, buttons)
+		// One `+` button; its menu has the two actions (#436).
+		l.head(c, LabelProjectsHead, func() {
+			kit.IconButton(c, kit.IconButtonOpts{Icon: "plus", Label: LabelProjectsAdd, Small: true, Menu: l.addMenu})
+		})
 		l.projectList(c)
 		l.head(c, LabelServersHead, nil)
 		l.serverRow(c)
 		l.coreLine(c)
 		l.settingsFoot(c)
 	})
+}
+
+// addMenu is the menu of the `+` button of the Projects head: a new
+// orchestrator, or the projects modal.
+func (l *SpacesList) addMenu(m *ui.Menu) {
+	if m.Item(LabelProjectsNew).Chosen() && l.OnNew != nil {
+		l.OnNew()
+	}
+	if m.Item(LabelProjectsOpen).Chosen() && l.OnProjects != nil {
+		l.OnProjects()
+	}
 }
 
 // settingsFoot is the Settings button at the bottom left of the sidebar, and at the bottom of
@@ -105,13 +120,20 @@ func (l *SpacesList) settingsFoot(c *ui.Context) {
 	if ready {
 		label = LabelSettingsUpdate
 	}
-	row := ui.Row(c).FillWidth().Shrink(0).AlignItems(ui.Center).Padding(theme.Space6, theme.Space10, theme.Space6, theme.Space10)
+	// A thin divider above (the row's top border, inset 10); the button at the
+	// right (the icon column centers it).
+	p := theme.Current()
+	row := ui.Row(c).FillWidth().Shrink(0).AlignItems(ui.Center).Justify(ui.End).
+		Padding(theme.Space6, 0, theme.Space6, 0).BorderWidth(1, 0, 0, 0).BorderColor(p.Hairline)
 	if l.compact {
 		row = row.Justify(ui.Center)
 	}
-	row.Children(func() {
-		kit.IconButton(c, kit.IconButtonOpts{Icon: "settings", Label: label, Small: true, Dot: ready,
-			Key: "⌘,", OnClick: l.OnSettings})
+	// The wrapper insets the divider; a margin on a full-width row would overflow.
+	ui.Column(c).FillWidth().Shrink(0).Padding(theme.Space6, theme.Space10, 0, theme.Space10).Children(func() {
+		row.Children(func() {
+			kit.IconButton(c, kit.IconButtonOpts{Icon: "settings", Label: label, Small: true, Dot: ready,
+				Key: "⌘,", OnClick: l.OnSettings})
+		})
 	})
 }
 
@@ -127,10 +149,12 @@ func (l *SpacesList) head(c *ui.Context, name string, buttons func()) {
 	})
 }
 
-// rowIcon is a 15px line icon, drawn in the text color of the row.
-func rowIcon(c *ui.Context, name string) {
+// rowIcon is a 15px line icon in the given ink. The color is set here: a
+// selected ButtonBase gives its content the accent's text color, which is
+// almost invisible on a flat row (the This Mac icon, #436).
+func rowIcon(c *ui.Context, name string, ink ui.Color) {
 	if s := icons.Line(name); s != nil {
-		ui.Icon(c, s).Size(15, 15).Shrink(0)
+		ui.Icon(c, s).Size(15, 15).Shrink(0).TextColor(ink)
 	}
 }
 
@@ -139,7 +163,7 @@ func rowIcon(c *ui.Context, name string) {
 func (l *SpacesList) serverRow(c *ui.Context) {
 	kit.Row(c, kit.RowOpts{
 		Flat: true, Label: ServerLabel(l.online), Text: "This Mac", Meta: l.ServerMeta(), Selected: true,
-		Lead: func() { rowIcon(c, "computer") }, Compact: l.compact, Tip: "This Mac",
+		Lead: func() { rowIcon(c, "computer", theme.Current().Ink100) }, Compact: l.compact, Tip: "This Mac",
 	})
 }
 
@@ -186,21 +210,22 @@ func (l *SpacesList) projectList(c *ui.Context) {
 			l.agentRow(c, *a)
 			return
 		}
-		l.projectRow(c, l.groups[items[i].group])
+		l.projectRow(c, l.groups[items[i].group], items[i].group)
 	}).Label(LabelProjectList).Focusable().FillWidth().Grow(1).MinHeight(0)
 }
 
-// projectRow is one ProjectRow. An empty project (D116) has a dim name, the
+// projectRow is one ProjectRow; index is its place among the projects. An empty project (D116) has a dim name, the
 // meta "nothing open" and a `+` that starts an orchestrator in its folder.
-func (l *SpacesList) projectRow(c *ui.Context, g spaces.RepoGroup) {
+func (l *SpacesList) projectRow(c *ui.Context, g spaces.RepoGroup, index int) {
 	p := theme.Current()
 	open := !l.Folded(g.CommonDir)
 	o := kit.RowOpts{
 		Flat: true, Label: ProjectLabel(g), Text: g.Name, Meta: projectMeta(g),
-		NameInk: p.Ink85, MetaInk: p.Ink26, NameStyle: theme.StyleBodyStrong,
+		NameInk: p.Ink85, MetaInk: p.Ink26, NameStyle: theme.StyleBody,
 		Expanded: &open, OnClick: func() { l.Activate(g) },
-		Lead: func() { rowIcon(c, "project") }, Compact: l.compact, Tip: g.Name,
+		Compact: l.compact, Tip: g.Name,
 	}
+	iconInk := p.Ink85
 	if l.selection != nil {
 		if sel, ok := l.selection.Current(); ok {
 			// An open project shows the selection on the agent row; the project
@@ -208,17 +233,25 @@ func (l *SpacesList) projectRow(c *ui.Context, g spaces.RepoGroup) {
 			o.Selected = l.itemSelected(sideItem{group: l.groupIndex(g)}, sel)
 		}
 	}
+	if o.Selected {
+		iconInk = p.Ink100
+	}
 	if g.Path != "" {
-		o.NameInk = p.Ink42
-		// The icon column has no room for the `+` (D128).
-		o.Trail = func() {
-			kit.IconButton(c, kit.IconButtonOpts{Icon: "plus", Label: LabelNewIn(g), Small: true,
-				OnClick: func() {
-					if l.OnNewIn != nil {
-						l.OnNewIn(g.Path)
-					}
-				}})
+		// An empty project is dim: name and icon ink-42, no `+` (#436). The
+		// start of an orchestrator in its folder (D116) is in the row's menu.
+		o.NameInk, iconInk = p.Ink42, p.Ink42
+		o.Menu = func(m *ui.Menu) {
+			if m.Item(LabelNewIn(g)).Chosen() && l.OnNewIn != nil {
+				l.OnNewIn(g.Path)
+			}
 		}
 	}
-	kit.Row(c, o)
+	o.Lead = func() { rowIcon(c, "folder", iconInk) }
+	if index == 0 {
+		kit.Row(c, o)
+		return
+	}
+	// Air between project groups (#436): the list sizes a row from its own
+	// box, so the space is the padding of a wrapper, not a margin of the row.
+	ui.Column(c).FillWidth().Padding(theme.Space12, 0, 0, 0).Children(func() { kit.Row(c, o) })
 }

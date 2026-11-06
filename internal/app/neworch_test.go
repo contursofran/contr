@@ -35,7 +35,7 @@ func newOrch(t *testing.T) *newOrchHarness {
 
 func TestPlusNewPicksAFolderAndSpawns(t *testing.T) {
 	n := newOrch(t)
-	if err := n.h.tt.Click(LabelProjectsNew); err != nil {
+	if err := addItem(n.h.tt, LabelProjectsNew); err != nil {
 		t.Fatal(err)
 	}
 	if n.picked != 1 || len(n.spawn) != 1 || n.spawn[0] != "/work/proj" {
@@ -49,7 +49,7 @@ func TestPlusNewPicksAFolderAndSpawns(t *testing.T) {
 func TestPlusNewCancelledPickerSpawnsNothing(t *testing.T) {
 	n := newOrch(t)
 	n.pickFn = func() (string, error) { return "", ErrPickCancelled }
-	if err := n.h.tt.Click(LabelProjectsNew); err != nil {
+	if err := addItem(n.h.tt, LabelProjectsNew); err != nil {
 		t.Fatal(err)
 	}
 	if n.picked != 1 || len(n.spawn) != 0 || len(n.status) != 0 {
@@ -60,7 +60,7 @@ func TestPlusNewCancelledPickerSpawnsNothing(t *testing.T) {
 func TestPlusNewShowsASpawnError(t *testing.T) {
 	n := newOrch(t)
 	n.spawnE = errors.New(`no "orchestrator" profile in agents.json`)
-	if err := n.h.tt.Click(LabelProjectsNew); err != nil {
+	if err := addItem(n.h.tt, LabelProjectsNew); err != nil {
 		t.Fatal(err)
 	}
 	if len(n.status) != 1 || !strings.Contains(n.status[0], "agents.json") {
@@ -71,7 +71,7 @@ func TestPlusNewShowsASpawnError(t *testing.T) {
 func TestPlusNewShowsAPickerError(t *testing.T) {
 	n := newOrch(t)
 	n.pickFn = func() (string, error) { return "", errors.New("dialog failed") }
-	_ = n.h.tt.Click(LabelProjectsNew)
+	_ = addItem(n.h.tt, LabelProjectsNew)
 	if len(n.spawn) != 0 || len(n.status) != 1 || !strings.Contains(n.status[0], "dialog failed") {
 		t.Errorf("spawn %q, status %q", n.spawn, n.status)
 	}
@@ -81,13 +81,13 @@ func TestPlusNewIgnoresAClickWhileOneRuns(t *testing.T) {
 	n := newOrch(t)
 	var queued []func()
 	n.no.Run = Runner{Go: func(f func()) { queued = append(queued, f) }}
-	_ = n.h.tt.Click(LabelProjectsNew)
-	_ = n.h.tt.Click(LabelProjectsNew)
+	_ = addItem(n.h.tt, LabelProjectsNew)
+	_ = addItem(n.h.tt, LabelProjectsNew)
 	if len(queued) != 1 {
 		t.Fatalf("queued %d, want 1", len(queued))
 	}
 	queued[0]()
-	_ = n.h.tt.Click(LabelProjectsNew)
+	_ = addItem(n.h.tt, LabelProjectsNew)
 	if len(queued) != 2 {
 		t.Errorf("after it ends a click starts again; queued %d", len(queued))
 	}
@@ -97,7 +97,7 @@ func TestPlusNewRunsOffTheCallingThread(t *testing.T) {
 	n := newOrch(t)
 	var queued []func()
 	n.no.Run = Runner{Go: func(f func()) { queued = append(queued, f) }}
-	_ = n.h.tt.Click(LabelProjectsNew)
+	_ = addItem(n.h.tt, LabelProjectsNew)
 	if n.picked != 0 {
 		t.Error("the picker must not run in the click handler")
 	}

@@ -1,6 +1,8 @@
 package app
 
 import (
+	"github.com/egoist/mygo/ui"
+
 	"context"
 	"errors"
 	"os"
@@ -46,15 +48,15 @@ func TestServerRowShowsCPUAndMemory(t *testing.T) {
 	}
 }
 
-func TestSettingsButtonIsAtTheBottomLeft(t *testing.T) {
+func TestSettingsButtonIsAtTheBottomRight(t *testing.T) {
 	h := newSpaces(t, spTree())
 	h.tt.Frame()
 	b, side := box(t, h.tt, LabelSettingsOpen), box(t, h.tt, LabelProjectList)
+	if win := box(t, h.tt, LabelServersHead+" header"); b.X+b.W < win.X+win.W-24 {
+		t.Errorf("Settings ends at x %v, not at the right edge %v", b.X+b.W, win.X+win.W)
+	}
 	if b.Y < side.Y+side.H-1 {
 		t.Errorf("Settings at y %v, above the end of the project list %v", b.Y, side.Y+side.H)
-	}
-	if b.X > 24 {
-		t.Errorf("Settings at x %v, not at the left", b.X)
 	}
 	head := box(t, h.tt, LabelServersHead+" header")
 	if b.Y < head.Y+head.H {
@@ -100,10 +102,13 @@ func TestSettingsButtonNamesAnUpdateThatWaits(t *testing.T) {
 func TestServerRowHasNoPlusUntilRemoteServers(t *testing.T) {
 	h := newSpaces(t, spTree())
 	h.tt.Frame()
-	// The only icon buttons are the two of the Projects head.
+	// The only icon button of the Projects head is the `+` (#436).
+	if !h.has(LabelProjectsAdd) {
+		t.Errorf("no %q button", LabelProjectsAdd)
+	}
 	for _, label := range []string{LabelProjectsOpen, LabelProjectsNew} {
-		if !h.has(label) {
-			t.Errorf("no %q button", label)
+		if h.has(label) {
+			t.Errorf("a %q button shows in the head, not in the + menu", label)
 		}
 	}
 	if h.has("Add server") {
@@ -284,7 +289,7 @@ func TestAClickOnTheSelectedProjectFoldsAndOpensIt(t *testing.T) {
 	}
 }
 
-func TestPlusNewOfAnEmptyProjectStartsAnOrchestratorThere(t *testing.T) {
+func TestEmptyProjectMenuStartsAnOrchestratorThere(t *testing.T) {
 	h, _ := twoRepos(t)
 	s := &projects.Store{}
 	s.AddFolder("/proj/gamma/.git", "/proj/gamma")
@@ -292,7 +297,13 @@ func TestPlusNewOfAnEmptyProjectStartsAnOrchestratorThere(t *testing.T) {
 	var started []string
 	h.list.OnNewIn = func(dir string) { started = append(started, dir) }
 	h.tt.Frame()
-	if err := h.tt.Click(LabelNewIn(spaces.RepoGroup{Name: "gamma"})); err != nil {
+	if _, ok := h.tt.Find(LabelNewIn(spaces.RepoGroup{Name: "gamma"})); ok {
+		t.Fatal("an empty project row shows a + button")
+	}
+	if err := h.tt.RightClick("gamma, nothing open"); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.tt.ChooseMenuItem(LabelNewIn(spaces.RepoGroup{Name: "gamma"})); err != nil {
 		t.Fatal(err)
 	}
 	if !slices.Equal(started, []string{"/proj/gamma"}) {
@@ -300,14 +311,18 @@ func TestPlusNewOfAnEmptyProjectStartsAnOrchestratorThere(t *testing.T) {
 	}
 }
 
-func TestTheProjectsHeadButtonsRunTheirActions(t *testing.T) {
+func TestThePlusMenuRunsItsActions(t *testing.T) {
 	h := newSpaces(t, spTree())
 	var opened, created int
 	h.list.OnProjects = func() { opened++ }
 	h.list.OnNew = func() { created++ }
 	h.tt.Frame()
-	h.tt.Click(LabelProjectsOpen)
-	h.tt.Click(LabelProjectsNew)
+	if err := addItem(h.tt, LabelProjectsOpen); err != nil {
+		t.Fatal(err)
+	}
+	if err := addItem(h.tt, LabelProjectsNew); err != nil {
+		t.Fatal(err)
+	}
 	if opened != 1 || created != 1 {
 		t.Errorf("opened %d, created %d", opened, created)
 	}
@@ -497,4 +512,12 @@ func TestALongProjectListScrollsAndServersStayInView(t *testing.T) {
 	if row.Y < list.Y+list.H-1 {
 		t.Errorf("Servers row %v overlaps the list %v", row, list)
 	}
+}
+
+// addItem opens the `+` menu of the Projects head and chooses an item (#436).
+func addItem(tt *ui.Tester, item string) error {
+	if err := tt.Click(LabelProjectsAdd); err != nil {
+		return err
+	}
+	return tt.Click(item)
 }
