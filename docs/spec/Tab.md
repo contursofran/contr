@@ -21,7 +21,7 @@ Design system page: component Tab. Shared rules: [README.md](README.md).
 
 - **Default:** no fill, title `ink-50`.
 - **Hover:** fill `hover`.
-- **Selected:** a pill: fill `selected`, ring `shadow-selected`, title `ink-100`, close button shows (plain terminal only, D85).
+- **Selected:** a pill: fill `panel` (the same fill as the panels, with the owner's Settings tint, D175), ring `shadow-selected`, title `ink-100`, close button shows (plain terminal only, D85).
 - **Close hover:** fill `press`, icon `ink-100`.
 - **Blocked agent:** the glyph turns `blocked`; the tab is not otherwise colored.
 
@@ -50,7 +50,7 @@ Design system page: component Tab. Shared rules: [README.md](README.md).
 
 ## Edge cases
 
-- A title longer than 180px: ellipsis.
+- A title longer than the room in a 180px tab: it is cut and ends in "…" (D175); the tooltip holds the whole title.
 - The terminal ends: the tab closes (D112).
 
 ## Accessibility
@@ -59,11 +59,11 @@ Design system page: component Tab. Shared rules: [README.md](README.md).
 
 ## Tokens
 
-`selected`, `shadow-selected`, `hover`, `press`, `ink-100`, `ink-50`, `ink-45`, `row-height`, `radius-8`, `radius-4`, `space-8`, `space-2`, `tab-max-width`.
+`panel`, `shadow-selected`, `hover`, `press`, `ink-100`, `ink-50`, `ink-45`, `row-height`, `radius-8`, `radius-4`, `space-8`, `space-2`, `tab-max-width`.
 
 ## Build in MyGo
 
-- `TabsBase` with a custom tab view. The title is `Text(...).NoWrap().Ellipsis()`.
+- `TabsBase` with a custom tab view. The title is `Text(...).SingleLine()` (D175: `NoWrap().Ellipsis()` does not cut a title wider than its tab, it runs over the close button).
 - Close button: `ButtonBase` with the `close` icon, label "Close tab".
 - Middle-click (`HandleInput`, button 2) and ⌘W close the tab. Reorder with `Drag` and `Drop` on the tab.
 - Context menu (`.ContextMenu(...)`): Close, Close others. Rename waits for an hc name call (D142).

@@ -3,8 +3,11 @@ package app
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/agents"
@@ -258,6 +261,119 @@ func TestATabTitleLongerThanTheMaxWidthIsCut(t *testing.T) {
 	b := newBar(t, []Tab{{Address: "t", Title: long, Plain: true, Selected: true}}, true)
 	if w := b.rect(t, long).W; w > theme.SizeTabMaxWidth {
 		t.Errorf("tab is %v wide, want at most %d", w, theme.SizeTabMaxWidth)
+	}
+}
+
+// stripOf copies the pixels of the bar between x0 and x1 on the tab's middle rows.
+func stripOf(b *barTest, x0, x1 float32) []ui.Color {
+	img := b.tt.Image()
+	var out []ui.Color
+	for y := 8; y < 32; y++ {
+		for x := int(x0); x < int(x1); x++ {
+			out = append(out, rgb(img, float32(x), float32(y)))
+		}
+	}
+	return out
+}
+
+// A long title ends in an ellipsis inside the tab, and the close button stays in view (#448, D175).
+// The shown title and the close button look as in a tab with the literal text "start…".
+func TestALongTitleEndsInAnEllipsisInsideTheTab(t *testing.T) {
+	long := "Herdr worker orchestrator with a very long title"
+	b := newBar(t, []Tab{{Address: "t", Title: long, Plain: true, Selected: true}}, true)
+	b.tt.Frame()
+	tab := b.rect(t, long)
+	closeBox := b.rect(t, LabelCloseTab)
+	if closeBox.X+closeBox.W > tab.X+tab.W {
+		t.Errorf("close button %+v sticks out of the tab %+v", closeBox, tab)
+	}
+	if tab.W > theme.SizeTabMaxWidth {
+		t.Errorf("tab is %v wide, want at most %d", tab.W, theme.SizeTabMaxWidth)
+	}
+	// Overflow check: the gap before the close button is bare.
+	limit := closeBox.X - theme.Space8
+	gap := stripOf(b, limit, closeBox.X)
+	for _, c := range gap {
+		if c != gap[0] {
+			t.Fatal("the title runs into the gap before the close button")
+		}
+	}
+	// The cut ends in an ellipsis: the ink in the last 10 px of the title is dots on the baseline,
+	// none above the middle of the line.
+	img := b.tt.Image()
+	fill := rgb(img, limit, 6)
+	dots := 0
+	for y := 8; y < 32; y++ {
+		for x := limit - 10; x < limit; x++ {
+			if c := rgb(img, x, float32(y)); !near(c, fill, 24) {
+				dots++
+				if y < 19 {
+					t.Fatalf("ink at row %d near the end of the title: a letter was cut, not an ellipsis", y)
+				}
+			}
+		}
+	}
+	if dots == 0 {
+		t.Error("no ellipsis dots at the end of the title")
+	}
+}
+
+func TestATabTitleThatFitsHasNoEllipsis(t *testing.T) {
+	b := newBar(t, []Tab{{Address: "t", Title: "zsh", Plain: true, Selected: true}}, true)
+	for _, s := range b.tt.Texts() {
+		if strings.HasSuffix(s, "…") {
+			t.Errorf("text %q has an ellipsis", s)
+		}
+	}
+}
+
+func TestTheTabTooltipHoldsTheFullTitle(t *testing.T) {
+	long := "Herdr worker orchestrator with a very long title"
+	count := func(b *barTest) (n int) {
+		for _, s := range b.tt.Texts() {
+			if strings.Contains(s, long) {
+				n++
+			}
+		}
+		return n
+	}
+	for name, tip := range map[string]string{"no tip": "", "tip with a name": "w"} {
+		b := newBar(t, []Tab{{Address: "t", Title: long, Tip: tip, Plain: true, Selected: true}}, true)
+		before := count(b)
+		r := b.rect(t, long)
+		b.tt.Move(r.X+r.W/2, r.Y+r.H/2)
+		b.tt.Advance(time.Second)
+		if count(b) != before+1 {
+			t.Errorf("%s: no tooltip with the full title; texts %q", name, b.tt.Texts())
+		}
+	}
+	if got := tabTooltip(Tab{Title: "a", Tip: "w"}); got != "a · w" {
+		t.Errorf("tooltip %q, want %q", got, "a · w")
+	}
+	if got := tabTooltip(Tab{Title: "a", Tip: "a · t1"}); got != "a · t1" {
+		t.Errorf("tooltip %q, want the tip as given", got)
+	}
+}
+
+// The selected tab has the panel fill, as the owner tuned it with the Settings sliders (#448, D175).
+func TestTheSelectedTabHasThePanelFillAndFollowsTheSliders(t *testing.T) {
+	for _, tc := range themeCases {
+		themetest.Use(t, tc.src)
+		for _, a := range []float64{-1, 0.3} { // -1: no override
+			theme.ClearTints()
+			if a >= 0 {
+				theme.SetTint(tc.src == mygo.ThemeDark, nil, &a)
+			}
+			t.Cleanup(theme.ClearTints)
+			b := newBar(t, tabsOf(), true)
+			b.tt.Frame()
+			sel := b.rect(t, "lead")
+			got := rgb(b.tt.Image(), sel.X+sel.W-3, sel.Y+sel.H/2)
+			want := theme.Over(theme.Current().Panel, tc.pal.Ground)
+			if !near(got, want, 10) {
+				t.Errorf("%s panel alpha %v: selected tab %v, want the panel fill %v", tc.name, a, got, want)
+			}
+		}
 	}
 }
 
@@ -534,8 +650,8 @@ func TestTheSelectedTabIsAPillInBothThemes(t *testing.T) {
 		// A point at the right edge inside the tab, clear of the glyph and the title.
 		at := func(r ui.Rect) ui.Color { return rgb(img, r.X+r.W-3, r.Y+r.H/2) }
 		ground := tc.pal.Ground
-		if want := theme.Over(tc.pal.Selected, ground); !near(at(sel), want, 14) {
-			t.Errorf("%s: selected tab %v, want the selected fill %v", tc.name, at(sel), want)
+		if want := theme.Over(theme.Current().Panel, ground); !near(at(sel), want, 14) {
+			t.Errorf("%s: selected tab %v, want the panel fill %v", tc.name, at(sel), want)
 		}
 		if !near(at(other), ground, 3) {
 			t.Errorf("%s: tab that is not selected %v, want the bare ground %v", tc.name, at(other), ground)
