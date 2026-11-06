@@ -356,7 +356,13 @@ func TestInputBeforeTheFirstAttachIsHeld(t *testing.T) {
 	if _, err := c.Write([]byte("ls")); err != nil { // starts the attach, as a size does
 		t.Fatal(err)
 	}
-	if got := src.stream(t, 0).wrote(); got != "ls" {
+	// The stream exists before run writes the held input to it.
+	s := src.stream(t, 0)
+	deadline := time.Now().Add(2 * time.Second)
+	for s.wrote() != "ls" && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if got := s.wrote(); got != "ls" {
 		t.Errorf("the stream got %q, want ls", got)
 	}
 }
