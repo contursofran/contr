@@ -41,6 +41,7 @@ const agentsUsage = `Usage:
   contr agents read <name> [--lines N]             print the screen and history
   contr agents prompt <name>                       print the menu a blocked worker waits on, or "no prompt"
   contr agents watch                               print the list as JSON on each change
+  contr agents flow                                print the flow: how the orchestrator takes an issue to a merge
 
 Flags can come before or after the other arguments. After --, every word is
 part of the task.
@@ -48,7 +49,9 @@ part of the task.
 Environment:
   CONTR_AGENTS_CONFIG   profiles file (default: the user config folder, contr/agents.json):
                         {"kit": DIR, "profiles": {NAME: {"argv": [...], "agent": KIT_AGENT}},
-                         "setup": {MAIN_CHECKOUT: SHELL_COMMAND}}
+                         "setup": {MAIN_CHECKOUT: SHELL_COMMAND},
+                         "flow": {"plan": "never|when-needed|always", "review": "none|code|every",
+                                  "debugger_after": N, "workers": N, "merge": "ask|auto"}}
                         setup runs in a new worktree of that main checkout before the
                         agent starts, with CONTR_MAIN set to the main checkout
   CONTR_HC              the hc program (default: hc from PATH, then ~/.local/bin, /opt/homebrew/bin, /usr/local/bin)
@@ -70,6 +73,16 @@ func dialAgents(ctx context.Context, getenv func(string) string) (agentsCore, er
 		return nil, err
 	}
 	return agents.HC{Client: cl}, nil
+}
+
+// flowText is the flow block of the profiles file, or the default flow with
+// the error when the file cannot be read.
+func flowText(getenv func(string) string) string {
+	cfg, err := agents.LoadConfig(configPath(getenv))
+	if err != nil {
+		return fmt.Sprintf("The flow could not be read (%v); the default flow follows.\n", err) + agents.DefaultFlow().Text()
+	}
+	return cfg.Flow.Text()
 }
 
 // configPath is the profiles file.
@@ -94,7 +107,23 @@ func runAgents(args []string, stdout, stderr io.Writer, dial func(context.Contex
 			w, code = stderr, 2
 		}
 		_, _ = io.WriteString(w, agentsUsage)
+		if code == 0 {
+			_, _ = io.WriteString(w, "\n"+flowText(getenv))
+		}
 		return code
+	}
+	if args[0] == "flow" {
+		if len(args) > 1 {
+			fmt.Fprintf(stderr, "contr agents flow: takes no arguments\n")
+			return 2
+		}
+		cfg, err := agents.LoadConfig(configPath(getenv))
+		if err != nil {
+			fmt.Fprintf(stderr, "contr agents: %v\n", err)
+			return 1
+		}
+		_, _ = io.WriteString(stdout, cfg.Flow.Text())
+		return 0
 	}
 	sub, rest := args[0], args[1:]
 	fs := flag.NewFlagSet("contr agents "+sub, flag.ContinueOnError)

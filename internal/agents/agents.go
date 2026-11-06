@@ -90,6 +90,8 @@ type Config struct {
 	Profiles map[string]Profile `json:"profiles"`
 	Kit      string             `json:"kit,omitempty"`
 	Setup    map[string]string  `json:"setup,omitempty"`
+	// Flow is how the orchestrator takes an issue to a merge (D177).
+	Flow Flow `json:"flow"`
 }
 
 // EnvCoordinator holds the address of the terminal that started a worker, so
@@ -101,7 +103,7 @@ func DefaultConfig() Config {
 	claude := func(model, effort string) Profile {
 		return Profile{Argv: []string{"claude", "--model", model, "--effort", effort, "--permission-mode", "auto"}}
 	}
-	return Config{Profiles: map[string]Profile{
+	return Config{Flow: DefaultFlow(), Profiles: map[string]Profile{
 		"builder":  claude("sonnet", "medium"),
 		"planner":  claude("opus", "low"),
 		"reviewer": claude("opus", "low"),
@@ -129,7 +131,8 @@ func modelFromArgv(argv []string) string {
 }
 
 // LoadConfig reads a JSON config file over the defaults: a profile in the file
-// replaces the default of the same name. A missing file gives the defaults.
+// replaces the default of the same name, and a flow key missing from the
+// file's flow keeps its default. A missing file gives the defaults.
 func LoadConfig(path string) (Config, error) {
 	cfg := DefaultConfig()
 	data, err := os.ReadFile(path)
@@ -139,7 +142,7 @@ func LoadConfig(path string) (Config, error) {
 	if err != nil {
 		return cfg, err
 	}
-	var file Config
+	file := Config{Flow: DefaultFlow()}
 	if err := json.Unmarshal(data, &file); err != nil {
 		return cfg, fmt.Errorf("agents: %s: %w", path, err)
 	}
@@ -147,6 +150,10 @@ func LoadConfig(path string) (Config, error) {
 		cfg.Kit = file.Kit
 	}
 	cfg.Setup = file.Setup
+	if err := file.Flow.Validate(); err != nil {
+		return cfg, fmt.Errorf("agents: %s: %w", path, err)
+	}
+	cfg.Flow = file.Flow
 	for name, p := range file.Profiles {
 		if len(p.Argv) == 0 {
 			return cfg, fmt.Errorf("agents: %s: profile %q has no argv", path, name)
