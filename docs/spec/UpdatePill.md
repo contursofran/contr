@@ -29,7 +29,7 @@ Shared rules: [README.md](README.md). Design: boards 8 and 9 of the from-zero ca
 
 ## Behavior
 
-- The scheduled check installs a newer version in the background, without a relaunch.
+- The scheduled check (every 15 minutes on the wall clock, and when the app becomes active after 10 minutes; D198) installs a newer version in the background, without a relaunch.
 - A click on the pill opens or closes the panel. A press outside or Escape closes it.
 - `Restart now` (panel, toast, Settings) calls `Settings.Relaunch`. `Later` closes the panel or
   the toast.
