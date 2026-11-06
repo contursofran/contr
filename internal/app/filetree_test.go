@@ -493,3 +493,63 @@ func TestFramePanelStaysTheFileTreeWhateverIsSelected(t *testing.T) {
 		}
 	}
 }
+
+// The files panel head shows the project name; the panel stays "Files" for
+// the screen reader (docs/spec/FileTree.md, Anatomy).
+func TestFilesPanelHeadShowsTheProjectName(t *testing.T) {
+	f, tt := newTester(t)
+	f.Files.Start = func(fn func()) { fn() }
+	f.Files.Watch = func(string, func()) (func(), error) { return func() {}, nil }
+	f.openProject = "contr"
+	tt.Frame()
+	box(t, tt, "contr name")
+	if !absent(tt, LabelPanelFiles+" name") {
+		t.Errorf("the head still says Files: %q", tt.Texts())
+	}
+	box(t, tt, LabelPanelFiles) // the group keeps its name
+}
+
+// Without a title the head shows the panel name.
+func TestPanelTitleFallsBackToName(t *testing.T) {
+	tt := ui.NewTester(func(c *ui.Context) {
+		theme.Apply(c)
+		kit.Panel(c, kit.PanelOpts{Name: "Files", Body: func() {}})
+	}, 300, 200)
+	tt.Frame()
+	if !slices.Contains(tt.Texts(), "Files name") {
+		t.Errorf("no head text: %q", tt.Texts())
+	}
+}
+
+// The tree draws no disclosure arrow: its color is clear, and the hover fill
+// is the token's.
+func TestTreeThemeHidesTheArrow(t *testing.T) {
+	base := ui.DarkTheme()
+	got := treeTheme(base)
+	if got.TextMuted != ui.Transparent {
+		t.Error("the arrow color is not clear")
+	}
+	if got.SurfaceHover != theme.Current().Hover {
+		t.Error("the hover fill is not the hover token")
+	}
+	if base.TextMuted == ui.Transparent {
+		t.Error("treeTheme changed the window theme")
+	}
+}
+
+// Folders show a closed or open folder icon; Go and Markdown files their own.
+func TestFileIconByKind(t *testing.T) {
+	for _, c := range []struct {
+		name      string
+		dir, open bool
+		want      string
+	}{
+		{"src", true, false, "folder"}, {"src", true, true, "folder-open"},
+		{"main.go", false, false, "file-go"}, {"A.MD", false, false, "file-md"},
+		{"go.mod", false, false, "file"}, {"NOTICE", false, false, "file"},
+	} {
+		if got := fileIcon(c.name, c.dir, c.open); got != c.want {
+			t.Errorf("fileIcon(%q, %v, %v) = %q, want %q", c.name, c.dir, c.open, got, c.want)
+		}
+	}
+}

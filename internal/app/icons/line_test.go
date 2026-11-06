@@ -78,3 +78,18 @@ func TestLineIconsAreLineDrawings(t *testing.T) {
 		}
 	}
 }
+
+// The filter icon is the mock's three lines, not a funnel: it has no closed
+// outline.
+func TestFilterIconIsLines(t *testing.T) {
+	b, err := fs.ReadFile(assets.Icons, "icons/filter.svg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.ContainsAny(string(b), "Zz") {
+		t.Error("the filter icon has a closed outline (a funnel)")
+	}
+	if strings.Count(string(b), "M") != 3 {
+		t.Errorf("the filter icon is not three lines: %s", b)
+	}
+}

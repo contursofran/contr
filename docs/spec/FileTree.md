@@ -12,6 +12,7 @@ Design system page: component FileTree. Shared rules: [README.md](README.md).
 
 | Part | Value |
 |---|---|
+| Head | the project name (`contr`), not "Files"; the filter button at the right uses the `filter` icon: three lines, long to short |
 | Row | height `file-row-height` (26px), padding `0 8px`, gap `space-7`, radius `radius-6` |
 | Icon | `folder`, `folder-open`, `file-go`, `file-md`, `file` at 15px, `ink-38` |
 | Name | `row-small` (12.5px), `ink-50`; ellipsis |
@@ -71,9 +72,11 @@ Design system page: component FileTree. Shared rules: [README.md](README.md).
 
 - `ui.Tree` with `TreeItem`s (the row is a `TreeItem` with an empty label;
   the icon, name and counts are added to it, and the guides are drawn over
-  it). MyGo's disclosure arrow stays in front of the icon, and the hover
-  fill is MyGo's `SurfaceHover` (`hover-strong`), not `hover`: `TreeItem`
-  gives no way to change either. It gives the keys (← → open and close, ↑ ↓ move) and the screen-reader roles.
+  it). The mock has no disclosure arrow: a folder shows `folder` or
+  `folder-open`. `TreeItem` always builds an arrow, so the tree sits in
+  `ui.Themed` with `TextMuted` clear (the arrow is not seen) and
+  `SurfaceHover` set to `hover`, and the row takes back the room of the
+  arrow with a negative start margin (D170). It gives the keys (← → open and close, ↑ ↓ move) and the screen-reader roles.
 - Counts: `kit.Counts`.
 - Data: `internal/review` on a goroutine; `mygo.WatchFiles` triggers a new read.
 - Click opens the file in the Review view; ⌘-click reveals it in Finder.
