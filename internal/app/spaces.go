@@ -71,6 +71,12 @@ type SpacesList struct {
 	Entry WorkerEntry
 	// ModelOf names the model of an agent profile for line 2. Nil: none.
 	ModelOf func(profile string) string
+	// StatusModel gives the model that Claude Code's status line reported for
+	// the agent in hc terminal address, for an agent with no --model (D174).
+	// Nil: none.
+	StatusModel func(address string) string
+	// Titles gives the issue titles of the worker rows. Nil: none.
+	Titles *IssueTitles
 	// Ages is the one timer of all ages (D137). Nil: ages move on a state
 	// change only.
 	Ages *AgeClock
@@ -219,12 +225,17 @@ func (l *SpacesList) applyProjects(groups []spaces.RepoGroup) []spaces.RepoGroup
 		byDir[g.CommonDir] = g
 	}
 	out := make([]spaces.RepoGroup, 0, len(groups))
+	var empty []spaces.RepoGroup
 	for _, d := range l.projects.Order(dirs) {
-		if !l.projects.Hidden(d) {
-			out = append(out, byDir[d])
+		switch g := byDir[d]; {
+		case l.projects.Hidden(d):
+		case g.Path != "":
+			empty = append(empty, g) // nothing open: after the others (#443, D174)
+		default:
+			out = append(out, g)
 		}
 	}
-	return out
+	return append(out, empty...)
 }
 
 // withStored adds an empty group for each stored project that no hc terminal
@@ -472,13 +483,55 @@ func (l *SpacesList) Reorder(rows []int, to int) {
 			break
 		}
 	}
-	to = target
-	dirs := make([]string, len(l.groups))
-	for i, g := range l.groups {
-		dirs[i] = g.CommonDir
+	if target == len(l.groups) {
+		// At the end: before the empty projects, which show last.
+		for i, g := range l.groups {
+			if g.Path != "" {
+				target = i
+				break
+			}
+		}
 	}
-	l.projects.SetOrder(dirs)
-	l.projects.Move(rows, to)
+	// The stored order holds the empty projects at their own place. Move the
+	// dragged projects there, before the project they were dropped on, and
+	// not in the displayed order (D109, D174).
+	shown := make([]string, len(l.groups))
+	for i, g := range l.groups {
+		shown[i] = g.CommonDir
+	}
+	stored := l.projects.Order(shown)
+	drag := map[string]bool{}
+	var dragged []string
+	for _, r := range rows {
+		if r >= 0 && r < len(l.groups) && !drag[l.groups[r].CommonDir] {
+			drag[l.groups[r].CommonDir] = true
+		}
+	}
+	before := ""
+	if target < len(l.groups) {
+		before = l.groups[target].CommonDir
+	}
+	out := make([]string, 0, len(stored))
+	insert := func() { out = append(out, dragged...) }
+	for _, d := range stored {
+		if drag[d] {
+			dragged = append(dragged, d)
+		}
+	}
+	placed := false
+	for _, d := range stored {
+		if d == before && !placed {
+			insert()
+			placed = true
+		}
+		if !drag[d] {
+			out = append(out, d)
+		}
+	}
+	if !placed {
+		insert()
+	}
+	l.projects.SetOrder(out)
 	if l.OnReordered != nil {
 		l.OnReordered()
 		return

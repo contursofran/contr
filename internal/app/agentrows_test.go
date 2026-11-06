@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -136,15 +137,15 @@ func TestAWorkerShowsItsTaskOnLineOneAndItsNameOnLineTwo(t *testing.T) {
 	snap.Workers[0].Task = "Agent rows on ui.List"
 	h.send(snap)
 	a := agentLine{w: snap.Workers[0]}
-	if titleOf(a) != "Agent rows on ui.List" || nameOf(a) != "b-241" {
-		t.Errorf("line 1 %q, name on line 2 %q", titleOf(a), nameOf(a))
+	if titleOf(a, "") != "Agent rows on ui.List" || nameOf(a, "") != "b-241" {
+		t.Errorf("line 1 %q, name on line 2 %q", titleOf(a, ""), nameOf(a, ""))
 	}
 	title, name := box(t, h.tt, "b-241, working, 241, sonnet title"), box(t, h.tt, "b-241")
 	if name.Y <= title.Y {
 		t.Errorf("the name %+v is not under the title %+v", name, title)
 	}
-	if o := (agentLine{w: snap.Orchestrators[0], orchestrator: true}); nameOf(o) != "" || titleOf(o) != "lead" {
-		t.Errorf("orchestrator: title %q, name %q", titleOf(o), nameOf(o))
+	if o := (agentLine{w: snap.Orchestrators[0], orchestrator: true}); nameOf(o, "") != "" || titleOf(o, "") != "lead" {
+		t.Errorf("orchestrator: title %q, name %q", titleOf(o, ""), nameOf(o, ""))
 	}
 }
 
@@ -556,5 +557,34 @@ func TestAttachStartsTheWindowHiddenWithNoClock(t *testing.T) {
 	f.SpacesList.Ages.SetShown(true)
 	if f.SpacesList.Ages.Running() {
 		t.Error("the clock runs in a window that started hidden")
+	}
+}
+
+func TestADragKeepsTheStoredPlaceOfAnEmptyProject(t *testing.T) {
+	h := newRows(t)
+	alpha, beta, gamma := h.group(0).CommonDir, h.group(1).CommonDir, "/proj/gamma/.git"
+	s := &projects.Store{}
+	// Stored order: gamma (empty) first, then beta, alpha. It shows last.
+	s.AddFolder(gamma, "/proj/gamma")
+	s.SetOrder([]string{gamma, beta, alpha})
+	h.list.SetProjects(s)
+	h.list.OnReordered = func() { h.list.SetProjects(s) }
+	h.tt.Frame()
+	if got := strings.Join(groupNames(h.list.Groups()), ","); got != "beta,alpha,gamma" {
+		t.Fatalf("shown %s", got)
+	}
+	row := -1
+	for i, it := range h.list.items() {
+		if it.agent == nil && h.list.groups[it.group].CommonDir == alpha {
+			row = i
+		}
+	}
+	h.list.Reorder([]int{row}, 0)
+	got := s.Order([]string{alpha, beta, gamma})
+	if want := []string{gamma, alpha, beta}; !slices.Equal(got, want) {
+		t.Errorf("stored order %v, want %v", got, want)
+	}
+	if got := strings.Join(groupNames(h.list.Groups()), ","); got != "alpha,beta,gamma" {
+		t.Errorf("shown %s", got)
 	}
 }

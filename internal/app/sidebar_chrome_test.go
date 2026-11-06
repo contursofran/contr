@@ -38,23 +38,18 @@ func TestFirstProjectHasNoAirAbove(t *testing.T) {
 	}
 }
 
-func TestThisMacIconIsVisible(t *testing.T) {
-	h := newSpaces(t, spTree())
-	tt := h.tt
-	tt.Frame()
-	r := box(t, tt, ServerLabel(true))
-	img := tt.Image()
-	bg := pixelAt(img, r.X+2, r.Y+r.H/2)
-	best := 0
-	for y := r.Y + 6; y < r.Y+r.H-6; y++ {
-		for x := r.X + theme.Space10; x < r.X+theme.Space10+15; x++ {
-			if d := absInt(int(pixelAt(img, x, y).R) - int(bg.R)); d > best {
-				best = d
-			}
+// The This Mac icon sets its own ink: a selected row gives its content the accent text color,
+// which was nearly invisible on the flat row (#436). The ink is a token of the palette, so each
+// theme shows it.
+func TestRowIconInksAreTokens(t *testing.T) {
+	for name, p := range map[string]*theme.Palette{"dark": theme.Dark, "light": theme.Light} {
+		if serverIconInk(p) != p.Ink100 {
+			t.Errorf("%s: This Mac icon is not ink-100", name)
 		}
-	}
-	if best < 120 {
-		t.Errorf("the This Mac icon is %d above the row background, want a clear ink", best)
+		if projectIconInk(p, false, false) != p.Ink85 || projectIconInk(p, true, false) != p.Ink100 ||
+			projectIconInk(p, false, true) != p.Ink42 || projectIconInk(p, true, true) != p.Ink100 {
+			t.Errorf("%s: project icon inks are not ink-85 / ink-100 / ink-42", name)
+		}
 	}
 }
 

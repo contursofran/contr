@@ -169,13 +169,34 @@ func (l *SpacesList) modelFor(w agents.Worker) string {
 	if m := l.modelOf(w); m != "" {
 		return m
 	}
-	return w.Model
+	if w.Model != "" {
+		return w.Model
+	}
+	if l.StatusModel != nil {
+		return l.StatusModel(w.Address)
+	}
+	return ""
 }
 
-// titleOf is line 1 of an agent row. A worker shows its task (the terminal
-// title); with none usable it shows its name. An orchestrator shows its name.
-func titleOf(a agentLine) string {
-	if !a.orchestrator && a.w.Task != "" {
+// issueTitle is the title of the issue of a worker row, "" when none is known (D174).
+func (l *SpacesList) issueTitle(a agentLine) string {
+	if a.orchestrator {
+		return ""
+	}
+	return l.Titles.Title(a.w.Worktree, a.w.Issue)
+}
+
+// titleOf is line 1 of an agent row. A worker shows the title of its issue
+// (D174); with none known, its task (the terminal title); with none usable,
+// its name. An orchestrator shows its name.
+func titleOf(a agentLine, issueTitle string) string {
+	if a.orchestrator {
+		return a.w.DisplayName()
+	}
+	if issueTitle != "" {
+		return issueTitle
+	}
+	if a.w.Task != "" {
 		return a.w.Task
 	}
 	return a.w.DisplayName()
@@ -183,8 +204,8 @@ func titleOf(a agentLine) string {
 
 // nameOf is the name on line 2 of a worker row: "b-241" in "b-241  sonnet".
 // It is left out when line 1 already shows it, and for an orchestrator.
-func nameOf(a agentLine) string {
-	if a.orchestrator || titleOf(a) == a.w.DisplayName() {
+func nameOf(a agentLine, issueTitle string) string {
+	if a.orchestrator || titleOf(a, issueTitle) == a.w.DisplayName() {
 		return ""
 	}
 	return a.w.DisplayName()
@@ -222,14 +243,14 @@ func issueText(a agentLine) string {
 
 // agentRow is one AgentRow.
 func (l *SpacesList) agentRow(c *ui.Context, a agentLine) {
-	issue, model := issueText(a), l.modelFor(a.w)
+	issue, model, it := issueText(a), l.modelFor(a.w), l.issueTitle(a)
 	ci := !a.orchestrator && a.w.Live && a.w.Status != "working" && l.Entry.PRs.Waiting(a.w.Worktree)
 	label := AgentLabel(a.w, issue, model)
 	if ci {
 		label += ", waiting on CI"
 	}
 	o := kit.AgentRowOpts{
-		CI: ci, Label: label, Title: titleOf(a), Name: nameOf(a), Model: model,
+		CI: ci, Label: label, Title: titleOf(a, it), Name: nameOf(a, it), Model: model,
 		Age: agentAge(a.w, l.clock()), State: tabState(a.w), Orchestrator: a.orchestrator,
 		OnClick: func() { l.SelectAgent(a) },
 		Menu:    func(m *ui.Menu) { l.agentMenu(m, a) },
@@ -436,6 +457,13 @@ func (l *SpacesList) move(items []sideItem, d int) {
 func (l *SpacesList) open(items []sideItem) {
 	if l.cursor < 0 || l.cursor >= len(items) {
 		return
+	}
+	if it := items[l.cursor]; it.agent == nil {
+		// An empty project has no terminal to focus, and Enter starts nothing: its menu
+		// (menu key, right-click) offers the new orchestrator (#443, D174).
+		if l.groups[it.group].Path != "" {
+			return
+		}
 	}
 	l.choose(items[l.cursor])
 	if l.OnOpen != nil {

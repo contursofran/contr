@@ -158,12 +158,27 @@ func rowIcon(c *ui.Context, name string, ink ui.Color) {
 	}
 }
 
+// serverIconInk is the ink of the This Mac icon: its row is always the selected look.
+func serverIconInk(p *theme.Palette) ui.Color { return p.Ink100 }
+
+// projectIconInk is the ink of a project's folder icon: ink-100 when selected, ink-42 when the
+// project is empty, else ink-85.
+func projectIconInk(p *theme.Palette, selected, empty bool) ui.Color {
+	switch {
+	case selected:
+		return p.Ink100
+	case empty:
+		return p.Ink42
+	}
+	return p.Ink85
+}
+
 // serverRow is the This Mac row. Its `+` stays hidden until remote servers
 // have a source (#149).
 func (l *SpacesList) serverRow(c *ui.Context) {
 	kit.Row(c, kit.RowOpts{
 		Flat: true, Label: ServerLabel(l.online), Text: "This Mac", Meta: l.ServerMeta(), Selected: true,
-		Lead: func() { rowIcon(c, "computer", theme.Current().Ink100) }, Compact: l.compact, Tip: "This Mac",
+		Lead: func() { rowIcon(c, "computer", serverIconInk(theme.Current())) }, Compact: l.compact, Tip: "This Mac",
 	})
 }
 
@@ -211,7 +226,23 @@ func (l *SpacesList) projectList(c *ui.Context) {
 			return
 		}
 		l.projectRow(c, l.groups[items[i].group], items[i].group)
-	}).Label(LabelProjectList).Focusable().FillWidth().Grow(1).MinHeight(0)
+	}).Label(LabelProjectList).Focusable().FillWidth().Grow(1).MinHeight(0).ContextMenu(func(m *ui.Menu) {
+		// The menu key (or Shift+F10) with the list focused opens the menu of the empty
+		// project under the key cursor, so no right-click is needed (#443). The rows
+		// have menus of their own for the pointer; other rows give no items here.
+		if l.cursor >= 0 && l.cursor < len(items) && items[l.cursor].agent == nil {
+			if g := l.groups[items[l.cursor].group]; g.Path != "" {
+				l.emptyMenu(m, g)
+			}
+		}
+	})
+}
+
+// emptyMenu is the menu of an empty project (D116): a new orchestrator in its folder.
+func (l *SpacesList) emptyMenu(m *ui.Menu, g spaces.RepoGroup) {
+	if m.Item(LabelNewIn(g)).Chosen() && l.OnNewIn != nil {
+		l.OnNewIn(g.Path)
+	}
 }
 
 // projectRow is one ProjectRow; index is its place among the projects. An empty project (D116) has a dim name, the
@@ -225,7 +256,7 @@ func (l *SpacesList) projectRow(c *ui.Context, g spaces.RepoGroup, index int) {
 		Expanded: &open, OnClick: func() { l.Activate(g) },
 		Compact: l.compact, Tip: g.Name,
 	}
-	iconInk := p.Ink85
+	iconInk := projectIconInk(p, false, false)
 	if l.selection != nil {
 		if sel, ok := l.selection.Current(); ok {
 			// An open project shows the selection on the agent row; the project
@@ -234,17 +265,13 @@ func (l *SpacesList) projectRow(c *ui.Context, g spaces.RepoGroup, index int) {
 		}
 	}
 	if o.Selected {
-		iconInk = p.Ink100
+		iconInk = projectIconInk(p, true, false)
 	}
 	if g.Path != "" {
 		// An empty project is dim: name and icon ink-42, no `+` (#436). The
 		// start of an orchestrator in its folder (D116) is in the row's menu.
-		o.NameInk, iconInk = p.Ink42, p.Ink42
-		o.Menu = func(m *ui.Menu) {
-			if m.Item(LabelNewIn(g)).Chosen() && l.OnNewIn != nil {
-				l.OnNewIn(g.Path)
-			}
-		}
+		o.NameInk, iconInk = p.Ink42, projectIconInk(p, false, true)
+		o.Menu = func(m *ui.Menu) { l.emptyMenu(m, g) }
 	}
 	o.Lead = func() { rowIcon(c, "folder", iconInk) }
 	if index == 0 {

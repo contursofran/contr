@@ -131,10 +131,10 @@ func TestSidebarShowsStoredProjectWithoutTerminalAsEmptyGroup(t *testing.T) {
 	s.AddFolder("/proj/gamma/.git", "/proj/gamma")
 	h.list.SetProjects(s)
 	h.tt.Frame()
-	if got := strings.Join(groupNames(h.list.Groups()), ","); got != "gamma,alpha,beta" {
+	if got := strings.Join(groupNames(h.list.Groups()), ","); got != "alpha,beta,gamma" {
 		t.Fatalf("groups %s", got)
 	}
-	g := h.list.Groups()[0]
+	g := h.list.Groups()[2]
 	if g.Path != "/proj/gamma" || len(g.Rows) != 0 {
 		t.Fatalf("empty group = %+v", g)
 	}
@@ -169,13 +169,26 @@ func TestSidebarStoredProjectHiddenOrWithTerminalIsNotEmptyGroup(t *testing.T) {
 	}
 }
 
-func TestSidebarStoredProjectFollowsStoredOrder(t *testing.T) {
+func TestSidebarEmptyProjectsGoLastWhateverTheStoredOrder(t *testing.T) {
 	h, _ := twoRepos(t)
 	s := &projects.Store{}
 	s.SetOrder([]string{"/proj/gamma/.git"})
 	s.AddFolder("/proj/gamma/.git", "/proj/gamma")
 	h.list.SetProjects(s)
-	if got := strings.Join(groupNames(h.list.Groups()), ","); got != "gamma,alpha,beta" {
-		t.Errorf("groups %s", got)
+	if got := strings.Join(groupNames(h.list.Groups()), ","); got != "alpha,beta,gamma" {
+		t.Errorf("groups %s, want the empty project last", got)
+	}
+}
+
+func TestSidebarProjectsWithAgentsKeepTheDraggedOrderAroundEmptyOnes(t *testing.T) {
+	h, _ := twoRepos(t)
+	beta, alpha := h.group(1).CommonDir, h.group(0).CommonDir
+	s := &projects.Store{}
+	s.SetOrder([]string{"/proj/gamma/.git", beta, "/proj/delta/.git", alpha})
+	s.AddFolder("/proj/gamma/.git", "/proj/gamma")
+	s.AddFolder("/proj/delta/.git", "/proj/delta")
+	h.list.SetProjects(s)
+	if got := strings.Join(groupNames(h.list.Groups()), ","); got != "beta,alpha,gamma,delta" {
+		t.Errorf("groups %s, want beta,alpha then the empty ones in their order", got)
 	}
 }
