@@ -429,18 +429,18 @@ func TestTabsFollowTheSelectedAgent(t *testing.T) {
 	f, tt := agentFrame(t, &snap)
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "w1"})
 	tt.Frame()
-	if got := tabTexts(tt); !slices.Equal(got, []string{"b1", "$ repo"}) {
-		t.Fatalf("tabs %q, want b1 and the terminal", got)
+	if got := tabTexts(tt); !slices.Equal(got, []string{"lead", "b1", "$ repo"}) {
+		t.Fatalf("tabs %q, want the session, b1 and the terminal", got)
 	}
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "w3"})
 	tt.Frame()
-	if got := tabTexts(tt); !slices.Equal(got, []string{"b3", "$ repo"}) {
-		t.Fatalf("tabs %q, want b3 and the terminal", got)
+	if got := tabTexts(tt); !slices.Equal(got, []string{"lead", "b3", "$ repo"}) {
+		t.Fatalf("tabs %q, want the session, b3 and the terminal", got)
 	}
-	// A plain terminal keeps the agent whose tabs show.
+	// A plain terminal keeps the worker whose tab shows.
 	f.Selection.Select(state.Selected{Kind: state.KindTerminal, ID: "t1"})
 	tt.Frame()
-	if got := tabTexts(tt); !slices.Equal(got, []string{"b3", "$ repo"}) {
+	if got := tabTexts(tt); !slices.Equal(got, []string{"lead", "b3", "$ repo"}) {
 		t.Errorf("tabs %q after selecting the terminal, want b3 kept", got)
 	}
 	// An agent of another project shows its own project's terminals.
