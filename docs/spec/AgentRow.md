@@ -14,9 +14,10 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
 |---|---|
 | Row | orchestrator padding `7px 10px`, worker padding `5px 10px`, gap `space-10`, radius `radius-8` |
 | Leading | Claude glyph (orchestrator) or braille StatusGlyph (worker) |
-| Line 1 | title in `body`, `ink-60`; one line, ellipsis |
-| Line 2 | mono `meta` (11px), `ink-42`, items `space-10` apart: issue id, model, then the age at the right ("b-241  sonnet  6m") |
-| Kids rail | workers indent 17px with 9px padding; a 1px `rail` line on the left |
+| Line 1 | title in `body`, `ink-60`; one line, ellipsis. A worker shows its task (the terminal title); an orchestrator its name |
+| Line 2 | mono `meta` (11px), `ink-42`, items `space-10` apart: worker name, model, then the age at the right ("b-241  sonnet  6m") |
+| Indent | the orchestrator row sits 16px in from its project row (D169) |
+| Kids rail | workers indent a further 17px with 9px padding; a 1px `rail` line on the left |
 
 ## States
 
@@ -32,8 +33,13 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
   it on the rail.
 - Click selects the agent: the title bar shows its tabs, the terminal
   shows its main terminal, the files panel shows its worktree.
-- Line 2: issue id, model, age. The model is the `--model` of the agent's
-  profile. The age is the time since the last hc event for the terminal,
+- Line 1 of a worker is its task: the terminal title without its status
+  glyph, when it is usable (not a path or a program name); else the worker
+  name (D169).
+- Line 2: worker name, model, age. The name is left out when line 1 shows
+  it, and for an orchestrator. The model is the `--model` of the agent's
+  profile, else the `--model` of the terminal's own command line (D169).
+  The issue id is in the accessibility label only. The age is the time since the last hc event for the terminal,
   as "now" (under a minute), "6m" or "2h".
 - Ages (D137, O10): one shared 1-minute timer moves them. It runs only
   while the window is visible and an age is on screen (an agent row of an
@@ -58,7 +64,8 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
 
 ## Edge cases
 
-- A worker with no issue: line 2 starts with the model.
+- A worker with no usable title: line 1 is its name; line 2 starts with the model.
+- Model unknown: the age still sits at the right of line 2, under the title.
 - An ended worker: removed (D112).
 - A worker of another orchestrator in the same project: under its own
   orchestrator.
@@ -85,7 +92,7 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
 **Do**
 
 - Put the orchestrator first, whatever its state.
-- Keep line 2 short: id, model, age.
+- Keep line 2 short: name, model, age.
 
 **Don't**
 
@@ -100,3 +107,4 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
 ## Replaces
 
 - The Agents section of `agents.go` (D54 line 2, state groups).
+

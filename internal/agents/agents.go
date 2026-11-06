@@ -112,7 +112,11 @@ func DefaultConfig() Config {
 // ModelOf is the model that the profile starts: the value after --model in
 // its argv. It is "" for an unknown profile or one with no --model.
 func (c Config) ModelOf(profile string) string {
-	argv := c.Profiles[profile].Argv
+	return modelFromArgv(c.Profiles[profile].Argv)
+}
+
+// modelFromArgv is the value after --model (or --model=) in argv, or "".
+func modelFromArgv(argv []string) string {
 	for i, a := range argv {
 		if a == "--model" && i+1 < len(argv) {
 			return argv[i+1]
@@ -191,6 +195,14 @@ type Worker struct {
 	Turn     uint64 `json:"turn"`
 	Title    string `json:"title,omitempty"`
 	ExitCode *int   `json:"exit_code,omitempty"`
+	// Model is the --model of the program's own command line, when it has
+	// one. A terminal contr did not start has no profile, so this is how its
+	// row knows the model (D169).
+	Model string `json:"model,omitempty"`
+	// Task is what a worker is doing, for line 1 of its row: the cleaned
+	// terminal title. Set by the agent model; empty when the title is not
+	// usable (D169).
+	Task string `json:"-"`
 	// Foreign is true for a terminal that contr did not start: it has no
 	// contr labels. Its role and folder come from hc (D149).
 	Foreign bool `json:"foreign,omitempty"`
@@ -247,6 +259,7 @@ func (t terminal) worker() Worker {
 		Turn:     t.Turn,
 		Title:    t.Title,
 		ExitCode: t.ExitCode,
+		Model:    modelFromArgv(t.Argv),
 	}
 	if t.Name != nil {
 		w.Name = *t.Name

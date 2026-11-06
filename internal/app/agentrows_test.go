@@ -107,9 +107,12 @@ func TestAnEndedWorkerAndAPlainTerminalHaveNoRow(t *testing.T) {
 	}
 }
 
-func TestLineTwoIsIssueModelAndAge(t *testing.T) {
+func TestLineTwoIsNameModelAndAge(t *testing.T) {
 	h := newRows(t)
-	for _, want := range []string{"241", "sonnet", "6m", "1m", "opus", "2m"} {
+	snap := h.live.get()
+	snap.Workers[0].Task = "Agent rows on ui.List"
+	h.send(snap)
+	for _, want := range []string{"b-241", "sonnet", "6m", "1m", "opus", "2m"} {
 		if !h.tt.HasText(want) {
 			t.Errorf("no %q in %q", want, h.tt.Texts())
 		}
@@ -122,8 +125,84 @@ func TestLineTwoIsIssueModelAndAge(t *testing.T) {
 			t.Errorf("age %q ends at %v, want the right padding of the row at %v", age, right, theme.SidebarWidth-theme.Space6-theme.Space10)
 		}
 	}
-	if box(t, h.tt, "241").X > box(t, h.tt, "sonnet").X {
-		t.Error("the issue comes after the model")
+	if box(t, h.tt, "b-241").X > box(t, h.tt, "sonnet").X {
+		t.Error("the name comes after the model")
+	}
+}
+
+func TestAWorkerShowsItsTaskOnLineOneAndItsNameOnLineTwo(t *testing.T) {
+	h := newRows(t)
+	snap := h.live.get()
+	snap.Workers[0].Task = "Agent rows on ui.List"
+	h.send(snap)
+	a := agentLine{w: snap.Workers[0]}
+	if titleOf(a) != "Agent rows on ui.List" || nameOf(a) != "b-241" {
+		t.Errorf("line 1 %q, name on line 2 %q", titleOf(a), nameOf(a))
+	}
+	title, name := box(t, h.tt, "b-241, working, 241, sonnet title"), box(t, h.tt, "b-241")
+	if name.Y <= title.Y {
+		t.Errorf("the name %+v is not under the title %+v", name, title)
+	}
+	if o := (agentLine{w: snap.Orchestrators[0], orchestrator: true}); nameOf(o) != "" || titleOf(o) != "lead" {
+		t.Errorf("orchestrator: title %q, name %q", titleOf(o), nameOf(o))
+	}
+}
+
+func TestAWorkerWithNoTaskShowsItsNameOnceOnLineOne(t *testing.T) {
+	h := newRows(t) // b-242 has no task
+	n := 0
+	for _, s := range h.tt.Texts() {
+		if s == "b-242" {
+			n++
+		}
+	}
+	if n != 0 { // the name is in the row label only; no text shows it twice
+		t.Errorf("name text shown %d times in %q", n, h.tt.Texts())
+	}
+	if !h.tt.HasText("b-242, working, sonnet title") {
+		t.Errorf("line 1 is not the name: %q", h.tt.Texts())
+	}
+}
+
+func TestAnOrchestratorIsIndentedUnderItsProject(t *testing.T) {
+	h := newRows(t)
+	proj, lead := box(t, h.tt, "alpha, main text"), box(t, h.tt, "lead, idle, opus title")
+	if lead.X < proj.X+kit.OrchestratorIndent {
+		t.Errorf("orchestrator title %+v is not indented from the project name %+v", lead, proj)
+	}
+	w := box(t, h.tt, "b-241, working, 241, sonnet title")
+	if w.X < lead.X+kit.RailIndent {
+		t.Errorf("the worker title %+v is not on the rail inside the orchestrator %+v", w, lead)
+	}
+}
+
+func TestAnOrchestratorOfOtherMakeShowsItsOwnModelAndKeepsTheAgeRight(t *testing.T) {
+	h := newRows(t)
+	h.list.ModelOf = func(p string) string {
+		if p == "" {
+			return ""
+		}
+		return "opus"
+	}
+	snap := h.live.get()
+	f := orchestratorIn("fo", h.cwds[0])
+	f.Foreign, f.Profile, f.Model, f.LastOutput = true, "", "opus", rowsNow.Add(-5*time.Minute)
+	g := orchestratorIn("fo2", h.cwds[0])
+	g.Foreign, g.Profile, g.LastOutput = true, "", rowsNow.Add(-7*time.Minute)
+	snap.Orchestrators = append(snap.Orchestrators, f, g)
+	h.send(snap)
+	if !h.tt.HasText("fo, idle, opus") {
+		t.Errorf("no model in the label: %q", h.tt.Texts())
+	}
+	for _, age := range []string{"5m", "7m"} {
+		end := box(t, h.tt, age)
+		if right := end.X + end.W; right > theme.SidebarWidth-theme.Space6-theme.Space10+1 || right < theme.SidebarWidth-theme.Space6-theme.Space10-8 {
+			t.Errorf("age %q ends at %v, not at the right edge", age, right)
+		}
+	}
+	// With no model the age still has line 2 under the title.
+	if box(t, h.tt, "7m").Y <= box(t, h.tt, "fo2, idle title").Y {
+		t.Error("the age of the row with no model is not under its title")
 	}
 }
 

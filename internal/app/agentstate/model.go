@@ -218,6 +218,11 @@ func (m *Model) Snapshot() Snapshot {
 			s.Workers = append(s.Workers, w)
 		}
 	}
+	for i, w := range s.Workers {
+		if usableTitle(w.Title, w) {
+			s.Workers[i].Task = cleanTitle(w.Title)
+		}
+	}
 	byProjectName := func(a, b agents.Worker) int {
 		if c := strings.Compare(a.Project, b.Project); c != 0 {
 			return c
