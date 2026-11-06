@@ -134,7 +134,7 @@ func (f *Frame) updatePanel(c *ui.Context, info UpdateInfo, at time.Time) {
 	})
 	ui.Row(c).AlignItems(ui.Center).Gap(theme.Space8).Padding(theme.Space10, theme.Space16).
 		BorderWidth(1, 0, 0, 0).BorderColor(p.Hairline).Children(func() {
-		ui.Text(c, downloadedText(time.Now(), at)).Grow(1).TextColor(p.Ink50)
+		ui.Text(c, downloadedText(time.Now(), at)).NoWrap().Grow(1).TextColor(p.Ink50)
 		settingsButton(c, UpdateLater, ButtonPlain, func() { f.upd.open = false })
 		settingsButton(c, SettingsRestart+" ⏎", ButtonFilled, f.Settings.RestartNow)
 	})
