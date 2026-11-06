@@ -21,7 +21,7 @@ Design system page: component Tab. Shared rules: [README.md](README.md).
 
 - **Default:** no fill, title `ink-50`.
 - **Hover:** fill `hover`.
-- **Selected:** fill `selected`, ring `shadow-selected`, title `ink-100`, close button shows.
+- **Selected:** fill `panel` and a 1px inset `panel-line` edge, as the panels (D164); title `ink-100`, close button shows.
 - **Close hover:** fill `press`, icon `ink-100`.
 - **Blocked agent:** the glyph turns `blocked`; the tab is not otherwise colored.
 
@@ -59,7 +59,7 @@ Design system page: component Tab. Shared rules: [README.md](README.md).
 
 ## Tokens
 
-`selected`, `shadow-selected`, `hover`, `press`, `ink-100`, `ink-50`, `ink-45`, `row-height`, `radius-8`, `radius-4`, `space-8`, `space-2`, `tab-max-width`.
+`panel`, `panel-line`, `hover`, `press`, `ink-100`, `ink-50`, `ink-45`, `row-height`, `radius-8`, `radius-4`, `space-8`, `space-2`, `tab-max-width`.
 
 ## Build in MyGo
 

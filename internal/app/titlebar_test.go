@@ -520,3 +520,23 @@ func TestNoSearchButtonWithoutASearchHandler(t *testing.T) {
 		t.Error("the bar has a Search button with no handler")
 	}
 }
+
+func TestTheSelectedTabLooksLikeAPanel(t *testing.T) {
+	// D164: the selected tab has the panel fill, not the selected-row fill.
+	b := newBar(t, tabsOf(), true)
+	b.tt.Frame()
+	lead, t1 := b.rect(t, "lead"), b.rect(t, "go test ./...")
+	img := b.tt.Image()
+	under := pixelAt(img, t1.X+3, t1.Y+t1.H/2) // a tab at rest has no fill: the bar background
+	got := pixelAt(img, lead.X+3, lead.Y+lead.H/2)
+	p := theme.Current()
+	want := theme.Over(p.Panel, ui.RGB(under.R, under.G, under.B))
+	near := func(a, b uint8) bool { return int(a)-int(b) <= 2 && int(b)-int(a) <= 2 }
+	if !near(got.R, want.R) || !near(got.G, want.G) || !near(got.B, want.B) {
+		t.Errorf("selected tab fill = %v, want panel over the bar %v", got, want)
+	}
+	if sel := theme.Over(p.Selected, ui.RGB(under.R, under.G, under.B)); sel != want &&
+		near(got.R, sel.R) && near(got.G, sel.G) && near(got.B, sel.B) {
+		t.Errorf("selected tab still has the selected-row fill %v", sel)
+	}
+}
