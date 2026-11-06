@@ -27,14 +27,14 @@ Generated from the design system `tokens.json`. Views use the names; `internal/a
 | `meter-track` | `rgba(255,255,255,0.07)` | `rgba(0,0,0,0.08)` | Track of the context and plan-usage meters. |
 | `meter-fill` | `rgba(255,255,255,0.55)` | `rgba(0,0,0,0.5)` | Filled part of the context and plan-usage meters. |
 | `tick` | `rgba(255,255,255,0.14)` | `rgba(0,0,0,0.16)` | Outline ticks for messages already seen. 1.5:1 on panel: a mark, not text. |
-| `ink-100` | `#f4f4f5` | `#141414` | The strongest ink: white in dark, near-black in light. Only what needs the owner or what is chosen: the active tab, the selected agent, new outline ticks and their count, the question text, the closed notch label. 16.6:1 on panel, 15.1:1 on glass-float. |
-| `ink-95` | `#e9e9ea` | `#1e1e1e` | Default text in the window and the terminal cursor block. 15:1 on panel. |
+| `ink-100` | `#f4f4f5` | `#141414` | The strongest ink: white in dark, near-black in light. Only what needs the owner or what is chosen: the active tab, the selected agent, new outline ticks and their count, the question text, the closed notch label. 16.6:1 on panel, 15.0:1 on glass-float. |
+| `ink-95` | `#e9e9ea` | `#1e1e1e` | Default text in the window and the terminal cursor block. 15.1:1 on panel. |
 | `ink-90` | `rgba(255,255,255,0.9)` | `rgba(0,0,0,0.873)` | Changed and new file names; answer option labels. 14.9:1 on panel. |
 | `ink-85` | `rgba(255,255,255,0.85)` | `rgba(0,0,0,0.836)` | Project names in the sidebar. 13.3:1 on panel. |
 | `ink-62` | `rgba(255,255,255,0.62)` | `rgba(0,0,0,0.679)` | Values in the info block; the meta line of the selected agent. 7.5:1 on panel. |
 | `ink-60` | `rgba(255,255,255,0.6)` | `rgba(0,0,0,0.665)` | Sidebar rows at rest; the closed notch text. 7.1:1 on panel. |
 | `ink-50` | `rgba(255,255,255,0.5)` | `rgba(0,0,0,0.586)` | Tabs at rest, icon buttons at rest, file rows at rest. 5.3:1 on panel. |
-| `ink-45` | `rgba(255,255,255,0.45)` | `rgba(0,0,0,0.543)` | Panel headings (Projects, Servers, the files root), question chips at rest, answer option descriptions, the tab close glyph. 4.51:1 on panel, just above 4.5:1; 4.4:1 on glass-float, just below 4.5:1. Kept from the canvas. |
+| `ink-45` | `rgba(255,255,255,0.45)` | `rgba(0,0,0,0.543)` | Panel headings (Projects, Servers, the files root), question chips at rest, answer option descriptions, the tab close glyph. 4.55:1 on panel, just above 4.5:1; 4.4:1 on glass-float, just below 4.5:1. Kept from the canvas. |
 | `ink-42` | `rgba(255,255,255,0.42)` | `rgba(0,0,0,0.515)` | Secondary lines: agent meta, title-bar info, info labels, outline card detail, dim terminal lines. 4.1:1 on panel: below 4.5:1, kept from the canvas. |
 | `ink-40` | `rgba(255,255,255,0.4)` | `rgba(0,0,0,0.495)` | Added-line counts in the file tree. 3.8:1 on panel: below 4.5:1, kept from the canvas. |
 | `ink-38` | `rgba(255,255,255,0.38)` | `rgba(0,0,0,0.475)` | Row meta on the right (branch, server state) and file icons. 3.6:1 on panel: below 4.5:1, kept from the canvas. |
@@ -45,8 +45,8 @@ Generated from the design system `tokens.json`. Views use the names; `internal/a
 | `ink-24` | `rgba(255,255,255,0.24)` | `rgba(0,0,0,0.313)` | Deleted file names (struck through) and removed-line counts in the file tree. 2.2:1: dim on purpose, kept from the canvas. |
 | `ink-22` | `rgba(255,255,255,0.22)` | `rgba(0,0,0,0.287)` | Icon and counts of a deleted file. 2:1: dim on purpose, kept from the canvas. |
 | `terminal-text` | `rgba(255,255,255,0.82)` | `rgba(0,0,0,0.815)` | Default terminal text before the agent CLI paints its own colors. 12.4:1 on panel. |
-| `blocked` | `#f07178` | `#c73947` | The one hue in the chrome: red for an agent that is blocked or asks the owner. Loader glyphs and the Claude glyph only, never fills or text runs. 6.5:1 on panel, 5.8:1 on glass-float. Light: #c73947, 4.8:1 on panel. |
-| `claude` | `#d97757` | `#c15f3c` | Stroke of the Claude agent glyph (orchestrators) while it works or idles. 6.0:1 on panel. Light: #c15f3c, 3.9:1 on panel (#d97757 is only 2.9:1 on light). |
+| `blocked` | `#f07178` | `#c73947` | The one hue in the chrome: red for an agent that is blocked or asks the owner. Loader glyphs and the Claude glyph only, never fills or text runs. 6.4:1 on panel, 5.8:1 on glass-float. Light: #c73947, 4.8:1 on panel. |
+| `claude` | `#d97757` | `#c15f3c` | Stroke of the Claude agent glyph (orchestrators) while it works or idles. 5.85:1 on panel. Light: #c15f3c, 3.9:1 on panel (#d97757 is only 2.9:1 on light). |
 | `focus-ring` | `rgba(255,255,255,0.5)` | `rgba(0,0,0,0.45)` | The 1px keyboard focus ring of every button, 2px outside it. |
 | `lights` | `rgba(255,255,255,0.14)` | `rgba(0,0,0,0.14)` | Previews only: the traffic-light stand-ins. macOS draws the real ones. |
 
