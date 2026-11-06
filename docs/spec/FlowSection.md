@@ -1,7 +1,7 @@
 # FlowSection
 
-The Flow section of Settings → Agents: how the orchestrator takes an issue to a merge (D179).
-It shows and edits `agents.Flow`, the `flow` key of `agents.json` (D177).
+The Flow section of Settings → Agents: how the orchestrator takes an issue to a merge (D187).
+It shows and edits `agents.Flow`, the `flow` key of `agents.json` (D185).
 
 Shared rules: [README.md](README.md). Design: board 10 of the from-zero canvas.
 

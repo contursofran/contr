@@ -9,7 +9,7 @@ import (
 	"github.com/contursofran/contr/internal/app/theme"
 )
 
-// Flow section texts (D179, docs/spec/FlowSection.md).
+// Flow section texts (D187, docs/spec/FlowSection.md).
 const (
 	LabelFlow        = "Flow"
 	FlowHint         = "How the orchestrator takes an issue to a merge"

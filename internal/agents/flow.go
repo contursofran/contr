@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
-// Flow is how the orchestrator takes an issue to a merge (D177). It is saved
+// Flow is how the orchestrator takes an issue to a merge (D185). It is saved
 // as the flow key of agents.json.
 type Flow struct {
 	// Plan is when a planner runs first: never, when-needed or always.
@@ -88,7 +89,9 @@ func (f Flow) Text() string {
 }
 
 // Save writes the config to path. Keys in the file that Config does not know
-// stay as they are.
+// stay as they are. A profile goes to the file only when the file had it or
+// when it differs from DefaultConfig, so the file does not freeze today's
+// defaults (D186).
 func (c Config) Save(path string) error {
 	raw := map[string]json.RawMessage{}
 	data, err := os.ReadFile(path)
@@ -103,6 +106,21 @@ func (c Config) Save(path string) error {
 	if err := c.Flow.Validate(); err != nil {
 		return fmt.Errorf("agents: %w", err)
 	}
+	var had map[string]json.RawMessage
+	_, hadProfiles := raw["profiles"]
+	if hadProfiles {
+		if err := json.Unmarshal(raw["profiles"], &had); err != nil {
+			return fmt.Errorf("agents: %s: profiles: %w", path, err)
+		}
+	}
+	defaults := DefaultConfig().Profiles
+	profiles := map[string]Profile{}
+	for name, p := range c.Profiles {
+		d, isDefault := defaults[name]
+		if _, ok := had[name]; ok || !isDefault || !p.Equal(d) {
+			profiles[name] = p
+		}
+	}
 	set := func(key string, v any, empty bool) error {
 		if empty {
 			delete(raw, key)
@@ -116,7 +134,7 @@ func (c Config) Save(path string) error {
 		return nil
 	}
 	for _, e := range []error{
-		set("profiles", c.Profiles, false),
+		set("profiles", profiles, len(profiles) == 0 && !hadProfiles),
 		set("kit", c.Kit, c.Kit == ""),
 		set("setup", c.Setup, len(c.Setup) == 0),
 		set("flow", c.Flow, false),
@@ -137,4 +155,9 @@ func (c Config) Save(path string) error {
 		return err
 	}
 	return os.Rename(tmp, path)
+}
+
+// Equal tells whether two profiles start the same agent.
+func (p Profile) Equal(o Profile) bool {
+	return p.Agent == o.Agent && slices.Equal(p.Argv, o.Argv)
 }
