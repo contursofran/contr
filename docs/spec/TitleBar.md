@@ -12,7 +12,7 @@ Design system page: component TitleBar. Shared rules: [README.md](README.md).
 
 From left to right:
 
-1. Traffic-light area, as wide as the sidebar plus its gap (328px with the default sidebar), so the tabs start above the terminal.
+1. Traffic-light area, as wide as the sidebar plus its gap (328px with the default sidebar), so the tabs start above the terminal. It holds only the window buttons: there is no sidebar button next to them (D172). With the sidebar hidden or as icons, the area is 78px, so the tabs stay clear of the window buttons.
 2. Tabs (see Tab) and a "New tab" icon button.
 3. Flexible space (drags the window).
 4. DiffSummary of the selected project.
@@ -45,9 +45,9 @@ Height `titlebar-height` (38px: a 30px tab, 4px above and below, D168), gap `spa
 
 ## Keys and focus
 
-- `⌘T` new tab, `⌘W` close tab (plain terminals only, D85), `⌘F` search, `⌘⇧E` files.
-  `⌘T` and `⌘W` are the File menu items, which hold the key (D131); `⌘⇧E`
-  is `c.Shortcut`.
+- `⌘T` new tab, `⌘W` close tab (plain terminals only, D85), `⌘F` search, `⌘⇧E` files, `⌘B` show or hide the sidebar (D172).
+  `⌘T` and `⌘W` are the File menu items, which hold the key (D131); `⌘B` is the
+  View menu item "Toggle Sidebar"; `⌘⇧E` is `c.Shortcut`.
 - The tooltips show each key.
 
 ## Edge cases

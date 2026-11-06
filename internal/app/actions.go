@@ -23,6 +23,7 @@ const (
 	keyNewTerminal   = "Cmd+T"
 	keyCloseTerminal = "Cmd+W"
 	keySettings      = "Cmd+,"
+	keySidebar       = "Cmd+B"
 )
 
 // action is one item of the app menus: the MyGo role that does the work, and its shortcut.
@@ -50,6 +51,8 @@ var (
 	actionCloseTerminal = action{"Close Terminal", "", keyCloseTerminal}
 	// Settings has no role: its Click opens the Settings modal (D115).
 	actionSettings = action{"Settings…", "", keySettings}
+	// Toggle Sidebar has no role: its Click shows or hides the sidebar (the title bar has no button for it).
+	actionSidebar = action{"Toggle Sidebar", "", keySidebar}
 )
 
 // item makes the menu item of the action.
@@ -121,6 +124,29 @@ func settingsItem() *mygo.MenuItem {
 	it := actionSettings.item()
 	it.Click = func(*mygo.MenuItem, *mygo.Window) {
 		if fn := settingsHandler.Load(); fn != nil {
+			(*fn)()
+		}
+	}
+	return it
+}
+
+// sidebarHandler shows or hides the sidebar of the open window, set and cleared like
+// newTerminalHandler.
+var sidebarHandler atomic.Pointer[func()]
+
+func setSidebarHandler(fn func()) {
+	if fn == nil {
+		sidebarHandler.Store(nil)
+		return
+	}
+	sidebarHandler.Store(&fn)
+}
+
+// sidebarItem is the Toggle Sidebar item. Its Click runs on the main thread.
+func sidebarItem() *mygo.MenuItem {
+	it := actionSidebar.item()
+	it.Click = func(*mygo.MenuItem, *mygo.Window) {
+		if fn := sidebarHandler.Load(); fn != nil {
 			(*fn)()
 		}
 	}

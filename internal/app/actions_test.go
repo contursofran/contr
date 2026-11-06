@@ -14,7 +14,7 @@ func TestCmdQHAltHAndMRunTheirAppActions(t *testing.T) {
 			t.Errorf("%s key = %q, want %q", label, got, key)
 		}
 	}
-	if got := find(t, menus[3].Submenu, "Minimize").Accelerator; got != "Cmd+M" {
+	if got := find(t, menus[4].Submenu, "Minimize").Accelerator; got != "Cmd+M" {
 		t.Errorf("Minimize key = %q", got)
 	}
 }

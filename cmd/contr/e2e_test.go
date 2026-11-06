@@ -76,10 +76,13 @@ func TestFrameWindowCapture(t *testing.T) {
 			c.call(t, "idle", map[string]any{"timeout": 10000})
 
 			labels := c.labels(t)
-			for _, want := range []string{"Toggle sidebar", "Hide files", "Sidebar", "Terminal", "Files", "New tab"} {
+			for _, want := range []string{"Hide files", "Sidebar", "Terminal", "Files", "New tab"} {
 				if !labels[want] {
 					t.Errorf("%s: no element %q; labels %v", name, want, keys(labels))
 				}
+			}
+			if labels["Toggle sidebar"] || labels["Show sidebar"] {
+				t.Errorf("%s: the title bar has a sidebar toggle (#437)", name)
 			}
 			sidebar, files, term := c.boundsOf(t, "Sidebar"), c.boundsOf(t, "Files"), c.boundsOf(t, "Terminal")
 			if sidebar.Width != 312 || files.Width != 280 || term.Width < 480 || sidebar.X != 10 {

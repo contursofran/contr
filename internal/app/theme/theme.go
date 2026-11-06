@@ -127,15 +127,11 @@ const CardInsetX = 4         // selected-card margin (same 4 px as the agent row
 const BadgeRadius = 4
 const SpacesGap = 8 // icon to text, name to branch, between a row's parts
 const MemBarWidth = 60
-const SidebarToggleRadius = 2
 
 // Title bar tabs and buttons (planner defaults; docs/DESIGN.md has no sizes for these)
 
-const TitleButtonSize = 28 // "+", split, panel toggle: square hit areas
-const TitleGlyphWidth = 14 // split and panel glyphs, border included
-const TitleGlyphHeight = 12
+const TitleButtonSize = 28     // "+", split, panel toggle: square hit areas
 const TitleBarPadEnd = Space14 // title bar: room right of the files toggle
-const TitleGlyphFill = 4       // panel glyph: filled right part when the panel is open
 
 // Board panel (planner defaults; docs/DESIGN.md has no sizes for these). The "you" chip reuses
 // BADGE_PAD_X and BADGE_RADIUS.
