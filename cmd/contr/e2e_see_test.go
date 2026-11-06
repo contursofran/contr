@@ -9,8 +9,10 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/hc"
 )
 
 // seeFixture is a state of the app that scripts/see.sh can show.
@@ -46,6 +48,43 @@ var seeFixtures = map[string]seeFixture{
 		},
 		ready: "lead, ",
 	},
+	"wide": {
+		about: "the workers fixture; the core sized a third worker's terminal to 300x60 before the app shows it (#481)",
+		setup: func(t *testing.T, h *harness) {
+			seeWorkers(t, h)
+			h.spawn(t, agents.Spec{Name: "b203-wide", Profile: "sizer", Role: "builder", Issue: "203", Project: "demo", Worktree: filepath.Join(h.dir, "demo")})
+			h.sizeTerminal(t, "b203-wide", 300, 60)
+		},
+		ready: "lead, ",
+	},
+}
+
+// sizeTerminal attaches to the worker's terminal with input at cols x rows,
+// and detaches, so the core keeps that size.
+func (h *harness) sizeTerminal(t *testing.T, name string, cols, rows uint16) {
+	t.Helper()
+	ws, err := h.mgr.List(h.ctx, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, w := range ws {
+		if w.Name != name {
+			continue
+		}
+		fc, err := hc.DialFramed(h.ctx, hc.Command("", h.env))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer fc.Close()
+		s, err := fc.Attach(h.ctx, hc.AttachParams{Terminal: w.Address, Cols: cols, Rows: rows})
+		if err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(300 * time.Millisecond)
+		_ = s.Close()
+		return
+	}
+	t.Fatalf("no worker %q", name)
 }
 
 func seeWorkers(t *testing.T, h *harness) {
@@ -105,6 +144,9 @@ func TestSee(t *testing.T) {
 		c.settle(t)
 		for _, l := range press {
 			c.press(t, l)
+		}
+		if len(press) > 0 {
+			c.settle(t)
 		}
 		base := filepath.Join(out, name+"-"+th)
 		c.capture(t, base+".png")

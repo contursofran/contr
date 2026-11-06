@@ -110,6 +110,10 @@ func newHarness(t *testing.T) *harness {
 	claude := h.buildFakeClaude(t)
 	cfg := agents.DefaultConfig()
 	cfg.Profiles["sleepy"] = agents.Profile{Argv: []string{"sh", "-c", "echo working; sleep 600"}}
+	// sizer shows its grid size and a ruler as wide as the grid, and draws
+	// them again on each resize.
+	cfg.Profiles["sizer"] = agents.Profile{Argv: []string{"sh", "-c",
+		`draw() { printf "\033[2J\033[H"; set -- $(stty size); echo "grid $2x$1"; i=0; while [ $i -lt $2 ]; do printf %d $((i % 10)); i=$((i+1)); done; echo; }; trap draw WINCH; draw; while :; do sleep 1; done`}}
 	cfg.Profiles["claude-idle"] = agents.Profile{Argv: []string{claude, "idle"}}
 	cfg.Profiles["claude-working"] = agents.Profile{Argv: []string{claude, "working"}}
 	h.mgr = agents.New(agents.HC{Client: cl}, cfg)

@@ -708,8 +708,8 @@ func startWatchNow(t *testing.T, src *fakeSource) (*Conn, *states, *fakeScreen) 
 	return c, st, scr
 }
 
-// While it watches, Conn sends no size or focus, and the screen follows the
-// core's size in order with the output (D91).
+// While it watches and the core's size is the view's, Conn sends no size or
+// focus, attaches no more, and the screen follows the core's size (D91, D199).
 func TestWatchKeepsTheCoreSize(t *testing.T) {
 	src := newFakeSource()
 	c, st, scr := startWatchSized(t, src)
@@ -721,19 +721,23 @@ func TestWatchKeepsTheCoreSize(t *testing.T) {
 		t.Errorf("attach params %+v", p)
 	}
 	s := src.stream(t, 0)
-	s.events <- hc.StreamEvent{Resize: &hc.Size{Cols: 120, Rows: 40}}
+	s.events <- hc.StreamEvent{Resize: &hc.Size{Cols: 90, Rows: 20}}
 	s.data("ab")
 	if got := readN(t, c, 2); got != "ab" {
 		t.Errorf("read %q", got)
 	}
-	if got := scr.last(); got != [2]int{120, 40} {
-		t.Errorf("screen %v, want the core's 120x40 before the output", got)
+	if got := scr.last(); got != [2]int{90, 20} {
+		t.Errorf("screen %v, want the core's 90x20 before the output", got)
 	}
-	if err := c.ResizePixels(100, 30, 8, 16); err != nil {
+	if err := c.ResizePixels(90, 20, 8, 16); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.SetFocus(true); err != nil {
 		t.Fatal(err)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if n := src.attachCount(); n != 1 {
+		t.Errorf("%d attaches, want 1", n)
 	}
 	s.mu.Lock()
 	sent := len(s.resizes) + len(s.focus)
@@ -741,6 +745,90 @@ func TestWatchKeepsTheCoreSize(t *testing.T) {
 	if sent != 0 {
 		t.Errorf("an observer sent resizes %v focus %v", s.resizes, s.focus)
 	}
+}
+
+// A core size other than the view's makes Conn attach with input at the
+// view's size, with no input and no focus; the screen takes the view's size.
+// The focus goes with the first key (D199).
+func TestWatchFitsTheViewWhenTheCoreIsWider(t *testing.T) {
+	src := newFakeSource()
+	c, st, scr := startWatchSized(t, src)
+	if err := c.ResizePixels(90, 20, 8, 16); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SetFocus(true); err != nil {
+		t.Fatal(err)
+	}
+	st.wait(t, Live)
+	obs := src.stream(t, 0)
+	obs.events <- hc.StreamEvent{Resize: &hc.Size{Cols: 120, Rows: 40}}
+	go func() {
+		buf := make([]byte, 8)
+		for {
+			if _, err := c.Read(buf); err != nil {
+				return
+			}
+		}
+	}()
+	waitAttaches(t, src, 2)
+	if p := src.param(1); p.Observe || p.Cols != 90 || p.Rows != 20 || !p.Resumed {
+		t.Errorf("fit attach %+v", p)
+	}
+	scr.wait(t, 90, 20)
+	in := src.stream(t, 1)
+	time.Sleep(20 * time.Millisecond)
+	in.mu.Lock()
+	focus, resizes := len(in.focus), len(in.resizes)
+	in.mu.Unlock()
+	if in.wrote() != "" || obs.wrote() != "" || focus != 0 || resizes != 0 {
+		t.Errorf("fit sent input %q/%q focus %d resizes %d", obs.wrote(), in.wrote(), focus, resizes)
+	}
+	if err := c.SetFocus(true); err != nil {
+		t.Fatal(err)
+	}
+	in.mu.Lock()
+	focus = len(in.focus)
+	in.mu.Unlock()
+	if focus != 0 {
+		t.Errorf("focus sent before a key")
+	}
+	if _, err := c.Write([]byte("k")); err != nil {
+		t.Fatal(err)
+	}
+	in.mu.Lock()
+	gotFocus := append([]bool(nil), in.focus...)
+	in.mu.Unlock()
+	if len(gotFocus) != 1 || !gotFocus[0] || in.wrote() != "k" {
+		t.Errorf("after a key: focus %v input %q", gotFocus, in.wrote())
+	}
+	if n := src.attachCount(); n != 2 {
+		t.Errorf("%d attaches, want 2", n)
+	}
+}
+
+// A view resize while it watches fits the view when the core's size differs.
+func TestWatchFitsAfterAViewResize(t *testing.T) {
+	src := newFakeSource()
+	c, st, scr := startWatchSized(t, src)
+	if err := c.ResizePixels(90, 20, 8, 16); err != nil {
+		t.Fatal(err)
+	}
+	st.wait(t, Live)
+	obs := src.stream(t, 0)
+	obs.events <- hc.StreamEvent{Resize: &hc.Size{Cols: 90, Rows: 20}}
+	obs.data("a")
+	if got := readN(t, c, 1); got != "a" {
+		t.Fatalf("read %q", got)
+	}
+	if err := c.ResizePixels(70, 20, 8, 16); err != nil {
+		t.Fatal(err)
+	}
+	waitAttaches(t, src, 2)
+	if p := src.param(1); p.Observe || p.Cols != 70 || p.Rows != 20 {
+		t.Errorf("fit attach %+v", p)
+	}
+	go func() { buf := make([]byte, 8); _, _ = c.Read(buf) }()
+	scr.wait(t, 70, 20)
 }
 
 // The first key ends the observer stream and attaches with input at the
