@@ -49,9 +49,9 @@ func meterLine(c *ui.Context, m Meter) {
 	ui.Column(c).Label(m.Label + " line").Gap(theme.Space4).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(theme.Space4).Children(func() {
 			ui.Text(c, m.Label).SingleLine().Grow(1).MinWidth(0).
-				Font(theme.StyleSmall.Family()).FontSize(theme.StyleSmall.Size).TextColor(p.Ink42)
+				Font(theme.StyleSmall.Family()).FontSize(theme.StyleSmall.Size).FixedLineHeight(theme.StyleSmall.Line).TextColor(p.Ink42)
 			ui.Text(c, value).SingleLine().Shrink(0).
-				Font(theme.StyleValue.Family()).FontSize(theme.StyleValue.Size).TextColor(p.Ink62)
+				Font(theme.StyleValue.Family()).FontSize(theme.StyleValue.Size).FixedLineHeight(theme.StyleValue.Line).TextColor(p.Ink62)
 		})
 		meterBar(c, m)
 	})
