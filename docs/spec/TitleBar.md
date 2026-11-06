@@ -19,7 +19,7 @@ From left to right:
 5. DiffSummary of the selected project.
 6. Icon buttons: Search, Hide files (pressed while files show).
 
-Height `titlebar-height` (38px: a 30px tab, 4px above and below, D168), gap `space-8`, right padding `space-14`. Items center on the vertical axis.
+Height `titlebar-height` (46px: a 30px tab, 8px above and below, D177; the panels start right under it), gap `space-8`, right padding `space-14`. Items center on the vertical axis.
 
 ## States
 

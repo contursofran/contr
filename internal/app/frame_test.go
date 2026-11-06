@@ -46,13 +46,13 @@ func absent(tt *ui.Tester, label string) bool {
 func TestFrameMatchesDesignSizes(t *testing.T) {
 	_, tt := newTester(t)
 	bar := box(t, tt, LabelTitleBar)
-	if bar.X != 0 || bar.Y != 0 || bar.W != theme.WindowWidth || bar.H != 38 {
-		t.Errorf("title bar %+v, want 38 high at the top over the full width", bar)
+	if bar.X != 0 || bar.Y != 0 || bar.W != theme.WindowWidth || bar.H != 46 {
+		t.Errorf("title bar %+v, want 46 high at the top over the full width", bar)
 	}
 	// 8px between all panels and the window edge (docs/spec/Window.md).
 	sidebar := box(t, tt, LabelPanelSidebar)
-	if sidebar.X != 8 || sidebar.Y != 38+theme.PanelGap || sidebar.W != 312 {
-		t.Errorf("sidebar %+v, want 312 wide at x 8, a gap under the title bar", sidebar)
+	if sidebar.X != 8 || sidebar.Y != 46 || sidebar.W != 312 {
+		t.Errorf("sidebar %+v, want 312 wide at x 8, right under the title bar (D177)", sidebar)
 	}
 	files := box(t, tt, LabelPanelFiles)
 	if files.W != 280 || files.X+files.W != theme.WindowWidth-8 {
@@ -640,15 +640,18 @@ func TestPanelGapsAreEqual(t *testing.T) {
 	bar := box(t, tt, LabelTitleBar)
 	sb, tm, fl := box(t, tt, LabelPanelSidebar), box(t, tt, LabelPanelTerminal), box(t, tt, LabelPanelFiles)
 	gap := float32(theme.PanelGap)
+	// The 30pt tabs center in the title bar; the panels start PanelGap below them (D177).
+	tabs := bar.Y + (bar.H+theme.SizeRowHeight)/2
 	for name, got := range map[string]float32{
 		"left edge to sidebar":   sb.X,
 		"sidebar to terminal":    tm.X - (sb.X + sb.W),
 		"terminal to files":      fl.X - (tm.X + tm.W),
 		"files to right edge":    theme.WindowWidth - (fl.X + fl.W),
-		"title bar to panels":    tm.Y - (bar.Y + bar.H),
+		"window top to tab row":  tabs - theme.SizeRowHeight,
+		"tab row to terminal":    tm.Y - tabs,
 		"panels to bottom edge":  theme.WindowHeight - (tm.Y + tm.H),
-		"title bar to sidebar":   sb.Y - (bar.Y + bar.H),
-		"title bar to files":     fl.Y - (bar.Y + bar.H),
+		"tab row to sidebar":     sb.Y - tabs,
+		"tab row to files":       fl.Y - tabs,
 		"sidebar to bottom edge": theme.WindowHeight - (sb.Y + sb.H),
 		"files to bottom edge":   theme.WindowHeight - (fl.Y + fl.H),
 	} {
