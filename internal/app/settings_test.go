@@ -70,6 +70,16 @@ func newSettingsRig(t *testing.T, u *fakeUpdates) *settingsRig {
 }
 
 func (r *settingsRig) open() { r.s.Toggle(); r.tt.Frame() }
+
+// openUpdates opens the modal on the Updates tab with a click on the tab.
+func (r *settingsRig) openUpdates() {
+	r.t.Helper()
+	r.open()
+	if err := r.tt.Click(SettingsTabs[TabUpdates]); err != nil {
+		r.t.Fatal(err)
+	}
+	r.tt.Frame()
+}
 func (r *settingsRig) has(label string) bool {
 	_, ok := r.tt.Find(label)
 	return ok
@@ -84,7 +94,7 @@ func TestSettingsShowsTheVersionAndClosesWithEscAndDone(t *testing.T) {
 	if r.has(LabelSettings) {
 		t.Fatal("modal shows before it opens")
 	}
-	r.open()
+	r.openUpdates()
 	if !r.has(LabelSettings) || !r.hasText("contr 1.2.3") || !r.has(SettingsCheck) {
 		t.Fatalf("modal incomplete: %v", r.texts())
 	}
@@ -92,12 +102,12 @@ func TestSettingsShowsTheVersionAndClosesWithEscAndDone(t *testing.T) {
 	if r.s.Opened() {
 		t.Error("Esc did not close")
 	}
-	r.open()
+	r.openUpdates()
 	r.tt.Click(SettingsDone)
 	if r.s.Opened() {
 		t.Error("Done did not close")
 	}
-	r.open()
+	r.openUpdates()
 	r.tt.Click(SettingsEsc)
 	if r.s.Opened() {
 		t.Error("esc button did not close")
@@ -112,7 +122,7 @@ func TestSettingsShowsTheVersionAndClosesWithEscAndDone(t *testing.T) {
 func TestSettingsSaysUpdatesAreOffWhenTheBuildHasNoKey(t *testing.T) {
 	u := &fakeUpdates{enabled: false}
 	r := newSettingsRig(t, u)
-	r.open()
+	r.openUpdates()
 	if !r.hasText(TextUpdatesOff) {
 		t.Fatalf("no off text in %v", r.texts())
 	}
@@ -124,7 +134,7 @@ func TestSettingsSaysUpdatesAreOffWhenTheBuildHasNoKey(t *testing.T) {
 
 func TestSettingsWithoutAnUpdateServiceSaysUpdatesAreOff(t *testing.T) {
 	r := newSettingsRig(t, nil)
-	r.open()
+	r.openUpdates()
 	if !r.hasText(TextUpdatesOff) {
 		t.Fatalf("no off text in %v", r.texts())
 	}
@@ -133,7 +143,7 @@ func TestSettingsWithoutAnUpdateServiceSaysUpdatesAreOff(t *testing.T) {
 func TestSettingsReportsUpToDate(t *testing.T) {
 	u := &fakeUpdates{enabled: true}
 	r := newSettingsRig(t, u)
-	r.open()
+	r.openUpdates()
 	r.tt.Click(SettingsCheck)
 	r.tt.Frame()
 	if u.checks != 1 || !r.hasText(TextUpToDate) || r.has(SettingsInstall) {
@@ -145,7 +155,7 @@ func TestSettingsShowsTheNotesOfANewerVersionAndInstalls(t *testing.T) {
 	u := &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0", Notes: "## 1.3.0\n\n- Fixed the sidebar"},
 		progress: [][2]int64{{50, 100}, {100, 100}}}
 	r := newSettingsRig(t, u)
-	r.open()
+	r.openUpdates()
 	r.tt.Click(SettingsCheck)
 	r.tt.Frame()
 	if !r.hasText("contr 1.3.0 is available") || !r.has(LabelSettingsNotes) || !r.has(SettingsInstall) {
@@ -170,7 +180,7 @@ func TestSettingsShowsTheNotesOfANewerVersionAndInstalls(t *testing.T) {
 func TestSettingsShowsACheckError(t *testing.T) {
 	u := &fakeUpdates{enabled: true, checkErr: errors.New("offline")}
 	r := newSettingsRig(t, u)
-	r.open()
+	r.openUpdates()
 	r.tt.Click(SettingsCheck)
 	r.tt.Frame()
 	if !r.hasText("update check failed: offline") {
@@ -190,7 +200,7 @@ func TestSettingsShowsACheckError(t *testing.T) {
 func TestSettingsShowsAnInstallErrorAndDoesNotRelaunch(t *testing.T) {
 	u := &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}, installErr: errors.New("bad signature")}
 	r := newSettingsRig(t, u)
-	r.open()
+	r.openUpdates()
 	r.tt.Click(SettingsCheck)
 	r.tt.Frame()
 	r.tt.Click(SettingsInstall)
@@ -209,7 +219,7 @@ func TestSettingsButtonsDoNothingWhileWorkRuns(t *testing.T) {
 	r := newSettingsRig(t, u)
 	r.s.Run = Runner{Go: func(f func()) { held = append(held, f) }}
 	r.s.enabled, r.s.enabledKnown = true, true
-	r.open()
+	r.openUpdates()
 	r.tt.Click(SettingsCheck)
 	r.tt.Frame()
 	if !r.hasText(TextChecking) {
@@ -283,7 +293,7 @@ func TestABackgroundInstallErrorShowsInSettingsOnly(t *testing.T) {
 	if status != 0 {
 		t.Error("a failed download showed a toast")
 	}
-	r.open()
+	r.openUpdates()
 	if !r.hasText("download failed: disk full") || !r.has(SettingsInstall) {
 		t.Errorf("Settings does not show the failed download: %q", r.texts())
 	}
@@ -293,7 +303,7 @@ func TestSettingsOffersRestartNowWhenAnUpdateIsReady(t *testing.T) {
 	u := &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}}
 	r := newSettingsRig(t, u)
 	r.s.autoCheck()
-	r.open()
+	r.openUpdates()
 	if !r.has(SettingsRestart) || r.has(SettingsInstall) {
 		t.Fatalf("no Restart now in Settings: %q", r.texts())
 	}
@@ -366,7 +376,7 @@ func TestSettingsInstallErrorReachesTheStatusMessage(t *testing.T) {
 	r := newSettingsRig(t, u)
 	var msgs []string
 	r.s.Status = func(m string) { msgs = append(msgs, m) }
-	r.open()
+	r.openUpdates()
 	r.tt.Click(SettingsCheck)
 	r.tt.Click(SettingsInstall)
 	if len(msgs) != 1 || !strings.Contains(msgs[0], "no space") {
@@ -490,7 +500,7 @@ func TestSettingsAppearanceRowNeedsNoHandlers(t *testing.T) {
 func TestSettingsShowsTheHCVersion(t *testing.T) {
 	r := newSettingsRig(t, &fakeUpdates{enabled: true})
 	r.s.CoreVersion = func() (string, bool) { return "0.9.3", true }
-	r.open()
+	r.openUpdates()
 	if !r.hasText("hc 0.9.3") || !r.hasText("contr 1.2.3") {
 		t.Fatalf("versions missing: %v", r.texts())
 	}
@@ -498,7 +508,7 @@ func TestSettingsShowsTheHCVersion(t *testing.T) {
 
 func TestSettingsSaysThatHCIsNotConnected(t *testing.T) {
 	r := newSettingsRig(t, &fakeUpdates{enabled: true})
-	r.open()
+	r.openUpdates()
 	if !r.hasText(TextCoreOff) {
 		t.Fatalf("no %q without a source: %v", TextCoreOff, r.texts())
 	}
@@ -515,7 +525,7 @@ func TestSettingsReadyFollowsTheFoundUpdate(t *testing.T) {
 	if r.s.Ready() {
 		t.Fatal("ready before a check")
 	}
-	r.open()
+	r.openUpdates()
 	r.tt.Click(SettingsCheck)
 	if !r.s.Ready() {
 		t.Fatal("not ready after a check found 1.3.0")

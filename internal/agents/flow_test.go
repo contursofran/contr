@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -106,5 +107,48 @@ func TestFlowText(t *testing.T) {
 	}
 	if n := strings.Count(got, "\n- "); n != 5 {
 		t.Errorf("%d rule lines", n)
+	}
+}
+
+func TestSaveWritesOnlyChangedOrPresentProfiles(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agents.json")
+	if err := os.WriteFile(path, []byte(`{"profiles":{"planner":{"argv":["claude","--model","opus","--effort","low","--permission-mode","auto"]}},"other":1}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Profiles["debugger"] = Profile{Argv: []string{"claude", "--model", "opus", "--effort", "max"}}
+	cfg.Profiles["orchestrator"] = Profile{Argv: []string{"claude"}}
+	if err := cfg.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Profiles map[string]Profile `json:"profiles"`
+		Other    int                `json:"other"`
+	}
+	data, _ := os.ReadFile(path)
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for n := range got.Profiles {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	if strings.Join(names, ",") != "debugger,orchestrator,planner" || got.Other != 1 {
+		t.Fatalf("file = %s", data)
+	}
+}
+
+func TestSaveOfDefaultsWritesNoProfiles(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agents.json")
+	if err := DefaultConfig().Save(path); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	if strings.Contains(string(data), "profiles") {
+		t.Fatalf("file = %s", data)
 	}
 }

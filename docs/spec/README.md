@@ -32,6 +32,7 @@ what the redesign does not settle.
 | [OutlineCard.md](OutlineCard.md) | the card of a hovered tick |
 | [FileTree.md](FileTree.md) | the files panel tree with +/− counts |
 | [UsageMeter.md](UsageMeter.md) | context and plan usage under the file tree |
+| [SettingsAgents.md](SettingsAgents.md) | Settings tab bar and the Roles of the Agents tab |
 
 Each component spec has these sections: purpose, anatomy, states,
 behavior, data, keys and focus, edge cases, accessibility, build in MyGo,

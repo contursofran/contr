@@ -233,6 +233,7 @@ func openWindow(icons bool) int {
 		frame.PickFolder = pickFolder
 		frame.Updates = updateService()
 		frame.Relaunch = func() { mygo.App.Relaunch() }
+		frame.AgentsConfig = configPath(os.Getenv)
 		frame.OpenFolder = openFolder
 		frame.ProjectKey = projectKey
 		home, _ := os.UserHomeDir()

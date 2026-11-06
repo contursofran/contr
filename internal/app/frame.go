@@ -86,6 +86,8 @@ type Frame struct {
 	Updates Updates
 	// Relaunch restarts contr after an update installs.
 	Relaunch func()
+	// AgentsConfig is the path of agents.json that the Agents tab of Settings edits (D186).
+	AgentsConfig string
 	// Settings is the Settings modal, made in Attach.
 	Settings *Settings
 	// Worker is the panel's worker view. [Frame.Attach] makes it. The panel
@@ -1091,7 +1093,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	}
 	f.Settings = &Settings{Updates: f.Updates, Version: Version, CoreVersion: f.coreVersion, Run: Runner{Post: w.Update},
 		Relaunch: f.Relaunch, OnReady: f.updateReady, Invalidate: w.Invalidate, Visible: func() bool { return f.Visibility == nil || f.Visibility.Visible() },
-		Status: f.Toasts.Show, Appearance: f.Appearance, SetAppearance: f.SetAppearance,
+		AgentsConfig: f.AgentsConfig, Status: f.Toasts.Show, Appearance: f.Appearance, SetAppearance: f.SetAppearance,
 		Tint: f.Tint, SetTint: f.SetTint, ResetTint: f.ResetTint}
 	setSettingsHandler(func() { w.Update(f.Settings.Toggle) })
 	setSidebarHandler(func() { w.Update(f.ToggleSidebar) })
