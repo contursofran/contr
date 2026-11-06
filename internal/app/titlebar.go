@@ -6,6 +6,7 @@ package app
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/egoist/mygo/ui"
 
@@ -119,14 +120,15 @@ func (b *titleBar) tabRow(c *ui.Context) {
 	})
 }
 
-// tab draws one tab: the glyph, the title and, on the selected plain terminal, the close button.
+// tab draws one tab: the glyph, the title (SingleLine: NoWrap().Ellipsis() does not cut a title that
+// is wider than the tab, D175) and, on the selected plain terminal, the close button.
 func (b *titleBar) tab(c *ui.Context, tab ui.Element, t Tab) {
 	p := theme.Current()
 	el := tab.Label(t.Title).Height(theme.SizeRowHeight).MaxWidth(theme.SizeTabMaxWidth).MinWidth(0).Shrink(1).
 		Padding(0, theme.Space10).Gap(theme.Space8).AlignItems(ui.Center).Radius(theme.Radius8)
 	el = el.ContextMenu(func(m *ui.Menu) { b.tabMenu(m, t) })
-	if t.Tip != "" {
-		el = el.Tooltip(t.Tip)
+	if tip := tabTooltip(t); tip != "" {
+		el = el.Tooltip(tip)
 	}
 	over := false
 	if t.Movable() && b.moveTab != nil {
@@ -148,7 +150,7 @@ func (b *titleBar) tab(c *ui.Context, tab ui.Element, t Tab) {
 	ink := p.Ink50
 	switch {
 	case t.Selected:
-		el = el.Background(p.Selected)
+		el = el.Background(p.Panel)
 		el = insetRing(el, p.ShadowSelected)
 		ink = p.Ink100
 	default:
@@ -161,11 +163,23 @@ func (b *titleBar) tab(c *ui.Context, tab ui.Element, t Tab) {
 		b.glyph(c, t)
 		s := theme.StyleRowSmall
 		ui.Text(c, t.Title).Font(s.Stack()).FontSize(s.Size).FixedLineHeight(s.Line).FontWeight(s.Weight).
-			NoWrap().Ellipsis("…").MinWidth(0).Shrink(1)
+			SingleLine().MinWidth(0).Shrink(1)
 		if t.Selected && t.Closable() && b.closeTab != nil {
 			closeButton(c, func() { b.closeTab(t) })
 		}
 	})
+}
+
+// tabTooltip is the tooltip of a tab. A long title ends in an ellipsis (D175), so the tooltip always
+// holds the whole title: the tip as given, with the title in front when the tip does not have it.
+func tabTooltip(t Tab) string {
+	switch {
+	case t.Tip == "":
+		return t.Title
+	case t.Title == "" || strings.Contains(t.Tip, t.Title):
+		return t.Tip
+	}
+	return t.Title + " · " + t.Tip
 }
 
 // middleClick closes a tab when the middle button is pressed and released on it (D85: the caller
