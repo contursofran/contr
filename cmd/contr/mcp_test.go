@@ -342,8 +342,8 @@ func TestMCPSpawnReadsProfilesEachTime(t *testing.T) {
 	m := &managers{dial: dial, getenv: getenv, cfg: cfg, load: load}
 	spawn := agentTools(m, "")[0].Run
 	args := json.RawMessage(`{"name":"p","profile":"planner-high","task":"plan"}`)
-	if _, err := spawn(context.Background(), args); err == nil || !strings.Contains(err.Error(), `no profile "planner-high"`) {
-		t.Fatalf("before: %v", err)
+	if _, err := spawn(context.Background(), args); err == nil || !strings.Contains(err.Error(), `no profile "planner-high" in `+file+" (not found)") {
+		t.Fatalf("before: %v; want the error to name the file", err)
 	}
 	if err := os.WriteFile(file, []byte(`{"profiles":{"planner-high":{"argv":["claude","--effort","high"]}}}`), 0o600); err != nil {
 		t.Fatal(err)

@@ -10,9 +10,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -102,6 +104,11 @@ type Config struct {
 	Setup    map[string]string  `json:"setup,omitempty"`
 	// Flow is how the orchestrator takes an issue to a merge (D185).
 	Flow Flow `json:"flow"`
+	// Source tells where the profiles come from: the file that LoadConfig
+	// read, with "(not found)" after it when the file is missing. Spawn puts
+	// it in the "no profile" error, so the owner sees which file was read
+	// (#484).
+	Source string `json:"-"`
 }
 
 // EnvCoordinator holds the address of the terminal that started a worker, so
@@ -133,6 +140,16 @@ func (c Config) EffortOf(profile string) string {
 	return flagValue(c.Profiles[profile].Argv, "--effort")
 }
 
+// noProfile is the error for a profile that c does not have. It names the
+// profiles file that was read and the profiles that c has.
+func (c Config) noProfile(name string) error {
+	names := slices.Sorted(maps.Keys(c.Profiles))
+	if c.Source == "" {
+		return fmt.Errorf("agents: no profile %q; profiles: %s", name, strings.Join(names, ", "))
+	}
+	return fmt.Errorf("agents: no profile %q in %s; profiles: %s", name, c.Source, strings.Join(names, ", "))
+}
+
 // flagValue is the value after flag (or flag=) in argv, or "".
 func flagValue(argv []string, flag string) string {
 	for i, a := range argv {
@@ -151,8 +168,10 @@ func flagValue(argv []string, flag string) string {
 // file's flow keeps its default. A missing file gives the defaults.
 func LoadConfig(path string) (Config, error) {
 	cfg := DefaultConfig()
+	cfg.Source = path
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
+		cfg.Source = path + " (not found)"
 		return cfg, nil
 	}
 	if err != nil {
@@ -417,7 +436,7 @@ func New(core Core, cfg Config) *Manager {
 func (m *Manager) Spawn(ctx context.Context, s Spec) (Worker, error) {
 	p, ok := m.cfg.Profiles[s.Profile]
 	if !ok {
-		return Worker{}, fmt.Errorf("agents: no profile %q", s.Profile)
+		return Worker{}, m.cfg.noProfile(s.Profile)
 	}
 	if s.Name == "" {
 		return Worker{}, errors.New("agents: a worker needs a name")

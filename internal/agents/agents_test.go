@@ -93,8 +93,11 @@ var builderLabels = map[string]string{LabelApp: AppAgent, LabelRole: "builder", 
 
 func TestLoadConfig(t *testing.T) {
 	dir := t.TempDir()
-	cfg, err := LoadConfig(filepath.Join(dir, "missing.json"))
-	if err != nil || !reflect.DeepEqual(cfg, DefaultConfig()) {
+	missing := filepath.Join(dir, "missing.json")
+	cfg, err := LoadConfig(missing)
+	want := DefaultConfig()
+	want.Source = missing + " (not found)"
+	if err != nil || !reflect.DeepEqual(cfg, want) {
 		t.Fatalf("missing file: %v, %+v", err, cfg)
 	}
 
@@ -115,6 +118,9 @@ func TestLoadConfig(t *testing.T) {
 	if _, ok := cfg.Profiles["reviewer"]; !ok {
 		t.Error("default reviewer dropped")
 	}
+	if cfg.Source != path {
+		t.Errorf("source = %q, want %q", cfg.Source, path)
+	}
 
 	for _, bad := range []string{`{"profiles":{"x":{"argv":[]}}}`, `{not json`} {
 		if err := os.WriteFile(path, []byte(bad), 0o600); err != nil {
@@ -122,6 +128,22 @@ func TestLoadConfig(t *testing.T) {
 		}
 		if _, err := LoadConfig(path); err == nil {
 			t.Errorf("%s: no error", bad)
+		}
+	}
+}
+
+// TestSpawnNoProfile: the error for an unknown profile names the file that
+// was read and the profiles that it has (#484).
+func TestSpawnNoProfile(t *testing.T) {
+	for _, tc := range []struct{ source, want string }{
+		{"", `agents: no profile "planner-high"; profiles: builder, debugger, planner, reviewer`},
+		{"/cfg/agents.json (not found)", `agents: no profile "planner-high" in /cfg/agents.json (not found); profiles: builder, debugger, planner, reviewer`},
+	} {
+		cfg := DefaultConfig()
+		cfg.Source = tc.source
+		_, err := New(&fakeCore{}, cfg).Spawn(context.Background(), Spec{Name: "p", Profile: "planner-high"})
+		if err == nil || err.Error() != tc.want {
+			t.Errorf("source %q: err = %v, want %s", tc.source, err, tc.want)
 		}
 	}
 }
