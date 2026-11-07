@@ -120,6 +120,10 @@ type Conn struct {
 	rmu sync.Mutex // Read's leftover
 	buf []byte
 
+	// smu orders the size sends on an input stream (see sendSize). Take it
+	// before mu, never after.
+	smu sync.Mutex
+
 	mu        sync.Mutex
 	stream    Stream // nil unless attached
 	live      bool   // attached and the held input is flushed
@@ -136,6 +140,7 @@ type Conn struct {
 	focused   bool
 	cols      uint16
 	rows      uint16
+	sent      [2]uint16 // the size the core has from stream: the attach's, then each Resize
 	cell      [2]int
 	state     State
 	watching  bool     // attach as an observer: no size, focus or input
@@ -307,11 +312,39 @@ func (c *Conn) ResizePixels(cols, rows, cellW, cellH int) error {
 	if !changed {
 		return nil
 	}
-	if err := s.Resize(uint16(cols), uint16(rows)); err != nil {
-		return err
+	return c.sendSize(s, false)
+}
+
+// sendSize gives the core and the screen the view's newest size on the input
+// stream s. It sends a Resize when the core has another size, and marks the
+// size for the screen when it sent one or when mark is set. smu orders the
+// sends, and each one reads c.cols and c.rows under it, so the last send has
+// the newest size: an attach that ends while the view resizes cannot undo
+// the view's size (#487). A stream that is no longer current gets nothing.
+func (c *Conn) sendSize(s Stream, mark bool) error {
+	c.smu.Lock()
+	defer c.smu.Unlock()
+	c.mu.Lock()
+	size := [2]uint16{c.cols, c.rows}
+	current, differs := c.stream == s, c.sent != size
+	c.mu.Unlock()
+	if !current {
+		return nil
 	}
-	// The core sends no resize frame to the viewer that resized (D43).
-	c.setSize(uint16(cols), uint16(rows))
+	if differs {
+		if err := s.Resize(size[0], size[1]); err != nil {
+			return err
+		}
+		c.mu.Lock()
+		if c.stream == s {
+			c.sent = size
+		}
+		c.mu.Unlock()
+	}
+	if differs || mark {
+		// The core sends no resize frame to the viewer that resized (D43).
+		c.setSize(size[0], size[1])
+	}
 	return nil
 }
 
@@ -560,18 +593,18 @@ func (c *Conn) run() {
 		return
 	}
 	c.stream, c.attaching, c.resumed, c.noRetry = s, false, true, false
+	c.sent = [2]uint16{p.Cols, p.Rows}
 	fitting := c.fitting
-	cols, rows, focused := c.cols, c.rows, c.focused && !fitting
+	focused := c.focused && !fitting
 	c.mu.Unlock()
 	if !p.Observe {
-		if cols != p.Cols || rows != p.Rows { // the view's size changed during the attach
-			_ = s.Resize(cols, rows)
-		}
+		// This viewer set the size, and gets no resize frame for it (D43).
+		// sendSize also sends the size when the view resized during the
+		// attach.
+		_ = c.sendSize(s, true)
 		if focused {
 			_ = s.Focus(true)
 		}
-		// This viewer set the size, and gets no resize frame for it (D43).
-		c.setSize(cols, rows)
 	}
 	c.flushHeld(s)
 	c.mu.Lock()

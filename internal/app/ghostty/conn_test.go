@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -20,6 +21,9 @@ type fakeStream struct {
 	written []byte
 	resizes [][2]uint16
 	focus   []bool
+	// onResize, when set, runs at the start of each Resize, before the size
+	// is kept: the core has the size only after it returns.
+	onResize func(cols, rows uint16)
 }
 
 func newFakeStream() *fakeStream { return &fakeStream{events: make(chan hc.StreamEvent, 64)} }
@@ -33,6 +37,9 @@ func (s *fakeStream) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 func (s *fakeStream) Resize(c, r uint16) error {
+	if s.onResize != nil {
+		s.onResize(c, r)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.resizes = append(s.resizes, [2]uint16{c, r})
@@ -69,6 +76,8 @@ type fakeSource struct {
 	closed  int
 	gate    chan struct{} // attaches after the first wait for this to close, when set
 	gate0   chan struct{} // every attach waits for this to close, when set
+	// onResize goes to each new stream's onResize.
+	onResize func(cols, rows uint16)
 }
 
 func newFakeSource(errs ...error) *fakeSource {
@@ -97,6 +106,7 @@ func (f *fakeSource) Attach(ctx context.Context, p hc.AttachParams) (Stream, err
 		return nil, f.errs[i]
 	}
 	s := newFakeStream()
+	s.onResize = f.onResize
 	f.streams = append(f.streams, s)
 	return s, nil
 }
@@ -1035,5 +1045,71 @@ func TestWatchFitWaitsForTheViewSize(t *testing.T) {
 	waitAttaches(t, src, 2)
 	if p := src.param(1); p.Observe || p.Cols != 124 || p.Rows != 47 {
 		t.Errorf("fit attach %+v", p)
+	}
+}
+
+// A view resize while an attach sends its size is not undone by the
+// attach's older size: the core and the screen both end at the view's
+// newest size (#487).
+func TestViewResizeWhileTheAttachSendsItsSizeWins(t *testing.T) {
+	fast(t)
+	src := newFakeSource()
+	src.gate0 = make(chan struct{})
+	entered, release := make(chan struct{}), make(chan struct{})
+	var first atomic.Bool
+	src.onResize = func(uint16, uint16) { // only the attach's Resize waits
+		if first.CompareAndSwap(false, true) {
+			close(entered)
+			<-release
+		}
+	}
+	st := &states{ch: make(chan State, 16)}
+	c := NewConn(src, Options{OnState: st.on}) // attaches at 80x24 and waits
+	defer c.Close()
+	scr := &fakeScreen{}
+	c.SetScreen(scr)
+	go func() {
+		buf := make([]byte, 8)
+		for {
+			if _, err := c.Read(buf); err != nil {
+				return
+			}
+		}
+	}()
+	time.Sleep(30 * time.Millisecond)
+	_ = c.ResizePixels(100, 30, 8, 17) // during the attach: run sends it
+	close(src.gate0)
+	select {
+	case <-entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the attach sent no size")
+	}
+	done := make(chan error, 1)
+	go func() { done <- c.ResizePixels(120, 40, 8, 17) }() // the view resizes now
+	select {
+	case <-done: // sent at once: run's older size must not come after it
+	case <-time.After(20 * time.Millisecond): // waits for run's send
+	}
+	close(release)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the view resize did not end")
+	}
+	st.wait(t, Live)
+	s := src.stream(t, 0)
+	s.mu.Lock()
+	resizes := append([][2]uint16(nil), s.resizes...)
+	s.mu.Unlock()
+	if len(resizes) == 0 || resizes[len(resizes)-1] != [2]uint16{120, 40} {
+		t.Errorf("core resizes %v, want 120x40 last", resizes)
+	}
+	scr.wait(t, 120, 40)
+	time.Sleep(20 * time.Millisecond) // a late 100x30 would come now
+	if got := scr.last(); got != [2]int{120, 40} {
+		t.Errorf("screen size %v, want 120x40", got)
 	}
 }
