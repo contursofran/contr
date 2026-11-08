@@ -149,6 +149,7 @@ type Conn struct {
 	newest    uint64   // the seq of pending, or of the size the screen has
 	wake      chan struct{}
 	taken     func() // tests only: Read calls it after it takes a chunk
+	sizeRead  func() // tests only: sendSize calls it after it reads the view's size
 }
 
 // NewConn returns a Conn for src. It never blocks: the attach and the watch
@@ -561,17 +562,13 @@ func (c *Conn) run() {
 	}
 	c.stream, c.attaching, c.resumed, c.noRetry = s, false, true, false
 	fitting := c.fitting
-	cols, rows, focused := c.cols, c.rows, c.focused && !fitting
+	focused := c.focused && !fitting
 	c.mu.Unlock()
 	if !p.Observe {
-		if cols != p.Cols || rows != p.Rows { // the view's size changed during the attach
-			_ = s.Resize(cols, rows)
-		}
+		c.sendSize(s, p.Cols, p.Rows)
 		if focused {
 			_ = s.Focus(true)
 		}
-		// This viewer set the size, and gets no resize frame for it (D43).
-		c.setSize(cols, rows)
 	}
 	c.flushHeld(s)
 	c.mu.Lock()
@@ -615,6 +612,37 @@ func (c *Conn) run() {
 	c.setState(State{Kind: NotRunning, Message: msg})
 	if !final {
 		c.scheduleRetry() // a lost connection
+	}
+}
+
+// sendSize gives the view's size to the core over s and to the screen, after
+// an attach with input at cols x rows. The view's size can change during the
+// attach. It can also change just after run sets the stream: ResizePixels
+// then sends its size itself, and that can come before the size read here.
+// So after each send, sendSize reads the view's size again, and sends again
+// until the size it sent is the latest. The core and the screen end at the
+// view's latest size (#487). The core sends no resize frame to the viewer
+// that set the size (D43), so the screen gets it from setSize.
+func (c *Conn) sendSize(s Stream, cols, rows uint16) {
+	core := [2]uint16{cols, rows} // the size the core has from this viewer
+	for {
+		c.mu.Lock()
+		view := [2]uint16{c.cols, c.rows}
+		c.mu.Unlock()
+		if c.sizeRead != nil {
+			c.sizeRead()
+		}
+		if view != core {
+			_ = s.Resize(view[0], view[1])
+			core = view
+		}
+		c.setSize(view[0], view[1])
+		c.mu.Lock()
+		latest := c.cols == view[0] && c.rows == view[1]
+		c.mu.Unlock()
+		if latest {
+			return
+		}
 	}
 }
 

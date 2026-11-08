@@ -67,8 +67,9 @@ type fakeSource struct {
 	errs    []error // one per attach call, nil for success
 	watchCh chan hc.Event
 	closed  int
-	gate    chan struct{} // attaches after the first wait for this to close, when set
-	gate0   chan struct{} // every attach waits for this to close, when set
+	gate    chan struct{}        // attaches after the first wait for this to close, when set
+	gate0   chan struct{}        // every attach waits for this to close, when set
+	entered chan hc.AttachParams // each attach sends its params here first, when set
 }
 
 func newFakeSource(errs ...error) *fakeSource {
@@ -77,11 +78,14 @@ func newFakeSource(errs ...error) *fakeSource {
 
 func (f *fakeSource) Attach(ctx context.Context, p hc.AttachParams) (Stream, error) {
 	f.mu.Lock()
-	gate, n := f.gate, len(f.params)
+	gate, n, entered := f.gate, len(f.params), f.entered
 	if f.gate0 != nil {
 		gate, n = f.gate0, 1
 	}
 	f.mu.Unlock()
+	if entered != nil {
+		entered <- p
+	}
 	if gate != nil && n >= 1 {
 		select {
 		case <-gate:
@@ -446,6 +450,104 @@ func TestResizeDuringTheAttachIsSentOnceLive(t *testing.T) {
 	if len(s.resizes) != 1 || s.resizes[0] != [2]uint16{101, 31} {
 		t.Errorf("resizes %v, want 101x31", s.resizes)
 	}
+}
+
+// startSized starts a Conn that attaches with input when the test gives the
+// view's size, so the test can set hooks before the attach starts.
+func startSized(t *testing.T, src *fakeSource) (*Conn, *states, *fakeScreen) {
+	t.Helper()
+	fast(t)
+	firstWait = time.Hour // fast restores it on cleanup
+	st := &states{ch: make(chan State, 256)}
+	c := NewConn(src, Options{OnState: st.on})
+	scr := &fakeScreen{}
+	c.SetScreen(scr)
+	t.Cleanup(func() { _ = c.Close() })
+	return c, st, scr
+}
+
+// resizeOnSizeRead makes the view resize to cols x rows once, just after
+// sendSize read the view's size and before it sends that size: the latest
+// moment a ResizePixels call can come from the UI thread.
+func resizeOnSizeRead(t *testing.T, c *Conn, cols, rows int) {
+	var once sync.Once
+	c.sizeRead = func() {
+		once.Do(func() {
+			if err := c.ResizePixels(cols, rows, 8, 16); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+}
+
+// drain reads c until it closes, so the screen gets its sizes.
+func drain(c *Conn) {
+	go func() {
+		buf := make([]byte, 8)
+		for {
+			if _, err := c.Read(buf); err != nil {
+				return
+			}
+		}
+	}()
+}
+
+// sizesEnd checks that the core and the screen end at cols x rows.
+func sizesEnd(t *testing.T, s *fakeStream, scr *fakeScreen, cols, rows int) {
+	t.Helper()
+	scr.wait(t, cols, rows)
+	time.Sleep(20 * time.Millisecond) // a late older size would come now
+	if got := scr.last(); got != [2]int{cols, rows} {
+		t.Errorf("screen %v, want %dx%d", got, cols, rows)
+	}
+	s.mu.Lock()
+	resizes := append([][2]uint16(nil), s.resizes...)
+	s.mu.Unlock()
+	if len(resizes) == 0 || resizes[len(resizes)-1] != [2]uint16{uint16(cols), uint16(rows)} {
+		t.Errorf("core resizes %v, want the last %dx%d", resizes, cols, rows)
+	}
+}
+
+// The view resizes just after the attach set the stream, before run sends
+// the attach's size. The screen and the core end at the view's new size (#487).
+func TestResizeJustAfterAnAttachIsNotUndone(t *testing.T) {
+	src := newFakeSource()
+	c, st, scr := startSized(t, src)
+	resizeOnSizeRead(t, c, 100, 30)
+	if err := c.ResizePixels(90, 20, 8, 16); err != nil {
+		t.Fatal(err)
+	}
+	st.wait(t, Live)
+	drain(c)
+	sizesEnd(t, src.stream(t, 0), scr, 100, 30)
+	if p := src.param(0); p.Cols != 90 || p.Rows != 20 {
+		t.Errorf("attach %+v, want 90x20", p)
+	}
+}
+
+// The view resizes during the attach and again just after it set the stream.
+// The size from during the attach does not come after the newer one (#487).
+func TestResizeDuringAndJustAfterAnAttachIsNotUndone(t *testing.T) {
+	src := newFakeSource()
+	src.gate0 = make(chan struct{})
+	src.entered = make(chan hc.AttachParams, 4)
+	c, st, scr := startSized(t, src)
+	resizeOnSizeRead(t, c, 100, 30)
+	if err := c.ResizePixels(90, 20, 8, 16); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-src.entered: // the attach read 90x20 and waits at the gate
+	case <-time.After(2 * time.Second):
+		t.Fatal("no attach")
+	}
+	if err := c.ResizePixels(70, 20, 8, 16); err != nil {
+		t.Fatal(err)
+	}
+	close(src.gate0)
+	st.wait(t, Live)
+	drain(c)
+	sizesEnd(t, src.stream(t, 0), scr, 100, 30)
 }
 
 func TestFocusSetDuringTheAttachIsSentOnceLive(t *testing.T) {
