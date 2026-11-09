@@ -211,12 +211,17 @@ type Frame struct {
 	bar titleBar
 	// upd is the update pill, its panel and its toast (D176).
 	upd updateUI
-	// agentSnap gives the agents; nil before Attach or without agents. openProject is the
-	// project the title bar shows, and tabAgent the address of the agent whose tabs show.
+	// agentSnap reads the agent source; nil before Attach or without agents. Only
+	// [Frame.takeSnapshot] calls it. snap is the state of the last change and byAddr indexes
+	// it by address. openProject is the project the title bar shows, tabAgent the address of
+	// the agent whose tabs show, and tabs the title bar tabs (see agentview.go, #565).
 	agentSnap   func() agentstate.Snapshot
+	snap        agentstate.Snapshot
+	byAddr      map[string]agents.Worker
 	openProject string
 	openKey     string // the git common folder of openProject, when known
 	tabAgent    string
+	tabs        []Tab
 	// tabOrder is the order the owner dragged the plain tabs to, as addresses, for the session.
 	tabOrder    []string
 	sidebarOpen bool
@@ -298,7 +303,7 @@ func (f *Frame) OpenPR(dir string, n int) {
 	if viewersEnabled && f.PR != nil {
 		f.PR.Open(dir, n)
 		if f.agentSnap != nil {
-			f.PR.Item = itemOf(f.agentSnap().Workers, dir)
+			f.PR.Item = itemOf(f.snap.Workers, dir)
 		}
 	}
 }
@@ -319,7 +324,7 @@ func (f *Frame) prOrchestrator(dir string) string {
 	if f.agentSnap == nil {
 		return ""
 	}
-	snap := f.agentSnap()
+	snap := f.snap
 	project := f.openProject
 	for _, w := range snap.Workers {
 		if w.Worktree != "" && w.Worktree == dir {
@@ -593,22 +598,6 @@ func (f *Frame) contextLabels() usage.Context {
 	return usage.Context{Tokens: w.ContextTokens, Size: w.ContextLimit}
 }
 
-// agentAt is the orchestrator, worker or terminal at hc address id.
-func (f *Frame) agentAt(id string) (agents.Worker, bool) {
-	if id == "" || f.agentSnap == nil {
-		return agents.Worker{}, false
-	}
-	s := f.agentSnap()
-	for _, ws := range [][]agents.Worker{s.Orchestrators, s.Workers, s.Terminals} {
-		for _, w := range ws {
-			if w.Address == id {
-				return w, true
-			}
-		}
-	}
-	return agents.Worker{}, false
-}
-
 // planUsage is the usage sampler as the meters read it. A nil sampler (a
 // frame without one) reads as an interface that holds nothing.
 func (f *Frame) planUsage() planPercent {
@@ -774,28 +763,6 @@ func (f *Frame) terminal(c *ui.Context) {
 	})
 }
 
-// titleTabs returns the tabs of the selected agent. The open project follows the selected
-// orchestrator, worker or plain terminal, and keeps its last value for any other selection; the
-// agent keeps its last value while a plain terminal or a worktree is selected.
-func (f *Frame) titleTabs() []Tab {
-	if f.agentSnap == nil {
-		return nil
-	}
-	snap := f.agentSnap()
-	var sel state.Selected
-	var ok bool
-	if f.Selection != nil {
-		sel, ok = f.Selection.Current()
-	}
-	f.openProject, f.openKey = OpenProjectKey(snap, sel, ok, f.openProject, f.openKey)
-	f.tabAgent = TabAgent(snap, sel, ok, f.openProject, f.openKey, f.tabAgent)
-	selected := ""
-	if ok && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker || sel.Kind == state.KindTerminal) {
-		selected = sel.ID
-	}
-	return OrderTabs(TitleTabs(snap, f.openProject, f.openKey, f.tabAgent, selected), f.tabOrder)
-}
-
 // newTerminal opens a plain terminal in the open project (D82). Its folder is
 // the worktree of the project's first orchestrator, else the home folder.
 // UI thread.
@@ -819,7 +786,7 @@ func (f *Frame) closeSelectedTerminal() {
 	if !ok || sel.Kind != state.KindTerminal {
 		return
 	}
-	if f.agentSnap != nil && !slices.ContainsFunc(f.agentSnap().Terminals, func(w agents.Worker) bool { return w.Address == sel.ID }) {
+	if f.agentSnap != nil && !slices.ContainsFunc(f.snap.Terminals, func(w agents.Worker) bool { return w.Address == sel.ID }) {
 		return
 	}
 	f.CloseTerm.Start(sel.ID)
@@ -845,7 +812,7 @@ func (f *Frame) terminalClosed(addr string) {
 // terminalDir is the start folder of a new terminal in project.
 func (f *Frame) terminalDir(project string) string {
 	if f.agentSnap != nil {
-		for _, o := range f.agentSnap().Orchestrators {
+		for _, o := range f.snap.Orchestrators {
 			if o.Project == project && o.Worktree != "" {
 				return o.Worktree
 			}
@@ -921,6 +888,7 @@ func (f *Frame) moveTab(from, to string) {
 		}
 	}
 	f.tabOrder = order
+	f.syncOpen()
 }
 
 // Window is the part of a MyGo window that [Frame.Attach] uses.
@@ -935,12 +903,12 @@ type Window interface {
 
 // scope is the project the board shows: the selected orchestrator's,
 // or "" (all projects) when none is selected.
-func (f *Frame) scope(src AgentSource) string {
+func (f *Frame) scope() string {
 	sel, ok := f.Selection.Current()
 	if !ok || sel.Kind != state.KindOrchestrator {
 		return ""
 	}
-	for _, o := range src.Snapshot().Orchestrators {
+	for _, o := range f.snap.Orchestrators {
 		if o.Address == sel.ID {
 			return o.Project
 		}
@@ -948,7 +916,10 @@ func (f *Frame) scope(src AgentSource) string {
 	return ""
 }
 
+// syncAgents takes the snapshot of a change and gives it to the parts that follow the agents.
+// UI thread.
 func (f *Frame) syncAgents() {
+	f.takeSnapshot()
 	if f.Worker != nil {
 		f.Worker.Sync()
 	}
@@ -956,7 +927,7 @@ func (f *Frame) syncAgents() {
 		f.SpacesList.Sync()
 	}
 	if f.PR != nil && f.agentSnap != nil {
-		f.PR.OnAgentsSync(f.agentSnap().Workers)
+		f.PR.OnAgentsSync(f.snap.Workers)
 	}
 	f.syncWorkerPRs()
 	f.syncIssueTitles()
@@ -1018,7 +989,7 @@ func (f *Frame) loadWidths(w Window) {
 // syncIssueTitles starts the issue title reads for the workers (D174).
 func (f *Frame) syncIssueTitles() {
 	if f.IssueTitles != nil && f.agentSnap != nil {
-		f.IssueTitles.Sync(f.agentSnap().Workers)
+		f.IssueTitles.Sync(f.snap.Workers)
 	}
 }
 
@@ -1046,7 +1017,7 @@ func (f *Frame) statusEffort(address string) string {
 func (f *Frame) attachBoard(agentSnap func() agentstate.Snapshot, src AgentSource) {
 	var scope func() string
 	if src != nil {
-		scope = func() string { return f.scope(src) }
+		scope = f.scope
 	}
 	f.Panel = &BoardPanel{Snapshot: agentSnap, Needs: NeedItems(agentSnap, scope)}
 	f.Panel.OpenPR = f.paneOpener()
@@ -1065,7 +1036,7 @@ func (f *Frame) attachBoard(agentSnap func() agentstate.Snapshot, src AgentSourc
 // syncWorkerPRs starts the pull request reads for the workers now (D104).
 func (f *Frame) syncWorkerPRs() {
 	if f.WorkerPRs != nil && f.agentSnap != nil {
-		f.WorkerPRs.Sync(f.agentSnap().Workers)
+		f.WorkerPRs.Sync(f.snap.Workers)
 	}
 }
 
@@ -1073,7 +1044,7 @@ func (f *Frame) syncWorkerPRs() {
 // redraws the window; Visibility follows the window. Call it once, on the UI
 // thread, after the window exists. The returned function ends the watching.
 func (f *Frame) Attach(w Window) (stop func()) {
-	f.Selection = state.NewSelection(func() { w.Invalidate(); f.syncReview(); f.syncTerminal() })
+	f.Selection = state.NewSelection(func() { f.syncOpen(); w.Invalidate(); f.syncReview(); f.syncTerminal() })
 	f.Review = NewReview(w.Update, w.Invalidate)
 	f.Files.Post, f.Files.Invalidate = w.Update, w.Invalidate
 	f.Toasts = state.NewToasts(w.Invalidate)
@@ -1097,8 +1068,10 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		src, stopAgents = f.StartAgents(func() { w.Update(f.syncAgents) })
 	}
 	if src != nil {
-		agentSnap = src.Snapshot
-		f.agentSnap = agentSnap
+		f.agentSnap = src.Snapshot
+		f.takeSnapshot()
+		agentSnap = f.snapshot
+		src = storedSource{AgentSource: src, snap: f.snapshot}
 		run := Runner{Post: w.Update}
 		f.Card = &QuestionsCard{Source: src, Run: run, Invalidate: w.Invalidate, Status: f.Toasts.Show,
 			Select: func(address string, orchestrator bool) {
@@ -1400,7 +1373,7 @@ func (f *Frame) coreVersion() (string, bool) {
 	if f.agentSnap == nil {
 		return "", false
 	}
-	v := f.agentSnap().CoreVersion
+	v := f.snap.CoreVersion
 	return v, v != ""
 }
 

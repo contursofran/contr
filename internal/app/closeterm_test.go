@@ -38,6 +38,7 @@ func newCloseFrame(t *testing.T, snap *agentstate.Snapshot) *closeFrame {
 			cf.stopped = append(cf.stopped, addr)
 			if cf.stopErr == nil {
 				cf.snap.Terminals = slices.DeleteFunc(cf.snap.Terminals, func(w agents.Worker) bool { return w.Address == addr })
+				f.syncAgents() // as the change notify does
 			}
 			return cf.stopErr
 		},
@@ -236,6 +237,7 @@ func TestCloseTerminalKeepsAPlainTerminalThatRunsClaude(t *testing.T) {
 	s.Role, s.Session = agents.RoleOrchestrator, true
 	snap.Terminals = nil
 	snap.Orchestrators = append(snap.Orchestrators, s)
+	cf.syncAgents()
 	cf.closeSelectedTerminal()
 	if len(cf.stopped) != 0 {
 		t.Errorf("stopped %v, want none", cf.stopped)

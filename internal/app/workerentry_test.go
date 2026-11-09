@@ -123,6 +123,7 @@ func TestFrameOpenPRSetsTheItemOfTheWorker(t *testing.T) {
 	f.agentSnap = func() agentstate.Snapshot {
 		return agentstate.Snapshot{Workers: []agents.Worker{entryWorker}}
 	}
+	f.takeSnapshot()
 	f.OpenPR("/wt/a", 642)
 	if r.pane.Item != "#268" {
 		t.Errorf("item %q", r.pane.Item)
