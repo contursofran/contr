@@ -2,6 +2,7 @@ package kit
 
 import (
 	"bytes"
+	"image"
 	"testing"
 	"time"
 
@@ -11,7 +12,7 @@ import (
 )
 
 // at returns a time d after a moment where every cycle of the glyphs starts
-// (100.8s is a whole number of 90ms, 140ms, 1.6s and 2.4s), so the tests do
+// (1,008,000s is a whole number of 90ms, 140ms, .8s and 1.6s), so the tests do
 // not depend on the clock.
 func at(d time.Duration) time.Time {
 	return time.Unix(1_008_000, 0).Add(d)
@@ -81,8 +82,8 @@ func TestReduceMotionShowsFirstFrameAndWaiting(t *testing.T) {
 		if o := BrailleOpacity(GlyphWaiting, at(d), true); o != 1 {
 			t.Errorf("waiting with reduce motion has opacity %v, want 1", o)
 		}
-		if a := ClaudeAngle(GlyphWorking, at(d), true); a != 0 {
-			t.Errorf("claude with reduce motion turned to %v, want 0", a)
+		if y := ClaudeHopOffset(GlyphWorking, at(d+ClaudeHop/2), true); y != 0 {
+			t.Errorf("claude with reduce motion hopped to %v, want 0", y)
 		}
 	}
 }
@@ -105,20 +106,29 @@ func TestWaitingFadesBetweenQuarterAndOne(t *testing.T) {
 	}
 }
 
-func TestClaudeTurnsOnceIn2400msWhileWorking(t *testing.T) {
+func TestClaudeHopsOnceIn800msWhileWorking(t *testing.T) {
 	near := func(got, want float32) bool { return got > want-0.01 && got < want+0.01 }
-	if a := ClaudeAngle(GlyphWorking, at(0), false); a != 0 {
-		t.Errorf("angle at 0 is %v", a)
+	if y := ClaudeHopOffset(GlyphWorking, at(0), false); y != 0 {
+		t.Errorf("hop at 0 is %v", y)
 	}
-	if a := ClaudeAngle(GlyphWorking, at(1200*time.Millisecond), false); !near(a, 180) {
-		t.Errorf("angle at 1.2s is %v, want 180", a)
+	if y := ClaudeHopOffset(GlyphWorking, at(ClaudeHop/2), false); !near(y, ClaudeHopHeight) {
+		t.Errorf("hop at .4s is %v, want the top, %v", y, ClaudeHopHeight)
 	}
-	if a := ClaudeAngle(GlyphWorking, at(ClaudeTurn), false); a != 0 {
-		t.Errorf("angle after one turn is %v, want 0", a)
+	if ClaudeHopHeight < 1 || ClaudeHopHeight > 2 {
+		t.Errorf("the hop is %v high, want 1 to 2", ClaudeHopHeight)
+	}
+	if y := ClaudeHopOffset(GlyphWorking, at(ClaudeHop), false); y != 0 {
+		t.Errorf("hop after one hop is %v, want 0", y)
+	}
+	for _, d := range []time.Duration{100, 300, 500, 700} {
+		y := ClaudeHopOffset(GlyphWorking, at(d*time.Millisecond), false)
+		if y <= 0 || y > ClaudeHopHeight {
+			t.Errorf("hop at %vms is %v, want above 0 and at most %v", d, y, ClaudeHopHeight)
+		}
 	}
 	for _, s := range []GlyphState{GlyphIdle, GlyphWorkingSlow, GlyphWaiting, GlyphNeedsYou} {
-		if a := ClaudeAngle(s, at(900*time.Millisecond), false); a != 0 {
-			t.Errorf("%v turned to %v, want still", s, a)
+		if y := ClaudeHopOffset(s, at(ClaudeHop/2), false); y != 0 {
+			t.Errorf("%v hopped to %v, want still", s, y)
 		}
 	}
 	if o := ClaudeOpacity(GlyphIdle); o != 0.45 {
@@ -324,14 +334,136 @@ func TestBrailleGlyphHasInk(t *testing.T) {
 	}
 }
 
-func TestClaudeMarkLoads(t *testing.T) {
-	if ClaudeMark() == nil {
-		t.Fatal("assets/icons/claude.svg does not load")
+// inkBox returns the bounds of the pixels that are not black, in device
+// pixels; ok is false for a black image.
+func inkBox(img *image.RGBA) (r image.Rectangle, ok bool) {
+	b := img.Bounds()
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			c := img.RGBAAt(x, y)
+			if c.R == 0 && c.G == 0 && c.B == 0 {
+				continue
+			}
+			p := image.Rect(x, y, x+1, y+1)
+			if !ok {
+				r, ok = p, true
+			} else {
+				r = r.Union(p)
+			}
+		}
 	}
-	tt := ui.NewTester(glyphView(GlyphOpts{State: GlyphWorking, Claude: true}, false), 100, 100)
-	blank := ui.NewTester(func(c *ui.Context) { ui.Column(c).Fill().Background(ui.RGB(0, 0, 0)) }, 100, 100)
-	if bytes.Equal(tt.Image().Pix, blank.Image().Pix) {
-		t.Error("the Claude mark draws nothing")
+	return r, ok
+}
+
+// mascotTester shows one Claude glyph at scale 2, as on a Retina screen.
+func mascotTester(o GlyphOpts) *ui.Tester {
+	o.Claude = true
+	tt := ui.NewTester(glyphView(o, false), 100, 100)
+	tt.SetScale(2)
+	tt.Frame()
+	return tt
+}
+
+func TestTheGlyphDrawsTheMascot(t *testing.T) {
+	if ClaudeMascot() == nil {
+		t.Fatal("assets/icons/claude-mascot.svg does not load")
+	}
+	// The cells of the path, 1.5 SVG units each: the body, two eye holes,
+	// the arms and four legs.
+	cells := []string{
+		"..############..",
+		"..############..",
+		"..##.######.##..",
+		"..##.######.##..",
+		"################",
+		"################",
+		"..############..",
+		"..############..",
+		"...#.#....#.#...",
+		"...#.#....#.#...",
+	}
+	for _, small := range []bool{false, true} {
+		tt := mascotTester(GlyphOpts{State: GlyphNeedsYou, Small: small})
+		box, ok := inkBox(tt.Image())
+		if !ok {
+			t.Fatalf("small=%v: the Claude mascot draws nothing", small)
+		}
+		g, _ := tt.Find("needs you")
+		// The ink is as wide as the glyph box and 10/16 as high; the old
+		// mark was as high as wide.
+		if w := float32(box.Dx()); w < 2*g.W-1 || w > 2*g.W+1 {
+			t.Errorf("small=%v: the ink is %v px wide, want the box, %v px", small, box.Dx(), 2*g.W)
+		}
+		if h, want := float32(box.Dy()), 2*g.W*mascotRows/mascotCols; h < want-1.5 || h > want+1.5 { // the small cell is 1.75 px: edges blend
+			t.Errorf("small=%v: the ink is %v px high, want %v", small, box.Dy(), want)
+		}
+		// Centred in the box.
+		midX, midY := 2*(g.X+g.W/2), 2*(g.Y+g.H/2)
+		if x := float32(box.Min.X+box.Max.X) / 2; x < midX-1 || x > midX+1 {
+			t.Errorf("small=%v: the ink is centred at x %v, want %v", small, x, midX)
+		}
+		if y := float32(box.Min.Y+box.Max.Y) / 2; y < midY-1 || y > midY+1 {
+			t.Errorf("small=%v: the ink is centred at y %v, want %v", small, y, midY)
+		}
+		if small {
+			continue
+		}
+		// In the 16px box a cell is 2×2 device pixels: the image is the
+		// mascot, cell for cell, eyes and legs included, with sharp edges.
+		img := tt.Image()
+		for row, line := range cells {
+			for col := range line {
+				for _, d := range [][2]int{{0, 0}, {1, 1}} {
+					c := img.RGBAAt(box.Min.X+2*col+d[0], box.Min.Y+2*row+d[1])
+					// Half covered or more: the path has edges a little off
+					// the cells (17.079, not 17), so their pixels blend.
+					ink := max(c.R, c.G, c.B) >= 128
+					if want := line[col] == '#'; ink != want {
+						t.Errorf("cell %d,%d has ink %v, want %v", col, row, ink, want)
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestTheWorkingMascotHops(t *testing.T) {
+	// The Tester's clock is the wall clock, so the test samples a whole
+	// hop from any phase: the top moves by about ClaudeHopHeight.
+	tt := mascotTester(GlyphOpts{State: GlyphWorking})
+	lo, hi := 1<<30, -1
+	for range 8 {
+		tt.Advance(ClaudeHop / 8)
+		b, _ := inkBox(tt.Image())
+		lo, hi = min(lo, b.Min.Y), max(hi, b.Min.Y)
+	}
+	if d := hi - lo; d < 2 || d > 4 {
+		t.Errorf("the working mascot moves %d px (scale 2), want 1 to 2 DIPs", d)
+	}
+	for _, o := range []struct {
+		name   string
+		o      GlyphOpts
+		reduce bool
+	}{
+		{"working, Reduce Motion", GlyphOpts{State: GlyphWorking}, true},
+		{"working slow", GlyphOpts{State: GlyphWorkingSlow}, false},
+		{"waiting", GlyphOpts{State: GlyphWaiting}, false},
+		{"idle", GlyphOpts{State: GlyphIdle}, false},
+		{"needs you", GlyphOpts{State: GlyphNeedsYou}, false},
+	} {
+		tt := mascotTester(o.o)
+		if o.reduce {
+			tt.SetPreferences(ui.Preferences{ReduceMotion: true})
+			tt.Frame()
+		}
+		before, _ := inkBox(tt.Image())
+		for range 4 {
+			tt.Advance(ClaudeHop / 4)
+			if after, _ := inkBox(tt.Image()); after != before {
+				t.Errorf("%s: the mascot moved from %v to %v", o.name, before, after)
+				break
+			}
+		}
 	}
 }
 
@@ -343,7 +475,7 @@ func join(s []string) string {
 	return b.String()
 }
 
-// A Claude session that does not orchestrate has a grey mark; the claude hue
+// A Claude session that does not orchestrate has a grey mascot; the claude hue
 // stays for orchestrators, and needs you keeps its hue (D191).
 func TestTheMarkOfAPlainSessionIsGrey(t *testing.T) {
 	for _, p := range []*theme.Palette{theme.Dark, theme.Light} {

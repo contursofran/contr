@@ -1,7 +1,6 @@
 package kit
 
 import (
-	"log"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -9,7 +8,6 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/contursofran/contr/assets"
 	"github.com/contursofran/contr/internal/app/theme"
 )
 
@@ -56,8 +54,10 @@ const (
 	WorkingSlowStep = 140 * time.Millisecond
 	// WaitingCycle is one fade of the waiting glyph, from .25 to 1 and back.
 	WaitingCycle = 1600 * time.Millisecond
-	// ClaudeTurn is one turn of the Claude glyph while working.
-	ClaudeTurn = 2400 * time.Millisecond
+	// ClaudeHop is one hop of the Claude mascot while working.
+	ClaudeHop = 800 * time.Millisecond
+	// ClaudeHopHeight is how high the Claude mascot hops, in DIPs.
+	ClaudeHopHeight = 1.5
 )
 
 // Opacities from the spec.
@@ -75,7 +75,7 @@ const (
 	BrailleWaiting = "⠿"
 )
 
-// The frame rate of a fade and of the turn of the Claude mark: smooth enough
+// The frame rate of a fade and of the hop of the Claude mascot: smooth enough
 // at 30 frames a second.
 const smoothFPS = 30
 
@@ -121,17 +121,19 @@ func BrailleOpacity(s GlyphState, t time.Time, still bool) float32 {
 	return WaitingMinOpacity + (1-WaitingMinOpacity)*float32(wave)
 }
 
-// ClaudeAngle is the turn of the Claude glyph in degrees at time t: one turn
-// in ClaudeTurn while working, and still otherwise (the spec has no motion
-// for working slow and waiting). With still (Reduce Motion) it does not turn.
-func ClaudeAngle(s GlyphState, t time.Time, still bool) float32 {
+// ClaudeHopOffset is how far the Claude mascot is above its place at time t,
+// in DIPs: one hop up to ClaudeHopHeight and back in ClaudeHop while
+// working, and 0 otherwise (the spec has no motion for working slow and
+// waiting). With still (Reduce Motion) it does not hop.
+func ClaudeHopOffset(s GlyphState, t time.Time, still bool) float32 {
 	if s != GlyphWorking || still {
 		return 0
 	}
-	return 360 * float32(t.UnixNano()%int64(ClaudeTurn)) / float32(ClaudeTurn)
+	phase := float64(t.UnixNano()%int64(ClaudeHop)) / float64(ClaudeHop)
+	return ClaudeHopHeight * float32(math.Sin(math.Pi*phase))
 }
 
-// ClaudeOpacity is the opacity of the Claude glyph: ClaudeIdleOpacity when
+// ClaudeOpacity is the opacity of the Claude mascot: ClaudeIdleOpacity when
 // idle, 1 otherwise.
 func ClaudeOpacity(s GlyphState) float32 {
 	if s == GlyphIdle {
@@ -141,7 +143,7 @@ func ClaudeOpacity(s GlyphState) float32 {
 }
 
 // Runs reports whether a glyph of this state asks for repaints: a braille
-// glyph that moves, or the Claude mark while it works, and not under Reduce
+// glyph that moves, or the Claude mascot while it works, and not under Reduce
 // Motion.
 func Runs(s GlyphState, claude, still bool) bool {
 	if still {
@@ -156,10 +158,10 @@ func Runs(s GlyphState, claude, still bool) bool {
 // GlyphOpts describes a StatusGlyph.
 type GlyphOpts struct {
 	State GlyphState
-	// Claude draws the Claude mark, for an orchestrator, in place of the
-	// braille spinner.
+	// Claude draws the Claude Code mascot, for a Claude session, in place of
+	// the braille spinner.
 	Claude bool
-	// Grey draws the Claude mark in ink-45: a Claude session that does not
+	// Grey draws the Claude mascot in ink-45: a Claude session that does not
 	// orchestrate (D191). The claude hue stays for orchestrators.
 	Grey bool
 	// Small draws the 14px glyph of tabs and the notch; else 16px (rows).
@@ -178,8 +180,8 @@ func GlyphSize(small bool) float32 {
 }
 
 // GlyphColor is the token color of a state: blocked for needs you, ink-30 for
-// an idle braille glyph, claude for the Claude mark, ink-100 otherwise. The
-// fade and the idle opacity of the Claude mark are not in it.
+// an idle braille glyph, claude for the Claude mascot, ink-100 otherwise. The
+// fade and the idle opacity of the Claude mascot are not in it.
 func GlyphColor(p *theme.Palette, s GlyphState, claude bool) ui.Color {
 	switch {
 	case s == GlyphNeedsYou:
@@ -193,35 +195,13 @@ func GlyphColor(p *theme.Palette, s GlyphState, claude bool) ui.Color {
 	}
 }
 
-// optsColor is GlyphColor, with a grey Claude mark for a Claude session that
+// optsColor is GlyphColor, with a grey Claude mascot for a Claude session that
 // does not orchestrate (Grey, D191). Needs you keeps its hue.
 func optsColor(p *theme.Palette, o GlyphOpts) ui.Color {
 	if o.Claude && o.Grey && o.State != GlyphNeedsYou {
 		return p.Ink45
 	}
 	return GlyphColor(p, o.State, o.Claude)
-}
-
-var (
-	claudeOnce sync.Once
-	claudeSVG  *ui.SVG
-)
-
-// ClaudeMark returns the Claude mark, assets/icons/claude.svg. A file that
-// does not parse is logged and gives nil; the tests make sure it parses.
-func ClaudeMark() *ui.SVG {
-	claudeOnce.Do(func() {
-		data, err := assets.Icons.ReadFile("icons/claude.svg")
-		if err != nil {
-			log.Printf("kit: claude mark: %v", err)
-			return
-		}
-		claudeSVG, err = ui.ParseSVG(data)
-		if err != nil {
-			log.Printf("kit: claude mark: %v", err)
-		}
-	})
-	return claudeSVG
 }
 
 // paints counts the paints of glyphs. The tests read it to see that a glyph
@@ -247,7 +227,7 @@ func brailleLayout(size float32, glyph string) *ui.TextLayout {
 }
 
 // StatusGlyph shows the state of one agent as one mark: a braille spinner,
-// or the Claude mark for an orchestrator (docs/spec/StatusGlyph.md).
+// or the Claude Code mascot for a Claude session (docs/spec/StatusGlyph.md).
 //
 // The glyph paints itself from the frame time in Draw. The timer is a repaint
 // request (Painter.After or AnimationFrameRate) made only for a state that
@@ -256,9 +236,10 @@ func brailleLayout(size float32, glyph string) *ui.TextLayout {
 // still. A frame that only paints does not build the view, so the glyph costs
 // painting only.
 //
-// MyGo's Transition and AnimatePose go to a target and stop; the turn of the
-// Claude mark repeats, so it draws from Draw as the working icon of
-// internal/app/icons does.
+// MyGo's Transition and AnimatePose go to a target and stop; the hop of the
+// Claude mascot repeats, so it draws from Draw as the working icon of
+// internal/app/icons does. The hop only moves the mascot: its mask is
+// rasterized once per size, so a frame places it again and draws nothing new.
 func StatusGlyph(c *ui.Context, o GlyphOpts) ui.Element {
 	pal := theme.Current()
 	state := o.State
@@ -272,7 +253,7 @@ func StatusGlyph(c *ui.Context, o GlyphOpts) ui.Element {
 	box := ui.Box(c).Size(size, size).Shrink(0).Label(state.Label())
 
 	if o.Claude {
-		mark := ClaudeMark()
+		mark := ClaudeMascot()
 		if mark == nil {
 			return box // file missing, logged
 		}
@@ -285,10 +266,7 @@ func StatusGlyph(c *ui.Context, o GlyphOpts) ui.Element {
 			if state != GlyphNeedsYou {
 				col = col.Alpha(ClaudeOpacity(state))
 			}
-			angle := ClaudeAngle(state, p.Now(), still)
-			p.Transform(ui.Rotation(angle), r.X+r.W/2, r.Y+r.H/2, func() {
-				p.Icon(mark, r, col)
-			})
+			p.Icon(mark, mascotRect(r, ClaudeHopOffset(state, p.Now(), still), p.Scale()), col)
 		})
 	}
 

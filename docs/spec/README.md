@@ -135,7 +135,7 @@ The owner's from-zero canvas (https://claude.ai/artifact/9bmbRdJc8qDMSRXm6obEb3)
 - Names: `project`, `computer`, `server`, `folder`, `folder-open`,
   `file-go`, `file-md`, `file`, `close`, `plus`, `search`,
   `sidebar-right`, `filter` (three lines), `terminal`, `settings`, `download`, `chevron-down` (dropdowns), `todo`, `todo-done` and `artifact` (SessionPanel). They go in `assets`.
-- The Claude mark is the official Claude mark (O8 settled, D123): `claude.svg`, one filled shape.
+- The Claude glyph is the Claude Code mascot (D218, replaces the mark of D123): `claude-mascot.svg`, one filled shape.
 
 ## Data
 
@@ -223,7 +223,7 @@ The coordinator asks the owner these before the issues that need them.
 6. **O6 Narrow window.** Settled (D128): below about 1100px the files
    panel hides; below about 800px the sidebar collapses to icons.
 7. **O7 Sans font.** Settled: bundle Inter (OFL, a `NOTICE` entry), D121.
-8. **O8 Claude mark.** Settled (D123): the official Claude mark.
+8. **O8 Claude mark.** Settled (D123): the official Claude mark. The status glyph now draws the Claude Code mascot (D218).
 9. **O9 Light terminal palette.** Settled (D129): a known light palette
    (Ghostty or macOS Terminal style), tuned for contrast on the light
    panel. The values come in #345.
