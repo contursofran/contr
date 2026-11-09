@@ -136,6 +136,7 @@ func (f *Frame) attachSidebar(w Window, env Env, agentSnap func() agentstate.Sna
 	l.OnOpen = func() { f.focusTerm = true; w.Invalidate() }
 	l.OnPick = l.OnOpen
 	l.ModelOf = f.deps.ModelOf
+	l.OnGroups = func() { f.Files.Sync() } // the folder of the tree follows the groups (#585)
 	l.EffortOf = f.deps.EffortOf
 	l.StatusEffort = f.statusEffort
 	l.StatusModel = f.statusModel
