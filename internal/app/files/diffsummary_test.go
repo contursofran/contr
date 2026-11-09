@@ -1,9 +1,8 @@
-package app
+package files
 
 import (
 	"errors"
 	"path/filepath"
-	"strconv"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -14,20 +13,6 @@ import (
 	"github.com/contursofran/contr/internal/review"
 )
 
-// readyDiff is a DiffSummary over a tree that has read sum.Files files; the first one carries
-// the counts.
-func readyDiff(sum review.Summary) *DiffSummary {
-	t := &FileTree{dir: "/x", changesOK: true}
-	for i := 0; i < sum.Files; i++ {
-		f := review.File{Path: "f" + strconv.Itoa(i), Status: review.Modified}
-		if i == 0 {
-			f.Added, f.Removed = sum.Added, sum.Removed
-		}
-		t.changes = append(t.changes, f)
-	}
-	return &DiffSummary{Tree: t}
-}
-
 func diffTester(d *DiffSummary, open func()) *ui.Tester {
 	return ui.NewTester(func(c *ui.Context) {
 		ui.Row(c).Fill().Background(theme.Current().Ground).Children(func() { d.View(c, open) })
@@ -36,7 +21,7 @@ func diffTester(d *DiffSummary, open func()) *ui.Tester {
 
 func TestDiffSummaryShowsTheCountsAndOpensReviewOnAClick(t *testing.T) {
 	opened := 0
-	tt := diffTester(readyDiff(review.Summary{Added: 120, Removed: 126, Files: 9}), func() { opened++ })
+	tt := diffTester(ReadyDiff(review.Summary{Added: 120, Removed: 126, Files: 9}), func() { opened++ })
 	for _, text := range []string{"+120", "−126", "9 files"} {
 		if !tt.HasText(text) {
 			t.Errorf("no text %q; texts %q", text, tt.Texts())
@@ -51,14 +36,14 @@ func TestDiffSummaryShowsTheCountsAndOpensReviewOnAClick(t *testing.T) {
 }
 
 func TestDiffSummaryHidesWithNoChange(t *testing.T) {
-	tt := diffTester(readyDiff(review.Summary{}), nil)
+	tt := diffTester(ReadyDiff(review.Summary{}), nil)
 	if len(tt.Texts()) != 0 {
 		t.Errorf("a project with no change shows %q", tt.Texts())
 	}
 }
 
 func TestDiffSummaryHidesTheRemovedCountWithOnlyAdditions(t *testing.T) {
-	tt := diffTester(readyDiff(review.Summary{Added: 4, Files: 1}), nil)
+	tt := diffTester(ReadyDiff(review.Summary{Added: 4, Files: 1}), nil)
 	if !tt.HasText("+4") || !tt.HasText("1 file") || tt.HasText("−0") {
 		t.Errorf("texts %q, want +4 and 1 file only", tt.Texts())
 	}
@@ -98,23 +83,23 @@ func TestDiffSummaryHidesBeforeTheFirstReadWithNoFolderAndAfterAReadError(t *tes
 // agent's branch with its own commit that must not count.
 func TestDiffSummaryAndFileTreeAgreeOnAWorkTreeWithASecondAgentsBranch(t *testing.T) {
 	s := apptest.NewRepo(t)
-	write(t, s.Dir, "mod.go", "1\n2\n3\n")
-	write(t, s.Dir, "edit.go", "a\nb\n")
+	apptest.Write(t, s.Dir, "mod.go", "1\n2\n3\n")
+	apptest.Write(t, s.Dir, "edit.go", "a\nb\n")
 	s.Git("add", "-A")
 	s.Git("commit", "-m", "files")
 	// The second agent: its own worktree and branch, one commit ahead of main.
 	other := filepath.Join(t.TempDir(), "other")
 	s.Git("worktree", "add", "-b", "agent/other", other)
-	write(t, other, "theirs.go", "x\ny\nz\nw\nv\n")
+	apptest.Write(t, other, "theirs.go", "x\ny\nz\nw\nv\n")
 	runGit(t, other, "add", "-A")
 	runGit(t, other, "commit", "-m", "theirs")
 	// The selected agent: a committed change, an uncommitted one and an untracked file.
 	s.Git("checkout", "-b", "feature")
-	write(t, s.Dir, "mod.go", "1\n2\n3\n4\n5\n6\n") // committed: +3
+	apptest.Write(t, s.Dir, "mod.go", "1\n2\n3\n4\n5\n6\n") // committed: +3
 	s.Git("add", "-A")
 	s.Git("commit", "-m", "mod")
-	write(t, s.Dir, "edit.go", "a\n")           // uncommitted: −1
-	write(t, s.Dir, "fresh.go", "a\nb\nc\nd\n") // untracked: +4
+	apptest.Write(t, s.Dir, "edit.go", "a\n")           // uncommitted: −1
+	apptest.Write(t, s.Dir, "fresh.go", "a\nb\nc\nd\n") // untracked: +4
 
 	r := newTreeRig(t, s.Dir)
 	r.ft.onlyChanged = true
@@ -153,7 +138,7 @@ func TestDiffSummaryAndFileTreeAgreeOnAWorkTreeWithASecondAgentsBranch(t *testin
 		t.Errorf("title bar label wrong; texts %q", tt.Texts())
 	}
 	// A change in the work tree and a new read: both move together.
-	write(t, s.Dir, "fresh.go", "a\n")
+	apptest.Write(t, s.Dir, "fresh.go", "a\n")
 	r.notify()
 	r.frame()
 	if got, _ := d.Summary(); got != (review.Summary{Added: 4, Removed: 1, Files: 3}) {

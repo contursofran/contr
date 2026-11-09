@@ -7,6 +7,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/apptest"
+	"github.com/contursofran/contr/internal/app/files"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
@@ -114,7 +116,7 @@ func TestTheFilesPanelShowsOnlyTheContextUnderTheTree(t *testing.T) {
 	f.Usage.SetVisible(true)
 	waitUntil(t, func() bool { _, ok := f.Usage.Left(usage.PlanClaude, usage.UnixNow()); return ok })
 	tt.Frame()
-	tree, meters := box(t, tt, LabelFileTree), box(t, tt, "usage")
+	tree, meters := apptest.Box(t, tt, files.LabelFileTree), apptest.Box(t, tt, "usage")
 	if meters.Y < tree.Y+tree.H-1 {
 		t.Errorf("meters %+v are not under the tree %+v", meters, tree)
 	}
@@ -122,7 +124,7 @@ func TestTheFilesPanelShowsOnlyTheContextUnderTheTree(t *testing.T) {
 		t.Errorf("no Context; texts %q", tt.Texts())
 	}
 	for _, gone := range []string{"Claude meter", "Codex meter", "Claude line", "Codex line"} {
-		if !absent(tt, gone) {
+		if !apptest.Absent(tt, gone) {
 			t.Errorf("the files panel still has %q", gone)
 		}
 	}
@@ -150,8 +152,8 @@ func TestTheSidebarFootShowsThePlansLeftOfSettings(t *testing.T) {
 			t.Errorf("no text %q; texts %q", want, h.tt.Texts())
 		}
 	}
-	gear := box(t, h.tt, LabelSettingsOpen)
-	claude, codex := box(t, h.tt, "Claude meter"), box(t, h.tt, "Codex meter")
+	gear := apptest.Box(t, h.tt, LabelSettingsOpen)
+	claude, codex := apptest.Box(t, h.tt, "Claude meter"), apptest.Box(t, h.tt, "Codex meter")
 	if claude.W != kit.PlanUsageWidth || codex.W != kit.PlanUsageWidth {
 		t.Errorf("bar widths %v and %v, want %v", claude.W, codex.W, kit.PlanUsageWidth)
 	}
@@ -165,7 +167,7 @@ func TestTheSidebarFootShowsThePlansLeftOfSettings(t *testing.T) {
 	// The icon column has no room: the button only.
 	h.list.compact = true
 	h.tt.Frame()
-	if !absent(h.tt, "Claude meter") {
+	if !apptest.Absent(h.tt, "Claude meter") {
 		t.Error("the icon column shows the plan meters")
 	}
 }
@@ -191,7 +193,7 @@ func TestTheWindowHasNoV02PlanBars(t *testing.T) {
 	tt := ui.NewTester(NewFrame(Deps{}).View, theme.WindowWidth, theme.WindowHeight)
 	tt.Frame()
 	for _, label := range []string{"usage-claude", "usage-codex", "usage-claude-bar"} {
-		if !absent(tt, label) {
+		if !apptest.Absent(tt, label) {
 			t.Errorf("the window still has %q", label)
 		}
 	}
@@ -275,7 +277,7 @@ func TestTheSidebarFootKeepsSettingsInAtTheNarrowestWidth(t *testing.T) {
 	tt := h.tt
 	tt.SetSize(theme.SidebarMinWidth, theme.WindowHeight)
 	tt.Frame()
-	gear, group := box(t, tt, LabelSettingsOpen), box(t, tt, "plan usage")
+	gear, group := apptest.Box(t, tt, LabelSettingsOpen), apptest.Box(t, tt, "plan usage")
 	if gear.X+gear.W > theme.SidebarMinWidth {
 		t.Errorf("Settings ends at %v, past the sidebar %v", gear.X+gear.W, theme.SidebarMinWidth)
 	}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
@@ -98,7 +99,7 @@ func TestPanelShowsWorkRowsAndTheHeads(t *testing.T) {
 	tt.Frame()
 	for _, label := range []string{LabelWorkSection, LabelWorkHeader, LabelWorkRows,
 		WorkRowLabel(WorkRows(boardSnap(), "a")[1])} {
-		box(t, tt, label)
+		apptest.Box(t, tt, label)
 	}
 	for _, head := range StageHeads {
 		if !slices.Contains(tt.Texts(), head) {
@@ -114,12 +115,12 @@ func TestPanelEmptyLines(t *testing.T) {
 	p := &BoardPanel{}
 	tt := boardTester(p)
 	tt.Frame()
-	box(t, tt, LabelBoardEmpty)
+	apptest.Box(t, tt, LabelBoardEmpty)
 	p2, _ := newBoardPanel(agentstate.Snapshot{}, "")
 	tt = boardTester(p2)
 	tt.Frame()
-	box(t, tt, LabelWorkEmpty)
-	box(t, tt, LabelNeedsEmpty)
+	apptest.Box(t, tt, LabelWorkEmpty)
+	apptest.Box(t, tt, LabelNeedsEmpty)
 }
 
 func TestNeedsSectionEqualsTheRowOrder(t *testing.T) {
@@ -132,12 +133,12 @@ func TestNeedsSectionEqualsTheRowOrder(t *testing.T) {
 	var labels []string
 	for _, tab := range row() {
 		labels = append(labels, tab.Key)
-		box(t, tt, tab.Label()+", "+NeedKindLabel(tab))
+		apptest.Box(t, tt, tab.Label()+", "+NeedKindLabel(tab))
 	}
 	if want := []string{"r-1", "D7", "T3"}; !slices.Equal(labels, want) {
 		t.Errorf("order %q, want %q", labels, want)
 	}
-	box(t, tt, NeedsCountLabel(3))
+	apptest.Box(t, tt, NeedsCountLabel(3))
 }
 
 func TestResolvedTabIsDoneAndNotCounted(t *testing.T) {
@@ -146,8 +147,8 @@ func TestResolvedTabIsDoneAndNotCounted(t *testing.T) {
 	p, _ := newBoardPanel(snap, "a")
 	tt := boardTester(p)
 	tt.Frame()
-	box(t, tt, NeedsCountLabel(2))
-	box(t, tt, "D7 Which?, done")
+	apptest.Box(t, tt, NeedsCountLabel(2))
+	apptest.Box(t, tt, "D7 Which?, done")
 }
 
 func TestClickingARowSelectsAndClickingANeedOpens(t *testing.T) {
@@ -194,17 +195,17 @@ func TestFramePanelRowClickShowsTheWorker(t *testing.T) {
 	f.Slots.Panel = f.Panel.View
 	tt := ui.NewTester(panelBox(f), theme.PanelWidth, theme.WindowHeight)
 	tt.Frame()
-	box(t, tt, LabelBoardRoot)
+	apptest.Box(t, tt, LabelBoardRoot)
 	tt.Click(WorkRowLabel(WorkRows(src.snap, "a")[1]))
 	tt.Frame()
-	box(t, tt, LabelWorkerPanel)
+	apptest.Box(t, tt, LabelWorkerPanel)
 }
 
 func TestPanelShowsTheProblemOfTheState(t *testing.T) {
 	p, _ := newBoardPanel(agentstate.Snapshot{Problem: "agents: hc: program not found"}, "")
 	tt := boardTester(p)
 	tt.Frame()
-	box(t, tt, LabelBoardProblem)
+	apptest.Box(t, tt, LabelBoardProblem)
 	if !slices.Contains(tt.Texts(), "agents: hc: program not found") {
 		t.Errorf("no problem text in %q", tt.Texts())
 	}

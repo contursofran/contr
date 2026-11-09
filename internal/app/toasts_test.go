@@ -6,6 +6,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 )
@@ -37,7 +38,7 @@ func TestAQueuedMessageShowsAsAToast(t *testing.T) {
 	if !slices.Contains(tt.Texts(), "gh: no browser") {
 		t.Fatalf("no toast in %q", tt.Texts())
 	}
-	box(t, tt, LabelToastViewport)
+	apptest.Box(t, tt, LabelToastViewport)
 	if left := f.Toasts.Pending(); len(left) != 0 {
 		t.Errorf("the view left %q in the queue", left)
 	}

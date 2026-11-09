@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 )
@@ -40,10 +41,10 @@ func TestSidebarIconRuleBothWays(t *testing.T) {
 func TestNarrowWindowDrawsTheSidebarAsIconsAndRestoresIt(t *testing.T) {
 	f, tt := newTester(t)
 	tt.SetSize(760, 800)
-	if got := box(t, tt, LabelPanelSidebar).W; got != theme.SidebarIconWidth {
+	if got := apptest.Box(t, tt, LabelPanelSidebar).W; got != theme.SidebarIconWidth {
 		t.Errorf("sidebar %v wide at 760, want the icon column %d", got, theme.SidebarIconWidth)
 	}
-	if got := box(t, tt, LabelPanelTerminal).W; got < theme.TerminalMinWidth {
+	if got := apptest.Box(t, tt, LabelPanelTerminal).W; got < theme.TerminalMinWidth {
 		t.Errorf("terminal %v wide at 760", got)
 	}
 	// The stored width (D111) is not changed by the collapse.
@@ -56,7 +57,7 @@ func TestNarrowWindowDrawsTheSidebarAsIconsAndRestoresIt(t *testing.T) {
 		t.Errorf("a drag in the icon column stored %v", f.sidebarW)
 	}
 	tt.SetSize(900, 800)
-	if got := box(t, tt, LabelPanelSidebar).W; got != theme.SidebarWidth {
+	if got := apptest.Box(t, tt, LabelPanelSidebar).W; got != theme.SidebarWidth {
 		t.Errorf("sidebar %v wide at 900, want the stored %d", got, theme.SidebarWidth)
 	}
 	if f.sidebarW != theme.SidebarWidth {
@@ -67,10 +68,10 @@ func TestNarrowWindowDrawsTheSidebarAsIconsAndRestoresIt(t *testing.T) {
 func TestFilesPanelRuleStaysAt1100(t *testing.T) {
 	_, tt := newTester(t)
 	tt.SetSize(1099, 800)
-	if !absent(tt, LabelPanelFiles) {
+	if !apptest.Absent(tt, LabelPanelFiles) {
 		t.Error("the files panel shows at 1099")
 	}
-	if got := box(t, tt, LabelPanelSidebar).W; got != theme.SidebarWidth {
+	if got := apptest.Box(t, tt, LabelPanelSidebar).W; got != theme.SidebarWidth {
 		t.Errorf("sidebar %v wide at 1099, want it whole", got)
 	}
 }
@@ -79,7 +80,7 @@ func TestFilesPanelRuleStaysAt1100(t *testing.T) {
 func TestTabsStayClearOfTheWindowButtonsInTheIconColumn(t *testing.T) {
 	_, tt := newTester(t)
 	tt.SetSize(760, 800)
-	if r := box(t, tt, LabelTabs); r.X < theme.TrafficLightInset {
+	if r := apptest.Box(t, tt, LabelTabs); r.X < theme.TrafficLightInset {
 		t.Errorf("tabs %+v are over the window buttons", r)
 	}
 }
@@ -109,7 +110,7 @@ func TestIconColumnRowsShowNoText(t *testing.T) {
 		}
 	}
 	for _, label := range []string{"This Mac, local", "alpha, main", "lead, idle, opus", "b-241, working, 241, sonnet", "beta, main"} {
-		r := box(t, h.tt, label)
+		r := apptest.Box(t, h.tt, label)
 		if r.W > theme.SidebarIconWidth {
 			t.Errorf("%q is %v wide, wider than the column", label, r.W)
 		}
@@ -160,7 +161,7 @@ func TestIconColumnRowsShowTheirNameInATooltip(t *testing.T) {
 		"b-241, working, 241, sonnet": "b-241",
 	} {
 		h := compactRows(t)
-		r := box(t, h.tt, label)
+		r := apptest.Box(t, h.tt, label)
 		has := func() bool {
 			for _, s := range h.tt.Texts() {
 				if s == tip {
@@ -199,7 +200,7 @@ func TestIconColumnKeepsTheProjectButtons(t *testing.T) {
 func TestTheWideSidebarStillShowsText(t *testing.T) {
 	h := newRows(t)
 	for _, s := range []string{"This Mac, local text", "alpha, main text", "lead, idle, opus title", "Servers header", "Projects header"} {
-		if absent(h.tt, s) {
+		if apptest.Absent(h.tt, s) {
 			t.Errorf("the wide sidebar lost the text %q", s)
 		}
 	}

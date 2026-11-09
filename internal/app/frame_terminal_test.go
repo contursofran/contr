@@ -11,6 +11,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
@@ -98,7 +99,7 @@ func TestTerminalSlotSaysSelectAnAgentWithoutOne(t *testing.T) {
 	if !strings.Contains(strings.Join(tt.Texts(), "\n"), TerminalOffLine) {
 		t.Errorf("texts %q, want %q", tt.Texts(), TerminalOffLine)
 	}
-	if !absent(tt, LabelTerminalGrid) {
+	if !apptest.Absent(tt, LabelTerminalGrid) {
 		t.Error("a grid shows with no agent selected")
 	}
 }
@@ -118,7 +119,7 @@ func TestTerminalGridIsInsideTheTerminalAreaAndShowsNoLineWhileLive(t *testing.T
 		t.Fatalf("state %+v, want live", f.termState)
 	}
 	tt.Frame()
-	grid, area := box(t, tt, LabelTerminalGrid), box(t, tt, LabelTerminal)
+	grid, area := apptest.Box(t, tt, LabelTerminalGrid), apptest.Box(t, tt, LabelTerminal)
 	if grid.X < area.X || grid.Y < area.Y || grid.X+grid.W > area.X+area.W+0.5 || grid.Y+grid.H > area.Y+area.H+0.5 {
 		t.Errorf("grid %+v is not inside the terminal area %+v", grid, area)
 	}

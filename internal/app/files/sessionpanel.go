@@ -1,4 +1,4 @@
-package app
+package files
 
 // The session sections of the files panel (docs/spec/SessionPanel.md, D197):
 // the todos and the artifacts of the selected agent, read from the session

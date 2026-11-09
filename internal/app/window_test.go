@@ -6,6 +6,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/widths"
 )
@@ -53,7 +54,7 @@ func TestTerminalKeepsItsMinimumWidth(t *testing.T) {
 	f.sidebarW, f.panelW = theme.SidebarMaxWidth, theme.PanelMaxWidth
 	for _, w := range []int{1100, 1200, 1440} {
 		tt.SetSize(w, 800)
-		if got := box(t, tt, LabelPanelTerminal).W; got < theme.TerminalMinWidth {
+		if got := apptest.Box(t, tt, LabelPanelTerminal).W; got < theme.TerminalMinWidth {
 			t.Errorf("window %d: terminal %v wide, want at least %d", w, got, theme.TerminalMinWidth)
 		}
 	}
@@ -66,17 +67,17 @@ func TestTerminalKeepsItsMinimumWidth(t *testing.T) {
 func TestNarrowWindowHidesTheFilesPanel(t *testing.T) {
 	f, tt := newTester(t)
 	tt.SetSize(1099, 800)
-	if !absent(tt, LabelPanelFiles) {
+	if !apptest.Absent(tt, LabelPanelFiles) {
 		t.Error("the files panel shows in a window under 1100 wide")
 	}
 	if !f.PanelOpen() {
 		t.Error("the narrow window changed the owner's toggle")
 	}
-	if got := box(t, tt, LabelPanelTerminal).W; got != 1099-8-312-8-8 {
+	if got := apptest.Box(t, tt, LabelPanelTerminal).W; got != 1099-8-312-8-8 {
 		t.Errorf("terminal %v wide, want the room the files left", got)
 	}
 	// The button is there but cannot do anything; the key does nothing either.
-	box(t, tt, LabelFilesToggle)
+	apptest.Box(t, tt, LabelFilesToggle)
 	if err := tt.Click(LabelFilesToggle); err != nil {
 		t.Fatal(err)
 	}
@@ -85,10 +86,10 @@ func TestNarrowWindowHidesTheFilesPanel(t *testing.T) {
 		t.Error("the toggle changed while the files were hidden by the window width")
 	}
 	tt.SetSize(1100, 800)
-	if absent(tt, LabelPanelFiles) {
+	if apptest.Absent(tt, LabelPanelFiles) {
 		t.Error("the files panel should show at 1100")
 	}
-	if got := box(t, tt, LabelPanelTerminal).W; got < theme.TerminalMinWidth {
+	if got := apptest.Box(t, tt, LabelPanelTerminal).W; got < theme.TerminalMinWidth {
 		t.Errorf("terminal %v wide at 1100", got)
 	}
 }
@@ -98,7 +99,7 @@ func TestNarrowWindowKeepsAClosedPanelClosed(t *testing.T) {
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyE) // hide
 	tt.SetSize(1000, 800)
 	tt.SetSize(1440, 900)
-	if f.PanelOpen() || !absent(tt, LabelPanelFiles) {
+	if f.PanelOpen() || !apptest.Absent(tt, LabelPanelFiles) {
 		t.Error("a hidden files panel came back with the window width")
 	}
 }
@@ -106,10 +107,10 @@ func TestNarrowWindowKeepsAClosedPanelClosed(t *testing.T) {
 func TestSavedFilesWidthShowsInTheFrame(t *testing.T) {
 	f := attachWithWidths(t, widths.Widths{Sidebar: 300, Panel: 360}, nil)
 	tt := ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)
-	if got := box(t, tt, LabelPanelSidebar).W; got != 300 {
+	if got := apptest.Box(t, tt, LabelPanelSidebar).W; got != 300 {
 		t.Errorf("sidebar %v, want the saved 300", got)
 	}
-	if got := box(t, tt, LabelPanelFiles).W; got != 360 {
+	if got := apptest.Box(t, tt, LabelPanelFiles).W; got != 360 {
 		t.Errorf("files %v, want the saved 360", got)
 	}
 }
@@ -137,7 +138,7 @@ func TestFrameFollowsTheTheme(t *testing.T) {
 	if light := tt.Image().At(4, 400); light == dark {
 		t.Errorf("the window looks the same in Light and Dark: %v", light)
 	}
-	if got := box(t, tt, LabelPanelFiles).W; got != 280 {
+	if got := apptest.Box(t, tt, LabelPanelFiles).W; got != 280 {
 		t.Errorf("files %v wide in Light, want 280", got)
 	}
 }

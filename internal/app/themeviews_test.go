@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/theme/themetest"
 )
@@ -93,7 +94,7 @@ func TestPlaceholderFollowsTheTheme(t *testing.T) {
 				FontSize(theme.FontSize).Children(func() { placeholder("Terminal")(c) })
 		}, 200, 60)
 		tt.Frame()
-		r := box(t, tt, "[Terminal]")
+		r := apptest.Box(t, tt, "[Terminal]")
 		wantInk(t, tc.name, tt.Image(), r, tc.pal.Ground, tc.pal.Ink42)
 	}
 }
@@ -112,7 +113,7 @@ func TestBoardEmptyLinesFollowTheTheme(t *testing.T) {
 					FontSize(theme.FontSize).FixedLineHeight(theme.LineHeight).Children(func() { p.View(c) })
 			}, theme.PanelWidth, 400)
 			tt.Frame()
-			r := box(t, tt, label)
+			r := apptest.Box(t, tt, label)
 			wantInk(t, tc.name+" "+label, tt.Image(), r, tc.pal.Ground, tc.pal.Ink50)
 		}
 	}

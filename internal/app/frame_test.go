@@ -14,6 +14,7 @@ import (
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/apptest"
+	"github.com/contursofran/contr/internal/app/files"
 	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/reviewview"
@@ -42,36 +43,22 @@ func newTester(t *testing.T) (*Frame, *ui.Tester) {
 	return f, ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)
 }
 
-func box(t *testing.T, tt *ui.Tester, label string) ui.Rect {
-	t.Helper()
-	r, ok := tt.Find(label)
-	if !ok {
-		t.Fatalf("no element %q; texts %q", label, tt.Texts())
-	}
-	return r
-}
-
-func absent(tt *ui.Tester, label string) bool {
-	_, ok := tt.Find(label)
-	return !ok
-}
-
 func TestFrameMatchesDesignSizes(t *testing.T) {
 	_, tt := newTester(t)
-	bar := box(t, tt, LabelTitleBar)
+	bar := apptest.Box(t, tt, LabelTitleBar)
 	if bar.X != 0 || bar.Y != 0 || bar.W != theme.WindowWidth || bar.H != 46 {
 		t.Errorf("title bar %+v, want 46 high at the top over the full width", bar)
 	}
 	// 8px between all panels and the window edge (docs/spec/Window.md).
-	sidebar := box(t, tt, LabelPanelSidebar)
+	sidebar := apptest.Box(t, tt, LabelPanelSidebar)
 	if sidebar.X != 8 || sidebar.Y != 46 || sidebar.W != 312 {
 		t.Errorf("sidebar %+v, want 312 wide at x 8, right under the title bar (D177)", sidebar)
 	}
-	files := box(t, tt, LabelPanelFiles)
+	files := apptest.Box(t, tt, LabelPanelFiles)
 	if files.W != 280 || files.X+files.W != theme.WindowWidth-8 {
 		t.Errorf("files %+v, want 280 wide, 8 from the right edge", files)
 	}
-	term := box(t, tt, LabelPanelTerminal)
+	term := apptest.Box(t, tt, LabelPanelTerminal)
 	if term.X != sidebar.X+sidebar.W+8 || term.X+term.W != files.X-8 {
 		t.Errorf("terminal %+v, want 8 from the sidebar and 8 from the files", term)
 	}
@@ -81,7 +68,7 @@ func TestFrameMatchesDesignSizes(t *testing.T) {
 		}
 	}
 	// The tabs start above the terminal panel.
-	if tabs := box(t, tt, LabelTabs); tabs.X < term.X {
+	if tabs := apptest.Box(t, tt, LabelTabs); tabs.X < term.X {
 		t.Errorf("tabs at %v, left of the terminal panel at %v", tabs.X, term.X)
 	}
 }
@@ -89,35 +76,35 @@ func TestFrameMatchesDesignSizes(t *testing.T) {
 func TestTitleBarHasNoSidebarToggle(t *testing.T) {
 	f, tt := newTester(t)
 	for _, label := range []string{"Toggle sidebar", "Show sidebar"} {
-		if !absent(tt, label) {
+		if !apptest.Absent(tt, label) {
 			t.Errorf("the title bar has a %q button; the mock has none", label)
 		}
 	}
 	// The corner is as wide as the sidebar and its gaps, so the tabs start at the terminal.
-	if tabs, term := box(t, tt, LabelTabs), box(t, tt, LabelPanelTerminal); tabs.X < term.X {
+	if tabs, term := apptest.Box(t, tt, LabelTabs), apptest.Box(t, tt, LabelPanelTerminal); tabs.X < term.X {
 		t.Errorf("tabs at %v, left of the terminal panel at %v", tabs.X, term.X)
 	}
 	f.ToggleSidebar()
 	tt.Frame()
-	if !absent(tt, LabelPanelSidebar) {
+	if !apptest.Absent(tt, LabelPanelSidebar) {
 		t.Error("the sidebar should be hidden")
 	}
-	if absent(tt, LabelTitleBar) || !absent(tt, "Show sidebar") {
+	if apptest.Absent(tt, LabelTitleBar) || !apptest.Absent(tt, "Show sidebar") {
 		t.Error("a hidden sidebar must not bring a title bar button")
 	}
 	// The tabs keep clear of the window buttons.
-	if tabs := box(t, tt, LabelTabs); tabs.X < theme.TrafficLightInset {
+	if tabs := apptest.Box(t, tt, LabelTabs); tabs.X < theme.TrafficLightInset {
 		t.Errorf("tabs at %v, over the window buttons (%d)", tabs.X, theme.TrafficLightInset)
 	}
-	if term := box(t, tt, LabelPanelTerminal); term.W != 1136 || term.X != 8 {
+	if term := apptest.Box(t, tt, LabelPanelTerminal); term.W != 1136 || term.X != 8 {
 		t.Errorf("terminal %+v, want 1136 wide from x 8", term)
 	}
 	f.ToggleSidebar()
 	tt.Frame()
-	if got := box(t, tt, LabelPanelSidebar).W; got != theme.SidebarWidth {
+	if got := apptest.Box(t, tt, LabelPanelSidebar).W; got != theme.SidebarWidth {
 		t.Errorf("sidebar width %v, want 312", got)
 	}
-	if got := box(t, tt, LabelPanelTerminal).W; got != 816 {
+	if got := apptest.Box(t, tt, LabelPanelTerminal).W; got != 816 {
 		t.Errorf("terminal width %v, want 816", got)
 	}
 }
@@ -127,19 +114,19 @@ func TestPanelToggleHidesAndShowsThePanel(t *testing.T) {
 	if err := tt.Click(LabelFilesToggle); err != nil {
 		t.Fatal(err)
 	}
-	if f.PanelOpen() || !absent(tt, LabelPanelFiles) {
+	if f.PanelOpen() || !apptest.Absent(tt, LabelPanelFiles) {
 		t.Error("the files panel should be hidden")
 	}
-	if got := box(t, tt, LabelPanelTerminal).W; got != 1104 {
+	if got := apptest.Box(t, tt, LabelPanelTerminal).W; got != 1104 {
 		t.Errorf("terminal width %v, want 1104", got)
 	}
 	if err := tt.Click(LabelFilesToggle); err != nil {
 		t.Fatal(err)
 	}
-	if got := box(t, tt, LabelPanelFiles).W; got != theme.PanelWidth {
+	if got := apptest.Box(t, tt, LabelPanelFiles).W; got != theme.PanelWidth {
 		t.Errorf("files width %v, want 280", got)
 	}
-	if got := box(t, tt, LabelPanelTerminal).W; got != 816 {
+	if got := apptest.Box(t, tt, LabelPanelTerminal).W; got != 816 {
 		t.Errorf("terminal width %v, want 816", got)
 	}
 }
@@ -148,11 +135,11 @@ func TestPanelToggleHidesAndShowsThePanel(t *testing.T) {
 func TestCmdShiftEHidesAndShowsTheFilesPanel(t *testing.T) {
 	f, tt := newTester(t)
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyE)
-	if f.PanelOpen() || !absent(tt, LabelPanelFiles) {
+	if f.PanelOpen() || !apptest.Absent(tt, LabelPanelFiles) {
 		t.Error("the key should hide the files panel")
 	}
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyE)
-	if !f.PanelOpen() || absent(tt, LabelPanelFiles) {
+	if !f.PanelOpen() || apptest.Absent(tt, LabelPanelFiles) {
 		t.Error("the key should show the files panel again")
 	}
 }
@@ -160,7 +147,7 @@ func TestCmdShiftEHidesAndShowsTheFilesPanel(t *testing.T) {
 func TestPanelsHaveNamesForScreenReaders(t *testing.T) {
 	_, tt := newTester(t)
 	for _, name := range []string{"Sidebar", "Terminal", "Files"} {
-		box(t, tt, name)
+		apptest.Box(t, tt, name)
 	}
 }
 
@@ -413,13 +400,13 @@ func TestFrameReviewHiddenNoReads(t *testing.T) {
 func TestFrameReviewReplacesTerminal(t *testing.T) {
 	f := NewFrame(Deps{})
 	f.Review, _ = newTestReview()
-	f.Diff = readyDiff(review.Summary{Added: 3, Removed: 1, Files: 2})
+	f.Diff = files.ReadyDiff(review.Summary{Added: 3, Removed: 1, Files: 2})
 	tt := ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)
 	if _, ok := tt.Find(LabelReview); ok {
 		t.Fatal("review area shows before the toggle")
 	}
 	tt.Click(kit.DiffSummaryLabel(kit.DiffSummaryOpts{Added: 3, Removed: 1, Files: 2}))
-	box(t, tt, LabelReview)
+	apptest.Box(t, tt, LabelReview)
 	if _, ok := tt.Find(LabelTerminal); ok {
 		t.Fatal("terminal area still shows with Review on")
 	}
@@ -601,7 +588,7 @@ func TestPlusNoProjectUsesHome(t *testing.T) {
 	snap := agentstate.Snapshot{}
 	tf := newTermFrame(t, &snap)
 	tf.tt.Frame()
-	if absent(tf.tt, LabelNewTab) {
+	if apptest.Absent(tf.tt, LabelNewTab) {
 		t.Fatal("the + button must show with no tabs")
 	}
 	if err := tf.tt.Click(LabelNewTab); err != nil {
@@ -616,7 +603,7 @@ func TestNoPlusWithoutNewTerminal(t *testing.T) {
 	snap := tabSnap()
 	_, tt := agentFrame(t, &snap)
 	tt.Frame()
-	if !absent(tt, LabelNewTab) {
+	if !apptest.Absent(tt, LabelNewTab) {
 		t.Error("the + button shows with no open action")
 	}
 }
@@ -680,7 +667,7 @@ func TestPlainTabSelectsKindTerminal(t *testing.T) {
 		t.Errorf("selection %+v, want a terminal", sel)
 	}
 	tt.Frame()
-	if absent(tt, LabelCloseTab) {
+	if apptest.Absent(tt, LabelCloseTab) {
 		t.Error("the selected plain tab has no close button")
 	}
 }
@@ -701,8 +688,8 @@ func TestSyncTerminalAttachesAPlainTerminal(t *testing.T) {
 // edge (left, right, bottom) and between the title bar and the panels is PanelGap (D168).
 func TestPanelGapsAreEqual(t *testing.T) {
 	_, tt := newTester(t)
-	bar := box(t, tt, LabelTitleBar)
-	sb, tm, fl := box(t, tt, LabelPanelSidebar), box(t, tt, LabelPanelTerminal), box(t, tt, LabelPanelFiles)
+	bar := apptest.Box(t, tt, LabelTitleBar)
+	sb, tm, fl := apptest.Box(t, tt, LabelPanelSidebar), apptest.Box(t, tt, LabelPanelTerminal), apptest.Box(t, tt, LabelPanelFiles)
 	gap := float32(theme.PanelGap)
 	// The 30pt tabs center in the title bar; the panels start PanelGap below them (D177).
 	tabs := bar.Y + (bar.H+theme.SizeRowHeight)/2

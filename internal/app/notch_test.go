@@ -11,6 +11,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/hc"
@@ -367,7 +368,7 @@ func TestNotchShowsAProblemOfTheQuestionsFile(t *testing.T) {
 	}
 	src.snap.OwnerProblem = "owner: owner.json: invalid character"
 	r.tt.Frame()
-	box(t, r.tt, LabelOwnerProblem)
+	apptest.Box(t, r.tt, LabelOwnerProblem)
 	if !r.tt.HasText(TextOwnerProblem) {
 		t.Errorf("no problem text in %q", r.tt.Texts())
 	}
@@ -395,5 +396,5 @@ func TestNotchProblemClosesAnOpenCard(t *testing.T) {
 	if r.closes != 1 || r.isOpen {
 		t.Errorf("card closes = %d, open = %v", r.closes, r.isOpen)
 	}
-	box(t, r.tt, LabelOwnerProblem)
+	apptest.Box(t, r.tt, LabelOwnerProblem)
 }
