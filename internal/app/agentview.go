@@ -8,6 +8,7 @@ import (
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/state"
+	"github.com/contursofran/contr/internal/app/tabmodel"
 )
 
 // storedSource is an [AgentSource] whose Snapshot is the frame's stored snapshot. The actions go
@@ -65,17 +66,17 @@ func (f *Frame) openState() {
 	if f.Selection != nil {
 		sel, ok = f.Selection.Current()
 	}
-	f.openProject, f.openKey = OpenProjectKey(f.snap, sel, ok, f.openProject, f.openKey)
-	f.tabAgent = TabAgent(f.snap, sel, ok, f.openProject, f.openKey, f.tabAgent)
+	f.openProject, f.openKey = tabmodel.OpenProjectKey(f.snap, sel, ok, f.openProject, f.openKey)
+	f.tabAgent = tabmodel.TabAgent(f.snap, sel, ok, f.openProject, f.openKey, f.tabAgent)
 	selected := ""
 	if ok && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker || sel.Kind == state.KindTerminal) {
 		selected = sel.ID
 	}
-	f.tabs = OrderTabs(TitleTabs(f.snap, f.openProject, f.openKey, f.tabAgent, selected), f.tabOrder)
+	f.tabs = tabmodel.OrderTabs(tabmodel.TitleTabs(f.snap, f.openProject, f.openKey, f.tabAgent, selected), f.tabOrder)
 }
 
 // titleTabs returns the stored tabs of the selected agent; see [Frame.syncOpen].
-func (f *Frame) titleTabs() []Tab { return f.tabs }
+func (f *Frame) titleTabs() []tabmodel.Tab { return f.tabs }
 
 // agentAt is the orchestrator, worker or terminal at hc address id, from the stored snapshot.
 func (f *Frame) agentAt(id string) (agents.Worker, bool) {

@@ -17,6 +17,7 @@ import (
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/state"
+	"github.com/contursofran/contr/internal/app/tabmodel"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
 )
@@ -164,7 +165,7 @@ func (p *WorkerPanel) View(c *ui.Context) {
 		p.follow(w.Address)
 		ui.Row(c).FillWidth().Height(theme.PanelHeaderHeight).Shrink(0).AlignItems(ui.Center).
 			Gap(theme.NeedGap).PaddingX(theme.PanelPadX).Children(func() {
-			icons.Sized(c, workerIcon(w), theme.IconSizeSmall).Shrink(0)
+			icons.Sized(c, tabmodel.WorkerIcon(w), theme.IconSizeSmall).Shrink(0)
 			ui.Text(c, w.Name).Bold().SingleLine().Grow(1).MinWidth(0)
 			p.button(c, WorkerInterrupt, kit.ButtonOutlined, func() { p.interrupt(w) })
 			label, style := WorkerStop, kit.ButtonOutlined

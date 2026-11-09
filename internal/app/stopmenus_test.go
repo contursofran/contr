@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/contursofran/contr/internal/app/spaces"
+	"github.com/contursofran/contr/internal/app/tabmodel"
 )
 
 // ---- Stop and Hide in the project and tab menus (D219) ----
@@ -62,13 +63,13 @@ func TestEmptyProjectMenuHasHideAndNoCloseAll(t *testing.T) {
 
 func TestTabMenuStopsAnAgentTab(t *testing.T) {
 	b := newBar(t, tabsOf(), true)
-	var stopped []Tab
-	b.bar.stopTab = func(t Tab) { stopped = append(stopped, t) }
+	var stopped []tabmodel.Tab
+	b.bar.stopTab = func(t tabmodel.Tab) { stopped = append(stopped, t) }
 	b.tt.Frame()
 	if err := b.tt.RightClick("lead"); err != nil {
 		t.Fatal(err)
 	}
-	if err := b.tt.ChooseMenuItem(MenuStop); err != nil {
+	if err := b.tt.ChooseMenuItem(tabmodel.MenuStop); err != nil {
 		t.Fatal(err)
 	}
 	if len(stopped) != 1 || stopped[0].Address != "o" {
@@ -81,12 +82,12 @@ func TestTabMenuStopsAnAgentTab(t *testing.T) {
 
 func TestTabMenuOnAPlainTabHasNoStop(t *testing.T) {
 	b := newBar(t, tabsOf(), true)
-	b.bar.stopTab = func(Tab) { t.Error("Stop ran on a plain tab") }
+	b.bar.stopTab = func(tabmodel.Tab) { t.Error("Stop ran on a plain tab") }
 	b.tt.Frame()
 	if err := b.tt.RightClick("go test ./..."); err != nil {
 		t.Fatal(err)
 	}
-	if slices.Contains(b.tt.Menu(), MenuStop) {
+	if slices.Contains(b.tt.Menu(), tabmodel.MenuStop) {
 		t.Errorf("menu %q has Stop", b.tt.Menu())
 	}
 }
@@ -118,8 +119,8 @@ func TestAgentRowMenuClosesTheAgent(t *testing.T) {
 
 func TestTabMenuClosesAnAgentTab(t *testing.T) {
 	b := newBar(t, tabsOf(), true)
-	var gone []Tab
-	b.bar.closeAgent = func(t Tab) { gone = append(gone, t) }
+	var gone []tabmodel.Tab
+	b.bar.closeAgent = func(t tabmodel.Tab) { gone = append(gone, t) }
 	b.tt.Frame()
 	b.tt.RightClick("lead")
 	if err := b.tt.ChooseMenuItem(MenuClose); err != nil {

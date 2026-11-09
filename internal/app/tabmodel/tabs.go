@@ -1,4 +1,9 @@
-package app
+// Package tabmodel is the model of the title bar tabs: the tabs of a snapshot,
+// their order and the agent they follow. It also holds the look of an agent
+// that the tabs and the sidebar rows share: the glyph state, the icon, the tip
+// and the Stop menu item. Its name is not tabs, so that it does not clash with
+// the many variables named tabs.
+package tabmodel
 
 // The model of the title bar tabs (docs/spec/Tab.md, TitleBar.md): the Claude sessions of the
 // open project, the selected worker, then the plain terminals of the project (D190). This file
@@ -10,6 +15,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/state"
 )
@@ -50,7 +56,7 @@ func TitleTabs(s agentstate.Snapshot, project, key, agent, selected string) []Ta
 	var tabs []Tab
 	add := func(w agents.Worker) {
 		tabs = append(tabs, Tab{Address: w.Address, Title: tabTitle(w), Tip: tabTip(w), Orchestrator: w.Orchestrator(),
-			Grey: w.Orchestrator() && !s.Orchestrating(w), State: tabState(w), Selected: selected != "" && w.Address == selected})
+			Grey: w.Orchestrator() && !s.Orchestrating(w), State: TabState(w), Selected: selected != "" && w.Address == selected})
 	}
 	for _, w := range s.Orchestrators {
 		if agentstate.SameProject(w, project, key) {
@@ -87,8 +93,8 @@ func findAgent(s agentstate.Snapshot, addr string) (agents.Worker, bool) {
 	return agents.Worker{}, false
 }
 
-// tabState is the glyph state of an agent: a program that ended is idle.
-func tabState(w agents.Worker) kit.GlyphState {
+// TabState is the glyph state of an agent: a program that ended is idle.
+func TabState(w agents.Worker) kit.GlyphState {
 	switch {
 	case !w.Live:
 		return kit.GlyphIdle
@@ -124,7 +130,7 @@ func tabTitle(w agents.Worker) string {
 
 // tabTip is the tooltip of a tab: the name, and for a terminal contr did not start its address.
 func tabTip(w agents.Worker) string {
-	return rowTip(w)
+	return RowTip(w)
 }
 
 // TabAgent returns the address of the agent whose tabs show. A selected orchestrator or live
@@ -221,3 +227,31 @@ func MoveTab(tabs []Tab, from, to string) (order []string, ok bool) {
 	plain = slices.Insert(plain, j, from)
 	return plain, true
 }
+
+// WorkerIcon is the icon for a worker. A program that ended shows done.
+func WorkerIcon(w agents.Worker) icons.Status {
+	switch {
+	case !w.Live:
+		return icons.Done
+	case w.Status == "working":
+		return icons.Working
+	case w.Status == "blocked" || w.Status == "error":
+		return icons.Blocked
+	case w.Status == "done":
+		return icons.Done
+	}
+	return icons.Idle
+}
+
+// RowTip is the tooltip of an agent row: the name. A terminal contr did not start also shows its
+// hc address, which is no longer its name (D156).
+func RowTip(w agents.Worker) string {
+	n := w.DisplayName()
+	if w.Foreign && w.Address != "" && n != w.Address {
+		return n + " · " + w.Address
+	}
+	return n
+}
+
+// MenuStop is the menu item that stops an agent, in the menu of an agent row and of an agent tab.
+const MenuStop = "Stop"

@@ -1,27 +1,15 @@
-package app
+package tabmodel
 
 import (
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/state"
 )
-
-func orchW(addr, name, project string) agents.Worker {
-	return agents.Worker{Address: addr, Name: name, Project: project, Role: agents.RoleOrchestrator, Live: true}
-}
-
-func workW(addr, name, project string) agents.Worker {
-	return agents.Worker{Address: addr, Name: name, Project: project, Role: "builder", Live: true}
-}
-
-func termW(addr, name, project, worktree string) agents.Worker {
-	return agents.Worker{Address: addr, Name: name, Project: project, Worktree: worktree, Role: agents.RoleTerminal, Live: true}
-}
 
 func addrs(tabs []Tab) []string {
 	var out []string
@@ -35,12 +23,12 @@ func addrs(tabs []Tab) []string {
 // plain terminal that must not show for p.
 func twoAgents() agentstate.Snapshot {
 	return agentstate.Snapshot{
-		Orchestrators: []agents.Worker{orchW("o", "orch", "p")},
-		Workers:       []agents.Worker{workW("a", "a", "p"), workW("x", "x", "q")},
+		Orchestrators: []agents.Worker{apptest.OrchW("o", "orch", "p")},
+		Workers:       []agents.Worker{apptest.WorkW("a", "a", "p"), apptest.WorkW("x", "x", "q")},
 		Terminals: []agents.Worker{
-			termW("t1", "term-1", "p", "/work/repo"),
-			termW("tq", "term-q", "q", "/work/other"),
-			termW("t2", "term-2", "p", "/work/repo"),
+			apptest.TermW("t1", "term-1", "p", "/work/repo"),
+			apptest.TermW("tq", "term-q", "q", "/work/other"),
+			apptest.TermW("t2", "term-2", "p", "/work/repo"),
 		},
 	}
 }
@@ -100,20 +88,20 @@ func TestTitleTabsSkipAnEndedWorker(t *testing.T) {
 }
 
 func TestTabTitle(t *testing.T) {
-	titled := termW("t", "term-1", "p", "/work/repo")
+	titled := apptest.TermW("t", "term-1", "p", "/work/repo")
 	titled.Title = "go test ./..."
-	worker := workW("a", "name", "p")
+	worker := apptest.WorkW("a", "name", "p")
 	worker.Issue, worker.Worktree = "#138", "/code/contr-wt/agent-138-tab-model"
-	noIssue := workW("b", "name", "p")
+	noIssue := apptest.WorkW("b", "name", "p")
 	noIssue.Worktree = "/x/wt"
 	for _, c := range []struct {
 		w    agents.Worker
 		want string
 	}{
 		{titled, "go test ./..."},
-		{termW("t", "term-1", "p", "/work/repo"), "$ repo"},
-		{termW("t", "term-1", "p", ""), "term-1"},
-		{orchW("o", "lead", "p"), "lead"},
+		{apptest.TermW("t", "term-1", "p", "/work/repo"), "$ repo"},
+		{apptest.TermW("t", "term-1", "p", ""), "term-1"},
+		{apptest.OrchW("o", "lead", "p"), "lead"},
 		{worker, "#138 · agent-138-tab-model"},
 		{noIssue, "name"},
 	} {
@@ -135,8 +123,8 @@ func TestTabStateFollowsTheAgentStatus(t *testing.T) {
 		{"idle", true, kit.GlyphIdle},
 		{"working", false, kit.GlyphIdle},
 	} {
-		if got := tabState(agents.Worker{Status: c.status, Live: c.live}); got != c.want {
-			t.Errorf("tabState(%q, live %v) = %v, want %v", c.status, c.live, got, c.want)
+		if got := TabState(agents.Worker{Status: c.status, Live: c.live}); got != c.want {
+			t.Errorf("TabState(%q, live %v) = %v, want %v", c.status, c.live, got, c.want)
 		}
 	}
 }
@@ -215,16 +203,6 @@ func TestForeignTabsUseTheReadableNameAndKeepTheAddressInTheTip(t *testing.T) {
 	}
 }
 
-func TestForeignRowLabelUsesTheReadableName(t *testing.T) {
-	w := agents.Worker{Address: "t1nh", Name: "t1nh", Shown: "contr", Role: agents.RoleOrchestrator, Foreign: true, Live: true}
-	if got := AgentLabel(w, "", ""); !strings.HasPrefix(got, "contr,") {
-		t.Errorf("label %q", got)
-	}
-	if got := rowTip(w); got != "contr · t1nh" {
-		t.Errorf("tip %q", got)
-	}
-}
-
 // The tab of a Claude session that does not orchestrate has a grey mark; one
 // that ran /contr:orchestrate, or has workers, keeps the claude hue (D191).
 func TestTheTabOfASessionThatDoesNotOrchestrateIsGrey(t *testing.T) {
@@ -249,7 +227,7 @@ func TestTheTabOfASessionThatDoesNotOrchestrateIsGrey(t *testing.T) {
 // Every Claude session of the project is a tab, the same set whichever is selected (D190).
 func TestTitleTabsShareEverySessionOfTheProject(t *testing.T) {
 	s := twoAgents()
-	s.Orchestrators = append(s.Orchestrators, orchW("o2", "orch-2", "p"), orchW("oq", "orch-q", "q"))
+	s.Orchestrators = append(s.Orchestrators, apptest.OrchW("o2", "orch-2", "p"), apptest.OrchW("oq", "orch-q", "q"))
 	for _, agent := range []string{"o", "o2"} {
 		if got := addrs(TitleTabs(s, "p", "", agent, agent)); !slices.Equal(got, []string{"o", "o2", "t1", "t2"}) {
 			t.Errorf("tabs with %s selected = %v, want [o o2 t1 t2]", agent, got)
@@ -258,5 +236,71 @@ func TestTitleTabsShareEverySessionOfTheProject(t *testing.T) {
 	tabs := TitleTabs(s, "p", "", "o2", "o2")
 	if tabs[0].Selected || !tabs[1].Selected {
 		t.Errorf("selection marks: %+v", tabs[:2])
+	}
+}
+
+func plainTabs(addrs ...string) []Tab {
+	tabs := []Tab{{Address: "o", Title: "lead", Orchestrator: true}}
+	for _, a := range addrs {
+		tabs = append(tabs, Tab{Address: a, Title: a, Plain: true})
+	}
+	return tabs
+}
+
+func TestOrderTabsKeepsTheAgentFirstAndFollowsTheOrder(t *testing.T) {
+	got := addrs(OrderTabs(plainTabs("t1", "t2", "t3"), []string{"t3", "t1", "t2"}))
+	if want := []string{"o", "t3", "t1", "t2"}; !slices.Equal(got, want) {
+		t.Errorf("order %v, want %v", got, want)
+	}
+	// An order that names the agent tab does not move it.
+	got = addrs(OrderTabs(plainTabs("t1", "t2"), []string{"t2", "o", "t1"}))
+	if want := []string{"o", "t2", "t1"}; !slices.Equal(got, want) {
+		t.Errorf("order with the agent named %v, want %v", got, want)
+	}
+}
+
+func TestOrderTabsPutsUnknownTabsAfterTheKnownOnesInTheirOwnOrder(t *testing.T) {
+	got := addrs(OrderTabs(plainTabs("t1", "new1", "t2", "new2"), []string{"t2", "gone", "t1"}))
+	if want := []string{"o", "t2", "t1", "new1", "new2"}; !slices.Equal(got, want) {
+		t.Errorf("order %v, want %v", got, want)
+	}
+	if got := addrs(OrderTabs(plainTabs("t1", "t2"), nil)); !slices.Equal(got, []string{"o", "t1", "t2"}) {
+		t.Errorf("no order changed the tabs: %v", got)
+	}
+}
+
+func TestMoveTabTakesThePlaceOfTheTabItIsDroppedOn(t *testing.T) {
+	tabs := plainTabs("t1", "t2", "t3")
+	cases := []struct {
+		from, to string
+		want     []string
+	}{
+		{"t1", "t3", []string{"t2", "t3", "t1"}}, // right: after the target
+		{"t3", "t1", []string{"t3", "t1", "t2"}}, // left: before the target
+		{"t1", "t2", []string{"t2", "t1", "t3"}},
+	}
+	for _, c := range cases {
+		got, ok := MoveTab(tabs, c.from, c.to)
+		if !ok || !slices.Equal(got, c.want) {
+			t.Errorf("MoveTab(%s, %s) = %v, %v; want %v", c.from, c.to, got, ok, c.want)
+		}
+	}
+}
+
+func TestMoveTabNeverMovesOrDisplacesTheAgentTab(t *testing.T) {
+	tabs := plainTabs("t1", "t2")
+	for _, c := range [][2]string{{"o", "t1"}, {"t1", "o"}, {"t1", "t1"}, {"t1", "nope"}, {"nope", "t1"}} {
+		if got, ok := MoveTab(tabs, c[0], c[1]); ok {
+			t.Errorf("MoveTab(%s, %s) = %v, want no move", c[0], c[1], got)
+		}
+	}
+}
+
+func TestOnlyAPlainTabIsMovable(t *testing.T) {
+	if (Tab{Orchestrator: true}).Movable() || (Tab{}).Movable() {
+		t.Error("an agent tab is movable")
+	}
+	if !(Tab{Plain: true}).Movable() {
+		t.Error("a plain tab is not movable")
 	}
 }

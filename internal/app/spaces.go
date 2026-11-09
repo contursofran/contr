@@ -25,6 +25,7 @@ import (
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/state"
+	"github.com/contursofran/contr/internal/app/tabmodel"
 	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/host"
@@ -326,7 +327,7 @@ func spaceTerms(s agentstate.Snapshot) []spaces.Term {
 			if !w.Live && !w.Orchestrator() && !w.Plain() { // an ended worker holds no worktree (D112)
 				continue
 			}
-			out = append(out, spaces.Term{Name: w.DisplayName(), Address: w.Address, Dir: w.Worktree, Status: workerIcon(w)})
+			out = append(out, spaces.Term{Name: w.DisplayName(), Address: w.Address, Dir: w.Worktree, Status: tabmodel.WorkerIcon(w)})
 		}
 	}
 	return out
