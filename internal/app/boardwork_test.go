@@ -182,7 +182,7 @@ func TestNoWrapUpControl(t *testing.T) {
 func TestFramePanelRowClickShowsTheWorker(t *testing.T) {
 	enableViewers(t)
 	src := &source{snap: boardSnap(), text: "out"}
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	f.Selection = state.NewSelection(nil)
 	f.Selection.Select(state.Selected{Kind: state.KindOrchestrator, ID: "o1"})
 	f.Worker = &WorkerPanel{Source: src, Selection: f.Selection}

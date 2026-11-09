@@ -97,7 +97,7 @@ func TestPROpenClearsTheMergedLine(t *testing.T) {
 }
 
 func TestFramePROrchestratorFollowsTheWorkersProject(t *testing.T) {
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	f.agentSnap = func() agentstate.Snapshot {
 		return agentstate.Snapshot{
 			Orchestrators: []agents.Worker{{Address: "o-a", Project: "a"}, {Address: "o-b", Project: "b"}},

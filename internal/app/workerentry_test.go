@@ -118,7 +118,7 @@ func TestItemOfFindsTheWorkersIssue(t *testing.T) {
 func TestFrameOpenPRSetsTheItemOfTheWorker(t *testing.T) {
 	enableViewers(t)
 	r := newPRRig(t)
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	f.PR = r.pane
 	f.agentSnap = func() agentstate.Snapshot {
 		return agentstate.Snapshot{Workers: []agents.Worker{entryWorker}}

@@ -178,10 +178,10 @@ func (s keySource) Attach(ctx context.Context, p hc.AttachParams) (ghostty.Strea
 func keyFrame(t *testing.T) (*Frame, *fakeWindow, *ui.Tester, *scriptSource) {
 	t.Helper()
 	w := &fakeWindow{visible: true}
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	f.Selection = state.NewSelection(f.syncTerminal)
 	src := &scriptSource{address: "t2"}
-	f.TerminalSource = func(string) ghostty.Source { return keySource{src} }
+	f.deps.TerminalSource = func(string) ghostty.Source { return keySource{src} }
 	t.Cleanup(f.attachTerminal(w))
 	tt := ui.NewTester(f.buildTerminal, 600, 400)
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t2"})

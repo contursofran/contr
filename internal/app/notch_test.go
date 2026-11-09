@@ -302,7 +302,7 @@ func TestNotchFollowsTheFileThroughTheModel(t *testing.T) {
 func notchFrame(t *testing.T) (*Frame, *ui.Tester, *source) {
 	t.Helper()
 	w := &fakeWindow{visible: true}
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	src := &source{snap: agentstate.Snapshot{
@@ -313,7 +313,7 @@ func notchFrame(t *testing.T) (*Frame, *ui.Tester, *source) {
 		Workers:   []agents.Worker{{Name: "b-250", Address: "wa", Project: "a", Status: "working", Live: true}},
 		Questions: append(qs("a", 2), owner.Question{ID: "D7", Project: "b", Title: "b-251 checks"}),
 	}}
-	f.StartAgents = func(func()) (AgentSource, func()) { return src, func() {} }
+	f.deps.StartAgents = func(func()) (AgentSource, func()) { return src, func() {} }
 	stop := f.Attach(w)
 	t.Cleanup(func() { w.flush(); stop() })
 	tt := ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)

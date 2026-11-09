@@ -26,7 +26,7 @@ import (
 // newTester builds a frame of 1440x900.
 func newTester(t *testing.T) (*Frame, *ui.Tester) {
 	t.Helper()
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	return f, ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)
 }
 
@@ -270,7 +270,7 @@ func (w *fakeWindow) OnRestore(fn func()) func() {
 
 func TestAttachWiresTheStateToTheWindow(t *testing.T) {
 	w := &fakeWindow{visible: true}
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	stop := f.Attach(w)
@@ -301,7 +301,7 @@ func TestAttachTiesTheSamplersToTheWindowVisibility(t *testing.T) {
 	reads := make(chan struct{}, 8)
 	attach := func(visible bool) (*fakeWindow, func()) {
 		w := &fakeWindow{visible: visible}
-		f := NewFrame()
+		f := NewFrame(Deps{})
 		f.Host = host.New(func() (host.Stats, error) { reads <- struct{}{}; return host.Stats{}, nil }, theme.MemBarWidth, nil)
 		f.Usage = usage.NewSampler(usage.Unread, nil)
 		return w, f.Attach(w)
@@ -332,7 +332,7 @@ func TestAttachTiesTheSamplersToTheWindowVisibility(t *testing.T) {
 
 func TestAttachWiresTheTerminalToTheWindowFocus(t *testing.T) {
 	w := &fakeWindow{visible: true, focused: true}
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	stop := f.Attach(w)
@@ -399,7 +399,7 @@ func TestFrameReviewHiddenNoReads(t *testing.T) {
 }
 
 func TestFrameReviewReplacesTerminal(t *testing.T) {
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	f.Review, _ = newTestReview()
 	f.Diff = readyDiff(review.Summary{Added: 3, Removed: 1, Files: 2})
 	tt := ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)
@@ -415,12 +415,12 @@ func TestFrameReviewReplacesTerminal(t *testing.T) {
 
 func TestAttachStartsAndStopsTheAgentState(t *testing.T) {
 	w := &fakeWindow{visible: true}
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	var notify func()
 	stopped := 0
-	f.StartAgents = func(n func()) (AgentSource, func()) {
+	f.deps.StartAgents = func(n func()) (AgentSource, func()) {
 		notify = n
 		return &source{snap: agentstate.Snapshot{Workers: []agents.Worker{{Name: "b1", Address: "a", Live: true}}}}, func() { stopped++ }
 	}
@@ -444,11 +444,11 @@ func TestAttachStartsAndStopsTheAgentState(t *testing.T) {
 
 func TestAttachTiesTheAgentSourceToTheWindow(t *testing.T) {
 	w := &fakeWindow{visible: true}
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	src := &source{}
-	f.StartAgents = func(func()) (AgentSource, func()) { return src, func() {} }
+	f.deps.StartAgents = func(func()) (AgentSource, func()) { return src, func() {} }
 	stop := f.Attach(w)
 	defer stop()
 	last := func() []bool {
@@ -480,11 +480,11 @@ func TestAttachTiesTheAgentSourceToTheWindow(t *testing.T) {
 
 func TestAttachTellsAHiddenWindowToTheAgentSource(t *testing.T) {
 	w := &fakeWindow{visible: false}
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	src := &source{}
-	f.StartAgents = func(func()) (AgentSource, func()) { return src, func() {} }
+	f.deps.StartAgents = func(func()) (AgentSource, func()) { return src, func() {} }
 	stop := f.Attach(w)
 	defer stop()
 	src.mu.Lock()
@@ -505,11 +505,11 @@ func (idleSource) Watch(context.Context) (<-chan hc.Event, func(), error) { retu
 
 func TestTheTerminalFollowsTheSelectedAgent(t *testing.T) {
 	w := &fakeWindow{visible: true}
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	var asked []string
-	f.TerminalSource = func(addr string) ghostty.Source {
+	f.deps.TerminalSource = func(addr string) ghostty.Source {
 		asked = append(asked, addr)
 		return idleSource{addr}
 	}

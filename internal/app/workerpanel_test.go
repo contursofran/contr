@@ -37,7 +37,7 @@ type followRig struct {
 func newFollowRig(t *testing.T) *followRig {
 	t.Helper()
 	src := panelSource()
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	f.Selection = stateSelection()
 	f.agentSnap = src.Snapshot
 	f.takeSnapshot()

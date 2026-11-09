@@ -67,9 +67,9 @@ func TestFrameShowsLoadErrorAndKeepsDefaultOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	w := &fakeWindow{visible: true}
-	f := NewFrame()
-	f.LoadProjects = func() (*projects.Store, error) { return projects.Load(path) }
-	f.StartAgents = func(func()) (AgentSource, func()) {
+	f := NewFrame(Deps{})
+	f.deps.Projects.Load = func() (*projects.Store, error) { return projects.Load(path) }
+	f.deps.StartAgents = func(func()) (AgentSource, func()) {
 		return &source{snap: agentstate.Snapshot{}}, func() {}
 	}
 	stop := f.Attach(w)
@@ -116,7 +116,7 @@ func TestSidebarGroupMissingFromStoredOrderGoesLast(t *testing.T) {
 
 func TestFrameWithoutLoaderReadsNoStore(t *testing.T) {
 	w := &fakeWindow{visible: true}
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	stop := f.Attach(w)
 	defer stop()
 	w.flush()

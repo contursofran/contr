@@ -72,7 +72,7 @@ func findFrameLog(t *testing.T) (*Frame, *fakeWindow, *ui.Tester, *inputLog) {
 	t.Helper()
 	f, w, _, _ := terminalFrame(t, nil)
 	log := &inputLog{}
-	f.TerminalSource = func(string) ghostty.Source { return recSource{log} }
+	f.deps.TerminalSource = func(string) ghostty.Source { return recSource{log} }
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t2"})
 	if f.term == nil {
 		t.Fatal("no terminal after the selection")

@@ -244,7 +244,7 @@ func TestFileTreeFollowsTheSelectedFolder(t *testing.T) {
 }
 
 func TestFilesDirFollowsTheSelectedAgent(t *testing.T) {
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	f.Selection = state.NewSelection(nil)
 	f.agentSnap = func() agentstate.Snapshot {
 		return agentstate.Snapshot{
@@ -440,7 +440,7 @@ func TestFileClickOpensTheFileInReview(t *testing.T) {
 	s.commit("o", map[string]string{"o.txt": "o\n"})
 	s.git("checkout", "-b", "work")
 	s.commit("w", map[string]string{"first.txt": "1\n", "wanted.txt": "w1\nw2\n"})
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	f.Review, _ = newTestReview()
 	f.openFileInReview(s.dir, "wanted.txt")
 	if !f.ReviewOpen() {

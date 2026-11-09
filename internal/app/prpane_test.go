@@ -226,7 +226,7 @@ func TestPRTextHelpers(t *testing.T) {
 
 func TestFrameOpenPRShowsThePaneAndCollapsesTabs(t *testing.T) {
 	enableViewers(t)
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	r := newPRRig(t)
 	f.PR = r.pane
 	tt := ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)

@@ -40,12 +40,12 @@ func (l *lateWindow) Update(fn func()) {
 
 // StartTheme reads the stored settings and applies the theme source. Call it on the UI thread
 // once the app runs, before the window is made. A missing, bad or unknown stored value gives
-// System; a read error shows as a toast once the frame attaches. Without ThemePlatform
+// System; a read error shows as a toast once the frame attaches. Without Deps.ThemePlatform
 // it only keeps the value.
 func (f *Frame) StartTheme() {
 	src := mygo.ThemeSystem
-	if f.LoadPrefs != nil {
-		p, err := f.LoadPrefs()
+	if f.deps.Prefs.Load != nil {
+		p, err := f.deps.Prefs.Load()
 		if err != nil {
 			f.themeErr = err
 		} else {
@@ -56,8 +56,8 @@ func (f *Frame) StartTheme() {
 		}
 	}
 	f.appearance = src
-	if f.ThemePlatform != nil {
-		f.follower = theme.Follow(f.ThemePlatform, &f.lateWin, src)
+	if f.deps.ThemePlatform != nil {
+		f.follower = theme.Follow(f.deps.ThemePlatform, &f.lateWin, src)
 	}
 }
 
@@ -88,7 +88,7 @@ const TintDelay = 300 * time.Millisecond
 // replaces a write that waits. Writes go one at a time, and each writes the latest
 // values, so quick changes end with the last choice on disk.
 func (f *Frame) persist(delay time.Duration) {
-	save, post := f.SavePrefs, f.post
+	save, post := f.deps.Prefs.Save, f.post
 	if save == nil {
 		return
 	}
