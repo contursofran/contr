@@ -9,6 +9,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/owner"
 )
 
@@ -701,5 +702,15 @@ func TestChipOfABlockedWorkerWithoutAMessageShowsItsName(t *testing.T) {
 	}
 	if _, ok := r.tt.Find("b-2"); !ok {
 		t.Error("no chip labelled with the worker name")
+	}
+}
+
+// The open questions card has an opaque fill, float-solid, like the update panel (#524, D212).
+// The closed notch label keeps glass-float.
+func TestTheQuestionsCardFillIsFloatSolid(t *testing.T) {
+	for name, p := range map[string]*theme.Palette{"dark": theme.Dark, "light": theme.Light} {
+		if questionsCardFill(p) != p.FloatSolid {
+			t.Errorf("%s: the questions card fill is not float-solid", name)
+		}
 	}
 }

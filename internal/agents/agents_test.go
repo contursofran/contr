@@ -446,8 +446,9 @@ func TestSpawnStartsTheKitAgent(t *testing.T) {
 	if got := argvOf("builder"); !reflect.DeepEqual(got, want) {
 		t.Errorf("builder argv\n got %v\nwant %v", got, want)
 	}
-	if got := argvOf("reviewer"); got[1] != "--model" {
-		t.Errorf("a profile with no agent file gets the kit: %v", got)
+	// No agent file: the kit loads, with no --agent (D211).
+	if got := argvOf("reviewer"); !reflect.DeepEqual(got[:4], []any{"claude", "--plugin-dir", kit, "--model"}) {
+		t.Errorf("a profile with no agent file: %v", got)
 	}
 	if got := argvOf("shell"); !reflect.DeepEqual(got, []any{"sh"}) {
 		t.Errorf("a non-claude profile changed: %v", got)
@@ -779,11 +780,11 @@ func TestProfileAgentPicksTheKitAgent(t *testing.T) {
 	if !reflect.DeepEqual(argv, want) {
 		t.Errorf("argv = %v, want %v", argv, want)
 	}
-	// No agent field and no kit file of that name: the argv as written.
+	// No agent field and no kit file of that name: the kit, no --agent.
 	if _, err := m.Spawn(context.Background(), Spec{Name: "o", Profile: "odd"}); err != nil {
 		t.Fatal(err)
 	}
-	if argv := f.last().Params["argv"].([]any); !reflect.DeepEqual(argv, []any{"claude"}) {
+	if argv := f.last().Params["argv"].([]any); !reflect.DeepEqual(argv, []any{"claude", "--plugin-dir", kit}) {
 		t.Errorf("odd argv = %v", argv)
 	}
 }
@@ -1057,11 +1058,11 @@ func TestClaudeArgvGetsTheStatusLine(t *testing.T) {
 	}
 
 	own := []string{"claude", "--settings", `{"x":1}`, "--model", "opus"}
-	if got := m.agentArgv("orchestrator", own); !reflect.DeepEqual(got, own) {
+	if got := m.agentArgv("orchestrator", own); !reflect.DeepEqual(got, append([]string{"claude", "--plugin-dir", kit}, own[1:]...)) {
 		t.Errorf("argv with --settings changed: %v", got)
 	}
 	eq := []string{"claude", "--settings=/p.json"}
-	if got := m.agentArgv("orchestrator", eq); !reflect.DeepEqual(got, eq) {
+	if got := m.agentArgv("orchestrator", eq); !reflect.DeepEqual(got, []string{"claude", "--plugin-dir", kit, "--settings=/p.json"}) {
 		t.Errorf("argv with --settings= changed: %v", got)
 	}
 	codex := []string{"codex", "--model", "x"}
@@ -1072,7 +1073,7 @@ func TestClaudeArgvGetsTheStatusLine(t *testing.T) {
 	if got := noKit.agentArgv("builder", []string{"claude"}); len(got) != 3 || got[1] != "--settings" {
 		t.Errorf("no kit: %v", got)
 	}
-	if got := m.WithExecutable("").agentArgv("orchestrator", []string{"claude"}); !reflect.DeepEqual(got, []string{"claude"}) {
+	if got := m.WithExecutable("").agentArgv("orchestrator", []string{"claude"}); !reflect.DeepEqual(got, []string{"claude", "--plugin-dir", kit}) {
 		t.Errorf("no binary: %v", got)
 	}
 }
@@ -1089,8 +1090,44 @@ func TestSpawnPutsTheStatusLineInTheOrchestratorArgv(t *testing.T) {
 		t.Fatal(err)
 	}
 	argv := f.last().Params["argv"].([]any)
-	if argv[0] != "claude" || argv[1] != "--settings" {
+	if argv[0] != "claude" || argv[1] != "--plugin-dir" || argv[2] != cfg.Kit || argv[3] != "--settings" {
 		t.Errorf("argv = %v", argv)
+	}
+}
+
+// D211: every claude argv loads the kit; --agent only with an agent file.
+func TestAgentArgvLoadsTheKitInEveryClaudeArgv(t *testing.T) {
+	kit := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(kit, "agents"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(kit, "agents", "builder.md"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := DefaultConfig()
+	cfg.Kit = kit
+	m := New(&fakeCore{}, cfg).WithExecutable("")
+	for _, c := range []struct {
+		agent string
+		argv  []string
+		want  []string
+	}{
+		{"orchestrator", []string{"claude", "--model", "opus"}, []string{"claude", "--plugin-dir", kit, "--model", "opus"}},
+		{"builder", []string{"claude"}, []string{"claude", "--plugin-dir", kit, "--agent", "contr:builder"}},
+		{"orchestrator", []string{"claude", "--plugin-dir", "/own"}, []string{"claude", "--plugin-dir", "/own"}},
+		{"orchestrator", []string{"claude", "--plugin-dir=/own"}, []string{"claude", "--plugin-dir=/own"}},
+		{"builder", []string{"claude", "--plugin-dir", "/own"}, []string{"claude", "--agent", "contr:builder", "--plugin-dir", "/own"}},
+		{"orchestrator", []string{"/usr/local/bin/claude"}, []string{"/usr/local/bin/claude", "--plugin-dir", kit}},
+		{"orchestrator", []string{"codex", "--model", "x"}, []string{"codex", "--model", "x"}},
+		{"builder", []string{"codex"}, []string{"codex"}},
+	} {
+		if got := m.agentArgv(c.agent, c.argv); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s %v:\n got %v\nwant %v", c.agent, c.argv, got, c.want)
+		}
+	}
+	noKit := New(&fakeCore{}, DefaultConfig()).WithExecutable("")
+	if got := noKit.agentArgv("orchestrator", []string{"claude"}); !reflect.DeepEqual(got, []string{"claude"}) {
+		t.Errorf("no kit: %v", got)
 	}
 }
 

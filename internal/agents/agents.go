@@ -625,11 +625,13 @@ func (m *Manager) OpenTerminal(ctx context.Context, s TerminalSpec) (Worker, err
 	return decodeWorker(raw)
 }
 
-// agentArgv returns the profile's command. A claude command whose agent
-// (Profile.Agent, else the profile name) has a definition in the kit gets
-// `--plugin-dir <kit> --agent contr:<agent>` after the program name. Every
-// claude command gets `--settings` with a status line that runs
-// `contr statusline`, unless it has `--settings` already (D203).
+// agentArgv returns the profile's command. With a kit set, a claude command
+// gets `--plugin-dir <kit>` after the program name, unless it has
+// `--plugin-dir` already (D211). When its agent (Profile.Agent, else the
+// profile name) has a definition in the kit, it also gets
+// `--agent contr:<agent>`. Every claude command gets `--settings` with a
+// status line that runs `contr statusline`, unless it has `--settings`
+// already (D203).
 func (m *Manager) agentArgv(agent string, argv []string) []string {
 	out := append([]string(nil), argv...)
 	if len(out) == 0 || filepath.Base(out[0]) != "claude" {
@@ -637,11 +639,14 @@ func (m *Manager) agentArgv(agent string, argv []string) []string {
 	}
 	head := []string{out[0]}
 	if m.cfg.Kit != "" {
+		if !hasFlag(out[1:], "--plugin-dir") {
+			head = append(head, "--plugin-dir", m.cfg.Kit)
+		}
 		if _, err := os.Stat(filepath.Join(m.cfg.Kit, "agents", agent+".md")); err == nil {
-			head = append(head, "--plugin-dir", m.cfg.Kit, "--agent", "contr:"+agent)
+			head = append(head, "--agent", "contr:"+agent)
 		}
 	}
-	if m.exe != "" && !hasSettings(out[1:]) {
+	if m.exe != "" && !hasFlag(out[1:], "--settings") {
 		if js, err := statuslineSettings(m.exe); err != nil {
 			slog.Warn("unable to build the status line settings", "err", err)
 		} else {
@@ -651,10 +656,10 @@ func (m *Manager) agentArgv(agent string, argv []string) []string {
 	return append(head, out[1:]...)
 }
 
-// hasSettings reports whether args set --settings.
-func hasSettings(args []string) bool {
+// hasFlag reports whether args set flag, as `flag v` or `flag=v`.
+func hasFlag(args []string, flag string) bool {
 	for _, a := range args {
-		if a == "--settings" || strings.HasPrefix(a, "--settings=") {
+		if a == flag || strings.HasPrefix(a, flag+"=") {
 			return true
 		}
 	}
