@@ -142,6 +142,7 @@ func DefaultConfig() Config {
 		"planner":      claude("opus", "low"),
 		"reviewer":     claude("opus", "low"),
 		"debugger":     claude("opus", "xhigh"),
+		"explorer":     claude("sonnet", "medium"),
 	}}
 }
 
