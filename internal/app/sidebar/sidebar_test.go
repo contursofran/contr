@@ -1,4 +1,4 @@
-package app
+package sidebar
 
 import (
 	"github.com/egoist/mygo/ui"
@@ -16,20 +16,18 @@ import (
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/files"
-	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/projects"
-	"github.com/contursofran/contr/internal/usage"
 )
 
 // ---- The server row ----
 
 func TestServerRowIsLocalWhenHCIsUp(t *testing.T) {
-	h := newSpaces(t, spTree())
+	h := newSpaces(t, apptest.SpTree())
 	h.tt.Frame()
 	if !h.has("This Mac, local") || !h.tt.HasText("This Mac") || !h.tt.HasText("local") {
 		t.Errorf("texts %q", h.tt.Texts())
@@ -45,7 +43,7 @@ func TestServerRowIsLocalWhenHCIsUp(t *testing.T) {
 }
 
 func TestServerRowShowsCPUAndMemory(t *testing.T) {
-	h := newSpaces(t, spTree())
+	h := newSpaces(t, apptest.SpTree())
 	h.host.set(stats(38, 62, 100))
 	h.tt.Frame()
 	if want := "local · 38% CPU · 62% MEM"; !h.tt.HasText(want) {
@@ -54,7 +52,7 @@ func TestServerRowShowsCPUAndMemory(t *testing.T) {
 }
 
 func TestSettingsButtonIsAtTheBottomRight(t *testing.T) {
-	h := newSpaces(t, spTree())
+	h := newSpaces(t, apptest.SpTree())
 	h.tt.Frame()
 	b, side := apptest.Box(t, h.tt, LabelSettingsOpen), apptest.Box(t, h.tt, LabelProjectList)
 	if win := apptest.Box(t, h.tt, LabelServersHead+" header"); b.X+b.W < win.X+win.W-24 {
@@ -68,7 +66,7 @@ func TestSettingsButtonIsAtTheBottomRight(t *testing.T) {
 		t.Error("Settings still sits in the Servers head")
 	}
 
-	h.list.compact = true
+	h.list.Compact = true
 	h.tt.Frame()
 	b, side = apptest.Box(t, h.tt, LabelSettingsOpen), apptest.Box(t, h.tt, LabelProjectList)
 	if b.Y < side.Y+side.H-1 {
@@ -77,7 +75,7 @@ func TestSettingsButtonIsAtTheBottomRight(t *testing.T) {
 }
 
 func TestSettingsButtonOpensSettings(t *testing.T) {
-	h := newSpaces(t, spTree())
+	h := newSpaces(t, apptest.SpTree())
 	opened := 0
 	h.list.OnSettings = func() { opened++ }
 	h.tt.Frame()
@@ -90,7 +88,7 @@ func TestSettingsButtonOpensSettings(t *testing.T) {
 }
 
 func TestSettingsButtonNamesAnUpdateThatWaits(t *testing.T) {
-	h := newSpaces(t, spTree())
+	h := newSpaces(t, apptest.SpTree())
 	ready := false
 	h.list.UpdateReady = func() bool { return ready }
 	h.tt.Frame()
@@ -105,7 +103,7 @@ func TestSettingsButtonNamesAnUpdateThatWaits(t *testing.T) {
 }
 
 func TestServerRowHasNoPlusUntilRemoteServers(t *testing.T) {
-	h := newSpaces(t, spTree())
+	h := newSpaces(t, apptest.SpTree())
 	h.tt.Frame()
 	// The only icon button of the Projects head is the `+` (#436).
 	if !h.has(LabelProjectsAdd) {
@@ -122,7 +120,7 @@ func TestServerRowHasNoPlusUntilRemoteServers(t *testing.T) {
 }
 
 func TestServerRowIsOfflineWithTheProblemLine(t *testing.T) {
-	h := newSpaces(t, spTree())
+	h := newSpaces(t, apptest.SpTree())
 	h.host.set(stats(38, 62, 100))
 	h.send(hcDown())
 	if !h.has("This Mac, offline") || !h.tt.HasText("offline") {
@@ -137,7 +135,7 @@ func TestServerRowIsOfflineWithTheProblemLine(t *testing.T) {
 		}
 	}
 	// The problem goes away with the connection.
-	h.send(spTree())
+	h.send(apptest.SpTree())
 	if h.tt.HasText("hc: connection refused") || !h.has("This Mac, local") {
 		t.Errorf("texts %q", h.tt.Texts())
 	}
@@ -251,7 +249,7 @@ func TestAClickSelectsTheOrchestratorElseTheProject(t *testing.T) {
 	h, cwds := twoRepos(t)
 	h.send(agentstate.Snapshot{CoreVersion: "0.1.18",
 		Orchestrators: []agents.Worker{orchestratorIn("lead", cwds[0])},
-		Workers:       []agents.Worker{spPane("w1:p2", cwds[1], nil)}})
+		Workers:       []agents.Worker{apptest.SpPane("w1:p2", cwds[1], nil)}})
 	if err := h.tt.Click("alpha, main"); err != nil {
 		t.Fatal(err)
 	}
@@ -272,7 +270,7 @@ func TestAClickOnTheSelectedProjectFoldsAndOpensIt(t *testing.T) {
 	h, cwds := twoRepos(t)
 	h.send(agentstate.Snapshot{CoreVersion: "0.1.18",
 		Orchestrators: []agents.Worker{orchestratorIn("lead", cwds[0])},
-		Workers:       []agents.Worker{spPane("w1:p2", cwds[1], nil)}})
+		Workers:       []agents.Worker{apptest.SpPane("w1:p2", cwds[1], nil)}})
 	dir := h.group(0).CommonDir
 	h.tt.Click("alpha, main") // selects
 	h.tt.Frame()
@@ -317,7 +315,7 @@ func TestEmptyProjectMenuStartsAnOrchestratorThere(t *testing.T) {
 }
 
 func TestThePlusMenuRunsItsActions(t *testing.T) {
-	h := newSpaces(t, spTree())
+	h := newSpaces(t, apptest.SpTree())
 	var opened, created int
 	h.list.OnProjects = func() { opened++ }
 	h.list.OnNew = func() { created++ }
@@ -336,9 +334,9 @@ func TestThePlusMenuRunsItsActions(t *testing.T) {
 // ---- The branch ----
 
 func TestTheBranchIsReadOffTheUIThread(t *testing.T) {
-	base := canonicalTmp(t)
+	base := apptest.CanonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	live := &spSnap{s: spTree(spPane("w1:p1", wt, nil))}
+	live := &spSnap{s: apptest.SpTree(apptest.SpPane("w1:p1", wt, nil))}
 	var started []func()
 	read := 0
 	l := NewSpacesList(live.get, nil, view.Env{})
@@ -356,9 +354,9 @@ func TestTheBranchIsReadOffTheUIThread(t *testing.T) {
 }
 
 func TestAHeadChangeReadsTheBranchAgain(t *testing.T) {
-	base := canonicalTmp(t)
+	base := apptest.CanonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
+	h := newSpaces(t, apptest.SpTree(apptest.SpPane("w1:p1", wt, nil)))
 	commonDir := h.group(0).CommonDir
 	head, ok := h.heads[filepath.Join(commonDir, "HEAD")]
 	if !ok {
@@ -368,7 +366,7 @@ func TestAHeadChangeReadsTheBranchAgain(t *testing.T) {
 	if !h.has("repo, main") {
 		t.Fatalf("texts %q", h.tt.Texts())
 	}
-	writeFakeFile(t, filepath.Join(commonDir, "HEAD"), "ref: refs/heads/release\n")
+	apptest.WriteFakeFile(t, filepath.Join(commonDir, "HEAD"), "ref: refs/heads/release\n")
 	head.changed()
 	h.tt.Frame()
 	if !h.has("repo, release") || h.has("repo, main") {
@@ -380,9 +378,9 @@ func TestAHeadChangeReadsTheBranchAgain(t *testing.T) {
 }
 
 func TestAHeadChangeReadsGitOnAGoroutine(t *testing.T) {
-	base := canonicalTmp(t)
+	base := apptest.CanonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
+	h := newSpaces(t, apptest.SpTree(apptest.SpPane("w1:p1", wt, nil)))
 	var started []func()
 	h.list.Env.Run.Go = func(f func()) { started = append(started, f) }
 	for _, head := range h.heads {
@@ -398,8 +396,8 @@ func TestEachRepoIsWatchedOnceAndTheWatchEndsWithTheRepo(t *testing.T) {
 	if len(h.heads) != 2 {
 		t.Fatalf("watches %d, want 2", len(h.heads))
 	}
-	h.send(spTree(spPane("w1:p1", h.list.scanned[0], nil)))
-	h.send(spTree(spPane("w1:p1", h.list.scanned[0], nil)))
+	h.send(apptest.SpTree(apptest.SpPane("w1:p1", h.list.scanned[0], nil)))
+	h.send(apptest.SpTree(apptest.SpPane("w1:p1", h.list.scanned[0], nil)))
 	if len(h.heads) != 2 {
 		t.Errorf("watches %d: a second sync started more", len(h.heads))
 	}
@@ -432,9 +430,9 @@ func TestClosingTheListEndsTheWatches(t *testing.T) {
 }
 
 func TestAFailedWatchIsReported(t *testing.T) {
-	base := canonicalTmp(t)
+	base := apptest.CanonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	live := &spSnap{s: spTree(spPane("w1:p1", wt, nil))}
+	live := &spSnap{s: apptest.SpTree(apptest.SpPane("w1:p1", wt, nil))}
 	l := NewSpacesList(live.get, nil, view.Env{})
 	l.Env.Run.Go = func(f func()) { f() }
 	l.WatchHead = func(context.Context, string, func()) error { return errors.New("watch limit") }
@@ -474,16 +472,16 @@ func TestWatchFileReportsAChangeAndEndsWithItsContext(t *testing.T) {
 // manyRepos is a harness with n projects, one pane each.
 func manyRepos(t *testing.T, n int) *spacesHarness {
 	t.Helper()
-	base := canonicalTmp(t)
+	base := apptest.CanonicalTmp(t)
 	var ws []agents.Worker
 	for i := 0; i < n; i++ {
 		name := "repo" + string(rune('a'+i/26)) + string(rune('a'+i%26))
-		gitDir := mainRepo(t, filepath.Join(base, name), "ref: refs/heads/main\n")
+		gitDir := apptest.MainRepo(t, filepath.Join(base, name), "ref: refs/heads/main\n")
 		wt := filepath.Join(base, name+"-wt")
 		linkedWorktree(t, gitDir, "w1", wt, "ref: refs/heads/feature\n")
-		ws = append(ws, spPane("w1:p"+name, wt, nil))
+		ws = append(ws, apptest.SpPane("w1:p"+name, wt, nil))
 	}
-	return newSpaces(t, spTree(ws...))
+	return newSpaces(t, apptest.SpTree(ws...))
 }
 
 // Servers sits under the project list and above Settings, wide and in the
@@ -498,7 +496,7 @@ func TestServersSitBelowTheProjectsAndAboveSettings(t *testing.T) {
 		t.Errorf("order: projects %v list %v servers %v row %v settings %v", proj, list, srv, row, set)
 	}
 
-	h.list.compact = true
+	h.list.Compact = true
 	h.tt.Frame()
 	list, row, set = apptest.Box(t, h.tt, LabelProjectList), apptest.Box(t, h.tt, "This Mac, local"), apptest.Box(t, h.tt, LabelSettingsOpen)
 	if row.Y < list.Y+list.H-1 || set.Y < row.Y+row.H-1 {
@@ -527,41 +525,8 @@ func addItem(tt *ui.Tester, item string) error {
 	return tt.Click(item)
 }
 
-// The foot row is centered in its area (#495): the meters' left inset equals the
-// gear's right inset, the divider has the same insets, and the content has as
-// much room above (to the divider) as below (to the sidebar's bottom edge).
-func TestSidebarFootIsCentered(t *testing.T) {
-	h := newSpaces(t, spTree())
-	h.list.Plans = func() []kit.Meter { return planMeters(fakeLeft{usage.PlanClaude: 62}) }
-	h.tt.Frame()
-	foot, div := apptest.Box(t, h.tt, "sidebar foot"), apptest.Box(t, h.tt, "sidebar foot divider")
-	gear, plans := apptest.Box(t, h.tt, LabelSettingsOpen), apptest.Box(t, h.tt, "plan usage")
-	right, left := foot.X+foot.W-(gear.X+gear.W), plans.X-foot.X
-	if right != left || left <= 0 {
-		t.Errorf("gear right inset %v, meters left inset %v", right, left)
-	}
-	if div.X != plans.X || div.X+div.W != gear.X+gear.W {
-		t.Errorf("divider x %v..%v, content %v..%v", div.X, div.X+div.W, plans.X, gear.X+gear.W)
-	}
-	bottom := float32(theme.WindowHeight)
-	if above, below := gear.Y-(div.Y+div.H), bottom-(gear.Y+gear.H); above != below {
-		t.Errorf("gear has %v above and %v below", above, below)
-	}
-	if mid, gm := plans.Y+plans.H/2, gear.Y+gear.H/2; mid != gm {
-		t.Errorf("meters center %v, gear center %v", mid, gm)
-	}
-
-	// The icon column keeps the button centered (D147).
-	h.list.compact = true
-	h.tt.Frame()
-	foot, gear = apptest.Box(t, h.tt, "sidebar foot"), apptest.Box(t, h.tt, LabelSettingsOpen)
-	if l, r := gear.X-foot.X, foot.X+foot.W-(gear.X+gear.W); l != r {
-		t.Errorf("icon column: gear insets %v and %v", l, r)
-	}
-}
-
 func TestServerRowClickRetriesWhileOffline(t *testing.T) {
-	h := newSpaces(t, spTree())
+	h := newSpaces(t, apptest.SpTree())
 	retries := 0
 	h.list.OnRetry = func() { retries++ }
 	h.send(hcDown())
@@ -571,7 +536,7 @@ func TestServerRowClickRetriesWhileOffline(t *testing.T) {
 	if retries != 1 {
 		t.Fatalf("retries = %d after a click on the offline row, want 1", retries)
 	}
-	h.send(spTree())
+	h.send(apptest.SpTree())
 	_ = h.tt.Click("This Mac, local") // the online row has no click
 	if retries != 1 {
 		t.Fatalf("retries = %d after a click on the online row, want 1", retries)

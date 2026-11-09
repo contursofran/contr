@@ -1,13 +1,11 @@
-package app
+package sidebar
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/projects"
 )
@@ -16,16 +14,16 @@ import (
 // a tree with a terminal in each. Group 0 is alpha, group 1 is beta.
 func twoRepos(t *testing.T) (*spacesHarness, []string) {
 	t.Helper()
-	base := canonicalTmp(t)
+	base := apptest.CanonicalTmp(t)
 	var wts, cwds []string
 	for _, name := range []string{"alpha", "beta"} {
-		gitDir := mainRepo(t, filepath.Join(base, name), "ref: refs/heads/main\n")
+		gitDir := apptest.MainRepo(t, filepath.Join(base, name), "ref: refs/heads/main\n")
 		wt := filepath.Join(base, name+"-wt")
 		linkedWorktree(t, gitDir, "w1", wt, "ref: refs/heads/feature\n")
 		wts = append(wts, wt)
 		cwds = append(cwds, wt)
 	}
-	h := newSpaces(t, spTree(spPane("w1:p1", wts[0], nil), spPane("w1:p2", wts[1], nil)))
+	h := newSpaces(t, apptest.SpTree(apptest.SpPane("w1:p1", wts[0], nil), apptest.SpPane("w1:p2", wts[1], nil)))
 	return h, cwds
 }
 
@@ -61,37 +59,6 @@ func TestSidebarLeavesHiddenGroupsOut(t *testing.T) {
 	}
 }
 
-func TestFrameShowsLoadErrorAndKeepsDefaultOrder(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "projects.json")
-	if err := os.WriteFile(path, []byte("{not json"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	w := &fakeWindow{visible: true}
-	f := NewFrame(Deps{})
-	f.deps.Projects.Load = func() (*projects.Store, error) { return projects.Load(path) }
-	f.deps.StartAgents = func(func()) (agentstate.AgentSource, func()) {
-		return &source{Snap: agentstate.Snapshot{}}, func() {}
-	}
-	stop := f.Attach(w)
-	defer stop()
-	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
-		w.flush()
-		if _, ok := lastToast(f); ok {
-			break
-		}
-		time.Sleep(time.Millisecond)
-	}
-	if text, _ := lastToast(f); !strings.HasPrefix(text, "projects: ") {
-		t.Errorf("message %q", text)
-	}
-	if f.Projects == nil {
-		t.Error("a corrupt file gave no empty store")
-	}
-	if b, _ := os.ReadFile(path); string(b) != "{not json" {
-		t.Error("the corrupt file was overwritten")
-	}
-}
-
 func TestSidebarMissingStoreFileKeepsTreeOrder(t *testing.T) {
 	h, _ := twoRepos(t)
 	s, err := projects.Load(filepath.Join(t.TempDir(), "none.json"))
@@ -111,17 +78,6 @@ func TestSidebarGroupMissingFromStoredOrderGoesLast(t *testing.T) {
 	h.list.SetProjects(s)
 	if got := strings.Join(groupNames(h.list.Groups()), ","); got != "beta,alpha" {
 		t.Errorf("groups %s, want beta,alpha", got)
-	}
-}
-
-func TestFrameWithoutLoaderReadsNoStore(t *testing.T) {
-	w := &fakeWindow{visible: true}
-	f := NewFrame(Deps{})
-	stop := f.Attach(w)
-	defer stop()
-	w.flush()
-	if f.Projects != nil {
-		t.Error("a store appeared without a loader")
 	}
 }
 

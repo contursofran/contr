@@ -1,4 +1,4 @@
-package app
+package sidebar
 
 // The age clock (decision D137, open point O10): one shared timer that moves
 // the ages of the agent rows once a minute. It runs only while the window is

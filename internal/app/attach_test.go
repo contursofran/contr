@@ -69,7 +69,7 @@ func TestAttachStopOrder(t *testing.T) {
 			if hasLayer(&f.Overlay, questions.LabelOutline) {
 				t.Error("the agent state stopped before the outline was removed")
 			}
-			if f.SpacesList.closed {
+			if f.SpacesList.Closed() {
 				t.Error("the sidebar list closed before the agent state stopped")
 			}
 		}
@@ -88,7 +88,7 @@ func TestAttachStopOrder(t *testing.T) {
 	if want := []string{"unwatch", "term", "agents"}; !slices.Equal(log, want) {
 		t.Errorf("the stop order is %v, want %v", log, want)
 	}
-	if !f.SpacesList.closed {
+	if !f.SpacesList.Closed() {
 		t.Error("stop should close the sidebar list")
 	}
 }

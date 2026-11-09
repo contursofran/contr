@@ -10,6 +10,7 @@ import (
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/files"
 	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/sidebar"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/usage"
@@ -144,7 +145,7 @@ func TestTheFilesPanelShowsADashWithoutASampler(t *testing.T) {
 
 // The sidebar foot shows the plan meters inline, left of the Settings button (D196).
 func TestTheSidebarFootShowsThePlansLeftOfSettings(t *testing.T) {
-	h := newSpaces(t, spTree())
+	h := newSpaces(t, apptest.SpTree())
 	h.list.Plans = func() []kit.Meter { return planMeters(fakeLeft{usage.PlanClaude: 62}) }
 	h.tt.Frame()
 	for _, want := range []string{"Claude", "Codex", "38%", kit.NoValue} {
@@ -152,7 +153,7 @@ func TestTheSidebarFootShowsThePlansLeftOfSettings(t *testing.T) {
 			t.Errorf("no text %q; texts %q", want, h.tt.Texts())
 		}
 	}
-	gear := apptest.Box(t, h.tt, LabelSettingsOpen)
+	gear := apptest.Box(t, h.tt, sidebar.LabelSettingsOpen)
 	claude, codex := apptest.Box(t, h.tt, "Claude meter"), apptest.Box(t, h.tt, "Codex meter")
 	if claude.W != kit.PlanUsageWidth || codex.W != kit.PlanUsageWidth {
 		t.Errorf("bar widths %v and %v, want %v", claude.W, codex.W, kit.PlanUsageWidth)
@@ -165,7 +166,7 @@ func TestTheSidebarFootShowsThePlansLeftOfSettings(t *testing.T) {
 		t.Errorf("meters at y %v, gear at y %v: not one row", midBar, midGear)
 	}
 	// The icon column has no room: the button only.
-	h.list.compact = true
+	h.list.Compact = true
 	h.tt.Frame()
 	if !apptest.Absent(h.tt, "Claude meter") {
 		t.Error("the icon column shows the plan meters")
@@ -272,12 +273,12 @@ func TestTheContextLineFollowsTheSelectedTerminal(t *testing.T) {
 
 // At the narrowest sidebar the meters clip; the Settings button stays inside.
 func TestTheSidebarFootKeepsSettingsInAtTheNarrowestWidth(t *testing.T) {
-	h := newSpaces(t, spTree())
+	h := newSpaces(t, apptest.SpTree())
 	h.list.Plans = func() []kit.Meter { return planMeters(fakeLeft{usage.PlanClaude: 62, usage.PlanCodex: 88}) }
 	tt := h.tt
 	tt.SetSize(theme.SidebarMinWidth, theme.WindowHeight)
 	tt.Frame()
-	gear, group := apptest.Box(t, tt, LabelSettingsOpen), apptest.Box(t, tt, "plan usage")
+	gear, group := apptest.Box(t, tt, sidebar.LabelSettingsOpen), apptest.Box(t, tt, "plan usage")
 	if gear.X+gear.W > theme.SidebarMinWidth {
 		t.Errorf("Settings ends at %v, past the sidebar %v", gear.X+gear.W, theme.SidebarMinWidth)
 	}

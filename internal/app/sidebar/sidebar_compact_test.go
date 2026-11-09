@@ -1,4 +1,4 @@
-package app
+package sidebar
 
 import (
 	"testing"
@@ -7,89 +7,12 @@ import (
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
-	"github.com/contursofran/contr/internal/app/titlebar"
 )
-
-func TestSidebarIconRuleBothWays(t *testing.T) {
-	for _, tc := range []struct {
-		win     float32
-		compact bool
-	}{{0, false}, {760, true}, {799, true}, {800, false}, {1099, false}, {1440, false}} {
-		if got := compactSidebar(tc.win); got != tc.compact {
-			t.Errorf("compactSidebar(%v) = %v, want %v", tc.win, got, tc.compact)
-		}
-	}
-	// Under 800 an open sidebar is the icon column, whatever width was stored;
-	// from 800 up the stored width is drawn; a closed sidebar keeps its width.
-	for _, tc := range []struct {
-		win, stored float32
-		open        bool
-		want        float32
-	}{
-		{799, 312, true, theme.SidebarIconWidth},
-		{600, 480, true, theme.SidebarIconWidth},
-		{800, 312, true, 296}, // the sidebar gives way for the terminal minimum, as before
-		{900, 312, true, 312},
-		{799, 312, false, 312},
-	} {
-		got, _, files := fitWidths(tc.win, tc.stored, 280, tc.open, true)
-		if got != tc.want || (tc.win < theme.FilesHideBelow && files) {
-			t.Errorf("fitWidths(%v, %v, open %v) = %v, files %v; want %v, no files", tc.win, tc.stored, tc.open, got, files, tc.want)
-		}
-	}
-}
-
-func TestNarrowWindowDrawsTheSidebarAsIconsAndRestoresIt(t *testing.T) {
-	f, tt := newTester(t)
-	tt.SetSize(760, 800)
-	if got := apptest.Box(t, tt, LabelPanelSidebar).W; got != theme.SidebarIconWidth {
-		t.Errorf("sidebar %v wide at 760, want the icon column %d", got, theme.SidebarIconWidth)
-	}
-	if got := apptest.Box(t, tt, LabelPanelTerminal).W; got < theme.TerminalMinWidth {
-		t.Errorf("terminal %v wide at 760", got)
-	}
-	// The stored width (D111) is not changed by the collapse.
-	if f.sidebarW != theme.SidebarWidth {
-		t.Errorf("stored width %v after the collapse, want %d", f.sidebarW, theme.SidebarWidth)
-	}
-	// A drag of the divider in the icon column does not store a width either.
-	drag(tt, sidebarDivider(t, tt), sidebarDivider(t, tt)+90)
-	if f.sidebarW != theme.SidebarWidth {
-		t.Errorf("a drag in the icon column stored %v", f.sidebarW)
-	}
-	tt.SetSize(900, 800)
-	if got := apptest.Box(t, tt, LabelPanelSidebar).W; got != theme.SidebarWidth {
-		t.Errorf("sidebar %v wide at 900, want the stored %d", got, theme.SidebarWidth)
-	}
-	if f.sidebarW != theme.SidebarWidth {
-		t.Errorf("stored width %v after the window grew", f.sidebarW)
-	}
-}
-
-func TestFilesPanelRuleStaysAt1100(t *testing.T) {
-	_, tt := newTester(t)
-	tt.SetSize(1099, 800)
-	if !apptest.Absent(tt, LabelPanelFiles) {
-		t.Error("the files panel shows at 1099")
-	}
-	if got := apptest.Box(t, tt, LabelPanelSidebar).W; got != theme.SidebarWidth {
-		t.Errorf("sidebar %v wide at 1099, want it whole", got)
-	}
-}
-
-// In the icon column the tabs still start clear of the window buttons.
-func TestTabsStayClearOfTheWindowButtonsInTheIconColumn(t *testing.T) {
-	_, tt := newTester(t)
-	tt.SetSize(760, 800)
-	if r := apptest.Box(t, tt, titlebar.LabelTabs); r.X < theme.TrafficLightInset {
-		t.Errorf("tabs %+v are over the window buttons", r)
-	}
-}
 
 func compactRows(t *testing.T) *rowsHarness {
 	t.Helper()
 	h := newRows(t)
-	h.list.compact = true
+	h.list.Compact = true
 	h.tt.SetSize(theme.SidebarIconWidth, theme.WindowHeight)
 	return h
 }

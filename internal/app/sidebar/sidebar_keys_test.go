@@ -1,4 +1,4 @@
-package app
+package sidebar
 
 import (
 	"slices"
