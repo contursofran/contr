@@ -100,7 +100,7 @@ func TestTintSliders(t *testing.T) {
 		// Step the Background slider down and the Panels slider up: the values show beside them.
 		for i, label := range []string{app.LabelBackground, app.LabelPanels} {
 			action := []string{"decrement", "increment"}[i]
-			id := c.idOf(t, label+" alpha")
+			id := c.idOfRole(t, "slider", label)
 			for n := 0; n < 10; n++ {
 				c.call(t, "act", map[string]any{"id": id, "action": action})
 			}
