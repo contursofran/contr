@@ -1,9 +1,11 @@
 package session
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
@@ -68,5 +70,79 @@ func TestAddArtifact(t *testing.T) {
 	}
 	if len(s.Artifacts) != MaxArtifacts || s.Artifacts[0].Slug != "29" {
 		t.Fatalf("got %d, top %s", len(s.Artifacts), s.Artifacts[0].Slug)
+	}
+}
+
+func TestUpdateConcurrentKeepsAll(t *testing.T) {
+	dir := t.TempDir()
+	const n = 32
+	var wg sync.WaitGroup
+	errs := make(chan error, n)
+	for i := range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs <- Update(dir, "t1", func(s *Session) (bool, error) {
+				s.Todos = append(s.Todos, NewTodo(fmt.Sprint(i), "", Pending))
+				return true, nil
+			})
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	s, err := Read(dir, "t1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Todos) != n {
+		t.Fatalf("kept %d of %d todos", len(s.Todos), n)
+	}
+}
+
+func TestUpdateReplacesBadFile(t *testing.T) {
+	dir := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(dir, Dir), 0o755)
+	if err := os.WriteFile(filepath.Join(dir, Dir, "t1.json"), []byte("{"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := Update(dir, "t1", func(s *Session) (bool, error) {
+		if len(s.Todos) != 0 {
+			t.Fatalf("bad file gave %+v", s)
+		}
+		s.Todos = append(s.Todos, NewTodo("new", "", Pending))
+		return true, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := Read(dir, "t1")
+	if err != nil || len(s.Todos) != 1 || s.Todos[0].Text != "new" {
+		t.Fatalf("got %+v, %v", s, err)
+	}
+}
+
+func TestUpdateNoWrite(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, Dir, "t1.json")
+	if err := Update(dir, "t1", func(*Session) (bool, error) { return false, nil }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("no change wrote a file: %v", err)
+	}
+	boom := errors.New("boom")
+	if err := Update(dir, "t1", func(*Session) (bool, error) { return true, boom }); !errors.Is(err, boom) {
+		t.Fatalf("got %v", err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("an error wrote a file: %v", err)
+	}
+	if err := Update(dir, "///", func(*Session) (bool, error) { return true, nil }); err == nil {
+		t.Fatal("no error for a bad id")
 	}
 }

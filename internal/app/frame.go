@@ -96,8 +96,8 @@ type Frame struct {
 	AgentsConfig string
 	// Settings is the Settings modal, made in Attach.
 	Settings *Settings
-	// Worker is the panel's worker view. [Frame.Attach] makes it. The panel
-	// shows it while a worker is selected.
+	// Worker is the panel's worker view. [Frame.Attach] makes it while the viewers are
+	// shown (D147); else it stays nil.
 	Worker *WorkerPanel
 	// StartAgents follows the agents. [Frame.Attach] calls it once, with a
 	// notify function that is safe from any goroutine, and uses the source
@@ -159,7 +159,8 @@ type Frame struct {
 	// Nil shows no terminal.
 	TerminalSource func(address string) ghostty.Source
 	// Panel is the board panel. [Frame.Attach] makes it and puts its view in
-	// Slots.Panel. The board is disabled (D122): the files panel does not show it.
+	// Slots.Panel while the viewers are shown (D147); else it stays nil. The board is
+	// disabled (D122): the files panel does not show it.
 	Panel *BoardPanel
 	// Files is the tree of the files panel. [NewFrame] makes it.
 	Files *FileTree
@@ -174,7 +175,8 @@ type Frame struct {
 	// SpacesList is the spaces column body. [Frame.Attach] makes it and puts
 	// its view in Slots.Spaces.
 	SpacesList *SpacesList
-	// PR is the pull request pane. [Frame.Attach] makes it. [Frame.OpenPR] opens it at the
+	// PR is the pull request pane. [Frame.Attach] makes it while the viewers are shown
+	// (D147); else it stays nil. [Frame.OpenPR] opens it at the
 	// right of the terminal area, and the title bar tabs shrink to icon and id (D59).
 	PR *PRPane
 	// WorkerPRs finds the pull request of each worker's branch (D104). [Frame.Attach] makes it.
@@ -559,7 +561,7 @@ func (f *Frame) terminalPanel(c *ui.Context) {
 // filesPanel is the files slot: the agent's todos and artifacts (D197), the file tree under the
 // head "Files", and the Context meter in its footer (the plan meters are in the sidebar foot,
 // D196). The v0.2 board and worker panel
-// stay in the code but are not shown (D122); see panelBox.
+// stay in the code but are not shown (D122, D147).
 func (f *Frame) filesPanel(c *ui.Context) {
 	kit.Panel(c, kit.PanelOpts{Name: LabelPanelFiles,
 		Top:  func() { f.Session.View(c) },
@@ -716,25 +718,6 @@ func (f *Frame) content(c *ui.Context) {
 			f.PR.View(c)
 		}
 	})
-}
-
-// panelBox draws the v0.2 right panel (board or worker). It draws nothing while the viewers
-// are hidden (D147, [viewersEnabled]); the redesign (#333) decides where it goes.
-func (f *Frame) panelBox(c *ui.Context) {
-	if !viewersEnabled {
-		return
-	}
-	ui.Box(c).Label(LabelPanel).FillWidth().FillHeight().Children(func() { f.panel(c) })
-}
-
-// panel draws the worker view while a worker is selected, and the slot (the
-// board) otherwise: the panel follows the selected tab.
-func (f *Frame) panel(c *ui.Context) {
-	if f.Worker != nil && f.Worker.Following() {
-		f.Worker.View(c)
-		return
-	}
-	f.run(c, f.Slots.Panel)
 }
 
 // titleBar draws the 46px row at the top of the glass: a drag area that keeps
@@ -1058,6 +1041,27 @@ func (f *Frame) statusEffort(address string) string {
 	return c.Effort
 }
 
+// attachBoard makes the board panel and puts its view in Slots.Panel. [Frame.Attach] calls it
+// only while the viewers are shown (D147).
+func (f *Frame) attachBoard(agentSnap func() agentstate.Snapshot, src AgentSource) {
+	var scope func() string
+	if src != nil {
+		scope = func() string { return f.scope(src) }
+	}
+	f.Panel = &BoardPanel{Snapshot: agentSnap, Needs: NeedItems(agentSnap, scope)}
+	f.Panel.OpenPR = f.paneOpener()
+	f.Panel.OpenIssue = f.OpenIssue
+	f.Panel.PRs = f.WorkerPRs
+	if src != nil {
+		f.Panel.Scope = scope
+		f.Panel.Open = f.Card.Open
+		f.Panel.Select = func(address string) {
+			f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: address})
+		}
+	}
+	f.Slots.Panel = f.Panel.View
+}
+
 // syncWorkerPRs starts the pull request reads for the workers now (D104).
 func (f *Frame) syncWorkerPRs() {
 	if f.WorkerPRs != nil && f.agentSnap != nil {
@@ -1081,7 +1085,9 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	if f.Session.StateDir == "" {
 		f.Session.StateDir = statedir.Dir()
 	}
-	f.PR = &PRPane{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate, OpenURL: openURL}
+	if viewersEnabled {
+		f.PR = &PRPane{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate, OpenURL: openURL}
+	}
 	f.WorkerPRs = &WorkerPRs{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate}
 	f.IssueTitles = &IssueTitles{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate}
 	var agentSnap func() agentstate.Snapshot
@@ -1106,8 +1112,10 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		setHandler(handlerCloseTerminal, func() { w.Update(f.closeSelectedTerminal) })
 		entry := WorkerEntry{PRs: f.WorkerPRs, OpenPR: f.paneOpener(), OpenIssue: f.OpenIssue}
 		f.Card.Entry = entry
-		f.Worker = &WorkerPanel{Entry: entry, Source: src, Selection: f.Selection, Run: run, Status: f.Toasts.Show, Invalidate: w.Invalidate}
-		f.PR.Orchestrator, f.PR.Send = f.prOrchestrator, src.Send
+		if viewersEnabled {
+			f.Worker = &WorkerPanel{Entry: entry, Source: src, Selection: f.Selection, Run: run, Status: f.Toasts.Show, Invalidate: w.Invalidate}
+			f.PR.Orchestrator, f.PR.Send = f.prOrchestrator, src.Send
+		}
 	}
 	removeOutline := func() {}
 	if agentSnap != nil {
@@ -1190,10 +1198,6 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.SpacesList.Sync()
 	f.loadProjects(w)
 	f.loadWidths(w)
-	var scope func() string
-	if src != nil {
-		scope = func() string { return f.scope(src) }
-	}
 	f.Notch = &Notch{Snapshot: agentSnap, Project: func() string { return f.openProject }}
 	if src != nil {
 		f.Notch.Open = f.Card.Open
@@ -1202,20 +1206,11 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		f.Notch.Panel = f.Card.View
 	}
 	f.Overlay.Add(LabelNotchLayer, f.Notch.View)
-	f.Panel = &BoardPanel{Snapshot: agentSnap, Needs: NeedItems(agentSnap, scope)}
-	f.Panel.OpenPR = f.paneOpener()
-	f.Panel.OpenIssue = f.OpenIssue
-	f.Panel.PRs = f.WorkerPRs
 	f.syncWorkerPRs()
 	f.syncIssueTitles()
-	if src != nil {
-		f.Panel.Scope = scope
-		f.Panel.Open = f.Card.Open
-		f.Panel.Select = func(address string) {
-			f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: address})
-		}
+	if viewersEnabled {
+		f.attachBoard(agentSnap, src)
 	}
-	f.Slots.Panel = f.Panel.View
 	if f.Usage == nil {
 		f.Usage = usage.NewFileSampler(w.Invalidate)
 	}

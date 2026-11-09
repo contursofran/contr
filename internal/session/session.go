@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 // Dir is the folder of the session files, under the state dir.
@@ -133,12 +134,50 @@ func Read(stateDir, id string) (*Session, error) {
 }
 
 // Write saves s for terminal id with a temp file and a rename, so a reader
-// never sees half a file.
+// never sees half a file. Writers that read the file first use Update.
 func Write(stateDir, id string, s *Session) error {
 	path := Path(stateDir, id)
 	if path == "" {
 		return errors.New("no terminal id or state dir")
 	}
+	return write(path, s)
+}
+
+// Update reads the session of terminal id, runs f on it and writes it when f
+// returns true. An exclusive lock on a file next to the session file holds
+// over the read, f and the write, so two hooks that run at the same time do
+// not lose changes. A bad file gives f an empty session, so the write
+// replaces it. Read needs no lock: the write is a temp file and a rename.
+func Update(stateDir, id string, f func(*Session) (bool, error)) error {
+	path := Path(stateDir, id)
+	if path == "" {
+		return errors.New("no terminal id or state dir")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	lock, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
+		return fmt.Errorf("session lock: %w", err)
+	}
+	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN) //nolint:errcheck // closing the file unlocks it too
+
+	s, err := Read(stateDir, id)
+	if err != nil {
+		s = &Session{Schema: Schema}
+	}
+	changed, err := f(s)
+	if err != nil || !changed {
+		return err
+	}
+	return write(path, s)
+}
+
+func write(path string, s *Session) error {
 	s.Schema = Schema
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err

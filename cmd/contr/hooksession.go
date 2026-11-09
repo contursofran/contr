@@ -82,27 +82,37 @@ func postToolHook(stdin io.Reader, stateDir, id string, now uint64) error {
 	if err := json.NewDecoder(stdin).Decode(&in); err != nil {
 		return fmt.Errorf("bad hook input: %w", err)
 	}
-	s, err := session.Read(stateDir, id)
-	if err != nil {
-		// A bad file is replaced, not kept forever.
-		s = &session.Session{}
+	if !recordedTool(in.ToolName) {
+		return nil
 	}
-	var changed bool
-	switch {
-	case in.ToolName == "TodoWrite":
-		changed, err = todoWrite(s, in.ToolInput)
-	case in.ToolName == "TaskCreate":
-		changed, err = taskCreate(s, in.ToolInput, in.ToolResponse)
-	case in.ToolName == "TaskUpdate":
-		changed, err = taskUpdate(s, in.ToolInput)
-	case artifactTools[strings.TrimPrefix(in.ToolName, artifactsPrefix)] && strings.HasPrefix(in.ToolName, artifactsPrefix):
-		changed = artifactCall(s, in.ToolInput, in.ToolResponse, now)
+	// One locked update: hooks of parallel tool calls may run at the same time.
+	return session.Update(stateDir, id, func(s *session.Session) (bool, error) {
+		var changed bool
+		var err error
+		switch {
+		case in.ToolName == "TodoWrite":
+			changed, err = todoWrite(s, in.ToolInput)
+		case in.ToolName == "TaskCreate":
+			changed, err = taskCreate(s, in.ToolInput, in.ToolResponse)
+		case in.ToolName == "TaskUpdate":
+			changed, err = taskUpdate(s, in.ToolInput)
+		default:
+			changed = artifactCall(s, in.ToolInput, in.ToolResponse, now)
+		}
+		if err == nil && changed {
+			s.UpdatedAt = now
+		}
+		return changed, err
+	})
+}
+
+// recordedTool reports whether post-tool records calls of the tool name.
+func recordedTool(name string) bool {
+	switch name {
+	case "TodoWrite", "TaskCreate", "TaskUpdate":
+		return true
 	}
-	if err != nil || !changed {
-		return err
-	}
-	s.UpdatedAt = now
-	return session.Write(stateDir, id, s)
+	return strings.HasPrefix(name, artifactsPrefix) && artifactTools[strings.TrimPrefix(name, artifactsPrefix)]
 }
 
 func todoWrite(s *session.Session, raw json.RawMessage) (bool, error) {
