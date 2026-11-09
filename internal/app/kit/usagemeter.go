@@ -83,7 +83,7 @@ const PlanUsageWidth = 44
 // inline, its label, a 44px bar and its value ("Claude ▬ 38%  Codex ▬ 12%").
 func PlanUsage(c *ui.Context, meters []Meter) ui.Element {
 	p := theme.Current()
-	return ui.Row(c).Label("plan usage").AlignItems(ui.Center).Gap(theme.Space7).MinWidth(0).Shrink(1).ClipX().Padding(0, 0, 0, theme.Space10).Children(func() {
+	return ui.Row(c).Label("plan usage").AlignItems(ui.Center).Gap(theme.Space7).MinWidth(0).Shrink(1).ClipX().Children(func() {
 		for i, m := range meters {
 			if i > 0 {
 				ui.Box(c).Width(theme.Space6).Shrink(0)

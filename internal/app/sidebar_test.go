@@ -14,11 +14,13 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/projects"
+	"github.com/contursofran/contr/internal/usage"
 )
 
 // ---- The server row ----
@@ -520,4 +522,37 @@ func addItem(tt *ui.Tester, item string) error {
 		return err
 	}
 	return tt.Click(item)
+}
+
+// The foot row is centered in its area (#495): the meters' left inset equals the
+// gear's right inset, the divider has the same insets, and the content has as
+// much room above (to the divider) as below (to the sidebar's bottom edge).
+func TestSidebarFootIsCentered(t *testing.T) {
+	h := newSpaces(t, spTree())
+	h.list.Plans = func() []kit.Meter { return planMeters(fakeLeft{usage.PlanClaude: 62}) }
+	h.tt.Frame()
+	foot, div := box(t, h.tt, "sidebar foot"), box(t, h.tt, "sidebar foot divider")
+	gear, plans := box(t, h.tt, LabelSettingsOpen), box(t, h.tt, "plan usage")
+	right, left := foot.X+foot.W-(gear.X+gear.W), plans.X-foot.X
+	if right != left || left <= 0 {
+		t.Errorf("gear right inset %v, meters left inset %v", right, left)
+	}
+	if div.X != plans.X || div.X+div.W != gear.X+gear.W {
+		t.Errorf("divider x %v..%v, content %v..%v", div.X, div.X+div.W, plans.X, gear.X+gear.W)
+	}
+	bottom := float32(theme.WindowHeight)
+	if above, below := gear.Y-(div.Y+div.H), bottom-(gear.Y+gear.H); above != below {
+		t.Errorf("gear has %v above and %v below", above, below)
+	}
+	if mid, gm := plans.Y+plans.H/2, gear.Y+gear.H/2; mid != gm {
+		t.Errorf("meters center %v, gear center %v", mid, gm)
+	}
+
+	// The icon column keeps the button centered (D147).
+	h.list.compact = true
+	h.tt.Frame()
+	foot, gear = box(t, h.tt, "sidebar foot"), box(t, h.tt, LabelSettingsOpen)
+	if l, r := gear.X-foot.X, foot.X+foot.W-(gear.X+gear.W); l != r {
+		t.Errorf("icon column: gear insets %v and %v", l, r)
+	}
 }
