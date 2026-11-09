@@ -134,8 +134,8 @@ type Outline struct {
 	Selection *state.Selection
 	// Now is the clock; nil means time.Now.
 	Now func() time.Time
-	// Invalidate asks for a new frame.
-	Invalidate func()
+	// Env asks for a new frame.
+	Env Env
 
 	start   time.Time
 	seen    map[string]*seenState // by hc terminal address
@@ -147,8 +147,8 @@ type Outline struct {
 
 // NewOutline returns an outline. Messages that were pinned before it began
 // are old: the owner counts only what comes while away.
-func NewOutline(snap func() agentstate.Snapshot, sel *state.Selection, invalidate func()) *Outline {
-	o := &Outline{Snapshot: snap, Selection: sel, Invalidate: invalidate}
+func NewOutline(snap func() agentstate.Snapshot, sel *state.Selection, env Env) *Outline {
+	o := &Outline{Snapshot: snap, Selection: sel, Env: env}
 	o.start = o.now()
 	return o
 }
@@ -189,9 +189,7 @@ func (o *Outline) Focus(addr string) {
 	if addr != "" {
 		o.state(addr).gained = now
 	}
-	if o.Invalidate != nil {
-		o.Invalidate()
-	}
+	o.Env.Redraw()
 }
 
 // isNew tells whether a message of the terminal came while the owner was away.
@@ -295,9 +293,7 @@ func (o *Outline) tickView(c *ui.Context, addr string, t OutlineTick, isNew bool
 	b = b.OnClick(func() {
 		o.Read(addr, t)
 		o.open = t.ID
-		if o.Invalidate != nil {
-			o.Invalidate()
-		}
+		o.Env.Redraw()
 	})
 	b.Margin(0, 0, theme.Space9-1, 0) // the 11px pitch: 10px of hit area and 1px more
 	grow := b.Hovered() || b.FocusVisible()

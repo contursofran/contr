@@ -103,7 +103,7 @@ func TestStopAgentWithNoSourceDoesNothing(t *testing.T) {
 func TestAgentRowMenuClosesTheAgent(t *testing.T) {
 	h := newRows(t)
 	var told []string
-	h.list.Status = func(s string) { told = append(told, s) }
+	h.list.Env.Status = func(s string) { told = append(told, s) }
 	h.tt.RightClick("lead, idle, opus")
 	if err := h.tt.ChooseMenuItem(MenuCloseAgent); err != nil {
 		t.Fatal(err)

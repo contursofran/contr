@@ -69,7 +69,7 @@ func (q postQueue) run(t *testing.T) {
 
 func blockedReview(timeout time.Duration) (*Review, *blockingGit, postQueue) {
 	g, q := newBlockingGit(), make(postQueue, 100)
-	r := NewReview(q.post, nil)
+	r := NewReview(Env{Run: Runner{Post: q.post}})
 	r.git, r.timeout = g, timeout
 	return r, g, q
 }
@@ -116,8 +116,8 @@ func blockedTree(t *testing.T, timeout time.Duration) (*FileTree, *blockingGit, 
 	g, q := newBlockingGit(), make(postQueue, 100)
 	dir := t.TempDir()
 	ft := NewFileTree(func() string { return dir })
-	ft.Git, ft.Timeout, ft.Post = g, timeout, q.post
-	ft.Start = func(fn func()) { go fn() }
+	ft.Git, ft.Timeout, ft.Env.Run.Post = g, timeout, q.post
+	ft.Env.Run.Go = func(fn func()) { go fn() }
 	ft.Watch = func(string, func()) (func(), error) { return func() {}, nil }
 	return ft, g, q
 }

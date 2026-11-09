@@ -42,15 +42,9 @@ type SessionPanel struct {
 	StateDir string
 	// Terminal gives the selected hc terminal; "" shows nothing.
 	Terminal func() string
-	// OpenURL opens a web address. Nil does nothing.
-	OpenURL func(string)
-	// Post runs fn on the UI thread (Window.Update); nil runs it at once.
-	Post func(func())
-	// Invalidate asks for a redraw; nil in tests.
-	Invalidate func()
-	// Start runs fn on a goroutine; nil runs it at once when Post is nil,
-	// else starts a goroutine.
-	Start func(func())
+	// Env reads the session file off the UI thread, redraws and opens web
+	// addresses. The zero Env reads at once.
+	Env Env
 	// Watch watches the file at path and calls notify on a change, from any
 	// goroutine. Nil uses mygo.WatchFiles on its folder.
 	Watch func(path string, notify func()) (stop func(), err error)
@@ -61,25 +55,6 @@ type SessionPanel struct {
 	sess      *session.Session
 	gen       uint64
 	stopWatch func()
-}
-
-func (s *SessionPanel) post(fn func()) {
-	if s.Post == nil {
-		fn()
-		return
-	}
-	s.Post(fn)
-}
-
-func (s *SessionPanel) start(fn func()) {
-	switch {
-	case s.Start != nil:
-		s.Start(fn)
-	case s.Post == nil:
-		fn()
-	default:
-		go fn()
-	}
 }
 
 // sync points the panel at the selected terminal. Cheap when it did not change.
@@ -102,7 +77,7 @@ func (s *SessionPanel) sync() {
 	if watch == nil {
 		watch = watchSessionFile
 	}
-	stop, err := watch(path, func() { s.post(func() { s.read(gen) }) })
+	stop, err := watch(path, func() { s.Env.Post(func() { s.read(gen) }) })
 	if err != nil {
 		log.Printf("session watch %s: %v", filepath.Base(path), err)
 	} else {
@@ -128,21 +103,19 @@ func (s *SessionPanel) read(gen uint64) {
 		return
 	}
 	dir, id := s.StateDir, s.id
-	s.start(func() {
+	s.Env.Do(func() func() {
 		sess, err := session.Read(dir, id)
 		if err != nil {
 			log.Printf("session: %v", err)
 			sess = nil
 		}
-		s.post(func() {
+		return func() {
 			if gen != s.gen {
 				return
 			}
 			s.sess = sess
-			if s.Invalidate != nil {
-				s.Invalidate()
-			}
-		})
+			s.Env.Redraw()
+		}
 	})
 }
 
@@ -393,8 +366,8 @@ func (s *SessionPanel) artifacts(c *ui.Context, arts []session.Artifact, now tim
 						Font(theme.StyleMeta.Family()).FontSize(theme.StyleMeta.Size)
 				}
 			})
-			if row.Clicked() && url != "" && s.OpenURL != nil {
-				s.OpenURL(url)
+			if row.Clicked() && url != "" {
+				s.Env.Open(url)
 			}
 		}
 	})

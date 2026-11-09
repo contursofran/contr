@@ -82,7 +82,7 @@ func TestDiffSummaryHidesBeforeTheFirstReadWithNoFolderAndAfterAReadError(t *tes
 	ft := NewFileTree(func() string { return dir })
 	ft.Debounce = -1
 	ft.Watch = func(string, func()) (func(), error) { return func() {}, nil }
-	ft.Start = func(fn func()) { fn() }
+	ft.Env.Run.Go = func(fn func()) { fn() }
 	ft.Sync()
 	ft.changesOK = false
 	ft.fail(errors.New("git: boom"))

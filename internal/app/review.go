@@ -53,15 +53,12 @@ type Review struct {
 
 	mode int // reviewWhole or reviewByCommit
 
-	// start runs fn on a goroutine. post runs fn on the UI thread
-	// (Window.Update). Tests replace start with a direct call.
-	start func(func())
-	post  func(func())
+	// Env runs the git reads off the UI thread and redraws. Tests set
+	// Env.Run.Go to a direct call.
+	Env Env
 	// want is a file that the next branch read should open, if the branch
 	// changes it ([Review.OpenFile]).
 	want string
-	// invalidate asks for a redraw. Nil in tests.
-	invalidate func()
 	// gen counts the reads started. A result of an older read is dropped.
 	gen uint64
 	// cancel ends the read in flight; nil when none is.
@@ -72,14 +69,9 @@ type Review struct {
 	timeout time.Duration
 }
 
-// NewReview returns an empty view. post runs a func on the UI thread
-// (Window.Update; nil runs it at once). invalidate is Window.Invalidate.
-func NewReview(post func(func()), invalidate func()) *Review {
-	r := &Review{start: func(f func()) { go f() }, post: post, invalidate: invalidate}
-	if r.post == nil {
-		r.post = func(f func()) { f() }
-	}
-	return r
+// NewReview returns an empty view that reads and redraws through env.
+func NewReview(env Env) *Review {
+	return &Review{Env: env}
 }
 
 // State for tests and for the frame.
@@ -93,12 +85,6 @@ func (r *Review) Branches() []review.Branch { return r.branches }
 func (r *Review) Code() *editor.DiffState   { return r.code }
 func (r *Review) ByCommit() bool            { return r.mode == reviewByCommit }
 
-func (r *Review) redraw() {
-	if r.invalidate != nil {
-		r.invalidate()
-	}
-}
-
 // run reads on a goroutine and applies the result on the UI thread, unless a
 // newer read started meanwhile. It ends the read in flight. read gets a
 // context that ends when a newer read starts, when the view closes, or at
@@ -111,19 +97,19 @@ func (r *Review) run(read func(ctx context.Context) func()) {
 	if limit <= 0 {
 		limit = gitReadTimeout
 	}
-	r.start(func() {
+	r.Env.Do(func() func() {
 		rctx, stop := context.WithTimeout(ctx, limit)
 		apply := read(rctx)
 		stop()
-		r.post(func() {
+		return func() {
 			if gen != r.gen {
 				return
 			}
 			r.cancel()
 			r.cancel = nil
 			apply()
-			r.redraw()
-		})
+			r.Env.Redraw()
+		}
 	})
 }
 
@@ -157,7 +143,7 @@ func (r *Review) setRepo(dir, want string) {
 	r.mode = reviewWhole
 	if dir == "" {
 		r.drop()
-		r.redraw()
+		r.Env.Redraw()
 		return
 	}
 	repo := r.repo
@@ -189,7 +175,7 @@ func (r *Review) SelectBranch(name string) { r.selectBranch(name) }
 func (r *Review) selectBranch(name string) {
 	r.branch, r.file, r.files, r.code, r.binary = name, "", nil, nil, false
 	r.commit, r.commits = "", nil
-	r.redraw()
+	r.Env.Redraw()
 	repo, byCommit := r.repo, r.ByCommit()
 	r.run(func(ctx context.Context) func() {
 		fs, err := repo.Files(ctx, name)
@@ -228,14 +214,14 @@ func (r *Review) SetMode(mode int) {
 	if r.branch != "" {
 		r.selectBranch(r.branch)
 	} else {
-		r.redraw()
+		r.Env.Redraw()
 	}
 }
 
 // SelectCommit lists the files that commit sha changes and opens the first.
 func (r *Review) SelectCommit(sha string) {
 	r.commit, r.file, r.files, r.code, r.binary = sha, "", nil, nil, false
-	r.redraw()
+	r.Env.Redraw()
 	repo := r.repo
 	r.run(func(ctx context.Context) func() {
 		fs, err := repo.CommitFiles(ctx, sha)
@@ -261,7 +247,7 @@ func (r *Review) SelectFile(path string) {
 			r.binary = f.Binary
 		}
 	}
-	r.redraw()
+	r.Env.Redraw()
 	if r.binary {
 		r.drop()
 		return

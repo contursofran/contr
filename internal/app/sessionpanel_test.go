@@ -28,9 +28,9 @@ func newSessionTester(t *testing.T, s *session.Session) (*SessionPanel, *ui.Test
 	}
 	var opened []string
 	p := &SessionPanel{StateDir: dir, Terminal: func() string { return "t1" },
-		OpenURL: func(u string) { opened = append(opened, u) },
-		Watch:   func(string, func()) (func(), error) { return func() {}, nil },
-		Now:     func() time.Time { return sessionNow }}
+		Env:   Env{OpenURL: func(u string) { opened = append(opened, u) }},
+		Watch: func(string, func()) (func(), error) { return func() {}, nil },
+		Now:   func() time.Time { return sessionNow }}
 	tt := ui.NewTester(func(c *ui.Context) {
 		theme.Apply(c)
 		ui.Column(c).Width(280).Children(func() { p.View(c) })
@@ -197,7 +197,7 @@ func TestSessionFollowsTerminalAndWatch(t *testing.T) {
 
 func TestFilesPanelShowsSessionAboveTheTree(t *testing.T) {
 	f, tt := newTester(t)
-	f.Files.Start = func(fn func()) { fn() }
+	f.Files.Env.Run.Go = func(fn func()) { fn() }
 	f.Files.Watch = func(string, func()) (func(), error) { return func() {}, nil }
 	dir := t.TempDir()
 	if err := session.Write(dir, "t1", &session.Session{Todos: []session.Todo{{Text: "one", Status: session.Pending}}}); err != nil {
