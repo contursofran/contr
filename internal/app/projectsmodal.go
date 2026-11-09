@@ -59,7 +59,8 @@ type ProjectsModal struct {
 	Apply func()
 	// Save writes a copy of the store. It runs on a goroutine; nil saves nothing.
 	Save func(*projects.Store) error
-	Run  Runner
+	// Env runs the reads and writes off the UI thread, redraws and shows errors.
+	Env Env
 	// PickFolder asks the owner for a folder. It blocks, so it runs on a
 	// goroutine, and returns ErrPickCancelled for no choice. Nil hides
 	// `Open folder…` (D116).
@@ -79,13 +80,9 @@ type ProjectsModal struct {
 	CloneRun git.CloneRunner
 	// Now gives the time of an open; nil uses time.Now.
 	Now func() time.Time
-	// Status shows an error; may be nil.
-	Status func(string)
 	// Toast shows a message with a button in the frame, so the button works
 	// after the modal closes (D207). May be nil.
 	Toast func(msg, action string, undo func())
-	// Invalidate redraws the window; may be nil.
-	Invalidate func()
 	// Switch selects the open project with this common dir in the sidebar;
 	// may be nil.
 	Switch func(dir string)
@@ -133,14 +130,14 @@ func (m *ProjectsModal) Toggle() {
 	}
 	m.query, m.sel, m.hover = "", 0, -1
 	m.cloneErr, m.pathErr = "", ""
-	m.redraw()
+	m.Env.Redraw()
 }
 
 // Close hides the modal.
 func (m *ProjectsModal) Close() {
 	m.open = false
 	m.stopClone()
-	m.redraw()
+	m.Env.Redraw()
 }
 
 // Opened tells whether the modal shows.
@@ -177,7 +174,7 @@ func (m *ProjectsModal) refreshDefault() {
 		m.defParent = ""
 		return
 	}
-	m.Run.Do(func() func() {
+	m.Env.Do(func() func() {
 		def := ""
 		p := filepath.Dir(recent)
 		if fi, err := os.Stat(p); err == nil && fi.IsDir() {
@@ -186,16 +183,10 @@ func (m *ProjectsModal) refreshDefault() {
 		return func() {
 			if def != m.defParent {
 				m.defParent = def
-				m.redraw()
+				m.Env.Redraw()
 			}
 		}
 	})
-}
-
-func (m *ProjectsModal) redraw() {
-	if m.Invalidate != nil {
-		m.Invalidate()
-	}
 }
 
 // text is the trimmed text of the field.
@@ -263,7 +254,7 @@ func (m *ProjectsModal) openFolder() {
 	if m.PickFolder == nil {
 		return
 	}
-	m.Run.Do(func() func() {
+	m.Env.Do(func() func() {
 		path, err := m.PickFolder()
 		dir := path
 		if err == nil && m.Resolve != nil {
@@ -273,7 +264,7 @@ func (m *ProjectsModal) openFolder() {
 			switch {
 			case errors.Is(err, ErrPickCancelled):
 			case err != nil:
-				m.status("open folder: " + err.Error())
+				m.Env.Show("open folder: " + err.Error())
 			default:
 				m.add(dir, path)
 			}
@@ -312,16 +303,16 @@ func (m *ProjectsModal) chooseParent() {
 	if def == "" {
 		def = m.defaultParent()
 	}
-	m.Run.Do(func() func() {
+	m.Env.Do(func() func() {
 		path, err := m.PickParent(def)
 		return func() {
 			switch {
 			case errors.Is(err, ErrPickCancelled):
 			case err != nil:
-				m.status("choose folder: " + err.Error())
+				m.Env.Show("choose folder: " + err.Error())
 			default:
 				m.parent = path
-				m.redraw()
+				m.Env.Redraw()
 			}
 		}
 	})
@@ -342,10 +333,10 @@ func (m *ProjectsModal) clone() {
 	_, owner, repo := classifyQuery(m.query)
 	m.cloning, m.cloneErr = true, ""
 	m.job = cloneJob{owner: owner, repo: repo, query: m.query, dest: dest}
-	m.redraw()
+	m.Env.Redraw()
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancelClone = cancel
-	m.Run.Do(func() func() {
+	m.Env.Do(func() func() {
 		err := git.Clone(ctx, m.CloneRun, url, dest)
 		key := dest
 		if err == nil && m.Resolve != nil {
@@ -362,9 +353,9 @@ func (m *ProjectsModal) clone() {
 				if m.query == m.job.query {
 					m.cloneErr = cloneMessage(err, dest)
 				} else { // the field changed: the row of the repo is not on screen
-					m.status("clone " + m.job.owner + "/" + m.job.repo + ": " + cloneMessage(err, dest))
+					m.Env.Show("clone " + m.job.owner + "/" + m.job.repo + ": " + cloneMessage(err, dest))
 				}
-				m.redraw()
+				m.Env.Redraw()
 				return
 			}
 			m.parent = ""
@@ -424,12 +415,6 @@ func (m *ProjectsModal) add(dir, path string) {
 // openRecent opens a project of the recent list again.
 func (m *ProjectsModal) openRecent(e projects.Entry) { m.add(e.Dir, e.Path) }
 
-func (m *ProjectsModal) status(s string) {
-	if m.Status != nil {
-		m.Status(s)
-	}
-}
-
 // recent returns the recent entries that the sidebar does not show now.
 func (m *ProjectsModal) recent() []projects.Entry {
 	st := m.store()
@@ -459,7 +444,7 @@ func (m *ProjectsModal) changed() {
 	if m.Apply != nil {
 		m.Apply()
 	}
-	m.redraw()
+	m.Env.Redraw()
 	if m.Save == nil {
 		return
 	}
@@ -475,12 +460,12 @@ func (m *ProjectsModal) changed() {
 func (m *ProjectsModal) flush() {
 	snap := m.next
 	m.next = nil
-	m.Run.Do(func() func() {
+	m.Env.Do(func() func() {
 		err := m.Save(snap)
 		return func() {
 			m.saving = false
-			if err != nil && m.Status != nil {
-				m.Status("projects not saved: " + err.Error())
+			if err != nil {
+				m.Env.Show("projects not saved: " + err.Error())
 			}
 			if m.next != nil {
 				m.saving = true

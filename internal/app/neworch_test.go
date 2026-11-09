@@ -23,10 +23,9 @@ func newOrch(t *testing.T) *newOrchHarness {
 	n := &newOrchHarness{h: newSpaces(t, spTree(spPane("w1:p1", t.TempDir(), nil)))}
 	n.pickFn = func() (string, error) { return "/work/proj", nil }
 	n.no = &NewOrchestrator{
-		Pick:   func() (string, error) { n.picked++; return n.pickFn() },
-		Spawn:  func(dir string) error { n.spawn = append(n.spawn, dir); return n.spawnE },
-		Run:    Runner{Go: func(f func()) { f() }},
-		Status: func(s string) { n.status = append(n.status, s) },
+		Pick:  func() (string, error) { n.picked++; return n.pickFn() },
+		Spawn: func(dir string) error { n.spawn = append(n.spawn, dir); return n.spawnE },
+		Env:   Env{Status: func(s string) { n.status = append(n.status, s) }},
 	}
 	n.h.list.OnNew = n.no.Start
 	n.h.tt.Frame()
@@ -80,7 +79,7 @@ func TestPlusNewShowsAPickerError(t *testing.T) {
 func TestPlusNewIgnoresAClickWhileOneRuns(t *testing.T) {
 	n := newOrch(t)
 	var queued []func()
-	n.no.Run = Runner{Go: func(f func()) { queued = append(queued, f) }}
+	n.no.Env.Run = Runner{Go: func(f func()) { queued = append(queued, f) }}
 	_ = addItem(n.h.tt, LabelProjectsNew)
 	_ = addItem(n.h.tt, LabelProjectsNew)
 	if len(queued) != 1 {
@@ -96,7 +95,7 @@ func TestPlusNewIgnoresAClickWhileOneRuns(t *testing.T) {
 func TestPlusNewRunsOffTheCallingThread(t *testing.T) {
 	n := newOrch(t)
 	var queued []func()
-	n.no.Run = Runner{Go: func(f func()) { queued = append(queued, f) }}
+	n.no.Env.Run = Runner{Go: func(f func()) { queued = append(queued, f) }}
 	_ = addItem(n.h.tt, LabelProjectsNew)
 	if n.picked != 0 {
 		t.Error("the picker must not run in the click handler")

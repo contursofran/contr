@@ -66,13 +66,13 @@ type updateUI struct {
 // loadUpdated reads the note of the last install off the UI thread (D209). When it is of the
 // running version and did not show yet, the "Updated to" pill shows with its panel open. A
 // missing file shows nothing; a bad one is logged.
-func (f *Frame) loadUpdated(run Runner, invalidate func()) {
-	f.upd.run = run
+func (f *Frame) loadUpdated(env Env) {
+	f.upd.run = env.Run
 	if f.LoadUpdated == nil {
 		return
 	}
 	load := f.LoadUpdated
-	run.Do(func() func() {
+	env.Do(func() func() {
 		n, err := load()
 		if err != nil {
 			log.Printf("contr: read the installed update: %v", err)
@@ -80,9 +80,7 @@ func (f *Frame) loadUpdated(run Runner, invalidate func()) {
 		}
 		return func() {
 			f.showUpdated(n)
-			if invalidate != nil {
-				invalidate()
-			}
+			env.Redraw()
 		}
 	})
 }

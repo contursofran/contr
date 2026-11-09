@@ -83,7 +83,7 @@ func (p *PRPane) readViewer(client github.Client) {
 		return
 	}
 	p.ft.viewerAsked = true
-	p.Run.Do(func() func() {
+	p.Env.Do(func() func() {
 		login, err := client.Viewer(context.Background())
 		return func() {
 			p.ft.viewerAsked = false
@@ -92,7 +92,7 @@ func (p *PRPane) readViewer(client github.Client) {
 			} else {
 				p.ft.viewer = login
 			}
-			p.redraw()
+			p.Env.Redraw()
 		}
 	})
 }
@@ -106,7 +106,7 @@ func (p *PRPane) write(op func(context.Context, github.Client, github.PR) error,
 	}
 	p.ft.busy, p.ft.err = true, ""
 	gen, client, pr, n := p.gen, p.client, *p.pr, p.number
-	p.Run.Do(func() func() {
+	p.Env.Do(func() func() {
 		ctx := context.Background()
 		err := op(ctx, client, pr)
 		var fresh github.PR
@@ -130,10 +130,10 @@ func (p *PRPane) write(op func(context.Context, github.Client, github.PR) error,
 			if err == nil && done != nil {
 				done()
 			}
-			p.redraw()
+			p.Env.Redraw()
 		}
 	})
-	p.redraw()
+	p.Env.Redraw()
 }
 
 func (p *PRPane) sendComment() {
@@ -188,7 +188,7 @@ func (p *PRPane) mergedTell(addr string, n int, sha string) {
 	p.ft.after = LabelPRMergedBare
 	text := "contr: PR #" + strconv.Itoa(n) + " merged at " + shortSHA(sha)
 	gen, send := p.gen, p.Send
-	p.Run.Do(func() func() {
+	p.Env.Do(func() func() {
 		err := send(addr, text)
 		return func() {
 			if gen != p.gen {
@@ -199,7 +199,7 @@ func (p *PRPane) mergedTell(addr string, n int, sha string) {
 			} else {
 				p.ft.after = LabelPRMerged
 			}
-			p.redraw()
+			p.Env.Redraw()
 		}
 	})
 }
@@ -218,7 +218,7 @@ func (p *PRPane) footerKeys(root ui.Element) ui.Element {
 	root = root.OnShortcut(0, ui.KeyC, func() {
 		if p.footerOpen() {
 			p.refocusField = true
-			p.redraw()
+			p.Env.Redraw()
 		}
 	})
 	return root.OnShortcut(ui.Cmd|ui.Shift, ui.KeyM, func() {

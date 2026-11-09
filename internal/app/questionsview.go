@@ -386,7 +386,5 @@ func (q *QuestionsCard) codeText(c *ui.Context, p *theme.Palette, s string, st t
 // copyCode puts code on the clipboard and shows "Copied".
 func (q *QuestionsCard) copyCode(c *ui.Context, code string) {
 	c.WriteClipboard(code)
-	if q.Status != nil {
-		q.Status(QuestionsCopied)
-	}
+	q.Env.Show(QuestionsCopied)
 }

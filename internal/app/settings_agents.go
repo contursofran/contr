@@ -169,18 +169,18 @@ func (s *Settings) loadAgents() {
 	}
 	s.ag.loading = true
 	path := s.AgentsConfig
-	s.Run.Do(func() func() {
+	s.Env.Do(func() func() {
 		cfg, err := agents.LoadConfig(path)
 		return func() {
 			s.ag.loading = false
 			if err != nil {
 				log.Printf("contr: read agents config: %v", err)
 				s.ag.err = "read failed: " + err.Error()
-				s.redraw()
+				s.Env.Redraw()
 				return
 			}
 			s.ag.cfg, s.ag.loaded, s.ag.err = cfg, true, ""
-			s.redraw()
+			s.Env.Redraw()
 		}
 	})
 }
@@ -194,7 +194,7 @@ func (s *Settings) saveAgents() {
 	}
 	path := s.AgentsConfig
 	s.ag.saving, s.ag.err = true, ""
-	s.Run.Do(func() func() {
+	s.Env.Do(func() func() {
 		err := cfg.Save(path)
 		return func() {
 			s.ag.saving = false
@@ -202,7 +202,7 @@ func (s *Settings) saveAgents() {
 				log.Printf("contr: save agents config: %v", err)
 				s.ag.err = "save failed: " + err.Error()
 			}
-			s.redraw()
+			s.Env.Redraw()
 		}
 	})
 }

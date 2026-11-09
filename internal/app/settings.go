@@ -105,7 +105,8 @@ type Settings struct {
 	// CoreVersion gives the hc core's version, and whether contr follows the core. Nil shows
 	// that contr is not connected.
 	CoreVersion func() (string, bool)
-	Run         Runner
+	// Env runs the checks and installs off the UI thread, redraws and shows messages.
+	Env Env
 	// Relaunch restarts contr after an install. It runs on the UI thread.
 	Relaunch func()
 	// OnReady runs on the UI thread when a background install ends well (D176). May be nil.
@@ -114,16 +115,12 @@ type Settings struct {
 	// install ended, for What's new at the next start (D209). It runs off the UI thread when an
 	// install ends well, before any relaunch. Nil saves nothing.
 	RecordInstall func(info UpdateInfo, from string, at time.Time) error
-	// Invalidate redraws the window; may be nil.
-	Invalidate func()
 	// Visible tells whether the window shows; nil means it does. Hidden windows get no checks.
 	Visible func() bool
 	// Every is the time between automatic checks; zero means CheckEvery.
 	Every time.Duration
 	// Now is the clock; nil means time.Now. Tests give it a fake.
 	Now func() time.Time
-	// Status shows a short message; may be nil.
-	Status func(string)
 	// Appearance returns the theme source in use; nil means System. SetAppearance applies and
 	// stores a new one when the owner picks a segment; nil makes the row do nothing (D119).
 	Appearance    func() mygo.ThemeSource
@@ -170,13 +167,13 @@ func (s *Settings) Toggle() {
 	s.open = true
 	s.ag = agentsState{}
 	s.probe()
-	s.redraw()
+	s.Env.Redraw()
 }
 
 // Close hides the modal.
 func (s *Settings) Close() {
 	s.open = false
-	s.redraw()
+	s.Env.Redraw()
 }
 
 // Opened tells whether the modal shows.
@@ -207,23 +204,17 @@ func (s *Settings) RestartNow() {
 	}
 }
 
-func (s *Settings) redraw() {
-	if s.Invalidate != nil {
-		s.Invalidate()
-	}
-}
-
 // probe asks the service once whether this build can update. Enabled touches the disk, so it
 // runs off the UI thread.
 func (s *Settings) probe() {
 	if s.enabledKnown || s.Updates == nil {
 		return
 	}
-	s.Run.Do(func() func() {
+	s.Env.Do(func() func() {
 		on := s.Updates.Enabled()
 		return func() {
 			s.enabled, s.enabledKnown = on, true
-			s.redraw()
+			s.Env.Redraw()
 		}
 	})
 }
@@ -241,13 +232,6 @@ func (s *Settings) StartChecks() (stop func()) {
 	}
 	tick := s.interval() / 6
 	done := make(chan struct{})
-	post := func(fn func()) {
-		if s.Run.Post == nil {
-			fn()
-			return
-		}
-		s.Run.Post(fn)
-	}
 	go func() {
 		t := time.NewTimer(0)
 		defer t.Stop()
@@ -256,7 +240,7 @@ func (s *Settings) StartChecks() (stop func()) {
 			case <-done:
 				return
 			case <-t.C:
-				post(s.dueCheck)
+				s.Env.Post(s.dueCheck)
 				t.Reset(tick)
 			}
 		}
@@ -326,7 +310,7 @@ func (s *Settings) autoCheck() {
 	}
 	s.checking = true
 	started := s.now()
-	s.Run.Do(func() func() {
+	s.Env.Do(func() func() {
 		var info *UpdateInfo
 		var err error
 		on := s.Updates.Enabled()
@@ -348,7 +332,7 @@ func (s *Settings) autoCheck() {
 					s.background()
 				}
 			}
-			s.redraw()
+			s.Env.Redraw()
 		}
 	})
 }
@@ -363,13 +347,13 @@ func (s *Settings) background() {
 	s.installing, s.err = true, ""
 	s.percent.Store(0)
 	info := *s.found
-	s.Run.Do(func() func() {
+	s.Env.Do(func() func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
 		err := s.Updates.Install(ctx, func(done, total int64) {
 			if total > 0 {
 				s.percent.Store(int32(done * 100 / total))
-				s.redraw()
+				s.Env.Redraw()
 			}
 		})
 		var at time.Time
@@ -381,14 +365,14 @@ func (s *Settings) background() {
 			if err != nil {
 				log.Printf("contr: update download failed: %v", err)
 				s.err = "download failed: " + err.Error()
-				s.redraw()
+				s.Env.Redraw()
 				return
 			}
 			s.ready, s.readyAt = true, at
 			if s.OnReady != nil {
 				s.OnReady(info)
 			}
-			s.redraw()
+			s.Env.Redraw()
 		}
 	})
 }
@@ -412,8 +396,8 @@ func (s *Settings) Check() {
 	}
 	s.checking, s.upToDate, s.found, s.err = true, false, nil, ""
 	s.lastCheck = s.now()
-	s.redraw()
-	s.Run.Do(func() func() {
+	s.Env.Redraw()
+	s.Env.Do(func() func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		info, err := s.Updates.Check(ctx)
@@ -427,7 +411,7 @@ func (s *Settings) Check() {
 			default:
 				s.found = info
 			}
-			s.redraw()
+			s.Env.Redraw()
 		}
 	})
 }
@@ -440,15 +424,15 @@ func (s *Settings) Install() {
 	}
 	s.installing, s.err = true, ""
 	s.percent.Store(0)
-	s.redraw()
+	s.Env.Redraw()
 	info := *s.found
-	s.Run.Do(func() func() {
+	s.Env.Do(func() func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
 		err := s.Updates.Install(ctx, func(done, total int64) {
 			if total > 0 {
 				s.percent.Store(int32(done * 100 / total))
-				s.redraw()
+				s.Env.Redraw()
 			}
 		})
 		if err == nil {
@@ -458,15 +442,13 @@ func (s *Settings) Install() {
 			s.installing = false
 			if err != nil {
 				s.err = "install failed: " + err.Error()
-				if s.Status != nil {
-					s.Status(s.err)
-				}
-				s.redraw()
+				s.Env.Show(s.err)
+				s.Env.Redraw()
 				return
 			}
 			s.found = nil
 			s.upToDate = true
-			s.redraw()
+			s.Env.Redraw()
 			if s.Relaunch != nil {
 				s.Relaunch()
 			}
@@ -524,7 +506,7 @@ func (s *Settings) View(c *ui.Context) {
 	})
 	if d.Dismissed() || !open {
 		s.open = false
-		s.redraw()
+		s.Env.Redraw()
 	}
 }
 
@@ -554,7 +536,7 @@ func (s *Settings) body(c *ui.Context) {
 func (s *Settings) SelectTab(i int) {
 	if i >= 0 && i < len(SettingsTabs) {
 		s.tab = i
-		s.redraw()
+		s.Env.Redraw()
 	}
 }
 

@@ -365,7 +365,7 @@ func (f *Frame) agentRowEntry() WorkerEntry {
 func (f *Frame) openWeb(open func(dir string, n int) error, dir string, n int) {
 	run := Runner{}
 	if f.WorkerPRs != nil {
-		run = f.WorkerPRs.Run
+		run = f.WorkerPRs.Env.Run
 	}
 	run.Do(func() func() {
 		err := open(dir, n)
@@ -1078,6 +1078,8 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.Files.Post, f.Files.Invalidate = w.Update, w.Invalidate
 	f.Toasts = state.NewToasts(w.Invalidate)
 	f.Files.Status = f.Toasts.Show
+	// env is the window's Env for the views: one value, not a field per view.
+	env := Env{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate, Status: f.Toasts.Show, OpenURL: openURL}
 	if f.AgentsNotice != "" {
 		f.Toasts.Show(f.AgentsNotice)
 	}
@@ -1086,10 +1088,10 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		f.Session.StateDir = statedir.Dir()
 	}
 	if viewersEnabled {
-		f.PR = &PRPane{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate, OpenURL: openURL}
+		f.PR = &PRPane{Env: env}
 	}
-	f.WorkerPRs = &WorkerPRs{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate}
-	f.IssueTitles = &IssueTitles{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate}
+	f.WorkerPRs = &WorkerPRs{Env: env}
+	f.IssueTitles = &IssueTitles{Env: env}
 	var agentSnap func() agentstate.Snapshot
 	var src AgentSource
 	stopAgents := func() {}
@@ -1099,8 +1101,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	if src != nil {
 		agentSnap = src.Snapshot
 		f.agentSnap = agentSnap
-		run := Runner{Post: w.Update}
-		f.Card = &QuestionsCard{Source: src, Run: run, Invalidate: w.Invalidate, Status: f.Toasts.Show,
+		f.Card = &QuestionsCard{Source: src, Env: env,
 			Select: func(address string, orchestrator bool) {
 				kind := state.KindWorker
 				if orchestrator {
@@ -1108,12 +1109,12 @@ func (f *Frame) Attach(w Window) (stop func()) {
 				}
 				f.Selection.Select(state.Selected{Kind: kind, ID: address})
 			}}
-		f.CloseTerm = &CloseTerminal{Stop: src.Close, Run: run, Status: f.Toasts.Show, Closed: f.terminalClosed}
+		f.CloseTerm = &CloseTerminal{Stop: src.Close, Env: env, Closed: f.terminalClosed}
 		setHandler(handlerCloseTerminal, func() { w.Update(f.closeSelectedTerminal) })
 		entry := WorkerEntry{PRs: f.WorkerPRs, OpenPR: f.paneOpener(), OpenIssue: f.OpenIssue}
 		f.Card.Entry = entry
 		if viewersEnabled {
-			f.Worker = &WorkerPanel{Entry: entry, Source: src, Selection: f.Selection, Run: run, Status: f.Toasts.Show, Invalidate: w.Invalidate}
+			f.Worker = &WorkerPanel{Entry: entry, Source: src, Selection: f.Selection, Env: env}
 			f.PR.Orchestrator, f.PR.Send = f.prOrchestrator, src.Send
 		}
 	}
@@ -1148,12 +1149,12 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.SpacesList.OnError = func(err error) { f.Toasts.Show(err.Error()) }
 	if f.PickFolder != nil && f.SpawnOrchestrator != nil {
 		f.NewOrch = &NewOrchestrator{Pick: f.PickFolder, Spawn: f.SpawnOrchestrator,
-			Run: Runner{Post: w.Update}, Status: f.Toasts.Show}
+			Env: env}
 		f.SpacesList.OnNew = f.NewOrch.Start
 		f.SpacesList.OnNewIn = f.NewOrch.StartIn
 	}
 	if f.OpenTerminal != nil {
-		f.NewTerm = &NewTerminal{Open: f.OpenTerminal, Run: Runner{Post: w.Update}, Status: f.Toasts.Show,
+		f.NewTerm = &NewTerminal{Open: f.OpenTerminal, Env: env,
 			Select: func(addr string) { f.Selection.Select(state.Selected{Kind: state.KindTerminal, ID: addr}) }}
 		setHandler(handlerNewTerminal, func() { w.Update(f.newTerminal) })
 	}
@@ -1167,7 +1168,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		},
 		PickFolder: f.OpenFolder, Resolve: f.ProjectKey,
 		CloneParent: f.CloneParent, PickParent: f.PickCloneParent, CloneRun: f.CloneRun,
-		Save: f.SaveProjects, Run: Runner{Post: w.Update}, Status: f.Toasts.Show, Invalidate: w.Invalidate,
+		Save: f.SaveProjects, Env: env,
 		Toast: f.Toasts.ShowAction,
 	}
 	f.ProjectsModal.Switch = f.SpacesList.Switch
@@ -1181,11 +1182,11 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		f.Toasts.Show(f.themeErr.Error())
 		f.themeErr = nil
 	}
-	f.Settings = &Settings{Updates: f.Updates, Version: Version, CoreVersion: f.coreVersion, Run: Runner{Post: w.Update},
-		Relaunch: f.Relaunch, OnReady: f.updateReady, Invalidate: w.Invalidate, Visible: func() bool { return f.Visibility == nil || f.Visibility.Visible() },
-		AgentsConfig: f.AgentsConfig, Status: f.Toasts.Show, Appearance: f.Appearance, SetAppearance: f.SetAppearance,
+	f.Settings = &Settings{Updates: f.Updates, Version: Version, CoreVersion: f.coreVersion, Env: env,
+		Relaunch: f.Relaunch, OnReady: f.updateReady, Visible: func() bool { return f.Visibility == nil || f.Visibility.Visible() },
+		AgentsConfig: f.AgentsConfig, Appearance: f.Appearance, SetAppearance: f.SetAppearance,
 		Tint: f.Tint, SetTint: f.SetTint, ResetTint: f.ResetTint, RecordInstall: f.recordInstall}
-	f.loadUpdated(Runner{Post: w.Update}, w.Invalidate)
+	f.loadUpdated(env)
 	setHandler(handlerSettings, func() { w.Update(f.Settings.Toggle) })
 	setHandler(handlerSidebar, func() { w.Update(f.ToggleSidebar) })
 	f.SpacesList.OnSettings = func() { f.Settings.Toggle() }

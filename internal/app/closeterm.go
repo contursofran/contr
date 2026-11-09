@@ -6,9 +6,8 @@ type CloseTerminal struct {
 	// Stop ends the hc terminal with an address. It blocks, so Start runs it
 	// off the UI thread. Nil makes Start do nothing.
 	Stop func(addr string) error
-	Run  Runner
-	// Status shows a line as a toast; may be nil.
-	Status func(string)
+	// Env runs Stop off the UI thread and shows its error.
+	Env Env
 	// Closed runs on the UI thread after Stop worked; may be nil.
 	Closed func(addr string)
 
@@ -25,14 +24,12 @@ func (c *CloseTerminal) Start(addr string) {
 		c.busy = map[string]bool{}
 	}
 	c.busy[addr] = true
-	c.Run.Do(func() func() {
+	c.Env.Do(func() func() {
 		err := c.Stop(addr)
 		return func() {
 			delete(c.busy, addr)
 			if err != nil {
-				if c.Status != nil {
-					c.Status("Close terminal: " + err.Error())
-				}
+				c.Env.Show("Close terminal: " + err.Error())
 				return
 			}
 			if c.Closed != nil {

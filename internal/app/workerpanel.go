@@ -36,11 +36,8 @@ type WorkerPanel struct {
 	Entry     WorkerEntry
 	Source    AgentSource
 	Selection *state.Selection
-	Run       Runner
-	// Status shows a line as a toast; may be nil.
-	Status func(string)
-	// Invalidate redraws the window; may be nil.
-	Invalidate func()
+	// Env runs the hc calls off the UI thread, redraws and shows messages.
+	Env Env
 
 	addr  string // the worker that out belongs to
 	out   string
@@ -78,12 +75,6 @@ func (p *WorkerPanel) Following() bool {
 	return ok && sel.Kind == state.KindWorker
 }
 
-func (p *WorkerPanel) redraw() {
-	if p.Invalidate != nil {
-		p.Invalidate()
-	}
-}
-
 // Sync reads the selected worker's terminal again. The frame calls it when the
 // agent state changes.
 func (p *WorkerPanel) Sync() {
@@ -98,7 +89,7 @@ func (p *WorkerPanel) read(addr string) {
 		return
 	}
 	p.busy = true
-	p.Run.Do(func() func() {
+	p.Env.Do(func() func() {
 		text, err := p.Source.Read(addr, workerLines)
 		return func() {
 			p.busy = false
@@ -113,7 +104,7 @@ func (p *WorkerPanel) read(addr string) {
 				p.again = false
 				p.Sync()
 			}
-			p.redraw()
+			p.Env.Redraw()
 		}
 	})
 }
@@ -138,7 +129,7 @@ func (p *WorkerPanel) interrupt(w agents.Worker) {
 func (p *WorkerPanel) stop(w agents.Worker) {
 	if p.armed != w.Address {
 		p.armed = w.Address
-		p.redraw()
+		p.Env.Redraw()
 		return
 	}
 	p.armed = ""
@@ -146,16 +137,16 @@ func (p *WorkerPanel) stop(w agents.Worker) {
 }
 
 func (p *WorkerPanel) act(w agents.Worker, done string, do func(string) error) {
-	p.Run.Do(func() func() {
+	p.Env.Do(func() func() {
 		err := do(w.Address)
 		return func() {
 			switch {
 			case err != nil:
 				p.err = err.Error()
-			case p.Status != nil:
-				p.Status(w.Name + " " + done)
+			default:
+				p.Env.Show(w.Name + " " + done)
 			}
-			p.redraw()
+			p.Env.Redraw()
 		}
 	})
 }

@@ -54,8 +54,8 @@ type settingsRig struct {
 func newSettingsRig(t *testing.T, u *fakeUpdates) *settingsRig {
 	t.Helper()
 	r := &settingsRig{t: t, u: u}
-	r.s = &Settings{Version: "1.2.3", Run: Runner{Go: func(f func()) { f() }},
-		Relaunch: func() { r.relaunch++ }, Invalidate: func() { r.redrawals++ }}
+	r.s = &Settings{Version: "1.2.3", Relaunch: func() { r.relaunch++ },
+		Env: Env{Invalidate: func() { r.redrawals++ }}}
 	if u != nil {
 		r.s.Updates = u
 	}
@@ -217,7 +217,7 @@ func TestSettingsButtonsDoNothingWhileWorkRuns(t *testing.T) {
 	u := &fakeUpdates{enabled: true}
 	var held []func()
 	r := newSettingsRig(t, u)
-	r.s.Run = Runner{Go: func(f func()) { held = append(held, f) }}
+	r.s.Env.Run = Runner{Go: func(f func()) { held = append(held, f) }}
 	r.s.enabled, r.s.enabledKnown = true, true
 	r.openUpdates()
 	r.tt.Click(SettingsCheck)
@@ -237,8 +237,7 @@ func scheduleRig(t *testing.T, u *fakeUpdates, every time.Duration, visible func
 	t.Helper()
 	redrawn = make(chan struct{}, 100)
 	s = &Settings{Updates: u, Version: "1.2.3", Every: every, Visible: visible,
-		Run:        Runner{Go: func(f func()) { f() }},
-		Invalidate: func() { redrawn <- struct{}{} }}
+		Env: Env{Invalidate: func() { redrawn <- struct{}{} }}}
 	stop = s.StartChecks()
 	t.Cleanup(stop)
 	return s, redrawn, stop
@@ -285,7 +284,7 @@ func TestABackgroundInstallErrorShowsInSettingsOnly(t *testing.T) {
 	u := &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}, installErr: errors.New("disk full")}
 	r := newSettingsRig(t, u)
 	status := 0
-	r.s.Status = func(string) { status++ }
+	r.s.Env.Status = func(string) { status++ }
 	r.s.autoCheck()
 	if _, _, ok := r.s.Installed(); ok {
 		t.Fatal("a failed download is ready")
@@ -375,7 +374,7 @@ func TestSettingsInstallErrorReachesTheStatusMessage(t *testing.T) {
 	u := &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}, installErr: errors.New("no space")}
 	r := newSettingsRig(t, u)
 	var msgs []string
-	r.s.Status = func(m string) { msgs = append(msgs, m) }
+	r.s.Env.Status = func(m string) { msgs = append(msgs, m) }
 	r.openUpdates()
 	r.tt.Click(SettingsCheck)
 	r.tt.Click(SettingsInstall)
@@ -386,7 +385,7 @@ func TestSettingsInstallErrorReachesTheStatusMessage(t *testing.T) {
 
 func TestSetVisibleChecksAtOnceWhenNoCheckRan(t *testing.T) {
 	u := &fakeUpdates{enabled: true}
-	s := &Settings{Updates: u, Run: Runner{Go: func(f func()) { f() }}}
+	s := &Settings{Updates: u}
 	s.SetVisible(false)
 	if u.checks != 0 {
 		t.Fatal("a hiding window was checked")
@@ -400,8 +399,7 @@ func TestSetVisibleChecksAtOnceWhenNoCheckRan(t *testing.T) {
 func TestSetVisibleChecksOnlyWhenTheLastCheckIsOld(t *testing.T) {
 	u := &fakeUpdates{enabled: true}
 	now := time.Date(2026, 11, 4, 9, 0, 0, 0, time.UTC)
-	s := &Settings{Updates: u, Every: time.Hour, Now: func() time.Time { return now },
-		Run: Runner{Go: func(f func()) { f() }}}
+	s := &Settings{Updates: u, Every: time.Hour, Now: func() time.Time { return now }}
 	s.autoCheck()
 	if u.checks != 1 {
 		t.Fatalf("checks = %d after the first check", u.checks)
@@ -425,8 +423,7 @@ func TestSetVisibleChecksOnlyWhenTheLastCheckIsOld(t *testing.T) {
 func TestSkippedHiddenCheckDoesNotCountAsACheck(t *testing.T) {
 	u := &fakeUpdates{enabled: true}
 	hidden := false
-	s := &Settings{Updates: u, Visible: func() bool { return !hidden },
-		Run: Runner{Go: func(f func()) { f() }}}
+	s := &Settings{Updates: u, Visible: func() bool { return !hidden }}
 	hidden = true
 	s.autoCheck() // timer fires while hidden
 	hidden = false
@@ -672,8 +669,7 @@ func TestSettingsTintSliderFollowsAClickOnTheTrack(t *testing.T) {
 }
 
 func fakeClockSettings(u *fakeUpdates, now *time.Time) *Settings {
-	return &Settings{Updates: u, Now: func() time.Time { return *now },
-		Run: Runner{Go: func(f func()) { f() }}}
+	return &Settings{Updates: u, Now: func() time.Time { return *now }}
 }
 
 func TestCheckEveryIsFifteenMinutes(t *testing.T) {
@@ -764,7 +760,7 @@ type recorded struct {
 func recordRig(u *fakeUpdates) (*Settings, *[]recorded) {
 	var log []recorded
 	at := time.Date(2026, 11, 9, 10, 0, 0, 0, time.UTC)
-	s := &Settings{Updates: u, Version: "1.2.3", Run: Runner{Go: func(f func()) { f() }},
+	s := &Settings{Updates: u, Version: "1.2.3",
 		Now:      func() time.Time { return at },
 		Relaunch: func() { log = append(log, recorded{what: "relaunch"}) },
 		RecordInstall: func(info UpdateInfo, from string, at time.Time) error {

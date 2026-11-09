@@ -41,7 +41,7 @@ func TestWorkerPanelOpensPR(t *testing.T) {
 	src := &source{snap: agentstate.Snapshot{Workers: []agents.Worker{entryWorker}}}
 	sel := stateSelection()
 	sel.Select(state.Selected{Kind: state.KindWorker, ID: "t1"})
-	p := &WorkerPanel{Entry: entry, Source: src, Selection: sel, Run: Runner{Go: func(f func()) { f() }}}
+	p := &WorkerPanel{Entry: entry, Source: src, Selection: sel}
 	tt := ui.NewTester(p.View, theme.WindowWidth, theme.WindowHeight)
 	tt.Frame()
 	if err := tt.Click("Open PR #307"); err != nil {
@@ -57,7 +57,7 @@ func TestWorkerPanelOpensIssueWithoutPR(t *testing.T) {
 	src := &source{snap: agentstate.Snapshot{Workers: []agents.Worker{entryWorker}}}
 	sel := stateSelection()
 	sel.Select(state.Selected{Kind: state.KindWorker, ID: "t1"})
-	p := &WorkerPanel{Entry: entry, Source: src, Selection: sel, Run: Runner{Go: func(f func()) { f() }}}
+	p := &WorkerPanel{Entry: entry, Source: src, Selection: sel}
 	tt := ui.NewTester(p.View, theme.WindowWidth, theme.WindowHeight)
 	tt.Frame()
 	if err := tt.Click("Open issue #268"); err != nil {

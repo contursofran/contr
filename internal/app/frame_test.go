@@ -557,8 +557,7 @@ func newTermFrame(t *testing.T, snap *agentstate.Snapshot) *termFrame {
 			tf.opened = append(tf.opened, [2]string{project, dir})
 			return "tNew", tf.openErr
 		},
-		Run:    Runner{Go: func(f func()) { f() }},
-		Status: func(s string) { tf.statuses = append(tf.statuses, s) },
+		Env:    Env{Status: func(s string) { tf.statuses = append(tf.statuses, s) }},
 		Select: func(addr string) { f.Selection.Select(state.Selected{Kind: state.KindTerminal, ID: addr}) },
 	}
 	return tf
@@ -640,7 +639,7 @@ func TestNewTerminalErrorStatus(t *testing.T) {
 func TestNewTerminalBusy(t *testing.T) {
 	var jobs []func()
 	n := &NewTerminal{Open: func(string, string) (string, error) { return "t", nil },
-		Run: Runner{Go: func(f func()) { jobs = append(jobs, f) }}}
+		Env: Env{Run: Runner{Go: func(f func()) { jobs = append(jobs, f) }}}}
 	n.Start("p", "/d")
 	n.Start("p", "/d")
 	if len(jobs) != 1 {
