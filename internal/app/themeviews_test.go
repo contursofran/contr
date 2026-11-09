@@ -4,7 +4,6 @@ import (
 	"image"
 	"testing"
 
-	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/agentstate"
@@ -17,37 +16,13 @@ import (
 // D157). Each test builds the view in Dark and in Light and checks the
 // pixels against the palette of that theme.
 
-var themeCases = []struct {
-	name string
-	src  mygo.ThemeSource
-	pal  *theme.Palette
-}{
-	{"dark", mygo.ThemeDark, theme.Dark},
-	{"light", mygo.ThemeLight, theme.Light},
-}
-
-func near(a, b ui.Color, tol int) bool {
-	d := func(x, y uint8) int {
-		if x > y {
-			return int(x - y)
-		}
-		return int(y - x)
-	}
-	return d(a.R, b.R) <= tol && d(a.G, b.G) <= tol && d(a.B, b.B) <= tol
-}
-
-func rgb(img *image.RGBA, x, y float32) ui.Color {
-	p := img.RGBAAt(int(x), int(y))
-	return ui.RGB(p.R, p.G, p.B)
-}
-
 // textInk returns the pixel of r that differs most from bg: the glyph core.
 func textInk(img *image.RGBA, r ui.Rect, bg ui.Color) ui.Color {
 	var best ui.Color
 	most := -1
 	for y := int(r.Y); y < int(r.Y+r.H); y++ {
 		for x := int(r.X); x < int(r.X+r.W); x++ {
-			c := rgb(img, float32(x), float32(y))
+			c := apptest.RGB(img, float32(x), float32(y))
 			d := 0
 			for _, v := range [3]int{int(c.R) - int(bg.R), int(c.G) - int(bg.G), int(c.B) - int(bg.B)} {
 				if v < 0 {
@@ -87,22 +62,22 @@ func wantInk(t *testing.T, name string, img *image.RGBA, r ui.Rect, bg, ink ui.C
 }
 
 func TestPlaceholderFollowsTheTheme(t *testing.T) {
-	for _, tc := range themeCases {
-		themetest.Use(t, tc.src)
+	for _, tc := range apptest.ThemeCases {
+		themetest.Use(t, tc.Src)
 		tt := ui.NewTester(func(c *ui.Context) {
 			ui.Column(c).Fill().Background(theme.Current().Ground).Font(theme.FontFamily).
 				FontSize(theme.FontSize).Children(func() { placeholder("Terminal")(c) })
 		}, 200, 60)
 		tt.Frame()
 		r := apptest.Box(t, tt, "[Terminal]")
-		wantInk(t, tc.name, tt.Image(), r, tc.pal.Ground, tc.pal.Ink42)
+		wantInk(t, tc.Name, tt.Image(), r, tc.Pal.Ground, tc.Pal.Ink42)
 	}
 }
 
 func TestBoardEmptyLinesFollowTheTheme(t *testing.T) {
 	problem := func() agentstate.Snapshot { return agentstate.Snapshot{Problem: "no hc"} }
-	for _, tc := range themeCases {
-		themetest.Use(t, tc.src)
+	for _, tc := range apptest.ThemeCases {
+		themetest.Use(t, tc.Src)
 		for _, label := range []string{LabelBoardEmpty, LabelBoardProblem} {
 			p := &BoardPanel{}
 			if label == LabelBoardProblem {
@@ -114,7 +89,7 @@ func TestBoardEmptyLinesFollowTheTheme(t *testing.T) {
 			}, theme.PanelWidth, 400)
 			tt.Frame()
 			r := apptest.Box(t, tt, label)
-			wantInk(t, tc.name+" "+label, tt.Image(), r, tc.pal.Ground, tc.pal.Ink50)
+			wantInk(t, tc.Name+" "+label, tt.Image(), r, tc.Pal.Ground, tc.Pal.Ink50)
 		}
 	}
 }

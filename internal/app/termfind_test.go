@@ -13,6 +13,7 @@ import (
 	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/titlebar"
 	"github.com/contursofran/contr/internal/hc"
 )
 
@@ -226,13 +227,13 @@ func TestSearchButtonOpensTheFindBarAndShowsItsKey(t *testing.T) {
 	if !apptest.Absent(tt, LabelFind) {
 		t.Fatal("the find bar shows before the click")
 	}
-	r := apptest.Box(t, tt, LabelSearch)
+	r := apptest.Box(t, tt, titlebar.LabelSearch)
 	tt.Move(r.X+r.W/2, r.Y+r.H/2)
 	tt.Advance(time.Second)
 	if !tt.HasText("Search  ⌘F") {
 		t.Errorf("no tooltip \"Search  ⌘F\"; texts %q", tt.Texts())
 	}
-	if err := tt.Click(LabelSearch); err != nil {
+	if err := tt.Click(titlebar.LabelSearch); err != nil {
 		t.Fatal(err)
 	}
 	settle(w, tt)

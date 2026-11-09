@@ -14,7 +14,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/assets"
@@ -35,15 +34,6 @@ type SheetPart struct {
 const SheetPad = 24
 
 var sheetFonts sync.Once
-
-var sheetThemes = []struct {
-	name string
-	src  mygo.ThemeSource
-	pal  *theme.Palette
-}{
-	{"dark", mygo.ThemeDark, theme.Dark},
-	{"light", mygo.ThemeLight, theme.Light},
-}
 
 // sheetView is a part as the app shows it: on the ground, in the app's fonts and MyGo theme.
 func sheetView(p SheetPart) func(c *ui.Context) {
@@ -81,21 +71,21 @@ func SpecSheet(t *testing.T, parts []SheetPart, noImage []string) {
 	want := os.Getenv("CONTR_SHEET")
 	names := strings.Split(want, ",")
 	out := filepath.Join(root, "tmp", "sheet")
-	for _, tc := range sheetThemes {
-		themetest.Use(t, tc.src)
+	for _, tc := range ThemeCases {
+		themetest.Use(t, tc.Src)
 		for _, p := range parts {
 			img := ui.Render(sheetView(p), p.W+2*SheetPad, p.H+2*SheetPad, 1)
-			if inked(img, tc.pal.Ground) < 50 {
-				t.Errorf("%s %s: the render is empty", p.Name, tc.name)
+			if inked(img, tc.Pal.Ground) < 50 {
+				t.Errorf("%s %s: the render is empty", p.Name, tc.Name)
 			}
 			if want == "" || (want != "all" && !slices.Contains(names, p.Name)) {
 				continue
 			}
-			sheet := sheetImage(t, root, p, tc.name, noImage)
+			sheet := sheetImage(t, root, p, tc.Name, noImage)
 			if err := os.MkdirAll(out, 0o755); err != nil {
 				t.Fatal(err)
 			}
-			path := filepath.Join(out, p.Name+"-"+tc.name+".png")
+			path := filepath.Join(out, p.Name+"-"+tc.Name+".png")
 			writePNG(t, path, sheet)
 			t.Logf("sheet: %s", path)
 		}
@@ -162,20 +152,13 @@ func sheetImage(t *testing.T, root string, p SheetPart, themeName string, noImag
 	}, w, h, 1)
 }
 
-// inked counts the pixels that differ from the ground by more than 16 in a channel.
+// inked counts the pixels that differ from the ground.
 func inked(img *image.RGBA, ground ui.Color) int {
-	d := func(x, y uint8) int {
-		if x > y {
-			return int(x - y)
-		}
-		return int(y - x)
-	}
 	n := 0
 	b := img.Bounds()
 	for y := b.Min.Y; y < b.Max.Y; y++ {
 		for x := b.Min.X; x < b.Max.X; x++ {
-			p := img.RGBAAt(x, y)
-			if d(p.R, ground.R) > 16 || d(p.G, ground.G) > 16 || d(p.B, ground.B) > 16 {
+			if !Near(RGB(img, float32(x), float32(y)), ground, 16) {
 				n++
 			}
 		}
