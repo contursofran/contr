@@ -133,6 +133,9 @@ func (h *harness) buildFakeClaude(t *testing.T) string {
 			t.Fatal(err)
 		}
 	}
+	// Named "claude": the app reads a worker's menu only from a claude command.
+	// contr puts --settings before the profile arguments, so the fake reads its
+	// state from the last argument (#532).
 	bin := filepath.Join(h.dir, "claude")
 	mk := exec.Command("go", "build", "-o", bin, ".")
 	mk.Dir = src
@@ -159,6 +162,29 @@ func (h *harness) spawn(t *testing.T, specs ...agents.Spec) {
 		if _, err := h.mgr.Spawn(h.ctx, s); err != nil {
 			t.Fatalf("spawn %s: %v", s.Name, err)
 		}
+		if want := fakeStates[s.Profile]; want != "" {
+			h.waitStatus(t, s.Name, want)
+		}
+	}
+}
+
+// fakeStates is the status each fake Claude profile reports.
+var fakeStates = map[string]string{"claude-working": "working", "claude-blocked": "blocked"}
+
+// waitStatus waits until hc reports the status of the worker, so a fixture
+// shows a state that is already set when the app starts.
+func (h *harness) waitStatus(t *testing.T, name, want string) {
+	t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		w, err := h.mgr.Get(h.ctx, name)
+		if err == nil && w.Status == want {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("worker %s: status %q (err %v), want %q", name, w.Status, err, want)
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 
