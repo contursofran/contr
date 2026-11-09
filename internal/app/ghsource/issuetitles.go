@@ -1,12 +1,12 @@
-package app
+package ghsource
 
 // The issue titles of the worker rows (D174). Line 1 of a worker row is the title of its issue.
 // [IssueTitles] asks gh in the worker's folder, off the UI thread, when the agents change. A
-// found title is asked again after [titleHitTTL] (the owner may edit it); a failed read (no
+// found title is asked again after [TitleHitTTL] (the owner may edit it); a failed read (no
 // gh, no network, no such issue) is asked again after [titleMissTTL] and keeps the title that was
 // known. There is no timer: a read starts only from an agents sync, and only for an issue with
 // no fresh answer, so an idle screen does no gh work. At most [maxGH] gh runs go at once, the
-// pull request reads included ([ghQueue]).
+// pull request reads included ([GHQueue]).
 
 import (
 	"context"
@@ -19,7 +19,8 @@ import (
 )
 
 const (
-	titleHitTTL  = 10 * time.Minute
+	// TitleHitTTL is how long a found title holds.
+	TitleHitTTL  = 10 * time.Minute
 	titleMissTTL = 5 * time.Minute
 )
 
@@ -44,7 +45,7 @@ type IssueTitles struct {
 	Now func() time.Time
 
 	// GH is the queue of gh runs, shared with [WorkerPRs]. Nil: a queue of its own.
-	GH *ghQueue
+	GH *GHQueue
 
 	answers  map[titleKey]titleAnswer
 	inflight map[titleKey]bool
@@ -99,7 +100,7 @@ func (t *IssueTitles) read(k titleKey) {
 	if a, ok := t.answers[k]; ok {
 		ttl := titleMissTTL
 		if a.title != "" && !a.failed {
-			ttl = titleHitTTL
+			ttl = TitleHitTTL
 		}
 		if t.now().Sub(a.at) < ttl {
 			return
@@ -127,7 +128,7 @@ func (t *IssueTitles) read(k titleKey) {
 // gh runs a read off the UI thread through the queue [IssueTitles.GH].
 func (t *IssueTitles) gh(read func() func()) {
 	if t.GH == nil {
-		t.GH = &ghQueue{}
+		t.GH = &GHQueue{}
 	}
 	t.GH.Do(t.Env, read)
 }

@@ -1,4 +1,4 @@
-package app
+package ghsource
 
 // The entry points from a worker to its pull request (D106). A worker with a pull request opens
 // it in the PR pane; a worker with only an issue opens the issue in the browser (D74).
@@ -51,9 +51,9 @@ func issueNumber(s string) (int, bool) {
 	return n, err == nil && n > 0
 }
 
-// itemOf is the item a pull request is for: the issue of the worker in dir, as "#N". It is ""
+// ItemOf is the item a pull request is for: the issue of the worker in dir, as "#N". It is ""
 // when no worker works in dir or the worker has no issue.
-func itemOf(workers []agents.Worker, dir string) string {
+func ItemOf(workers []agents.Worker, dir string) string {
 	for _, w := range workers {
 		if w.Worktree == dir && w.Worktree != "" {
 			if n, ok := issueNumber(w.Issue); ok {

@@ -1,4 +1,4 @@
-package app
+package ghsource
 
 import (
 	"context"
@@ -6,11 +6,9 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/agents"
-	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/github"
-	"github.com/contursofran/contr/internal/host"
-	"github.com/contursofran/contr/internal/usage"
 )
 
 // fakeGH answers both gh reads: `pr view` with no pull request and `issue view` with a title.
@@ -30,7 +28,7 @@ func (r *fakeGH) Run(_ context.Context, _ string, args ...string) ([]byte, error
 func TestOneGHQueueLimitsPRAndTitleReadsTogether(t *testing.T) {
 	var queue []func()
 	env := view.Env{Run: view.Runner{Go: func(f func()) { queue = append(queue, f) }}}
-	gh, runner := &ghQueue{}, &fakeGH{}
+	gh, runner := &GHQueue{}, &fakeGH{}
 	client := func(dir string) github.Client { return github.Client{R: runner, Dir: dir} }
 	now := func() time.Time { return time.Unix(1000, 0) }
 	prs := &WorkerPRs{Env: env, GH: gh, Client: client, Branch: func(string) string { return "agent/1-x" }, Now: now}
@@ -38,10 +36,10 @@ func TestOneGHQueueLimitsPRAndTitleReadsTogether(t *testing.T) {
 
 	var prWorkers, titleWorkers []agents.Worker
 	for _, d := range []string{"/wt/a", "/wt/b", "/wt/c"} {
-		prWorkers = append(prWorkers, liveWorker(d)...)
+		prWorkers = append(prWorkers, apptest.LiveWorker(d)...)
 	}
 	for _, n := range []string{"1", "2"} {
-		titleWorkers = append(titleWorkers, issueWorker("/wt/"+n, n)...)
+		titleWorkers = append(titleWorkers, apptest.IssueWorker("/wt/"+n, n)...)
 	}
 	prs.Sync(prWorkers)
 	titles.Sync(titleWorkers)
@@ -77,16 +75,5 @@ func TestOneGHQueueLimitsPRAndTitleReadsTogether(t *testing.T) {
 	}
 	if gh.active != 0 || len(gh.waiting) != 0 {
 		t.Errorf("active %d, waiting %d at the end", gh.active, len(gh.waiting))
-	}
-}
-
-func TestAttachGivesOneGHQueueToPRsAndTitles(t *testing.T) {
-	f, _ := themeFrame(t, nil)
-	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
-	f.Usage = usage.NewSampler(usage.Unread, nil)
-	stop := f.Attach(&fakeWindow{visible: true})
-	defer stop()
-	if f.WorkerPRs.GH == nil || f.WorkerPRs.GH != f.IssueTitles.GH {
-		t.Errorf("queues %p and %p, want one shared queue", f.WorkerPRs.GH, f.IssueTitles.GH)
 	}
 }

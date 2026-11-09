@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/ghsource"
 	"github.com/contursofran/contr/internal/app/theme"
 )
 
@@ -42,7 +43,7 @@ type BoardPanel struct {
 	// worktree and the issue number (D74).
 	OpenIssue func(dir string, n int)
 	// PRs gives each worker's pull request number (D104). Nil: no worker has one.
-	PRs *WorkerPRs
+	PRs *ghsource.WorkerPRs
 }
 
 // Rows returns the work rows now.

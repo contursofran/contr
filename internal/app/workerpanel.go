@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui/editor"
 
 	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/app/ghsource"
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/state"
@@ -34,7 +35,7 @@ const (
 // WorkerPanel is the worker view. Its methods run on the UI thread.
 type WorkerPanel struct {
 	// Entry opens the worker's pull request or issue (D106).
-	Entry     WorkerEntry
+	Entry     ghsource.WorkerEntry
 	Source    AgentSource
 	Selection *state.Selection
 	// Env runs the hc calls off the UI thread, redraws and shows messages.

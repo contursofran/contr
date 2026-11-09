@@ -11,6 +11,7 @@ import (
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/apptest"
+	"github.com/contursofran/contr/internal/app/ghsource"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
@@ -314,11 +315,11 @@ func TestOpenPRFromTheContextMenu(t *testing.T) {
 		t.Error("Open PR chose with no pull request")
 	}
 	rig := newPRSourceRig(map[string]string{h.cwds[0]: `{"number":307}`})
-	rig.w.Sync(liveWorker(h.cwds[0]))
-	rig.flush()
+	rig.w.Sync(apptest.LiveWorker(h.cwds[0]))
+	rig.Flush()
 	var opened [][2]any
 	paneOpened := false
-	h.list.Entry = WorkerEntry{PRs: rig.w,
+	h.list.Entry = ghsource.WorkerEntry{PRs: rig.w,
 		OpenPR:    func(string, int) { paneOpened = true },
 		OpenPRWeb: func(dir string, n int) { opened = append(opened, [2]any{dir, n}) }}
 	h.tt.Frame()

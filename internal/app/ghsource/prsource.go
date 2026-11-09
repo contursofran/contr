@@ -1,4 +1,4 @@
-package app
+package ghsource
 
 // The source of a worker's pull request (D104). The board needs to know whether a worker's
 // branch has a pull request. [WorkerPRs] asks gh in the worker's worktree, off the UI thread,
@@ -7,7 +7,7 @@ package app
 // none. "No pull request" is asked again after [prMissTTL], because the worker may open its PR
 // later. There is no timer: a read starts only from an agents sync, and only for a worktree that
 // has no fresh answer, so a sync that changes nothing does no git or gh work. At most [maxGH] gh
-// runs go at once, the issue title reads included; the others wait ([ghQueue]).
+// runs go at once, the issue title reads included; the others wait ([GHQueue]).
 
 import (
 	"context"
@@ -25,7 +25,7 @@ const (
 	// prHitTTL is how long a found PR number holds before its state is read again.
 	prHitTTL = 5 * time.Minute
 	// maxGH is the most gh runs at once, over all folders, for pull requests and issue titles
-	// together ([ghQueue]).
+	// together ([GHQueue]).
 	maxGH = 2
 )
 
@@ -49,7 +49,7 @@ type WorkerPRs struct {
 	// Now is the clock. Nil: time.Now.
 	Now func() time.Time
 	// GH is the queue of gh runs, shared with [IssueTitles]. Nil: a queue of its own.
-	GH *ghQueue
+	GH *GHQueue
 
 	branch   map[string]string
 	answers  map[prKey]prAnswer
@@ -161,7 +161,7 @@ func (w *WorkerPRs) read(dir string) {
 // gh runs a gh read off the UI thread through the queue [WorkerPRs.GH].
 func (w *WorkerPRs) gh(read func() func()) {
 	if w.GH == nil {
-		w.GH = &ghQueue{}
+		w.GH = &GHQueue{}
 	}
 	w.GH.Do(w.Env, read)
 }

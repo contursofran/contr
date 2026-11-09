@@ -13,6 +13,7 @@ package app
 
 import (
 	"context"
+	"github.com/contursofran/contr/internal/app/ghsource"
 	"github.com/contursofran/contr/internal/app/kit"
 	"path/filepath"
 	"slices"
@@ -79,7 +80,7 @@ type SpacesList struct {
 	// UI thread, and shows the result of an action.
 	Env view.Env
 	// Entry opens the pull request of an agent from its menu.
-	Entry WorkerEntry
+	Entry ghsource.WorkerEntry
 	// ModelOf names the model of an agent profile for line 2. Nil: none.
 	ModelOf func(profile string) string
 	// EffortOf names the effort of an agent profile for line 2. Nil: none.
@@ -92,7 +93,7 @@ type SpacesList struct {
 	// for the terminal at address, or "" (D189).
 	StatusEffort func(address string) string
 	// Titles gives the issue titles of the worker rows. Nil: none.
-	Titles *IssueTitles
+	Titles *ghsource.IssueTitles
 	// Ages is the one timer of all ages (D137). Nil: ages move on a state
 	// change only.
 	Ages *AgeClock
