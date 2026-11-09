@@ -6,6 +6,7 @@ package app
 import (
 	"testing"
 
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/projects"
 
 	"github.com/contursofran/contr/internal/app/theme"
@@ -63,7 +64,7 @@ func TestADividerSitsAboveTheSettingsButton(t *testing.T) {
 	// button that differs from the one above it.
 	found := false
 	for y := b.Y - 14; y < b.Y; y++ {
-		if pixelAt(img, 100, y) != pixelAt(img, 100, b.Y-15) {
+		if apptest.PixelAt(img, 100, y) != apptest.PixelAt(img, 100, b.Y-15) {
 			found = true
 		}
 	}

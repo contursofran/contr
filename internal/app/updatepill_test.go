@@ -8,6 +8,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/apptest"
+	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/updated"
@@ -16,7 +18,7 @@ import (
 type pillRig struct {
 	f        *Frame
 	tt       *ui.Tester
-	u        *fakeUpdates
+	u        *apptest.Updates[settings.UpdateInfo]
 	relaunch int
 }
 
@@ -25,15 +27,15 @@ func newPillRig(t *testing.T, installErr error) *pillRig {
 	t.Helper()
 	f, tt := toastFrame()
 	r := &pillRig{f: f, tt: tt}
-	r.u = &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0", Notes: "## 1.3.0\n- Update pill\n- Faster tabs"}, installErr: installErr}
-	f.Settings = &Settings{Updates: r.u, Version: "1.2.3",
+	r.u = &apptest.Updates[settings.UpdateInfo]{On: true, Info: &settings.UpdateInfo{Version: "1.3.0", Notes: "## 1.3.0\n- Update pill\n- Faster tabs"}, InstallErr: installErr}
+	f.Settings = &settings.Settings{Updates: r.u, Version: "1.2.3",
 		Relaunch: func() { r.relaunch++ }, OnReady: f.updateReady}
 	tt.Frame()
 	return r
 }
 
 func (r *pillRig) ready() {
-	r.f.Settings.autoCheck()
+	r.f.Settings.AutoCheck()
 	r.tt.Frame()
 	r.tt.Frame()
 }
@@ -82,7 +84,7 @@ func TestTheUpdateToastDoesNotComeBackAfterLater(t *testing.T) {
 	if r.has(LabelUpdateToast) {
 		t.Fatal("the toast stays after Later")
 	}
-	r.f.updateReady(UpdateInfo{Version: "1.3.0"})
+	r.f.updateReady(settings.UpdateInfo{Version: "1.3.0"})
 	r.tt.Frame()
 	r.settle()
 	if r.has(LabelUpdateToast) {
@@ -110,7 +112,7 @@ func TestThePillOpensThePanelAndRestartNowRelaunches(t *testing.T) {
 			t.Errorf("the panel has no %q: %q", want, texts)
 		}
 	}
-	if err := r.tt.Click(SettingsRestart + " ⏎"); err != nil {
+	if err := r.tt.Click(settings.SettingsRestart + " ⏎"); err != nil {
 		t.Fatal(err)
 	}
 	if r.relaunch != 1 {
@@ -175,7 +177,7 @@ func newUpdatedRig(t *testing.T, n updated.Note, err error) *updatedRig {
 	t.Helper()
 	f, tt := toastFrame()
 	r := &updatedRig{f: f, tt: tt}
-	f.Settings = &Settings{Version: "0.4.0"}
+	f.Settings = &settings.Settings{Version: "0.4.0"}
 	f.deps.Updated.Load = func() (updated.Note, error) { return n, err }
 	f.deps.Updated.Save = func(n updated.Note) error { r.saved = append(r.saved, n); return nil }
 	tt.Frame()
@@ -220,7 +222,7 @@ func TestWhatsNewOpensAtStartAfterAnUpdate(t *testing.T) {
 			t.Errorf("no %q: %q", want, texts)
 		}
 	}
-	for _, not := range []string{UpdateAgentsNote, UpdateLater, SettingsRestart + " ⏎", LabelUpdatePill} {
+	for _, not := range []string{UpdateAgentsNote, UpdateLater, settings.SettingsRestart + " ⏎", LabelUpdatePill} {
 		if slices.Contains(texts, not) {
 			t.Errorf("the panel after an update has %q", not)
 		}
@@ -298,7 +300,7 @@ func TestAnInstallRecordsTheNoteForTheNextStart(t *testing.T) {
 	var saved []updated.Note
 	f.deps.Updated.Save = func(n updated.Note) error { saved = append(saved, n); return nil }
 	at := time.Date(2026, 11, 9, 10, 0, 0, 0, time.UTC)
-	if err := f.recordInstall(UpdateInfo{Version: "0.4.0", Notes: "- x"}, "0.3.2", at); err != nil {
+	if err := f.recordInstall(settings.UpdateInfo{Version: "0.4.0", Notes: "- x"}, "0.3.2", at); err != nil {
 		t.Fatal(err)
 	}
 	want := updated.Note{Version: "0.4.0", From: "0.3.2", Notes: "- x", InstalledAt: at}
@@ -306,7 +308,7 @@ func TestAnInstallRecordsTheNoteForTheNextStart(t *testing.T) {
 		t.Errorf("saved %+v, want %+v", saved, want)
 	}
 	f.deps.Updated.Save = nil
-	if err := f.recordInstall(UpdateInfo{Version: "0.4.0"}, "0.3.2", at); err != nil {
+	if err := f.recordInstall(settings.UpdateInfo{Version: "0.4.0"}, "0.3.2", at); err != nil {
 		t.Errorf("no saver: %v", err)
 	}
 }

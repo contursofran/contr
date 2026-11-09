@@ -29,3 +29,11 @@ func Use(t *testing.T, src mygo.ThemeSource) {
 		theme.Follow(platform{}, window{}, mygo.ThemeDark).Stop()
 	})
 }
+
+// Follow makes a Follower with src on a fake platform and window, and puts
+// the Dark palette back when the test ends.
+func Follow(t *testing.T, src mygo.ThemeSource) *theme.Follower {
+	t.Helper()
+	t.Cleanup(func() { theme.Follow(platform{}, window{}, mygo.ThemeDark).Stop() })
+	return theme.Follow(platform{}, window{}, src)
+}

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
 
@@ -83,10 +84,10 @@ func TestUpdatePillCapture(t *testing.T) {
 	theme := func(name string) {
 		t.Helper()
 		c.call(t, "menu", map[string]any{"path": []string{"contr", "Settings…"}})
-		wait(app.LabelSettings, true)
+		wait(settings.LabelSettings, true)
 		click(name)
-		click(app.SettingsDone)
-		wait(app.LabelSettings, false)
+		click(settings.SettingsDone)
+		wait(settings.LabelSettings, false)
 	}
 
 	wait(app.LabelUpdatePill, true)

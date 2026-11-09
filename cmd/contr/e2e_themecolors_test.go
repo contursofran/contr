@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
 
@@ -87,9 +88,9 @@ func TestProjectsModalColors(t *testing.T) {
 	wait(app.LabelNewTab)
 	for _, name := range []string{"Dark", "Light"} {
 		c.call(t, "menu", map[string]any{"path": []string{"contr", "Settings…"}})
-		wait(app.LabelSettings)
+		wait(settings.LabelSettings)
 		click(name)
-		click(app.SettingsDone)
+		click(settings.SettingsDone)
 		click("Open projects")
 		wait(app.LabelProjects)
 		time.Sleep(500 * time.Millisecond)

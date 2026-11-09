@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/contursofran/contr/internal/app/ghostty"
+	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/prefs"
@@ -102,7 +103,7 @@ type Deps struct {
 	ProjectKey func(path string) string
 
 	// Updates is the update service of the Settings modal (D115). Nil shows "updates are off".
-	Updates Updates
+	Updates settings.Updates
 	// Relaunch restarts contr after an update installs.
 	Relaunch func()
 	// ThemePlatform is MyGo's theme (mygo.Theme). Nil leaves the palette as it is.

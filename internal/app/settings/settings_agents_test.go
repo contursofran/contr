@@ -1,4 +1,4 @@
-package app
+package settings
 
 import (
 	"os"
@@ -205,7 +205,7 @@ func TestSettingsAFailedReadShowsTheError(t *testing.T) {
 }
 
 func TestSettingsUpdatesTabShowsTheDotWhileAnUpdateWaits(t *testing.T) {
-	r := newSettingsRig(t, &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "9.9.9"}})
+	r := newSettingsRig(t, &fakeUpdates{On: true, Info: &UpdateInfo{Version: "9.9.9"}})
 	r.open()
 	if r.has("update dot") {
 		t.Fatal("dot without an update")

@@ -1,4 +1,4 @@
-package app
+package settings
 
 // The Agents tab of Settings (D186): the Roles section edits the profiles of agents.json. Only
 // Claude Code is in the dropdowns for now. A profile that the dropdowns cannot show is "Custom":
@@ -14,6 +14,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/icons"
+	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/theme"
 )
 
@@ -260,7 +261,7 @@ func (s *Settings) agentsFoot(c *ui.Context) {
 	ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(14).Padding(12, theme.ModalPadX).Margin(12, 0, 0, 0).
 		BorderWidth(1, 0, 0, 0).BorderColor(p.Hairline).Children(func() {
 		ui.Text(c, TextAgentsFoot).Grow(1).TextColor(p.Ink50)
-		var reset ClickFn
+		var reset kit.ClickFn
 		if s.ag.loaded {
 			reset = func() {
 				resetRoles(&s.ag.cfg)
@@ -268,8 +269,8 @@ func (s *Settings) agentsFoot(c *ui.Context) {
 				s.saveAgents()
 			}
 		}
-		settingsButton(c, AgentsReset, ButtonOutlined, reset)
-		settingsButton(c, SettingsDone, ButtonPlain, s.Close)
+		SettingsButton(c, AgentsReset, kit.ButtonOutlined, reset)
+		SettingsButton(c, SettingsDone, kit.ButtonPlain, s.Close)
 	})
 }
 

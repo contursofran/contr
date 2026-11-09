@@ -366,7 +366,7 @@ func (p *PRPane) renderThread(c *ui.Context, t github.Thread) {
 			ui.Text(c, cm.Body).TextColor(theme.Color(theme.Text2)).FillWidth()
 		}
 		ui.Row(c).Height(theme.AnswerButtonHeight).Gap(theme.AnswerButtonGap).AlignItems(ui.Center).Children(func() {
-			var reply, resolve ClickFn
+			var reply, resolve kit.ClickFn
 			if !f.busy {
 				reply = func() {
 					if f.replying == nil {
@@ -378,8 +378,8 @@ func (p *PRPane) renderThread(c *ui.Context, t github.Thread) {
 				}
 				resolve = func() { p.resolveThread(t.ID) }
 			}
-			cardButton(c, LabelPRReply, ButtonPlain, theme.Current().Ink50, reply)
-			cardButton(c, LabelPRResolve, ButtonPlain, theme.Current().Ink50, resolve)
+			kit.CardButton(c, LabelPRReply, kit.ButtonPlain, theme.Current().Ink50, reply)
+			kit.CardButton(c, LabelPRResolve, kit.ButtonPlain, theme.Current().Ink50, resolve)
 		})
 		if f.replying[t.ID] {
 			ui.Row(c).Height(theme.AnswerButtonHeight).Gap(theme.AnswerButtonGap).AlignItems(ui.Center).Children(func() {
@@ -388,11 +388,11 @@ func (p *PRPane) renderThread(c *ui.Context, t github.Thread) {
 				if in.Submitted() {
 					p.replyTo(t.ID)
 				}
-				send := ClickFn(func() { p.replyTo(t.ID) })
+				send := kit.ClickFn(func() { p.replyTo(t.ID) })
 				if f.busy {
 					send = nil
 				}
-				cardButton(c, LabelPRReplySend, ButtonOutlined, theme.Current().Ink95, send)
+				kit.CardButton(c, LabelPRReplySend, kit.ButtonOutlined, theme.Current().Ink95, send)
 			})
 		}
 	})
