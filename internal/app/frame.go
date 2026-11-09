@@ -1050,7 +1050,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		agentSnap = src.Snapshot
 		f.agentSnap = agentSnap
 		run := Runner{Post: w.Update}
-		f.Card = &QuestionsCard{Source: src, Run: run, Invalidate: w.Invalidate,
+		f.Card = &QuestionsCard{Source: src, Run: run, Invalidate: w.Invalidate, Status: f.Toasts.Show,
 			Select: func(address string, orchestrator bool) {
 				kind := state.KindWorker
 				if orchestrator {

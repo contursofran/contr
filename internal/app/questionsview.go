@@ -5,6 +5,7 @@ package app
 // Colors and type come from the theme tokens.
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
@@ -67,9 +68,11 @@ func (q *QuestionsCard) View(c *ui.Context, anchor ui.Element, items []NeedTab) 
 		}
 		// glass-float over the blur, with float-line on the sides and the bottom.
 		panel.Children(func() {
+			// Selectable: the owner can select and copy the texts of the
+			// card (D204). Buttons and the field keep their own input.
 			ui.Column(c).Width(width).Padding(theme.Space12).Gap(theme.Space4).
 				Radius(0, 0, theme.Radius12, theme.Radius12).Background(p.GlassFloat).
-				BorderWidth(0, 1, 1, 1).BorderColor(p.FloatLine).Children(func() {
+				BorderWidth(0, 1, 1, 1).BorderColor(p.FloatLine).Selectable().Children(func() {
 				q.body(c, p, items, t, snap)
 			})
 		})
@@ -198,7 +201,7 @@ func contextLine(from string) string {
 
 // heading builds the question line and the context line under it.
 func (q *QuestionsCard) heading(c *ui.Context, p *theme.Palette, question, context string) {
-	styled(ui.Text(c, question), theme.StyleQuestion).Wrap().Padding(2, theme.Space12).TextColor(p.Ink100)
+	q.codeText(c, p, question, theme.StyleQuestion).Padding(2, theme.Space12).TextColor(p.Ink100)
 	if context != "" {
 		styled(ui.Text(c, context), theme.StyleSmall).Wrap().Padding(0, theme.Space12).TextColor(p.Ink42)
 	}
@@ -258,7 +261,7 @@ func (q *QuestionsCard) detailsSection(c *ui.Context, p *theme.Palette, refs []s
 				styled(ui.Text(c, strings.Join(refs, "  ")), theme.StyleSmall).Wrap().TextColor(p.Ink42)
 			}
 			if source != "" {
-				styled(ui.Text(c, source), theme.StyleSmall).Wrap().TextColor(p.Ink42)
+				q.codeText(c, p, source, theme.StyleSmall).TextColor(p.Ink42)
 			}
 		})
 	})
@@ -343,4 +346,35 @@ func (q *QuestionsCard) keys(c *ui.Context, p *theme.Palette, t NeedTab, snap ag
 	}
 	parts = append(parts, "esc close")
 	styled(ui.Text(c, strings.Join(parts, "  ")), theme.StyleMeta).NoWrap().Padding(theme.Space6, theme.Space12, 0).TextColor(p.Ink32)
+}
+
+// codeText builds a wrapped paragraph of s in style st. Its backtick spans
+// show as mono code chips without the backticks; a click on a chip copies
+// its text and shows "Copied" (D204).
+func (q *QuestionsCard) codeText(c *ui.Context, p *theme.Palette, s string, st theme.TextStyle) ui.Element {
+	parts := splitCode(s)
+	if !slices.ContainsFunc(parts, func(t textPart) bool { return t.Code }) {
+		return styled(ui.Text(c, s), st).Wrap()
+	}
+	return styled(ui.RichText(c), st).Wrap().Children(func() {
+		for _, t := range parts {
+			if !t.Code {
+				ui.Text(c, t.Text)
+				continue
+			}
+			chip := ui.RichText(c, ui.Span{Text: t.Text, Font: theme.FontMono, Size: theme.StyleMeta.Size,
+				Background: p.HoverStrong, Radius: theme.Radius4}).Label(LabelCopyCode + t.Text).Cursor(ui.CursorPointer)
+			if chip.Clicked() {
+				q.copyCode(c, t.Text)
+			}
+		}
+	})
+}
+
+// copyCode puts code on the clipboard and shows "Copied".
+func (q *QuestionsCard) copyCode(c *ui.Context, code string) {
+	c.WriteClipboard(code)
+	if q.Status != nil {
+		q.Status(QuestionsCopied)
+	}
 }
