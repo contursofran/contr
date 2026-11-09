@@ -1208,6 +1208,9 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.Overlay.Add(LabelNotchLayer, f.Notch.View)
 	f.syncWorkerPRs()
 	f.syncIssueTitles()
+	if src != nil {
+		f.SpacesList.OnRetry = src.Reconnect
+	}
 	if viewersEnabled {
 		f.attachBoard(agentSnap, src)
 	}
@@ -1216,6 +1219,9 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	}
 	f.Visibility = state.NewVisibility(func(visible bool) {
 		f.SpacesList.Ages.SetVisible(visible)
+		if src != nil {
+			src.SetVisible(visible) // it does not block
+		}
 		f.Host.SetVisible(visible)
 		f.Usage.SetVisible(visible)
 		w.Update(func() {
@@ -1233,6 +1239,9 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.Host.SetVisible(w.IsVisible())
 	f.Usage.SetVisible(w.IsVisible())
 	f.SpacesList.Ages.SetVisible(w.IsVisible())
+	if src != nil {
+		src.SetVisible(w.IsVisible())
+	}
 	unwatch := f.Visibility.Watch(w)
 	term := f.attachTerminal(w)
 	return func() {

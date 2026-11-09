@@ -556,3 +556,31 @@ func TestSidebarFootIsCentered(t *testing.T) {
 		t.Errorf("icon column: gear insets %v and %v", l, r)
 	}
 }
+
+func TestServerRowClickRetriesWhileOffline(t *testing.T) {
+	h := newSpaces(t, spTree())
+	retries := 0
+	h.list.OnRetry = func() { retries++ }
+	h.send(hcDown())
+	if err := h.tt.Click("This Mac, offline"); err != nil {
+		t.Fatal(err)
+	}
+	if retries != 1 {
+		t.Fatalf("retries = %d after a click on the offline row, want 1", retries)
+	}
+	h.send(spTree())
+	_ = h.tt.Click("This Mac, local") // the online row has no click
+	if retries != 1 {
+		t.Fatalf("retries = %d after a click on the online row, want 1", retries)
+	}
+}
+
+func TestServerRowWithoutOnRetryIsSafe(t *testing.T) {
+	h := newSpaces(t, hcDown())
+	h.send(hcDown())
+	_ = h.tt.Click("This Mac, offline")
+	h.tt.Frame()
+	if !h.has("This Mac, offline") {
+		t.Errorf("texts %q", h.tt.Texts())
+	}
+}

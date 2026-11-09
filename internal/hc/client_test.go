@@ -478,3 +478,40 @@ func TestUncleanArgvReturnsTheWrappedArgv(t *testing.T) {
 		t.Errorf("not wrapped: %q %v", got, ok)
 	}
 }
+
+func TestClosedFollowsTheConnection(t *testing.T) {
+	end := make(chan struct{})
+	cl, err := Dial(ctx(t), fakeDialer(t, func(f *fakeConn) {
+		f.hello(1)
+		<-end // then end the core side of the pipe
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cl.Close()
+	if cl.Closed() {
+		t.Fatal("Closed() = true on a live connection")
+	}
+	close(end)
+	deadline := time.Now().Add(5 * time.Second)
+	for !cl.Closed() {
+		if time.Now().After(deadline) {
+			t.Fatal("Closed() stays false after the core went away")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	cl2, err := Dial(ctx(t), fakeDialer(t, func(f *fakeConn) {
+		f.hello(1)
+		f.next()
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cl2.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if !cl2.Closed() {
+		t.Fatal("Closed() = false after Close")
+	}
+}

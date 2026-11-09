@@ -30,6 +30,11 @@ type AgentSource interface {
 	Stop(name string) error
 	// Close stops a plain terminal and removes it, so its tab goes.
 	Close(name string) error
+	// SetVisible tells the source whether the window shows; a hidden window
+	// has no retry timer (D9).
+	SetVisible(visible bool)
+	// Reconnect tries to connect to hc at once while it is offline.
+	Reconnect()
 }
 
 // NeedKind tells what a [NeedTab] is.

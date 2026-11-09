@@ -367,6 +367,13 @@ func (c *conn) call(ctx context.Context, method string, params, result any) erro
 	}
 }
 
+// isClosed tells whether the connection has ended or was closed.
+func (c *conn) isClosed() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.closed
+}
+
 func (c *conn) drop(id uint64) {
 	c.mu.Lock()
 	delete(c.pending, id)
@@ -437,6 +444,12 @@ func Dial(ctx context.Context, dial Dialer) (*Client, error) {
 // can be nil). An error reply of the core is an *Error.
 func (cl *Client) Call(ctx context.Context, method string, params, result any) error {
 	return cl.c.call(ctx, method, params, result)
+}
+
+// Closed tells whether the call connection has ended or was closed. A call on
+// it returns ErrNotSent.
+func (cl *Client) Closed() bool {
+	return cl.c.isClosed()
 }
 
 // Close ends the call connection. Pending calls end with ErrClosed. A second

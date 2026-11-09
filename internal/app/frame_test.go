@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -438,6 +439,58 @@ func TestAttachStartsAndStopsTheAgentState(t *testing.T) {
 	stop()
 	if stopped != 1 {
 		t.Errorf("the agent state was stopped %d times, want 1", stopped)
+	}
+}
+
+func TestAttachTiesTheAgentSourceToTheWindow(t *testing.T) {
+	w := &fakeWindow{visible: true}
+	f := NewFrame()
+	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
+	f.Usage = usage.NewSampler(usage.Unread, nil)
+	src := &source{}
+	f.StartAgents = func(func()) (AgentSource, func()) { return src, func() {} }
+	stop := f.Attach(w)
+	defer stop()
+	last := func() []bool {
+		src.mu.Lock()
+		defer src.mu.Unlock()
+		return slices.Clone(src.visible)
+	}
+	if v := last(); !slices.Equal(v, []bool{true}) {
+		t.Fatalf("visible = %v after Attach, want [true]", v)
+	}
+	w.hide()
+	if v := last(); len(v) == 0 || v[len(v)-1] {
+		t.Fatalf("visible = %v after hide, want the last false", v)
+	}
+	w.show()
+	if v := last(); len(v) == 0 || !v[len(v)-1] {
+		t.Fatalf("visible = %v after show, want the last true", v)
+	}
+	if f.SpacesList.OnRetry == nil {
+		t.Fatal("the This Mac row has no retry")
+	}
+	f.SpacesList.OnRetry()
+	src.mu.Lock()
+	defer src.mu.Unlock()
+	if src.reconnects != 1 {
+		t.Fatalf("reconnects = %d, want 1", src.reconnects)
+	}
+}
+
+func TestAttachTellsAHiddenWindowToTheAgentSource(t *testing.T) {
+	w := &fakeWindow{visible: false}
+	f := NewFrame()
+	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
+	f.Usage = usage.NewSampler(usage.Unread, nil)
+	src := &source{}
+	f.StartAgents = func(func()) (AgentSource, func()) { return src, func() {} }
+	stop := f.Attach(w)
+	defer stop()
+	src.mu.Lock()
+	defer src.mu.Unlock()
+	if len(src.visible) == 0 || src.visible[0] {
+		t.Fatalf("visible = %v, want the first value false", src.visible)
 	}
 }
 
