@@ -1,6 +1,7 @@
 // Package agentstate is the one source the agent views read: the workers from
 // hc, and the questions and to-dos from owner.json. It does its I/O on
-// goroutines and tells the UI through a notify function; there are no timers.
+// goroutines and tells the UI through a notify function; there are no timers,
+// except the retry wait while hc is offline and the window shows (#559).
 package agentstate
 
 import (
@@ -11,11 +12,32 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/git"
+	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/owner"
 )
+
+// The wait after a failed watch: retryBase, doubled by each further failure,
+// at most retryMax, as D79. Variables so tests can shorten them.
+var (
+	retryBase = 500 * time.Millisecond
+	retryMax  = 5 * time.Second
+)
+
+// retryDelay is the wait after failures failed watches in a row.
+func retryDelay(failures int) time.Duration {
+	d := retryBase
+	for range failures {
+		d *= 2
+		if d >= retryMax {
+			return retryMax
+		}
+	}
+	return min(d, retryMax)
+}
 
 // Snapshot is a copy of the state at one moment.
 type Snapshot struct {
@@ -62,6 +84,13 @@ type Model struct {
 
 	// orchNums and termNums keep the numbers of unnamed foreign terminals (D156).
 	orchNums, termNums Numbering
+
+	// hidden is true while the window does not show: no retry timer runs
+	// (D9). tryNow asks the watch loop for a try at once. kick wakes the
+	// loop when one of them changes.
+	hidden bool
+	tryNow bool
+	kick   chan struct{}
 
 	wg sync.WaitGroup
 }
@@ -135,7 +164,79 @@ func New(m *agents.Manager, store *owner.Store, notify func()) *Model {
 	if notify == nil {
 		notify = func() {}
 	}
-	return &Model{mgr: m, store: store, notify: notify, resolve: ProjectOf, orchNums: Numbering{}, termNums: Numbering{}}
+	return &Model{mgr: m, store: store, notify: notify, resolve: ProjectOf, orchNums: Numbering{}, termNums: Numbering{}, kick: make(chan struct{}, 1)}
+}
+
+// poke wakes the watch loop when it waits. It does not block.
+func (m *Model) poke() {
+	select {
+	case m.kick <- struct{}{}:
+	default:
+	}
+}
+
+// SetVisible tells the model whether the window shows. A hidden window has
+// no retry timer (D9); a window that shows again while hc is offline tries
+// at once. It does not block.
+func (m *Model) SetVisible(visible bool) {
+	m.mu.Lock()
+	if !m.hidden == visible {
+		m.mu.Unlock()
+		return
+	}
+	m.hidden = !visible
+	if visible && m.hcProb != "" {
+		m.tryNow = true
+	}
+	m.mu.Unlock()
+	m.poke()
+}
+
+// Reconnect tries to follow hc again at once while it is offline. Online,
+// or while the first try still runs, it does nothing. It does not block.
+func (m *Model) Reconnect() {
+	m.mu.Lock()
+	if m.hcProb == "" {
+		m.mu.Unlock()
+		return
+	}
+	m.tryNow = true
+	m.mu.Unlock()
+	m.poke()
+}
+
+// waitRetry waits d before the next try of the watch. A try asked for with
+// tryNow comes at once. While the window is hidden no timer runs. It returns
+// false when ctx ends.
+func (m *Model) waitRetry(ctx context.Context, d time.Duration) bool {
+	for {
+		m.mu.Lock()
+		now, hidden := m.tryNow, m.hidden
+		m.tryNow = false
+		m.mu.Unlock()
+		if now {
+			return true
+		}
+		var fire <-chan time.Time
+		var timer *time.Timer
+		if !hidden {
+			timer = time.NewTimer(d)
+			fire = timer.C
+		}
+		select {
+		case <-ctx.Done():
+			if timer != nil {
+				timer.Stop()
+			}
+			return false
+		case <-m.kick:
+			if timer != nil {
+				timer.Stop()
+			}
+		case <-fire:
+			return true
+		}
+	}
 }
 
 // SetCoreVersion sets the version of the hc core that the model follows.
@@ -151,19 +252,7 @@ func (m *Model) Start(ctx context.Context) {
 	m.wg.Add(2)
 	go func() {
 		defer m.wg.Done()
-		err := m.mgr.WatchAll(ctx, func(ws []agents.Worker) {
-			m.mu.Lock()
-			m.workers, m.hcProb = ws, ""
-			m.mu.Unlock()
-			m.resolveProjects(ws)
-			m.notify()
-		})
-		if err != nil && ctx.Err() == nil {
-			m.mu.Lock()
-			m.hcProb = "hc: " + err.Error()
-			m.mu.Unlock()
-			m.notify()
-		}
+		m.watchLoop(ctx)
 	}()
 	go func() {
 		defer m.wg.Done()
@@ -175,6 +264,42 @@ func (m *Model) Start(ctx context.Context) {
 			m.notify()
 		}
 	}()
+}
+
+// watchLoop follows hc until ctx ends. After a failed watch it shows the
+// problem, waits (waitRetry) and watches again; a new watch subscribes again
+// and, through agents.Redial, dials again when the connection ended (#559).
+// The last list stays while hc is offline.
+func (m *Model) watchLoop(ctx context.Context) {
+	failures := 0 // only this goroutine uses it: fn runs on it too
+	for {
+		err := m.mgr.WatchAll(ctx, func(ws []agents.Worker) {
+			failures = 0 // D79: data resets the backoff
+			m.mu.Lock()
+			m.workers, m.hcProb, m.tryNow = ws, "", false
+			m.mu.Unlock()
+			m.resolveProjects(ws)
+			m.notify()
+		})
+		if ctx.Err() != nil {
+			return
+		}
+		if err == nil {
+			err = hc.ErrClosed
+		}
+		prob := "hc: " + err.Error()
+		m.mu.Lock()
+		if m.hcProb != prob {
+			log.Printf("agentstate: %s", prob)
+		}
+		m.hcProb = prob
+		m.mu.Unlock()
+		m.notify()
+		if !m.waitRetry(ctx, retryDelay(failures)) {
+			return
+		}
+		failures++
+	}
 }
 
 // Wait blocks until the goroutines of Start have ended; cancel the context
