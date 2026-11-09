@@ -11,7 +11,7 @@ Design system page: component StatusGlyph. Shared rules: [README.md](README.md).
 ## Anatomy
 
 - Braille glyph: mono `glyph` style (17/18), 16px wide; 14px inside tabs and the notch.
-- Claude glyph: the Claude Code mascot (D218), the pixel creature of Claude Code's start banner, in `claude`. A Claude session that does not orchestrate draws it in `ink-45`; needs you stays `blocked` (D191). It is the banner's three lines of block characters, 2×2 pixels per character: an 18×6 grid with the body, two eye holes, the arms and four legs (`assets/icons/claude-mascot.svg`, square cells, one fill). Its ink, 16×5 cells, is as wide as the glyph box and centred in it: a cell is 1px in the 16px box, so the edges are sharp, and .875px in the 14px box.
+- Claude glyph: the Claude Code mascot (D218), the pixel creature of Claude Code, in `claude`. A Claude session that does not orchestrate draws it in `ink-45`; needs you stays `blocked` (D191). It is one filled shape of 16×10 cells: the body, two eye holes, the arms and four legs (`assets/icons/claude-mascot.svg`, one fill; NOTICE credits the source). It is as wide as the glyph box and centred in it: a cell is 1px in the 16px box, so the edges are sharp, and .875px in the 14px box.
 
 ## States
 
@@ -59,7 +59,7 @@ With reduce motion on, every glyph is still: working shows ⠋, waiting shows �
 - A small custom widget (see `ui/custom-widgets.md`; `kit.StatusGlyph`) that draws one text glyph (a shaped `ui.TextLayout` in the mono family). A timer changes the frame only while the state is working or waiting and the glyph is on screen; idle and needs-you states use no timer, so the app uses no CPU while idle.
 - Read the reduce-motion setting from MyGo and stop the timer when it is on.
 - Claude glyph: the Claude Code mascot (D218, `assets/icons/claude-mascot.svg`), drawn with `Painter.Icon`. The hop moves the rect of the icon by whole device pixels, so its mask is rasterized once per size and a frame only places it again. `.Transition(...)` and `AnimatePose` go to a target and stop, and the hop repeats, so the mascot paints itself from `Draw`, as the working icon of `internal/app/icons` does. Like the braille glyph, it asks for repaints only while it works, so it stops off screen and with Reduce Motion.
-- `kit.MascotGrid` converts the banner lines to the pixel grid; a test checks the SVG cells against it, so the art does not drift.
+- A test checks the SVG against the credited path, so the art does not drift.
 - Braille frames repaint at the step boundary (`Painter.After`), a fade and the hop at 30 frames a second.
 - Give the glyph a screen-reader label: "working", "waiting", "idle", "needs you".
 
@@ -77,7 +77,7 @@ With reduce motion on, every glyph is still: working shows ⠋, waiting shows �
 
 ## Tests
 
-- Unit: state to glyph and frame list; banner to grid; SVG cells to grid; hop offset over time.
+- Unit: state to glyph and frame list; the SVG is the credited path; hop offset over time.
 - View: no timer runs for idle and needs you; reduce motion stops it.
 
 ## Replaces

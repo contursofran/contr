@@ -135,7 +135,7 @@ The owner's from-zero canvas (https://claude.ai/artifact/9bmbRdJc8qDMSRXm6obEb3)
 - Names: `project`, `computer`, `server`, `folder`, `folder-open`,
   `file-go`, `file-md`, `file`, `close`, `plus`, `search`,
   `sidebar-right`, `filter` (three lines), `terminal`, `settings`, `download`, `chevron-down` (dropdowns), `todo`, `todo-done` and `artifact` (SessionPanel). They go in `assets`.
-- The Claude glyph is the Claude Code mascot (D218, replaces the mark of D123): `claude-mascot.svg`, square cells, one fill.
+- The Claude glyph is the Claude Code mascot (D218, replaces the mark of D123): `claude-mascot.svg`, one filled shape.
 
 ## Data
 

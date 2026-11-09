@@ -368,9 +368,19 @@ func TestTheGlyphDrawsTheMascot(t *testing.T) {
 	if ClaudeMascot() == nil {
 		t.Fatal("assets/icons/claude-mascot.svg does not load")
 	}
-	grid, err := MascotGrid(MascotBanner[:])
-	if err != nil {
-		t.Fatal(err)
+	// The cells of the path, 1.5 SVG units each: the body, two eye holes,
+	// the arms and four legs.
+	cells := []string{
+		"..############..",
+		"..############..",
+		"..##.######.##..",
+		"..##.######.##..",
+		"################",
+		"################",
+		"..############..",
+		"..############..",
+		"...#.#....#.#...",
+		"...#.#....#.#...",
 	}
 	for _, small := range []bool{false, true} {
 		tt := mascotTester(GlyphOpts{State: GlyphNeedsYou, Small: small})
@@ -379,12 +389,12 @@ func TestTheGlyphDrawsTheMascot(t *testing.T) {
 			t.Fatalf("small=%v: the Claude mascot draws nothing", small)
 		}
 		g, _ := tt.Find("needs you")
-		// The ink is as wide as the glyph box and 5/16 as high; the old
+		// The ink is as wide as the glyph box and 10/16 as high; the old
 		// mark was as high as wide.
 		if w := float32(box.Dx()); w < 2*g.W-1 || w > 2*g.W+1 {
 			t.Errorf("small=%v: the ink is %v px wide, want the box, %v px", small, box.Dx(), 2*g.W)
 		}
-		if h, want := float32(box.Dy()), 2*g.W*mascotInkRows/mascotInkCols; h < want-1.5 || h > want+1.5 { // the small cell is 1.75 px: edges blend
+		if h, want := float32(box.Dy()), 2*g.W*mascotRows/mascotCols; h < want-1.5 || h > want+1.5 { // the small cell is 1.75 px: edges blend
 			t.Errorf("small=%v: the ink is %v px high, want %v", small, box.Dy(), want)
 		}
 		// Centred in the box.
@@ -399,15 +409,18 @@ func TestTheGlyphDrawsTheMascot(t *testing.T) {
 			continue
 		}
 		// In the 16px box a cell is 2×2 device pixels: the image is the
-		// grid, cell for cell, eyes and legs included.
+		// mascot, cell for cell, eyes and legs included, with sharp edges.
 		img := tt.Image()
-		for row := range MascotRows {
-			for col := range MascotCols {
-				x, y := box.Min.X+2*(col-mascotInkLeft), box.Min.Y+2*row
-				c := img.RGBAAt(x, y)
-				ink := c.R != 0 || c.G != 0 || c.B != 0
-				if ink != grid[row][col] {
-					t.Errorf("cell %d,%d has ink %v, want %v", col, row, ink, grid[row][col])
+		for row, line := range cells {
+			for col := range line {
+				for _, d := range [][2]int{{0, 0}, {1, 1}} {
+					c := img.RGBAAt(box.Min.X+2*col+d[0], box.Min.Y+2*row+d[1])
+					// Half covered or more: the path has edges a little off
+					// the cells (17.079, not 17), so their pixels blend.
+					ink := max(c.R, c.G, c.B) >= 128
+					if want := line[col] == '#'; ink != want {
+						t.Errorf("cell %d,%d has ink %v, want %v", col, row, ink, want)
+					}
 				}
 			}
 		}
