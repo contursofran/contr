@@ -7,6 +7,7 @@ import (
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/titlebar"
 )
 
 func TestSidebarIconRuleBothWays(t *testing.T) {
@@ -80,7 +81,7 @@ func TestFilesPanelRuleStaysAt1100(t *testing.T) {
 func TestTabsStayClearOfTheWindowButtonsInTheIconColumn(t *testing.T) {
 	_, tt := newTester(t)
 	tt.SetSize(760, 800)
-	if r := apptest.Box(t, tt, LabelTabs); r.X < theme.TrafficLightInset {
+	if r := apptest.Box(t, tt, titlebar.LabelTabs); r.X < theme.TrafficLightInset {
 		t.Errorf("tabs %+v are over the window buttons", r)
 	}
 }

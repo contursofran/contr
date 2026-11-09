@@ -1,4 +1,6 @@
-package app
+// Package titlebar is the title bar: the tabs of the selected agent, the New
+// tab button, the Search button, the diff summary and the Hide files button.
+package titlebar
 
 // The title bar (docs/spec/TitleBar.md): the tabs of the selected agent, the New tab button, the
 // diff summary and the Hide files button. The sidebar toggle and the room for the window buttons
@@ -25,6 +27,10 @@ const (
 	LabelNewTab = "New tab"
 	// LabelCloseTab is the close button of the selected plain terminal tab.
 	LabelCloseTab = "Close tab"
+	// LabelFilesToggle is the title bar button that hides and shows the files panel.
+	LabelFilesToggle = "Hide files"
+	// LabelSearch names the title bar button.
+	LabelSearch = "Search"
 )
 
 // Items of the tab context menu. Rename is not in it: hc has no way to store a name for a
@@ -40,54 +46,54 @@ type tabDrag struct{ Address string }
 // middleButton is the Button of ui.InputEvent for the middle button.
 const middleButton = 2
 
-// titleBar holds the tabs the bar shows and where its clicks go.
-type titleBar struct {
-	tabs []tabmodel.Tab
-	// selectTab takes the tab that a click picked. It may be nil: the click is dropped.
-	selectTab func(tabmodel.Tab)
-	// closeTab takes the plain tab whose close button was clicked. Nil: no close buttons.
-	closeTab func(tabmodel.Tab)
-	// closeOthers takes the tab whose menu chose "Close others": the frame closes every plain tab
+// TitleBar holds the tabs the bar shows and where its clicks go.
+type TitleBar struct {
+	Tabs []tabmodel.Tab
+	// SelectTab takes the tab that a click picked. It may be nil: the click is dropped.
+	SelectTab func(tabmodel.Tab)
+	// CloseTab takes the plain tab whose close button was clicked. Nil: no close buttons.
+	CloseTab func(tabmodel.Tab)
+	// CloseOthers takes the tab whose menu chose "Close others": the frame closes every plain tab
 	// except it. Nil: the menu has no such item.
-	closeOthers func(keep tabmodel.Tab)
-	// stopTab takes the agent tab whose menu chose "Stop" (D219). Nil: the item is off.
-	stopTab func(tabmodel.Tab)
-	// closeAgent takes the agent tab whose menu chose "Close" (D219): stop and remove. Nil: off.
-	closeAgent func(tabmodel.Tab)
-	// moveTab takes the address of a plain tab that was dropped on another plain tab: from takes
+	CloseOthers func(keep tabmodel.Tab)
+	// StopTab takes the agent tab whose menu chose "Stop" (D219). Nil: the item is off.
+	StopTab func(tabmodel.Tab)
+	// CloseAgent takes the agent tab whose menu chose "Close" (D219): stop and remove. Nil: off.
+	CloseAgent func(tabmodel.Tab)
+	// MoveTab takes the address of a plain tab that was dropped on another plain tab: from takes
 	// the place of to. Nil: the tabs do not drag.
-	moveTab func(from, to string)
-	// newTab opens a plain terminal. Nil: the bar has no "+" button.
-	newTab func()
-	// search opens the find bar over the terminal. Nil: the bar has no Search button.
-	search func()
-	// diff is the diff summary and openReview its click. Nil diff: none.
-	diff       *files.DiffSummary
-	openReview func()
-	// update builds the update pill left of the diff summary (D176). Nil: none.
-	update func(c *ui.Context)
+	MoveTab func(from, to string)
+	// NewTab opens a plain terminal. Nil: the bar has no "+" button.
+	NewTab func()
+	// Search opens the find bar over the terminal. Nil: the bar has no Search button.
+	Search func()
+	// Diff is the diff summary and OpenReview its click. Nil Diff: none.
+	Diff       *files.DiffSummary
+	OpenReview func()
+	// Update builds the update pill left of the diff summary (D176). Nil: none.
+	Update func(c *ui.Context)
 	// choice is the index the tab list edits; model is the selected tab's index at the last build.
 	choice, model int
 }
 
-// setTabs takes in the tabs and tells whether they differ from the last ones.
-func (b *titleBar) setTabs(tabs []tabmodel.Tab) bool {
-	if slices.Equal(b.tabs, tabs) {
+// SetTabs takes in the tabs and tells whether they differ from the last ones.
+func (b *TitleBar) SetTabs(tabs []tabmodel.Tab) bool {
+	if slices.Equal(b.Tabs, tabs) {
 		return false
 	}
-	b.tabs = tabs
+	b.Tabs = tabs
 	return true
 }
 
 // syncChoice turns a choice made on the tab list (a click, an arrow, Home or End) into a call
 // of selectTab, then sets the list to the model's selected tab. The selected tab does nothing.
-func (b *titleBar) syncChoice() {
-	if b.choice != b.model && b.choice >= 0 && b.choice < len(b.tabs) && b.selectTab != nil &&
-		!b.tabs[b.choice].Selected {
-		b.selectTab(b.tabs[b.choice])
+func (b *TitleBar) syncChoice() {
+	if b.choice != b.model && b.choice >= 0 && b.choice < len(b.Tabs) && b.SelectTab != nil &&
+		!b.Tabs[b.choice].Selected {
+		b.SelectTab(b.Tabs[b.choice])
 	}
 	b.model = 0
-	for i, t := range b.tabs {
+	for i, t := range b.Tabs {
 		if t.Selected {
 			b.model = i
 		}
@@ -95,24 +101,24 @@ func (b *titleBar) syncChoice() {
 	b.choice = b.model
 }
 
-// build adds the bar's parts to the title bar row: the tabs, "+", the drag stretch, the diff
+// Build adds the bar's parts to the title bar row: the tabs, "+", the drag stretch, the diff
 // summary, Search and the files toggle at the right edge. The toggle is pressed while the files show; it
 // is disabled while the window is too narrow for them.
-func (b *titleBar) build(c *ui.Context, filesOn, filesDisabled bool, toggleFiles func()) {
+func (b *TitleBar) Build(c *ui.Context, filesOn, filesDisabled bool, toggleFiles func()) {
 	b.tabRow(c)
-	if b.newTab != nil {
-		kit.IconButton(c, kit.IconButtonOpts{Icon: "plus", Label: LabelNewTab, Key: "⌘T", OnClick: b.newTab}).
+	if b.NewTab != nil {
+		kit.IconButton(c, kit.IconButtonOpts{Icon: "plus", Label: LabelNewTab, Key: "⌘T", OnClick: b.NewTab}).
 			MarginStart(theme.Space8)
 	}
 	ui.Box(c).Label(LabelTitleDrag).Grow(1).MinWidth(0).FillHeight().DragWindow()
-	if b.update != nil {
-		b.update(c)
+	if b.Update != nil {
+		b.Update(c)
 	}
-	if b.diff != nil {
-		ui.Row(c).Shrink(0).MarginEnd(theme.Space8).Children(func() { b.diff.View(c, b.openReview) })
+	if b.Diff != nil {
+		ui.Row(c).Shrink(0).MarginEnd(theme.Space8).Children(func() { b.Diff.View(c, b.OpenReview) })
 	}
-	if b.search != nil {
-		kit.IconButton(c, kit.IconButtonOpts{Icon: "search", Label: LabelSearch, Key: "⌘F", OnClick: b.search}).
+	if b.Search != nil {
+		kit.IconButton(c, kit.IconButtonOpts{Icon: "search", Label: LabelSearch, Key: "⌘F", OnClick: b.Search}).
 			MarginEnd(theme.Space8)
 	}
 	kit.IconButton(c, kit.IconButtonOpts{Icon: "sidebar-right", Label: LabelFilesToggle, Key: "⌘⇧E",
@@ -121,11 +127,11 @@ func (b *titleBar) build(c *ui.Context, filesOn, filesDisabled bool, toggleFiles
 
 // tabRow shows the tabs in model order, space-2 apart. When they do not fit, each tab shrinks
 // toward zero and its title ends in an ellipsis; the row clips what is left.
-func (b *titleBar) tabRow(c *ui.Context) {
+func (b *TitleBar) tabRow(c *ui.Context) {
 	b.syncChoice()
-	tabs := ui.TabsBase(c.Key("agent tabs"), &b.choice, len(b.tabs))
+	tabs := ui.TabsBase(c.Key("agent tabs"), &b.choice, len(b.Tabs))
 	tabs.List.Label(LabelTabs).FillHeight().MinWidth(0).Shrink(1).AlignItems(ui.Center).Gap(theme.Space2).Clip().Children(func() {
-		for i, t := range b.tabs {
+		for i, t := range b.Tabs {
 			b.tab(c, tabs.Tab(i), t)
 		}
 	})
@@ -133,7 +139,7 @@ func (b *titleBar) tabRow(c *ui.Context) {
 
 // tab draws one tab: the glyph, the title (SingleLine: NoWrap().Ellipsis() does not cut a title that
 // is wider than the tab, D175) and, on the selected plain terminal, the close button.
-func (b *titleBar) tab(c *ui.Context, tab ui.Element, t tabmodel.Tab) {
+func (b *TitleBar) tab(c *ui.Context, tab ui.Element, t tabmodel.Tab) {
 	p := theme.Current()
 	el := tab.Label(t.Title).Height(theme.SizeRowHeight).MaxWidth(theme.SizeTabMaxWidth).MinWidth(0).Shrink(1).
 		Padding(0, theme.Space10).Gap(theme.Space8).AlignItems(ui.Center).Radius(theme.Radius8)
@@ -142,20 +148,20 @@ func (b *titleBar) tab(c *ui.Context, tab ui.Element, t tabmodel.Tab) {
 		el = el.Tooltip(tip)
 	}
 	over := false
-	if t.Movable() && b.moveTab != nil {
+	if t.Movable() && b.MoveTab != nil {
 		el = el.Drag(tabDrag{Address: t.Address})
 		if d, ok := ui.DragOver[tabDrag](el); ok && d.Address != t.Address {
 			over = true
 		}
 		if d, ok := ui.Drop[tabDrag](el); ok {
-			b.moveTab(d.Address, t.Address)
+			b.MoveTab(d.Address, t.Address)
 		}
 	}
-	if t.Closable() && b.closeTab != nil {
+	if t.Closable() && b.CloseTab != nil {
 		// The box is the last frame's: an element is not valid after the pass that built it.
 		box := el.Bounds()
 		el = el.HandleInput(func(ev ui.InputEvent) bool {
-			return middleClick(ev, box, func() { b.closeTab(t) })
+			return middleClick(ev, box, func() { b.CloseTab(t) })
 		})
 	}
 	ink := p.Ink50
@@ -175,8 +181,8 @@ func (b *titleBar) tab(c *ui.Context, tab ui.Element, t tabmodel.Tab) {
 		s := theme.StyleRowSmall
 		ui.Text(c, t.Title).Font(s.Stack()).FontSize(s.Size).FixedLineHeight(s.Line).FontWeight(s.Weight).
 			SingleLine().MinWidth(0).Shrink(1)
-		if t.Selected && t.Closable() && b.closeTab != nil {
-			closeButton(c, func() { b.closeTab(t) })
+		if t.Selected && t.Closable() && b.CloseTab != nil {
+			closeButton(c, func() { b.CloseTab(t) })
 		}
 	})
 }
@@ -216,29 +222,29 @@ func middleClick(ev ui.InputEvent, bounds ui.Rect, closeTab func()) bool {
 // (D85): Close is off on an agent tab, and Close others never closes t when t is an agent tab.
 // An agent tab has Stop first, and its Close stops the agent and removes the terminal (D219):
 // the menu choice is the confirmation, as on the agent row.
-func (b *titleBar) tabMenu(m *ui.Menu, t tabmodel.Tab) {
+func (b *TitleBar) tabMenu(m *ui.Menu, t tabmodel.Tab) {
 	if !t.Plain {
-		if m.Item(tabmodel.MenuStop).Disabled(b.stopTab == nil).Chosen() && b.stopTab != nil {
-			b.stopTab(t)
+		if m.Item(tabmodel.MenuStop).Disabled(b.StopTab == nil).Chosen() && b.StopTab != nil {
+			b.StopTab(t)
 		}
-		if m.Item(MenuClose).Disabled(b.closeAgent == nil).Chosen() && b.closeAgent != nil {
-			b.closeAgent(t)
+		if m.Item(MenuClose).Disabled(b.CloseAgent == nil).Chosen() && b.CloseAgent != nil {
+			b.CloseAgent(t)
 		}
 	} else {
-		closable := t.Closable() && b.closeTab != nil
+		closable := t.Closable() && b.CloseTab != nil
 		if m.Item(MenuClose).Disabled(!closable).Chosen() && closable {
-			b.closeTab(t)
+			b.CloseTab(t)
 		}
 	}
-	others := b.closeOthers != nil && b.hasOtherPlain(t)
+	others := b.CloseOthers != nil && b.hasOtherPlain(t)
 	if m.Item(MenuCloseOthers).Disabled(!others).Chosen() && others {
-		b.closeOthers(t)
+		b.CloseOthers(t)
 	}
 }
 
 // hasOtherPlain tells whether the bar has a plain tab other than t.
-func (b *titleBar) hasOtherPlain(t tabmodel.Tab) bool {
-	for _, o := range b.tabs {
+func (b *TitleBar) hasOtherPlain(t tabmodel.Tab) bool {
+	for _, o := range b.Tabs {
 		if o.Plain && o.Address != t.Address {
 			return true
 		}
@@ -248,7 +254,7 @@ func (b *titleBar) hasOtherPlain(t tabmodel.Tab) bool {
 
 // glyph is the leading part of a tab: the Claude mark for an orchestrator, the status glyph for
 // a worker, the terminal icon for a plain terminal.
-func (b *titleBar) glyph(c *ui.Context, t tabmodel.Tab) {
+func (b *TitleBar) glyph(c *ui.Context, t tabmodel.Tab) {
 	if t.Plain {
 		if s := icons.Line("terminal"); s != nil {
 			ui.Icon(c, s).Size(14, 14).Shrink(0)

@@ -17,6 +17,7 @@ import (
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app"
 	"github.com/contursofran/contr/internal/app/files"
+	"github.com/contursofran/contr/internal/app/titlebar"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
@@ -310,8 +311,8 @@ func TestTitleBarCapture(t *testing.T) {
 			for n := 1; n <= 2; n++ {
 				// A click can land while the window builds a frame: click again until the terminal exists.
 				for try := 0; try < 5 && plains() < n; try++ {
-					waitFor(c, "the new tab button", func(map[string]bool) bool { return inBar(c, app.LabelNewTab) })
-					click(c, app.LabelNewTab)
+					waitFor(c, "the new tab button", func(map[string]bool) bool { return inBar(c, titlebar.LabelNewTab) })
+					click(c, titlebar.LabelNewTab)
 					for deadline := time.Now().Add(4 * time.Second); plains() < n && time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
 					}
 				}
@@ -319,16 +320,16 @@ func TestTitleBarCapture(t *testing.T) {
 		}
 		waitFor(c, "the two plain terminal tabs", func(map[string]bool) bool {
 			_, _, two := c.plainTabWidths(t)
-			return two && inBar(c, app.LabelNewTab)
+			return two && inBar(c, titlebar.LabelNewTab)
 		})
 		click(c, "lead")
 		time.Sleep(time.Second)
-		for _, want := range []string{"lead", "$ contr", app.LabelNewTab, app.LabelFilesToggle} {
+		for _, want := range []string{"lead", "$ contr", titlebar.LabelNewTab, titlebar.LabelFilesToggle} {
 			if !inBar(c, want) {
 				t.Errorf("%s, orchestrator: no %q in the bar; labels %v", theme, want, keys(c.labels(t)))
 			}
 		}
-		for _, absent := range []string{"Split", "#342 · agent-342-titlebar", app.LabelCloseTab} {
+		for _, absent := range []string{"Split", "#342 · agent-342-titlebar", titlebar.LabelCloseTab} {
 			if inBar(c, absent) {
 				t.Errorf("%s, orchestrator selected: the bar has %q", theme, absent)
 			}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/titlebar"
 	"github.com/contursofran/contr/internal/widths"
 )
 
@@ -77,8 +78,8 @@ func TestNarrowWindowHidesTheFilesPanel(t *testing.T) {
 		t.Errorf("terminal %v wide, want the room the files left", got)
 	}
 	// The button is there but cannot do anything; the key does nothing either.
-	apptest.Box(t, tt, LabelFilesToggle)
-	if err := tt.Click(LabelFilesToggle); err != nil {
+	apptest.Box(t, tt, titlebar.LabelFilesToggle)
+	if err := tt.Click(titlebar.LabelFilesToggle); err != nil {
 		t.Fatal(err)
 	}
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyE)

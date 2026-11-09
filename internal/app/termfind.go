@@ -18,8 +18,6 @@ import (
 
 // Labels of the search parts.
 const (
-	// LabelSearch names the title bar button.
-	LabelSearch = "Search"
 	// LabelFindLayer names the find bar layer of the terminal overlay.
 	LabelFindLayer = "find bar layer"
 	// LabelFind is the label MyGo gives its find bar.

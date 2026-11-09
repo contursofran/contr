@@ -11,6 +11,7 @@ import (
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/titlebar"
 	"github.com/contursofran/contr/internal/widths"
 )
 
@@ -93,12 +94,12 @@ func TestHiddenSidesKeepTheirWidths(t *testing.T) {
 	drag(tt, x, x-60)
 	want := apptest.Box(t, tt, LabelPanelFiles).W
 	f.ToggleSidebar()
-	if err := tt.Click(LabelFilesToggle); err != nil {
+	if err := tt.Click(titlebar.LabelFilesToggle); err != nil {
 		t.Fatal(err)
 	}
 	f.ToggleSidebar()
 	tt.Frame()
-	if err := tt.Click(LabelFilesToggle); err != nil {
+	if err := tt.Click(titlebar.LabelFilesToggle); err != nil {
 		t.Fatal(err)
 	}
 	if got := apptest.Box(t, tt, LabelPanelSidebar).W; got != 340 {

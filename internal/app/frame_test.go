@@ -20,6 +20,7 @@ import (
 	"github.com/contursofran/contr/internal/app/reviewview"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/titlebar"
 	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/host"
@@ -68,7 +69,7 @@ func TestFrameMatchesDesignSizes(t *testing.T) {
 		}
 	}
 	// The tabs start above the terminal panel.
-	if tabs := apptest.Box(t, tt, LabelTabs); tabs.X < term.X {
+	if tabs := apptest.Box(t, tt, titlebar.LabelTabs); tabs.X < term.X {
 		t.Errorf("tabs at %v, left of the terminal panel at %v", tabs.X, term.X)
 	}
 }
@@ -81,7 +82,7 @@ func TestTitleBarHasNoSidebarToggle(t *testing.T) {
 		}
 	}
 	// The corner is as wide as the sidebar and its gaps, so the tabs start at the terminal.
-	if tabs, term := apptest.Box(t, tt, LabelTabs), apptest.Box(t, tt, LabelPanelTerminal); tabs.X < term.X {
+	if tabs, term := apptest.Box(t, tt, titlebar.LabelTabs), apptest.Box(t, tt, LabelPanelTerminal); tabs.X < term.X {
 		t.Errorf("tabs at %v, left of the terminal panel at %v", tabs.X, term.X)
 	}
 	f.ToggleSidebar()
@@ -93,7 +94,7 @@ func TestTitleBarHasNoSidebarToggle(t *testing.T) {
 		t.Error("a hidden sidebar must not bring a title bar button")
 	}
 	// The tabs keep clear of the window buttons.
-	if tabs := apptest.Box(t, tt, LabelTabs); tabs.X < theme.TrafficLightInset {
+	if tabs := apptest.Box(t, tt, titlebar.LabelTabs); tabs.X < theme.TrafficLightInset {
 		t.Errorf("tabs at %v, over the window buttons (%d)", tabs.X, theme.TrafficLightInset)
 	}
 	if term := apptest.Box(t, tt, LabelPanelTerminal); term.W != 1136 || term.X != 8 {
@@ -111,7 +112,7 @@ func TestTitleBarHasNoSidebarToggle(t *testing.T) {
 
 func TestPanelToggleHidesAndShowsThePanel(t *testing.T) {
 	f, tt := newTester(t)
-	if err := tt.Click(LabelFilesToggle); err != nil {
+	if err := tt.Click(titlebar.LabelFilesToggle); err != nil {
 		t.Fatal(err)
 	}
 	if f.PanelOpen() || !apptest.Absent(tt, LabelPanelFiles) {
@@ -120,7 +121,7 @@ func TestPanelToggleHidesAndShowsThePanel(t *testing.T) {
 	if got := apptest.Box(t, tt, LabelPanelTerminal).W; got != 1104 {
 		t.Errorf("terminal width %v, want 1104", got)
 	}
-	if err := tt.Click(LabelFilesToggle); err != nil {
+	if err := tt.Click(titlebar.LabelFilesToggle); err != nil {
 		t.Fatal(err)
 	}
 	if got := apptest.Box(t, tt, LabelPanelFiles).W; got != theme.PanelWidth {
@@ -571,7 +572,7 @@ func TestPlusTabStartsTerminal(t *testing.T) {
 	tf := newTermFrame(t, &snap)
 	tf.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "w1"}) // opens project p
 	tf.tt.Frame()
-	if err := tf.tt.Click(LabelNewTab); err != nil {
+	if err := tf.tt.Click(titlebar.LabelNewTab); err != nil {
 		t.Fatal(err)
 	}
 	if len(tf.opened) != 1 || tf.opened[0] != [2]string{"p", "/work/p"} {
@@ -588,10 +589,10 @@ func TestPlusNoProjectUsesHome(t *testing.T) {
 	snap := agentstate.Snapshot{}
 	tf := newTermFrame(t, &snap)
 	tf.tt.Frame()
-	if apptest.Absent(tf.tt, LabelNewTab) {
+	if apptest.Absent(tf.tt, titlebar.LabelNewTab) {
 		t.Fatal("the + button must show with no tabs")
 	}
-	if err := tf.tt.Click(LabelNewTab); err != nil {
+	if err := tf.tt.Click(titlebar.LabelNewTab); err != nil {
 		t.Fatal(err)
 	}
 	if len(tf.opened) != 1 || tf.opened[0] != [2]string{"", home} {
@@ -603,7 +604,7 @@ func TestNoPlusWithoutNewTerminal(t *testing.T) {
 	snap := tabSnap()
 	_, tt := agentFrame(t, &snap)
 	tt.Frame()
-	if !apptest.Absent(tt, LabelNewTab) {
+	if !apptest.Absent(tt, titlebar.LabelNewTab) {
 		t.Error("the + button shows with no open action")
 	}
 }
@@ -667,7 +668,7 @@ func TestPlainTabSelectsKindTerminal(t *testing.T) {
 		t.Errorf("selection %+v, want a terminal", sel)
 	}
 	tt.Frame()
-	if apptest.Absent(tt, LabelCloseTab) {
+	if apptest.Absent(tt, titlebar.LabelCloseTab) {
 		t.Error("the selected plain tab has no close button")
 	}
 }

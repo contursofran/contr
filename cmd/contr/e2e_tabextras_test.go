@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/agents"
-	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/titlebar"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
@@ -175,7 +175,7 @@ func TestTabExtrasCapture(t *testing.T) {
 
 	waitTabs("the orchestrator's tab", func(tabs []barTab) bool { return len(tabs) == 1 && tabs[0].Label == "lead" })
 	for n := 1; n <= 3; n++ {
-		b := c.boundsOf(t, app.LabelNewTab)
+		b := c.boundsOf(t, titlebar.LabelNewTab)
 		x, y := center(b)
 		input(map[string]any{"type": "click", "x": x, "y": y})
 		waitPlains(n)
