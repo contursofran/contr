@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"fmt"
 	"image/png"
 	"time"
 
@@ -79,7 +80,9 @@ func pmModal() *ProjectsModal {
 	}
 }
 
-// pmImage renders one state and returns it as a bitmap for ui.Image.
+// pmImage renders one state and returns it as a bitmap for ui.Image. An
+// encode or decode error panics: the view runs inside ui.Render, where there
+// is no testing.T, and a panic fails the test (a blank cell would hide it).
 func pmImage(draw func(c *ui.Context)) *ui.Bitmap {
 	img := ui.Render(func(c *ui.Context) {
 		theme.Apply(c)
@@ -88,11 +91,11 @@ func pmImage(draw func(c *ui.Context)) *ui.Bitmap {
 	}, pmW, pmH, 1)
 	var b bytes.Buffer
 	if err := png.Encode(&b, img); err != nil {
-		return nil
+		panic(fmt.Sprintf("projects modal sheet: encode a state: %v", err))
 	}
 	bm, err := ui.DecodeBitmap(b.Bytes())
 	if err != nil {
-		return nil
+		panic(fmt.Sprintf("projects modal sheet: decode a state: %v", err))
 	}
 	return bm
 }
