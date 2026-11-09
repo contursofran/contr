@@ -24,6 +24,7 @@ import (
 	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/app/ghsource"
 	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/projectsview"
 	"github.com/contursofran/contr/internal/app/questions"
 	"github.com/contursofran/contr/internal/app/reviewview"
 	"github.com/contursofran/contr/internal/app/settings"
@@ -90,7 +91,7 @@ type Frame struct {
 	// Notch is the questions notch in the terminal overlay ([Frame.Attach] makes it).
 	Notch *questions.Notch
 	// ProjectsModal is the projects modal (D110), made in Attach.
-	ProjectsModal *ProjectsModal
+	ProjectsModal *projectsview.ProjectsModal
 	// Settings is the Settings modal, made in Attach.
 	Settings *settings.Settings
 	// Worker is the panel's worker view. [Frame.Attach] makes it while the viewers are
@@ -465,7 +466,7 @@ func (f *Frame) View(c *ui.Context) {
 		if f.Settings != nil {
 			f.Settings.View(c)
 		}
-		f.toastView(c)
+		f.ToastView(c)
 	})
 }
 

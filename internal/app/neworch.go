@@ -3,12 +3,9 @@ package app
 import (
 	"errors"
 
+	"github.com/contursofran/contr/internal/app/projectsview"
 	"github.com/contursofran/contr/internal/app/view"
 )
-
-// ErrPickCancelled is what a folder picker returns when the owner closes it
-// without a choice. Starting an orchestrator then does nothing.
-var ErrPickCancelled = errors.New("folder picker cancelled")
 
 // NewOrchestrator starts an orchestrator in a folder that the owner picks
 // (the `+ new` button next to Spaces, D57). Its methods run on the UI thread;
@@ -40,7 +37,7 @@ func (n *NewOrchestrator) Start() {
 		return func() {
 			n.busy = false
 			switch {
-			case errors.Is(err, ErrPickCancelled):
+			case errors.Is(err, projectsview.ErrPickCancelled):
 			case err != nil:
 				n.Env.Show("New orchestrator: " + err.Error())
 			}

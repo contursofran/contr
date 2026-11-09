@@ -19,13 +19,12 @@ const toastMaxWidth = 420
 const (
 	LabelToastViewport = "toasts"
 	LabelToastClose    = "Close message"
-	// ProjectsUndo is the label of the Undo button of the hide toast.
-	ProjectsUndo = "Undo"
 )
 
-// toastView adds the queued messages and builds the toasts without MyGo's look: glass-float with
-// float-line, as the other floating parts (docs/spec/README.md).
-func (f *Frame) toastView(c *ui.Context) {
+// ToastView draws the toast stack: it adds the queued messages and builds the toasts without
+// MyGo's look: glass-float with float-line, as the other floating parts (docs/spec/README.md). The
+// frame draws it; the ProjectsModal part of the spec sheet uses it too.
+func (f *Frame) ToastView(c *ui.Context) {
 	if f.Toasts != nil {
 		for _, m := range f.Toasts.Take() {
 			c.AddToast(ui.Toast{ID: m, Title: m})
