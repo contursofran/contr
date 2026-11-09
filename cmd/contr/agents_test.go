@@ -285,7 +285,7 @@ func TestAgentsKitFromTheEnvironment(t *testing.T) {
 	if code, _, errs := run(t, core, env, "spawn", "--name", "b", "--profile", "builder"); code != 0 {
 		t.Fatalf("code %d: %s", code, errs)
 	}
-	if argv := core.params[0]["argv"].([]any); argv[2] != filepath.Join(dir, "env-kit") {
+	if argv := core.params[0]["argv"].([]any); argv[len(hc.CleanArgv(nil))+2] != filepath.Join(dir, "env-kit") {
 		t.Errorf("argv = %v, want the CONTR_KIT folder", argv)
 	}
 }
