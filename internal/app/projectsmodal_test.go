@@ -41,8 +41,7 @@ func newModalRig(t *testing.T) *modalRig {
 			r.saved = append(r.saved, s)
 			return r.saveEr
 		},
-		Run:    Runner{Go: func(f func()) { f() }},
-		Status: func(s string) { r.status = append(r.status, s) },
+		Env: Env{Status: func(s string) { r.status = append(r.status, s) }},
 	}
 	r.tt = ui.NewTester(func(c *ui.Context) {
 		ui.Column(c).Fill().Children(func() {
@@ -440,7 +439,7 @@ func TestProjectsModalSaveErrorShowsInStatus(t *testing.T) {
 
 func TestProjectsModalSavesInOrderOffTheUIThread(t *testing.T) {
 	r := newModalRig(t)
-	r.m.Run = Runner{Go: func(f func()) { r.held = append(r.held, f) }}
+	r.m.Env.Run = Runner{Go: func(f func()) { r.held = append(r.held, f) }}
 	r.open()
 	r.tt.Key(ui.Cmd, ui.KeyBackspace) // hides a
 	r.tt.Frame()

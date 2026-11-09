@@ -46,9 +46,9 @@ func newPRRig(t *testing.T) *prRig {
 	t.Helper()
 	r := &prRig{run: &prRunner{reply: func(string) ([]byte, error) { return []byte(prJSON), nil }}}
 	r.pane = &PRPane{
-		Client:  func(dir string) github.Client { return github.Client{R: r.run, Dir: dir} },
-		Run:     Runner{Go: func(f func()) { r.queue = append(r.queue, f) }},
-		OpenURL: func(u string) { r.opened = append(r.opened, u) },
+		Client: func(dir string) github.Client { return github.Client{R: r.run, Dir: dir} },
+		Env: Env{Run: Runner{Go: func(f func()) { r.queue = append(r.queue, f) }},
+			OpenURL: func(u string) { r.opened = append(r.opened, u) }},
 		Now:     func() time.Time { return time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC) },
 		OnClose: func() { r.closed++ },
 	}

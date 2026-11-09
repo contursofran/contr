@@ -39,10 +39,10 @@ type titleRig struct {
 func newTitleRig() *titleRig {
 	r := &titleRig{runner: &titleRunner{out: map[string]string{"241": `{"title":"Agent rows on ui.List"}`}}, now: time.Unix(5000, 0)}
 	r.t = &IssueTitles{
-		Run:        Runner{Go: func(f func()) { r.queue = append(r.queue, f) }},
-		Client:     func(dir string) github.Client { return github.Client{R: r.runner, Dir: dir} },
-		Invalidate: func() { r.redraw++ },
-		Now:        func() time.Time { return r.now },
+		Env: Env{Run: Runner{Go: func(f func()) { r.queue = append(r.queue, f) }},
+			Invalidate: func() { r.redraw++ }},
+		Client: func(dir string) github.Client { return github.Client{R: r.runner, Dir: dir} },
+		Now:    func() time.Time { return r.now },
 	}
 	return r
 }

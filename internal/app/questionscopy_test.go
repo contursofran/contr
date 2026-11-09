@@ -21,7 +21,7 @@ func copyRig(t *testing.T) (*qRig, *state.Toasts) {
 	src.snap.Todos = []owner.Todo{{ID: "T1", Project: "a", Kind: "do", Text: "Run `" + copyCmd + "` and report"}}
 	r := newQRig(t, src)
 	toasts := state.NewToasts(nil)
-	r.card.Status = toasts.Show
+	r.card.Env.Status = toasts.Show
 	r.open("T1")
 	return r, toasts
 }

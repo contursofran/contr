@@ -15,9 +15,8 @@ type NewOrchestrator struct {
 	Pick func() (string, error)
 	// Spawn starts the orchestrator profile in a folder.
 	Spawn func(dir string) error
-	Run   Runner
-	// Status shows a line as a toast; may be nil.
-	Status func(string)
+	// Env runs the picker and the spawn off the UI thread and shows errors.
+	Env Env
 
 	busy bool // a pick or spawn is running
 }
@@ -29,7 +28,7 @@ func (n *NewOrchestrator) Start() {
 		return
 	}
 	n.busy = true
-	n.Run.Do(func() func() {
+	n.Env.Do(func() func() {
 		dir, err := n.Pick()
 		if err == nil {
 			err = n.Spawn(dir)
@@ -39,7 +38,7 @@ func (n *NewOrchestrator) Start() {
 			switch {
 			case errors.Is(err, ErrPickCancelled):
 			case err != nil:
-				n.show("New orchestrator: " + err.Error())
+				n.Env.Show("New orchestrator: " + err.Error())
 			}
 		}
 	})
@@ -52,19 +51,13 @@ func (n *NewOrchestrator) StartIn(dir string) {
 		return
 	}
 	n.busy = true
-	n.Run.Do(func() func() {
+	n.Env.Do(func() func() {
 		err := n.Spawn(dir)
 		return func() {
 			n.busy = false
 			if err != nil {
-				n.show("New orchestrator: " + err.Error())
+				n.Env.Show("New orchestrator: " + err.Error())
 			}
 		}
 	})
-}
-
-func (n *NewOrchestrator) show(s string) {
-	if n.Status != nil {
-		n.Status(s)
-	}
 }

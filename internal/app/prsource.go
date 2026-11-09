@@ -37,15 +37,13 @@ type prAnswer struct {
 
 // WorkerPRs maps a worker's worktree to the number of its pull request. Use it on the UI thread.
 type WorkerPRs struct {
-	// Run runs the reads off the UI thread.
-	Run Runner
+	// Env runs the reads off the UI thread and redraws after an answer.
+	Env Env
 	// Client gives the GitHub client for a folder. Nil: [github.New].
 	Client func(dir string) github.Client
 	// Branch returns the checked-out branch of a folder, "" when unknown. It runs off the UI
 	// thread. Nil: reads HEAD with package git.
 	Branch func(dir string) string
-	// Invalidate redraws after an answer. May be nil.
-	Invalidate func()
 	// Now is the clock. Nil: time.Now.
 	Now func() time.Time
 
@@ -129,7 +127,7 @@ func (w *WorkerPRs) read(dir string) {
 	if mk == nil {
 		mk = github.New
 	}
-	w.Run.Do(func() func() {
+	w.Env.Do(func() func() {
 		branch := branchOf(dir)
 		return func() {
 			if branch == "" { // not a repository, or no HEAD
@@ -140,7 +138,7 @@ func (w *WorkerPRs) read(dir string) {
 			key := prKey{dir, branch}
 			if a, ok := w.answers[key]; ok && w.fresh(a) {
 				delete(w.inflight, dir)
-				w.redraw() // the branch may have moved back to a known one
+				w.Env.Redraw() // the branch may have moved back to a known one
 				return
 			}
 			w.gh(func() func() {
@@ -151,7 +149,7 @@ func (w *WorkerPRs) read(dir string) {
 						st = github.BranchState{Number: old.n, Pending: old.pending} // an error keeps what is known
 					}
 					w.answers[key] = prAnswer{st.Number, st.Pending, w.now()}
-					w.redraw()
+					w.Env.Redraw()
 				}
 			})
 		}
@@ -162,7 +160,7 @@ func (w *WorkerPRs) read(dir string) {
 func (w *WorkerPRs) gh(read func() func()) {
 	start := func() {
 		w.active++
-		w.Run.Do(func() func() {
+		w.Env.Do(func() func() {
 			done := read()
 			return func() {
 				w.active--
@@ -180,12 +178,6 @@ func (w *WorkerPRs) gh(read func() func()) {
 		return
 	}
 	start()
-}
-
-func (w *WorkerPRs) redraw() {
-	if w.Invalidate != nil {
-		w.Invalidate()
-	}
 }
 
 // headBranchOf reads the branch of the checkout that holds dir.

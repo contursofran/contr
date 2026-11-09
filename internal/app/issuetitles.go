@@ -35,12 +35,10 @@ type titleAnswer struct {
 
 // IssueTitles maps the issue of a worker to its title. Use it on the UI thread.
 type IssueTitles struct {
-	// Run runs the reads off the UI thread.
-	Run Runner
+	// Env runs the reads off the UI thread and redraws after an answer.
+	Env Env
 	// Client gives the GitHub client for a folder. Nil: [github.New].
 	Client func(dir string) github.Client
-	// Invalidate redraws after an answer. May be nil.
-	Invalidate func()
 	// Now is the clock. Nil: time.Now.
 	Now func() time.Time
 
@@ -119,9 +117,7 @@ func (t *IssueTitles) read(k titleKey) {
 				title = t.answers[k].title // an error keeps what is known
 			}
 			t.answers[k] = titleAnswer{title, t.now(), err != nil}
-			if t.Invalidate != nil {
-				t.Invalidate()
-			}
+			t.Env.Redraw()
 		}
 	})
 }
@@ -130,7 +126,7 @@ func (t *IssueTitles) read(k titleKey) {
 func (t *IssueTitles) gh(read func() func()) {
 	start := func() {
 		t.active++
-		t.Run.Do(func() func() {
+		t.Env.Do(func() func() {
 			done := read()
 			return func() {
 				t.active--

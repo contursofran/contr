@@ -85,7 +85,7 @@ type qRig struct {
 func newQRig(t *testing.T, src *source) *qRig {
 	t.Helper()
 	r := &qRig{t: t, src: src}
-	r.card = &QuestionsCard{Source: resolver{src}, Run: Runner{Go: func(f func()) { f() }}}
+	r.card = &QuestionsCard{Source: resolver{src}}
 	r.notch = &Notch{Snapshot: src.Snapshot, Project: func() string { return "a" },
 		Open: r.card.Open, Close: r.card.Close, Opened: r.card.IsOpen, Panel: r.card.View}
 	r.tt = ui.NewTester(func(c *ui.Context) {
@@ -415,7 +415,7 @@ func TestAnswerRunsOffTheUIThread(t *testing.T) {
 	src := askSource()
 	r := newQRig(t, src)
 	var queued []func()
-	r.card.Run = Runner{Go: func(f func()) { queued = append(queued, f) }}
+	r.card.Env.Run = Runner{Go: func(f func()) { queued = append(queued, f) }}
 	r.open("D1")
 	if err := r.tt.Click("sqlite"); err != nil {
 		t.Fatal(err)

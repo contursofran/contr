@@ -185,7 +185,7 @@ func TestFramePanelRowClickShowsTheWorker(t *testing.T) {
 	f := NewFrame()
 	f.Selection = state.NewSelection(nil)
 	f.Selection.Select(state.Selected{Kind: state.KindOrchestrator, ID: "o1"})
-	f.Worker = &WorkerPanel{Source: src, Selection: f.Selection, Run: Runner{Go: func(f func()) { f() }}}
+	f.Worker = &WorkerPanel{Source: src, Selection: f.Selection}
 	scope := func() string { return f.scope(src) }
 	f.Panel = &BoardPanel{Snapshot: src.Snapshot, Scope: scope, Needs: NeedItems(src.Snapshot, scope),
 		Select: func(a string) { f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: a}) }}

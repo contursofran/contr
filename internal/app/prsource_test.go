@@ -42,11 +42,11 @@ type prSourceRig struct {
 func newPRSourceRig(out map[string]string) *prSourceRig {
 	r := &prSourceRig{runner: &branchRunner{out: out}, branch: "agent/1-x", now: time.Unix(1000, 0)}
 	r.w = &WorkerPRs{
-		Run:        Runner{Go: func(f func()) { r.queue = append(r.queue, f) }},
-		Client:     func(dir string) github.Client { return github.Client{R: r.runner, Dir: dir} },
-		Branch:     func(string) string { return r.branch },
-		Invalidate: func() { r.redraw++ },
-		Now:        func() time.Time { return r.now },
+		Env: Env{Run: Runner{Go: func(f func()) { r.queue = append(r.queue, f) }},
+			Invalidate: func() { r.redraw++ }},
+		Client: func(dir string) github.Client { return github.Client{R: r.runner, Dir: dir} },
+		Branch: func(string) string { return r.branch },
+		Now:    func() time.Time { return r.now },
 	}
 	return r
 }
@@ -222,7 +222,7 @@ func TestFrameOpenIssueRunsOffThreadAndShowsAnError(t *testing.T) {
 	var gotDir string
 	var gotN int
 	var queued []func()
-	f.WorkerPRs = &WorkerPRs{Run: Runner{Go: func(fn func()) { queued = append(queued, fn) }}}
+	f.WorkerPRs = &WorkerPRs{Env: Env{Run: Runner{Go: func(fn func()) { queued = append(queued, fn) }}}}
 	f.OpenIssueWeb = func(d string, n int) error { gotDir, gotN = d, n; return errors.New("gh: no browser") }
 	f.OpenIssue("/wt/a", 151)
 	if gotN != 0 || len(queued) != 1 {
@@ -241,7 +241,7 @@ func TestAgentRowOpenPRGoesToTheBrowserNotThePane(t *testing.T) {
 	var gotDir string
 	var gotN int
 	var queued []func()
-	f.WorkerPRs = &WorkerPRs{Run: Runner{Go: func(fn func()) { queued = append(queued, fn) }}}
+	f.WorkerPRs = &WorkerPRs{Env: Env{Run: Runner{Go: func(fn func()) { queued = append(queued, fn) }}}}
 	f.Toasts = state.NewToasts(func() {})
 	f.OpenPRWeb = func(d string, n int) error { gotDir, gotN = d, n; return errors.New("gh: no browser") }
 	e := f.agentRowEntry()

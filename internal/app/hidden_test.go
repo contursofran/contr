@@ -31,7 +31,7 @@ func TestHiddenViewersHaveNoEntryPoint(t *testing.T) {
 	f.PR = r.pane
 	src := &source{snap: boardSnap(), text: "out"}
 	f.Selection = state.NewSelection(nil)
-	f.Worker = &WorkerPanel{Source: src, Selection: f.Selection, Run: Runner{Go: func(f func()) { f() }}}
+	f.Worker = &WorkerPanel{Source: src, Selection: f.Selection}
 	f.Panel = &BoardPanel{Snapshot: src.Snapshot, Needs: NeedItems(src.Snapshot, nil)}
 	f.Slots.Panel = f.Panel.View
 	tt := ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)
