@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/contursofran/contr/internal/app/theme"
 )
 
 func orchEnv(t *testing.T, profiles string) (func(string) string, string) {
@@ -35,7 +37,7 @@ func TestSpawnOrchestratorStartsTheProfileWithRoleAndNoParent(t *testing.T) {
 	if err := os.Mkdir(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := spawnOrchestrator(context.Background(), getenv, dial, dir, now); err != nil {
+	if err := spawnOrchestrator(context.Background(), getenv, dial, dir, now, paletteColors(theme.Light)); err != nil {
 		t.Fatal(err)
 	}
 	if len(core.params) != 1 {
@@ -52,6 +54,11 @@ func TestSpawnOrchestratorStartsTheProfileWithRoleAndNoParent(t *testing.T) {
 	if !core.closed {
 		t.Error("the connection must close")
 	}
+	d, _ := p["display"].(map[string]any)
+	want := paletteColors(theme.Light)
+	if d["bg"] != want.BG || d["fg"] != want.FG || d["cursor"] != want.Cursor {
+		t.Errorf("display %v, want the Light colors %+v", d, want)
+	}
 }
 
 // `+ new` works with no agents.json and with a file in the old format (D206).
@@ -60,7 +67,7 @@ func TestSpawnOrchestratorUsesTheDefaultProfile(t *testing.T) {
 		getenv, _ := orchEnv(t, body)
 		core := &cliCore{reply: map[string]any{"terminal.run": worker("t4", "o", "live", nil)}}
 		dial := func(context.Context, func(string) string) (agentsCore, error) { return core, nil }
-		if err := spawnOrchestrator(context.Background(), getenv, dial, t.TempDir(), time.Now()); err != nil {
+		if err := spawnOrchestrator(context.Background(), getenv, dial, t.TempDir(), time.Now(), nil); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
 		if len(core.params) != 1 || core.params[0]["labels"].(map[string]any)["profile"] != "orchestrator" {
@@ -73,11 +80,11 @@ func TestSpawnOrchestratorReturnsTheCoreError(t *testing.T) {
 	getenv, _ := orchEnv(t, `{"profiles":{"orchestrator":{"argv":["claude"]}}}`)
 	core := &cliCore{errs: map[string]error{"terminal.run": errors.New("name taken")}}
 	dial := func(context.Context, func(string) string) (agentsCore, error) { return core, nil }
-	if err := spawnOrchestrator(context.Background(), getenv, dial, t.TempDir(), time.Now()); err == nil || !strings.Contains(err.Error(), "name taken") {
+	if err := spawnOrchestrator(context.Background(), getenv, dial, t.TempDir(), time.Now(), nil); err == nil || !strings.Contains(err.Error(), "name taken") {
 		t.Errorf("error %v", err)
 	}
 	dial = func(context.Context, func(string) string) (agentsCore, error) { return nil, errors.New("no hc") }
-	if err := spawnOrchestrator(context.Background(), getenv, dial, "/work/p", time.Now()); err == nil || !strings.Contains(err.Error(), "no hc") {
+	if err := spawnOrchestrator(context.Background(), getenv, dial, "/work/p", time.Now(), nil); err == nil || !strings.Contains(err.Error(), "no hc") {
 		t.Errorf("dial error %v", err)
 	}
 }

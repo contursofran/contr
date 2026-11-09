@@ -217,7 +217,7 @@ func agentTools(m *managers, parent string) []mcp.Tool {
 						return "", err
 					}
 				}
-				w, err := mgr.Spawn(ctx, agents.Spec{Name: a.Name, Profile: a.Profile, Task: task, Issue: a.Issue, Worktree: dir, Role: a.Role, Project: a.Project, Parent: parent})
+				w, err := mgr.Spawn(ctx, agents.Spec{Name: a.Name, Profile: a.Profile, Task: task, Issue: a.Issue, Worktree: dir, Role: a.Role, Project: a.Project, Parent: parent, Colors: storedColors()})
 				if err != nil {
 					return "", err
 				}

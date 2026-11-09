@@ -1130,3 +1130,40 @@ func TestAgentArgvLoadsTheKitInEveryClaudeArgv(t *testing.T) {
 		t.Errorf("no kit: %v", got)
 	}
 }
+
+func TestSpawnSendsDisplayColors(t *testing.T) {
+	f := &fakeCore{handle: map[string]func(map[string]any) (any, error){
+		"terminal.run": func(map[string]any) (any, error) { return term("t1", "w", "live", builderLabels, nil), nil },
+	}}
+	m := New(f, DefaultConfig()).WithExecutable("")
+	c := &Colors{FG: "#1a1a1a", BG: "#f5f5f3", Cursor: "#222222"}
+	if _, err := m.Spawn(context.Background(), Spec{Name: "w", Profile: "builder", Colors: c}); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]any{"fg": "#1a1a1a", "bg": "#f5f5f3", "cursor": "#222222"}
+	if got := f.last().Params["display"]; !reflect.DeepEqual(got, want) {
+		t.Errorf("display = %v, want %v", got, want)
+	}
+	// No colors, or empty colors: no display, so hc keeps its default.
+	for _, c := range []*Colors{nil, {}} {
+		if _, err := m.Spawn(context.Background(), Spec{Name: "w", Profile: "builder", Colors: c}); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := f.last().Params["display"]; ok {
+			t.Errorf("colors %+v: display sent", c)
+		}
+	}
+}
+
+func TestOpenTerminalSendsDisplayColors(t *testing.T) {
+	f := openTermCore()
+	m := New(f, DefaultConfig())
+	c := &Colors{FG: "#1a1a1a", BG: "#f5f5f3"}
+	if _, err := m.OpenTerminal(context.Background(), TerminalSpec{Name: "term-1", Shell: "/bin/sh", Colors: c}); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]any{"fg": "#1a1a1a", "bg": "#f5f5f3"}
+	if got := f.last().Params["display"]; !reflect.DeepEqual(got, want) {
+		t.Errorf("display = %v, want %v", got, want)
+	}
+}
