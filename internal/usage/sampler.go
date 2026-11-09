@@ -29,26 +29,35 @@ func Unread() Reading {
 	return out
 }
 
-// ReadPlans reads each plan from its source, in [Plans] order. An empty
-// stateDir or codexHome, or a source with no usable data, gives nil usage for
-// that plan. It blocks: run it on a goroutine.
-func ReadPlans(stateDir, codexHome string) Reading {
+// ReadPlans reads each plan from its source, in [Plans] order. Codex comes
+// from codexApp (codex app-server) first; when that gives nil, from the newest
+// rollout file under codexHome (D206). A nil codexApp, an empty stateDir or
+// codexHome, or a source with no usable data, gives nil usage for that source.
+// It blocks: run it on a goroutine.
+func ReadPlans(stateDir, codexHome string, codexApp func() *PlanUsage) Reading {
 	out := Unread()
 	for i, p := range Plans {
 		switch {
 		case p == PlanClaude && stateDir != "":
 			out[i].Usage = ReadClaude(stateDir)
-		case p == PlanCodex && codexHome != "":
-			out[i].Usage = ReadCodex(codexHome)
+		case p == PlanCodex:
+			if codexApp != nil {
+				out[i].Usage = codexApp()
+			}
+			if out[i].Usage == nil && codexHome != "" {
+				out[i].Usage = ReadCodex(codexHome)
+			}
 		}
 	}
 	return out
 }
 
-// FileReader is the real reader: Claude's status line file and Codex's newest
-// rollout file. The folders are found at each read.
+// FileReader is the real reader: Claude's status line file, then Codex's
+// app-server, else its newest rollout file. The folders and the codex program
+// are found at each read.
 func FileReader() func() Reading {
-	return func() Reading { return ReadPlans(StateDir(), CodexHome()) }
+	app := &CodexApp{}
+	return func() Reading { return ReadPlans(StateDir(), CodexHome(), app.Read) }
 }
 
 // UnixNow is the Unix second now. Window reset times are Unix seconds, so

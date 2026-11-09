@@ -1,5 +1,6 @@
-// Codex's session logs as a usage source. Codex writes the plan's limit
-// windows into its rollout files under sessions/, on each token_count event.
+// Codex's session logs as a usage source, when app-server gives no data
+// (codexapp.go, D206). Older Codex versions write the plan's limit windows
+// into their rollout files under sessions/, on each token_count event.
 // ReadCodex reads the tail of the newest rollout file and nothing else under
 // CODEX_HOME: no credentials, config or transcript text is read.
 
