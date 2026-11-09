@@ -28,6 +28,7 @@ const (
 	LabelProjects       = "projects modal"
 	LabelProjectsList   = "projects list"
 	LabelProjectsFooter = "projects footer"
+	LabelProjectsDot    = "orchestrator dot"
 	LabelProjectsSearch = "Search projects, or paste a GitHub repo or a path"
 	ProjectsHide        = "Hide"
 	ProjectsOpenFolder  = "Open folder…"
@@ -83,6 +84,9 @@ type ProjectsModal struct {
 	// Switch selects the open project with this common dir in the sidebar;
 	// may be nil.
 	Switch func(dir string)
+	// Orchestrated tells whether an orchestrator holds a main worktree of the
+	// project; the row then shows a dot before the live state. May be nil.
+	Orchestrated func(g spaces.RepoGroup) bool
 
 	open  bool
 	query string

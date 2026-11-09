@@ -101,6 +101,11 @@ func TestOpenMeta(t *testing.T) {
 		t.Errorf("need you: %q %d", meta, n)
 	}
 
+	base, live, _ := openMetaParts(g, "/home/me")
+	if base != "~/code/contr · main" || live != "2 need you" {
+		t.Errorf("parts: %q %q", base, live)
+	}
+
 	// A path outside home stays as it is, and a missing branch is left out.
 	if meta, _ = openMeta(spaces.RepoGroup{Path: "/srv/x"}, "/home/me"); meta != "/srv/x" {
 		t.Errorf("no branch: %q", meta)

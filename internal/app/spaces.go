@@ -579,6 +579,16 @@ func (l *SpacesList) Switch(dir string) {
 	}
 }
 
+// Orchestrated tells whether an orchestrator holds a terminal in project g.
+func (l *SpacesList) Orchestrated(g spaces.RepoGroup) bool {
+	for _, o := range l.snapshot().Orchestrators {
+		if l.holdsAddress(g, o.Address) {
+			return true
+		}
+	}
+	return false
+}
+
 // selectProject selects the orchestrator of g, else its main checkout.
 func (l *SpacesList) selectProject(g spaces.RepoGroup) {
 	for _, o := range l.snapshot().Orchestrators {

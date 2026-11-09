@@ -132,7 +132,7 @@ func (m *ProjectsModal) View(c *ui.Context) {
 	open := true
 	p := theme.Current()
 	d := ui.DialogBase(c, &open, func(backdrop, panel ui.Element) {
-		backdrop.Background(p.Ground.Alpha(0.72)).Justify(ui.Start).AlignItems(ui.Center).Padding(theme.ModalTop, 0, 0, 0)
+		backdrop.Background(p.Scrim).Justify(ui.Start).AlignItems(ui.Center).Padding(theme.ModalTop, 0, 0, 0)
 		panel.Label(LabelProjects).Column().Width(theme.ProjectsWidth).Background(p.GlassFloat).
 			Border(1, p.FloatLine).Radius(theme.Radius14)
 		for _, l := range p.ShadowFloat {
@@ -188,9 +188,11 @@ func (m *ProjectsModal) searchField(c *ui.Context, rows []paletteRow) {
 		in.OnTextKey(func(k ui.TextKey) bool {
 			switch {
 			case k.Key == ui.KeyBackspace && k.Mods == ui.Cmd:
-				if r != nil && r.kind == rowOpen {
-					m.hide(r.group.CommonDir)
+				// With text in the field, ⌘⌫ deletes the text as in any field.
+				if k.Text() != "" || r == nil || r.kind != rowOpen {
+					return false
 				}
+				m.hide(r.group.CommonDir)
 				return true
 			case k.Key == ui.KeyEscape && k.Mods == 0 && k.Text() != "":
 				k.SetText("")
@@ -279,7 +281,9 @@ func (m *ProjectsModal) footer(c *ui.Context, rows []paletteRow) {
 		if lb := enterLabel(rows, m.sel); lb != "" {
 			hint("⏎", lb)
 		}
-		hint("⌘⌫", "hide")
+		if m.sel < len(rows) && rows[m.sel].kind == rowOpen && m.text() == "" {
+			hint("⌘⌫", "hide")
+		}
 		ui.Spacer(c)
 		if m.PickFolder == nil {
 			return
@@ -356,9 +360,9 @@ func (m *ProjectsModal) row(c *ui.Context, rows []paletteRow, i int, home string
 		el = el.Background(p.Hover)
 	}
 	active := selected || hovered
-	meta, needYou, age := "", 0, ""
+	meta, age, orch := "", "", false
 	if r.kind == rowOpen {
-		meta, needYou = openMeta(r.group, home)
+		orch = m.Orchestrated != nil && m.Orchestrated(r.group)
 	} else {
 		meta = tildePath(r.entry.Path, home)
 		now := time.Now
@@ -383,7 +387,11 @@ func (m *ProjectsModal) row(c *ui.Context, rows []paletteRow, i int, home string
 		})
 		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 			m.nameText(c, name, weight, nameColour)
-			m.metaText(c, meta, needYou)
+			if r.kind == rowOpen {
+				m.openMetaView(c, r.group, home, orch)
+			} else {
+				m.metaText(c, meta, 0)
+			}
 		})
 		switch {
 		case r.kind == rowOpen:
@@ -422,6 +430,32 @@ func (m *ProjectsModal) metaText(c *ui.Context, meta string, needYou int) {
 		ui.Span{Text: strings.TrimSuffix(meta, t)},
 		ui.Span{Text: t, Color: p.Blocked},
 	), theme.StyleValue).SingleLine().MinWidth(0).TextColor(p.Ink38)
+}
+
+// openMetaView builds the meta of an open row: the path and the branch, a
+// dot when an orchestrator holds the row, and the live state. The path part
+// keeps the ellipsis; `N need you` is blocked text (Q1).
+func (m *ProjectsModal) openMetaView(c *ui.Context, g spaces.RepoGroup, home string, orch bool) {
+	p := theme.Current()
+	base, live, needYou := openMetaParts(g, home)
+	ui.Row(c).AlignItems(ui.Center).MinWidth(0).Children(func() {
+		if live != "" && base != "" {
+			base += " · "
+		}
+		styled(ui.Text(c, base), theme.StyleValue).SingleLine().MinWidth(0).TextColor(p.Ink38)
+		if live == "" {
+			return
+		}
+		if orch && needYou == 0 {
+			ui.Box(c).Label(LabelProjectsDot).Width(theme.ModalDot).Height(theme.ModalDot).Shrink(0).
+				Radius(theme.ModalDot/2).Background(p.Claude).Margin(0, theme.Space6, 0, 0)
+		}
+		colour := p.Ink38
+		if needYou > 0 {
+			colour = p.Blocked
+		}
+		styled(ui.Text(c, live), theme.StyleValue).NoWrap().Shrink(0).TextColor(colour)
+	})
 }
 
 // tildePath shows a path in home with a leading ~.

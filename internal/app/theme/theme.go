@@ -161,6 +161,7 @@ const ModalRadius = 12
 const ProjectsWidth = 560 // the projects modal (D207)
 const ModalTop = 110
 const ModalPadX = 18
+const ModalDot = 6 // the orchestrator dot of a project row
 const ModalTile = 30
 const ModalGrip = 12
 const ModalListMax = 360

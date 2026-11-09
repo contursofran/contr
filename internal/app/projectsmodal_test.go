@@ -22,6 +22,8 @@ type modalRig struct {
 	dirs   []string // all dirs, tree order
 	saved  []*projects.Store
 	saveEr error
+	// rows edits each group the rig returns.
+	rows   func(g *spaces.RepoGroup)
 	status []string
 	tt     *ui.Tester
 	// held queues work instead of running it, to test saves that overlap.
@@ -59,7 +61,11 @@ func (r *modalRig) groups() []spaces.RepoGroup {
 			continue
 		}
 		name := strings.Split(d, "/")[2]
-		out = append(out, spaces.RepoGroup{CommonDir: d, Name: name, Rows: []spaces.WorktreeRow{{HoldYou: name == "a"}, {}}})
+		g := spaces.RepoGroup{CommonDir: d, Name: name, Rows: []spaces.WorktreeRow{{HoldYou: name == "a"}, {}}}
+		if r.rows != nil {
+			r.rows(&g)
+		}
+		out = append(out, g)
 	}
 	return out
 }
@@ -97,7 +103,7 @@ func TestProjectsModalOpensAndListsProjects(t *testing.T) {
 			t.Errorf("no text %q in %v", want, texts)
 		}
 	}
-	if !slices.ContainsFunc(texts, func(s string) bool { return strings.HasSuffix(s, "· 1 need you") }) {
+	if !slices.Contains(texts, "1 need you") {
 		t.Errorf("no need-you meta in %v", texts)
 	}
 	r.m.Toggle()
@@ -237,6 +243,61 @@ func TestProjectsModalCmdBackspaceHides(t *testing.T) {
 	r.tt.Key(ui.Cmd, ui.KeyBackspace)
 	if !r.store.Hidden("/w/b/.git") || len(r.saved) != 1 || !r.saved[0].Hidden("/w/b/.git") {
 		t.Errorf("hidden = %v, saved = %v", r.store.Hidden("/w/b/.git"), r.saved)
+	}
+}
+
+func TestProjectsModalCmdBackspaceWithTextDoesNotHide(t *testing.T) {
+	r := newModalRig(t)
+	r.open()
+	r.tt.Type("a")
+	r.tt.Frame()
+	if slices.Contains(r.tt.Texts(), "hide") {
+		t.Error("the footer offers hide while the field has text")
+	}
+	r.tt.Key(ui.Cmd, ui.KeyBackspace) // deletes the text
+	r.tt.Frame()
+	if r.store.Hidden("/w/a/.git") || len(r.saved) != 0 || r.m.query != "" {
+		t.Errorf("hidden %v, saved %d, query %q", r.store.Hidden("/w/a/.git"), len(r.saved), r.m.query)
+	}
+}
+
+func TestProjectsModalFooterOffersHideOnOpenRowOnly(t *testing.T) {
+	r := newModalRig(t)
+	r.store.Touch("/w/z/.git", "/w/z", time.Unix(1, 0))
+	r.open()
+	if !slices.Contains(r.tt.Texts(), "hide") {
+		t.Error("no hide hint on an open row")
+	}
+	for range 3 {
+		r.tt.Key(0, ui.KeyDown)
+	}
+	r.tt.Frame()
+	if slices.Contains(r.tt.Texts(), "hide") {
+		t.Error("hide hint on a recent row")
+	}
+}
+
+func TestProjectsModalOrchestratorDot(t *testing.T) {
+	r := newModalRig(t)
+	hold := "orchestrator idle"
+	r.rows = func(g *spaces.RepoGroup) {
+		if g.Name == "b" {
+			g.Rows[0].IsMain, g.Rows[0].Hold = true, &hold
+		}
+	}
+	orch := false
+	r.m.Orchestrated = func(g spaces.RepoGroup) bool { return orch && g.Name == "b" }
+	r.open()
+	if r.has(LabelProjectsDot) {
+		t.Error("dot without an orchestrator")
+	}
+	orch = true
+	r.tt.Frame()
+	if !r.has(LabelProjectsDot) {
+		t.Error("no dot with an orchestrator")
+	}
+	if !slices.Contains(r.tt.Texts(), "orchestrator idle") {
+		t.Errorf("no live state in %v", r.tt.Texts())
 	}
 }
 
