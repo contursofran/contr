@@ -572,3 +572,13 @@ func TestProjectsModalChangesWithTheTheme(t *testing.T) {
 	r.tt.Frame()
 	check(theme.Light)
 }
+
+// The projects modal has an opaque fill, float-solid, so the terminal behind it does not show
+// through its rows (#546, D217). Modals are never glass-float.
+func TestTheProjectsModalFillIsFloatSolid(t *testing.T) {
+	for name, p := range map[string]*theme.Palette{"dark": theme.Dark, "light": theme.Light} {
+		if got := projectsModalFill(p); got != p.FloatSolid || got.A != 255 {
+			t.Errorf("%s: the projects modal fill %v is not the opaque float-solid %v", name, got, p.FloatSolid)
+		}
+	}
+}

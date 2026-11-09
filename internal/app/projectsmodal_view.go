@@ -195,7 +195,7 @@ func (m *ProjectsModal) View(c *ui.Context) {
 	p := theme.Current()
 	d := ui.DialogBase(c, &open, func(backdrop, panel ui.Element) {
 		backdrop.Background(p.Scrim).Justify(ui.Start).AlignItems(ui.Center).Padding(theme.ModalTop, 0, 0, 0)
-		panel.Label(LabelProjects).Column().Width(theme.ProjectsWidth).Background(p.GlassFloat).
+		panel.Label(LabelProjects).Column().Width(theme.ProjectsWidth).Background(projectsModalFill(p)).
 			Material(glass.Blur{Radius: theme.GlassBlur}).Border(1, p.FloatLine).Radius(theme.Radius14)
 		for _, l := range p.ShadowFloat {
 			if !l.Inset {
@@ -209,6 +209,10 @@ func (m *ProjectsModal) View(c *ui.Context) {
 		m.redraw()
 	}
 }
+
+// projectsModalFill is the panel fill: float-solid, opaque, so the terminal behind the modal does
+// not show through its rows (#546, D217). Modals are never glass-float.
+func projectsModalFill(p *theme.Palette) ui.Color { return p.FloatSolid }
 
 // kbd is a key cap: mono text in a thin box.
 func kbd(c *ui.Context, text string) {
