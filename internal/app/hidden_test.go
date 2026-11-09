@@ -6,6 +6,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/host"
@@ -43,10 +44,10 @@ func TestHiddenViewersHaveNoEntryPoint(t *testing.T) {
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyE)
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyE)
 	tt.Frame()
-	if f.PROpen() || !absent(tt, LabelPRPane) {
+	if f.PROpen() || !apptest.Absent(tt, LabelPRPane) {
 		t.Error("OpenPR opened the PR pane")
 	}
-	if !absent(tt, LabelPanel) || !absent(tt, LabelWorkerPanel) || !absent(tt, LabelBoardRoot) {
+	if !apptest.Absent(tt, LabelPanel) || !apptest.Absent(tt, LabelWorkerPanel) || !apptest.Absent(tt, LabelBoardRoot) {
 		t.Error("the board or the worker panel shows")
 	}
 	if f.paneOpener() != nil {

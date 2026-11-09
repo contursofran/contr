@@ -14,7 +14,7 @@ import (
 // text.
 func rowFill(t *testing.T, tt *ui.Tester, label string) uint32 {
 	t.Helper()
-	r := box(t, tt, label)
+	r := apptest.Box(t, tt, label)
 	p := apptest.PixelAt(tt.Image(), r.X+4, r.Y+r.H/2)
 	return uint32(p.R)<<16 | uint32(p.G)<<8 | uint32(p.B)
 }

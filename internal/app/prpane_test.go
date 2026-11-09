@@ -10,6 +10,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/github"
@@ -241,7 +242,7 @@ func TestFrameOpenPRShowsThePaneAndCollapsesTabs(t *testing.T) {
 	if !f.PROpen() || !tt.HasText("Fix bag drag target") {
 		t.Errorf("pane missing: %q", tt.Texts())
 	}
-	if rect := box(t, tt, LabelPRPane); rect.W != theme.PRPaneWidth {
+	if rect := apptest.Box(t, tt, LabelPRPane); rect.W != theme.PRPaneWidth {
 		t.Errorf("pane width %v", rect.W)
 	}
 	f.ClosePR()

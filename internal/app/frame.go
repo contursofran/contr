@@ -20,6 +20,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/files"
 	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/app/ghsource"
 	"github.com/contursofran/contr/internal/app/kit"
@@ -97,12 +98,12 @@ type Frame struct {
 	// disabled (D122): the files panel does not show it.
 	Panel *BoardPanel
 	// Files is the tree of the files panel. [NewFrame] makes it.
-	Files *FileTree
+	Files *files.FileTree
 	// Session shows the selected agent's todos and artifacts over the file
 	// tree (D197). [NewFrame] makes it; [Frame.Attach] gives it the state dir.
-	Session *SessionPanel
+	Session *files.SessionPanel
 	// Diff is the title bar's diff summary. It shows the totals of Files. [NewFrame] makes it.
-	Diff *DiffSummary
+	Diff *files.DiffSummary
 	// Review is the Review view. [Frame.Attach] makes it. While the Review toggle is on, it
 	// replaces the terminal area, and it follows the selected project.
 	Review *reviewview.Review
@@ -208,9 +209,9 @@ type Frame struct {
 func NewFrame(d Deps) *Frame {
 	f := &Frame{deps: d, Slots: PlaceholderSlots(), sidebarOpen: true, panelOpen: true,
 		sidebarW: theme.SidebarWidth, panelW: theme.PanelWidth}
-	f.Files = NewFileTree(f.filesDir)
-	f.Diff = &DiffSummary{Tree: f.Files}
-	f.Session = &SessionPanel{Terminal: f.selectedTerminal}
+	f.Files = files.NewFileTree(f.filesDir)
+	f.Diff = &files.DiffSummary{Tree: f.Files}
+	f.Session = &files.SessionPanel{Terminal: f.selectedTerminal}
 	f.Files.Open = f.openFileInReview
 	f.Files.Reveal = func(abs string) { mygo.Shell.ShowItemInFolder(abs) }
 	return f

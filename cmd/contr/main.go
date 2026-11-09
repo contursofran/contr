@@ -19,6 +19,7 @@ import (
 	"github.com/contursofran/contr/assets"
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/files"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/prefs"
 	"github.com/contursofran/contr/internal/projects"
@@ -183,7 +184,7 @@ func frameDeps() app.Deps {
 		AgentsConfig:   configPath(os.Getenv),
 		ModelOf:        cfg.ModelOf,
 		EffortOf:       cfg.EffortOf,
-		WatchHead:      app.WatchFile,
+		WatchHead:      files.WatchFile,
 		TerminalSource: terminalSource(os.Getenv),
 		OpenTerminal: func(project, dir string) (string, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)

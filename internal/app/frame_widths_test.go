@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/widths"
 )
@@ -27,25 +28,25 @@ func drag(tt *ui.Tester, fromX, toX float32) {
 // gap between two panels: 5px from the panel on its first side.
 func sidebarDivider(t *testing.T, tt *ui.Tester) float32 {
 	t.Helper()
-	r := box(t, tt, LabelPanelSidebar)
+	r := apptest.Box(t, tt, LabelPanelSidebar)
 	return r.X + r.W + 5
 }
 
 func filesDivider(t *testing.T, tt *ui.Tester) float32 {
 	t.Helper()
-	return box(t, tt, LabelPanelFiles).X - 5
+	return apptest.Box(t, tt, LabelPanelFiles).X - 5
 }
 
 func TestDragSidebarDividerChangesWidth(t *testing.T) {
 	f, tt := newTester(t)
 	drag(tt, sidebarDivider(t, tt), sidebarDivider(t, tt)+28)
-	if got := box(t, tt, LabelPanelSidebar).W; got != 340 {
+	if got := apptest.Box(t, tt, LabelPanelSidebar).W; got != 340 {
 		t.Errorf("sidebar width %v, want 340", got)
 	}
 	if f.sidebarW != 340 {
 		t.Errorf("kept width %v, want 340", f.sidebarW)
 	}
-	if got := box(t, tt, LabelPanelFiles).W; got != theme.PanelWidth {
+	if got := apptest.Box(t, tt, LabelPanelFiles).W; got != theme.PanelWidth {
 		t.Errorf("files width %v, want it unchanged", got)
 	}
 }
@@ -54,7 +55,7 @@ func TestDragFilesDividerChangesWidth(t *testing.T) {
 	f, tt := newTester(t)
 	x := filesDivider(t, tt)
 	drag(tt, x, x-80)
-	if got := box(t, tt, LabelPanelFiles).W; got != theme.PanelWidth+80 {
+	if got := apptest.Box(t, tt, LabelPanelFiles).W; got != theme.PanelWidth+80 {
 		t.Errorf("files width %v, want %d", got, theme.PanelWidth+80)
 	}
 	if f.panelW != theme.PanelWidth+80 {
@@ -65,7 +66,7 @@ func TestDragFilesDividerChangesWidth(t *testing.T) {
 func TestDraggedWidthsStayInTheirLimits(t *testing.T) {
 	f, tt := newTester(t)
 	drag(tt, sidebarDivider(t, tt), 20)
-	if got := box(t, tt, LabelPanelSidebar).W; got != theme.SidebarMinWidth {
+	if got := apptest.Box(t, tt, LabelPanelSidebar).W; got != theme.SidebarMinWidth {
 		t.Errorf("sidebar %v, want the minimum %d", got, theme.SidebarMinWidth)
 	}
 	drag(tt, sidebarDivider(t, tt), 900)
@@ -90,7 +91,7 @@ func TestHiddenSidesKeepTheirWidths(t *testing.T) {
 	drag(tt, sidebarDivider(t, tt), sidebarDivider(t, tt)+28)
 	x := filesDivider(t, tt)
 	drag(tt, x, x-60)
-	want := box(t, tt, LabelPanelFiles).W
+	want := apptest.Box(t, tt, LabelPanelFiles).W
 	f.ToggleSidebar()
 	if err := tt.Click(LabelFilesToggle); err != nil {
 		t.Fatal(err)
@@ -100,10 +101,10 @@ func TestHiddenSidesKeepTheirWidths(t *testing.T) {
 	if err := tt.Click(LabelFilesToggle); err != nil {
 		t.Fatal(err)
 	}
-	if got := box(t, tt, LabelPanelSidebar).W; got != 340 {
+	if got := apptest.Box(t, tt, LabelPanelSidebar).W; got != 340 {
 		t.Errorf("sidebar %v after show, want 340", got)
 	}
-	if got := box(t, tt, LabelPanelFiles).W; got != want {
+	if got := apptest.Box(t, tt, LabelPanelFiles).W; got != want {
 		t.Errorf("files %v after show, want %v", got, want)
 	}
 }

@@ -21,7 +21,7 @@ func TestProjectGroupsHaveAirBetweenThem(t *testing.T) {
 	h.tt.Frame()
 	// Two empty projects, no agent row between: the names are one row height
 	// apart, plus the air.
-	a, b := box(t, h.tt, "gamma, nothing open text"), box(t, h.tt, "delta, nothing open text")
+	a, b := apptest.Box(t, h.tt, "gamma, nothing open text"), apptest.Box(t, h.tt, "delta, nothing open text")
 	if a.Y > b.Y {
 		a, b = b, a
 	}
@@ -33,7 +33,7 @@ func TestProjectGroupsHaveAirBetweenThem(t *testing.T) {
 func TestFirstProjectHasNoAirAbove(t *testing.T) {
 	h, _ := twoRepos(t)
 	h.tt.Frame()
-	a, list := box(t, h.tt, "alpha, main"), box(t, h.tt, LabelProjectList)
+	a, list := apptest.Box(t, h.tt, "alpha, main"), apptest.Box(t, h.tt, LabelProjectList)
 	if a.Y-list.Y > 2 {
 		t.Errorf("first project row is %v below the list top", a.Y-list.Y)
 	}
@@ -58,7 +58,7 @@ func TestADividerSitsAboveTheSettingsButton(t *testing.T) {
 	h := newSpaces(t, spTree())
 	tt := h.tt
 	tt.Frame()
-	b := box(t, tt, LabelSettingsOpen)
+	b := apptest.Box(t, tt, LabelSettingsOpen)
 	img := tt.Image()
 	// The hairline is a faint fill: a pixel row between the Servers row and the
 	// button that differs from the one above it.

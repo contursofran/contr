@@ -14,6 +14,8 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/apptest"
+	"github.com/contursofran/contr/internal/app/files"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/state"
@@ -54,21 +56,21 @@ func TestServerRowShowsCPUAndMemory(t *testing.T) {
 func TestSettingsButtonIsAtTheBottomRight(t *testing.T) {
 	h := newSpaces(t, spTree())
 	h.tt.Frame()
-	b, side := box(t, h.tt, LabelSettingsOpen), box(t, h.tt, LabelProjectList)
-	if win := box(t, h.tt, LabelServersHead+" header"); b.X+b.W < win.X+win.W-24 {
+	b, side := apptest.Box(t, h.tt, LabelSettingsOpen), apptest.Box(t, h.tt, LabelProjectList)
+	if win := apptest.Box(t, h.tt, LabelServersHead+" header"); b.X+b.W < win.X+win.W-24 {
 		t.Errorf("Settings ends at x %v, not at the right edge %v", b.X+b.W, win.X+win.W)
 	}
 	if b.Y < side.Y+side.H-1 {
 		t.Errorf("Settings at y %v, above the end of the project list %v", b.Y, side.Y+side.H)
 	}
-	head := box(t, h.tt, LabelServersHead+" header")
+	head := apptest.Box(t, h.tt, LabelServersHead+" header")
 	if b.Y < head.Y+head.H {
 		t.Error("Settings still sits in the Servers head")
 	}
 
 	h.list.compact = true
 	h.tt.Frame()
-	b, side = box(t, h.tt, LabelSettingsOpen), box(t, h.tt, LabelProjectList)
+	b, side = apptest.Box(t, h.tt, LabelSettingsOpen), apptest.Box(t, h.tt, LabelProjectList)
 	if b.Y < side.Y+side.H-1 {
 		t.Errorf("icon column: Settings at y %v, above the project list end %v", b.Y, side.Y+side.H)
 	}
@@ -452,7 +454,7 @@ func TestWatchFileReportsAChangeAndEndsWithItsContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	changed := make(chan struct{}, 4)
 	done := make(chan error, 1)
-	go func() { done <- WatchFile(ctx, path, func() { changed <- struct{}{} }) }()
+	go func() { done <- files.WatchFile(ctx, path, func() { changed <- struct{}{} }) }()
 	for range 50 {
 		_ = os.WriteFile(path, []byte("ref: refs/heads/b\n"), 0o644)
 		select {
@@ -489,16 +491,16 @@ func manyRepos(t *testing.T, n int) *spacesHarness {
 func TestServersSitBelowTheProjectsAndAboveSettings(t *testing.T) {
 	h, _ := twoRepos(t)
 	h.tt.Frame()
-	proj, list := box(t, h.tt, LabelProjectsHead+" header"), box(t, h.tt, LabelProjectList)
-	srv, row := box(t, h.tt, LabelServersHead+" header"), box(t, h.tt, "This Mac, local text")
-	set := box(t, h.tt, LabelSettingsOpen)
+	proj, list := apptest.Box(t, h.tt, LabelProjectsHead+" header"), apptest.Box(t, h.tt, LabelProjectList)
+	srv, row := apptest.Box(t, h.tt, LabelServersHead+" header"), apptest.Box(t, h.tt, "This Mac, local text")
+	set := apptest.Box(t, h.tt, LabelSettingsOpen)
 	if proj.Y >= list.Y || srv.Y < list.Y+list.H-1 || row.Y < srv.Y+srv.H-1 || set.Y < row.Y+row.H-1 {
 		t.Errorf("order: projects %v list %v servers %v row %v settings %v", proj, list, srv, row, set)
 	}
 
 	h.list.compact = true
 	h.tt.Frame()
-	list, row, set = box(t, h.tt, LabelProjectList), box(t, h.tt, "This Mac, local"), box(t, h.tt, LabelSettingsOpen)
+	list, row, set = apptest.Box(t, h.tt, LabelProjectList), apptest.Box(t, h.tt, "This Mac, local"), apptest.Box(t, h.tt, LabelSettingsOpen)
 	if row.Y < list.Y+list.H-1 || set.Y < row.Y+row.H-1 {
 		t.Errorf("icon column: list %v row %v settings %v", list, row, set)
 	}
@@ -508,7 +510,7 @@ func TestServersSitBelowTheProjectsAndAboveSettings(t *testing.T) {
 func TestALongProjectListScrollsAndServersStayInView(t *testing.T) {
 	h := manyRepos(t, 40)
 	h.tt.Frame()
-	list, row, set := box(t, h.tt, LabelProjectList), box(t, h.tt, "This Mac, local text"), box(t, h.tt, LabelSettingsOpen)
+	list, row, set := apptest.Box(t, h.tt, LabelProjectList), apptest.Box(t, h.tt, "This Mac, local text"), apptest.Box(t, h.tt, LabelSettingsOpen)
 	if bottom := float32(theme.WindowHeight); row.Y+row.H > bottom || set.Y+set.H > bottom+1 {
 		t.Errorf("Servers row %v or Settings %v leave the window (%v)", row, set, bottom)
 	}
@@ -532,8 +534,8 @@ func TestSidebarFootIsCentered(t *testing.T) {
 	h := newSpaces(t, spTree())
 	h.list.Plans = func() []kit.Meter { return planMeters(fakeLeft{usage.PlanClaude: 62}) }
 	h.tt.Frame()
-	foot, div := box(t, h.tt, "sidebar foot"), box(t, h.tt, "sidebar foot divider")
-	gear, plans := box(t, h.tt, LabelSettingsOpen), box(t, h.tt, "plan usage")
+	foot, div := apptest.Box(t, h.tt, "sidebar foot"), apptest.Box(t, h.tt, "sidebar foot divider")
+	gear, plans := apptest.Box(t, h.tt, LabelSettingsOpen), apptest.Box(t, h.tt, "plan usage")
 	right, left := foot.X+foot.W-(gear.X+gear.W), plans.X-foot.X
 	if right != left || left <= 0 {
 		t.Errorf("gear right inset %v, meters left inset %v", right, left)
@@ -552,7 +554,7 @@ func TestSidebarFootIsCentered(t *testing.T) {
 	// The icon column keeps the button centered (D147).
 	h.list.compact = true
 	h.tt.Frame()
-	foot, gear = box(t, h.tt, "sidebar foot"), box(t, h.tt, LabelSettingsOpen)
+	foot, gear = apptest.Box(t, h.tt, "sidebar foot"), apptest.Box(t, h.tt, LabelSettingsOpen)
 	if l, r := gear.X-foot.X, foot.X+foot.W-(gear.X+gear.W); l != r {
 		t.Errorf("icon column: gear insets %v and %v", l, r)
 	}

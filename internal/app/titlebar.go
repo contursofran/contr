@@ -10,6 +10,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/files"
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/theme"
@@ -60,7 +61,7 @@ type titleBar struct {
 	// search opens the find bar over the terminal. Nil: the bar has no Search button.
 	search func()
 	// diff is the diff summary and openReview its click. Nil diff: none.
-	diff       *DiffSummary
+	diff       *files.DiffSummary
 	openReview func()
 	// update builds the update pill left of the diff summary (D176). Nil: none.
 	update func(c *ui.Context)

@@ -1,4 +1,4 @@
-package app
+package files
 
 import (
 	"errors"
@@ -51,7 +51,7 @@ func TestSessionTodoRowStates(t *testing.T) {
 	}})
 	for _, label := range []string{LabelTodos, "Merge #453, done",
 		"Designing the panel, in progress", "Merge #460, pending", "working"} {
-		box(t, tt, label)
+		apptest.Box(t, tt, label)
 	}
 	if !tt.HasText("1 of 3") {
 		t.Errorf("no count 1 of 3: %q", tt.Texts())
@@ -64,7 +64,7 @@ func TestSessionTodoRowStates(t *testing.T) {
 	if n := count(tt.Texts(), LabelYouTag); n != 1 {
 		t.Errorf("%d you tags, want 1: %q", n, tt.Texts())
 	}
-	if !absent(tt, LabelArtifacts) {
+	if !apptest.Absent(tt, LabelArtifacts) {
 		t.Error("the empty Artifacts section shows")
 	}
 }
@@ -82,7 +82,7 @@ func count(list []string, s string) int {
 func TestSessionTodoTextClips(t *testing.T) {
 	long := "a todo text that is much too long to fit in the files panel at any width"
 	_, tt, _ := newSessionTester(t, &session.Session{Todos: []session.Todo{{Text: long, Status: session.Pending}}})
-	row := box(t, tt, long+", pending")
+	row := apptest.Box(t, tt, long+", pending")
 	if row.W > 280 {
 		t.Errorf("row %v is wider than the panel", row)
 	}
@@ -99,7 +99,7 @@ func TestSessionArtifactRows(t *testing.T) {
 			t.Errorf("no text %q: %q", s, tt.Texts())
 		}
 	}
-	if !absent(tt, LabelTodos) {
+	if !apptest.Absent(tt, LabelTodos) {
 		t.Error("the empty Todos section shows")
 	}
 	tt.Click("Open contr design system")
@@ -139,7 +139,7 @@ func TestSessionArtifactAge(t *testing.T) {
 
 func TestSessionMissingFileShowsNothing(t *testing.T) {
 	_, tt, _ := newSessionTester(t, nil)
-	if !absent(tt, LabelTodos) || !absent(tt, LabelArtifacts) {
+	if !apptest.Absent(tt, LabelTodos) || !apptest.Absent(tt, LabelArtifacts) {
 		t.Errorf("sections show with no file: %q", tt.Texts())
 	}
 }
@@ -157,7 +157,7 @@ func TestSessionBadFileShowsNothing(t *testing.T) {
 		Watch: func(string, func()) (func(), error) { return nil, errors.New("no watch") }}
 	tt := ui.NewTester(func(c *ui.Context) { theme.Apply(c); p.View(c) }, 300, 400)
 	tt.Frame()
-	if !absent(tt, LabelTodos) || !absent(tt, LabelArtifacts) {
+	if !apptest.Absent(tt, LabelTodos) || !apptest.Absent(tt, LabelArtifacts) {
 		t.Errorf("sections show for a bad file: %q", tt.Texts())
 	}
 }
@@ -172,7 +172,7 @@ func TestSessionFollowsTerminalAndWatch(t *testing.T) {
 		Watch: func(_ string, n func()) (func(), error) { notify = n; return func() { stops++ }, nil }}
 	tt := ui.NewTester(func(c *ui.Context) { theme.Apply(c); p.View(c) }, 300, 400)
 	tt.Frame()
-	if !absent(tt, LabelTodos) {
+	if !apptest.Absent(tt, LabelTodos) {
 		t.Fatal("todos before the file exists")
 	}
 	if err := session.Write(dir, "t1", &session.Session{Todos: []session.Todo{{Text: "one", Status: session.Pending}}}); err != nil {
@@ -180,38 +180,20 @@ func TestSessionFollowsTerminalAndWatch(t *testing.T) {
 	}
 	notify()
 	tt.Frame()
-	box(t, tt, "one, pending")
+	apptest.Box(t, tt, "one, pending")
 	if err := session.Write(dir, "t2", &session.Session{Todos: []session.Todo{{Text: "two", Status: session.Pending}}}); err != nil {
 		t.Fatal(err)
 	}
 	id = "t2"
 	tt.Frame()
-	box(t, tt, "two, pending")
-	if stops != 1 || !absent(tt, "one, pending") {
+	apptest.Box(t, tt, "two, pending")
+	if stops != 1 || !apptest.Absent(tt, "one, pending") {
 		t.Errorf("stops %d, texts %q", stops, tt.Texts())
 	}
 	id = ""
 	tt.Frame()
-	if !absent(tt, LabelTodos) {
+	if !apptest.Absent(tt, LabelTodos) {
 		t.Error("todos with no terminal")
-	}
-}
-
-func TestFilesPanelShowsSessionAboveTheTree(t *testing.T) {
-	f, tt := newTester(t)
-	f.Files.Env.Run.Go = func(fn func()) { fn() }
-	f.Files.Watch = func(string, func()) (func(), error) { return func() {}, nil }
-	dir := t.TempDir()
-	if err := session.Write(dir, "t1", &session.Session{Todos: []session.Todo{{Text: "one", Status: session.Pending}}}); err != nil {
-		t.Fatal(err)
-	}
-	f.Session.StateDir = dir
-	f.Session.Terminal = func() string { return "t1" }
-	f.Session.Watch = func(string, func()) (func(), error) { return func() {}, nil }
-	tt.Frame()
-	todos, head := box(t, tt, LabelTodos), box(t, tt, LabelPanelFiles+" name")
-	if todos.Y >= head.Y {
-		t.Errorf("todos at %v, files head at %v: want the todos above", todos, head)
 	}
 }
 

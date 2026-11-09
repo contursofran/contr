@@ -1,4 +1,4 @@
-package app
+package files
 
 // The title bar's DiffSummary (docs/spec/DiffSummary.md): the changed lines and files of the
 // selected agent. It owns no git read and no watch. It counts what the file tree lists (D131):
@@ -6,6 +6,8 @@ package app
 // watches the work tree, so the two totals always agree. Its methods run on the UI thread.
 
 import (
+	"strconv"
+
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/kit"
@@ -33,4 +35,18 @@ func (d *DiffSummary) View(c *ui.Context, open func()) {
 		return
 	}
 	kit.DiffSummary(c, kit.DiffSummaryOpts{Added: sum.Added, Removed: sum.Removed, Files: sum.Files, OnClick: open})
+}
+
+// ReadyDiff is a DiffSummary over a tree that has read sum.Files files; the first one carries
+// the counts. It runs no read. It is for the tests of the frame and the title bar.
+func ReadyDiff(sum review.Summary) *DiffSummary {
+	t := &FileTree{dir: "/x", changesOK: true}
+	for i := 0; i < sum.Files; i++ {
+		f := review.File{Path: "f" + strconv.Itoa(i), Status: review.Modified}
+		if i == 0 {
+			f.Added, f.Removed = sum.Added, sum.Removed
+		}
+		t.changes = append(t.changes, f)
+	}
+	return &DiffSummary{Tree: t}
 }

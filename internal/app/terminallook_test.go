@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
@@ -216,7 +217,7 @@ func TestEmptyOverlayBuildsNothingAndKeysReachTheTerminal(t *testing.T) {
 	if len(f.Overlay.layers) != 1 || f.Overlay.layers[0].name != LabelFindLayer {
 		t.Fatalf("layers %v, want only the find bar layer", f.Overlay.layers)
 	}
-	if !absent(tt, LabelTerminalOverlay) || !absent(tt, LabelFind) {
+	if !apptest.Absent(tt, LabelTerminalOverlay) || !apptest.Absent(tt, LabelFind) {
 		t.Error("a closed find bar layer draws an element")
 	}
 	tt.Type("x")
@@ -232,7 +233,7 @@ func TestOverlayLayerTakesKeysOnlyWhileFocused(t *testing.T) {
 		ui.TextInput(c, &field).Label("overlay field").Absolute().Top(8).Right(8).Width(120)
 	})
 	tt.Frame()
-	if f.Overlay.Empty() || absent(tt, "overlay field") {
+	if f.Overlay.Empty() || apptest.Absent(tt, "overlay field") {
 		t.Fatal("the layer did not build")
 	}
 	// Focused: the field takes the keys and the terminal gets none.
@@ -245,7 +246,7 @@ func TestOverlayLayerTakesKeysOnlyWhileFocused(t *testing.T) {
 	}
 	remove()
 	tt.Frame()
-	if len(f.Overlay.layers) != 1 || !absent(tt, "overlay field") {
+	if len(f.Overlay.layers) != 1 || !apptest.Absent(tt, "overlay field") {
 		t.Error("remove left the layer")
 	}
 }
