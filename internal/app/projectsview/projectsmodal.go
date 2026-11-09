@@ -1,4 +1,7 @@
-package app
+// Package projectsview is the projects modal: the open and recent projects, the filter, adding a
+// folder or a clone, and hiding a project. The name is not "projects", so that it needs no import
+// alias next to internal/projects, the store.
+package projectsview
 
 // The projects modal (D207, docs/spec/ProjectsModal.md): a palette with a
 // search field and one list of the open and recent projects. The owner drags
@@ -49,6 +52,10 @@ func ProjectsHideOf(name string) string { return ProjectsHide + " " + name }
 func ProjectsNoMatch(q string) string {
 	return "No project matches \"" + q + "\". Paste a GitHub repo or a path to add one."
 }
+
+// ErrPickCancelled is what a folder picker returns when the owner closes it
+// without a choice. Starting an orchestrator then does nothing.
+var ErrPickCancelled = errors.New("folder picker cancelled")
 
 // ProjectsModal is the modal. Its methods run on the UI thread.
 type ProjectsModal struct {
@@ -223,7 +230,7 @@ func (m *ProjectsModal) reorder(rows []int, to int) {
 	}
 	st.SetOrder(dirs)
 	st.Move(rows, to)
-	m.changed()
+	m.Changed()
 }
 
 // listReorder maps a drag in the list to the open rows: the list has the
@@ -410,7 +417,7 @@ func (m *ProjectsModal) add(dir, path string) {
 	st.SetOrder(st.Order(dirs))
 	st.AddFolder(dir, path)
 	st.Touch(dir, path, now())
-	m.changed()
+	m.Changed()
 }
 
 // openRecent opens a project of the recent list again.
@@ -439,8 +446,8 @@ func (m *ProjectsModal) store() *projects.Store {
 	return m.Store()
 }
 
-// changed updates the sidebar and saves the store.
-func (m *ProjectsModal) changed() {
+// Changed updates the sidebar and saves the store.
+func (m *ProjectsModal) Changed() {
 	m.refreshDefault()
 	if m.Apply != nil {
 		m.Apply()

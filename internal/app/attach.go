@@ -6,6 +6,7 @@ import (
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/ghsource"
 	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/projectsview"
 	"github.com/contursofran/contr/internal/app/questions"
 	"github.com/contursofran/contr/internal/app/reviewview"
 	"github.com/contursofran/contr/internal/app/settings"
@@ -179,7 +180,7 @@ func (f *Frame) attachSidebar(w Window, env view.Env, agentSnap func() agentstat
 // the list opens the modal, hides a project through it and tells it of a reorder or an adopt.
 func (f *Frame) attachProjects(env view.Env) {
 	l := f.SpacesList
-	m := &ProjectsModal{
+	m := &projectsview.ProjectsModal{
 		Groups: l.Groups,
 		Store:  func() *projects.Store { return f.Projects },
 		Apply: func() {
@@ -195,10 +196,10 @@ func (f *Frame) attachProjects(env view.Env) {
 	f.ProjectsModal = m
 	m.Switch = l.Switch
 	m.Orchestrated = l.Orchestrated
-	l.OnHide = m.hide
+	l.OnHide = m.Hide
 	l.OnProjects = m.Toggle
-	l.OnReordered = m.changed
-	l.OnAdopted = m.changed
+	l.OnReordered = m.Changed
+	l.OnAdopted = m.Changed
 }
 
 // attachSettings gives the appearance its window, shows a theme load error and makes the

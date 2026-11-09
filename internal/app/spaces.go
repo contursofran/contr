@@ -268,18 +268,9 @@ func (l *SpacesList) withStored(groups []spaces.RepoGroup) []spaces.RepoGroup {
 		if slices.ContainsFunc(groups, func(g spaces.RepoGroup) bool { return g.CommonDir == d }) {
 			continue
 		}
-		groups = append(groups, spaces.RepoGroup{CommonDir: d, Name: storedName(d, l.projects.Path(d)), Path: l.projects.Path(d)})
+		groups = append(groups, spaces.RepoGroup{CommonDir: d, Name: spaces.StoredName(d, l.projects.Path(d)), Path: l.projects.Path(d)})
 	}
 	return groups
-}
-
-// storedName is the name of a stored project: the repo folder, as the scan
-// names it.
-func storedName(dir, path string) string {
-	if filepath.Base(dir) == ".git" {
-		return filepath.Base(filepath.Dir(dir))
-	}
-	return filepath.Base(path)
 }
 
 // Sync brings the list up to the hc terminals and the connection. It starts
