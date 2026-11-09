@@ -24,8 +24,10 @@ The `--plugin-dir` sessions below still work with the plugin installed.
 
 1. Point `contr agents` at this folder: set `CONTR_KIT` to its path, or put
    `"kit": "<path>"` in the profiles file (`contr agents help` names it).
-   A claude profile with an agent file here then starts as that agent:
-   `claude --plugin-dir <kit> --agent contr:<profile> …`. A variant names
+   Every claude profile then starts with the kit:
+   `claude --plugin-dir <kit> …`, unless its argv has `--plugin-dir`
+   already (D211). A profile with an agent file here also starts as that
+   agent: `claude --plugin-dir <kit> --agent contr:<profile> …`. A variant names
    its agent: `"planner-high": {"argv": ["claude", "--model", "opus",
    "--effort", "high"], "agent": "planner"}`. The `spawn` tool reads the
    profiles file on each spawn, so a new profile works at once.
