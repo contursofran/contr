@@ -116,6 +116,7 @@ func newHarness(t *testing.T) *harness {
 		`draw() { printf "\033[2J\033[H"; set -- $(stty size); echo "grid $2x$1"; i=0; while [ $i -lt $2 ]; do printf %d $((i % 10)); i=$((i+1)); done; echo; }; trap draw WINCH; draw; while :; do sleep 1; done`}}
 	cfg.Profiles["claude-idle"] = agents.Profile{Argv: []string{claude, "idle"}}
 	cfg.Profiles["claude-working"] = agents.Profile{Argv: []string{claude, "working"}}
+	cfg.Profiles["claude-blocked"] = agents.Profile{Argv: []string{claude, "blocked:kind=permission:msg=Allow%20rm"}}
 	h.mgr = agents.New(agents.HC{Client: cl}, cfg)
 	return h
 }

@@ -57,29 +57,59 @@ run workers
 case "$err" in *"already running"*) ;; *) fail "second start: message: $err" ;; esac
 rm -f "$EXPLORE_DIR/state"
 
-# stop ends a fake test process that ignores the stop file, a fake app that
-# has the app name, and removes the scratch folder and the state files.
+# ident of a process, as explore.sh records it: "<command name>|<start time>".
+ident() { printf '%s|%s\n' "$(basename "$(ps -p "$1" -o comm=)")" "$(ps -p "$1" -o lstart=)"; }
+
+# stop ends a fake test binary that ignores the stop file, and a fake app that have the recorded ident (a fake go, with no ident, stays), and removes the scratch folder and
+# the state files.
 scratch="$(mktemp -d /tmp/contr-hexplore.XXXXXX)"
 mkdir -p "$scratch/home"
-cp /bin/sleep "$tmp/contr-explore"
+ln -s /bin/sleep "$tmp/contr-explore"
+ln -s /bin/sleep "$tmp/contr.test"
+"$tmp/contr.test" 300 &
+testpid=$!
 sleep 300 &
 gopid=$!
 "$tmp/contr-explore" 300 &
 apppid=$!
-# A bystander with another name must survive a stop that names its pid by mistake.
+# Bystanders: processes that are not the recorded ones.
 sleep 300 &
 other=$!
-pids=("$gopid" "$apppid" "$other")
-printf 'gopid=%s\n' "$gopid" >"$EXPLORE_DIR/state"
-printf 'app=contr-explore\npid=%s\nscratch=%s\nhc_session=\n' "$apppid" "$scratch" >"$EXPLORE_DIR/info"
+pids=("$testpid" "$gopid" "$apppid" "$other")
+sleep 0.3
+for p in "${pids[@]}"; do kill -0 "$p" 2>/dev/null || fail "a fake process did not start"; done
+printf 'gopid=%s\ntestpid=%s\ntestid=%s\napppid=%s\nappid=%s\n' \
+	"$gopid" "$testpid" "$(ident "$testpid")" "$apppid" "$(ident "$apppid")" >"$EXPLORE_DIR/state"
+printf 'app=contr-explore\npid=%s\ntestpid=%s\nscratch=%s\nhc_session=\n' "$apppid" "$testpid" "$scratch" >"$EXPLORE_DIR/info"
 run stop
 [ "$rc" = 0 ] || fail "stop: want exit 0, got $rc: $err"
 sleep 0.5
-kill -0 "$gopid" 2>/dev/null && fail "stop left the test process"
+kill -0 "$testpid" 2>/dev/null && fail "stop left the test binary"
+kill -0 "$gopid" 2>/dev/null || fail "stop ended go, which is not recorded"
 kill -0 "$apppid" 2>/dev/null && fail "stop left the app"
-kill -0 "$other" 2>/dev/null || fail "stop ended a process that is not the app"
+kill -0 "$other" 2>/dev/null || fail "stop ended a process that is not recorded"
 [ ! -e "$scratch" ] || fail "stop left the scratch folder"
 for f in state info stop; do [ ! -e "$EXPLORE_DIR/$f" ] || fail "stop left $f"; done
+
+# A stale state file: the pids now belong to other processes. A bystander as
+# gopid, testpid and apppid, with no ident or with another ident, survives.
+scratch="$(mktemp -d /tmp/contr-hexplore.XXXXXX)"
+"$tmp/contr-explore" 300 &
+by1=$!
+sleep 300 &
+by2=$!
+pids+=("$by1" "$by2")
+sleep 0.3
+kill -0 "$by1" 2>/dev/null && kill -0 "$by2" 2>/dev/null || fail "a fake process did not start"
+printf 'gopid=%s\ntestpid=%s\ntestid=contr.test|Mon Jan  1 00:00:00 2001\napppid=%s\nappid=contr-explore|Mon Jan  1 00:00:00 2001\n' \
+	"$by2" "$by2" "$by1" >"$EXPLORE_DIR/state"
+printf 'app=contr-explore\npid=%s\ntestpid=%s\nscratch=%s\nhc_session=\n' "$by1" "$by2" "$scratch" >"$EXPLORE_DIR/info"
+run stop
+[ "$rc" = 0 ] || fail "stale stop: want exit 0, got $rc: $err"
+kill -0 "$by1" 2>/dev/null || fail "stale stop ended a process with another start time (comm matches)"
+kill -0 "$by2" 2>/dev/null || fail "stale stop ended a bystander"
+[ ! -e "$scratch" ] || fail "stale stop left the scratch folder"
+[ ! -e "$EXPLORE_DIR/state" ] || fail "stale stop left the state file"
 
 # stop never removes a folder outside /tmp/contr-h*.
 keep="$tmp/keep"

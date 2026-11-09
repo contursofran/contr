@@ -34,35 +34,53 @@ fixtures() {
 
 alive() { [ -n "${1:-}" ] && kill -0 "$1" 2>/dev/null; }
 
-# stop_all ends what the state file lists: the test (which stops the core and
-# removes the scratch folder), then, if that fails, the app, the holders, the
-# core and the folder by hand. Only a folder /tmp/contr-h* is ever removed.
+# ident prints "<command name>|<start time>" of a process, or nothing. A pid
+# that a later process reuses has another ident.
+ident() {
+	[ -n "${1:-}" ] || return 0
+	c=$(ps -p "$1" -o comm= 2>/dev/null) || return 0
+	t=$(ps -p "$1" -o lstart= 2>/dev/null) || return 0
+	[ -n "$c" ] && printf '%s|%s\n' "$(basename "$c")" "$t"
+}
+
+# same pid ident: true when the process runs and has the recorded ident. An
+# empty ident never matches, so a state file without idents kills nothing.
+same() { [ -n "${2:-}" ] && [ "$(ident "$1")" = "$2" ]; }
+
+# endpid pid ident: TERM, then KILL, a process that has the recorded ident.
+endpid() {
+	same "$1" "$2" || return 0
+	kill -TERM "$1" 2>/dev/null || true
+	sleep 0.5
+	same "$1" "$2" && kill -KILL "$1" 2>/dev/null || true
+}
+
+# stop_all ends what the state file lists: the test binary (`go` ends by itself when it ends; it stops the core
+# and removes the scratch folder when it gets the stop file), then, if that
+# fails, the app, the holders, the core and the folder by hand. It ends a
+# process only when its command name and start time match what start
+# recorded, and removes only a folder /tmp/contr-h*.
 stop_all() {
-	gopid= scratch= apppid= session=
-	[ -f "$statefile" ] && gopid=$(sed -n 's/^gopid=//p' "$statefile")
+	testpid= testid= apppid= appid= scratch= session=
+	if [ -f "$statefile" ]; then
+		testpid=$(sed -n 's/^testpid=//p' "$statefile")
+		testid=$(sed -n 's/^testid=//p' "$statefile")
+		apppid=$(sed -n 's/^apppid=//p' "$statefile")
+		appid=$(sed -n 's/^appid=//p' "$statefile")
+	fi
 	if [ -f "$infofile" ]; then
 		scratch=$(sed -n 's/^scratch=//p' "$infofile")
-		apppid=$(sed -n 's/^pid=//p' "$infofile")
 		session=$(sed -n 's/^hc_session=//p' "$infofile")
 	fi
 	mkdir -p "$dir"
 	: >"$stopfile"
 	i=0
-	while alive "$gopid" && [ "$i" -lt "$((wait_stop * 5))" ]; do
+	while same "$testpid" "$testid" && [ "$i" -lt "$((wait_stop * 5))" ]; do
 		sleep 0.2
 		i=$((i + 1))
 	done
-	if alive "$gopid"; then
-		kill -TERM "$gopid" 2>/dev/null || true
-		sleep 1
-		kill -KILL "$gopid" 2>/dev/null || true
-	fi
-	# The app: only a process that has the name of the scratch app.
-	if alive "$apppid" && [ "$(basename "$(ps -p "$apppid" -o comm= 2>/dev/null)")" = "$app" ]; then
-		kill -TERM "$apppid" 2>/dev/null || true
-		sleep 0.5
-		kill -KILL "$apppid" 2>/dev/null || true
-	fi
+	endpid "$testpid" "$testid"
+	endpid "$apppid" "$appid"
 	case "$scratch" in
 	/tmp/contr-h?*)
 		if [ -d "$scratch" ]; then
@@ -139,7 +157,7 @@ CONTR_EXPLORE=$fixture CONTR_EXPLORE_THEME=$theme CONTR_EXPLORE_BIN=$abs/$app \
 	CONTR_EXPLORE_INFO=$abs/info CONTR_EXPLORE_STOP=$abs/stop \
 	nohup go test -tags e2e -count=1 -timeout 0 -run '^TestExplore$' -v ./cmd/contr >"$log" 2>&1 &
 gopid=$!
-echo "gopid=$gopid" >"$statefile"
+: >"$statefile"
 
 # Wait for the info file (the app runs), then for its window.
 i=0
@@ -162,6 +180,9 @@ if grep -q -- '--- SKIP' "$log"; then
 fi
 
 pid=$(sed -n 's/^pid=//p' "$infofile")
+testpid=$(sed -n 's/^testpid=//p' "$infofile")
+# Record the idents now, so a stop can tell these processes from a later one.
+printf 'testpid=%s\ntestid=%s\napppid=%s\nappid=%s\n' "$testpid" "$(ident "$testpid")" "$pid" "$(ident "$pid")" >>"$statefile"
 scratch=$(sed -n 's/^scratch=//p' "$infofile")
 session=$(sed -n 's/^hc_session=//p' "$infofile")
 win=

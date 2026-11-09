@@ -40,9 +40,10 @@ var seeFixtures = map[string]seeFixture{
 		ready: "lead, ",
 	},
 	"questions": {
-		about: "the workers fixture with two questions and a to-do for the owner",
+		about: "the workers fixture with a blocked worker (permission menu), two questions and a to-do for the owner",
 		setup: func(t *testing.T, h *harness) {
-			seeWorkers(t, h)
+			repo := seeWorkersRepo(t, h)
+			h.spawn(t, agents.Spec{Name: "b252-s1-cleanup", Profile: "claude-blocked", Role: "builder", Issue: "252", Project: "demo", Worktree: repo})
 			h.owner(t, `{"questions":[
 {"id":"D1","project":"demo","title":"Which database for the cache?","question":"The cache needs a store. Redis is fast but one more service; sqlite is already in the app. Which one should it use?","options":["sqlite","redis","files"],"recommended":0,"asked":"2026-11-03T10:00:00Z"},
 {"id":"D2","project":"demo","title":"Keep the old outline ticks?","question":"The new outline replaces the pin bar. Remove the old ticks now, or after one release?","options":["now","after one release"],"recommended":0,"asked":"2026-11-03T10:05:00Z"}],
@@ -198,13 +199,17 @@ func seeSession(t *testing.T, h *harness) {
 	}
 }
 
-func seeWorkers(t *testing.T, h *harness) {
+func seeWorkers(t *testing.T, h *harness) { seeWorkersRepo(t, h) }
+
+// seeWorkersRepo spawns the workers fixture and returns its repository.
+func seeWorkersRepo(t *testing.T, h *harness) string {
 	repo := h.repo(t, "demo", "main")
 	h.spawn(t,
 		agents.Spec{Name: "lead", Profile: "claude-idle", Role: agents.RoleOrchestrator, Project: "demo", Worktree: repo},
 		agents.Spec{Name: "b201-s1-notch", Profile: "claude-working", Role: "builder", Issue: "201", Project: "demo", Worktree: repo},
 		agents.Spec{Name: "b202-s1-outline", Profile: "claude-idle", Role: "builder", Issue: "202", Project: "demo", Worktree: repo},
 	)
+	return repo
 }
 
 // TestSee is scripts/see.sh (#457, D178). It starts the fixture CONTR_SEE

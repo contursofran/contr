@@ -19,7 +19,7 @@ import (
 // fixture CONTR_EXPLORE names in the harness (a scratch core, scratch home and
 // folders), starts the release binary CONTR_EXPLORE_BIN in the theme of
 // CONTR_EXPLORE_THEME, and writes CONTR_EXPLORE_INFO (lines app=, pid=,
-// scratch=, hc_session=). Then it keeps the app and the core open until the
+// testpid=, scratch=, hc_session=). Then it keeps the app and the core open until the
 // file CONTR_EXPLORE_STOP exists or the test gets SIGINT or SIGTERM. The
 // harness cleanup then ends the core and removes the scratch folder.
 // Without CONTR_EXPLORE it skips.
@@ -64,7 +64,7 @@ func TestExplore(t *testing.T) {
 			session = s
 		}
 	}
-	body := "app=" + filepath.Base(bin) + "\npid=" + strconv.Itoa(app.Process.Pid) +
+	body := "app=" + filepath.Base(bin) + "\npid=" + strconv.Itoa(app.Process.Pid) + "\ntestpid=" + strconv.Itoa(os.Getpid()) +
 		"\nscratch=" + h.dir + "\nhc_session=" + session + "\n"
 	tmp := info + ".tmp"
 	if err := os.WriteFile(tmp, []byte(body), 0o600); err != nil {
