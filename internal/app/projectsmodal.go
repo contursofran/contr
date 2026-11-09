@@ -1,9 +1,10 @@
 package app
 
-// The projects modal (D110): the open projects in the sidebar order. The
-// owner drags a row to change the order and clicks `close` to hide a project
-// in contr only (D70). Each change goes to the projects store at once and is
-// saved to projects.json on a goroutine (D63). Esc, `esc` or `Done` closes it.
+// The projects modal (D207, docs/spec/ProjectsModal.md): a palette with a
+// search field and one list of the open and recent projects. The owner drags
+// an open row to change the sidebar order and hides a project in contr only
+// (D70). Each change goes to the projects store at once and is saved to
+// projects.json on a goroutine (D63). Esc or a click outside closes it.
 
 import (
 	"context"
@@ -11,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -27,24 +27,25 @@ import (
 const (
 	LabelProjects       = "projects modal"
 	LabelProjectsList   = "projects list"
-	LabelProjectsFilter = "Filter projects"
-	ProjectsEsc         = "esc"
-	ProjectsDone        = "Done"
-	ProjectsClose       = "close"
-	ProjectsOpenFolder  = "+ open folder…"
-	LabelProjectsRecent = "projects recent"
+	LabelProjectsFooter = "projects footer"
+	LabelProjectsDot    = "orchestrator dot"
+	LabelProjectsSearch = "Search projects, or paste a GitHub repo or a path"
+	ProjectsHide        = "Hide"
+	ProjectsOpenFolder  = "Open folder…"
 	LabelCloneRemote    = "Clone from GitHub"
 	ProjectsClone       = "Clone"
 	ProjectsCloneFolder = "Choose folder…"
 )
 
-// ProjectsRow is the label of a project row; ProjectsCloseOf is its close
+// ProjectsRow is the label of a project row; ProjectsHideOf is its Hide
 // button.
-func ProjectsRow(name string) string     { return "project " + name }
-func ProjectsCloseOf(name string) string { return ProjectsClose + " " + name }
+func ProjectsRow(name string) string    { return "project " + name }
+func ProjectsHideOf(name string) string { return ProjectsHide + " " + name }
 
-// ProjectsOpenOf is the `open` button of a recent project (D116).
-func ProjectsOpenOf(name string) string { return "open " + name }
+// ProjectsNoMatch is the text of an empty list under a filter.
+func ProjectsNoMatch(q string) string {
+	return "No project matches \"" + q + "\". Paste a GitHub repo or a path to add one."
+}
 
 // ProjectsModal is the modal. Its methods run on the UI thread.
 type ProjectsModal struct {
@@ -59,7 +60,7 @@ type ProjectsModal struct {
 	Run  Runner
 	// PickFolder asks the owner for a folder. It blocks, so it runs on a
 	// goroutine, and returns ErrPickCancelled for no choice. Nil hides
-	// `+ open folder…` (D116).
+	// `Open folder…` (D116).
 	PickFolder func() (string, error)
 	// Resolve returns the project key of a folder: its git common dir, or the
 	// folder when it is outside git. It reads files, so it runs on a goroutine.
@@ -80,9 +81,20 @@ type ProjectsModal struct {
 	Status func(string)
 	// Invalidate redraws the window; may be nil.
 	Invalidate func()
+	// Switch selects the open project with this common dir in the sidebar;
+	// may be nil.
+	Switch func(dir string)
+	// Orchestrated tells whether an orchestrator holds a main worktree of the
+	// project; the row then shows a dot before the live state. May be nil.
+	Orchestrated func(g spaces.RepoGroup) bool
 
-	open   bool
-	filter string
+	open  bool
+	query string
+	// sel is the selected row, an index into rows(). hover is the row the
+	// pointer entered last; it moves sel only when it changes.
+	sel, hover int
+	// moved is true after a key moved sel: the list then scrolls to it.
+	moved bool
 	// remote is the text of the clone field; parent is the folder the owner
 	// picked ("" means CloneParent); cloning is true while git runs; cloneErr
 	// is the text of the last failure.
@@ -110,7 +122,7 @@ func (m *ProjectsModal) Toggle() {
 	} else {
 		m.refreshDefault()
 	}
-	m.filter = ""
+	m.query, m.sel, m.hover = "", 0, -1
 	m.redraw()
 }
 
@@ -176,19 +188,19 @@ func (m *ProjectsModal) redraw() {
 	}
 }
 
-// shown returns the groups that match the filter.
+// text is the trimmed text of the field.
+func (m *ProjectsModal) text() string { return strings.TrimSpace(m.query) }
+
+// shown returns the open groups whose name has the text of the field.
 func (m *ProjectsModal) shown() []spaces.RepoGroup {
-	var groups []spaces.RepoGroup
-	if m.Groups != nil {
-		groups = m.Groups()
-	}
-	f := strings.ToLower(strings.TrimSpace(m.filter))
+	groups := m.groupsAll()
+	f := m.text()
 	if f == "" {
 		return groups
 	}
 	var out []spaces.RepoGroup
 	for _, g := range groups {
-		if strings.Contains(strings.ToLower(g.Name+" "+g.CommonDir), f) {
+		if _, _, ok := matchSpan(g.Name, f); ok {
 			out = append(out, g)
 		}
 	}
@@ -199,7 +211,7 @@ func (m *ProjectsModal) shown() []spaces.RepoGroup {
 // filter hides rows, since the row numbers then differ from the stored order.
 func (m *ProjectsModal) reorder(rows []int, to int) {
 	st := m.store()
-	if st == nil || strings.TrimSpace(m.filter) != "" {
+	if st == nil || m.text() != "" {
 		return
 	}
 	groups := m.Groups()
@@ -212,8 +224,30 @@ func (m *ProjectsModal) reorder(rows []int, to int) {
 	m.changed()
 }
 
-// closeProject hides the project in contr only (D70).
-func (m *ProjectsModal) closeProject(dir string) {
+// listReorder maps a drag in the list to the open rows: the list has the
+// `Open` header first, so its row i is open row i-1. A drag of another row,
+// or a drop in Recent, does nothing.
+func (m *ProjectsModal) listReorder(rows []int, to int) {
+	n := len(m.groupsAll())
+	if to < 1 || to > 1+n {
+		if to < 1 {
+			to = 1
+		} else {
+			return
+		}
+	}
+	open := make([]int, 0, len(rows))
+	for _, r := range rows {
+		if r < 1 || r > n {
+			return
+		}
+		open = append(open, r-1)
+	}
+	m.reorder(open, to-1)
+}
+
+// hide hides the project in contr only (D70).
+func (m *ProjectsModal) hide(dir string) {
 	st := m.store()
 	if st == nil {
 		return
@@ -440,96 +474,6 @@ func (m *ProjectsModal) flush() {
 	})
 }
 
-// folder is the name of the folder that holds the project.
-func projectFolder(commonDir string) string {
-	dir := commonDir
-	if filepath.Base(dir) == ".git" {
-		dir = filepath.Dir(dir)
-	}
-	return filepath.Base(filepath.Dir(dir))
-}
-
-// initials are the first letters of the first two words of name, in capitals.
-func projectInitials(name string) string {
-	words := strings.FieldsFunc(name, func(r rune) bool { return r == '-' || r == '_' || r == ' ' || r == '.' })
-	var out []rune
-	for _, w := range words {
-		out = append(out, []rune(strings.ToUpper(w))[0])
-		if len(out) == 2 {
-			break
-		}
-	}
-	return string(out)
-}
-
-// sub is the second line of a row: the folder, the worktrees and the ones that need the owner.
-func projectSub(g spaces.RepoGroup) string {
-	you := 0
-	for _, r := range g.Rows {
-		if r.HoldYou {
-			you++
-		}
-	}
-	return projectFolder(g.CommonDir) + " · " + strconv.Itoa(len(g.Rows)) + " worktrees · " + strconv.Itoa(you) + " need you"
-}
-
-// View builds the modal, or nothing while it is closed.
-func (m *ProjectsModal) View(c *ui.Context) {
-	if !m.open {
-		return
-	}
-	open := true
-	p := theme.Current()
-	d := ui.DialogBase(c, &open, func(backdrop, panel ui.Element) {
-		backdrop.Background(p.Ground.Alpha(0.72)).Justify(ui.Start).AlignItems(ui.Center).Padding(theme.ModalTop, 0, 0, 0)
-		panel.Label(LabelProjects).Column().Width(theme.ModalWidth).Background(p.Ground).
-			Border(1, p.FloatLine).Radius(theme.ModalRadius)
-		for _, l := range p.ShadowFloat {
-			if !l.Inset {
-				panel.Shadow(l.X, l.Y, l.Blur, l.Wide, l.Color)
-			}
-		}
-		panel.Children(func() { m.body(c) })
-	})
-	if d.Dismissed() || !open {
-		m.open = false
-		m.redraw()
-	}
-}
-
-func (m *ProjectsModal) body(c *ui.Context) {
-	p := theme.Current()
-	groups := m.shown()
-	ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(8).Padding(16, theme.ModalPadX, 12, theme.ModalPadX).Children(func() {
-		ui.Text(c, "Projects").Bold().Shrink(0).TextColor(p.Ink95)
-		ui.Text(c, strconv.Itoa(len(m.groupsAll()))+" open").Grow(1).TextColor(p.Ink50)
-		cardButton(c, ProjectsEsc, ButtonPlain, p.Ink50, m.Close)
-	})
-	ui.TextInput(c, &m.filter).Label(LabelProjectsFilter).Placeholder("> filter projects…").
-		AutoFocus().Shrink(0).Margin(0, theme.ModalPadX, 12, theme.ModalPadX)
-	ui.Text(c, "open in contr · drag to reorder the sidebar").Shrink(0).
-		PaddingX(theme.ModalPadX).TextColor(p.Ink50)
-	m.list.Key = func(i int) any { return groups[i].CommonDir }
-	m.list.Label = func(i int) string { return ProjectsRow(groups[i].Name) }
-	m.list.Reorder = nil
-	if strings.TrimSpace(m.filter) == "" {
-		m.list.Reorder = m.reorder
-	}
-	h := float32(len(groups)) * theme.ModalRowHeight
-	ui.List(c.Key("projectslist"), &m.list, len(groups), func(i int) { m.row(c, groups[i]) }).
-		Label(LabelProjectsList).FillWidth().Shrink(0).Height(min(h, theme.ModalListMax)).Padding(6, 10)
-	m.recentSection(c)
-	m.cloneSection(c)
-	ui.Row(c).Shrink(0).AlignItems(ui.Center).Justify(ui.End).Gap(14).Padding(12, theme.ModalPadX).
-		BorderWidth(1, 0, 0, 0).BorderColor(p.Hairline).Children(func() {
-		if m.PickFolder != nil {
-			cardButton(c, ProjectsOpenFolder, ButtonOutlined, p.Ink95, m.openFolder)
-			ui.Spacer(c)
-		}
-		cardButton(c, ProjectsDone, ButtonFilled, p.Ink95, m.Close)
-	})
-}
-
 // cloneSection is the clone part: the field, the destination preview and the
 // buttons. A busy state or the last error shows below.
 func (m *ProjectsModal) cloneSection(c *ui.Context) {
@@ -563,48 +507,5 @@ func (m *ProjectsModal) cloneSection(c *ui.Context) {
 		case dest != "":
 			ui.Text(c, "→ "+dest).SingleLine().MinWidth(0).TextColor(p.Ink62)
 		}
-	})
-}
-
-// recentSection lists the recent projects that are not open, each with `open`.
-func (m *ProjectsModal) recentSection(c *ui.Context) {
-	p := theme.Current()
-	recent := m.recent()
-	if len(recent) == 0 {
-		return
-	}
-	ui.Column(c).Label(LabelProjectsRecent).Shrink(0).Padding(10, theme.ModalPadX).Gap(4).Children(func() {
-		ui.Text(c, "recent").TextColor(p.Ink50)
-		for _, e := range recent {
-			name := storedName(e.Dir, e.Path)
-			ui.Row(c).AlignItems(ui.Center).Gap(12).Children(func() {
-				ui.Text(c, name).Grow(1).SingleLine().MinWidth(0).TextColor(p.Ink62)
-				cardButton(c, ProjectsOpenOf(name), ButtonOutlined, p.Ink95, func() { m.openRecent(e) })
-			})
-		}
-	})
-}
-
-func (m *ProjectsModal) groupsAll() []spaces.RepoGroup {
-	if m.Groups == nil {
-		return nil
-	}
-	return m.Groups()
-}
-
-func (m *ProjectsModal) row(c *ui.Context, g spaces.RepoGroup) {
-	p := theme.Current()
-	ui.Row(c).Label(ProjectsRow(g.Name)).Height(theme.ModalRowHeight).AlignItems(ui.Center).Gap(12).
-		Padding(8, 10).Radius(8).Children(func() {
-		ui.Text(c, "⋮⋮").Shrink(0).TextColor(p.Ink26)
-		ui.Box(c).Width(theme.ModalTile).Height(theme.ModalTile).Shrink(0).Radius(theme.ModalTileRadius).
-			Background(p.Hover).Center().Children(func() {
-			ui.Text(c, projectInitials(g.Name)).Bold().TextColor(p.Ink62)
-		})
-		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-			ui.Text(c, g.Name).Bold().SingleLine().MinWidth(0).TextColor(p.Ink95)
-			ui.Text(c, projectSub(g)).SingleLine().MinWidth(0).TextColor(p.Ink38)
-		})
-		cardButton(c, ProjectsCloseOf(g.Name), ButtonOutlined, p.Ink95, func() { m.closeProject(g.CommonDir) })
 	})
 }

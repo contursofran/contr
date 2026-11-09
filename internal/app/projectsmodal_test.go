@@ -22,6 +22,8 @@ type modalRig struct {
 	dirs   []string // all dirs, tree order
 	saved  []*projects.Store
 	saveEr error
+	// rows edits each group the rig returns.
+	rows   func(g *spaces.RepoGroup)
 	status []string
 	tt     *ui.Tester
 	// held queues work instead of running it, to test saves that overlap.
@@ -59,7 +61,11 @@ func (r *modalRig) groups() []spaces.RepoGroup {
 			continue
 		}
 		name := strings.Split(d, "/")[2]
-		out = append(out, spaces.RepoGroup{CommonDir: d, Name: name, Rows: []spaces.WorktreeRow{{HoldYou: name == "a"}, {}}})
+		g := spaces.RepoGroup{CommonDir: d, Name: name, Rows: []spaces.WorktreeRow{{HoldYou: name == "a"}, {}}}
+		if r.rows != nil {
+			r.rows(&g)
+		}
+		out = append(out, g)
 	}
 	return out
 }
@@ -77,6 +83,7 @@ func (r *modalRig) has(label string) bool { _, ok := r.tt.Find(label); return ok
 func (r *modalRig) open() {
 	r.m.Toggle()
 	r.tt.Frame()
+	r.tt.Frame() // the list measures its rows in the first frame and the footer moves
 }
 
 func TestProjectsModalOpensAndListsProjects(t *testing.T) {
@@ -85,16 +92,19 @@ func TestProjectsModalOpensAndListsProjects(t *testing.T) {
 		t.Fatal("modal shows before it opens")
 	}
 	r.open()
-	for _, l := range []string{LabelProjects, ProjectsRow("a"), ProjectsRow("b"), ProjectsRow("c"), ProjectsDone} {
+	for _, l := range []string{LabelProjects, LabelProjectsSearch, LabelProjectsFooter, ProjectsRow("a"), ProjectsRow("b"), ProjectsRow("c")} {
 		if !r.has(l) {
 			t.Errorf("no %q", l)
 		}
 	}
 	texts := r.tt.Texts()
-	for _, want := range []string{"3 open", "w · 2 worktrees · 1 need you"} {
+	for _, want := range []string{"Open · 3", "drag to reorder the sidebar"} {
 		if !slices.Contains(texts, want) {
 			t.Errorf("no text %q in %v", want, texts)
 		}
+	}
+	if !slices.Contains(texts, "1 need you") {
+		t.Errorf("no need-you meta in %v", texts)
 	}
 	r.m.Toggle()
 	r.tt.Frame()
@@ -103,7 +113,7 @@ func TestProjectsModalOpensAndListsProjects(t *testing.T) {
 	}
 }
 
-func TestProjectsModalClosesWithEscAndDone(t *testing.T) {
+func TestProjectsModalClosesWithEsc(t *testing.T) {
 	r := newModalRig(t)
 	r.open()
 	r.tt.Key(0, ui.KeyEscape)
@@ -111,23 +121,35 @@ func TestProjectsModalClosesWithEscAndDone(t *testing.T) {
 		t.Error("Esc did not close the modal")
 	}
 	r.open()
-	r.tt.Click(ProjectsDone)
-	if r.m.Opened() {
-		t.Error("Done did not close the modal")
-	}
-	r.open()
-	r.tt.Click(ProjectsEsc)
-	if r.m.Opened() {
-		t.Error("esc button did not close the modal")
+	for _, gone := range []string{"Done", "close"} {
+		if r.has(gone) || slices.Contains(r.tt.Texts(), gone) {
+			t.Errorf("the modal still has %q", gone)
+		}
 	}
 }
 
-func TestProjectsModalCloseHidesAndSaves(t *testing.T) {
+func TestProjectsModalEscClearsTheFieldFirst(t *testing.T) {
+	r := newModalRig(t)
+	r.open()
+	r.tt.Type("zz")
+	r.tt.Key(0, ui.KeyEscape)
+	if r.m.query != "" || !r.m.Opened() {
+		t.Errorf("first Esc: query %q opened %v", r.m.query, r.m.Opened())
+	}
+	r.tt.Key(0, ui.KeyEscape)
+	if r.m.Opened() {
+		t.Error("Esc on an empty field did not close")
+	}
+}
+
+func TestProjectsModalHideHidesAndSaves(t *testing.T) {
 	r := newModalRig(t)
 	apply := 0
 	r.m.Apply = func() { apply++ }
 	r.open()
-	r.tt.Click(ProjectsCloseOf("b"))
+	r.tt.Key(0, ui.KeyDown) // select b
+	r.tt.Frame()
+	r.tt.Click(ProjectsHideOf("b"))
 	if !r.store.Hidden("/w/b/.git") {
 		t.Fatal("project b is not hidden")
 	}
@@ -143,13 +165,220 @@ func TestProjectsModalCloseHidesAndSaves(t *testing.T) {
 	}
 }
 
+func TestProjectsModalSearchFiltersAndUnderlines(t *testing.T) {
+	r := newModalRig(t)
+	r.dirs = []string{"/w/contr/.git", "/w/contr-rune/.git", "/w/site/.git"}
+	r.open()
+	r.tt.Type("rune")
+	r.tt.Frame()
+	if !r.has(ProjectsRow("contr-rune")) || r.has(ProjectsRow("contr")) || r.has(ProjectsRow("site")) {
+		t.Errorf("filter wrong: %v", r.tt.Texts())
+	}
+	texts := r.tt.Texts()
+	if !slices.Contains(texts, "Open · 3") {
+		t.Errorf("Open count is not that of all open projects: %v", texts)
+	}
+	if slices.Contains(texts, "drag to reorder the sidebar") {
+		t.Error("the hint shows while filtering")
+	}
+}
+
+func TestNameSpansUnderlinesTheMatch(t *testing.T) {
+	sp := nameSpans("contr-rune", "RUNE", ui.Color{})
+	if len(sp) != 3 || sp[0].Text != "contr-" || sp[1].Text != "rune" || !sp[1].Underline || sp[0].Underline || sp[2].Text != "" {
+		t.Errorf("spans %+v", sp)
+	}
+	if sp := nameSpans("contr", "zz", ui.Color{}); len(sp) != 1 || sp[0].Underline {
+		t.Errorf("no match: %+v", sp)
+	}
+}
+
+func TestProjectsModalNoMatch(t *testing.T) {
+	r := newModalRig(t)
+	r.open()
+	r.tt.Type("dashboard")
+	r.tt.Frame()
+	if want := ProjectsNoMatch("dashboard"); want != `No project matches "dashboard". Paste a GitHub repo or a path to add one.` ||
+		!slices.Contains(r.tt.Texts(), want) {
+		t.Errorf("no empty text in %v", r.tt.Texts())
+	}
+}
+
+func TestProjectsModalKeysMoveAndEnter(t *testing.T) {
+	r := newModalRig(t)
+	r.store.Touch("/w/z/.git", "/w/z", time.Unix(1, 0))
+	var switched []string
+	r.m.Switch = func(d string) { switched = append(switched, d) }
+	r.open()
+	r.tt.Key(0, ui.KeyDown)
+	r.tt.Frame()
+	if r.m.sel != 1 {
+		t.Fatalf("sel = %d, want 1", r.m.sel)
+	}
+	r.tt.Key(0, ui.KeyUp)
+	r.tt.Key(0, ui.KeyUp) // stops at the top
+	if r.m.sel != 0 {
+		t.Fatalf("sel = %d, want 0", r.m.sel)
+	}
+	r.tt.Key(0, ui.KeyDown)
+	r.tt.Key(0, ui.KeyEnter)
+	if !slices.Equal(switched, []string{"/w/b/.git"}) || r.m.Opened() {
+		t.Errorf("switched %v, opened %v", switched, r.m.Opened())
+	}
+	// Enter on a recent row adds it to the store.
+	r.open()
+	for range 5 { // past the last row: stops at z
+		r.tt.Key(0, ui.KeyDown)
+	}
+	r.tt.Key(0, ui.KeyEnter)
+	if !slices.Equal(r.store.Folders(), []string{"/w/z/.git"}) || len(r.saved) != 1 {
+		t.Errorf("folders = %v, saved = %d", r.store.Folders(), len(r.saved))
+	}
+}
+
+func TestProjectsModalCmdBackspaceHides(t *testing.T) {
+	r := newModalRig(t)
+	r.open()
+	r.tt.Key(0, ui.KeyDown)
+	r.tt.Key(ui.Cmd, ui.KeyBackspace)
+	if !r.store.Hidden("/w/b/.git") || len(r.saved) != 1 || !r.saved[0].Hidden("/w/b/.git") {
+		t.Errorf("hidden = %v, saved = %v", r.store.Hidden("/w/b/.git"), r.saved)
+	}
+}
+
+func TestProjectsModalCmdBackspaceWithTextDoesNotHide(t *testing.T) {
+	r := newModalRig(t)
+	r.open()
+	r.tt.Type("a")
+	r.tt.Frame()
+	if slices.Contains(r.tt.Texts(), "hide") {
+		t.Error("the footer offers hide while the field has text")
+	}
+	r.tt.Key(ui.Cmd, ui.KeyBackspace) // deletes the text
+	r.tt.Frame()
+	if r.store.Hidden("/w/a/.git") || len(r.saved) != 0 || r.m.query != "" {
+		t.Errorf("hidden %v, saved %d, query %q", r.store.Hidden("/w/a/.git"), len(r.saved), r.m.query)
+	}
+}
+
+func TestProjectsModalFooterOffersHideOnOpenRowOnly(t *testing.T) {
+	r := newModalRig(t)
+	r.store.Touch("/w/z/.git", "/w/z", time.Unix(1, 0))
+	r.open()
+	if !slices.Contains(r.tt.Texts(), "hide") {
+		t.Error("no hide hint on an open row")
+	}
+	for range 3 {
+		r.tt.Key(0, ui.KeyDown)
+	}
+	r.tt.Frame()
+	if slices.Contains(r.tt.Texts(), "hide") {
+		t.Error("hide hint on a recent row")
+	}
+}
+
+func TestProjectsModalOrchestratorDot(t *testing.T) {
+	r := newModalRig(t)
+	hold := "orchestrator idle"
+	r.rows = func(g *spaces.RepoGroup) {
+		if g.Name == "b" {
+			g.Rows[0].IsMain, g.Rows[0].Hold = true, &hold
+		}
+	}
+	orch := false
+	r.m.Orchestrated = func(g spaces.RepoGroup) bool { return orch && g.Name == "b" }
+	r.open()
+	if r.has(LabelProjectsDot) {
+		t.Error("dot without an orchestrator")
+	}
+	orch = true
+	r.tt.Frame()
+	if !r.has(LabelProjectsDot) {
+		t.Error("no dot with an orchestrator")
+	}
+	if !slices.Contains(r.tt.Texts(), "orchestrator idle") {
+		t.Errorf("no live state in %v", r.tt.Texts())
+	}
+}
+
+func TestProjectsModalLongPathKeepsBranch(t *testing.T) {
+	r := newModalRig(t)
+	long := "/very/long/folder/name/" + strings.Repeat("deep/", 30) + "project"
+	r.rows = func(g *spaces.RepoGroup) { g.Path, g.Branch = long, "main" }
+	r.open()
+	if !slices.Contains(r.tt.Texts(), " · main") {
+		t.Errorf("the branch is gone from %v", r.tt.Texts())
+	}
+}
+
+func TestProjectsModalDotAlsoBeforeNeedYou(t *testing.T) {
+	r := newModalRig(t)
+	r.m.Orchestrated = func(g spaces.RepoGroup) bool { return g.Name == "a" } // a has a HoldYou row
+	r.open()
+	if !r.has(LabelProjectsDot) || !slices.Contains(r.tt.Texts(), "1 need you") {
+		t.Errorf("dot %v, texts %v", r.has(LabelProjectsDot), r.tt.Texts())
+	}
+}
+
+func TestProjectsModalMetaLeavesOutZeros(t *testing.T) {
+	r := newModalRig(t)
+	r.open()
+	for _, s := range r.tt.Texts() {
+		if strings.Contains(s, "0 worktrees") || strings.Contains(s, "0 need you") {
+			t.Errorf("text %q", s)
+		}
+	}
+}
+
+func TestProjectsModalFooterEnterLabel(t *testing.T) {
+	r := newModalRig(t)
+	r.store.Touch("/w/z/.git", "/w/z", time.Unix(1, 0))
+	r.open()
+	if !slices.Contains(r.tt.Texts(), "switch") || slices.Contains(r.tt.Texts(), "open") {
+		t.Errorf("open row: %v", r.tt.Texts())
+	}
+	for range 3 {
+		r.tt.Key(0, ui.KeyDown)
+	}
+	r.tt.Frame()
+	if !slices.Contains(r.tt.Texts(), "open") || slices.Contains(r.tt.Texts(), "switch") {
+		t.Errorf("recent row: %v", r.tt.Texts())
+	}
+}
+
+func TestProjectsModalHoverMovesSelection(t *testing.T) {
+	r := newModalRig(t)
+	r.open()
+	b, ok := r.tt.Find(ProjectsRow("c"))
+	if !ok {
+		t.Fatal("no row c")
+	}
+	r.tt.Move(b.X+b.W/2, b.Y+b.H/2)
+	r.tt.Frame()
+	r.tt.Frame()
+	if r.m.sel != 2 {
+		t.Errorf("sel = %d, want 2", r.m.sel)
+	}
+}
+
+func TestProjectsModalClickOnRowSwitches(t *testing.T) {
+	r := newModalRig(t)
+	var switched []string
+	r.m.Switch = func(d string) { switched = append(switched, d) }
+	r.open()
+	r.tt.Click(ProjectsRow("c"))
+	if !slices.Equal(switched, []string{"/w/c/.git"}) || r.m.Opened() {
+		t.Errorf("switched %v", switched)
+	}
+}
+
 func TestProjectsModalReorderStoresOrder(t *testing.T) {
 	r := newModalRig(t)
 	r.open()
 	if r.m.list.Reorder == nil {
 		t.Fatal("the list has no Reorder")
 	}
-	r.m.list.Reorder([]int{2}, 0)
+	r.m.list.Reorder([]int{3}, 1) // list row 0 is the Open header
 	if got := r.names(); !slices.Equal(got, []string{"c", "a", "b"}) {
 		t.Errorf("order %v", got)
 	}
@@ -162,7 +391,7 @@ func TestProjectsModalReorderKeepsHiddenOnesOut(t *testing.T) {
 	r := newModalRig(t)
 	r.store.Hide("/w/b/.git")
 	r.open()
-	r.m.list.Reorder([]int{1}, 0) // rows are a, c: c goes first
+	r.m.list.Reorder([]int{2}, 1) // rows are a, c: c goes first
 	if got := r.names(); !slices.Equal(got, []string{"c", "a"}) {
 		t.Errorf("order %v", got)
 	}
@@ -171,7 +400,7 @@ func TestProjectsModalReorderKeepsHiddenOnesOut(t *testing.T) {
 func TestProjectsModalFilterTurnsReorderOff(t *testing.T) {
 	r := newModalRig(t)
 	r.open()
-	r.m.filter = "c"
+	r.tt.Type("c")
 	r.tt.Frame()
 	if !r.has(ProjectsRow("c")) || r.has(ProjectsRow("a")) {
 		t.Error("filter did not narrow the list")
@@ -189,7 +418,7 @@ func TestProjectsModalWithoutStoreChangesNothing(t *testing.T) {
 	r := newModalRig(t)
 	r.m.Store = func() *projects.Store { return nil }
 	r.open()
-	r.m.closeProject("/w/a/.git")
+	r.m.hide("/w/a/.git")
 	r.m.reorder([]int{0}, 2)
 	if len(r.saved) != 0 {
 		t.Error("saved without a store")
@@ -200,7 +429,8 @@ func TestProjectsModalSaveErrorShowsInStatus(t *testing.T) {
 	r := newModalRig(t)
 	r.saveEr = errors.New("disk full")
 	r.open()
-	r.tt.Click(ProjectsCloseOf("a"))
+	r.tt.Key(0, ui.KeyDown)
+	r.tt.Key(ui.Cmd, ui.KeyBackspace)
 	if len(r.status) != 1 || !strings.Contains(r.status[0], "disk full") {
 		t.Errorf("status %v", r.status)
 	}
@@ -210,9 +440,9 @@ func TestProjectsModalSavesInOrderOffTheUIThread(t *testing.T) {
 	r := newModalRig(t)
 	r.m.Run = Runner{Go: func(f func()) { r.held = append(r.held, f) }}
 	r.open()
-	r.tt.Click(ProjectsCloseOf("a"))
+	r.tt.Key(ui.Cmd, ui.KeyBackspace) // hides a
 	r.tt.Frame()
-	r.tt.Click(ProjectsCloseOf("b"))
+	r.tt.Key(ui.Cmd, ui.KeyBackspace) // hides b, now the first row
 	if len(r.saved) != 0 {
 		t.Fatal("a save ran on the UI thread")
 	}
@@ -298,20 +528,20 @@ func TestProjectsModalRecentOpensAProjectAgain(t *testing.T) {
 	r.store.Touch("/w/z/.git", "/w/z", time.Unix(1, 0))
 	r.store.Touch("/w/a/.git", "/w/a", time.Unix(2, 0)) // open already: not listed
 	r.open()
-	if r.has(ProjectsOpenOf("a")) {
+	if r.has(ProjectsRow("a")) && slices.Contains(r.tt.Texts(), "Recent") && len(r.m.recent()) != 1 {
 		t.Error("an open project is in the recent list")
 	}
-	if !r.has(ProjectsOpenOf("z")) {
-		t.Fatal("no open button for z")
+	if !slices.Contains(r.tt.Texts(), "Recent") || !r.has(ProjectsRow("z")) {
+		t.Fatalf("no recent row for z: %v", r.tt.Texts())
 	}
-	r.tt.Click(ProjectsOpenOf("z"))
+	r.tt.Click(ProjectsRow("z"))
 	if !slices.Equal(r.store.Folders(), []string{"/w/z/.git"}) || r.store.Recent()[0].Dir != "/w/z/.git" || len(r.saved) != 1 {
 		t.Errorf("folders = %v, recent = %v, saved = %d", r.store.Folders(), r.store.Recent(), len(r.saved))
 	}
 }
 
 // The open modal reads the palette on every build: after a switch to Light its card is the Light
-// ground and its Done button the Light ink-100 fill (#403, D157).
+// ground and its selected row the Light selected fill (#403, D157).
 func TestProjectsModalChangesWithTheTheme(t *testing.T) {
 	restoreTheme(t)
 	r := newModalRig(t)
@@ -328,11 +558,12 @@ func TestProjectsModalChangesWithTheTheme(t *testing.T) {
 	rgb := func(c ui.Color) [3]uint8 { return [3]uint8{c.R, c.G, c.B} }
 	check := func(p *theme.Palette) {
 		t.Helper()
-		if got := pixel(LabelProjects, 6, 6); got != rgb(p.Ground) {
-			t.Errorf("dark=%v card = %v, want ground %v", p.Dark, got, rgb(p.Ground))
+		// The card is glass-float over the backdrop: dark in Dark, light in Light.
+		if got := pixel(LabelProjects, 6, 6); (got[0] > 128) == p.Dark {
+			t.Errorf("dark=%v card = %v", p.Dark, got)
 		}
-		if got := pixel(ProjectsDone, 3, 3); got != rgb(p.Ink100) {
-			t.Errorf("dark=%v Done fill = %v, want ink-100 %v", p.Dark, got, rgb(p.Ink100))
+		if got := pixel(ProjectsRow("a"), 3, 3); got == rgb(p.Ground) {
+			t.Errorf("dark=%v the selected row has no fill", p.Dark)
 		}
 	}
 	check(theme.Dark)
