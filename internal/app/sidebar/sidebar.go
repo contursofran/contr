@@ -1,4 +1,7 @@
-package app
+// Package sidebar is the sidebar: the Projects head, a row for each project
+// with its agents, the Servers section and the foot with the plan meters and
+// Settings. SpacesList is the list; the frame builds and syncs it.
+package sidebar
 
 // The sidebar head part (docs/spec/ServerRow.md, docs/spec/ProjectRow.md):
 // the Projects head and one row for each project, with its agents, in one
@@ -78,7 +81,7 @@ func LabelNewIn(g spaces.RepoGroup) string { return "New orchestrator in " + g.N
 // View builds the sidebar head part.
 func (l *SpacesList) View(c *ui.Context) {
 	ui.Column(c).FillWidth().FillHeight().Padding(theme.Space10, 0, 0, 0).Children(func() {
-		if l.compact {
+		if l.Compact {
 			// An icon column (D128): no section names or problem line; the
 			// project buttons stay, one above the other. Same order (D154).
 			ui.Column(c).FillWidth().Shrink(0).AlignItems(ui.Center).Gap(theme.Space2).
@@ -125,10 +128,10 @@ func (l *SpacesList) settingsFoot(c *ui.Context) {
 		label = LabelSettingsUpdate
 	}
 	p := theme.Current()
-	plans := !l.compact && l.Plans != nil
+	plans := !l.Compact && l.Plans != nil
 	justify := ui.End
 	switch {
-	case l.compact:
+	case l.Compact:
 		justify = ui.Center
 	case plans:
 		// The meters at the left, a spacer, then the button.
@@ -198,7 +201,7 @@ func (l *SpacesList) serverRow(c *ui.Context) {
 	}
 	kit.Row(c, kit.RowOpts{
 		Flat: true, Label: ServerLabel(l.online), Text: "This Mac", Meta: l.ServerMeta(), Selected: true,
-		Lead: func() { rowIcon(c, "computer", serverIconInk(theme.Current())) }, Compact: l.compact, Tip: "This Mac",
+		Lead: func() { rowIcon(c, "computer", serverIconInk(theme.Current())) }, Compact: l.Compact, Tip: "This Mac",
 		OnClick: click,
 	})
 }
@@ -265,7 +268,7 @@ func (l *SpacesList) projectMenu(m *ui.Menu, g spaces.RepoGroup) {
 			l.OnNewIn(g.Path)
 		}
 	} else {
-		lines := agentLines(g, l.snapshot())
+		lines := agentLines(g, l.Snapshot())
 		off := l.Source == nil || len(lines) == 0
 		if m.Item(MenuCloseAll).Disabled(off).Chosen() && !off {
 			for _, a := range lines {
@@ -288,7 +291,7 @@ func (l *SpacesList) projectRow(c *ui.Context, g spaces.RepoGroup, index int) {
 		Flat: true, Label: ProjectLabel(g), Text: g.Name, Meta: projectMeta(g),
 		NameInk: p.Ink85, MetaInk: p.Ink26, NameStyle: theme.StyleBody,
 		Expanded: &open, OnClick: func() { l.Activate(g) },
-		Compact: l.compact, Tip: g.Name,
+		Compact: l.Compact, Tip: g.Name,
 	}
 	iconInk := projectIconInk(p, false, false)
 	if l.selection != nil {

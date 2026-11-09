@@ -1,4 +1,4 @@
-package app
+package sidebar
 
 import (
 	"context"
@@ -11,8 +11,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/state"
@@ -24,53 +24,23 @@ import (
 
 // ---- Fake git layouts on disk (plain files, no `git` binary) ----
 
-func writeFakeFile(t *testing.T, path, text string) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
-// mainRepo makes a main checkout at root with `.git/HEAD` = head and returns
-// the git dir.
-func mainRepo(t *testing.T, root, head string) string {
-	t.Helper()
-	gitDir := filepath.Join(root, ".git")
-	writeFakeFile(t, filepath.Join(gitDir, "HEAD"), head)
-	return gitDir
-}
-
 // linkedWorktree makes a linked worktree at root, laid out as git writes it,
 // and returns its admin dir.
 func linkedWorktree(t *testing.T, common, name, root, head string) string {
 	t.Helper()
 	admin := filepath.Join(common, "worktrees", name)
-	writeFakeFile(t, filepath.Join(admin, "HEAD"), head)
-	writeFakeFile(t, filepath.Join(admin, "gitdir"), filepath.Join(root, ".git")+"\n")
-	writeFakeFile(t, filepath.Join(admin, "commondir"), "../..\n")
-	writeFakeFile(t, filepath.Join(root, ".git"), "gitdir: "+admin+"\n")
+	apptest.WriteFakeFile(t, filepath.Join(admin, "HEAD"), head)
+	apptest.WriteFakeFile(t, filepath.Join(admin, "gitdir"), filepath.Join(root, ".git")+"\n")
+	apptest.WriteFakeFile(t, filepath.Join(admin, "commondir"), "../..\n")
+	apptest.WriteFakeFile(t, filepath.Join(root, ".git"), "gitdir: "+admin+"\n")
 	return admin
-}
-
-// canonicalTmp is a temporary directory in the canonical form that the scan's
-// rows use.
-func canonicalTmp(t *testing.T) string {
-	t.Helper()
-	p, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	return p
 }
 
 // oneWorktree makes a repo at base/repo with a linked worktree at base/wt1 on
 // branch feature. It returns the worktree's root and its admin dir.
 func oneWorktree(t *testing.T, base string) (string, string) {
 	t.Helper()
-	gitDir := mainRepo(t, filepath.Join(base, "repo"), "ref: refs/heads/main\n")
+	gitDir := apptest.MainRepo(t, filepath.Join(base, "repo"), "ref: refs/heads/main\n")
 	root := filepath.Join(base, "wt1")
 	return root, linkedWorktree(t, gitDir, "w1", root, "ref: refs/heads/feature\n")
 }
@@ -78,7 +48,7 @@ func oneWorktree(t *testing.T, base string) (string, string) {
 // twoWorktrees makes base/wt1 on feature and base/wt2 on other.
 func twoWorktrees(t *testing.T, base string) (string, string) {
 	t.Helper()
-	gitDir := mainRepo(t, filepath.Join(base, "repo"), "ref: refs/heads/main\n")
+	gitDir := apptest.MainRepo(t, filepath.Join(base, "repo"), "ref: refs/heads/main\n")
 	wt1, wt2 := filepath.Join(base, "wt1"), filepath.Join(base, "wt2")
 	linkedWorktree(t, gitDir, "w1", wt1, "ref: refs/heads/feature\n")
 	linkedWorktree(t, gitDir, "w2", wt2, "ref: refs/heads/other\n")
@@ -87,22 +57,7 @@ func twoWorktrees(t *testing.T, base string) (string, string) {
 
 // ---- Trees ----
 
-// spPane is a live worker named id in the folder cwd, with an hc status
-// when status is not nil.
-func spPane(id, cwd string, status *string) agents.Worker {
-	w := agents.Worker{Name: id, Address: id, Role: "builder", Worktree: cwd, Live: true}
-	if status != nil {
-		w.Status = *status
-	}
-	return w
-}
-
 func hs(s string) *string { return &s }
-
-// spTree is the agent state of a followed core with the workers ws.
-func spTree(ws ...agents.Worker) agentstate.Snapshot {
-	return agentstate.Snapshot{Workers: ws, CoreVersion: "0.1.18"}
-}
 
 // hcDown is the agent state of a core that contr does not follow:
 // no core version, and the hc problem.
@@ -184,9 +139,9 @@ func (h *spacesHarness) has(label string) bool { _, ok := h.tt.Find(label); retu
 // ---- The scan and the sync ----
 
 func TestTheScanFillsTheGroupsOnceTheTreeIsKnown(t *testing.T) {
-	base := canonicalTmp(t)
+	base := apptest.CanonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
+	h := newSpaces(t, apptest.SpTree(apptest.SpPane("w1:p1", wt, nil)))
 	if len(h.list.Groups()) != 1 || h.group(0).Name != "repo" {
 		t.Fatalf("groups %+v", h.list.Groups())
 	}
@@ -203,10 +158,10 @@ func TestTheScanFillsTheGroupsOnceTheTreeIsKnown(t *testing.T) {
 }
 
 func TestAnAgentsChangeWithTheSameCwdsRebuildsWithoutAScan(t *testing.T) {
-	base := canonicalTmp(t)
+	base := apptest.CanonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
-	h.send(spTree(spPane("w1:p1", wt, hs("working"))))
+	h := newSpaces(t, apptest.SpTree(apptest.SpPane("w1:p1", wt, nil)))
+	h.send(apptest.SpTree(apptest.SpPane("w1:p1", wt, hs("working"))))
 	if h.list.scans != 1 {
 		t.Errorf("scans %d: same cwds, want no scan", h.list.scans)
 	}
@@ -216,19 +171,19 @@ func TestAnAgentsChangeWithTheSameCwdsRebuildsWithoutAScan(t *testing.T) {
 }
 
 func TestANewCwdStartsOneMoreScan(t *testing.T) {
-	base := canonicalTmp(t)
+	base := apptest.CanonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
-	h.send(spTree(spPane("w1:p1", wt, nil), spPane("w1:p2", filepath.Join(base, "repo"), nil)))
+	h := newSpaces(t, apptest.SpTree(apptest.SpPane("w1:p1", wt, nil)))
+	h.send(apptest.SpTree(apptest.SpPane("w1:p1", wt, nil), apptest.SpPane("w1:p2", filepath.Join(base, "repo"), nil)))
 	if h.list.scans != 2 {
 		t.Errorf("scans %d, want 2", h.list.scans)
 	}
 }
 
 func TestLosingTheTreeEmptiesTheGroupsAndStopsTheScans(t *testing.T) {
-	base := canonicalTmp(t)
+	base := apptest.CanonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
+	h := newSpaces(t, apptest.SpTree(apptest.SpPane("w1:p1", wt, nil)))
 	if len(h.list.Groups()) != 1 {
 		t.Fatal("want one group")
 	}
@@ -243,30 +198,30 @@ func TestLosingTheTreeEmptiesTheGroupsAndStopsTheScans(t *testing.T) {
 }
 
 func TestACwdOutsideGitGivesNoGroup(t *testing.T) {
-	base := canonicalTmp(t)
+	base := apptest.CanonicalTmp(t)
 	// TMPDIR may lie inside a git worktree; do not look above the temp folder.
 	t.Setenv("GIT_CEILING_DIRECTORIES", base)
 	plain := filepath.Join(base, "plain")
 	if err := os.MkdirAll(plain, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	h := newSpaces(t, spTree(spPane("w1:p1", plain, nil)))
+	h := newSpaces(t, apptest.SpTree(apptest.SpPane("w1:p1", plain, nil)))
 	if len(h.list.Groups()) != 0 {
 		t.Errorf("groups %+v", h.list.Groups())
 	}
 }
 
 func TestAPaneWithoutACwdStartsNoScan(t *testing.T) {
-	h := newSpaces(t, spTree(spPane("w1:p1", "", nil)))
+	h := newSpaces(t, apptest.SpTree(apptest.SpPane("w1:p1", "", nil)))
 	if h.list.scans != 0 {
 		t.Errorf("scans %d, want 0", h.list.scans)
 	}
 }
 
 func TestAScanLandsThroughThePostFunc(t *testing.T) {
-	base := canonicalTmp(t)
+	base := apptest.CanonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	live := &spSnap{s: spTree(spPane("w1:p1", wt, nil))}
+	live := &spSnap{s: apptest.SpTree(apptest.SpPane("w1:p1", wt, nil))}
 	var started, posted []func()
 	l := NewSpacesList(live.get, state.NewSelection(nil), view.Env{Run: view.Runner{Post: func(f func()) { posted = append(posted, f) }}})
 	l.Env.Run.Go = func(f func()) { started = append(started, f) }
@@ -285,9 +240,9 @@ func TestAScanLandsThroughThePostFunc(t *testing.T) {
 }
 
 func TestAScanThatLostTheTreeIsDropped(t *testing.T) {
-	base := canonicalTmp(t)
+	base := apptest.CanonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
-	live := &spSnap{s: spTree(spPane("w1:p1", wt, nil))}
+	live := &spSnap{s: apptest.SpTree(apptest.SpPane("w1:p1", wt, nil))}
 	var started []func()
 	l := NewSpacesList(live.get, state.NewSelection(nil), view.Env{})
 	l.Env.Run.Go = func(f func()) { started = append(started, f) }
@@ -295,22 +250,22 @@ func TestAScanThatLostTheTreeIsDropped(t *testing.T) {
 	live.set(hcDown())
 	l.Sync()
 	started[0]() // the old scan ends now; post is nil, so it lands at once
-	live.set(spTree(spPane("w1:p1", wt, nil)))
+	live.set(apptest.SpTree(apptest.SpPane("w1:p1", wt, nil)))
 	if got := len(l.Groups()); got != 0 {
 		t.Errorf("groups %d: a dropped scan came back", got)
 	}
 }
 
 func TestOnlyTheNewestScanLands(t *testing.T) {
-	base := canonicalTmp(t)
+	base := apptest.CanonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
 	repo := filepath.Join(base, "repo")
-	live := &spSnap{s: spTree(spPane("w1:p1", wt, nil))}
+	live := &spSnap{s: apptest.SpTree(apptest.SpPane("w1:p1", wt, nil))}
 	var started []func()
 	l := NewSpacesList(live.get, state.NewSelection(nil), view.Env{})
 	l.Env.Run.Go = func(f func()) { started = append(started, f) }
 	l.Sync()
-	live.set(spTree(spPane("w1:p1", wt, nil), spPane("w1:p2", repo, nil)))
+	live.set(apptest.SpTree(apptest.SpPane("w1:p1", wt, nil), apptest.SpPane("w1:p2", repo, nil)))
 	l.Sync()
 	started[1]()
 	started[0]() // the older scan ends last and is dropped
@@ -320,7 +275,7 @@ func TestOnlyTheNewestScanLands(t *testing.T) {
 }
 
 func TestTheScanFuncGetsTheCwdsInTreeOrder(t *testing.T) {
-	live := &spSnap{s: spTree(spPane("w1:p1", "/x/b", nil), spPane("w1:p2", "/x/a", nil), spPane("w1:p3", "/x/b", nil))}
+	live := &spSnap{s: apptest.SpTree(apptest.SpPane("w1:p1", "/x/b", nil), apptest.SpPane("w1:p2", "/x/a", nil), apptest.SpPane("w1:p3", "/x/b", nil))}
 	var got []string
 	l := NewSpacesList(live.get, nil, view.Env{})
 	l.scanFn = func(cwds []string) git.Scan { got = cwds; return git.Scan{} }

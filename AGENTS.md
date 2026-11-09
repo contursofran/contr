@@ -93,6 +93,7 @@ that code, move it to the MyGo part in its own small PR.
 | `internal/app/files` | the files panel: file tree, diff summary, the agent's todos and artifacts |
 | `internal/app/tabmodel` | the title bar tabs of a snapshot, and the agent look that tabs and sidebar rows share |
 | `internal/app/titlebar` | the title bar: tabs, New tab, Search, diff summary, Hide files |
+| `internal/app/sidebar` | the sidebar: projects and their agent rows, servers, the foot |
 | `internal/app/ghostty` | `Conn`: an hc terminal as the connection of MyGo's terminal plugin (D79) |
 | `internal/usage` | plan usage: Claude status line, `codex app-server`, Codex logs |
 | `internal/statedir` | the folder where contr keeps its own files, and the agent terminal variable |

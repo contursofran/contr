@@ -1,7 +1,6 @@
-package app
+package sidebar
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -9,19 +8,15 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/tabmodel"
 	"github.com/contursofran/contr/internal/projects"
 )
 
-// foreignTerm is a terminal that contr did not start, in dir.
-func foreignTerm(addr, role, project, dir string) agents.Worker {
-	return agents.Worker{Name: addr, Address: addr, Role: role, Project: project, Worktree: dir, Live: true, Foreign: true}
-}
-
 func TestSidebarShowsAProjectOfForeignTerminalsNotInTheStore(t *testing.T) {
 	h, cwds := twoRepos(t)
-	h.send(agentstate.Snapshot{CoreVersion: "0.1.18", Orchestrators: []agents.Worker{foreignTerm("t1", agents.RoleOrchestrator, "alpha", cwds[0])},
-		Terminals: []agents.Worker{foreignTerm("t2", agents.RoleTerminal, "beta", cwds[1])}})
+	h.send(agentstate.Snapshot{CoreVersion: "0.1.18", Orchestrators: []agents.Worker{apptest.ForeignTerm("t1", agents.RoleOrchestrator, "alpha", cwds[0])},
+		Terminals: []agents.Worker{apptest.ForeignTerm("t2", agents.RoleTerminal, "beta", cwds[1])}})
 	h.list.SetProjects(&projects.Store{}) // a store that knows neither project
 	if got := strings.Join(groupNames(h.list.Groups()), ","); got != "alpha,beta" {
 		t.Errorf("groups %s, want alpha,beta", got)
@@ -97,73 +92,13 @@ func TestAdoptOffKeepsTheStoreAsItIs(t *testing.T) {
 
 func TestTabsShowAForeignPlainTerminalOfItsProject(t *testing.T) {
 	s := agentstate.Snapshot{
-		Orchestrators: []agents.Worker{foreignTerm("t1", agents.RoleOrchestrator, "alpha", "/a")},
-		Terminals: []agents.Worker{foreignTerm("t2", agents.RoleTerminal, "alpha", "/a"),
-			foreignTerm("t3", agents.RoleTerminal, "beta", "/b")},
+		Orchestrators: []agents.Worker{apptest.ForeignTerm("t1", agents.RoleOrchestrator, "alpha", "/a")},
+		Terminals: []agents.Worker{apptest.ForeignTerm("t2", agents.RoleTerminal, "alpha", "/a"),
+			apptest.ForeignTerm("t3", agents.RoleTerminal, "beta", "/b")},
 	}
 	tabs := tabmodel.TitleTabs(s, "alpha", "", "t1", "")
 	if len(tabs) != 2 || tabs[0].Address != "t1" || tabs[1].Address != "t2" || !tabs[1].Plain {
 		t.Errorf("tabs %+v", tabs)
-	}
-}
-
-// adoptFrame attaches a frame to a core with one unlabeled Claude Code in a
-// scratch repo. It returns the frame, its window and the repo's common dir.
-func adoptFrame(t *testing.T, load func() (*projects.Store, error), save func(*projects.Store) error) (*Frame, *fakeWindow, func()) {
-	t.Helper()
-	repo := filepath.Join(canonicalTmp(t), "scratch")
-	mainRepo(t, repo, "ref: refs/heads/main\n")
-	w := &fakeWindow{visible: true}
-	f := NewFrame(Deps{})
-	f.deps.Projects.Load, f.deps.Projects.Save = load, save
-	f.deps.StartAgents = func(func()) (agentstate.AgentSource, func()) {
-		return &source{Snap: agentstate.Snapshot{CoreVersion: "0.1.18",
-			Orchestrators: []agents.Worker{foreignTerm("t1", agents.RoleOrchestrator, "scratch", repo)}}}, func() {}
-	}
-	return f, w, f.Attach(w)
-}
-
-func TestFrameSavesAnAdoptedProjectOffTheUIThread(t *testing.T) {
-	saved := make(chan *projects.Store, 4)
-	f, w, stop := adoptFrame(t,
-		func() (*projects.Store, error) { return &projects.Store{}, nil },
-		func(s *projects.Store) error { saved <- s; return nil })
-	defer stop()
-	var got *projects.Store
-	for deadline := time.Now().Add(5 * time.Second); got == nil && time.Now().Before(deadline); time.Sleep(time.Millisecond) {
-		w.flush()
-		select {
-		case got = <-saved:
-		default:
-		}
-	}
-	if got == nil {
-		t.Fatal("the adopted project was not saved")
-	}
-	if len(got.Folders()) != 1 || filepath.Base(got.Path(got.Folders()[0])) != "scratch" {
-		t.Errorf("saved folders %v", got.Folders())
-	}
-	if len(f.SpacesList.Groups()) != 1 {
-		t.Errorf("groups %v", f.SpacesList.Groups())
-	}
-}
-
-func TestFrameDoesNotAdoptOverACorruptFile(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "projects.json")
-	if err := os.WriteFile(path, []byte("{not json"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	saves := 0
-	_, w, stop := adoptFrame(t,
-		func() (*projects.Store, error) { return projects.Load(path) },
-		func(s *projects.Store) error { saves++; return s.Save(path) })
-	defer stop()
-	for i := 0; i < 50; i++ {
-		w.flush()
-		time.Sleep(time.Millisecond)
-	}
-	if b, _ := os.ReadFile(path); string(b) != "{not json" || saves != 0 {
-		t.Errorf("the corrupt file was written over (saves %d)", saves)
 	}
 }
 
@@ -195,9 +130,9 @@ func TestAdoptKeepsTheStoredOrderOfProjectsWithoutTerminals(t *testing.T) {
 }
 
 func TestTabsKeepTwoReposWithTheSameFolderNameApart(t *testing.T) {
-	a := foreignTerm("ta", agents.RoleTerminal, "app", "/one/app")
+	a := apptest.ForeignTerm("ta", agents.RoleTerminal, "app", "/one/app")
 	a.ProjectKey = "/one/app/.git"
-	b := foreignTerm("tb", agents.RoleTerminal, "app", "/two/app")
+	b := apptest.ForeignTerm("tb", agents.RoleTerminal, "app", "/two/app")
 	b.ProjectKey = "/two/app/.git"
 	s := agentstate.Snapshot{Terminals: []agents.Worker{a, b}}
 	tabs := tabmodel.TitleTabs(s, "app", "/two/app/.git", "", "")

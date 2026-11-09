@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/contursofran/contr/internal/app"
 	"github.com/contursofran/contr/internal/app/settings"
+	"github.com/contursofran/contr/internal/app/sidebar"
 	"github.com/contursofran/contr/internal/hc/hctest"
 	"github.com/contursofran/contr/internal/usage"
 )
@@ -106,7 +106,7 @@ func TestPlanUsageInTheSidebarFoot(t *testing.T) {
 		c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "key", "key": "Escape"}}})
 		waitFor("settings closed", func() bool { return !labels()[settings.LabelSettings] })
 		time.Sleep(500 * time.Millisecond)
-		claude, codexBar, gear := c.boundsOf(t, "Claude meter"), c.boundsOf(t, "Codex meter"), c.boundsOf(t, app.LabelSettingsOpen)
+		claude, codexBar, gear := c.boundsOf(t, "Claude meter"), c.boundsOf(t, "Codex meter"), c.boundsOf(t, sidebar.LabelSettingsOpen)
 		if !(claude.X < codexBar.X && codexBar.X+codexBar.Width < gear.X) {
 			t.Errorf("%s: order Claude %v, Codex %v, gear %v", theme, claude, codexBar, gear)
 		}

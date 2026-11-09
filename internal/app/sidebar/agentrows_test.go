@@ -1,4 +1,4 @@
-package app
+package sidebar
 
 import (
 	"errors"
@@ -18,10 +18,11 @@ import (
 	"github.com/contursofran/contr/internal/app/tabmodel"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
-	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/projects"
-	"github.com/contursofran/contr/internal/usage"
 )
+
+// source is the stub AgentSource of the tests.
+type source = apptest.Source
 
 var rowsNow = time.Date(2026, 11, 5, 12, 0, 0, 0, time.UTC)
 
@@ -60,7 +61,7 @@ func newRows(t *testing.T) *rowsHarness {
 		Workers: []agents.Worker{
 			builder("b-241", "lead", cwds[0], "241", 6*time.Minute),
 			builder("b-242", "lead", cwds[0], "", 90*time.Second),
-			spPane("w1:p2", cwds[1], nil),
+			apptest.SpPane("w1:p2", cwds[1], nil),
 		}})
 	return &rowsHarness{spacesHarness: h, src: src, cwds: cwds}
 }
@@ -527,44 +528,6 @@ func TestAnAgeMovesWithTheClockOnARedraw(t *testing.T) {
 	}
 }
 
-func TestTheFrameTiesTheClockToTheWindowVisibility(t *testing.T) {
-	w := &fakeWindow{visible: true}
-	f := NewFrame(Deps{})
-	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
-	f.Usage = usage.NewSampler(usage.Unread, nil)
-	stop := f.Attach(w)
-	defer stop()
-	ages := f.SpacesList.Ages
-	if ages == nil || ages.Running() {
-		t.Fatalf("clock %v: want one that waits for an age", ages)
-	}
-	ages.SetShown(true)
-	if !ages.Running() {
-		t.Fatal("the clock does not run with an age on screen")
-	}
-	w.hide()
-	if ages.Running() {
-		t.Error("the clock runs in a hidden window")
-	}
-	w.show()
-	if !ages.Running() {
-		t.Error("the clock did not return with the window")
-	}
-}
-
-func TestAttachStartsTheWindowHiddenWithNoClock(t *testing.T) {
-	w := &fakeWindow{visible: false}
-	f := NewFrame(Deps{})
-	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
-	f.Usage = usage.NewSampler(usage.Unread, nil)
-	stop := f.Attach(w)
-	defer stop()
-	f.SpacesList.Ages.SetShown(true)
-	if f.SpacesList.Ages.Running() {
-		t.Error("the clock runs in a window that started hidden")
-	}
-}
-
 func TestADragKeepsTheStoredPlaceOfAnEmptyProject(t *testing.T) {
 	h := newRows(t)
 	alpha, beta, gamma := h.group(0).CommonDir, h.group(1).CommonDir, "/proj/gamma/.git"
@@ -637,4 +600,118 @@ func TestForeignRowLabelUsesTheReadableName(t *testing.T) {
 	if got := tabmodel.RowTip(w); got != "contr · t1nh" {
 		t.Errorf("tip %q", got)
 	}
+}
+
+// The row shows the issue title on line 1, so the worker name moves to line 2. A row with no
+// title and no task shows the name once, on line 1.
+func TestAWorkerRowShowsTheIssueTitleAndTheNameMovesToLineTwo(t *testing.T) {
+	h := newRows(t)
+	r := newTitleRig()
+	h.list.Titles = r.t
+	snap := h.live.get()
+	h.send(snap)
+	if slices.Contains(h.tt.Texts(), "b-241") {
+		t.Fatalf("the name is on line 2 before any title: %q", h.tt.Texts())
+	}
+	r.t.Sync(snap.Workers)
+	r.Flush()
+	h.send(snap)
+	if !slices.Contains(h.tt.Texts(), "b-241") {
+		t.Errorf("the name is not on line 2 once the issue title is on line 1: %q", h.tt.Texts())
+	}
+	l := &SpacesList{Titles: r.t}
+	a := agentLine{w: snap.Workers[0]}
+	if got := titleOf(a, l.issueTitle(a)); got != "Agent rows on ui.List" {
+		t.Errorf("line 1 %q", got)
+	}
+	// The issue title wins over the task; a failed read later keeps it.
+	a.w.Task = "terminal title"
+	r.runner.Err = errors.New("offline")
+	r.Now = r.Now.Add(ghsource.TitleHitTTL + time.Second)
+	r.t.Sync(snap.Workers)
+	r.Flush()
+	if got := titleOf(a, l.issueTitle(a)); got != "Agent rows on ui.List" {
+		t.Errorf("line 1 %q after an error", got)
+	}
+	// With no issue title, the task is line 1.
+	if got := titleOf(a, ""); got != "terminal title" {
+		t.Errorf("fallback %q", got)
+	}
+}
+
+func TestLineTwoShowsTheEffortAfterTheModel(t *testing.T) {
+	h := newRows(t)
+	h.list.ModelOf = func(string) string { return "" }
+	h.list.EffortOf = func(string) string { return "" }
+	h.list.StatusEffort = func(addr string) string {
+		if addr == "lead" {
+			return "medium"
+		}
+		return ""
+	}
+	snap := h.live.get()
+	snap.Orchestrators[0].Model = "opus"
+	h.send(snap)
+	if !h.tt.HasText("opus medium") {
+		t.Errorf("no effort from the status line in %q", h.tt.Texts())
+	}
+	// The hook's label (Worker.Effort) wins over the status line.
+	snap.Orchestrators[0].Effort = "high"
+	h.send(snap)
+	if !h.tt.HasText("opus high") {
+		t.Errorf("no effort from the label in %q", h.tt.Texts())
+	}
+	// The profile's effort wins over both.
+	h.list.EffortOf = func(string) string { return "low" }
+	h.send(snap)
+	if !h.tt.HasText("opus low") {
+		t.Errorf("no effort from the profile in %q", h.tt.Texts())
+	}
+}
+
+func TestTheModelComesFromTheStatusLineWhenArgvHasNone(t *testing.T) {
+	h := newRows(t)
+	h.list.ModelOf = func(string) string { return "" }
+	h.list.StatusModel = func(addr string) string {
+		if addr == "lead" {
+			return "opus"
+		}
+		return ""
+	}
+	snap := h.live.get()
+	snap.Orchestrators[0].Model = ""
+	h.send(snap)
+	if !h.tt.HasText("opus") {
+		t.Errorf("no model from the status line in %q", h.tt.Texts())
+	}
+	// argv wins over the status line.
+	snap.Orchestrators[0].Model = "haiku"
+	h.send(snap)
+	if !h.tt.HasText("haiku") {
+		t.Errorf("no model from argv in %q", h.tt.Texts())
+	}
+}
+
+func TestAnOrchestratorRowNeverShowsAnIssueTitle(t *testing.T) {
+	a := agentLine{w: agents.Worker{Name: "lead", Issue: "241", Worktree: "/wt/a"}, orchestrator: true}
+	l := &SpacesList{}
+	if got := l.issueTitle(a); got != "" {
+		t.Errorf("title %q", got)
+	}
+	if got := titleOf(a, "Some title"); got != "lead" {
+		t.Errorf("line 1 %q", got)
+	}
+}
+
+type titleRig struct {
+	*apptest.GHRig
+	t      *ghsource.IssueTitles
+	runner *apptest.TitleRunner
+}
+
+func newTitleRig() *titleRig {
+	r := &titleRig{GHRig: &apptest.GHRig{Now: time.Unix(5000, 0)},
+		runner: &apptest.TitleRunner{Out: map[string]string{"241": `{"title":"Agent rows on ui.List"}`}}}
+	r.t = &ghsource.IssueTitles{Env: r.Env(), Client: apptest.ClientOf(r.runner), Now: r.Clock}
+	return r
 }

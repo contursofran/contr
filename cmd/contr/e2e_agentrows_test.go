@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/agents"
-	"github.com/contursofran/contr/internal/app"
 	"github.com/contursofran/contr/internal/app/settings"
+	"github.com/contursofran/contr/internal/app/sidebar"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
@@ -192,7 +192,7 @@ func TestAgentRows(t *testing.T) {
 	c.capture(t, filepath.Join(out, "agentrows-dark-worker.png"))
 
 	// ↑ from the worker row moves the selection to the orchestrator (D145).
-	c.call(t, "act", map[string]any{"id": c.idOf(t, app.LabelProjectList), "action": "focus"})
+	c.call(t, "act", map[string]any{"id": c.idOf(t, sidebar.LabelProjectList), "action": "focus"})
 	c.key(t, "Up")
 	waitFor("Up selects the orchestrator", 20*time.Second, func() bool { return c.labelWithPrefix(t, "241 · demo") == "" })
 	time.Sleep(800 * time.Millisecond)
@@ -204,7 +204,7 @@ func TestAgentRows(t *testing.T) {
 	time.Sleep(1500 * time.Millisecond)
 	c.capture(t, filepath.Join(out, "agentrows-light.png"))
 	// ↓ from the orchestrator row moves the selection to the first worker.
-	c.call(t, "act", map[string]any{"id": c.idOf(t, app.LabelProjectList), "action": "focus"})
+	c.call(t, "act", map[string]any{"id": c.idOf(t, sidebar.LabelProjectList), "action": "focus"})
 	c.key(t, "Down")
 	waitFor("Down selects the worker", 20*time.Second, func() bool { return c.labelWithPrefix(t, "241 · demo") != "" })
 	time.Sleep(800 * time.Millisecond)
