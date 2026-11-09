@@ -149,6 +149,7 @@ CGO_ENABLED=0 go build -o "$abs/$app" ./cmd/contr
 
 # From here on, Ctrl-C or an error cleans up. A start that works clears the trap.
 started=0
+gopid=
 cleanup() {
 	[ "$started" -eq 1 ] && return 0
 	stop_all
@@ -159,6 +160,9 @@ cleanup() {
 		sleep 0.2
 		i=$((i + 1))
 	done
+	if alive "$gopid"; then
+		echo "explore: the scratch run did not end in 120 s; stop it by hand (pid $gopid)" >&2
+	fi
 }
 trap cleanup EXIT
 trap 'exit 130' INT TERM
