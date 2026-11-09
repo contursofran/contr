@@ -61,11 +61,11 @@ func hidePath(stored string, g spaces.RepoGroup) string {
 	return ""
 }
 
-// place is where a project sat in the order: its index and the project before
-// it ("" at the start).
+// place is where a project sat in the order: its index, the project before it
+// ("" at the start) and the project after it ("" at the end).
 type place struct {
-	index int
-	after string
+	index         int
+	after, nextTo string
 }
 
 // placeOf finds dir in order.
@@ -75,6 +75,9 @@ func placeOf(order []string, dir string) place {
 			p := place{index: i}
 			if i > 0 {
 				p.after = order[i-1]
+			}
+			if i+1 < len(order) {
+				p.nextTo = order[i+1]
 			}
 			return p
 		}
@@ -112,6 +115,8 @@ func (m *ProjectsModal) unhide(dir string, p place) {
 	i := min(p.index, len(cur))
 	if j := slices.Index(cur, p.after); p.after != "" && j >= 0 {
 		i = j + 1
+	} else if j := slices.Index(cur, p.nextTo); p.nextTo != "" && j >= 0 {
+		i = j
 	}
 	st.SetOrder(slices.Insert(cur, i, dir))
 	m.changed()

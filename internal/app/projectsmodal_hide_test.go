@@ -77,14 +77,14 @@ func TestUndoRestoresProjectAndOrder(t *testing.T) {
 	}
 }
 
-func TestUndoPutsTheProjectAtItsIndexWhenItsNeighbourIsGone(t *testing.T) {
+func TestUndoPutsTheProjectAtItsIndexWhenBothNeighboursAreGone(t *testing.T) {
 	r, calls := hideRig(t)
 	r.store.SetOrder([]string{"/w/a/.git", "/w/b/.git", "/w/c/.git"})
 	r.m.hide("/w/b/.git")
-	r.store.SetOrder([]string{"/w/c/.git"}) // a is gone
-	r.dirs = []string{"/w/b/.git", "/w/c/.git"}
+	r.store.SetOrder([]string{"/w/d/.git"}) // a and c are gone
+	r.dirs = []string{"/w/b/.git", "/w/d/.git"}
 	(*calls)[0].undo()
-	if got, want := r.names(), []string{"c", "b"}; !slices.Equal(got, want) {
+	if got, want := r.names(), []string{"d", "b"}; !slices.Equal(got, want) {
 		t.Errorf("order = %v, want %v", got, want)
 	}
 }
@@ -99,8 +99,8 @@ func TestTwoHidesAndAnOutOfOrderUndo(t *testing.T) {
 		t.Fatal("the first Undo touched b")
 	}
 	(*calls)[1].undo()
-	// b was first when it was hidden, so it goes first; nothing is lost.
-	if got, want := r.names(), []string{"b", "a", "c"}; !slices.Equal(got, want) {
+	// b had no previous neighbour, so it goes before its next one, c.
+	if got, want := r.names(), []string{"a", "b", "c"}; !slices.Equal(got, want) {
 		t.Errorf("order = %v, want %v", got, want)
 	}
 }
@@ -155,4 +155,16 @@ func TestHideToastsGetUniqueIDs(t *testing.T) {
 		t.Errorf("ids = %v", a)
 	}
 	_ = tt
+}
+
+func TestUndoGoesBeforeTheNextNeighbourWhenThePreviousIsGone(t *testing.T) {
+	r, calls := hideRig(t)
+	r.store.SetOrder([]string{"/w/a/.git", "/w/b/.git", "/w/c/.git"})
+	r.m.hide("/w/b/.git")
+	r.store.SetOrder([]string{"/w/c/.git"}) // a is gone
+	r.dirs = []string{"/w/b/.git", "/w/c/.git"}
+	(*calls)[0].undo()
+	if got, want := r.names(), []string{"b", "c"}; !slices.Equal(got, want) {
+		t.Errorf("order = %v, want %v", got, want)
+	}
 }
