@@ -379,12 +379,15 @@ func TestTheSelectedTabHasThePanelFillAndFollowsTheSliders(t *testing.T) {
 
 // ---- The bar follows the agent state (through the frame) ----
 
-// agentFrame is a frame whose agents come from snap, with a selection.
+// agentFrame is a frame whose agents come from snap, with a selection. As in [Frame.Attach], the
+// frame takes the snapshot now and a selection change computes the tabs again; after a change
+// of snap, a test calls [Frame.syncAgents] as the change notify does.
 func agentFrame(t *testing.T, snap *agentstate.Snapshot) (*Frame, *ui.Tester) {
 	t.Helper()
 	f, tt := newTester(t)
-	f.Selection = state.NewSelection(nil)
+	f.Selection = state.NewSelection(func() { f.syncOpen() })
 	f.agentSnap = func() agentstate.Snapshot { return *snap }
+	f.takeSnapshot()
 	return f, tt
 }
 
@@ -446,6 +449,7 @@ func TestTabsFollowTheSelectedAgent(t *testing.T) {
 	// An agent of another project shows its own project's terminals.
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "w4"})
 	snap.Workers = append(snap.Workers, workW("w4", "b4", "q"))
+	f.syncAgents()
 	tt.Frame()
 	if slices.Contains(tabTexts(tt), "$ repo") {
 		t.Errorf("a plain terminal of project p shows for project q: %q", tt.Texts())
@@ -481,6 +485,7 @@ func TestAWorkerGoneFromTheSnapshotLeavesTheBar(t *testing.T) {
 		t.Fatalf("tabs %q", tabTexts(tt))
 	}
 	snap.Workers = snap.Workers[1:]
+	f.syncAgents()
 	tt.Frame()
 	if slices.Contains(tabTexts(tt), "b1") {
 		t.Errorf("tabs %q still show the gone worker", tabTexts(tt))
@@ -497,6 +502,7 @@ func TestAStatusChangeInTheSnapshotRedrawsTheGlyph(t *testing.T) {
 	}
 	snap.Workers = append([]agents.Worker(nil), snap.Workers...)
 	snap.Workers[0].Status = "blocked"
+	f.syncAgents()
 	tt.Frame()
 	if absent(tt, "needs you") || !absent(tt, "working") {
 		t.Errorf("the tab should show needs you; texts %q", tt.Texts())

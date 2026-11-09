@@ -21,6 +21,7 @@ func TestReviewTargetOfHcTabs(t *testing.T) {
 	}
 	f := &Frame{Selection: state.NewSelection(nil)}
 	f.agentSnap = func() agentstate.Snapshot { return snap }
+	f.takeSnapshot()
 
 	cases := []struct {
 		name string
@@ -40,6 +41,7 @@ func TestReviewTargetOfHcTabs(t *testing.T) {
 	}
 
 	f.agentSnap = nil
+	f.takeSnapshot()
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "w"})
 	if got := f.reviewTarget(); got != "" {
 		t.Errorf("nil agentSnap: reviewTarget = %q, want empty", got)
@@ -55,6 +57,7 @@ func TestContextLabelsOfTheSelectedTerminal(t *testing.T) {
 	snap := agentstate.Snapshot{Orchestrators: []agents.Worker{o}, Workers: []agents.Worker{w}}
 	f := &Frame{Selection: state.NewSelection(nil)}
 	f.agentSnap = func() agentstate.Snapshot { return snap }
+	f.takeSnapshot()
 
 	f.Selection.Select(state.Selected{Kind: state.KindOrchestrator, ID: "o"})
 	if got := f.contextLabels(); got.Tokens != 90000 || got.Size != 160000 {
@@ -71,6 +74,7 @@ func TestContextLabelsOfTheSelectedTerminal(t *testing.T) {
 		}
 	}
 	f.agentSnap = nil
+	f.takeSnapshot()
 	f.Selection.Select(state.Selected{Kind: state.KindOrchestrator, ID: "o"})
 	if got := f.contextLabels(); got.Size != 0 {
 		t.Errorf("nil agentSnap: %+v, want none", got)

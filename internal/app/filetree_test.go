@@ -252,6 +252,7 @@ func TestFilesDirFollowsTheSelectedAgent(t *testing.T) {
 			Workers:       []agents.Worker{{Address: "w1", Project: "p", Worktree: "/work/wt-1"}},
 		}
 	}
+	f.takeSnapshot()
 	if got := f.filesDir(); got != "" {
 		t.Errorf("no selection and no project: %q", got)
 	}
