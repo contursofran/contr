@@ -72,4 +72,3 @@ func TestEntriesFailWhenTheContextEnded(t *testing.T) {
 		t.Fatalf("error %v, want context.Canceled from git for-each-ref", err)
 	}
 }
-
