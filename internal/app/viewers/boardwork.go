@@ -1,4 +1,4 @@
-package app
+package viewers
 
 // The work section of the board: one row per worker of the project, with
 // the issue, the title, "<role> <status>" and four stage columns. The stage

@@ -1,12 +1,9 @@
-package app
+package viewers
 
 import (
 	"errors"
 	"strings"
 	"testing"
-
-	"github.com/contursofran/contr/internal/agents"
-	"github.com/contursofran/contr/internal/app/agentstate"
 )
 
 // mergeRig is a footer rig whose pane tells an orchestrator through a fake source.
@@ -93,27 +90,5 @@ func TestPROpenClearsTheMergedLine(t *testing.T) {
 	r.flush()
 	if r.tt.HasText(LabelPRMerged) || !r.tt.HasText(LabelPRMerge) {
 		t.Errorf("texts %q", r.tt.Texts())
-	}
-}
-
-func TestFramePROrchestratorFollowsTheWorkersProject(t *testing.T) {
-	f := NewFrame(Deps{})
-	f.agentSnap = func() agentstate.Snapshot {
-		return agentstate.Snapshot{
-			Orchestrators: []agents.Worker{{Address: "o-a", Project: "a"}, {Address: "o-b", Project: "b"}},
-			Workers:       []agents.Worker{{Address: "w1", Project: "b", Worktree: "/wt/b"}},
-		}
-	}
-	f.takeSnapshot()
-	f.openProject = "a"
-	if got := f.prOrchestrator("/wt/b"); got != "o-b" {
-		t.Errorf("worker folder gave %q", got)
-	}
-	if got := f.prOrchestrator("/other"); got != "o-a" {
-		t.Errorf("open project gave %q", got)
-	}
-	f.openProject = "none"
-	if got := f.prOrchestrator("/other"); got != "" {
-		t.Errorf("no orchestrator gave %q", got)
 	}
 }

@@ -1,4 +1,4 @@
-package app
+package viewers
 
 // The worker view of the right panel. While a worker is selected in the
 // sidebar, the panel shows that worker: its name, role, issue, worktree and
@@ -78,6 +78,9 @@ func (p *WorkerPanel) Following() bool {
 	sel, ok := p.Selection.Current()
 	return ok && sel.Kind == state.KindWorker
 }
+
+// Output is the last terminal text read of the worker that the panel shows, "" before a read.
+func (p *WorkerPanel) Output() string { return p.out }
 
 // Sync reads the selected worker's terminal again. The frame calls it when the
 // agent state changes.

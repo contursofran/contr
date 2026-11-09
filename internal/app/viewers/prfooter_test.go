@@ -1,4 +1,4 @@
-package app
+package viewers
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/github"
 )
@@ -56,7 +57,7 @@ func (g *ghFake) writes() [][]string {
 func footerRig(t *testing.T, mutate func(string) string) (*prRig, *ghFake) {
 	t.Helper()
 	r := newPRRig(t)
-	pr := prJSON
+	pr := apptest.PRJSON
 	if mutate != nil {
 		pr = mutate(pr)
 	}
@@ -205,7 +206,7 @@ func TestPRFooterCommentKeptOnError(t *testing.T) {
 
 func TestPRFooterViewerErrorShown(t *testing.T) {
 	r := newPRRig(t)
-	g := &ghFake{pr: prJSON, user: "owner", userErr: true}
+	g := &ghFake{pr: apptest.PRJSON, user: "owner", userErr: true}
 	r.pane.Client = func(dir string) github.Client { return github.Client{R: g, Dir: dir} }
 	r.pane.Open("/w", 642)
 	r.tt.Frame()

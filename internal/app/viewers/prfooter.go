@@ -1,4 +1,4 @@
-package app
+package viewers
 
 // The PR pane footer (#154, D103): a comment field, `Comment`, `Approve`
 // and `Squash and merge`. Every write needs a click (or Shift-Cmd-M for the

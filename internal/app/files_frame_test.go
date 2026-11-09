@@ -10,6 +10,7 @@ import (
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/files"
 	"github.com/contursofran/contr/internal/app/state"
+	"github.com/contursofran/contr/internal/app/viewers"
 	"github.com/contursofran/contr/internal/session"
 )
 
@@ -79,7 +80,7 @@ func TestFramePanelStaysTheFileTreeWhateverIsSelected(t *testing.T) {
 	f.Files.Env.Run.Go = func(fn func()) { fn() }
 	f.Files.Watch = func(string, func()) (func(), error) { return func() {}, nil }
 	f.Selection = state.NewSelection(nil)
-	f.Worker = &WorkerPanel{Source: panelSource(), Selection: f.Selection}
+	f.Worker = &viewers.WorkerPanel{Source: panelSource(), Selection: f.Selection}
 	for _, sel := range []state.Selected{
 		{Kind: state.KindOrchestrator, ID: "o1"}, {Kind: state.KindWorker, ID: "t1"}, {Kind: state.KindTerminal, ID: "x"},
 	} {
@@ -87,7 +88,7 @@ func TestFramePanelStaysTheFileTreeWhateverIsSelected(t *testing.T) {
 		tt.Key(ui.Cmd, ui.KeyJ)
 		tt.Frame()
 		apptest.Box(t, tt, files.LabelFileTree)
-		if !apptest.Absent(tt, LabelWorkerPanel) || !apptest.Absent(tt, LabelPanel) {
+		if !apptest.Absent(tt, viewers.LabelWorkerPanel) || !apptest.Absent(tt, LabelPanel) {
 			t.Errorf("%v: the board or worker panel shows", sel.Kind)
 		}
 	}

@@ -87,6 +87,7 @@ that code, move it to the MyGo part in its own small PR.
 | `internal/app/settings` | the Settings modal: General, Agents and Updates tabs, update checks and install |
 | `internal/app/projectsview` | the projects modal: list, filter, add a folder or a clone, hide |
 | `internal/app/questions` | the questions notch and card, the outline of pinned messages, the code chips |
+| `internal/app/viewers` | the views hidden behind one switch (D147): PR pane, board panel, worker panel |
 | `internal/app/apptest` | test helpers that the tests of more than one `internal/app` package use |
 | `internal/app/reviewview` | the Review view: branches ahead of main, their files or commits, the file as a code view |
 | `internal/app/files` | the files panel: file tree, diff summary, the agent's todos and artifacts |

@@ -1,7 +1,7 @@
 // Ported from the Rust contr modules board_panel (ActionClick, clear_done,
 // text_line) and board_card (selected_card).
 
-package app
+package viewers
 
 // The small parts that the work and needs-you sections share, and that the
 // board panel reuses.

@@ -10,6 +10,8 @@ import (
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/viewers"
+	"github.com/contursofran/contr/internal/app/viewers/viewerstest"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/usage"
 )
@@ -29,26 +31,26 @@ func TestHiddenViewersHaveNoEntryPoint(t *testing.T) {
 		t.Fatal("the viewers must be hidden by default")
 	}
 	f := NewFrame(Deps{})
-	r := newPRRig(t)
-	f.PR = r.pane
-	src := &source{Snap: boardSnap(), Text: "out"}
+	r := viewerstest.NewPRRig(t)
+	f.PR = r.Pane
+	src := &source{Snap: apptest.BoardSnap(), Text: "out"}
 	f.Selection = state.NewSelection(nil)
-	f.Worker = &WorkerPanel{Source: src, Selection: f.Selection}
-	f.Panel = &BoardPanel{Snapshot: src.Snapshot, Needs: agentstate.NeedItems(src.Snapshot, nil)}
+	f.Worker = &viewers.WorkerPanel{Source: src, Selection: f.Selection}
+	f.Panel = &viewers.BoardPanel{Snapshot: src.Snapshot, Needs: agentstate.NeedItems(src.Snapshot, nil)}
 	f.Slots.Panel = f.Panel.View
 	tt := ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)
 	tt.Frame()
 	f.OpenPR("/w", 642)
-	r.flush()
+	r.Flush()
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t1"})
 	tt.Key(ui.Cmd, ui.KeyJ)
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyE)
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyE)
 	tt.Frame()
-	if f.PROpen() || !apptest.Absent(tt, LabelPRPane) {
+	if f.PROpen() || !apptest.Absent(tt, viewers.LabelPRPane) {
 		t.Error("OpenPR opened the PR pane")
 	}
-	if !apptest.Absent(tt, LabelPanel) || !apptest.Absent(tt, LabelWorkerPanel) || !apptest.Absent(tt, LabelBoardRoot) {
+	if !apptest.Absent(tt, LabelPanel) || !apptest.Absent(tt, viewers.LabelWorkerPanel) || !apptest.Absent(tt, viewers.LabelBoardRoot) {
 		t.Error("the board or the worker panel shows")
 	}
 	if f.paneOpener() != nil {
@@ -86,7 +88,7 @@ func (s readSource) Read(name string, _ int) (string, error) {
 // change, as the notify of StartAgents does.
 func attachWithWorker(t *testing.T) (*Frame, readSource) {
 	t.Helper()
-	src := readSource{source: &source{Snap: boardSnap()}, reads: make(chan string, 16)}
+	src := readSource{source: &source{Snap: apptest.BoardSnap()}, reads: make(chan string, 16)}
 	w := &fakeWindow{visible: true}
 	f := NewFrame(Deps{})
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)

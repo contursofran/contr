@@ -12,6 +12,7 @@ import (
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
+	"github.com/contursofran/contr/internal/app/viewers"
 )
 
 func stateSelection() *state.Selection { return state.NewSelection(nil) }
@@ -42,7 +43,7 @@ func newFollowRig(t *testing.T) *followRig {
 	f.Selection = stateSelection()
 	f.agentSnap = src.Snapshot
 	f.takeSnapshot()
-	f.Worker = &WorkerPanel{Source: src, Selection: f.Selection}
+	f.Worker = &viewers.WorkerPanel{Source: src, Selection: f.Selection}
 	f.Slots.Panel = func(c *ui.Context) { ui.Text(c, "[board]") }
 	return &followRig{f: f, src: src, tt: ui.NewTester(panelBox(f), theme.PanelWidth, theme.WindowHeight)}
 }
@@ -57,7 +58,7 @@ func TestPanelFollowsOrchestratorSelection(t *testing.T) {
 	if !r.tt.HasText("[board]") {
 		t.Errorf("an orchestrator should show the board: %q", r.tt.Texts())
 	}
-	if _, ok := r.tt.Find(LabelWorkerPanel); ok {
+	if _, ok := r.tt.Find(viewers.LabelWorkerPanel); ok {
 		t.Error("the worker view shows for an orchestrator")
 	}
 }
@@ -79,7 +80,7 @@ func TestPanelFollowsWorkerSelection(t *testing.T) {
 	if r.tt.HasText("[board]") {
 		t.Fatal("the board shows for a worker")
 	}
-	for _, want := range []string{"b-1", "builder #162", "/tmp/wt", "working", WorkerInterrupt, WorkerStop} {
+	for _, want := range []string{"b-1", "builder #162", "/tmp/wt", "working", viewers.WorkerInterrupt, viewers.WorkerStop} {
 		if !r.tt.HasText(want) {
 			t.Errorf("worker view lacks %q; texts %q", want, r.tt.Texts())
 		}
@@ -104,17 +105,17 @@ func TestWorkerPanelShowsOutputAndReadsAgainOnSync(t *testing.T) {
 	r.f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t1"})
 	r.frame()
 	r.frame()
-	if r.f.Worker.out != "building the thing\nall tests pass" {
-		t.Errorf("output %q", r.f.Worker.out)
+	if r.f.Worker.Output() != "building the thing\nall tests pass" {
+		t.Errorf("output %q", r.f.Worker.Output())
 	}
-	if _, ok := r.tt.Find(LabelWorkerOutput); !ok {
+	if _, ok := r.tt.Find(viewers.LabelWorkerOutput); !ok {
 		t.Error("the output view is missing")
 	}
 	r.src.Text = "new line"
 	r.f.Worker.Sync()
 	r.frame()
-	if r.f.Worker.out != "new line" || len(r.src.Reads) != 2 {
-		t.Errorf("sync should read again; reads %v out %q", r.src.Reads, r.f.Worker.out)
+	if r.f.Worker.Output() != "new line" || len(r.src.Reads) != 2 {
+		t.Errorf("sync should read again; reads %v out %q", r.src.Reads, r.f.Worker.Output())
 	}
 }
 
@@ -166,7 +167,7 @@ func TestWorkerPanelInterrupt(t *testing.T) {
 	r.f.Worker.Env.Status = func(s string) { status = s }
 	r.f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t1"})
 	r.frame()
-	if err := r.tt.Click(WorkerInterrupt); err != nil {
+	if err := r.tt.Click(viewers.WorkerInterrupt); err != nil {
 		t.Fatal(err)
 	}
 	if !slices.Equal(r.src.Signalled, []string{"t1"}) || status != "b-1 interrupted" {
@@ -179,17 +180,17 @@ func TestWorkerPanelStopAsks(t *testing.T) {
 	r := newFollowRig(t)
 	r.f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t1"})
 	r.frame()
-	if err := r.tt.Click(WorkerStop); err != nil {
+	if err := r.tt.Click(viewers.WorkerStop); err != nil {
 		t.Fatal(err)
 	}
 	if len(r.src.Stopped) != 0 {
 		t.Fatal("the first click stopped the worker")
 	}
 	r.frame()
-	if !r.tt.HasText(WorkerConfirmStop) {
+	if !r.tt.HasText(viewers.WorkerConfirmStop) {
 		t.Fatalf("the button should ask again: %q", r.tt.Texts())
 	}
-	if err := r.tt.Click(WorkerConfirmStop); err != nil {
+	if err := r.tt.Click(viewers.WorkerConfirmStop); err != nil {
 		t.Fatal(err)
 	}
 	if !slices.Equal(r.src.Stopped, []string{"t1"}) {
@@ -201,11 +202,11 @@ func TestWorkerPanelInterruptDisarmsStop(t *testing.T) {
 	r := newFollowRig(t)
 	r.f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t1"})
 	r.frame()
-	_ = r.tt.Click(WorkerStop)
+	_ = r.tt.Click(viewers.WorkerStop)
 	r.frame()
-	_ = r.tt.Click(WorkerInterrupt)
+	_ = r.tt.Click(viewers.WorkerInterrupt)
 	r.frame()
-	if r.tt.HasText(WorkerConfirmStop) {
+	if r.tt.HasText(viewers.WorkerConfirmStop) {
 		t.Error("Interrupt should disarm Stop")
 	}
 }
@@ -216,7 +217,7 @@ func TestWorkerPanelActionErrorShows(t *testing.T) {
 	r.src.ActionErr = errors.New("hc said no")
 	r.f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t1"})
 	r.frame()
-	_ = r.tt.Click(WorkerInterrupt)
+	_ = r.tt.Click(viewers.WorkerInterrupt)
 	r.frame()
 	if !r.tt.HasText("hc said no") {
 		t.Errorf("error missing: %q", r.tt.Texts())
