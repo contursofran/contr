@@ -7,6 +7,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/github"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/usage"
@@ -28,7 +29,7 @@ func (r *fakeGH) Run(_ context.Context, _ string, args ...string) ([]byte, error
 // end (#568).
 func TestOneGHQueueLimitsPRAndTitleReadsTogether(t *testing.T) {
 	var queue []func()
-	env := Env{Run: Runner{Go: func(f func()) { queue = append(queue, f) }}}
+	env := view.Env{Run: view.Runner{Go: func(f func()) { queue = append(queue, f) }}}
 	gh, runner := &ghQueue{}, &fakeGH{}
 	client := func(dir string) github.Client { return github.Client{R: runner, Dir: dir} }
 	now := func() time.Time { return time.Unix(1000, 0) }

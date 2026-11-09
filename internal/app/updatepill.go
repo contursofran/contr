@@ -18,6 +18,7 @@ import (
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/updated"
 )
 
@@ -60,13 +61,13 @@ type updateUI struct {
 	// after is the update that the running version came from, while its What's new shows (D209).
 	after *updated.Note
 	// run saves the note as shown, off the UI thread.
-	run Runner
+	run view.Runner
 }
 
 // loadUpdated reads the note of the last install off the UI thread (D209). When it is of the
 // running version and did not show yet, the "Updated to" pill shows with its panel open. A
 // missing file shows nothing; a bad one is logged.
-func (f *Frame) loadUpdated(env Env) {
+func (f *Frame) loadUpdated(env view.Env) {
 	f.upd.run = env.Run
 	if f.deps.Updated.Load == nil {
 		return

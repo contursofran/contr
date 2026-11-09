@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/github"
 )
 
@@ -39,7 +40,7 @@ type titleRig struct {
 func newTitleRig() *titleRig {
 	r := &titleRig{runner: &titleRunner{out: map[string]string{"241": `{"title":"Agent rows on ui.List"}`}}, now: time.Unix(5000, 0)}
 	r.t = &IssueTitles{
-		Env: Env{Run: Runner{Go: func(f func()) { r.queue = append(r.queue, f) }},
+		Env: view.Env{Run: view.Runner{Go: func(f func()) { r.queue = append(r.queue, f) }},
 			Invalidate: func() { r.redraw++ }},
 		Client: func(dir string) github.Client { return github.Client{R: r.runner, Dir: dir} },
 		Now:    func() time.Time { return r.now },

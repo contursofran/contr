@@ -24,6 +24,7 @@ import (
 
 	"github.com/contursofran/contr"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/view"
 )
 
 // Version is contr's version, shown in Settings. It comes from the VERSION file (D107).
@@ -106,7 +107,7 @@ type Settings struct {
 	// that contr is not connected.
 	CoreVersion func() (string, bool)
 	// Env runs the checks and installs off the UI thread, redraws and shows messages.
-	Env Env
+	Env view.Env
 	// Relaunch restarts contr after an install. It runs on the UI thread.
 	Relaunch func()
 	// OnReady runs on the UI thread when a background install ends well (D176). May be nil.

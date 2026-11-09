@@ -1,6 +1,10 @@
 package app
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/contursofran/contr/internal/app/view"
+)
 
 // ErrPickCancelled is what a folder picker returns when the owner closes it
 // without a choice. Starting an orchestrator then does nothing.
@@ -16,7 +20,7 @@ type NewOrchestrator struct {
 	// Spawn starts the orchestrator profile in a folder.
 	Spawn func(dir string) error
 	// Env runs the picker and the spawn off the UI thread and shows errors.
-	Env Env
+	Env view.Env
 
 	busy bool // a pick or spawn is running
 }

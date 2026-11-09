@@ -17,6 +17,7 @@ import (
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/host"
 )
@@ -144,7 +145,7 @@ func newSpaces(t *testing.T, live agentstate.Snapshot) *spacesHarness {
 	t.Helper()
 	h := &spacesHarness{t: t, live: &spSnap{s: live}, sel: state.NewSelection(nil),
 		host: &fakeHost{}, heads: map[string]*fakeHead{}}
-	h.list = NewSpacesList(h.live.get, h.sel, Env{})
+	h.list = NewSpacesList(h.live.get, h.sel, view.Env{})
 	h.list.Env.Run.Go = func(f func()) { f() }
 	h.list.Host = h.host
 	h.list.WatchHead = func(ctx context.Context, path string, changed func()) error {
@@ -267,7 +268,7 @@ func TestAScanLandsThroughThePostFunc(t *testing.T) {
 	wt, _ := oneWorktree(t, base)
 	live := &spSnap{s: spTree(spPane("w1:p1", wt, nil))}
 	var started, posted []func()
-	l := NewSpacesList(live.get, state.NewSelection(nil), Env{Run: Runner{Post: func(f func()) { posted = append(posted, f) }}})
+	l := NewSpacesList(live.get, state.NewSelection(nil), view.Env{Run: view.Runner{Post: func(f func()) { posted = append(posted, f) }}})
 	l.Env.Run.Go = func(f func()) { started = append(started, f) }
 	l.Sync()
 	if len(l.Groups()) != 0 || len(started) != 1 {
@@ -288,7 +289,7 @@ func TestAScanThatLostTheTreeIsDropped(t *testing.T) {
 	wt, _ := oneWorktree(t, base)
 	live := &spSnap{s: spTree(spPane("w1:p1", wt, nil))}
 	var started []func()
-	l := NewSpacesList(live.get, state.NewSelection(nil), Env{})
+	l := NewSpacesList(live.get, state.NewSelection(nil), view.Env{})
 	l.Env.Run.Go = func(f func()) { started = append(started, f) }
 	l.Sync()
 	live.set(hcDown())
@@ -306,7 +307,7 @@ func TestOnlyTheNewestScanLands(t *testing.T) {
 	repo := filepath.Join(base, "repo")
 	live := &spSnap{s: spTree(spPane("w1:p1", wt, nil))}
 	var started []func()
-	l := NewSpacesList(live.get, state.NewSelection(nil), Env{})
+	l := NewSpacesList(live.get, state.NewSelection(nil), view.Env{})
 	l.Env.Run.Go = func(f func()) { started = append(started, f) }
 	l.Sync()
 	live.set(spTree(spPane("w1:p1", wt, nil), spPane("w1:p2", repo, nil)))
@@ -321,7 +322,7 @@ func TestOnlyTheNewestScanLands(t *testing.T) {
 func TestTheScanFuncGetsTheCwdsInTreeOrder(t *testing.T) {
 	live := &spSnap{s: spTree(spPane("w1:p1", "/x/b", nil), spPane("w1:p2", "/x/a", nil), spPane("w1:p3", "/x/b", nil))}
 	var got []string
-	l := NewSpacesList(live.get, nil, Env{})
+	l := NewSpacesList(live.get, nil, view.Env{})
 	l.scanFn = func(cwds []string) git.Scan { got = cwds; return git.Scan{} }
 	l.Env.Run.Go = func(f func()) { f() }
 	l.Sync()
@@ -356,7 +357,7 @@ func stats(cpu float32, used, total uint64) host.Stats {
 // The HEAD watch blocks until its context ends, so it starts a goroutine even
 // in a zero Env, where other work runs at once.
 func TestSpacesHeadWatchDoesNotBlockInAZeroEnv(t *testing.T) {
-	l := NewSpacesList(nil, nil, Env{})
+	l := NewSpacesList(nil, nil, view.Env{})
 	started := make(chan struct{})
 	l.WatchHead = func(ctx context.Context, _ string, _ func()) error {
 		close(started)

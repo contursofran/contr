@@ -17,6 +17,7 @@ import (
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/review"
@@ -557,7 +558,7 @@ func newTermFrame(t *testing.T, snap *agentstate.Snapshot) *termFrame {
 			tf.opened = append(tf.opened, [2]string{project, dir})
 			return "tNew", tf.openErr
 		},
-		Env:    Env{Status: func(s string) { tf.statuses = append(tf.statuses, s) }},
+		Env:    view.Env{Status: func(s string) { tf.statuses = append(tf.statuses, s) }},
 		Select: func(addr string) { f.Selection.Select(state.Selected{Kind: state.KindTerminal, ID: addr}) },
 	}
 	return tf
@@ -639,7 +640,7 @@ func TestNewTerminalErrorStatus(t *testing.T) {
 func TestNewTerminalBusy(t *testing.T) {
 	var jobs []func()
 	n := &NewTerminal{Open: func(string, string) (string, error) { return "t", nil },
-		Env: Env{Run: Runner{Go: func(f func()) { jobs = append(jobs, f) }}}}
+		Env: view.Env{Run: view.Runner{Go: func(f func()) { jobs = append(jobs, f) }}}}
 	n.Start("p", "/d")
 	n.Start("p", "/d")
 	if len(jobs) != 1 {

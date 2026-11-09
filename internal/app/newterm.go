@@ -1,5 +1,9 @@
 package app
 
+import (
+	"github.com/contursofran/contr/internal/app/view"
+)
+
 // NewTerminal opens a plain hc terminal in the open project: the "+" in the
 // title bar and Cmd-T (#246, D82). Its methods run on the UI thread; Open runs
 // off it.
@@ -9,7 +13,7 @@ type NewTerminal struct {
 	// blocks, so Start runs it off the UI thread. Nil makes Start do nothing.
 	Open func(project, dir string) (addr string, err error)
 	// Env runs Open off the UI thread and shows its error.
-	Env Env
+	Env view.Env
 	// Select selects the new terminal. It runs on the UI thread; may be nil.
 	Select func(addr string)
 

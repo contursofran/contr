@@ -15,6 +15,7 @@ import (
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/review"
 )
@@ -48,7 +49,7 @@ type FileTree struct {
 	// Env runs the reads off the UI thread, redraws and shows read errors.
 	// The zero Env (a tree that no window owns) reads at once, so nothing
 	// reaches the tree from another goroutine.
-	Env Env
+	Env view.Env
 	// Watch watches dir and calls notify on a change, from any goroutine.
 	// Nil uses mygo.WatchFiles.
 	Watch func(dir string, notify func()) (stop func(), err error)
@@ -78,7 +79,7 @@ type FileTree struct {
 	// reads drops the result of an older read and ends its context: a newer
 	// read started or the tree closed. session counts the folders shown, so a
 	// watch event of an old folder is dropped.
-	reads     Latest
+	reads     view.Latest
 	session   uint64
 	stopWatch func()
 	mu        sync.Mutex

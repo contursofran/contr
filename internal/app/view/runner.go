@@ -1,4 +1,4 @@
-package app
+package view
 
 // Runner runs work off the UI thread and hands the result back to it. The
 // views call hc and owner.json through it, so a slow core never blocks a

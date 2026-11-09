@@ -17,6 +17,7 @@ import (
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/view"
 )
 
 // Labels of the worker view.
@@ -37,7 +38,7 @@ type WorkerPanel struct {
 	Source    AgentSource
 	Selection *state.Selection
 	// Env runs the hc calls off the UI thread, redraws and shows messages.
-	Env Env
+	Env view.Env
 
 	addr  string // the worker that out belongs to
 	out   string

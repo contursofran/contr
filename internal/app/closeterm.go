@@ -1,5 +1,9 @@
 package app
 
+import (
+	"github.com/contursofran/contr/internal/app/view"
+)
+
 // CloseTerminal stops the selected plain terminal: Cmd-W and File > Close
 // Terminal (#246, S4, D85). Its methods run on the UI thread; Stop runs off it.
 type CloseTerminal struct {
@@ -7,7 +11,7 @@ type CloseTerminal struct {
 	// off the UI thread. Nil makes Start do nothing.
 	Stop func(addr string) error
 	// Env runs Stop off the UI thread and shows its error.
-	Env Env
+	Env view.Env
 	// Closed runs on the UI thread after Stop worked; may be nil.
 	Closed func(addr string)
 

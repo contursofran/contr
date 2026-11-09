@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/git"
 )
 
@@ -69,7 +70,7 @@ func (q postQueue) run(t *testing.T) {
 
 func blockedReview(timeout time.Duration) (*Review, *blockingGit, postQueue) {
 	g, q := newBlockingGit(), make(postQueue, 100)
-	r := NewReview(Env{Run: Runner{Post: q.post}})
+	r := NewReview(view.Env{Run: view.Runner{Post: q.post}})
 	r.git, r.timeout = g, timeout
 	return r, g, q
 }

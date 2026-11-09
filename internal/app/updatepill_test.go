@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/updated"
 )
 
@@ -178,7 +179,7 @@ func newUpdatedRig(t *testing.T, n updated.Note, err error) *updatedRig {
 	f.deps.Updated.Load = func() (updated.Note, error) { return n, err }
 	f.deps.Updated.Save = func(n updated.Note) error { r.saved = append(r.saved, n); return nil }
 	tt.Frame()
-	f.loadUpdated(Env{})
+	f.loadUpdated(view.Env{})
 	tt.Frame()
 	tt.Frame()
 	return r
@@ -334,7 +335,7 @@ func whatsNewThenReady(t *testing.T, closed bool) (*pillRig, *[]updated.Note) {
 	n := dueNote()
 	n.Version, n.From = "1.2.3", "1.2.0"
 	r.f.deps.Updated.Load = func() (updated.Note, error) { return n, nil }
-	r.f.loadUpdated(Env{})
+	r.f.loadUpdated(view.Env{})
 	r.tt.Frame()
 	if !r.has(UpdatedPrefix+"1.2.3") || !r.has(LabelUpdatePanel) {
 		t.Fatalf("no What's new at start: %q", r.tt.Texts())

@@ -13,6 +13,7 @@ import (
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/projects"
 	"github.com/contursofran/contr/internal/usage"
@@ -47,7 +48,7 @@ func newRows(t *testing.T) *rowsHarness {
 	}
 	src := &source{}
 	h.list.Source = src
-	h.list.Env.Run = Runner{Go: func(f func()) { f() }}
+	h.list.Env.Run = view.Runner{Go: func(f func()) { f() }}
 	lead := orchestratorIn("lead", cwds[0])
 	lead.Profile, lead.LastOutput = "orchestrator", rowsNow.Add(-2*time.Minute)
 	h.send(agentstate.Snapshot{CoreVersion: "0.1.18",

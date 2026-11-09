@@ -12,6 +12,7 @@ import (
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/usage"
 )
@@ -42,7 +43,7 @@ func newCloseFrame(t *testing.T, snap *agentstate.Snapshot) *closeFrame {
 			}
 			return cf.stopErr
 		},
-		Env:    Env{Status: func(s string) { cf.statuses = append(cf.statuses, s) }},
+		Env:    view.Env{Status: func(s string) { cf.statuses = append(cf.statuses, s) }},
 		Closed: f.terminalClosed,
 	}
 	return cf
@@ -164,7 +165,7 @@ func TestCloseTerminalWithoutStopOrActionDoesNothing(t *testing.T) {
 
 func TestCloseTerminalBusy(t *testing.T) {
 	var jobs []func()
-	c := &CloseTerminal{Stop: func(string) error { return nil }, Env: Env{Run: Runner{Go: func(f func()) { jobs = append(jobs, f) }}}}
+	c := &CloseTerminal{Stop: func(string) error { return nil }, Env: view.Env{Run: view.Runner{Go: func(f func()) { jobs = append(jobs, f) }}}}
 	c.Start("a")
 	c.Start("a")
 	c.Start("b")

@@ -19,6 +19,7 @@ import (
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/github"
 )
 
@@ -46,7 +47,7 @@ type PRPane struct {
 	// Client gives the GitHub client for a folder. Nil: [github.New].
 	Client func(dir string) github.Client
 	// Env runs the read off the UI thread, redraws and opens web addresses.
-	Env Env
+	Env view.Env
 	// Now is the clock. Nil: time.Now.
 	Now func() time.Time
 	// Orchestrator gives the address of the orchestrator terminal of the project of the
@@ -68,7 +69,7 @@ type PRPane struct {
 	pr      *github.PR
 	err     string
 	tab     int
-	reads   Latest // drops the result of a read of an older PR or a closed pane
+	reads   view.Latest // drops the result of a read of an older PR or a closed pane
 	client  github.Client
 	checks  prChecks
 	handle  ui.Handle

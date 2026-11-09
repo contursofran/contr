@@ -11,6 +11,7 @@ import (
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/view"
 )
 
 func stateSelection() *state.Selection { return state.NewSelection(nil) }
@@ -133,7 +134,7 @@ func TestWorkerPanelReadsOffTheUIThread(t *testing.T) {
 	enableViewers(t)
 	r := newFollowRig(t)
 	var queued []func()
-	r.f.Worker.Env.Run = Runner{Go: func(f func()) { queued = append(queued, f) }}
+	r.f.Worker.Env.Run = view.Runner{Go: func(f func()) { queued = append(queued, f) }}
 	r.f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t1"})
 	r.frame()
 	r.f.Worker.Sync() // while the first read runs
