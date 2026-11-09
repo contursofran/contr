@@ -20,7 +20,8 @@ import (
 // folders), starts the release binary CONTR_EXPLORE_BIN in the theme of
 // CONTR_EXPLORE_THEME, and writes CONTR_EXPLORE_INFO (lines app=, pid=,
 // testpid=, scratch=, hc_session=). Then it keeps the app and the core open until the
-// file CONTR_EXPLORE_STOP exists or the test gets SIGINT or SIGTERM. The
+// file CONTR_EXPLORE_STOP exists (a stop file that exists earlier ends the run
+// before the app starts) or the test gets SIGINT or SIGTERM. The
 // harness cleanup then ends the core and removes the scratch folder.
 // Without CONTR_EXPLORE it skips.
 func TestExplore(t *testing.T) {
@@ -46,9 +47,14 @@ func TestExplore(t *testing.T) {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
+	// A stop that came during the set-up ends the run before the app starts.
+	stopped := func() bool { _, err := os.Stat(stop); return err == nil }
 	h := newHarness(t)
 	f.setup(t, h)
 	h.theme(t, theme)
+	if stopped() || ctx.Err() != nil {
+		return
+	}
 
 	// The release build has no automation plugin, so the socket is empty.
 	app := exec.Command(bin)
@@ -57,6 +63,9 @@ func TestExplore(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = app.Process.Kill(); _ = app.Wait() })
+	if stopped() {
+		return
+	}
 
 	session := ""
 	for _, v := range h.env {
@@ -84,7 +93,7 @@ func TestExplore(t *testing.T) {
 		case <-limit:
 			return
 		case <-tick.C:
-			if _, err := os.Stat(stop); err == nil {
+			if stopped() {
 				return
 			}
 		}

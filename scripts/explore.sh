@@ -95,7 +95,9 @@ stop_all() {
 		fi
 		;;
 	esac
-	rm -f "$statefile" "$infofile" "$stopfile"
+	# The stop file stays: a test that is still starting must find it. Start
+	# removes it before the next launch.
+	rm -f "$statefile" "$infofile"
 }
 
 fixture=${1:-}
@@ -148,7 +150,15 @@ CGO_ENABLED=0 go build -o "$abs/$app" ./cmd/contr
 # From here on, Ctrl-C or an error cleans up. A start that works clears the trap.
 started=0
 cleanup() {
-	[ "$started" -eq 1 ] || stop_all
+	[ "$started" -eq 1 ] && return 0
+	stop_all
+	# The test may still be starting: it sees the stop file and ends. Wait for
+	# it, so no scratch app or core stays after this script.
+	i=0
+	while alive "$gopid" && [ "$i" -lt 600 ]; do
+		sleep 0.2
+		i=$((i + 1))
+	done
 }
 trap cleanup EXIT
 trap 'exit 130' INT TERM

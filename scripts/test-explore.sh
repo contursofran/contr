@@ -89,7 +89,7 @@ kill -0 "$gopid" 2>/dev/null || fail "stop ended go, which is not recorded"
 kill -0 "$apppid" 2>/dev/null && fail "stop left the app"
 kill -0 "$other" 2>/dev/null || fail "stop ended a process that is not recorded"
 [ ! -e "$scratch" ] || fail "stop left the scratch folder"
-for f in state info stop; do [ ! -e "$EXPLORE_DIR/$f" ] || fail "stop left $f"; done
+for f in state info; do [ ! -e "$EXPLORE_DIR/$f" ] || fail "stop left $f"; done
 
 # A stale state file: the pids now belong to other processes. A bystander as
 # gopid, testpid and apppid, with no ident or with another ident, survives.
@@ -110,6 +110,15 @@ kill -0 "$by1" 2>/dev/null || fail "stale stop ended a process with another star
 kill -0 "$by2" 2>/dev/null || fail "stale stop ended a bystander"
 [ ! -e "$scratch" ] || fail "stale stop left the scratch folder"
 [ ! -e "$EXPLORE_DIR/state" ] || fail "stale stop left the state file"
+
+# stop with an empty state (a start that ended early) leaves the stop file, so
+# a test that is still starting finds it and ends.
+rm -f "$EXPLORE_DIR/state" "$EXPLORE_DIR/info" "$EXPLORE_DIR/stop"
+: >"$EXPLORE_DIR/state"
+run stop
+[ "$rc" = 0 ] || fail "empty-state stop: want exit 0, got $rc: $err"
+[ -e "$EXPLORE_DIR/stop" ] || fail "empty-state stop removed the stop file"
+rm -f "$EXPLORE_DIR/stop"
 
 # stop never removes a folder outside /tmp/contr-h*.
 keep="$tmp/keep"
