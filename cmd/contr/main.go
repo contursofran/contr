@@ -232,7 +232,7 @@ func openWindow(icons bool) int {
 		frame.OpenTerminal = func(project, dir string) (string, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
-			return openTerminal(ctx, os.Getenv, dialAgents, project, dir, time.Now())
+			return openTerminal(ctx, os.Getenv, dialAgents, project, dir, time.Now(), appColors())
 		}
 		frame.PickFolder = pickFolder
 		frame.Updates = updateService()
@@ -260,7 +260,7 @@ func openWindow(icons bool) int {
 		frame.SpawnOrchestrator = func(dir string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
-			return spawnOrchestrator(ctx, os.Getenv, dialAgents, dir, time.Now())
+			return spawnOrchestrator(ctx, os.Getenv, dialAgents, dir, time.Now(), appColors())
 		}
 		opts.Content = ui.View(frame.View)
 	}

@@ -36,6 +36,7 @@ func (*recStream) Err() error                      { return nil }
 func (s *recStream) Write(p []byte) (int, error)   { s.log.add(p); return len(p), nil }
 func (*recStream) Resize(uint16, uint16) error     { return nil }
 func (*recStream) Focus(bool) error                { return nil }
+func (*recStream) SetDisplay(hc.Display) error     { return nil }
 func (s *recStream) Close() error                  { s.once.Do(func() { close(s.ev) }); return nil }
 
 type recSource struct{ log *inputLog }
