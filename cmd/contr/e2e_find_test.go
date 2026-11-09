@@ -13,6 +13,7 @@ import (
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app"
 	"github.com/contursofran/contr/internal/app/settings"
+	"github.com/contursofran/contr/internal/app/titlebar"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
@@ -158,7 +159,7 @@ func TestFindBarCapture(t *testing.T) {
 		waitFor(app.LabelFind, false)
 	}
 	// The Search button opens the bar too.
-	sb := c.boundsOf(t, app.LabelSearch)
+	sb := c.boundsOf(t, titlebar.LabelSearch)
 	c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "click", "x": sb.X + sb.Width/2, "y": sb.Y + sb.Height/2}}})
 	waitFor(app.LabelFind, true)
 }

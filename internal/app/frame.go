@@ -30,6 +30,7 @@ import (
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/tabmodel"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/titlebar"
 	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/github"
 	"github.com/contursofran/contr/internal/host"
@@ -141,7 +142,7 @@ type Frame struct {
 	// agents.
 	CloseTerm *CloseTerminal
 
-	bar titleBar
+	bar titlebar.TitleBar
 	// upd is the update pill, its panel and its toast (D176).
 	upd updateUI
 	// agentSnap reads the agent source; nil before Attach or without agents. Only
@@ -418,8 +419,6 @@ const (
 	LabelTerminalGrid = "terminal grid"
 	LabelReview       = "review area"
 	LabelPanel        = "board panel"
-	// LabelFilesToggle is the title bar button that hides and shows the files panel.
-	LabelFilesToggle = "Hide files"
 	// The three panels of the window (docs/spec/Window.md): screen readers name them so.
 	LabelPanelSidebar  = "Sidebar"
 	LabelPanelTerminal = "Terminal"
@@ -659,18 +658,18 @@ func (f *Frame) titleBar(c *ui.Context, sidebarW float32, narrow bool) {
 			corner = max(sidebarW+2*theme.PanelGap, corner)
 		}
 		ui.Box(c).Width(corner).FillHeight().Shrink(0)
-		f.bar.setTabs(f.titleTabs())
-		f.bar.selectTab, f.bar.closeTab = f.selectTab, f.closeTab
-		f.bar.closeOthers, f.bar.moveTab = f.closeOtherTabs, f.moveTab
-		f.bar.stopTab, f.bar.closeAgent = f.stopTab, f.closeAgentTab
-		f.bar.newTab = nil
+		f.bar.SetTabs(f.titleTabs())
+		f.bar.SelectTab, f.bar.CloseTab = f.selectTab, f.closeTab
+		f.bar.CloseOthers, f.bar.MoveTab = f.closeOtherTabs, f.moveTab
+		f.bar.StopTab, f.bar.CloseAgent = f.stopTab, f.closeAgentTab
+		f.bar.NewTab = nil
 		if f.NewTerm != nil {
-			f.bar.newTab = f.newTerminal
+			f.bar.NewTab = f.newTerminal
 		}
-		f.bar.diff, f.bar.openReview = f.Diff, f.openReviewView
-		f.bar.search = f.openFind
-		f.bar.update = f.updatePill
-		f.bar.build(c, f.panelOpen && !narrow, narrow, f.TogglePanel)
+		f.bar.Diff, f.bar.OpenReview = f.Diff, f.openReviewView
+		f.bar.Search = f.openFind
+		f.bar.Update = f.updatePill
+		f.bar.Build(c, f.panelOpen && !narrow, narrow, f.TogglePanel)
 	})
 }
 
@@ -800,7 +799,7 @@ func (f *Frame) closeAgentTab(t tabmodel.Tab) {
 // closeOtherTabs closes every plain terminal tab except keep. The agent's own tab never closes
 // (D85). UI thread.
 func (f *Frame) closeOtherTabs(keep tabmodel.Tab) {
-	for _, t := range f.bar.tabs {
+	for _, t := range f.bar.Tabs {
 		if t.Address != keep.Address {
 			f.closeTab(t)
 		}
@@ -810,7 +809,7 @@ func (f *Frame) closeOtherTabs(keep tabmodel.Tab) {
 // moveTab puts the plain tab from in the place of the plain tab to. The agent's own tab does
 // not move. The order lasts for the session. UI thread.
 func (f *Frame) moveTab(from, to string) {
-	order, ok := tabmodel.MoveTab(f.bar.tabs, from, to)
+	order, ok := tabmodel.MoveTab(f.bar.Tabs, from, to)
 	if !ok {
 		return
 	}

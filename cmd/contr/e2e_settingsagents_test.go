@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/contursofran/contr/internal/app"
 	"github.com/contursofran/contr/internal/app/settings"
+	"github.com/contursofran/contr/internal/app/titlebar"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
 
@@ -88,7 +88,7 @@ func TestSettingsAgentsTab(t *testing.T) {
 		time.Sleep(600 * time.Millisecond)
 	}
 
-	wait(app.LabelNewTab)
+	wait(titlebar.LabelNewTab)
 	c.call(t, "menu", map[string]any{"path": []string{"contr", "Settings…"}})
 	wait(settings.LabelSettings)
 	for _, theme := range []string{"Dark", "Light"} {

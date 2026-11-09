@@ -16,6 +16,7 @@ import (
 	"github.com/contursofran/contr/internal/app"
 	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/titlebar"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
 
@@ -66,12 +67,12 @@ func TestWindowGaps(t *testing.T) {
 	defer c.conn.Close()
 	c.waitWindow(t)
 	has := func(label string) bool { return c.labels(t)[label] }
-	for deadline := time.Now().Add(20 * time.Second); !has(app.LabelNewTab) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+	for deadline := time.Now().Add(20 * time.Second); !has(titlebar.LabelNewTab) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
 	}
 	// A plain terminal gives the tab row a tab to measure.
-	nb := c.boundsOf(t, app.LabelNewTab)
+	nb := c.boundsOf(t, titlebar.LabelNewTab)
 	c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "click", "x": nb.X + nb.Width/2, "y": nb.Y + nb.Height/2}}})
-	for deadline := time.Now().Add(20 * time.Second); c.boundsOf(t, app.LabelTabs).Width == 0 && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+	for deadline := time.Now().Add(20 * time.Second); c.boundsOf(t, titlebar.LabelTabs).Width == 0 && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
 	}
 	c.call(t, "menu", map[string]any{"path": []string{"contr", "Settings…"}})
 	for deadline := time.Now().Add(20 * time.Second); !has(settings.LabelSettings) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
@@ -158,7 +159,7 @@ func measureGaps(t *testing.T, c *client, path string) {
 	wantGaps(t, "column", cols, 2)
 	// The tab row (D168): down a column through the first tab, in points: the glass above the tab
 	// (window rim to the tab), the tab, and the glass below it to the terminal panel's border.
-	tabs := c.boundsOf(t, app.LabelTabs)
+	tabs := c.boundsOf(t, titlebar.LabelTabs)
 	tx := int((tabs.X + 16) * scale) // past the panel's corner radius
 	var seg []float64
 	run, last := 0, false

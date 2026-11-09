@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/assets"
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/theme/themetest"
@@ -135,21 +136,21 @@ func TestSpecSheet(t *testing.T) {
 	want := os.Getenv("CONTR_SHEET")
 	names := strings.Split(want, ",")
 	out := filepath.Join("..", "..", "tmp", "sheet")
-	for _, tc := range themeCases {
-		themetest.Use(t, tc.src)
+	for _, tc := range apptest.ThemeCases {
+		themetest.Use(t, tc.Src)
 		for _, p := range sheetParts {
 			img := ui.Render(sheetView(p), p.w+2*sheetPad, p.h+2*sheetPad, 1)
-			if inked(img, tc.pal.Ground) < 50 {
-				t.Errorf("%s %s: the render is empty", p.name, tc.name)
+			if inked(img, tc.Pal.Ground) < 50 {
+				t.Errorf("%s %s: the render is empty", p.name, tc.Name)
 			}
 			if want == "" || (want != "all" && !slices.Contains(names, p.name)) {
 				continue
 			}
-			sheet := sheetImage(t, p, tc.name)
+			sheet := sheetImage(t, p, tc.Name)
 			if err := os.MkdirAll(out, 0o755); err != nil {
 				t.Fatal(err)
 			}
-			path, err := filepath.Abs(filepath.Join(out, p.name+"-"+tc.name+".png"))
+			path, err := filepath.Abs(filepath.Join(out, p.name+"-"+tc.Name+".png"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -218,7 +219,7 @@ func inked(img *image.RGBA, ground ui.Color) int {
 	b := img.Bounds()
 	for y := b.Min.Y; y < b.Max.Y; y++ {
 		for x := b.Min.X; x < b.Max.X; x++ {
-			if !near(rgb(img, float32(x), float32(y)), ground, 16) {
+			if !apptest.Near(apptest.RGB(img, float32(x), float32(y)), ground, 16) {
 				n++
 			}
 		}
