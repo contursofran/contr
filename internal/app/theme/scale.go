@@ -53,6 +53,8 @@ var (
 	StyleGlyph      = TextStyle{Mono: true, Size: 17, Line: 18, Weight: 400}
 	StyleValue      = TextStyle{Mono: true, Size: 11.5, Line: 16, Weight: 400}
 	StyleMeta       = TextStyle{Mono: true, Size: 11, Line: 16, Weight: 400}
+	StyleKbd        = TextStyle{Mono: true, Size: 10.5, Line: 14, Weight: 500}
+	StyleTile       = TextStyle{Size: 11, Line: 14, Weight: 600}
 	StyleCount      = TextStyle{Mono: true, Size: 11, Line: 14, Weight: 500}
 )
 

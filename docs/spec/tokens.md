@@ -13,6 +13,7 @@ Generated from the design system `tokens.json`. Views use the names; `internal/a
 | `glass-window` | `rgba(20,21,24,0.7)` | `rgba(246,246,248,0.6)` | Window fill over the vibrancy material, under every panel. With glass-blur and glass-saturate. The owner can tune its alpha in Settings (D162); the value here is the default. |
 | `glass-float` | `rgba(34,35,40,0.72)` | `rgba(252,252,253,0.8)` | Floating glass over the terminal: the closed questions notch and the outline card. With glass-blur and glass-saturate. |
 | `float-solid` | `#222328` | `#fcfcfd` | `glass-float` at full alpha: the opaque fill of floating cards with text to read, the update panel, the What's new panel and the open questions card (D212). No blur. |
+| `scrim` | `rgba(8,8,8,0.72)` | `rgba(20,20,20,0.18)` | Backdrop behind the projects modal. |
 | `panel` | `rgba(20,21,24,0.85)` | `rgba(255,255,255,0.7)` | Fill of the three panels: sidebar, terminal, files. The owner can tune its alpha in Settings (D162); the value here is the default. |
 | `panel-line` | `rgba(255,255,255,0.065)` | `rgba(0,0,0,0.06)` | 1px border of the three panels. |
 | `window-line` | `rgba(255,255,255,0.09)` | `rgba(0,0,0,0.1)` | 1px border of the window. |
