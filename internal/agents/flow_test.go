@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -150,5 +151,72 @@ func TestSaveOfDefaultsWritesNoProfiles(t *testing.T) {
 	data, _ := os.ReadFile(path)
 	if strings.Contains(string(data), "profiles") {
 		t.Fatalf("file = %s", data)
+	}
+}
+
+func TestDefaultConfigHasTheOrchestrator(t *testing.T) {
+	p, ok := DefaultConfig().Profiles["orchestrator"]
+	want := []string{"claude", "--model", "opus", "--effort", "medium", "--permission-mode", "auto"}
+	if !ok || !reflect.DeepEqual(p.Argv, want) {
+		t.Fatalf("orchestrator %+v", p)
+	}
+}
+
+func TestSaveDoesNotWriteTheDefaultOrchestrator(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agents.json")
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "orchestrator") {
+		t.Fatalf("default frozen in file: %s", data)
+	}
+}
+
+func TestLoadConfigOldFormatGivesANotice(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agents.json")
+	body := `{"version":1,"presets":[{"name":"x","argv":["codex"]}]}`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Notice != OldFormatNotice {
+		t.Errorf("notice %q", cfg.Notice)
+	}
+	if _, ok := cfg.Profiles["orchestrator"]; !ok {
+		t.Error("defaults do not apply")
+	}
+	if data, _ := os.ReadFile(path); string(data) != body {
+		t.Errorf("the file changed: %q", data)
+	}
+	// A file with profiles, or with neither key, gives no notice.
+	for _, b := range []string{`{"presets":[],"profiles":{}}`, `{"version":1}`} {
+		if err := os.WriteFile(path, []byte(b), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if c, err := LoadConfig(path); err != nil || c.Notice != "" {
+			t.Errorf("%s: %v, notice %q", b, err, c.Notice)
+		}
+	}
+}
+
+func TestLoadConfigOwnOrchestratorWins(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agents.json")
+	if err := os.WriteFile(path, []byte(`{"profiles":{"orchestrator":{"argv":["codex"]}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(path)
+	if err != nil || !reflect.DeepEqual(cfg.Profiles["orchestrator"].Argv, []string{"codex"}) {
+		t.Fatalf("%v %+v", err, cfg.Profiles["orchestrator"])
 	}
 }
