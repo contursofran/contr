@@ -200,7 +200,6 @@ const updatedPill = UpdatedPrefix + "0.4.0"
 func (r *updatedRig) closedAndShown(t *testing.T) {
 	t.Helper()
 	r.tt.Frame()
-	r.tt.Frame()
 	if r.has(LabelUpdatePanel) || r.has(updatedPill) {
 		t.Error("the pill or the panel stays after the panel closed")
 	}
