@@ -258,6 +258,7 @@ func TestSee(t *testing.T) {
 		c.settle(t)
 		for _, l := range press {
 			c.press(t, l)
+			c.settle(t)
 		}
 		if len(press) > 0 {
 			c.settle(t)

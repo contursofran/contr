@@ -79,6 +79,9 @@ type ProjectsModal struct {
 	Now func() time.Time
 	// Status shows an error; may be nil.
 	Status func(string)
+	// Toast shows a message with a button in the frame, so the button works
+	// after the modal closes (D207). May be nil.
+	Toast func(msg, action string, undo func())
 	// Invalidate redraws the window; may be nil.
 	Invalidate func()
 	// Switch selects the open project with this common dir in the sidebar;
@@ -244,16 +247,6 @@ func (m *ProjectsModal) listReorder(rows []int, to int) {
 		open = append(open, r-1)
 	}
 	m.reorder(open, to-1)
-}
-
-// hide hides the project in contr only (D70).
-func (m *ProjectsModal) hide(dir string) {
-	st := m.store()
-	if st == nil {
-		return
-	}
-	st.Hide(dir)
-	m.changed()
 }
 
 // openFolder asks for a folder on a goroutine, then adds it to the store and

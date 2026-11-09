@@ -160,8 +160,9 @@ func TestProjectsModalHideHidesAndSaves(t *testing.T) {
 		t.Fatalf("saved %v", r.saved)
 	}
 	r.tt.Frame()
-	if r.has(ProjectsRow("b")) || !r.has(ProjectsRow("a")) {
-		t.Error("the list still shows b, or lost a")
+	// b leaves Open and goes to Recent (Q8): it has no Hide button any more.
+	if slices.Contains(r.names(), "b") || r.has(ProjectsHideOf("b")) || !r.has(ProjectsRow("a")) {
+		t.Error("the list still shows b as open, or lost a")
 	}
 }
 

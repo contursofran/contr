@@ -11,6 +11,14 @@ type Toasts struct {
 
 	mu      sync.Mutex
 	pending []string
+	actions []ToastAction
+}
+
+// ToastAction is a message with a button, such as Undo. OnAction runs on the
+// UI thread when the owner presses the button.
+type ToastAction struct {
+	Text, Action string
+	OnAction     func()
 }
 
 // NewToasts returns an empty queue. onChange may be nil. It runs after each
@@ -44,5 +52,29 @@ func (t *Toasts) Take() []string {
 	defer t.mu.Unlock()
 	out := t.pending
 	t.pending = nil
+	return out
+}
+
+// ShowAction queues a message with a button that runs undo (D207). An empty
+// text is ignored.
+func (t *Toasts) ShowAction(text, action string, undo func()) {
+	if text == "" {
+		return
+	}
+	t.mu.Lock()
+	t.actions = append(t.actions, ToastAction{Text: text, Action: action, OnAction: undo})
+	t.mu.Unlock()
+	if t.onChange != nil {
+		t.onChange()
+	}
+}
+
+// TakeActions returns the queued messages with a button, oldest first, and
+// empties that queue.
+func (t *Toasts) TakeActions() []ToastAction {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	out := t.actions
+	t.actions = nil
 	return out
 }
