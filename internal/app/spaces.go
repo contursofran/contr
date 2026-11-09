@@ -129,9 +129,9 @@ type SpacesList struct {
 
 	scan    git.Scan
 	scanned []string
-	// gen counts the scans started and the scans dropped. A finished scan of
-	// an older generation is dropped, so only the newest result lands.
-	gen   uint64
+	// reads drops a finished scan when a newer scan started or the scan was
+	// dropped, so only the newest result lands.
+	reads Latest
 	scans int
 	// list is the state of the project list.
 	list ui.ListState
@@ -328,22 +328,18 @@ func spaceTerms(s agentstate.Snapshot) []spaces.Term {
 }
 
 func (l *SpacesList) forgetScan() {
-	l.gen++
+	l.reads.Reset()
 	l.scan, l.scanned = git.Scan{}, nil
 }
 
 func (l *SpacesList) startScan(cwds []string) {
-	l.gen++
-	gen := l.gen
+	l.reads.Reset()
 	l.scanned = slices.Clone(cwds)
 	l.scans++
 	scanFn := l.scanFn
-	l.Env.Do(func() func() {
+	l.reads.Do(l.Env, func() func() {
 		scan := scanFn(cwds)
 		return func() {
-			if gen != l.gen {
-				return
-			}
 			l.scan = scan
 			l.rebuild()
 		}

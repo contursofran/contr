@@ -51,9 +51,10 @@ type SessionPanel struct {
 	// Now gives the time for the ages; nil uses time.Now.
 	Now func() time.Time
 
-	id        string
-	sess      *session.Session
-	gen       uint64
+	id   string
+	sess *session.Session
+	// reads drops a read of the file of an older terminal.
+	reads     Latest
 	stopWatch func()
 }
 
@@ -72,18 +73,18 @@ func (s *SessionPanel) sync() {
 	if path == "" {
 		return
 	}
-	gen := s.gen
+	read := s.reads.Bind(s.read)
 	watch := s.Watch
 	if watch == nil {
 		watch = watchSessionFile
 	}
-	stop, err := watch(path, func() { s.Env.Post(func() { s.read(gen) }) })
+	stop, err := watch(path, func() { s.Env.Post(read) })
 	if err != nil {
 		log.Printf("session watch %s: %v", filepath.Base(path), err)
 	} else {
 		s.stopWatch = stop
 	}
-	s.read(gen)
+	s.read()
 }
 
 // Close stops the watch and drops the session shown.
@@ -92,27 +93,21 @@ func (s *SessionPanel) Close() {
 		s.stopWatch()
 		s.stopWatch = nil
 	}
-	s.gen++
+	s.reads.Reset()
 	s.id, s.sess = "", nil
 }
 
 // read reads the file of the terminal on a goroutine. A result of an older
-// terminal (gen) is dropped. A bad file shows nothing and is logged.
-func (s *SessionPanel) read(gen uint64) {
-	if gen != s.gen {
-		return
-	}
+// terminal is dropped. A bad file shows nothing and is logged.
+func (s *SessionPanel) read() {
 	dir, id := s.StateDir, s.id
-	s.Env.Do(func() func() {
+	s.reads.Do(s.Env, func() func() {
 		sess, err := session.Read(dir, id)
 		if err != nil {
 			log.Printf("session: %v", err)
 			sess = nil
 		}
 		return func() {
-			if gen != s.gen {
-				return
-			}
 			s.sess = sess
 			s.Env.Redraw()
 		}

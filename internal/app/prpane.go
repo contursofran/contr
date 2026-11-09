@@ -68,7 +68,7 @@ type PRPane struct {
 	pr      *github.PR
 	err     string
 	tab     int
-	gen     uint64
+	reads   Latest // drops the result of a read of an older PR or a closed pane
 	client  github.Client
 	checks  prChecks
 	handle  ui.Handle
@@ -84,8 +84,7 @@ func (p *PRPane) Open(dir string, n int) {
 	p.open, p.number, p.dir = true, n, dir
 	p.pr, p.err, p.tab, p.refocus, p.Item = nil, "", PRTabOverview, true, ""
 	p.filesState = prFiles{}
-	p.gen++
-	gen := p.gen
+	p.reads.Reset()
 	mk := p.Client
 	if mk == nil {
 		mk = github.New
@@ -94,12 +93,9 @@ func (p *PRPane) Open(dir string, n int) {
 	p.client, p.checks = client, prChecks{}
 	p.ft.text, p.ft.err, p.ft.busy, p.ft.after = "", "", false, ""
 	p.readViewer(client)
-	p.Env.Do(func() func() {
+	p.reads.Do(p.Env, func() func() {
 		pr, err := client.PR(context.Background(), n)
 		return func() {
-			if gen != p.gen {
-				return // an older read, or the pane closed
-			}
 			if err != nil {
 				p.err = err.Error()
 			} else {
@@ -117,7 +113,7 @@ func (p *PRPane) Close() {
 		return
 	}
 	p.open = false
-	p.gen++
+	p.reads.Reset()
 	p.pr, p.err = nil, ""
 	p.Env.Redraw()
 	if p.OnClose != nil {

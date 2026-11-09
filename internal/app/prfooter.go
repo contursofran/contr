@@ -105,8 +105,8 @@ func (p *PRPane) write(op func(context.Context, github.Client, github.PR) error,
 		return
 	}
 	p.ft.busy, p.ft.err = true, ""
-	gen, client, pr, n := p.gen, p.client, *p.pr, p.number
-	p.Env.Do(func() func() {
+	client, pr, n := p.client, *p.pr, p.number
+	p.reads.Do(p.Env, func() func() {
 		ctx := context.Background()
 		err := op(ctx, client, pr)
 		var fresh github.PR
@@ -115,9 +115,6 @@ func (p *PRPane) write(op func(context.Context, github.Client, github.PR) error,
 			fresh, rerr = client.PR(ctx, n)
 		}
 		return func() {
-			if gen != p.gen {
-				return
-			}
 			p.ft.busy = false
 			switch {
 			case err != nil:
@@ -187,13 +184,10 @@ func (p *PRPane) mergedTell(addr string, n int, sha string) {
 	}
 	p.ft.after = LabelPRMergedBare
 	text := "contr: PR #" + strconv.Itoa(n) + " merged at " + shortSHA(sha)
-	gen, send := p.gen, p.Send
-	p.Env.Do(func() func() {
+	send := p.Send
+	p.reads.Do(p.Env, func() func() {
 		err := send(addr, text)
 		return func() {
-			if gen != p.gen {
-				return
-			}
 			if err != nil {
 				p.ft.err = "principal not told: " + err.Error()
 			} else {
