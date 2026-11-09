@@ -176,9 +176,6 @@ func (f *Frame) updatedPill(c *ui.Context) {
 			f.updatePanel(c, UpdateInfo{Version: n.Version, Notes: n.Notes}, n.From, n.InstalledAt, true)
 		})
 	})
-	if !f.upd.open {
-		f.updatedShown()
-	}
 }
 
 // pillButton is the pill: the download icon and text, on ButtonBase. A click opens or closes
