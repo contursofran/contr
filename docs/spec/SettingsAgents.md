@@ -49,7 +49,7 @@ Shared rules: [README.md](README.md). Design: board 10 of the from-zero canvas.
   lists. The dropdowns that cannot show its value say `Custom` (`ink-50`); the command line
   shows the argv as it is. Nothing writes it until the owner picks a value.
 - **Default orchestrator:** with no `orchestrator` profile in the file, the row shows the
-  default of `DefaultConfig`: Claude Code, Opus, medium (D201). There is no `not set` state.
+  default of `DefaultConfig`: Claude Code, Opus, medium (D206). There is no `not set` state.
 - **Error:** a failed read or save shows under the head in `blocked`, and goes to the log.
 
 ## Behavior

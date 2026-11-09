@@ -83,7 +83,7 @@ func orchestratorName(dir string, now time.Time) string {
 // spawnOrchestrator starts the orchestrator profile in dir, with role
 // orchestrator and no parent: the same as `contr agents spawn --role
 // orchestrator --no-parent`. DefaultConfig has the profile, so it needs no file
-// (D201).
+// (D206).
 func spawnOrchestrator(ctx context.Context, getenv func(string) string, dial func(context.Context, func(string) string) (agentsCore, error), dir string, now time.Time) error {
 	cfg, err := agents.LoadConfig(configPath(getenv))
 	if err != nil {

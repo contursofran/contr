@@ -54,7 +54,7 @@ func TestSpawnOrchestratorStartsTheProfileWithRoleAndNoParent(t *testing.T) {
 	}
 }
 
-// `+ new` works with no agents.json and with a file in the old format (D201).
+// `+ new` works with no agents.json and with a file in the old format (D206).
 func TestSpawnOrchestratorUsesTheDefaultProfile(t *testing.T) {
 	for name, body := range map[string]string{"no file": "", "old format": `{"version":1,"presets":[{"name":"x"}]}`} {
 		getenv, _ := orchEnv(t, body)

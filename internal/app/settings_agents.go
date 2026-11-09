@@ -49,7 +49,7 @@ var RoleEfforts = []string{"low", "medium", "high", "xhigh", "max"}
 const claudeProgram = "claude"
 
 // roleDefault is the profile that Reset to defaults and a pick on another program start from.
-// Every role is in DefaultConfig (D201).
+// Every role is in DefaultConfig (D206).
 func roleDefault(profile string) agents.Profile {
 	p := agents.DefaultConfig().Profiles[profile]
 	return agents.Profile{Argv: slices.Clone(p.Argv), Agent: p.Agent}
