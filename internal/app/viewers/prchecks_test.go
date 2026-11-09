@@ -1,4 +1,4 @@
-package app
+package viewers
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/github"
 )
@@ -18,7 +19,7 @@ const checksJSON = `[
 {"name":"e2e","workflow":"CI","bucket":"pending","link":"https://example.test/run/3","startedAt":"2026-11-03T11:00:00Z","completedAt":"0001-01-01T00:00:00Z"},
 {"name":"docs","workflow":"Docs","bucket":"skipping","link":"https://example.test/run/4"}]`
 
-// checksRunner answers pr view with prJSON and pr checks with a canned reply.
+// checksRunner answers pr view with apptest.PRJSON and pr checks with a canned reply.
 type checksRunner struct {
 	checks func() ([]byte, error)
 	calls  int
@@ -29,7 +30,7 @@ func (r *checksRunner) Run(_ context.Context, _ string, args ...string) ([]byte,
 		r.calls++
 		return r.checks()
 	}
-	return []byte(prJSON), nil
+	return []byte(apptest.PRJSON), nil
 }
 
 func newChecksRig(t *testing.T) (*prRig, *checksRunner) {

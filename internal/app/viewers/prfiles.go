@@ -1,4 +1,4 @@
-package app
+package viewers
 
 // The Files tab of the PR pane (#153, D102): the changed files on a list,
 // the diff of the chosen file in a code view, and the review threads under

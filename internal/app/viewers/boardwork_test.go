@@ -1,4 +1,4 @@
-package app
+package viewers
 
 import (
 	"slices"
@@ -9,25 +9,10 @@ import (
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/apptest"
+	"github.com/contursofran/contr/internal/app/ghsource/ghsourcetest"
 	"github.com/contursofran/contr/internal/app/icons"
-	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
-	"github.com/contursofran/contr/internal/owner"
 )
-
-func boardSnap() agentstate.Snapshot {
-	return agentstate.Snapshot{
-		Orchestrators: []agents.Worker{{Name: "lead", Address: "o1", Role: "orchestrator", Project: "a", Live: true}},
-		Workers: []agents.Worker{
-			{Name: "p-1", Address: "t1", Role: "planner", Issue: "162", Title: "Plan the board", Project: "a", Live: true, Status: "done"},
-			{Name: "b-1", Address: "t2", Role: "builder", Issue: "162", Project: "a", Live: true, Status: "working"},
-			{Name: "r-1", Address: "t3", Role: "reviewer", Issue: "#170", Project: "a", Live: true, Status: "blocked", Msg: "ok?"},
-			{Name: "b-9", Address: "t4", Role: "builder", Project: "other", Live: true, Status: "idle"},
-		},
-		Questions: []owner.Question{{ID: "D7", Project: "a", From: "b-1", Question: "Which?"}},
-		Todos:     []owner.Todo{{ID: "T3", Project: "a", Kind: "do", Text: "Run it"}},
-	}
-}
 
 func TestStagesComeFromRoles(t *testing.T) {
 	const (
@@ -53,7 +38,7 @@ func TestStagesComeFromRoles(t *testing.T) {
 }
 
 func TestYouStageLightsForAQuestionNamingTheWorker(t *testing.T) {
-	rows := WorkRows(boardSnap(), "a")
+	rows := WorkRows(apptest.BoardSnap(), "a")
 	if rows[1].Stages[StageYou] != icons.NeedsYou { // b-1 has D7
 		t.Errorf("b-1: %v", rows[1].Stages)
 	}
@@ -64,17 +49,17 @@ func TestYouStageLightsForAQuestionNamingTheWorker(t *testing.T) {
 
 func TestRowsAreThePerProjectWorkersWithoutOrchestrators(t *testing.T) {
 	var got []string
-	for _, r := range WorkRows(boardSnap(), "a") {
+	for _, r := range WorkRows(apptest.BoardSnap(), "a") {
 		got = append(got, r.Label+"|"+r.Title+"|"+r.Role+" "+r.Status)
 	}
 	want := []string{"#162|p-1|planner done", "#162|b-1|builder working", "#170|r-1|reviewer blocked"}
 	if !slices.Equal(got, want) {
 		t.Errorf("got %q, want %q", got, want)
 	}
-	if n := len(WorkRows(boardSnap(), "")); n != 4 {
+	if n := len(WorkRows(apptest.BoardSnap(), "")); n != 4 {
 		t.Errorf("all projects: %d rows, want 4", n)
 	}
-	if rows := WorkRows(boardSnap(), "other"); len(rows) != 1 || rows[0].Label != "b-9" {
+	if rows := WorkRows(apptest.BoardSnap(), "other"); len(rows) != 1 || rows[0].Label != "b-9" {
 		t.Errorf("other: %v", rows)
 	}
 }
@@ -94,11 +79,11 @@ func newBoardPanel(snap agentstate.Snapshot, project string) (*BoardPanel, func(
 }
 
 func TestPanelShowsWorkRowsAndTheHeads(t *testing.T) {
-	p, _ := newBoardPanel(boardSnap(), "a")
+	p, _ := newBoardPanel(apptest.BoardSnap(), "a")
 	tt := boardTester(p)
 	tt.Frame()
 	for _, label := range []string{LabelWorkSection, LabelWorkHeader, LabelWorkRows,
-		WorkRowLabel(WorkRows(boardSnap(), "a")[1])} {
+		WorkRowLabel(WorkRows(apptest.BoardSnap(), "a")[1])} {
 		apptest.Box(t, tt, label)
 	}
 	for _, head := range StageHeads {
@@ -124,7 +109,7 @@ func TestPanelEmptyLines(t *testing.T) {
 }
 
 func TestNeedsSectionEqualsTheRowOrder(t *testing.T) {
-	snap := boardSnap()
+	snap := apptest.BoardSnap()
 	snap.Orchestrators = nil
 	snap.Workers[2].Msg = "ok?"
 	p, row := newBoardPanel(snap, "a")
@@ -142,7 +127,7 @@ func TestNeedsSectionEqualsTheRowOrder(t *testing.T) {
 }
 
 func TestResolvedTabIsDoneAndNotCounted(t *testing.T) {
-	snap := boardSnap()
+	snap := apptest.BoardSnap()
 	snap.Resolved = []string{"D7"}
 	p, _ := newBoardPanel(snap, "a")
 	tt := boardTester(p)
@@ -152,14 +137,14 @@ func TestResolvedTabIsDoneAndNotCounted(t *testing.T) {
 }
 
 func TestClickingARowSelectsAndClickingANeedOpens(t *testing.T) {
-	p, _ := newBoardPanel(boardSnap(), "a")
+	p, _ := newBoardPanel(apptest.BoardSnap(), "a")
 	var picked string
 	var opened agentstate.NeedTab
 	p.Select = func(a string) { picked = a }
 	p.Open = func(t agentstate.NeedTab) { opened = t }
 	tt := boardTester(p)
 	tt.Frame()
-	tt.Click(WorkRowLabel(WorkRows(boardSnap(), "a")[1]))
+	tt.Click(WorkRowLabel(WorkRows(apptest.BoardSnap(), "a")[1]))
 	if picked != "t2" {
 		t.Errorf("picked %q", picked)
 	}
@@ -170,7 +155,7 @@ func TestClickingARowSelectsAndClickingANeedOpens(t *testing.T) {
 }
 
 func TestNoWrapUpControl(t *testing.T) {
-	p, _ := newBoardPanel(boardSnap(), "a")
+	p, _ := newBoardPanel(apptest.BoardSnap(), "a")
 	tt := boardTester(p)
 	tt.Frame()
 	for _, s := range tt.Texts() {
@@ -178,27 +163,6 @@ func TestNoWrapUpControl(t *testing.T) {
 			t.Errorf("found %q", s)
 		}
 	}
-}
-
-func TestFramePanelRowClickShowsTheWorker(t *testing.T) {
-	enableViewers(t)
-	src := &source{Snap: boardSnap(), Text: "out"}
-	f := NewFrame(Deps{})
-	f.Selection = state.NewSelection(nil)
-	f.Selection.Select(state.Selected{Kind: state.KindOrchestrator, ID: "o1"})
-	f.Worker = &WorkerPanel{Source: src, Selection: f.Selection}
-	f.agentSnap = src.Snapshot
-	f.takeSnapshot()
-	scope := f.scope
-	f.Panel = &BoardPanel{Snapshot: src.Snapshot, Scope: scope, Needs: agentstate.NeedItems(src.Snapshot, scope),
-		Select: func(a string) { f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: a}) }}
-	f.Slots.Panel = f.Panel.View
-	tt := ui.NewTester(panelBox(f), theme.PanelWidth, theme.WindowHeight)
-	tt.Frame()
-	apptest.Box(t, tt, LabelBoardRoot)
-	tt.Click(WorkRowLabel(WorkRows(src.Snap, "a")[1]))
-	tt.Frame()
-	apptest.Box(t, tt, LabelWorkerPanel)
 }
 
 func TestPanelShowsTheProblemOfTheState(t *testing.T) {
@@ -235,5 +199,59 @@ func TestEndedWorkersAreNotRows(t *testing.T) {
 	rows := WorkRows(snap, "")
 	if len(rows) != 1 || rows[0].Title != "here" {
 		t.Errorf("rows = %+v, want only here", rows)
+	}
+}
+
+func TestBoardWorkOpensRealPR(t *testing.T) {
+	snap := agentstate.Snapshot{Workers: []agents.Worker{
+		{Name: "b-9", Address: "t1", Role: "builder", Issue: "151", Worktree: "/wt/a", Project: "a", Live: true, Status: "working"},
+		{Name: "b-8", Address: "t2", Role: "builder", Project: "a", Live: true},
+	}}
+	r := ghsourcetest.NewPRSourceRig(map[string]string{"/wt/a": `{"number":307}`})
+	r.W.Sync(snap.Workers)
+	r.Flush()
+	p, _ := newBoardPanel(snap, "a")
+	p.PRs = r.W
+	var dir string
+	var n int
+	var issueOpened bool
+	picked := ""
+	p.OpenPR = func(d string, num int) { dir, n = d, num }
+	p.OpenIssue = func(string, int) { issueOpened = true }
+	p.Select = func(a string) { picked = a }
+	tt := boardTester(p)
+	tt.Frame()
+	if err := tt.Click(LabelWorkPR("#307")); err != nil {
+		t.Fatal(err)
+	}
+	if dir != "/wt/a" || n != 307 || picked != "" || issueOpened {
+		t.Errorf("OpenPR(%q, %d), picked %q, issue %v", dir, n, picked, issueOpened)
+	}
+	if _, ok := tt.Find(LabelWorkPR("b-8")); ok {
+		t.Error("a worker without an issue has a PR button")
+	}
+}
+
+func TestBoardWorkWithoutPROpensTheIssue(t *testing.T) {
+	snap := agentstate.Snapshot{Workers: []agents.Worker{
+		{Name: "b-9", Address: "t1", Role: "builder", Issue: "151", Worktree: "/wt/a", Project: "a", Live: true, Status: "working"},
+	}}
+	r := ghsourcetest.NewPRSourceRig(nil)
+	r.W.Sync(snap.Workers)
+	r.Flush()
+	p, _ := newBoardPanel(snap, "a")
+	p.PRs = r.W
+	var dir string
+	var n int
+	prOpened := false
+	p.OpenPR = func(string, int) { prOpened = true }
+	p.OpenIssue = func(d string, num int) { dir, n = d, num }
+	tt := boardTester(p)
+	tt.Frame()
+	if err := tt.Click(LabelWorkIssue("#151")); err != nil {
+		t.Fatal(err)
+	}
+	if dir != "/wt/a" || n != 151 || prOpened {
+		t.Errorf("OpenIssue(%q, %d), pr opened %v", dir, n, prOpened)
 	}
 }

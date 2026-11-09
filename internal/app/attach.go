@@ -13,6 +13,7 @@ import (
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
+	"github.com/contursofran/contr/internal/app/viewers"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/projects"
 	"github.com/contursofran/contr/internal/statedir"
@@ -68,7 +69,7 @@ func (f *Frame) attachFiles(env view.Env) (stop func()) {
 		f.Session.StateDir = statedir.Dir()
 	}
 	if viewersEnabled {
-		f.PR = &PRPane{Env: env}
+		f.PR = &viewers.PRPane{Env: env}
 	}
 	return func() {
 		f.Files.Close()
@@ -108,7 +109,7 @@ func (f *Frame) attachAgents(w Window, env view.Env) (agentSnap func() agentstat
 		entry := ghsource.WorkerEntry{PRs: f.WorkerPRs, OpenPR: f.paneOpener(), OpenIssue: f.OpenIssue}
 		f.Card.Entry = entry
 		if viewersEnabled {
-			f.Worker = &WorkerPanel{Entry: entry, Source: src, Selection: f.Selection, Env: env}
+			f.Worker = &viewers.WorkerPanel{Entry: entry, Source: src, Selection: f.Selection, Env: env}
 			f.PR.Orchestrator, f.PR.Send = f.prOrchestrator, src.Send
 		}
 	}

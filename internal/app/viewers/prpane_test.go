@@ -1,7 +1,6 @@
-package app
+package viewers
 
 import (
-	"context"
 	"errors"
 	"slices"
 	"strings"
@@ -16,28 +15,9 @@ import (
 	"github.com/contursofran/contr/internal/github"
 )
 
-// prRunner is a fake gh runner: it answers pr view with a canned reply per number.
-type prRunner struct {
-	reply func(n string) ([]byte, error)
-	dirs  []string
-}
-
-func (r *prRunner) Run(_ context.Context, dir string, args ...string) ([]byte, error) {
-	r.dirs = append(r.dirs, dir)
-	return r.reply(args[2])
-}
-
-const prJSON = `{"number":642,"title":"Fix bag drag target","url":"https://example.test/o/client/pull/642",
-"state":"OPEN","body":"## Why\n\nDrops land under the cursor.\n- one\n- two","author":{"login":"b-1140"},
-"headRefName":"fix/bag-drag","baseRefName":"main","headRefOid":"abc","additions":86,"deletions":12,"changedFiles":3,
-"isDraft":false,"mergeable":"MERGEABLE","mergedAt":null,"closedAt":null,
-"comments":[{"author":{"login":"alice"},"body":"Thanks\nsecond line","createdAt":"2026-11-03T11:50:00Z"}],
-"reviews":[{"author":{"login":"r-1139"},"body":"","state":"APPROVED","submittedAt":"2026-11-03T11:46:00Z"}],
-"commits":[],"statusCheckRollup":[{"status":"COMPLETED","conclusion":"SUCCESS"},{"status":"COMPLETED","conclusion":"SUCCESS"},{"status":"COMPLETED","conclusion":"SUCCESS"}]}`
-
 type prRig struct {
 	pane   *PRPane
-	run    *prRunner
+	run    *apptest.PRRunner
 	tt     *ui.Tester
 	queue  []func()
 	opened []string
@@ -46,7 +26,7 @@ type prRig struct {
 
 func newPRRig(t *testing.T) *prRig {
 	t.Helper()
-	r := &prRig{run: &prRunner{reply: func(string) ([]byte, error) { return []byte(prJSON), nil }}}
+	r := &prRig{run: &apptest.PRRunner{Reply: func(string) ([]byte, error) { return []byte(apptest.PRJSON), nil }}}
 	r.pane = &PRPane{
 		Client: func(dir string) github.Client { return github.Client{R: r.run, Dir: dir} },
 		Env: view.Env{Run: view.Runner{Go: func(f func()) { r.queue = append(r.queue, f) }},
@@ -95,14 +75,14 @@ func TestPRPaneHeaderTabsAndOverview(t *testing.T) {
 			t.Errorf("missing %q in %q", want, r.tt.Texts())
 		}
 	}
-	if r.run.dirs[0] != "/w" {
-		t.Errorf("gh ran in %q", r.run.dirs[0])
+	if r.run.Dirs[0] != "/w" {
+		t.Errorf("gh ran in %q", r.run.Dirs[0])
 	}
 }
 
 func TestPRPaneShowsTheErrorText(t *testing.T) {
 	r := newPRRig(t)
-	r.run.reply = func(string) ([]byte, error) { return nil, errors.New("not logged in") }
+	r.run.Reply = func(string) ([]byte, error) { return nil, errors.New("not logged in") }
 	r.pane.Open("/w", 1)
 	r.flush()
 	if !r.tt.HasText("gh: not logged in") {
@@ -149,8 +129,8 @@ func TestPRPaneWebLinkOpensTheAddress(t *testing.T) {
 
 func TestPRPaneStaleResultDropped(t *testing.T) {
 	r := newPRRig(t)
-	r.run.reply = func(n string) ([]byte, error) {
-		return []byte(strings.Replace(prJSON, "Fix bag drag target", "title "+n, 1)), nil
+	r.run.Reply = func(n string) ([]byte, error) {
+		return []byte(strings.Replace(apptest.PRJSON, "Fix bag drag target", "title "+n, 1)), nil
 	}
 	r.pane.ft.viewer = "owner" // the login is read: only the PR reads queue
 	r.pane.Open("/w", 1)
@@ -226,32 +206,6 @@ func TestPRTextHelpers(t *testing.T) {
 	}
 }
 
-func TestFrameOpenPRShowsThePaneAndCollapsesTabs(t *testing.T) {
-	enableViewers(t)
-	f := NewFrame(Deps{})
-	r := newPRRig(t)
-	f.PR = r.pane
-	tt := ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)
-	tt.Frame()
-	if f.PROpen() {
-		t.Fatal("closed at start")
-	}
-	f.OpenPR("/w", 642)
-	r.flush()
-	tt.Frame()
-	if !f.PROpen() || !tt.HasText("Fix bag drag target") {
-		t.Errorf("pane missing: %q", tt.Texts())
-	}
-	if rect := apptest.Box(t, tt, LabelPRPane); rect.W != theme.PRPaneWidth {
-		t.Errorf("pane width %v", rect.W)
-	}
-	f.ClosePR()
-	tt.Frame()
-	if f.PROpen() || tt.HasText("Fix bag drag target") {
-		t.Error("ClosePR should hide the pane")
-	}
-}
-
 // TestPRPaneEscapeOnlyWithFocus: Esc closes the pane only while the pane has
 // the focus (D72). With the focus on another part (the terminal, in the
 // app), Esc must reach that part and the pane stays open.
@@ -285,8 +239,8 @@ func TestPRPaneEscapeOnlyWithFocus(t *testing.T) {
 // `merged` in the `you` style (white background).
 func TestPRPaneStateBadge(t *testing.T) {
 	r := newPRRig(t)
-	r.run.reply = func(string) ([]byte, error) {
-		return []byte(strings.Replace(prJSON, `"isDraft":false,`, `"isDraft":false,"reviewDecision":"APPROVED",`, 1)), nil
+	r.run.Reply = func(string) ([]byte, error) {
+		return []byte(strings.Replace(apptest.PRJSON, `"isDraft":false,`, `"isDraft":false,"reviewDecision":"APPROVED",`, 1)), nil
 	}
 	r.pane.Open("/w", 642)
 	r.flush()
@@ -294,8 +248,8 @@ func TestPRPaneStateBadge(t *testing.T) {
 		t.Errorf("no approved badge; texts %v", r.tt.Texts())
 	}
 
-	r.run.reply = func(string) ([]byte, error) {
-		return []byte(strings.Replace(prJSON, `"state":"OPEN"`, `"state":"MERGED"`, 1)), nil
+	r.run.Reply = func(string) ([]byte, error) {
+		return []byte(strings.Replace(apptest.PRJSON, `"state":"OPEN"`, `"state":"MERGED"`, 1)), nil
 	}
 	r.pane.Open("/w", 642)
 	r.flush()
@@ -357,8 +311,8 @@ func TestPRPaneMarkdownThemeIsGrey(t *testing.T) {
 
 func TestPRPaneEmptyDescription(t *testing.T) {
 	r := newPRRig(t)
-	r.run.reply = func(string) ([]byte, error) {
-		return []byte(strings.Replace(prJSON, `"body":"## Why\n\nDrops land under the cursor.\n- one\n- two"`, `"body":"  "`, 1)), nil
+	r.run.Reply = func(string) ([]byte, error) {
+		return []byte(strings.Replace(apptest.PRJSON, `"body":"## Why\n\nDrops land under the cursor.\n- one\n- two"`, `"body":"  "`, 1)), nil
 	}
 	r.pane.Open("/w", 642)
 	r.flush()
@@ -445,5 +399,20 @@ func TestPRPaneReplaceDoesNotAnimate(t *testing.T) {
 	r.tt.Advance(40 * time.Millisecond)
 	if x := idHeaderX(t, r); x != rest {
 		t.Errorf("header at %v after replacing, want %v (no motion)", x, rest)
+	}
+}
+
+func TestPRHeaderForItem(t *testing.T) {
+	r := newPRRig(t)
+	r.pane.Open("/w", 642)
+	r.pane.Item = "#268"
+	r.flush()
+	if !r.tt.HasText("for #268") {
+		t.Errorf("texts %q", r.tt.Texts())
+	}
+	r.pane.Open("/w", 642)
+	r.flush()
+	if r.tt.HasText("for #268") {
+		t.Error("Open should clear the item")
 	}
 }

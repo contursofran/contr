@@ -33,6 +33,7 @@ import (
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/titlebar"
 	"github.com/contursofran/contr/internal/app/view"
+	"github.com/contursofran/contr/internal/app/viewers"
 	"github.com/contursofran/contr/internal/github"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/prefs"
@@ -96,11 +97,11 @@ type Frame struct {
 	Settings *settings.Settings
 	// Worker is the panel's worker view. [Frame.Attach] makes it while the viewers are
 	// shown (D147); else it stays nil.
-	Worker *WorkerPanel
+	Worker *viewers.WorkerPanel
 	// Panel is the board panel. [Frame.Attach] makes it and puts its view in
 	// Slots.Panel while the viewers are shown (D147); else it stays nil. The board is
 	// disabled (D122): the files panel does not show it.
-	Panel *BoardPanel
+	Panel *viewers.BoardPanel
 	// Files is the tree of the files panel. [NewFrame] makes it.
 	Files *files.FileTree
 	// Session shows the selected agent's todos and artifacts over the file
@@ -117,7 +118,7 @@ type Frame struct {
 	// PR is the pull request pane. [Frame.Attach] makes it while the viewers are shown
 	// (D147); else it stays nil. [Frame.OpenPR] opens it at the
 	// right of the terminal area, and the title bar tabs shrink to icon and id (D59).
-	PR *PRPane
+	PR *viewers.PRPane
 	// WorkerPRs finds the pull request of each worker's branch (D104). [Frame.Attach] makes it.
 	WorkerPRs *ghsource.WorkerPRs
 	// IssueTitles reads the issue title of each worker for line 1 of its row (D174). [Frame.Attach] makes it.
@@ -952,7 +953,7 @@ func (f *Frame) attachBoard(agentSnap func() agentstate.Snapshot, src agentstate
 	if src != nil {
 		scope = f.scope
 	}
-	f.Panel = &BoardPanel{Snapshot: agentSnap, Needs: agentstate.NeedItems(agentSnap, scope)}
+	f.Panel = &viewers.BoardPanel{Snapshot: agentSnap, Needs: agentstate.NeedItems(agentSnap, scope)}
 	f.Panel.OpenPR = f.paneOpener()
 	f.Panel.OpenIssue = f.OpenIssue
 	f.Panel.PRs = f.WorkerPRs

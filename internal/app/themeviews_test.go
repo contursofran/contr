@@ -10,6 +10,7 @@ import (
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/theme/themetest"
+	"github.com/contursofran/contr/internal/app/viewers"
 )
 
 // Views read the palette on each build, so Light shows Light colors (#403,
@@ -78,10 +79,10 @@ func TestBoardEmptyLinesFollowTheTheme(t *testing.T) {
 	problem := func() agentstate.Snapshot { return agentstate.Snapshot{Problem: "no hc"} }
 	for _, tc := range apptest.ThemeCases {
 		themetest.Use(t, tc.Src)
-		for _, label := range []string{LabelBoardEmpty, LabelBoardProblem} {
-			p := &BoardPanel{}
-			if label == LabelBoardProblem {
-				p = &BoardPanel{Snapshot: problem}
+		for _, label := range []string{viewers.LabelBoardEmpty, viewers.LabelBoardProblem} {
+			p := &viewers.BoardPanel{}
+			if label == viewers.LabelBoardProblem {
+				p = &viewers.BoardPanel{Snapshot: problem}
 			}
 			tt := ui.NewTester(func(c *ui.Context) {
 				ui.Column(c).Fill().Background(theme.Current().Ground).Font(theme.FontFamily).

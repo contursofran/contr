@@ -14,6 +14,7 @@ import (
 	"github.com/contursofran/contr/internal/app"
 	"github.com/contursofran/contr/internal/app/questions"
 	"github.com/contursofran/contr/internal/app/settings"
+	"github.com/contursofran/contr/internal/app/viewers"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
@@ -172,7 +173,7 @@ func TestNoFooter(t *testing.T) {
 				t.Errorf("%s: the v0.2 part %q is still in the window", theme, gone)
 			}
 		}
-		for _, hidden := range []string{app.LabelPRPane, app.LabelBoardRoot, app.LabelWorkerPanel, app.LabelPanel} {
+		for _, hidden := range []string{viewers.LabelPRPane, viewers.LabelBoardRoot, viewers.LabelWorkerPanel, app.LabelPanel} {
 			if has(hidden) {
 				t.Errorf("%s: the hidden viewer %q shows (D147)", theme, hidden)
 			}

@@ -18,6 +18,8 @@ import (
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
+	"github.com/contursofran/contr/internal/app/viewers"
+	"github.com/contursofran/contr/internal/app/viewers/viewerstest"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/usage"
 )
@@ -46,60 +48,6 @@ func TestAttachGivesOneGHQueueToPRsAndTitles(t *testing.T) {
 	}
 }
 
-func TestBoardWorkOpensRealPR(t *testing.T) {
-	snap := agentstate.Snapshot{Workers: []agents.Worker{
-		{Name: "b-9", Address: "t1", Role: "builder", Issue: "151", Worktree: "/wt/a", Project: "a", Live: true, Status: "working"},
-		{Name: "b-8", Address: "t2", Role: "builder", Project: "a", Live: true},
-	}}
-	r := ghsourcetest.NewPRSourceRig(map[string]string{"/wt/a": `{"number":307}`})
-	r.W.Sync(snap.Workers)
-	r.Flush()
-	p, _ := newBoardPanel(snap, "a")
-	p.PRs = r.W
-	var dir string
-	var n int
-	var issueOpened bool
-	picked := ""
-	p.OpenPR = func(d string, num int) { dir, n = d, num }
-	p.OpenIssue = func(string, int) { issueOpened = true }
-	p.Select = func(a string) { picked = a }
-	tt := boardTester(p)
-	tt.Frame()
-	if err := tt.Click(LabelWorkPR("#307")); err != nil {
-		t.Fatal(err)
-	}
-	if dir != "/wt/a" || n != 307 || picked != "" || issueOpened {
-		t.Errorf("OpenPR(%q, %d), picked %q, issue %v", dir, n, picked, issueOpened)
-	}
-	if _, ok := tt.Find(LabelWorkPR("b-8")); ok {
-		t.Error("a worker without an issue has a PR button")
-	}
-}
-
-func TestBoardWorkWithoutPROpensTheIssue(t *testing.T) {
-	snap := agentstate.Snapshot{Workers: []agents.Worker{
-		{Name: "b-9", Address: "t1", Role: "builder", Issue: "151", Worktree: "/wt/a", Project: "a", Live: true, Status: "working"},
-	}}
-	r := ghsourcetest.NewPRSourceRig(nil)
-	r.W.Sync(snap.Workers)
-	r.Flush()
-	p, _ := newBoardPanel(snap, "a")
-	p.PRs = r.W
-	var dir string
-	var n int
-	prOpened := false
-	p.OpenPR = func(string, int) { prOpened = true }
-	p.OpenIssue = func(d string, num int) { dir, n = d, num }
-	tt := boardTester(p)
-	tt.Frame()
-	if err := tt.Click(LabelWorkIssue("#151")); err != nil {
-		t.Fatal(err)
-	}
-	if dir != "/wt/a" || n != 151 || prOpened {
-		t.Errorf("OpenIssue(%q, %d), pr opened %v", dir, n, prOpened)
-	}
-}
-
 func TestFrameOpenIssueRunsOffThreadAndShowsAnError(t *testing.T) {
 	f := NewFrame(Deps{})
 	var gotDir string
@@ -118,9 +66,9 @@ func TestFrameOpenIssueRunsOffThreadAndShowsAnError(t *testing.T) {
 }
 
 func TestAgentRowOpenPRGoesToTheBrowserNotThePane(t *testing.T) {
-	r := newPRRig(t)
+	r := viewerstest.NewPRRig(t)
 	f := NewFrame(Deps{})
-	f.PR = r.pane
+	f.PR = r.Pane
 	var gotDir string
 	var gotN int
 	var queued []func()
@@ -155,7 +103,7 @@ func TestWorkerPanelOpensPR(t *testing.T) {
 	src := &source{Snap: agentstate.Snapshot{Workers: []agents.Worker{apptest.EntryWorker}}}
 	sel := stateSelection()
 	sel.Select(state.Selected{Kind: state.KindWorker, ID: "t1"})
-	p := &WorkerPanel{Entry: entry, Source: src, Selection: sel}
+	p := &viewers.WorkerPanel{Entry: entry, Source: src, Selection: sel}
 	tt := ui.NewTester(p.View, theme.WindowWidth, theme.WindowHeight)
 	tt.Frame()
 	if err := tt.Click("Open PR #307"); err != nil {
@@ -171,7 +119,7 @@ func TestWorkerPanelOpensIssueWithoutPR(t *testing.T) {
 	src := &source{Snap: agentstate.Snapshot{Workers: []agents.Worker{apptest.EntryWorker}}}
 	sel := stateSelection()
 	sel.Select(state.Selected{Kind: state.KindWorker, ID: "t1"})
-	p := &WorkerPanel{Entry: entry, Source: src, Selection: sel}
+	p := &viewers.WorkerPanel{Entry: entry, Source: src, Selection: sel}
 	tt := ui.NewTester(p.View, theme.WindowWidth, theme.WindowHeight)
 	tt.Frame()
 	if err := tt.Click("Open issue #268"); err != nil {
@@ -198,37 +146,22 @@ func TestWorkerPanelNoEntryWithoutIssueOrPR(t *testing.T) {
 	}
 }
 
-func TestPRHeaderForItem(t *testing.T) {
-	r := newPRRig(t)
-	r.pane.Open("/w", 642)
-	r.pane.Item = "#268"
-	r.flush()
-	if !r.tt.HasText("for #268") {
-		t.Errorf("texts %q", r.tt.Texts())
-	}
-	r.pane.Open("/w", 642)
-	r.flush()
-	if r.tt.HasText("for #268") {
-		t.Error("Open should clear the item")
-	}
-}
-
 func TestFrameOpenPRSetsTheItemOfTheWorker(t *testing.T) {
 	enableViewers(t)
-	r := newPRRig(t)
+	r := viewerstest.NewPRRig(t)
 	f := NewFrame(Deps{})
-	f.PR = r.pane
+	f.PR = r.Pane
 	f.agentSnap = func() agentstate.Snapshot {
 		return agentstate.Snapshot{Workers: []agents.Worker{apptest.EntryWorker}}
 	}
 	f.takeSnapshot()
 	f.OpenPR("/wt/a", 642)
-	if r.pane.Item != "#268" {
-		t.Errorf("item %q", r.pane.Item)
+	if r.Pane.Item != "#268" {
+		t.Errorf("item %q", r.Pane.Item)
 	}
 	f.OpenPR("/elsewhere", 642)
-	if r.pane.Item != "" {
-		t.Errorf("item %q for a folder with no worker", r.pane.Item)
+	if r.Pane.Item != "" {
+		t.Errorf("item %q for a folder with no worker", r.Pane.Item)
 	}
 }
 

@@ -1,4 +1,4 @@
-package app
+package viewers
 
 // The board panel: the work section over the needs-you section, for the
 // project of the selected orchestrator (all projects when none is selected).

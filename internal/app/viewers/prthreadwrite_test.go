@@ -1,4 +1,4 @@
-package app
+package viewers
 
 import (
 	"errors"
@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/github"
 )
 
@@ -56,7 +57,7 @@ func newWriteRig(t *testing.T) *writeRig {
 			}
 			return []byte(oneThreadJSON), nil
 		}
-		return []byte(prJSON), nil
+		return []byte(apptest.PRJSON), nil
 	})}
 	return w
 }

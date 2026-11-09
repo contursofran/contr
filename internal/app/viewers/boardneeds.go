@@ -1,4 +1,4 @@
-package app
+package viewers
 
 // The needs-you section of the board: the same items as the former needs-you row
 // under the terminal, in the same order (blocked workers, questions, to-dos),

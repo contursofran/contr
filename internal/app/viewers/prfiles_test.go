@@ -1,4 +1,4 @@
-package app
+package viewers
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui/editor"
 
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/github"
 )
 
@@ -62,7 +63,7 @@ func filesRig(t *testing.T, diff, threads string, fail map[string]bool) *prRig {
 			case strings.HasPrefix(j, "api graphql"):
 				return []byte(threads), nil
 			}
-			return []byte(prJSON), nil
+			return []byte(apptest.PRJSON), nil
 		})}
 	}
 	r.pane.Open("/w", 642)

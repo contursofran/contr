@@ -1,4 +1,7 @@
-package app
+// Package viewers holds the views that are hidden behind one switch (D147): the PR pane, the
+// board panel with the work and the needs, and the worker panel. The frame shows them only while
+// the viewers are enabled.
+package viewers
 
 // The PR pane (#151, D59): a 560 px column at the right of the terminal
 // area, opened by a `#N` badge. It shows the header and the Overview tab.
