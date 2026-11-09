@@ -352,7 +352,7 @@ func TestTitleBarCapture(t *testing.T) {
 		}
 		c.capture(t, filepath.Join(out, "titlebar-"+theme+"-terminal.png"))
 
-		// Select the builder in the sidebar: its own tab replaces the orchestrator's.
+		// Select the builder in the sidebar: its tab joins the shared set, after the orchestrator's (D190).
 		var row string
 		for l := range c.labels(t) {
 			if strings.HasPrefix(l, "b342-s1-titlebar, working, #342") {
@@ -370,8 +370,8 @@ func TestTitleBarCapture(t *testing.T) {
 			}
 		}
 		waitFor(c, "the builder's tab", func(map[string]bool) bool { return inBar(c, "#342 · agent-342-titlebar") })
-		if inBar(c, "lead") {
-			t.Errorf("%s: the orchestrator's tab shows with the builder selected", theme)
+		if !inBar(c, "lead") {
+			t.Errorf("%s: the orchestrator's tab left the bar with the builder selected (the tab set is shared, D190)", theme)
 		}
 		if !inBar(c, "$ contr") {
 			t.Errorf("%s: the plain terminals left the bar with the builder selected", theme)
