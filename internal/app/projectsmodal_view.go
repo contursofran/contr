@@ -432,23 +432,29 @@ func (m *ProjectsModal) metaText(c *ui.Context, meta string, needYou int) {
 	), theme.StyleValue).SingleLine().MinWidth(0).TextColor(p.Ink38)
 }
 
-// openMetaView builds the meta of an open row: the path and the branch, a
-// dot when an orchestrator holds the row, and the live state. The path part
-// keeps the ellipsis; `N need you` is blocked text (Q1).
+// openMetaView builds the meta of an open row: `<path> · <branch> · <live>`.
+// Only the path shrinks and gets the ellipsis. A dot comes before the live
+// state when an orchestrator holds the row. `N need you` is blocked text (Q1).
 func (m *ProjectsModal) openMetaView(c *ui.Context, g spaces.RepoGroup, home string, orch bool) {
 	p := theme.Current()
-	base, live, needYou := openMetaParts(g, home)
+	path, branch, live, needYou := openMetaParts(g, home)
+	ink := func(s string) {
+		styled(ui.Text(c, s), theme.StyleValue).NoWrap().Shrink(0).TextColor(p.Ink38)
+	}
 	ui.Row(c).AlignItems(ui.Center).MinWidth(0).Children(func() {
-		if live != "" && base != "" {
-			base += " · "
+		if path != "" {
+			styled(ui.Text(c, path), theme.StyleValue).SingleLine().MinWidth(0).TextColor(p.Ink38)
 		}
-		styled(ui.Text(c, base), theme.StyleValue).SingleLine().MinWidth(0).TextColor(p.Ink38)
+		if branch != "" {
+			ink(" · " + branch)
+		}
 		if live == "" {
 			return
 		}
-		if orch && needYou == 0 {
+		ink(" · ")
+		if orch {
 			ui.Box(c).Label(LabelProjectsDot).Width(theme.ModalDot).Height(theme.ModalDot).Shrink(0).
-				Radius(theme.ModalDot/2).Background(p.Claude).Margin(0, theme.Space6, 0, 0)
+				Radius(theme.ModalDot / 2).Background(p.Claude).Margin(0, theme.Space6, 0, 0)
 		}
 		colour := p.Ink38
 		if needYou > 0 {

@@ -301,6 +301,25 @@ func TestProjectsModalOrchestratorDot(t *testing.T) {
 	}
 }
 
+func TestProjectsModalLongPathKeepsBranch(t *testing.T) {
+	r := newModalRig(t)
+	long := "/very/long/folder/name/" + strings.Repeat("deep/", 30) + "project"
+	r.rows = func(g *spaces.RepoGroup) { g.Path, g.Branch = long, "main" }
+	r.open()
+	if !slices.Contains(r.tt.Texts(), " · main") {
+		t.Errorf("the branch is gone from %v", r.tt.Texts())
+	}
+}
+
+func TestProjectsModalDotAlsoBeforeNeedYou(t *testing.T) {
+	r := newModalRig(t)
+	r.m.Orchestrated = func(g spaces.RepoGroup) bool { return g.Name == "a" } // a has a HoldYou row
+	r.open()
+	if !r.has(LabelProjectsDot) || !slices.Contains(r.tt.Texts(), "1 need you") {
+		t.Errorf("dot %v, texts %v", r.has(LabelProjectsDot), r.tt.Texts())
+	}
+}
+
 func TestProjectsModalMetaLeavesOutZeros(t *testing.T) {
 	r := newModalRig(t)
 	r.open()
