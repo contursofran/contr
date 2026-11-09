@@ -94,6 +94,11 @@ func TestProjectsModalColors(t *testing.T) {
 		wait(app.LabelProjects)
 		time.Sleep(500 * time.Millisecond)
 		c.capture(t, filepath.Join(out, "projects-modal-"+strings.ToLower(name)+".png"))
-		click(app.ProjectsDone)
+		c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "key", "key": "Escape"}}})
+		for deadline := time.Now().Add(10 * time.Second); has(app.LabelProjects) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+		}
+		if has(app.LabelProjects) {
+			t.Fatal("Esc did not close the projects modal")
+		}
 	}
 }

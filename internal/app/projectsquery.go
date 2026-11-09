@@ -3,6 +3,7 @@ package app
 import (
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -98,8 +99,14 @@ func agoText(now, at time.Time) string {
 // when N rows wait for the owner, else the Hold text of the main row. Parts
 // that are empty are left out. needYou is N.
 func openMeta(g spaces.RepoGroup, home string) (meta string, needYou int) {
-	path := g.Path
-	live := ""
+	path, branch, live, needYou := openMetaParts(g, home)
+	return strings.Join(slices.DeleteFunc([]string{path, branch, live}, func(s string) bool { return s == "" }), " · "), needYou
+}
+
+// openMetaParts is openMeta in its three parts. The view shortens the path
+// only, and draws a dot before the live state for an orchestrator.
+func openMetaParts(g spaces.RepoGroup, home string) (path, branch, live string, needYou int) {
+	path = g.Path
 	for _, r := range g.Rows {
 		if r.HoldYou {
 			needYou++
@@ -129,11 +136,5 @@ func openMeta(g spaces.RepoGroup, home string) (meta string, needYou int) {
 			path = "~" + path[len(home):]
 		}
 	}
-	var parts []string
-	for _, p := range []string{path, g.Branch, live} {
-		if p != "" {
-			parts = append(parts, p)
-		}
-	}
-	return strings.Join(parts, " · "), needYou
+	return path, g.Branch, live, needYou
 }

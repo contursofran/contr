@@ -3,6 +3,7 @@
 package main
 
 import (
+	"encoding/json"
 	"maps"
 	"os"
 	"path/filepath"
@@ -32,6 +33,14 @@ var seeFixtures = map[string]seeFixture{
 	"empty": {
 		about: "no projects and no agents",
 		setup: func(t *testing.T, h *harness) {},
+		ready: "Sidebar",
+	},
+	"projects": {
+		about: "the workers fixture and a second project, demo-rune, in the recent list; press Open projects",
+		setup: func(t *testing.T, h *harness) {
+			seeWorkers(t, h)
+			h.recentProject(t, "demo-rune")
+		},
 		ready: "Sidebar",
 	},
 	"workers": {
@@ -169,6 +178,25 @@ func seeSession(t *testing.T, h *harness) {
 		{Slug: "native-final", Title: "Native · final", URL: "https://claude.ai/artifact/LU6P", UpdatedAt: now - 2*86400},
 	}}
 	if err := session.Write(filepath.Join(h.dir, "state"), w.Address, s); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// recentProject puts a project that is not open in the recent list of the
+// scratch projects file.
+func (h *harness) recentProject(t *testing.T, name string) {
+	t.Helper()
+	dir := filepath.Join(h.home, "Library", "Application Support", "contr")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(h.home, "code", name)
+	doc, err := json.Marshal(map[string]any{"version": 1, "recent": []map[string]any{
+		{"dir": filepath.Join(path, ".git"), "path": path, "at": time.Now().Add(-10 * time.Minute)}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "projects.json"), doc, 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
