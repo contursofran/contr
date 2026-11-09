@@ -205,7 +205,7 @@ func (m *ProjectsModal) View(c *ui.Context) {
 	})
 	if d.Dismissed() || !open {
 		m.open = false
-		m.redraw()
+		m.Env.Redraw()
 	}
 }
 

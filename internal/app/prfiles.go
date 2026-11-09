@@ -69,7 +69,7 @@ func (p *PRPane) loadFiles() {
 	}
 	client := mk(p.dir)
 	n := p.number
-	p.Run.Do(func() func() {
+	p.Env.Do(func() func() {
 		files, err := client.Files(context.Background(), n)
 		var threads []github.Thread
 		var terr error
@@ -89,7 +89,7 @@ func (p *PRPane) loadFiles() {
 			if terr != nil {
 				f.threadErr = terr.Error()
 			}
-			p.redraw()
+			p.Env.Redraw()
 		}
 	})
 }
@@ -135,7 +135,7 @@ func (p *PRPane) filesTab(c *ui.Context) {
 			fl := f.files[i]
 			kit.Row(c, kit.RowOpts{Label: "file " + fl.Path, Text: fl.Path, Counts: true,
 				Added: fl.Additions, Removed: fl.Deletions, Selected: i == f.sel,
-				OnClick: func() { f.sel = i; p.redraw() }})
+				OnClick: func() { f.sel = i; p.Env.Redraw() }})
 		}).FillWidth().Shrink(0).Height(min(h, prFileListMax)).Padding(4, 0)
 		ui.Column(c).Label(LabelPRDiff).Grow(1).MinHeight(0).FillWidth().
 			BorderWidth(1, 0, 0, 0).BorderColor(theme.Color(theme.Line)).Children(func() {
@@ -304,7 +304,7 @@ func (p *PRPane) writeThread(do func(context.Context, github.Client) error, ok f
 	}
 	f.busy, f.writeErr = true, ""
 	gen, client, n := p.gen, p.client, p.number
-	p.Run.Do(func() func() {
+	p.Env.Do(func() func() {
 		err := do(context.Background(), client)
 		var threads []github.Thread
 		var terr error
@@ -328,10 +328,10 @@ func (p *PRPane) writeThread(do func(context.Context, github.Client) error, ok f
 					f.shown = -1 // rebuild the diff with the new threads
 				}
 			}
-			p.redraw()
+			p.Env.Redraw()
 		}
 	})
-	p.redraw()
+	p.Env.Redraw()
 }
 
 // replyTo sends the typed reply of thread id.
@@ -381,7 +381,7 @@ func (p *PRPane) renderThread(c *ui.Context, t github.Thread) {
 					}
 					f.replying[t.ID] = !f.replying[t.ID]
 					p.syncThreadHeights()
-					p.redraw()
+					p.Env.Redraw()
 				}
 				resolve = func() { p.resolveThread(t.ID) }
 			}

@@ -481,7 +481,7 @@ func TestFramePanelStaysTheFileTreeWhateverIsSelected(t *testing.T) {
 	f.Files.Start = func(fn func()) { fn() }
 	f.Files.Watch = func(string, func()) (func(), error) { return func() {}, nil }
 	f.Selection = state.NewSelection(nil)
-	f.Worker = &WorkerPanel{Source: panelSource(), Selection: f.Selection, Run: Runner{Go: func(f func()) { f() }}}
+	f.Worker = &WorkerPanel{Source: panelSource(), Selection: f.Selection}
 	for _, sel := range []state.Selected{
 		{Kind: state.KindOrchestrator, ID: "o1"}, {Kind: state.KindWorker, ID: "t1"}, {Kind: state.KindTerminal, ID: "x"},
 	} {

@@ -8,9 +8,8 @@ type NewTerminal struct {
 	// the open project and dir the start folder; either may be empty. It
 	// blocks, so Start runs it off the UI thread. Nil makes Start do nothing.
 	Open func(project, dir string) (addr string, err error)
-	Run  Runner
-	// Status shows a line as a toast; may be nil.
-	Status func(string)
+	// Env runs Open off the UI thread and shows its error.
+	Env Env
 	// Select selects the new terminal. It runs on the UI thread; may be nil.
 	Select func(addr string)
 
@@ -23,14 +22,12 @@ func (n *NewTerminal) Start(project, dir string) {
 		return
 	}
 	n.busy = true
-	n.Run.Do(func() func() {
+	n.Env.Do(func() func() {
 		addr, err := n.Open(project, dir)
 		return func() {
 			n.busy = false
 			if err != nil {
-				if n.Status != nil {
-					n.Status("Terminal: " + err.Error())
-				}
+				n.Env.Show("Terminal: " + err.Error())
 				return
 			}
 			if n.Select != nil {

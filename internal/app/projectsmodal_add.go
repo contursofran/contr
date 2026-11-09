@@ -34,7 +34,7 @@ func expandHome(path, home string) string {
 func (m *ProjectsModal) openPath(path string) {
 	home, _ := os.UserHomeDir()
 	full := expandHome(path, home)
-	m.Run.Do(func() func() {
+	m.Env.Do(func() func() {
 		fi, err := os.Stat(full)
 		ok := err == nil && fi.IsDir()
 		dir := full
@@ -47,7 +47,7 @@ func (m *ProjectsModal) openPath(path string) {
 			}
 			if !ok {
 				m.pathErr = "not a folder: " + path
-				m.redraw()
+				m.Env.Redraw()
 				return
 			}
 			m.query, m.sel, m.pathErr = "", 0, ""

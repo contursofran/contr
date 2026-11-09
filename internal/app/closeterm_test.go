@@ -42,8 +42,7 @@ func newCloseFrame(t *testing.T, snap *agentstate.Snapshot) *closeFrame {
 			}
 			return cf.stopErr
 		},
-		Run:    Runner{Go: func(f func()) { f() }},
-		Status: func(s string) { cf.statuses = append(cf.statuses, s) },
+		Env:    Env{Status: func(s string) { cf.statuses = append(cf.statuses, s) }},
 		Closed: f.terminalClosed,
 	}
 	return cf
@@ -165,7 +164,7 @@ func TestCloseTerminalWithoutStopOrActionDoesNothing(t *testing.T) {
 
 func TestCloseTerminalBusy(t *testing.T) {
 	var jobs []func()
-	c := &CloseTerminal{Stop: func(string) error { return nil }, Run: Runner{Go: func(f func()) { jobs = append(jobs, f) }}}
+	c := &CloseTerminal{Stop: func(string) error { return nil }, Env: Env{Run: Runner{Go: func(f func()) { jobs = append(jobs, f) }}}}
 	c.Start("a")
 	c.Start("a")
 	c.Start("b")

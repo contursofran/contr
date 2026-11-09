@@ -27,7 +27,7 @@ func TestCloneProgressThemeColours(t *testing.T) {
 func TestCloneRowStaysOnTopWhileTheFieldChanges(t *testing.T) {
 	var calls [][]string
 	r, parent := cloneRig(t, okRunner(&calls))
-	r.m.Run = Runner{Go: func(f func()) { r.held = append(r.held, f) }}
+	r.m.Env.Run = Runner{Go: func(f func()) { r.held = append(r.held, f) }}
 	r.typeQuery("acme/widget")
 	r.tt.Key(0, ui.KeyEnter)
 	r.m.query = "a" // the owner edits the field: it filters the open rows
@@ -51,7 +51,7 @@ func TestCloneRowStaysOnTopWhileTheFieldChanges(t *testing.T) {
 
 func TestCloneEndClearsTheFieldOnlyIfUnchanged(t *testing.T) {
 	r, _ := cloneRig(t, okRunner(new([][]string)))
-	r.m.Run = Runner{Go: func(f func()) { r.held = append(r.held, f) }}
+	r.m.Env.Run = Runner{Go: func(f func()) { r.held = append(r.held, f) }}
 	r.typeQuery("acme/widget")
 	r.tt.Key(0, ui.KeyEnter)
 	r.held[0]()
@@ -62,7 +62,7 @@ func TestCloneEndClearsTheFieldOnlyIfUnchanged(t *testing.T) {
 
 func TestCloneFailureAfterAnEditGoesToStatus(t *testing.T) {
 	r, _ := cloneRig(t, func(context.Context, string, ...string) (string, error) { return "", errors.New("disk full") })
-	r.m.Run = Runner{Go: func(f func()) { r.held = append(r.held, f) }}
+	r.m.Env.Run = Runner{Go: func(f func()) { r.held = append(r.held, f) }}
 	r.typeQuery("acme/widget")
 	r.tt.Key(0, ui.KeyEnter)
 	r.m.query = "acme/other"
@@ -74,7 +74,7 @@ func TestCloneFailureAfterAnEditGoesToStatus(t *testing.T) {
 
 func TestCloneRunningShowsOneRowForTheSameRepo(t *testing.T) {
 	r, _ := cloneRig(t, okRunner(new([][]string)))
-	r.m.Run = Runner{Go: func(f func()) { r.held = append(r.held, f) }}
+	r.m.Env.Run = Runner{Go: func(f func()) { r.held = append(r.held, f) }}
 	r.typeQuery("acme/widget")
 	r.tt.Key(0, ui.KeyEnter)
 	r.tt.Frame()
@@ -92,7 +92,7 @@ func TestCloneRunningShowsOneRowForTheSameRepo(t *testing.T) {
 
 func TestCloneRunningTurnsDragReorderOff(t *testing.T) {
 	r, _ := cloneRig(t, okRunner(new([][]string)))
-	r.m.Run = Runner{Go: func(f func()) { r.held = append(r.held, f) }}
+	r.m.Env.Run = Runner{Go: func(f func()) { r.held = append(r.held, f) }}
 	r.open()
 	if r.m.list.Reorder == nil {
 		t.Fatal("reorder is off with an empty field")

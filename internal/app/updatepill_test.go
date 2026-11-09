@@ -25,7 +25,7 @@ func newPillRig(t *testing.T, installErr error) *pillRig {
 	f, tt := toastFrame()
 	r := &pillRig{f: f, tt: tt}
 	r.u = &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0", Notes: "## 1.3.0\n- Update pill\n- Faster tabs"}, installErr: installErr}
-	f.Settings = &Settings{Updates: r.u, Version: "1.2.3", Run: Runner{Go: func(fn func()) { fn() }},
+	f.Settings = &Settings{Updates: r.u, Version: "1.2.3",
 		Relaunch: func() { r.relaunch++ }, OnReady: f.updateReady}
 	tt.Frame()
 	return r
@@ -174,11 +174,11 @@ func newUpdatedRig(t *testing.T, n updated.Note, err error) *updatedRig {
 	t.Helper()
 	f, tt := toastFrame()
 	r := &updatedRig{f: f, tt: tt}
-	f.Settings = &Settings{Version: "0.4.0", Run: Runner{Go: func(fn func()) { fn() }}}
+	f.Settings = &Settings{Version: "0.4.0"}
 	f.LoadUpdated = func() (updated.Note, error) { return n, err }
 	f.SaveUpdated = func(n updated.Note) error { r.saved = append(r.saved, n); return nil }
 	tt.Frame()
-	f.loadUpdated(Runner{Go: func(fn func()) { fn() }}, nil)
+	f.loadUpdated(Env{})
 	tt.Frame()
 	tt.Frame()
 	return r
@@ -334,7 +334,7 @@ func whatsNewThenReady(t *testing.T, closed bool) (*pillRig, *[]updated.Note) {
 	n := dueNote()
 	n.Version, n.From = "1.2.3", "1.2.0"
 	r.f.LoadUpdated = func() (updated.Note, error) { return n, nil }
-	r.f.loadUpdated(Runner{Go: func(fn func()) { fn() }}, nil)
+	r.f.loadUpdated(Env{})
 	r.tt.Frame()
 	if !r.has(UpdatedPrefix+"1.2.3") || !r.has(LabelUpdatePanel) {
 		t.Fatalf("no What's new at start: %q", r.tt.Texts())

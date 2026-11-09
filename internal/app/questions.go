@@ -75,15 +75,12 @@ func resolvedID(snap agentstate.Snapshot, id string) bool { return slices.Contai
 // QuestionsCard is the card of the notch. Its methods run on the UI thread.
 type QuestionsCard struct {
 	Source AgentSource
-	Run    Runner
+	// Env runs the hc calls off the UI thread, redraws and shows messages.
+	Env Env
 	// Entry opens the pull request or issue of a blocked worker (D106).
 	Entry WorkerEntry
-	// Invalidate redraws the window; may be nil.
-	Invalidate func()
 	// Select selects the worker at an address (Focus worker); may be nil.
 	Select func(address string, orchestrator bool)
-	// Status shows a short message as a toast (D126); may be nil.
-	Status func(string)
 
 	open    bool
 	key     string // the item shown
@@ -108,23 +105,17 @@ func (q *QuestionsCard) Open(t NeedTab) {
 	q.open, q.focus = true, true
 	q.reset(t.Key)
 	q.err = ""
-	q.redraw()
+	q.Env.Redraw()
 }
 
 // Close hides the card.
 func (q *QuestionsCard) Close() {
 	q.open = false
-	q.redraw()
+	q.Env.Redraw()
 }
 
 // IsOpen tells whether the card shows.
 func (q *QuestionsCard) IsOpen() bool { return q.open }
-
-func (q *QuestionsCard) redraw() {
-	if q.Invalidate != nil {
-		q.Invalidate()
-	}
-}
 
 // reset starts a new item: the field, the pick, Details and the menu clear.
 func (q *QuestionsCard) reset(key string) {
@@ -138,7 +129,7 @@ func (q *QuestionsCard) show(items []NeedTab, i int) {
 	q.idx, q.focus = i, true
 	q.reset(items[i].Key)
 	q.err = ""
-	q.redraw()
+	q.Env.Redraw()
 }
 
 // sync finds the chip of the item shown. An item that went (answered here or
@@ -186,7 +177,7 @@ func (q *QuestionsCard) act(do func() error) {
 		return
 	}
 	q.busy = true
-	q.Run.Do(func() func() {
+	q.Env.Do(func() func() {
 		err := do()
 		return func() {
 			q.busy = false
@@ -194,7 +185,7 @@ func (q *QuestionsCard) act(do func() error) {
 			if err != nil {
 				q.err = err.Error()
 			}
-			q.redraw()
+			q.Env.Redraw()
 		}
 	})
 }
@@ -248,7 +239,7 @@ func (q *QuestionsCard) digit(t NeedTab, snap agentstate.Snapshot, pos int) {
 	case NeedQuestion:
 		if o, ok := q.question(snap); ok && pos < len(CardOptions(o)) {
 			q.picked = pos
-			q.redraw()
+			q.Env.Redraw()
 		}
 	case NeedBlocked:
 		q.choose(t, pos)
@@ -279,7 +270,7 @@ func (q *QuestionsCard) watchBlocked(snap agentstate.Snapshot, t NeedTab) {
 		return
 	}
 	q.stamp, q.reading = stamp, true
-	q.Run.Do(func() func() {
+	q.Env.Do(func() func() {
 		p, ok, err := q.readMenu(t)
 		return func() {
 			q.reading = false
@@ -293,7 +284,7 @@ func (q *QuestionsCard) watchBlocked(snap agentstate.Snapshot, t NeedTab) {
 			if err != nil {
 				q.err = err.Error()
 			}
-			q.redraw()
+			q.Env.Redraw()
 		}
 	})
 }
@@ -322,7 +313,7 @@ func (q *QuestionsCard) choose(t NeedTab, i int) {
 		return
 	}
 	q.busy = true
-	q.Run.Do(func() func() {
+	q.Env.Do(func() func() {
 		now, ok, err := q.readMenu(t)
 		changed := err == nil && !(ok && now.Equal(seen))
 		if err == nil && !changed {
@@ -344,7 +335,7 @@ func (q *QuestionsCard) choose(t NeedTab, i int) {
 					q.menu = &now
 				}
 			}
-			q.redraw()
+			q.Env.Redraw()
 		}
 	})
 }

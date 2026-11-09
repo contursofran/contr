@@ -106,7 +106,7 @@ func (p *PRPane) readChecks(t checksTrigger, stamp termStamp) {
 		p.checks.stamp = stamp
 	}
 	gen, n, client := p.gen, p.number, p.client
-	p.Run.Do(func() func() {
+	p.Env.Do(func() func() {
 		rows, err := client.Checks(context.Background(), n)
 		return func() {
 			if gen != p.gen {
@@ -118,7 +118,7 @@ func (p *PRPane) readChecks(t checksTrigger, stamp termStamp) {
 			} else {
 				p.checks.rows, p.checks.err = rows, ""
 			}
-			p.redraw()
+			p.Env.Redraw()
 		}
 	})
 }
@@ -192,8 +192,6 @@ func (p *PRPane) logButton(c *ui.Context, ch github.Check) {
 	}
 	ui.ButtonBase(c).Label(LabelPRCheckLog).Tooltip("Open the log of " + ch.Name).Cursor(ui.CursorPointer).Shrink(0).
 		TextColor(theme.Color(theme.TextDim)).OnClick(func() {
-		if p.OpenURL != nil {
-			p.OpenURL(ch.Link)
-		}
+		p.Env.Open(ch.Link)
 	}).Children(func() { ui.Text(c, LabelPRCheckLog) })
 }

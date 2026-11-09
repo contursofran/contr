@@ -41,7 +41,7 @@ func newFollowRig(t *testing.T) *followRig {
 	f.Selection = stateSelection()
 	f.agentSnap = src.Snapshot
 	f.takeSnapshot()
-	f.Worker = &WorkerPanel{Source: src, Selection: f.Selection, Run: Runner{Go: func(f func()) { f() }}}
+	f.Worker = &WorkerPanel{Source: src, Selection: f.Selection}
 	f.Slots.Panel = func(c *ui.Context) { ui.Text(c, "[board]") }
 	return &followRig{f: f, src: src, tt: ui.NewTester(panelBox(f), theme.PanelWidth, theme.WindowHeight)}
 }
@@ -133,7 +133,7 @@ func TestWorkerPanelReadsOffTheUIThread(t *testing.T) {
 	enableViewers(t)
 	r := newFollowRig(t)
 	var queued []func()
-	r.f.Worker.Run = Runner{Go: func(f func()) { queued = append(queued, f) }}
+	r.f.Worker.Env.Run = Runner{Go: func(f func()) { queued = append(queued, f) }}
 	r.f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t1"})
 	r.frame()
 	r.f.Worker.Sync() // while the first read runs
@@ -162,7 +162,7 @@ func TestWorkerPanelInterrupt(t *testing.T) {
 	enableViewers(t)
 	r := newFollowRig(t)
 	var status string
-	r.f.Worker.Status = func(s string) { status = s }
+	r.f.Worker.Env.Status = func(s string) { status = s }
 	r.f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t1"})
 	r.frame()
 	if err := r.tt.Click(WorkerInterrupt); err != nil {

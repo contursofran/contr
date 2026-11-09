@@ -45,12 +45,8 @@ const (
 type PRPane struct {
 	// Client gives the GitHub client for a folder. Nil: [github.New].
 	Client func(dir string) github.Client
-	// Run runs the read off the UI thread.
-	Run Runner
-	// Invalidate asks for a redraw. May be nil.
-	Invalidate func()
-	// OpenURL opens a web address. May be nil.
-	OpenURL func(string)
+	// Env runs the read off the UI thread, redraws and opens web addresses.
+	Env Env
 	// Now is the clock. Nil: time.Now.
 	Now func() time.Time
 	// Orchestrator gives the address of the orchestrator terminal of the project of the
@@ -98,7 +94,7 @@ func (p *PRPane) Open(dir string, n int) {
 	p.client, p.checks = client, prChecks{}
 	p.ft.text, p.ft.err, p.ft.busy, p.ft.after = "", "", false, ""
 	p.readViewer(client)
-	p.Run.Do(func() func() {
+	p.Env.Do(func() func() {
 		pr, err := client.PR(context.Background(), n)
 		return func() {
 			if gen != p.gen {
@@ -109,10 +105,10 @@ func (p *PRPane) Open(dir string, n int) {
 			} else {
 				p.pr = &pr
 			}
-			p.redraw()
+			p.Env.Redraw()
 		}
 	})
-	p.redraw()
+	p.Env.Redraw()
 }
 
 // Close hides the pane. A read in flight is dropped.
@@ -123,7 +119,7 @@ func (p *PRPane) Close() {
 	p.open = false
 	p.gen++
 	p.pr, p.err = nil, ""
-	p.redraw()
+	p.Env.Redraw()
 	if p.OnClose != nil {
 		p.OnClose()
 	}
@@ -140,12 +136,6 @@ func (p *PRPane) Loaded() *github.PR { return p.pr }
 
 // Err is the text of the last failed read.
 func (p *PRPane) Err() string { return p.err }
-
-func (p *PRPane) redraw() {
-	if p.Invalidate != nil {
-		p.Invalidate()
-	}
-}
 
 func (p *PRPane) now() time.Time {
 	if p.Now != nil {
@@ -369,9 +359,7 @@ func (p *PRPane) header(c *ui.Context) {
 			if pr != nil && pr.URL != "" {
 				ui.ButtonBase(c).Label(LabelPRWeb).Cursor(ui.CursorPointer).Shrink(0).
 					TextColor(theme.Color(theme.TextDim)).OnClick(func() {
-					if p.OpenURL != nil {
-						p.OpenURL(pr.URL)
-					}
+					p.Env.Open(pr.URL)
 				}).Children(func() { ui.Text(c, LabelPRWeb) })
 			}
 			ui.ButtonBase(c).Label(LabelPRClose).Tooltip("Close the pull request pane").Cursor(ui.CursorPointer).Shrink(0).
@@ -445,7 +433,7 @@ func mdTheme() *markdown.Theme {
 	return th
 }
 
-// description draws the PR text as markdown. Links open through OpenURL,
+// description draws the PR text as markdown. Links open through Env.Open,
 // only for http and https addresses. An empty text shows a dim note.
 func (p *PRPane) description(c *ui.Context) {
 	if strings.TrimSpace(p.pr.Body) == "" {
@@ -457,8 +445,8 @@ func (p *PRPane) description(c *ui.Context) {
 	}
 	p.md.OnLink = func(url string) {
 		u := strings.ToLower(url)
-		if p.OpenURL != nil && (strings.HasPrefix(u, "https://") || strings.HasPrefix(u, "http://")) {
-			p.OpenURL(url)
+		if strings.HasPrefix(u, "https://") || strings.HasPrefix(u, "http://") {
+			p.Env.Open(url)
 		}
 	}
 	ui.Column(c).FillWidth().TextColor(theme.Color(theme.Text2)).Children(func() {
