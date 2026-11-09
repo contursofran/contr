@@ -22,8 +22,8 @@ const (
 	LabelProjectsNew  = "New orchestrator"
 	// LabelProjectsAdd names the `+` button of the Projects head; its menu has the two above.
 	LabelProjectsAdd = "Add"
-	// MenuStopAll and MenuHideProject are the items of a project row's menu (D219).
-	MenuStopAll     = "Stop all agents"
+	// MenuCloseAll and MenuHideProject are the items of a project row's menu (D219).
+	MenuCloseAll    = "Close all agents"
 	MenuHideProject = "Hide project"
 	// LabelSettings names the Settings button at the bottom of the sidebar (D126, D147).
 	LabelSettingsOpen = "Settings"
@@ -249,9 +249,10 @@ func (l *SpacesList) projectList(c *ui.Context) {
 }
 
 // projectMenu is the menu of a project row (D219). An empty project (D116) has
-// a new orchestrator in its folder; a project with agents has Stop all agents.
-// Both have Hide project. Stop all agents asks for no second click, as Stop of
-// an agent row.
+// a new orchestrator in its folder; a project with agents has Close all agents:
+// it stops each agent and removes its terminal, also one that already ended.
+// Both have Hide project. Close all agents asks for no second click, as Stop
+// of an agent row.
 func (l *SpacesList) projectMenu(m *ui.Menu, g spaces.RepoGroup) {
 	if g.Path != "" {
 		if m.Item(LabelNewIn(g)).Chosen() && l.OnNewIn != nil {
@@ -260,9 +261,9 @@ func (l *SpacesList) projectMenu(m *ui.Menu, g spaces.RepoGroup) {
 	} else {
 		lines := agentLines(g, l.snapshot())
 		off := l.Source == nil || len(lines) == 0
-		if m.Item(MenuStopAll).Disabled(off).Chosen() && !off {
+		if m.Item(MenuCloseAll).Disabled(off).Chosen() && !off {
 			for _, a := range lines {
-				l.act(a.w, "stopped", l.Source.Stop)
+				l.act(a.w, "closed", l.Source.Close)
 			}
 		}
 	}

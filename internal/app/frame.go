@@ -756,7 +756,7 @@ func (f *Frame) titleBar(c *ui.Context, sidebarW float32, narrow bool) {
 		f.bar.setTabs(f.titleTabs())
 		f.bar.selectTab, f.bar.closeTab = f.selectTab, f.closeTab
 		f.bar.closeOthers, f.bar.moveTab = f.closeOtherTabs, f.moveTab
-		f.bar.stopTab = f.stopTab
+		f.bar.stopTab, f.bar.closeAgent = f.stopTab, f.closeAgentTab
 		f.bar.newTab = nil
 		if f.NewTerm != nil {
 			f.bar.newTab = f.newTerminal
@@ -903,6 +903,13 @@ func (f *Frame) closeTab(t Tab) {
 func (f *Frame) stopTab(t Tab) {
 	if f.SpacesList != nil && !t.Plain {
 		f.SpacesList.StopAgent(t.Address, t.Title)
+	}
+}
+
+// closeAgentTab stops the agent of an agent tab and removes its terminal (D219).
+func (f *Frame) closeAgentTab(t Tab) {
+	if f.SpacesList != nil && !t.Plain {
+		f.SpacesList.CloseAgent(t.Address, t.Title)
 	}
 }
 

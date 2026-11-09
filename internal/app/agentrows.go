@@ -23,6 +23,9 @@ import (
 const (
 	MenuInterrupt = "Interrupt"
 	MenuStop      = "Stop"
+	// MenuCloseAgent stops the agent and removes its terminal (D219). The tab menu's Close has
+	// the same text.
+	MenuCloseAgent = "Close"
 	MenuOpenPR    = "Open PR"
 )
 
@@ -31,6 +34,8 @@ const (
 type AgentActions interface {
 	Interrupt(address string) error
 	Stop(address string) error
+	// Close stops the agent and removes its terminal, also one that already ended.
+	Close(address string) error
 }
 
 // agentLine is one agent row of a project.
@@ -313,7 +318,8 @@ func (l *SpacesList) SelectAgent(a agentLine) {
 	}
 }
 
-// agentMenu fills the context menu of an agent row: Interrupt, Stop, Open PR.
+// agentMenu fills the context menu of an agent row: Interrupt, Stop, Close, Open PR.
+// Stop keeps the ended terminal; Close removes it (D219).
 // The actions run off the UI thread. Open PR is off for an agent with no pull
 // request. Open PR opens the browser, not the PR pane (D127).
 func (l *SpacesList) agentMenu(m *ui.Menu, a agentLine) {
@@ -322,6 +328,9 @@ func (l *SpacesList) agentMenu(m *ui.Menu, a agentLine) {
 	}
 	if m.Item(MenuStop).Disabled(l.Source == nil).Chosen() {
 		l.act(a.w, "stopped", l.Source.Stop)
+	}
+	if m.Item(MenuCloseAgent).Disabled(l.Source == nil).Chosen() {
+		l.act(a.w, "closed", l.Source.Close)
 	}
 	m.Separator()
 	var open func()
@@ -340,6 +349,15 @@ func (l *SpacesList) StopAgent(address, name string) {
 		return
 	}
 	l.act(agents.Worker{Address: address, Name: name}, "stopped", l.Source.Stop)
+}
+
+// CloseAgent stops the agent at address and removes its terminal, as Close of
+// its row does. UI thread.
+func (l *SpacesList) CloseAgent(address, name string) {
+	if l.Source == nil {
+		return
+	}
+	l.act(agents.Worker{Address: address, Name: name}, "closed", l.Source.Close)
 }
 
 func (l *SpacesList) act(w agents.Worker, done string, do func(string) error) {

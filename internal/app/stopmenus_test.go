@@ -9,21 +9,21 @@ import (
 
 // ---- Stop and Hide in the project and tab menus (D219) ----
 
-func TestProjectMenuStopsAllItsAgents(t *testing.T) {
+func TestProjectMenuClosesAllItsAgents(t *testing.T) {
 	h := newRows(t)
 	if err := h.tt.RightClick("alpha, main"); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := h.tt.Menu(), []string{MenuStopAll, "-", MenuHideProject}; !slices.Equal(got, want) {
+	if got, want := h.tt.Menu(), []string{MenuCloseAll, "-", MenuHideProject}; !slices.Equal(got, want) {
 		t.Fatalf("menu %q, want %q", got, want)
 	}
-	if err := h.tt.ChooseMenuItem(MenuStopAll); err != nil {
+	if err := h.tt.ChooseMenuItem(MenuCloseAll); err != nil {
 		t.Fatal(err)
 	}
-	stopped, _ := h.src.calls()
-	slices.Sort(stopped)
-	if want := []string{"b-241", "b-242", "lead"}; !slices.Equal(stopped, want) {
-		t.Errorf("stopped %v, want %v", stopped, want)
+	stopped, closed := h.src.calls()
+	slices.Sort(closed)
+	if want := []string{"b-241", "b-242", "lead"}; !slices.Equal(closed, want) || len(stopped) != 0 {
+		t.Errorf("closed %v (stopped %v), want %v", closed, stopped, want)
 	}
 }
 
@@ -48,7 +48,7 @@ func TestProjectMenuHidesTheProject(t *testing.T) {
 	}
 }
 
-func TestEmptyProjectMenuHasHideAndNoStopAll(t *testing.T) {
+func TestEmptyProjectMenuHasHideAndNoCloseAll(t *testing.T) {
 	h, _ := emptyProjectRig(t)
 	moveToEmpty(t, h)
 	g := spaces.RepoGroup{Name: "gamma"}
@@ -97,5 +97,35 @@ func TestStopAgentWithNoSourceDoesNothing(t *testing.T) {
 	h.list.StopAgent("lead", "lead")
 	if stopped, _ := h.src.calls(); len(stopped) != 0 {
 		t.Errorf("stopped %v", stopped)
+	}
+}
+
+func TestAgentRowMenuClosesTheAgent(t *testing.T) {
+	h := newRows(t)
+	var told []string
+	h.list.Status = func(s string) { told = append(told, s) }
+	h.tt.RightClick("lead, idle, opus")
+	if err := h.tt.ChooseMenuItem(MenuCloseAgent); err != nil {
+		t.Fatal(err)
+	}
+	if stopped, closed := h.src.calls(); len(stopped) != 0 || !slices.Equal(closed, []string{"lead"}) {
+		t.Errorf("stopped %v, closed %v, want closed lead", stopped, closed)
+	}
+	if !slices.Equal(told, []string{"lead closed"}) {
+		t.Errorf("status %q", told)
+	}
+}
+
+func TestTabMenuClosesAnAgentTab(t *testing.T) {
+	b := newBar(t, tabsOf(), true)
+	var gone []Tab
+	b.bar.closeAgent = func(t Tab) { gone = append(gone, t) }
+	b.tt.Frame()
+	b.tt.RightClick("lead")
+	if err := b.tt.ChooseMenuItem(MenuClose); err != nil {
+		t.Fatal(err)
+	}
+	if len(gone) != 1 || gone[0].Address != "o" || len(b.closed) != 0 {
+		t.Errorf("closed agent %+v, plain %+v", gone, b.closed)
 	}
 }

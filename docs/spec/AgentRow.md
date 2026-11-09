@@ -53,7 +53,8 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
   while the window is visible and an age is on screen (an agent row of an
   open project has one). It stops when the window hides or no age shows.
   Ages also move on every state change, because each build reads the clock.
-- Context menu: Interrupt, Stop, Open PR. They call the agent source
+- Context menu: Interrupt, Stop, Close, Open PR. Stop keeps the ended
+  terminal; Close also removes it, so the row goes (D219). They call the agent source
   (`internal/agents`) off the UI thread; Open PR opens the pull request in the
   browser (`gh pr view --web`), never in the PR pane (D127), and is off while
   the agent has no pull request. A failure shows in the status message. Stop asks for no second click: the menu choice is the
@@ -93,7 +94,7 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
 - Ages: `AgeClock`, one timer (D137). It starts and stops from `SpacesList`
   (an age shows) and the window visibility.
 - Keys: ↑ ↓ move the selection, ⏎ focuses the terminal.
-- `.ContextMenu(...)`: Interrupt, Stop, Open PR.
+- `.ContextMenu(...)`: Interrupt, Stop, Close, Open PR.
 
 ## Do and do not
 

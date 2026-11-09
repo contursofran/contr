@@ -40,8 +40,8 @@ Design system page: component ProjectRow. Shared rules: [README.md](README.md).
   (D116). With the list focused and the key cursor on an empty project, the
   menu key opens that menu, and Enter starts the orchestrator (D174).
 - Each project row has a context menu (D219). A project with agents has
-  "Stop all agents": it stops each agent of the project with no second
-  click. Each project has "Hide project": it hides the project and shows a
+  "Close all agents": it stops each agent of the project and removes its
+  terminal, also an ended one, with no second click. Each project has "Hide project": it hides the project and shows a
   toast with Undo (D207); it stops nothing. The menu key opens the menu of
   the project under the key cursor.
 - Empty projects sit after the projects with agents; the others keep the
@@ -76,7 +76,7 @@ Design system page: component ProjectRow. Shared rules: [README.md](README.md).
 - One `ui.List` holds the projects and their agents; each row is a `kit.Row`. Do not use `ui.Sidebar`: it shows the selection in the accent color.
 - Open and close a project group with `CollapsibleBase`, or keep a collapsed set in the list state.
 - Reorder projects by drag with `ListState.Reorder`; store the order with `internal/projects`.
-- `.ContextMenu(...)`: Stop all agents, Hide project (D219). Open in Finder and Remove wait.
+- `.ContextMenu(...)`: Close all agents, Hide project (D219). Open in Finder and Remove wait.
 
 ## Do and do not
 
