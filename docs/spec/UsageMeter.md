@@ -48,8 +48,16 @@ Plan meters, in the sidebar foot row (D196):
   agent in `usage/context/<HC_TERMINAL_ID>.json`. The sampler reads the folder
   with the plans. The line shows the file of the selected orchestrator, worker
   or plain terminal as "90k of 200k  45%", and the meter fills to that percent.
-  No file, no selection or a worktree row: "—" and an empty meter. The
-  context is up to one sampler period (60 s) old.
+  The context is up to one sampler period (60 s) old.
+- Context fallback (D205): when the terminal has no file, the line uses the
+  labels that the kit's Stop hook puts on the terminal after each turn:
+  `contr.context` (tokens) and `contr.context-limit`. That limit is the
+  compaction window (the size where Claude Code compacts), not the model's
+  window, so the percent is of the compaction window: "90k of 160k  56%".
+  A label that is missing or not a positive integer is no data. The labels
+  are as old as the last turn.
+- No file and no labels, no selection or a worktree row: "—" and an empty
+  meter.
 - Plans: `internal/usage` on a goroutine; read again on a status line or log
   change. The view reads the sampler's last result and touches no file.
 
@@ -86,7 +94,7 @@ Plan meters, in the sidebar foot row (D196):
 
 ## Tests
 
-- View: values, no data, 100%.
+- View: values, no data, 100%; the file wins over the labels; labels without a file.
 - The files panel has only Context; the sidebar foot has Claude, then Codex, then the gear, in one row; the icon column has no plan meters.
 
 ## Replaces

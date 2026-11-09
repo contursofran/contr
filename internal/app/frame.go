@@ -436,18 +436,8 @@ func (f *Frame) reviewTarget() string {
 	case state.KindWorktree:
 		return sel.ID
 	case state.KindOrchestrator, state.KindWorker, state.KindTerminal:
-		if f.agentSnap == nil {
-			return ""
-		}
-		s := f.agentSnap()
-		for _, ws := range [][]agents.Worker{s.Orchestrators, s.Workers, s.Terminals} {
-			for _, w := range ws {
-				if w.Address == sel.ID {
-					return w.Worktree
-				}
-			}
-		}
-		return ""
+		w, _ := f.agentAt(sel.ID)
+		return w.Worktree
 	}
 	return ""
 }
@@ -565,7 +555,7 @@ func (f *Frame) filesPanel(c *ui.Context) {
 		Top:    func() { f.Session.View(c) },
 		Head:   func() { f.Files.Head(c) },
 		Body:   func() { f.Files.View(c) },
-		Footer: func() { kit.UsageMeter(c, []kit.Meter{contextMeter(f.planUsage(), f.selectedTerminal())}) }})
+		Footer: func() { kit.UsageMeter(c, []kit.Meter{contextMeter(f.planUsage(), f.selectedTerminal(), f.contextLabels())}) }})
 }
 
 // selectedTerminal is the hc terminal of the selected orchestrator, worker or
@@ -579,6 +569,30 @@ func (f *Frame) selectedTerminal() string {
 		return sel.ID
 	}
 	return ""
+}
+
+// contextLabels is the context that the Stop hook put on the labels of the
+// selected terminal (D205), for the Context meter when that terminal has no
+// status line file. Zero when there is none.
+func (f *Frame) contextLabels() usage.Context {
+	w, _ := f.agentAt(f.selectedTerminal())
+	return usage.Context{Tokens: w.ContextTokens, Size: w.ContextLimit}
+}
+
+// agentAt is the orchestrator, worker or terminal at hc address id.
+func (f *Frame) agentAt(id string) (agents.Worker, bool) {
+	if id == "" || f.agentSnap == nil {
+		return agents.Worker{}, false
+	}
+	s := f.agentSnap()
+	for _, ws := range [][]agents.Worker{s.Orchestrators, s.Workers, s.Terminals} {
+		for _, w := range ws {
+			if w.Address == id {
+				return w, true
+			}
+		}
+	}
+	return agents.Worker{}, false
 }
 
 // planUsage is the usage sampler as the meters read it. A nil sampler (a

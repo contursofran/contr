@@ -946,6 +946,33 @@ func TestWorkerOrchestratingFromTheHookLabel(t *testing.T) {
 	}
 }
 
+// TestWorkerContextFromTheHookLabels: the Stop hook's context labels give
+// the tokens and the compaction window; a missing, bad or zero value gives
+// no data (D205).
+func TestWorkerContextFromTheHookLabels(t *testing.T) {
+	for _, c := range []struct {
+		name          string
+		labels        map[string]string
+		tokens, limit uint64
+	}{
+		{"valid", map[string]string{LabelContext: "90000", LabelContextLimit: "160000"}, 90000, 160000},
+		{"no labels", nil, 0, 0},
+		{"no limit", map[string]string{LabelContext: "90000"}, 0, 0},
+		{"no tokens", map[string]string{LabelContextLimit: "160000"}, 0, 0},
+		{"cleared tokens", map[string]string{LabelContext: "", LabelContextLimit: "160000"}, 0, 0},
+		{"bad tokens", map[string]string{LabelContext: "90k", LabelContextLimit: "160000"}, 0, 0},
+		{"negative tokens", map[string]string{LabelContext: "-5", LabelContextLimit: "160000"}, 0, 0},
+		{"bad limit", map[string]string{LabelContext: "90000", LabelContextLimit: "x"}, 0, 0},
+		{"zero limit", map[string]string{LabelContext: "90000", LabelContextLimit: "0"}, 0, 0},
+		{"zero tokens", map[string]string{LabelContext: "0", LabelContextLimit: "160000"}, 0, 0},
+	} {
+		w, err := decodeWorker(raw(term("t1", "a", "live", c.labels, nil)))
+		if err != nil || w.ContextTokens != c.tokens || w.ContextLimit != c.limit {
+			t.Errorf("%s: tokens %d limit %d (%v), want %d %d", c.name, w.ContextTokens, w.ContextLimit, err, c.tokens, c.limit)
+		}
+	}
+}
+
 // TestSendKeepsTheWholeText: a long text with backticks, quotes and newlines,
 // and a short one, reach terminal.send unchanged (#483).
 func TestSendKeepsTheWholeText(t *testing.T) {
