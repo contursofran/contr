@@ -10,7 +10,7 @@ type textPart struct {
 }
 
 // splitCode splits s at its backtick spans (D204). A backtick with no
-// closing backtick after it stays plain text, as does an empty span (``).
+// closing backtick after it stays plain text, as does an empty span (“).
 func splitCode(s string) []textPart {
 	var parts []textPart
 	plain := func(t string) {

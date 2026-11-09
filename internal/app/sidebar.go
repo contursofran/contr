@@ -121,22 +121,24 @@ func (l *SpacesList) settingsFoot(c *ui.Context) {
 	if ready {
 		label = LabelSettingsUpdate
 	}
-	// A thin divider above (the row's top border, inset 10); the button at the
-	// right (the icon column centers it).
 	p := theme.Current()
-	row := ui.Row(c).FillWidth().Shrink(0).AlignItems(ui.Center).Justify(ui.End).
-		Padding(theme.Space6, 0, theme.Space6, 0).BorderWidth(1, 0, 0, 0).BorderColor(p.Hairline)
 	plans := !l.compact && l.Plans != nil
+	justify := ui.End
 	switch {
 	case l.compact:
-		row = row.Justify(ui.Center)
+		justify = ui.Center
 	case plans:
 		// The meters at the left, a spacer, then the button.
-		row = row.Justify(ui.Start)
+		justify = ui.Start
 	}
-	// The wrapper insets the divider; a margin on a full-width row would overflow.
-	ui.Column(c).FillWidth().Shrink(0).Padding(theme.Space6, theme.Space10, 0, theme.Space10).Children(func() {
-		row.Children(func() {
+	// The foot insets its content by Space10 at both sides, so the meters'
+	// left inset equals the gear's right inset (#495). Build each element
+	// inside its parent's Children: a row made before the column is a sibling
+	// of it, so the column's padding never reached the row.
+	ui.Column(c).Label("sidebar foot").Shrink(0).Padding(theme.Space6, theme.Space10, 0, theme.Space10).Children(func() {
+		ui.Box(c).Label("sidebar foot divider").Height(1).Shrink(0).Background(p.Hairline)
+		ui.Row(c).Label("sidebar foot row").FillWidth().Shrink(0).AlignItems(ui.Center).Justify(justify).
+			Padding(theme.Space6, 0, theme.Space6, 0).Children(func() {
 			if plans {
 				kit.PlanUsage(c, l.Plans())
 				ui.Box(c).Grow(1)
