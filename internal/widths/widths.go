@@ -5,10 +5,11 @@ package widths
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/contursofran/contr/internal/jsonfile"
 )
 
 const version = 1
@@ -37,16 +38,13 @@ func Path() (string, error) {
 // error. A bad file gives zero widths and an error; the file stays as it is
 // until the next Save.
 func Load(path string) (Widths, error) {
-	data, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return Widths{}, nil
-	}
-	if err != nil {
-		return Widths{}, fmt.Errorf("widths: read %s: %w", path, err)
-	}
 	var f file
-	if err := json.Unmarshal(data, &f); err != nil {
-		return Widths{}, fmt.Errorf("widths: parse %s: %w", path, err)
+	found, err := jsonfile.Load(path, &f)
+	if err != nil {
+		return Widths{}, fmt.Errorf("widths: %w", err)
+	}
+	if !found {
+		return Widths{}, nil
 	}
 	if f.Version != version {
 		return Widths{}, fmt.Errorf("widths: %s has version %d, want %d", path, f.Version, version)
@@ -64,24 +62,8 @@ func Save(path string, w Widths) error {
 	if err != nil {
 		return fmt.Errorf("widths: encode: %w", err)
 	}
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("widths: make %s: %w", dir, err)
-	}
-	tmp, err := os.CreateTemp(dir, ".widths-*")
-	if err != nil {
-		return fmt.Errorf("widths: temp file: %w", err)
-	}
-	defer os.Remove(tmp.Name())
-	if _, err := tmp.Write(append(data, '\n')); err != nil {
-		tmp.Close()
-		return fmt.Errorf("widths: write: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("widths: close: %w", err)
-	}
-	if err := os.Rename(tmp.Name(), path); err != nil {
-		return fmt.Errorf("widths: rename: %w", err)
+	if err := jsonfile.Write(path, append(data, '\n'), 0o600); err != nil {
+		return fmt.Errorf("widths: save: %w", err)
 	}
 	return nil
 }

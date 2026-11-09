@@ -5,9 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/contursofran/contr/internal/jsonfile"
 )
 
 // Flow is how the orchestrator takes an issue to a merge (D185). It is saved
@@ -147,14 +148,7 @@ func (c Config) Save(path string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, append(out, '\n'), 0o644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return jsonfile.Write(path, append(out, '\n'), 0o644)
 }
 
 // Equal tells whether two profiles start the same agent.

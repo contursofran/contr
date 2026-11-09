@@ -5,13 +5,14 @@ package prefs
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"os"
 	"path/filepath"
 
 	"github.com/egoist/mygo"
+
+	"github.com/contursofran/contr/internal/jsonfile"
 )
 
 const version = 1
@@ -81,16 +82,13 @@ func Path() (string, error) {
 // until the next Save. A file without tint values gives the token defaults; values
 // outside 0 to 1 are limited to it. An unknown appearance value gives System and no error.
 func Load(path string) (Prefs, error) {
-	data, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return Prefs{}, nil
-	}
-	if err != nil {
-		return Prefs{}, fmt.Errorf("prefs: read %s: %w", path, err)
-	}
 	var f file
-	if err := json.Unmarshal(data, &f); err != nil {
-		return Prefs{}, fmt.Errorf("prefs: parse %s: %w", path, err)
+	found, err := jsonfile.Load(path, &f)
+	if err != nil {
+		return Prefs{}, fmt.Errorf("prefs: %w", err)
+	}
+	if !found {
+		return Prefs{}, nil
 	}
 	if f.Version != version {
 		return Prefs{}, fmt.Errorf("prefs: %s has version %d, want %d", path, f.Version, version)
@@ -109,24 +107,8 @@ func Save(path string, p Prefs) error {
 	if err != nil {
 		return fmt.Errorf("prefs: encode: %w", err)
 	}
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("prefs: make %s: %w", dir, err)
-	}
-	tmp, err := os.CreateTemp(dir, ".settings-*")
-	if err != nil {
-		return fmt.Errorf("prefs: temp file: %w", err)
-	}
-	name := tmp.Name()
-	_, werr := tmp.Write(data)
-	cerr := tmp.Close()
-	if err := errors.Join(werr, cerr); err != nil {
-		os.Remove(name)
-		return fmt.Errorf("prefs: write %s: %w", name, err)
-	}
-	if err := os.Rename(name, path); err != nil {
-		os.Remove(name)
-		return fmt.Errorf("prefs: rename to %s: %w", path, err)
+	if err := jsonfile.Write(path, data, 0o600); err != nil {
+		return fmt.Errorf("prefs: save: %w", err)
 	}
 	return nil
 }

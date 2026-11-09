@@ -4,11 +4,11 @@ package updated
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/contursofran/contr/internal/jsonfile"
 )
 
 // FileName is the name of the file in the state folder.
@@ -45,16 +45,9 @@ func Path(dir string) string {
 // Load reads the note at path. A missing file gives a zero note and no error. A bad file gives a
 // zero note and an error.
 func Load(path string) (Note, error) {
-	data, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return Note{}, nil
-	}
-	if err != nil {
-		return Note{}, fmt.Errorf("updated: read %s: %w", path, err)
-	}
 	var n Note
-	if err := json.Unmarshal(data, &n); err != nil {
-		return Note{}, fmt.Errorf("updated: parse %s: %w", path, err)
+	if _, err := jsonfile.Load(path, &n); err != nil {
+		return Note{}, fmt.Errorf("updated: %w", err)
 	}
 	return n, nil
 }
@@ -66,24 +59,8 @@ func Save(path string, n Note) error {
 	if err != nil {
 		return fmt.Errorf("updated: encode: %w", err)
 	}
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("updated: make %s: %w", dir, err)
-	}
-	tmp, err := os.CreateTemp(dir, ".updated-*")
-	if err != nil {
-		return fmt.Errorf("updated: temp file: %w", err)
-	}
-	defer os.Remove(tmp.Name())
-	if _, err := tmp.Write(append(data, '\n')); err != nil {
-		tmp.Close()
-		return fmt.Errorf("updated: write: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("updated: close: %w", err)
-	}
-	if err := os.Rename(tmp.Name(), path); err != nil {
-		return fmt.Errorf("updated: rename: %w", err)
+	if err := jsonfile.Write(path, append(data, '\n'), 0o600); err != nil {
+		return fmt.Errorf("updated: save: %w", err)
 	}
 	return nil
 }
