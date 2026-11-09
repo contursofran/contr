@@ -12,6 +12,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/theme/themetest"
@@ -578,18 +579,18 @@ func TestTheCloseButtonStopsAPlainTerminalAndNeverAnAgent(t *testing.T) {
 }
 
 func TestTheDiffSummaryFollowsTheSelectedAgentAndReadsOnlyThroughTheTree(t *testing.T) {
-	repo := reviewScratch(t)
-	repo.git("checkout", "-b", "feature")
-	write(t, repo.dir, "new.go", "a\nb\nc\n") // untracked: +3
+	repo := apptest.NewRepo(t)
+	repo.Git("checkout", "-b", "feature")
+	write(t, repo.Dir, "new.go", "a\nb\nc\n") // untracked: +3
 	snap := tabSnap()
-	snap.Workers[0].Worktree = repo.dir
+	snap.Workers[0].Worktree = repo.Dir
 	f, tt := agentFrame(t, &snap)
 	f.panelOpen = false // the files panel is hidden: the summary still reads
 	f.Files.Watch = func(string, func()) (func(), error) { return func() {}, nil }
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "w1"})
 	tt.Frame()
 	tt.Frame()
-	if got := f.Files.Shown(); got != repo.dir {
+	if got := f.Files.Shown(); got != repo.Dir {
 		t.Fatalf("the tree reads %q, want the selected worker's worktree", got)
 	}
 	if err := tt.Click("3 lines added, 1 file. Open review"); err != nil {

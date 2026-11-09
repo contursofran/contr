@@ -5,6 +5,7 @@ import (
 
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/reviewview"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
@@ -56,7 +57,7 @@ func (f *Frame) attachState(w Window) view.Env {
 // attachFiles gives the files, review and session views the Env, and makes the PR pane while the
 // viewers show. The stop closes the files, review and session views.
 func (f *Frame) attachFiles(env view.Env) (stop func()) {
-	f.Review = NewReview(env)
+	f.Review = reviewview.NewReview(env)
 	f.Files.Env = env
 	f.Session.Env = env
 	if f.Session.StateDir == "" {
