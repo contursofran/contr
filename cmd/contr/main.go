@@ -177,7 +177,7 @@ func openWindow(icons bool) int {
 		opts.Content = ui.View((&app.Legend{}).View)
 	} else {
 		frame = app.NewFrame()
-		frame.StartAgents = startAgents(os.Getenv)
+		frame.StartAgents = startAgents(os.Getenv, dialAgents)
 		frame.WatchHead = app.WatchFile
 		// The model on line 2 of an agent row comes from the profile. A config
 		// that does not read is reported by the agent state; the defaults serve here.
