@@ -478,7 +478,7 @@ agent. With no selection it shows `Select a project`.
 The footer is gone. CPU and memory are on the `This Mac` row, the contr and
 hc versions and the update are in Settings (a dot on the Settings button
 while an update waits; the button is at the bottom left of the sidebar, D147), and action messages are toasts. This section is kept
-as history.
+as history. A toast can carry a button: `Toasts.ShowAction` queues a message with an action such as `Undo`, which belongs to the frame and works after the view that asked for it closes (D207).
 
 `bg.bars`, top border `line`, 11 px dim. The plan usage left the footer
 for the files panel (D126, D139). The footer has the message slot (errors from `+ new` and other actions), host CPU

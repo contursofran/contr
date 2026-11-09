@@ -1,6 +1,10 @@
 package state
 
-import "sync"
+import (
+	"strconv"
+	"sync"
+	"sync/atomic"
+)
 
 // Toasts holds the short messages that the window shows as toasts (D126). A
 // message can come from any goroutine: Show keeps it and asks the window to
@@ -12,11 +16,13 @@ type Toasts struct {
 	mu      sync.Mutex
 	pending []string
 	actions []ToastAction
+	seq     atomic.Uint64
 }
 
 // ToastAction is a message with a button, such as Undo. OnAction runs on the
 // UI thread when the owner presses the button.
 type ToastAction struct {
+	ID           string
 	Text, Action string
 	OnAction     func()
 }
@@ -62,7 +68,7 @@ func (t *Toasts) ShowAction(text, action string, undo func()) {
 		return
 	}
 	t.mu.Lock()
-	t.actions = append(t.actions, ToastAction{Text: text, Action: action, OnAction: undo})
+	t.actions = append(t.actions, ToastAction{ID: "action-" + strconv.FormatUint(t.seq.Add(1), 10), Text: text, Action: action, OnAction: undo})
 	t.mu.Unlock()
 	if t.onChange != nil {
 		t.onChange()

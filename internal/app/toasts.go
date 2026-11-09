@@ -31,7 +31,7 @@ func (f *Frame) toastView(c *ui.Context) {
 			c.AddToast(ui.Toast{ID: m, Title: m})
 		}
 		for _, a := range f.Toasts.TakeActions() {
-			c.AddToast(ui.Toast{ID: a.Text, Title: a.Text, Action: a.Action, OnAction: a.OnAction})
+			c.AddToast(ui.Toast{ID: a.ID, Title: a.Text, Action: a.Action, OnAction: a.OnAction})
 		}
 	}
 	f.queueUpdateToast(c)

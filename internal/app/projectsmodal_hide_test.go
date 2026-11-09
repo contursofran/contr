@@ -58,23 +58,62 @@ func TestHidePutsTheProjectFirstInRecent(t *testing.T) {
 func TestUndoRestoresProjectAndOrder(t *testing.T) {
 	r, calls := hideRig(t)
 	r.store.SetOrder([]string{"/w/c/.git", "/w/a/.git", "/w/b/.git"})
-	before := r.names()
 	r.m.hide("/w/a/.git")
 	if !r.store.Hidden("/w/a/.git") {
 		t.Fatal("not hidden")
 	}
-	// Another change after the hide must not matter to the restored order.
+	// A reorder after the hide stays; a goes back after c.
 	r.store.SetOrder([]string{"/w/b/.git", "/w/c/.git"})
 	saves := len(r.saved)
 	(*calls)[0].undo()
 	if r.store.Hidden("/w/a/.git") {
 		t.Error("still hidden")
 	}
-	if got := r.names(); !slices.Equal(got, before) {
-		t.Errorf("order = %v, want %v", got, before)
+	if got, want := r.names(), []string{"b", "c", "a"}; !slices.Equal(got, want) {
+		t.Errorf("order = %v, want %v", got, want)
 	}
 	if len(r.saved) != saves+1 || r.saved[len(r.saved)-1].Hidden("/w/a/.git") {
 		t.Errorf("undo did not save: %d saves", len(r.saved))
+	}
+}
+
+func TestUndoPutsTheProjectAtItsIndexWhenItsNeighbourIsGone(t *testing.T) {
+	r, calls := hideRig(t)
+	r.store.SetOrder([]string{"/w/a/.git", "/w/b/.git", "/w/c/.git"})
+	r.m.hide("/w/b/.git")
+	r.store.SetOrder([]string{"/w/c/.git"}) // a is gone
+	r.dirs = []string{"/w/b/.git", "/w/c/.git"}
+	(*calls)[0].undo()
+	if got, want := r.names(), []string{"c", "b"}; !slices.Equal(got, want) {
+		t.Errorf("order = %v, want %v", got, want)
+	}
+}
+
+func TestTwoHidesAndAnOutOfOrderUndo(t *testing.T) {
+	r, calls := hideRig(t)
+	r.store.SetOrder([]string{"/w/a/.git", "/w/b/.git", "/w/c/.git"})
+	r.m.hide("/w/a/.git")
+	r.m.hide("/w/b/.git")
+	(*calls)[0].undo() // a first: b stays hidden
+	if !r.store.Hidden("/w/b/.git") || r.store.Hidden("/w/a/.git") {
+		t.Fatal("the first Undo touched b")
+	}
+	(*calls)[1].undo()
+	// b was first when it was hidden, so it goes first; nothing is lost.
+	if got, want := r.names(), []string{"b", "a", "c"}; !slices.Equal(got, want) {
+		t.Errorf("order = %v, want %v", got, want)
+	}
+}
+
+func TestUndoRunsOnce(t *testing.T) {
+	r, calls := hideRig(t)
+	r.m.hide("/w/a/.git")
+	(*calls)[0].undo()
+	n := len(r.saved)
+	r.m.hide("/w/b/.git") // another hide after the first Undo
+	(*calls)[0].undo()    // a second press of the first Undo
+	if len(r.saved) != n+1 {
+		t.Errorf("a second Undo saved again: %d saves", len(r.saved))
 	}
 }
 
@@ -105,4 +144,15 @@ func TestHideToastOfTheFrameRunsUndoOnClick(t *testing.T) {
 	if !ran {
 		t.Error("Undo did not run")
 	}
+}
+
+func TestHideToastsGetUniqueIDs(t *testing.T) {
+	f, tt := toastFrame()
+	f.Toasts.ShowAction("b hidden from the sidebar", ProjectsUndo, func() {})
+	f.Toasts.ShowAction("b hidden from the sidebar", ProjectsUndo, func() {})
+	a := f.Toasts.TakeActions()
+	if len(a) != 2 || a[0].ID == a[1].ID {
+		t.Errorf("ids = %v", a)
+	}
+	_ = tt
 }

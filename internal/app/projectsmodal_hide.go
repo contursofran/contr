@@ -5,6 +5,7 @@ package app
 // frame offers Undo, which shows the project again at its old place.
 
 import (
+	"slices"
 	"time"
 
 	"github.com/contursofran/contr/internal/app/spaces"
@@ -24,7 +25,7 @@ func (m *ProjectsModal) hide(dir string) {
 	for i, g := range groups {
 		dirs[i] = g.CommonDir
 	}
-	prev := st.Order(dirs)
+	place := placeOf(st.Order(dirs), dir)
 	name, path := dir, st.Path(dir)
 	for _, g := range groups {
 		if g.CommonDir == dir {
@@ -39,7 +40,7 @@ func (m *ProjectsModal) hide(dir string) {
 	st.Touch(dir, path, now())
 	m.changed()
 	if m.Toast != nil {
-		m.Toast(hiddenToast(name), ProjectsUndo, func() { m.unhide(dir, prev) })
+		m.Toast(hiddenToast(name), ProjectsUndo, m.undoOnce(dir, place))
 	}
 }
 
@@ -60,14 +61,58 @@ func hidePath(stored string, g spaces.RepoGroup) string {
 	return ""
 }
 
-// unhide shows the project again and restores the order that was before Hide.
-// It does not need the modal to be open.
-func (m *ProjectsModal) unhide(dir string, prev []string) {
+// place is where a project sat in the order: its index and the project before
+// it ("" at the start).
+type place struct {
+	index int
+	after string
+}
+
+// placeOf finds dir in order.
+func placeOf(order []string, dir string) place {
+	for i, d := range order {
+		if d == dir {
+			p := place{index: i}
+			if i > 0 {
+				p.after = order[i-1]
+			}
+			return p
+		}
+	}
+	return place{index: len(order)}
+}
+
+// undoOnce returns the Undo action: it runs unhide once, and a second press
+// does nothing.
+func (m *ProjectsModal) undoOnce(dir string, p place) func() {
+	done := false
+	return func() {
+		if done {
+			return
+		}
+		done = true
+		m.unhide(dir, p)
+	}
+}
+
+// unhide shows the project again at its old place in the current order. Later
+// changes to the order stay. It does not need the modal to be open.
+func (m *ProjectsModal) unhide(dir string, p place) {
 	st := m.store()
 	if st == nil {
 		return
 	}
 	st.Show(dir)
-	st.SetOrder(prev)
+	groups := m.groupsAll()
+	dirs := make([]string, 0, len(groups)+1)
+	for _, g := range groups {
+		dirs = append(dirs, g.CommonDir)
+	}
+	cur := slices.DeleteFunc(st.Order(dirs), func(d string) bool { return d == dir })
+	i := min(p.index, len(cur))
+	if j := slices.Index(cur, p.after); p.after != "" && j >= 0 {
+		i = j + 1
+	}
+	st.SetOrder(slices.Insert(cur, i, dir))
 	m.changed()
 }
