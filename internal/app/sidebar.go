@@ -215,12 +215,9 @@ func (l *SpacesList) projectList(c *ui.Context) {
 		}
 		return l.groups[items[i].group].CommonDir
 	}
-	l.list.Label = func(i int) string {
-		if a := items[i].agent; a != nil {
-			return AgentLabel(a.w, issueText(*a), l.modelOf(a.w))
-		}
-		return ProjectLabel(l.groups[items[i].group])
-	}
+	// No list Label: it would name each row's box with the label of the row's
+	// button, so a click by label (a test, the automation plugin) would find the box first and
+	// not the button (MyGo 0.8). The buttons carry the labels.
 	l.list.Reorder = nil
 	if l.projects != nil {
 		l.list.Reorder = l.Reorder

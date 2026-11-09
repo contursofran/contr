@@ -29,6 +29,7 @@ import (
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/prefs"
 	"github.com/contursofran/contr/internal/projects"
+	"github.com/contursofran/contr/internal/updated"
 	"github.com/contursofran/contr/internal/usage"
 	"github.com/contursofran/contr/internal/widths"
 )
@@ -86,6 +87,10 @@ type Frame struct {
 	Updates Updates
 	// Relaunch restarts contr after an update installs.
 	Relaunch func()
+	// LoadUpdated reads the note of the last install, and SaveUpdated writes it (D209). Both
+	// run on a goroutine. Nil reads or saves nothing.
+	LoadUpdated func() (updated.Note, error)
+	SaveUpdated func(updated.Note) error
 	// AgentsConfig is the path of agents.json that the Agents tab of Settings edits (D186).
 	AgentsConfig string
 	// Settings is the Settings modal, made in Attach.
@@ -1152,7 +1157,8 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.Settings = &Settings{Updates: f.Updates, Version: Version, CoreVersion: f.coreVersion, Run: Runner{Post: w.Update},
 		Relaunch: f.Relaunch, OnReady: f.updateReady, Invalidate: w.Invalidate, Visible: func() bool { return f.Visibility == nil || f.Visibility.Visible() },
 		AgentsConfig: f.AgentsConfig, Status: f.Toasts.Show, Appearance: f.Appearance, SetAppearance: f.SetAppearance,
-		Tint: f.Tint, SetTint: f.SetTint, ResetTint: f.ResetTint}
+		Tint: f.Tint, SetTint: f.SetTint, ResetTint: f.ResetTint, RecordInstall: f.recordInstall}
+	f.loadUpdated(Runner{Post: w.Update}, w.Invalidate)
 	setSettingsHandler(func() { w.Update(f.Settings.Toggle) })
 	setSidebarHandler(func() { w.Update(f.ToggleSidebar) })
 	f.SpacesList.OnSettings = func() { f.Settings.Toggle() }

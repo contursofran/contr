@@ -3,9 +3,12 @@ package app
 // The update pill (docs/spec/UpdatePill.md, D176): when a background install is ready, the title
 // bar shows "Restart to update" left of the diff summary. A click opens a panel under it
 // (PopoverBase) with the version, the release notes and "Restart now". The first time a version
-// is ready, one toast drops under the pill. The methods run on the UI thread.
+// is ready, one toast drops under the pill. On the first start of a version that contr installed,
+// the same pill says "Updated to X" and its panel opens by itself with What's new (D209). The
+// methods run on the UI thread.
 
 import (
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -15,6 +18,7 @@ import (
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/updated"
 )
 
 // Labels and texts of the update pill, its panel and its toast.
@@ -26,6 +30,10 @@ const (
 	UpdateWhatsNew   = "What's new"
 	UpdateToastBody  = "It downloaded in the background. Restart when you like: agents keep running."
 	UpdateAgentsNote = "Agents keep running. Their terminals live in hc; contr opens them again after the restart, in about 2 s."
+	// UpdatedPrefix starts the text of the pill after an update: "Updated to 0.4.0" (D209).
+	UpdatedPrefix = "Updated to "
+	// UpdateGotIt is the button that closes the What's new panel after an update (D209).
+	UpdateGotIt = "Got it"
 )
 
 // updateWidth is the width of the update panel and toast.
@@ -46,6 +54,68 @@ type updateUI struct {
 	pending string
 	// pill is the pill of this build; zero when it does not show.
 	pill ui.Element
+	// after is the update that the running version came from, while its What's new shows (D209).
+	after *updated.Note
+	// run saves the note as shown, off the UI thread.
+	run Runner
+}
+
+// loadUpdated reads the note of the last install off the UI thread (D209). When it is of the
+// running version and did not show yet, the "Updated to" pill shows with its panel open. A
+// missing file shows nothing; a bad one is logged.
+func (f *Frame) loadUpdated(run Runner, invalidate func()) {
+	f.upd.run = run
+	if f.LoadUpdated == nil {
+		return
+	}
+	load := f.LoadUpdated
+	run.Do(func() func() {
+		n, err := load()
+		if err != nil {
+			log.Printf("contr: read the installed update: %v", err)
+			return nil
+		}
+		return func() {
+			f.showUpdated(n)
+			if invalidate != nil {
+				invalidate()
+			}
+		}
+	})
+}
+
+// recordInstall is Settings.RecordInstall: it saves the installed update through SaveUpdated,
+// not shown yet (D209). It runs off the UI thread.
+func (f *Frame) recordInstall(info UpdateInfo, from string, at time.Time) error {
+	if f.SaveUpdated == nil {
+		return nil
+	}
+	return f.SaveUpdated(updated.Note{Version: info.Version, From: from, Notes: info.Notes, InstalledAt: at})
+}
+
+// showUpdated opens What's new for the note when it is due for the running version.
+func (f *Frame) showUpdated(n updated.Note) {
+	if f.Settings == nil || !n.Due(f.Settings.Version) {
+		return
+	}
+	f.upd.after, f.upd.open = &n, true
+}
+
+// updatedShown removes the "Updated to" pill and saves its note as shown, off the UI thread.
+func (f *Frame) updatedShown() {
+	n := *f.upd.after
+	n.Shown = true
+	f.upd.after, f.upd.open = nil, false
+	if f.SaveUpdated == nil {
+		return
+	}
+	save := f.SaveUpdated
+	f.upd.run.Do(func() func() {
+		if err := save(n); err != nil {
+			log.Printf("contr: mark the installed update shown: %v", err)
+		}
+		return nil
+	})
 }
 
 // updateReady is Settings.OnReady: it queues the one toast of the version.
@@ -60,7 +130,8 @@ func (f *Frame) updateReady(info UpdateInfo) {
 	f.upd.pending = info.Version
 }
 
-// updatePill builds the pill and its panel while an update is ready.
+// updatePill builds the pill and its panel while an update is ready, or the "Updated to" pill
+// after an update (D209).
 func (f *Frame) updatePill(c *ui.Context) {
 	f.upd.pill = ui.Element{}
 	if f.Settings == nil {
@@ -68,10 +139,50 @@ func (f *Frame) updatePill(c *ui.Context) {
 	}
 	info, at, ok := f.Settings.Installed()
 	if !ok {
+		f.updatedPill(c)
 		return
 	}
+	pill := f.pillButton(c, LabelUpdatePill)
+	ui.PopoverBase(c, pill, &f.upd.open, func(panel ui.Element) {
+		panel.Label(LabelUpdatePanel).AttachTo(pill, ui.AnchorBottomEnd, ui.AnchorTopEnd).Margin(theme.Space8, 0, 0, 0)
+		floatCard(panel)
+		if panel.OverlayShortcut(0, ui.KeyEnter) {
+			f.Settings.RestartNow()
+		}
+		panel.Children(func() { f.updatePanel(c, info, f.Settings.Version, at, false) })
+	})
+}
+
+// updatedPill is the pill on the first start after an update, with What's new open under it
+// (D209). Once the panel closes (Got it, Return, Escape or a press outside), the pill goes and
+// the note is saved as shown.
+func (f *Frame) updatedPill(c *ui.Context) {
+	n := f.upd.after
+	if n == nil {
+		return
+	}
+	if !f.upd.open {
+		f.updatedShown()
+		return
+	}
+	pill := f.pillButton(c, UpdatedPrefix+n.Version)
+	ui.PopoverBase(c, pill, &f.upd.open, func(panel ui.Element) {
+		panel.Label(LabelUpdatePanel).AttachTo(pill, ui.AnchorBottomEnd, ui.AnchorTopEnd).Margin(theme.Space8, 0, 0, 0)
+		floatCard(panel)
+		if panel.OverlayShortcut(0, ui.KeyEnter) {
+			f.upd.open = false
+		}
+		panel.Children(func() {
+			f.updatePanel(c, UpdateInfo{Version: n.Version, Notes: n.Notes}, n.From, n.InstalledAt, true)
+		})
+	})
+}
+
+// pillButton is the pill: the download icon and text, on ButtonBase. A click opens or closes
+// the panel.
+func (f *Frame) pillButton(c *ui.Context, text string) ui.Element {
 	p := theme.Current()
-	pill := ui.ButtonBase(c).Label(LabelUpdatePill).Height(theme.SizeIconButton).Shrink(0).
+	pill := ui.ButtonBase(c).Label(text).Height(theme.SizeIconButton).Shrink(0).
 		PaddingX(theme.Space10).Gap(theme.Space6).AlignItems(ui.Center).Radius(theme.SizeIconButton/2).
 		Border(1, p.FloatLine).Cursor(ui.CursorPointer).MarginEnd(theme.Space8).
 		OnClick(func() { f.upd.open = !f.upd.open })
@@ -82,17 +193,10 @@ func (f *Frame) updatePill(c *ui.Context) {
 		if s := icons.Line("download"); s != nil {
 			ui.Icon(c, s).Size(14, 14).Shrink(0)
 		}
-		ui.Text(c, LabelUpdatePill).NoWrap()
+		ui.Text(c, text).NoWrap()
 	})
 	f.upd.pill = pill
-	ui.PopoverBase(c, pill, &f.upd.open, func(panel ui.Element) {
-		panel.Label(LabelUpdatePanel).AttachTo(pill, ui.AnchorBottomEnd, ui.AnchorTopEnd).Margin(theme.Space8, 0, 0, 0)
-		floatCard(panel)
-		if panel.OverlayShortcut(0, ui.KeyEnter) {
-			f.Settings.RestartNow()
-		}
-		panel.Children(func() { f.updatePanel(c, info, at) })
-	})
+	return pill
 }
 
 // floatCard gives a floating card its look: glass-float, float-line and shadow-float.
@@ -106,13 +210,14 @@ func floatCard(el ui.Element) {
 	}
 }
 
-// updatePanel is the panel body: head, What's new, the agents note and the foot.
-func (f *Frame) updatePanel(c *ui.Context, info UpdateInfo, at time.Time) {
+// updatePanel is the panel body: head, What's new, the agents note and the foot. After an update
+// (D209) it has no agents note, and its foot has only Got it.
+func (f *Frame) updatePanel(c *ui.Context, info UpdateInfo, from string, at time.Time, after bool) {
 	p := theme.Current()
 	meta := theme.StyleMeta
 	ui.Row(c).AlignItems(ui.Center).Gap(theme.Space8).Padding(theme.Space14, theme.Space16, theme.Space10, theme.Space16).Children(func() {
 		ui.Text(c, "contr "+info.Version).Bold().Grow(1).TextColor(p.Ink95)
-		ui.Text(c, "from "+f.Settings.Version).Font(meta.Stack()).FontSize(meta.Size).TextColor(p.Ink50)
+		ui.Text(c, "from "+from).Font(meta.Stack()).FontSize(meta.Size).TextColor(p.Ink50)
 	})
 	if notes := noteLines(info.Notes); len(notes) > 0 {
 		ui.Column(c).Gap(theme.Space4).Padding(0, theme.Space16, theme.Space12, theme.Space16).Children(func() {
@@ -125,31 +230,38 @@ func (f *Frame) updatePanel(c *ui.Context, info UpdateInfo, at time.Time) {
 			}
 		})
 	}
-	ui.Row(c).Gap(theme.Space8).Margin(0, theme.Space16, theme.Space12, theme.Space16).Padding(theme.Space8, theme.Space10).
-		Radius(theme.Radius8).Background(p.Hover).TextColor(p.Ink62).Children(func() {
-		if s := icons.Line("server"); s != nil {
-			ui.Icon(c, s).Size(14, 14).Shrink(0)
-		}
-		ui.Text(c, UpdateAgentsNote).Grow(1).MinWidth(0)
-	})
+	if !after {
+		ui.Row(c).Gap(theme.Space8).Margin(0, theme.Space16, theme.Space12, theme.Space16).Padding(theme.Space8, theme.Space10).
+			Radius(theme.Radius8).Background(p.Hover).TextColor(p.Ink62).Children(func() {
+			if s := icons.Line("server"); s != nil {
+				ui.Icon(c, s).Size(14, 14).Shrink(0)
+			}
+			ui.Text(c, UpdateAgentsNote).Grow(1).MinWidth(0)
+		})
+	}
 	ui.Row(c).AlignItems(ui.Center).Gap(theme.Space8).Padding(theme.Space10, theme.Space16).
 		BorderWidth(1, 0, 0, 0).BorderColor(p.Hairline).Children(func() {
-		ui.Text(c, downloadedText(time.Now(), at)).NoWrap().Grow(1).TextColor(p.Ink50)
+		if after {
+			ui.Text(c, sinceText("Updated", time.Now(), at)).NoWrap().Grow(1).TextColor(p.Ink50)
+			settingsButton(c, UpdateGotIt+" ⏎", ButtonFilled, func() { f.upd.open = false })
+			return
+		}
+		ui.Text(c, sinceText("Downloaded", time.Now(), at)).NoWrap().Grow(1).TextColor(p.Ink50)
 		settingsButton(c, UpdateLater, ButtonPlain, func() { f.upd.open = false })
 		settingsButton(c, SettingsRestart+" ⏎", ButtonFilled, f.Settings.RestartNow)
 	})
 }
 
-// downloadedText is the foot text: "Downloaded just now", "Downloaded 3 min ago" or "Downloaded 2 h ago".
-func downloadedText(now, at time.Time) string {
+// sinceText is the foot text: "<verb> just now", "<verb> 3 min ago" or "<verb> 2 h ago".
+func sinceText(verb string, now, at time.Time) string {
 	d := now.Sub(at)
 	switch {
 	case at.IsZero() || d < time.Minute:
-		return "Downloaded just now"
+		return verb + " just now"
 	case d < time.Hour:
-		return "Downloaded " + strconv.Itoa(int(d/time.Minute)) + " min ago"
+		return verb + " " + strconv.Itoa(int(d/time.Minute)) + " min ago"
 	}
-	return "Downloaded " + strconv.Itoa(int(d/time.Hour)) + " h ago"
+	return verb + " " + strconv.Itoa(int(d/time.Hour)) + " h ago"
 }
 
 // noteLines turns the Markdown release notes into a short list: the list items, or the plain
