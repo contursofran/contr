@@ -180,11 +180,11 @@ func TestCloseTerminalBusy(t *testing.T) {
 
 func TestAttachWiresCmdWToTheSourceClose(t *testing.T) {
 	w := &fakeWindow{visible: true}
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	src := &source{snap: agentstate.Snapshot{Terminals: []agents.Worker{{Name: "term-1", Address: "tp", Role: agents.RoleTerminal, Live: true}}}}
-	f.StartAgents = func(func()) (AgentSource, func()) { return src, func() {} }
+	f.deps.StartAgents = func(func()) (AgentSource, func()) { return src, func() {} }
 	stop := f.Attach(w)
 	if f.CloseTerm == nil {
 		t.Fatal("Attach did not make the close action")

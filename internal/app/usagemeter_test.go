@@ -188,7 +188,7 @@ func TestBuildingTheMetersReadsNoFile(t *testing.T) {
 }
 
 func TestTheWindowHasNoV02PlanBars(t *testing.T) {
-	tt := ui.NewTester(NewFrame().View, theme.WindowWidth, theme.WindowHeight)
+	tt := ui.NewTester(NewFrame(Deps{}).View, theme.WindowWidth, theme.WindowHeight)
 	tt.Frame()
 	for _, label := range []string{"usage-claude", "usage-codex", "usage-claude-bar"} {
 		if !absent(tt, label) {

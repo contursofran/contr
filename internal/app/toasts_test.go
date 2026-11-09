@@ -20,7 +20,7 @@ func lastToast(f *Frame) (string, bool) {
 }
 
 func toastFrame() (*Frame, *ui.Tester) {
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	f.Toasts = state.NewToasts(nil)
 	return f, ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)
 }

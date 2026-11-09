@@ -175,8 +175,8 @@ func newUpdatedRig(t *testing.T, n updated.Note, err error) *updatedRig {
 	f, tt := toastFrame()
 	r := &updatedRig{f: f, tt: tt}
 	f.Settings = &Settings{Version: "0.4.0"}
-	f.LoadUpdated = func() (updated.Note, error) { return n, err }
-	f.SaveUpdated = func(n updated.Note) error { r.saved = append(r.saved, n); return nil }
+	f.deps.Updated.Load = func() (updated.Note, error) { return n, err }
+	f.deps.Updated.Save = func(n updated.Note) error { r.saved = append(r.saved, n); return nil }
 	tt.Frame()
 	f.loadUpdated(Env{})
 	tt.Frame()
@@ -295,7 +295,7 @@ func TestWhatsNewShowsNothingForOtherCases(t *testing.T) {
 func TestAnInstallRecordsTheNoteForTheNextStart(t *testing.T) {
 	f, _ := toastFrame()
 	var saved []updated.Note
-	f.SaveUpdated = func(n updated.Note) error { saved = append(saved, n); return nil }
+	f.deps.Updated.Save = func(n updated.Note) error { saved = append(saved, n); return nil }
 	at := time.Date(2026, 11, 9, 10, 0, 0, 0, time.UTC)
 	if err := f.recordInstall(UpdateInfo{Version: "0.4.0", Notes: "- x"}, "0.3.2", at); err != nil {
 		t.Fatal(err)
@@ -304,7 +304,7 @@ func TestAnInstallRecordsTheNoteForTheNextStart(t *testing.T) {
 	if len(saved) != 1 || saved[0] != want {
 		t.Errorf("saved %+v, want %+v", saved, want)
 	}
-	f.SaveUpdated = nil
+	f.deps.Updated.Save = nil
 	if err := f.recordInstall(UpdateInfo{Version: "0.4.0"}, "0.3.2", at); err != nil {
 		t.Errorf("no saver: %v", err)
 	}
@@ -330,10 +330,10 @@ func whatsNewThenReady(t *testing.T, closed bool) (*pillRig, *[]updated.Note) {
 	t.Helper()
 	r := newPillRig(t, nil)
 	var saved []updated.Note
-	r.f.SaveUpdated = func(n updated.Note) error { saved = append(saved, n); return nil }
+	r.f.deps.Updated.Save = func(n updated.Note) error { saved = append(saved, n); return nil }
 	n := dueNote()
 	n.Version, n.From = "1.2.3", "1.2.0"
-	r.f.LoadUpdated = func() (updated.Note, error) { return n, nil }
+	r.f.deps.Updated.Load = func() (updated.Note, error) { return n, nil }
 	r.f.loadUpdated(Env{})
 	r.tt.Frame()
 	if !r.has(UpdatedPrefix+"1.2.3") || !r.has(LabelUpdatePanel) {

@@ -26,7 +26,7 @@ func TestHiddenViewersHaveNoEntryPoint(t *testing.T) {
 	if viewersEnabled {
 		t.Fatal("the viewers must be hidden by default")
 	}
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	r := newPRRig(t)
 	f.PR = r.pane
 	src := &source{snap: boardSnap(), text: "out"}
@@ -86,11 +86,11 @@ func attachWithWorker(t *testing.T) (*Frame, readSource) {
 	t.Helper()
 	src := readSource{source: &source{snap: boardSnap()}, reads: make(chan string, 16)}
 	w := &fakeWindow{visible: true}
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	var notify func()
-	f.StartAgents = func(n func()) (AgentSource, func()) { notify = n; return src, func() {} }
+	f.deps.StartAgents = func(n func()) (AgentSource, func()) { notify = n; return src, func() {} }
 	t.Cleanup(f.Attach(w))
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t1"})
 	notify()

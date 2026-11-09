@@ -42,8 +42,8 @@ func themeFrame(t *testing.T, load func() (prefs.Prefs, error)) (*Frame, *fakeTh
 	t.Helper()
 	restoreTheme(t)
 	p := &fakeTheme{dark: true}
-	f := NewFrame()
-	f.LoadPrefs, f.ThemePlatform = load, p
+	f := NewFrame(Deps{})
+	f.deps.Prefs.Load, f.deps.ThemePlatform = load, p
 	return f, p
 }
 
@@ -90,10 +90,10 @@ func TestAttachShowsTheAgentsNoticeOnce(t *testing.T) {
 	f, _ := themeFrame(t, nil)
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
-	f.AgentsNotice = "agents.json is in the old format"
+	f.deps.AgentsNotice = "agents.json is in the old format"
 	stop := f.Attach(&fakeWindow{visible: true})
 	defer stop()
-	if got := f.Toasts.Pending(); len(got) != 1 || got[0] != f.AgentsNotice {
+	if got := f.Toasts.Pending(); len(got) != 1 || got[0] != f.deps.AgentsNotice {
 		t.Errorf("toasts %q", got)
 	}
 }
@@ -103,7 +103,7 @@ func TestSetAppearanceAppliesAtOnceAndStores(t *testing.T) {
 	var mu sync.Mutex
 	var saved []prefs.Prefs
 	done := make(chan struct{}, 4)
-	f.SavePrefs = func(v prefs.Prefs) error {
+	f.deps.Prefs.Save = func(v prefs.Prefs) error {
 		mu.Lock()
 		saved = append(saved, v)
 		mu.Unlock()
@@ -132,7 +132,7 @@ func TestSetAppearanceShowsASaveError(t *testing.T) {
 	shown := make(chan string, 1)
 	f.Toasts = state.NewToasts(nil)
 	f.post = func(fn func()) { fn(); msg, _ := lastToast(f); shown <- msg }
-	f.SavePrefs = func(prefs.Prefs) error { return errors.New("disk full") }
+	f.deps.Prefs.Save = func(prefs.Prefs) error { return errors.New("disk full") }
 	f.SetAppearance(mygo.ThemeDark)
 	select {
 	case msg := <-shown:
@@ -158,7 +158,7 @@ func tintFrame(t *testing.T, stored prefs.Prefs) (*Frame, chan prefs.Prefs) {
 	f, _ := themeFrame(t, func() (prefs.Prefs, error) { return stored, nil })
 	t.Cleanup(theme.ClearTints)
 	saved := make(chan prefs.Prefs, 8)
-	f.SavePrefs = func(v prefs.Prefs) error { saved <- v; return nil }
+	f.deps.Prefs.Save = func(v prefs.Prefs) error { saved <- v; return nil }
 	f.StartTheme()
 	return f, saved
 }
