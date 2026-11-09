@@ -9,7 +9,8 @@ package settings
 // while the window shows; a newer version puts a dot on the Settings button (see
 // [SpacesList.UpdateReady]). When a scheduled check finds one, contr downloads and installs it in
 // the background, without a relaunch (D176): MyGo keeps the running app as it is and swaps the bundle
-// once the app exits. The title bar then shows the update pill until the owner restarts.
+// once the app exits. The title bar then shows the update pill until the owner restarts. While an
+// update is ready, the checks go on, and a newer version installs over the ready one (D226).
 
 import (
 	"context"
@@ -84,6 +85,13 @@ const CheckEvery = 15 * time.Minute
 // ActiveAfter is the age of the last check after which the app becoming active checks again (D198).
 const ActiveAfter = 10 * time.Minute
 
+// CheckTimeout is the time limit of a scheduled check.
+const CheckTimeout = 30 * time.Second
+
+// RestartCheckTimeout is the time limit of the check that "Restart now" runs before the relaunch
+// (D226). When it ends with no answer, contr relaunches into the ready update.
+const RestartCheckTimeout = 5 * time.Second
+
 // UpdateInfo is a newer version of contr.
 type UpdateInfo struct {
 	Version string
@@ -156,7 +164,10 @@ type Settings struct {
 	// ready is set when the found version is installed and waits for a restart; readyAt is when.
 	ready   bool
 	readyAt time.Time
-	err     string
+	// restarting is set when the owner pressed "Restart now" on a ready update: contr relaunches
+	// when the check and install that run end (D226).
+	restarting bool
+	err        string
 	// percent is the install progress, 0 to 100, set from the install goroutine.
 	percent atomic.Int32
 	md      markdown.Options
@@ -196,13 +207,30 @@ func (s *Settings) Installed() (info UpdateInfo, at time.Time, ok bool) {
 	return *s.found, s.readyAt, true
 }
 
-// RestartNow relaunches contr into the update that is ready. Before that, it installs and
-// restarts as "Install and restart" does.
+// RestartNow relaunches contr into the update that is ready. While no update is ready, it installs
+// and restarts as "Install and restart" does. With a ready update, it first checks once, with
+// RestartCheckTimeout: a version newer than the ready one installs, then contr relaunches. A failed
+// check or install relaunches into the ready one (D226). A check or install that runs already is
+// not started again: contr relaunches when it ends.
 func (s *Settings) RestartNow() {
 	if !s.ready {
 		s.Install()
 		return
 	}
+	if s.restarting {
+		return
+	}
+	s.restarting = true
+	s.Env.Redraw()
+	if s.checking || s.installing {
+		return
+	}
+	s.runCheck(RestartCheckTimeout)
+}
+
+// relaunch calls Relaunch once the restart that the owner asked for can go on.
+func (s *Settings) relaunch() {
+	s.restarting = false
 	if s.Relaunch != nil {
 		s.Relaunch()
 	}
@@ -305,13 +333,20 @@ func (s *Settings) SetVisible(visible bool) {
 }
 
 // AutoCheck is one scheduled check. It runs on the UI thread, where the window state is known.
+// While an update is ready, the checks go on (D226); a found update that did not install stops
+// them until the owner acts in Settings.
 func (s *Settings) AutoCheck() {
 	if s.Visible != nil && !s.Visible() {
 		return
 	}
-	if s.Updates == nil || s.checking || s.installing || s.found != nil {
+	if s.Updates == nil || s.checking || s.installing || s.restarting || (s.found != nil && !s.ready) {
 		return
 	}
+	s.runCheck(CheckTimeout)
+}
+
+// runCheck checks off the UI thread with the time limit d, and gives the result to checked.
+func (s *Settings) runCheck(d time.Duration) {
 	s.checking = true
 	started := s.now()
 	s.Env.Do(func() func() {
@@ -319,38 +354,60 @@ func (s *Settings) AutoCheck() {
 		var err error
 		on := s.Updates.Enabled()
 		if on {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), d)
 			defer cancel()
 			info, err = s.Updates.Check(ctx)
 		}
 		return func() {
 			s.enabled, s.enabledKnown = on, true
 			s.checking = false
-			if err != nil {
-				// The age stays, so the next tick tries again (D198).
-				log.Printf("contr: update check failed: %v", err)
-			} else {
-				s.lastCheck = started
-				if info != nil {
-					s.found = info
-					s.background()
-				}
-			}
+			s.checked(info, err, started)
 			s.Env.Redraw()
 		}
 	})
 }
 
-// background installs the found version off the UI thread, without a relaunch (D176). A failed
-// install is logged and shows in Settings, not as a toast; the owner can try "Install and
-// restart" there.
-func (s *Settings) background() {
-	if s.Updates == nil || s.found == nil || s.installing || s.ready {
+// checked takes the result of a check that started at started. A found version installs in the
+// background when no update is ready, or when it is newer than the ready one (D226). When the owner
+// pressed "Restart now" and nothing installs, contr relaunches.
+func (s *Settings) checked(info *UpdateInfo, err error, started time.Time) {
+	switch {
+	case err != nil:
+		// The age stays, so the next tick tries again (D198).
+		log.Printf("contr: update check failed: %v", err)
+	case info == nil:
+		s.lastCheck = started
+	case !s.ready:
+		s.lastCheck = started
+		s.found = info
+		s.background(*info)
+		return
+	case s.found == nil || Newer(info.Version, s.found.Version):
+		s.lastCheck = started
+		// The install relaunches when it ends, if the owner asked for it.
+		s.background(*info)
+		return
+	default:
+		s.lastCheck = started
+	}
+	if s.restarting {
+		s.relaunch()
+	}
+}
+
+// background installs info off the UI thread, without a relaunch (D176). When the install ends
+// well, info is the ready update. A failed install is logged; with no ready update it shows in
+// Settings, not as a toast, and the owner can try "Install and restart" there. A ready update
+// stays ready when the install of a newer one fails (D226).
+func (s *Settings) background(info UpdateInfo) {
+	if s.Updates == nil || s.installing {
 		return
 	}
-	s.installing, s.err = true, ""
+	s.installing = true
+	if !s.ready {
+		s.err = ""
+	}
 	s.percent.Store(0)
-	info := *s.found
 	s.Env.Do(func() func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
@@ -366,23 +423,29 @@ func (s *Settings) background() {
 		}
 		return func() {
 			s.installing = false
+			defer s.Env.Redraw()
 			if err != nil {
 				log.Printf("contr: update download failed: %v", err)
-				s.err = "download failed: " + err.Error()
-				s.Env.Redraw()
-				return
+				if !s.ready {
+					s.err = "download failed: " + err.Error()
+				}
+			} else {
+				s.found, s.ready, s.readyAt = &info, true, at
+				if s.OnReady != nil {
+					s.OnReady(info)
+				}
 			}
-			s.ready, s.readyAt = true, at
-			if s.OnReady != nil {
-				s.OnReady(info)
+			if s.restarting && s.ready {
+				s.relaunch()
 			}
-			s.Env.Redraw()
 		}
 	})
 }
 
 // recordInstall saves the installed version through RecordInstall and returns when the install
-// ended. It runs off the UI thread. A failed save is logged: the update still works.
+// ended. It runs off the UI thread. A failed save is logged: the update still works. from is
+// always the running version, so after installs over a ready update What's new still starts
+// at the version that ran before the first one (D226).
 func (s *Settings) recordInstall(info UpdateInfo) time.Time {
 	at := s.now()
 	if s.RecordInstall != nil {

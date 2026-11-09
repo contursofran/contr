@@ -300,6 +300,10 @@ func noteLines(md string) []string {
 	return items
 }
 
+// updateToastID is the ID of the update toast. All versions share it, so the toast of a newer
+// version takes the place of the toast of the ready one (D226).
+const updateToastID = "update"
+
 // queueUpdateToast adds the update toast once, when a version became ready.
 func (f *Frame) queueUpdateToast(c *ui.Context) {
 	v := f.upd.pending
@@ -307,7 +311,7 @@ func (f *Frame) queueUpdateToast(c *ui.Context) {
 		return
 	}
 	f.upd.pending = ""
-	c.AddToast(ui.Toast{ID: "update " + v, Title: "contr " + v + " is ready", Description: UpdateToastBody,
+	c.AddToast(ui.Toast{ID: updateToastID, Title: "contr " + v + " is ready", Description: UpdateToastBody,
 		Timeout: -1, Data: updateToastData{Version: v}})
 }
 
