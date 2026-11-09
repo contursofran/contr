@@ -166,6 +166,14 @@ Add packages under `internal/` when a change needs them.
   elements. Check the data in the `.txt`; open the PNG for layout and color.
   `scripts/see.sh` alone lists the fixtures. Add a fixture in
   `cmd/contr/e2e_see_test.go` when none shows your state.
+- To drive a live scratch app with agent-desktop, run
+  `scripts/explore.sh <fixture> [dark|light]` (#522). It builds the release
+  app as `contr-explore`, loads the fixture in a scratch core, keeps the app
+  open and prints one JSON line (`app`, `pid`, `window_id`, `scratch`,
+  `hc_session`). Always pass `--app contr-explore --window-id <id>`, never
+  `--app contr`: that is the owner's app. Read terminal text with `hc read`
+  on the scratch core. `scripts/explore.sh stop` ends it and removes the
+  scratch folder.
 - New e2e tests use the harness in `cmd/contr/e2e_harness_test.go`
   (`newHarness`, `h.spawn`, `h.owner`, `h.theme`, `h.launch`, `c.press`).
   Do not set up the scratch home and env by hand.

@@ -22,12 +22,13 @@ import (
 
 // fakeClaude is a program that looks like Claude Code in a terminal: the welcome box, the
 // conversation, a status line and the prompt box. It tells hc its state with the OSC the hook
-// sends (argument 1: working or idle).
+// sends (argument 1: working, idle or blocked:kind=...:msg=..., which also prints a permission menu).
 const fakeClaude = `package main
 
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -46,6 +47,14 @@ func main() {
 	fmt.Print("● Read(docs/spec/TitleBar.md)\n  ⎿  Read 74 lines\n\n")
 	if state == "working" {
 		fmt.Print("✻ Reading the spec… (12s · ↓ 1.4k tokens · esc to interrupt)\n\n")
+	}
+	if strings.HasPrefix(state, "blocked") {
+		fmt.Print("● Bash(rm -rf build/ dist/)\n\n")
+		fmt.Print("────────────────────────────────────────\n Bash command\n\n   rm -rf build/ dist/\n   Remove the old build output\n\n Do you want to proceed?\n")
+		fmt.Print(" ❯ 1. Yes\n   2. Yes, and don't ask again for rm commands in this folder\n   3. No, and tell Claude what to do differently (esc)\n")
+		time.Sleep(time.Second) // hc needs the terminal up before it takes the state
+		fmt.Printf("\x1b]7501;state=%s\x07", state)
+		time.Sleep(time.Hour)
 	}
 	fmt.Print("╭───────────────────────────────────────────────────╮\n")
 	fmt.Print("│ >                                                 │\n")

@@ -49,9 +49,10 @@ var seeFixtures = map[string]seeFixture{
 		ready: "lead, ",
 	},
 	"questions": {
-		about: "the workers fixture with two questions and a to-do for the owner",
+		about: "the workers fixture with a blocked worker (permission menu), two questions and a to-do for the owner",
 		setup: func(t *testing.T, h *harness) {
-			seeWorkers(t, h)
+			repo := seeWorkersRepo(t, h)
+			h.spawn(t, agents.Spec{Name: "b252-s1-cleanup", Profile: "claude-blocked", Role: "builder", Issue: "252", Project: "demo", Worktree: repo})
 			h.owner(t, `{"questions":[
 {"id":"D1","project":"demo","title":"Which database for the cache?","question":"The cache needs a store. Redis is fast but one more service; sqlite is already in the app. Which one should it use?","options":["sqlite","redis","files"],"recommended":0,"asked":"2026-11-03T10:00:00Z"},
 {"id":"D2","project":"demo","title":"Keep the old outline ticks?","question":"The new outline replaces the pin bar. Remove the old ticks now, or after one release?","options":["now","after one release"],"recommended":0,"asked":"2026-11-03T10:05:00Z"}],
@@ -96,6 +97,31 @@ var seeFixtures = map[string]seeFixture{
 			}
 		},
 		ready: app.UpdatedPrefix,
+	},
+	"multi": {
+		about: "three projects (demo, api, site): demo has an orchestrator and a builder, the others one builder each",
+		setup: func(t *testing.T, h *harness) {
+			demo := h.repo(t, "demo", "main")
+			api := h.repo(t, "api", "main")
+			site := h.repo(t, "site", "main")
+			h.spawn(t,
+				agents.Spec{Name: "lead", Profile: "claude-idle", Role: agents.RoleOrchestrator, Project: "demo", Worktree: demo},
+				agents.Spec{Name: "b201-s1-notch", Profile: "claude-working", Role: "builder", Issue: "201", Project: "demo", Worktree: demo},
+				agents.Spec{Name: "b310-s1-routes", Profile: "claude-idle", Role: "builder", Issue: "310", Project: "api", Worktree: api},
+				agents.Spec{Name: "b411-s1-footer", Profile: "claude-working", Role: "builder", Issue: "411", Project: "site", Worktree: site},
+			)
+		},
+		ready: "lead, ",
+	},
+	"oldformat": {
+		about: "the workers fixture with an agents.json in the old format (presets)",
+		setup: func(t *testing.T, h *harness) {
+			seeWorkers(t, h)
+			if err := os.WriteFile(filepath.Join(h.dir, "agents.json"), []byte(`{"version":1,"presets":[{"name":"x"}]}`), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		},
+		ready: "lead, ",
 	},
 	"session": {
 		about: "the orchestrator lead with the todos and artifacts of canvas board 11 (D197)",
@@ -201,13 +227,17 @@ func (h *harness) recentProject(t *testing.T, name string) {
 	}
 }
 
-func seeWorkers(t *testing.T, h *harness) {
+func seeWorkers(t *testing.T, h *harness) { seeWorkersRepo(t, h) }
+
+// seeWorkersRepo spawns the workers fixture and returns its repository.
+func seeWorkersRepo(t *testing.T, h *harness) string {
 	repo := h.repo(t, "demo", "main")
 	h.spawn(t,
 		agents.Spec{Name: "lead", Profile: "claude-idle", Role: agents.RoleOrchestrator, Project: "demo", Worktree: repo},
 		agents.Spec{Name: "b201-s1-notch", Profile: "claude-working", Role: "builder", Issue: "201", Project: "demo", Worktree: repo},
 		agents.Spec{Name: "b202-s1-outline", Profile: "claude-idle", Role: "builder", Issue: "202", Project: "demo", Worktree: repo},
 	)
+	return repo
 }
 
 // TestSee is scripts/see.sh (#457, D178). It starts the fixture CONTR_SEE
