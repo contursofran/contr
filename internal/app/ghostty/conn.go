@@ -244,7 +244,7 @@ func (c *Conn) Read(p []byte) (int, error) {
 // keeps the input, in order, and sends it first once attached; it also tries
 // an attach. After the program ended it returns ErrNotRunning.
 func (c *Conn) Write(p []byte) (int, error) {
-	if isSchemeReport(p) { // hc pushes the report itself (D212)
+	if isSchemeReport(p) { // hc pushes the report itself (D213)
 		return len(p), nil
 	}
 	c.mu.Lock()
@@ -324,7 +324,7 @@ func hex(col ui.Color) *string {
 // them with the display. While the stream has input, hc gets them at once and
 // answers the program's color queries with them. An observer stream cannot
 // set colors: hc ignores them (D91), so they wait for the next attach with
-// input (D212).
+// input (D213).
 func (c *Conn) UseTheme(t *gterm.Theme) error {
 	if t == nil {
 		return nil

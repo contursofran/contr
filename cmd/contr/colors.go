@@ -15,7 +15,7 @@ import (
 	"github.com/contursofran/contr/internal/prefs"
 )
 
-// The colors a new terminal gets from contr (#521, D212): hc answers a
+// The colors a new terminal gets from contr (#521, D213): hc answers a
 // program's color queries (OSC 10, 11, 12) with them, so Claude Code's auto
 // theme sees a light terminal in Light.
 
