@@ -133,7 +133,7 @@ func TestReadPlansReadsEachSourceInPlansOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	read := ReadPlans(state, home)
+	read := ReadPlans(state, home, nil)
 	var order []PlanID
 	for _, e := range read {
 		order = append(order, e.Plan)
@@ -158,8 +158,8 @@ func TestReadPlansGivesNoneForAMissingOrUnusableSource(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, read := range map[string]Reading{
-		"unusable": ReadPlans(corrupt, empty),
-		"unset":    ReadPlans("", ""),
+		"unusable": ReadPlans(corrupt, empty, nil),
+		"unset":    ReadPlans("", "", nil),
 	} {
 		for _, e := range read {
 			if e.Usage != nil {

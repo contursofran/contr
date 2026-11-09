@@ -1,6 +1,6 @@
 // Package usage holds plan usage for contr's status bar: the usage model, with
-// Claude Code's status line and Codex's rollout logs as sources. It has no UI,
-// so `contr statusline` runs without a window.
+// Claude Code's status line, `codex app-server` and Codex's rollout logs as
+// sources. It has no UI, so `contr statusline` runs without a window.
 package usage
 
 import (

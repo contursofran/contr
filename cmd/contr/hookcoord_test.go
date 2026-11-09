@@ -162,13 +162,67 @@ func TestHookSessionStartRestores(t *testing.T) {
 
 func TestHookSessionStartQuiet(t *testing.T) {
 	r := newCoordRig(t, orchestrateLine)
+	r.core.reply["terminal.get"] = worker("t1", "b1", "live", nil)
 	if _, out, _ := r.run("session-start", map[string]any{"source": "startup"}); out != "" {
-		t.Errorf("startup: %q", out)
+		t.Errorf("startup in a worker: %q", out)
 	}
 	r = newCoordRig(t, usageLine(10))
 	r.core.reply["terminal.get"] = worker("t1", "b1", "live", nil)
 	if _, out, _ := r.run("session-start", map[string]any{"source": "compact"}); out != "" {
 		t.Errorf("not a coordinator: %q", out)
+	}
+}
+
+func orchestratorGet() map[string]any {
+	w := worker("t1", "orch", "live", nil)
+	w["labels"] = map[string]any{"contr": "agent", "role": "orchestrator"}
+	return w
+}
+
+func TestHookSessionStartStartup(t *testing.T) {
+	kit, err := filepath.Abs("../../kit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := newCoordRig(t)
+	r.env["CLAUDE_PLUGIN_ROOT"] = kit
+	r.core.reply["terminal.get"] = orchestratorGet()
+	r.core.reply["terminal.list"] = map[string]any{"terminals": []any{}}
+	code, out, errs := r.run("session-start", map[string]any{"source": "startup"})
+	if code != 0 {
+		t.Fatalf("code %d err %q", code, errs)
+	}
+	for _, want := range []string{"contr: you are the coordinator of this project; the owner gives the goal in the next message.", "You coordinate worker agents", "The flow:"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("startup text lacks %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "First read") {
+		t.Errorf("no state file, but the text names it:\n%s", out)
+	}
+	if n := len([]rune(out)); n > restoreMax {
+		t.Errorf("startup text is %d characters, more than %d", n, restoreMax)
+	}
+	// Nothing is labeled at startup.
+	if strings.Contains(strings.Join(r.core.calls, " "), "terminal.label") {
+		t.Errorf("calls %v", r.core.calls)
+	}
+	// With a state file, the text names it.
+	if err := os.WriteFile(filepath.Join(r.dir, "COORDINATOR-STATE.md"), []byte("goal"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, out, _ := r.run("session-start", map[string]any{"source": "startup"}); !strings.Contains(out, "First read "+filepath.Join(r.dir, "COORDINATOR-STATE.md")) {
+		t.Errorf("with a state file:\n%s", out)
+	}
+	// No kit folder: the playbook fallback.
+	delete(r.env, "CLAUDE_PLUGIN_ROOT")
+	if _, out, _ := r.run("session-start", map[string]any{"source": "startup"}); !strings.Contains(out, "The playbook could not be read") {
+		t.Errorf("no kit:\n%s", out)
+	}
+	// Outside hc: nothing.
+	delete(r.env, "HC_TERMINAL_ID")
+	if _, out, _ := r.run("session-start", map[string]any{"source": "startup"}); out != "" {
+		t.Errorf("outside hc: %q", out)
 	}
 }
 

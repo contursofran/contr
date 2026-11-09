@@ -5,7 +5,7 @@ A Claude Code plugin for agent work with `contr agents`:
 - `agents/`: the builder, planner and reviewer agent definitions.
 - `commands/orchestrate.md`: the coordinator playbook, as `/contr:orchestrate <goal>`.
 - `hooks/hooks.json`: the Stop hook (a worker's turn that sent no report; a coordinator's state
-  before a compaction) and the SessionStart hook after a compaction (the playbook comes back).
+  before a compaction) and the SessionStart hook at startup of an orchestrator and after a compaction (the playbook).
 - `.mcp.json`: starts `contr mcp`, which gives the session the agent tools (spawn, message,
   interrupt, stop, read, list, clear_ended). `stop` removes the
   worker's terminal unless `keep` is set. `contr` must be on the PATH; `scripts/install.sh` links it.
@@ -47,7 +47,7 @@ The `--plugin-dir` sessions below still work with the plugin installed.
    hc terminal with role orchestrator), the Stop hook keeps the turn going
    once when the context passes `CONTR_SAVE_AT` tokens (default 220000, under
    a 250000 `autoCompactWindow`) and asks for `COORDINATOR-STATE.md`. After
-   Claude Code compacts, the SessionStart hook (matcher `compact`) adds the
+   Claude Code compacts, the SessionStart hook (matcher `startup|compact`) adds the
    playbook, the state file to read, the coordinator's live workers and its
    open owner items. Claude Code's own auto-compaction stays on.
 
