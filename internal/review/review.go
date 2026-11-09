@@ -2,22 +2,28 @@
 // that are ahead of the base branch, the files and commits of each one, and
 // the text of a file before and after a change.
 //
-// Every method runs the git command line and only reads. Nothing is cached,
-// so call them from a goroutine, not from the UI thread.
+// Every method runs git through a runner and only reads. Nothing is cached,
+// so call them from a goroutine, not from the UI thread. Each method stops
+// its git when its context ends.
 package review
 
 import (
-	"bytes"
+	"context"
+	"errors"
 	"fmt"
-	"os/exec"
+	"io"
 	"strconv"
 	"strings"
+
+	"github.com/contursofran/contr/internal/git"
 )
 
 // Repo is a git repository and the branch that the others are compared with.
 type Repo struct {
 	Dir  string // the repository folder
 	Base string // for example "main"
+	// Git runs git. Nil runs the `git` command (git.ExecRunner).
+	Git git.InputRunner
 }
 
 // Status is the change of a file.
@@ -56,20 +62,36 @@ type Commit struct {
 	Removed int
 }
 
-func (r Repo) git(args ...string) (string, error) {
-	cmd := exec.Command("git", append([]string{"-C", r.Dir, "-c", "core.quotepath=false"}, args...)...)
-	var out, errb bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &errb
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(errb.String()))
+func (r Repo) runner() git.InputRunner {
+	if r.Git == nil {
+		return git.ExecRunner{}
 	}
-	return out.String(), nil
+	return r.Git
+}
+
+func (r Repo) git(ctx context.Context, args ...string) (string, error) {
+	return r.gitInput(ctx, nil, args...)
+}
+
+// gitInput runs git in Dir with stdin as its standard input. Paths in the
+// output are not quoted. The error names args without the global options.
+func (r Repo) gitInput(ctx context.Context, stdin io.Reader, args ...string) (string, error) {
+	full := append([]string{"-C", r.Dir, "-c", "core.quotepath=false"}, args...)
+	out, err := r.runner().RunInput(ctx, "", stdin, full...)
+	if err != nil {
+		var ge *git.Error
+		if errors.As(err, &ge) {
+			return string(out), fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), ge.Err, ge.Stderr)
+		}
+		return string(out), fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
+	}
+	return string(out), nil
 }
 
 // Branches lists every local branch except the base, sorted by name. It does
 // not filter by size: a branch with no commits ahead is in the list.
-func (r Repo) Branches() ([]Branch, error) {
-	out, err := r.git("for-each-ref", "--format=%(refname:short)", "--sort=refname", "refs/heads")
+func (r Repo) Branches(ctx context.Context) ([]Branch, error) {
+	out, err := r.git(ctx, "for-each-ref", "--format=%(refname:short)", "--sort=refname", "refs/heads")
 	if err != nil {
 		return nil, err
 	}
@@ -79,14 +101,14 @@ func (r Repo) Branches() ([]Branch, error) {
 			continue
 		}
 		b := Branch{Name: name}
-		n, err := r.git("rev-list", "--count", r.Base+".."+name)
+		n, err := r.git(ctx, "rev-list", "--count", r.Base+".."+name)
 		if err != nil {
 			return nil, err
 		}
 		if b.Ahead, err = strconv.Atoi(strings.TrimSpace(n)); err != nil {
 			return nil, fmt.Errorf("review: commit count of %s: %w", name, err)
 		}
-		files, err := r.Files(name)
+		files, err := r.Files(ctx, name)
 		if err != nil {
 			return nil, err
 		}
@@ -101,8 +123,8 @@ func (r Repo) Branches() ([]Branch, error) {
 
 // Current is the branch that Dir has checked out, "" on a detached HEAD or
 // when git fails.
-func (r Repo) Current() string {
-	out, err := r.git("branch", "--show-current")
+func (r Repo) Current(ctx context.Context) string {
+	out, err := r.git(ctx, "branch", "--show-current")
 	if err != nil {
 		return ""
 	}
@@ -111,20 +133,20 @@ func (r Repo) Current() string {
 
 // Files lists the files that branch changes against the merge base with the
 // base, like `git diff base...branch`. A rename shows as a delete and an add.
-func (r Repo) Files(branch string) ([]File, error) {
-	return r.filesFrom([]string{"diff", "--no-renames"}, r.Base+"..."+branch)
+func (r Repo) Files(ctx context.Context, branch string) ([]File, error) {
+	return r.filesFrom(ctx, []string{"diff", "--no-renames"}, r.Base+"..."+branch)
 }
 
 // CommitFiles lists the files that one commit changes against its parent. A
 // root commit compares with the empty tree.
-func (r Repo) CommitFiles(sha string) ([]File, error) {
-	return r.filesFrom([]string{"diff-tree", "--root", "-r", "--no-commit-id", "--no-renames"}, sha)
+func (r Repo) CommitFiles(ctx context.Context, sha string) ([]File, error) {
+	return r.filesFrom(ctx, []string{"diff-tree", "--root", "-r", "--no-commit-id", "--no-renames"}, sha)
 }
 
 // Commits lists the commits in Base..branch, oldest first. Merge commits are
 // left out: they change nothing that their parents did not.
-func (r Repo) Commits(branch string) ([]Commit, error) {
-	out, err := r.git("log", "--reverse", "--no-merges", "--format=%H%x09%h%x09%s", r.Base+".."+branch)
+func (r Repo) Commits(ctx context.Context, branch string) ([]Commit, error) {
+	out, err := r.git(ctx, "log", "--reverse", "--no-merges", "--format=%H%x09%h%x09%s", r.Base+".."+branch)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +157,7 @@ func (r Repo) Commits(branch string) ([]Commit, error) {
 			continue
 		}
 		c := Commit{SHA: f[0], Short: f[1], Subject: f[2]}
-		files, err := r.CommitFiles(c.SHA)
+		files, err := r.CommitFiles(ctx, c.SHA)
 		if err != nil {
 			return nil, err
 		}
@@ -153,57 +175,57 @@ func (r Repo) Commits(branch string) ([]Commit, error) {
 // branch, and at the branch tip. For a commit it is the file at the parent
 // (the empty tree for a root commit) and at the commit. A side where the
 // path does not exist gives "".
-func (r Repo) Texts(branch, sha, path string) (before, after string, err error) {
+func (r Repo) Texts(ctx context.Context, branch, sha, path string) (before, after string, err error) {
 	var from, to string
 	if sha == "" {
-		mb, err := r.git("merge-base", r.Base, branch)
+		mb, err := r.git(ctx, "merge-base", r.Base, branch)
 		if err != nil {
 			return "", "", err
 		}
 		from, to = strings.TrimSpace(mb), branch
 	} else {
 		to = sha
-		if r.hasParent(sha) {
+		if r.hasParent(ctx, sha) {
 			from = sha + "^"
 		}
 	}
 	if from != "" {
-		if before, err = r.textAt(from, path); err != nil {
+		if before, err = r.textAt(ctx, from, path); err != nil {
 			return "", "", err
 		}
 	}
-	if after, err = r.textAt(to, path); err != nil {
+	if after, err = r.textAt(ctx, to, path); err != nil {
 		return "", "", err
 	}
 	return before, after, nil
 }
 
 // textAt returns path at rev, or "" when rev has no such path.
-func (r Repo) textAt(rev, path string) (string, error) {
-	listed, err := r.git("ls-tree", "--name-only", rev, "--", path)
+func (r Repo) textAt(ctx context.Context, rev, path string) (string, error) {
+	listed, err := r.git(ctx, "ls-tree", "--name-only", rev, "--", path)
 	if err != nil {
 		return "", err
 	}
 	if strings.TrimSpace(listed) == "" {
 		return "", nil
 	}
-	return r.git("show", rev+":"+path)
+	return r.git(ctx, "show", rev+":"+path)
 }
 
 // hasParent reports whether sha has a parent, that is, is not a root commit.
-func (r Repo) hasParent(sha string) bool {
-	_, err := r.git("rev-parse", "--verify", "--quiet", sha+"^")
+func (r Repo) hasParent(ctx context.Context, sha string) bool {
+	_, err := r.git(ctx, "rev-parse", "--verify", "--quiet", sha+"^")
 	return err == nil
 }
 
 // filesFrom lists the files of a diff command: cmd is the git command with
 // its options, rev is the revision argument.
-func (r Repo) filesFrom(cmd []string, rev string) ([]File, error) {
-	status, err := r.git(append(append([]string{}, cmd...), "--name-status", rev)...)
+func (r Repo) filesFrom(ctx context.Context, cmd []string, rev string) ([]File, error) {
+	status, err := r.git(ctx, append(append([]string{}, cmd...), "--name-status", rev)...)
 	if err != nil {
 		return nil, err
 	}
-	nums, err := r.git(append(append([]string{}, cmd...), "--numstat", rev)...)
+	nums, err := r.git(ctx, append(append([]string{}, cmd...), "--numstat", rev)...)
 	if err != nil {
 		return nil, err
 	}
