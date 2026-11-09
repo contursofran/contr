@@ -12,8 +12,10 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/app"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/session"
+	"github.com/contursofran/contr/internal/updated"
 )
 
 // seeFixture is a state of the app that scripts/see.sh can show.
@@ -64,6 +66,17 @@ var seeFixtures = map[string]seeFixture{
 			h.labelTerminal(t, "lead", map[string]string{agents.LabelContext: "90000", agents.LabelContextLimit: "160000"})
 		},
 		ready: "lead, ",
+	},
+	"updated": {
+		about: "the first start after an update: the Updated to pill with What's new open (D207)",
+		setup: func(t *testing.T, h *harness) {
+			n := updated.Note{Version: app.Version, From: "0.0.9", InstalledAt: time.Now().Add(-3 * time.Minute),
+				Notes: "## " + app.Version + "\n- What's new opens after an update\n- Faster tab switching\n- Light theme fixes"}
+			if err := updated.Save(updated.Path(filepath.Join(h.dir, "state")), n); err != nil {
+				t.Fatal(err)
+			}
+		},
+		ready: app.UpdatedPrefix,
 	},
 	"session": {
 		about: "the orchestrator lead with the todos and artifacts of canvas board 11 (D197)",
