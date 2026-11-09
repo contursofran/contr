@@ -67,7 +67,7 @@ Plan meters, in the sidebar foot row (D196):
   and the context, and prints a short line ("opus · 90k of 200k"). A Claude
   session that contr did not start gives plan data only when the owner's own
   status line runs `contr statusline`.
-- Codex plan (D209): contr starts `codex app-server` (JSON-RPC over stdio,
+- Codex plan (D210): contr starts `codex app-server` (JSON-RPC over stdio,
   one JSON message per line), sends `initialize`, the `initialized`
   notification and `account/rateLimits/read`, then closes stdin and waits for
   the process to end. The `codex` limit (`rateLimitsByLimitId.codex`, else
