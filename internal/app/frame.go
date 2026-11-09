@@ -1060,8 +1060,9 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	if viewersEnabled {
 		f.PR = &PRPane{Env: env}
 	}
-	f.WorkerPRs = &WorkerPRs{Env: env}
-	f.IssueTitles = &IssueTitles{Env: env}
+	gh := &ghQueue{} // one limit for both (#568)
+	f.WorkerPRs = &WorkerPRs{Env: env, GH: gh}
+	f.IssueTitles = &IssueTitles{Env: env, GH: gh}
 	var agentSnap func() agentstate.Snapshot
 	var src AgentSource
 	stopAgents := func() {}

@@ -7,7 +7,7 @@ package app
 // none. "No pull request" is asked again after [prMissTTL], because the worker may open its PR
 // later. There is no timer: a read starts only from an agents sync, and only for a worktree that
 // has no fresh answer, so a sync that changes nothing does no git or gh work. At most [maxGH] gh
-// runs go at once; the others wait.
+// runs go at once, the issue title reads included; the others wait ([ghQueue]).
 
 import (
 	"context"
@@ -23,7 +23,8 @@ const (
 	prMissTTL = time.Minute
 	// prHitTTL is how long a found PR number holds before its state is read again.
 	prHitTTL = 5 * time.Minute
-	// maxGH is the most gh runs at once, over all folders.
+	// maxGH is the most gh runs at once, over all folders, for pull requests and issue titles
+	// together ([ghQueue]).
 	maxGH = 2
 )
 
@@ -46,12 +47,12 @@ type WorkerPRs struct {
 	Branch func(dir string) string
 	// Now is the clock. Nil: time.Now.
 	Now func() time.Time
+	// GH is the queue of gh runs, shared with [IssueTitles]. Nil: a queue of its own.
+	GH *ghQueue
 
 	branch   map[string]string
 	answers  map[prKey]prAnswer
 	inflight map[string]bool
-	active   int      // gh runs going
-	waiting  []func() // gh runs that wait for a free place
 }
 
 // fresh reports whether an answer needs no new read.
@@ -156,28 +157,12 @@ func (w *WorkerPRs) read(dir string) {
 	})
 }
 
-// gh runs a gh read off the UI thread, with at most [maxGH] at once. Others wait their turn.
+// gh runs a gh read off the UI thread through the queue [WorkerPRs.GH].
 func (w *WorkerPRs) gh(read func() func()) {
-	start := func() {
-		w.active++
-		w.Env.Do(func() func() {
-			done := read()
-			return func() {
-				w.active--
-				done()
-				if len(w.waiting) > 0 && w.active < maxGH {
-					next := w.waiting[0]
-					w.waiting = w.waiting[1:]
-					next()
-				}
-			}
-		})
+	if w.GH == nil {
+		w.GH = &ghQueue{}
 	}
-	if w.active >= maxGH {
-		w.waiting = append(w.waiting, start)
-		return
-	}
-	start()
+	w.GH.Do(w.Env, read)
 }
 
 // headBranchOf reads the branch of the checkout that holds dir.
