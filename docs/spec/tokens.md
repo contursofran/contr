@@ -106,14 +106,14 @@ The 16 colors a program in the terminal asks for (SGR 30-37, 90-97, palette 0-15
 | `space-4` | `4px` | Gap above nested worker rows; heading padding. |
 | `space-6` | `6px` | Gap inside the file-row diff counts; padding of the outline tick column. |
 | `space-7` | `7px` | Gap between icon and name in a file row; info block line gap. |
-| `space-8` | `8px` | Gap in tabs and the title bar; file row padding. |
+| `space-8` | `8px` | Gap in tabs and the title bar; title bar right padding. |
 | `space-9` | `9px` | Gap between outline ticks; rail indent inside agent groups. |
-| `space-10` | `10px` | Gutter between and around panels; row padding; gap between projects. |
-| `space-12` | `12px` | Panel top padding; option padding; gap on the outline card. |
-| `space-14` | `14px` | Title bar right padding; indent of a file-tree level. |
-| `space-16` | `16px` | Outline card padding left; gap in the title-bar info. |
-| `space-18` | `18px` | Title bar left inset for the window buttons; terminal top padding. |
-| `space-26` | `26px` | Terminal side padding. |
+| `space-10` | `10px` | Gutter between and around panels; row padding (file rows too); gap between projects. |
+| `space-12` | `12px` | Panel top padding; terminal bottom padding; option padding; gap on the outline card. |
+| `space-14` | `14px` | Terminal top padding; padding in the projects modal and the update panel. |
+| `space-16` | `16px` | Indent of a file-tree level (with `space-4`); outline card padding left; gap in the title-bar info. |
+| `space-18` | `18px` | Title bar left inset for the window buttons. |
+| `space-20` | `20px` | Terminal side padding: content sits 20px from a panel side in every panel (D228). |
 
 ## Radius
 

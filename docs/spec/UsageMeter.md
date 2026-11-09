@@ -12,7 +12,7 @@ Design system page: component UsageMeter. Shared rules: [README.md](README.md).
 
 | Part | Value |
 |---|---|
-| Block | line `hairline` on top, padding `12px 8px 2px`, gap `space-7` |
+| Block | line `hairline` on top, padding `12px 10px 2px` (D228), gap `space-7`; `space-6` more before each meter after the first |
 | Row | label `small`, `ink-42`; value mono `value`, `ink-62`, at the right |
 | Meter | height `meter-height` (4px), track `meter-track`, fill `meter-fill`, radius `radius-2` |
 

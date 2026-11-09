@@ -123,6 +123,10 @@ func TestTerminalGridIsInsideTheTerminalAreaAndShowsNoLineWhileLive(t *testing.T
 	if grid.X < area.X || grid.Y < area.Y || grid.X+grid.W > area.X+area.W+0.5 || grid.Y+grid.H > area.Y+area.H+0.5 {
 		t.Errorf("grid %+v is not inside the terminal area %+v", grid, area)
 	}
+	// Spec padding: 14 above, 20 at the sides, 12 below (D228).
+	if top, left, right, bottom := grid.Y-area.Y, grid.X-area.X, area.X+area.W-(grid.X+grid.W), area.Y+area.H-(grid.Y+grid.H); top != theme.Space14 || left != theme.Space20 || right != theme.Space20 || bottom != theme.Space12 {
+		t.Errorf("grid insets top %v left %v right %v bottom %v, want 14 20 20 12", top, left, right, bottom)
+	}
 	if got := strings.Join(tt.Texts(), "\n"); strings.Contains(got, TerminalNotRunningLine) || strings.Contains(got, TerminalOffLine) {
 		t.Errorf("a live terminal shows a line: %q", got)
 	}

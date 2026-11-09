@@ -190,7 +190,7 @@ func TestScaleTokens(t *testing.T) {
 	add("Spacing", map[string]float32{"space-2": Space2, "space-4": Space4, "space-6": Space6,
 		"space-7": Space7, "space-8": Space8, "space-9": Space9, "space-10": Space10,
 		"space-12": Space12, "space-14": Space14, "space-16": Space16, "space-18": Space18,
-		"space-26": Space26})
+		"space-20": Space20})
 	add("Radius", map[string]float32{"radius-1": Radius1, "radius-2": Radius2, "radius-4": Radius4,
 		"radius-6": Radius6, "radius-7": Radius7, "radius-8": Radius8, "radius-9": Radius9,
 		"radius-12": Radius12, "radius-14": Radius14})
