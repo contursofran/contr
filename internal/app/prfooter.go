@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/icons"
+	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/github"
 )
@@ -248,16 +249,16 @@ func (p *PRPane) footer(c *ui.Context) {
 			p.sendComment()
 		}
 		ui.Row(c).FillWidth().Gap(theme.AnswerButtonGap).AlignItems(ui.Center).Children(func() {
-			var comment, approve ClickFn
+			var comment, approve kit.ClickFn
 			if !p.ft.busy {
 				if strings.TrimSpace(p.ft.text) != "" {
 					comment = p.sendComment
 				}
 				approve = p.approve
 			}
-			cardButton(c, LabelPRComment, ButtonOutlined, theme.Current().Ink95, comment)
+			kit.CardButton(c, LabelPRComment, kit.ButtonOutlined, theme.Current().Ink95, comment)
 			if p.canApprove() {
-				cardButton(c, LabelPRApprove, ButtonOutlined, theme.Current().Ink95, approve)
+				kit.CardButton(c, LabelPRApprove, kit.ButtonOutlined, theme.Current().Ink95, approve)
 			}
 			ui.Box(c).Grow(1)
 			if wait, _ := ciGate(pr.ChecksSummary); wait {
@@ -265,11 +266,11 @@ func (p *PRPane) footer(c *ui.Context) {
 				ui.Text(c, LabelPRMergeWait).TextColor(theme.Color(theme.TextDim)).NoWrap()
 				return
 			}
-			var merge ClickFn
+			var merge kit.ClickFn
 			if !p.ft.busy {
 				merge = p.merge
 			}
-			cardButton(c, LabelPRMerge, ButtonFilled, theme.Current().Ink95, merge)
+			kit.CardButton(c, LabelPRMerge, kit.ButtonFilled, theme.Current().Ink95, merge)
 		})
 	})
 }

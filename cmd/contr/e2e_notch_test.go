@@ -12,6 +12,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
@@ -147,11 +148,11 @@ func TestQuestionsNotch(t *testing.T) {
 	pick := func(appearance string) {
 		t.Helper()
 		c.call(t, "menu", map[string]any{"path": []string{"contr", "Settings…"}})
-		waitFor("settings", func() bool { return has(app.LabelSettings) })
+		waitFor("settings", func() bool { return has(settings.LabelSettings) })
 		click(appearance)
 		time.Sleep(400 * time.Millisecond)
 		c.key(t, "Escape")
-		waitFor("settings closed", func() bool { return !has(app.LabelSettings) })
+		waitFor("settings closed", func() bool { return !has(settings.LabelSettings) })
 		time.Sleep(600 * time.Millisecond)
 	}
 	waitNotch := func(label string) {

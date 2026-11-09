@@ -12,6 +12,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
@@ -133,12 +134,12 @@ func TestFindBarCapture(t *testing.T) {
 	pick := func(appearance string) {
 		t.Helper()
 		c.call(t, "menu", map[string]any{"path": []string{"contr", "Settings…"}})
-		waitFor(app.LabelSettings, true)
+		waitFor(settings.LabelSettings, true)
 		sb := c.boundsOf(t, appearance)
 		c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "click", "x": sb.X + sb.Width/2, "y": sb.Y + sb.Height/2}}})
 		time.Sleep(400 * time.Millisecond)
 		c.key(t, "Escape")
-		waitFor(app.LabelSettings, false)
+		waitFor(settings.LabelSettings, false)
 		time.Sleep(600 * time.Millisecond)
 	}
 	for _, theme := range []string{"Dark", "Light"} {

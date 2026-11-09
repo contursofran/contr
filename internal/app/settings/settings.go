@@ -1,4 +1,6 @@
-package app
+// Package settings is the Settings modal: the General, Agents and Updates tabs, the checks and
+// the install of a newer version.
+package settings
 
 // The Settings modal (D115, D126): the contr and hc versions, "Check for updates", the notes of a
 // newer version, "Install and restart", and the errors. The menu item "Settings…" (Cmd-,) and the
@@ -23,6 +25,7 @@ import (
 	"github.com/egoist/mygo/ui/markdown"
 
 	"github.com/contursofran/contr"
+	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
 )
@@ -270,7 +273,7 @@ func (s *Settings) olderThan(d time.Duration) bool {
 // dueCheck is one timer tick: it checks when the last good check is Every old.
 func (s *Settings) dueCheck() {
 	if s.olderThan(s.interval()) {
-		s.autoCheck()
+		s.AutoCheck()
 	}
 }
 
@@ -278,7 +281,7 @@ func (s *Settings) dueCheck() {
 // last good check is older than ActiveAfter (D198).
 func (s *Settings) Activated() {
 	if s.Updates != nil && s.olderThan(ActiveAfter) {
-		s.autoCheck()
+		s.AutoCheck()
 	}
 }
 
@@ -297,12 +300,12 @@ func (s *Settings) SetVisible(visible bool) {
 		return
 	}
 	if s.olderThan(s.interval()) {
-		s.autoCheck()
+		s.AutoCheck()
 	}
 }
 
-// autoCheck is one scheduled check. It runs on the UI thread, where the window state is known.
-func (s *Settings) autoCheck() {
+// AutoCheck is one scheduled check. It runs on the UI thread, where the window state is known.
+func (s *Settings) AutoCheck() {
 	if s.Visible != nil && !s.Visible() {
 		return
 	}
@@ -515,7 +518,7 @@ func (s *Settings) body(c *ui.Context) {
 	p := theme.Current()
 	ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(8).Padding(16, theme.ModalPadX, 12, theme.ModalPadX).Children(func() {
 		ui.Text(c, "Settings").Bold().Grow(1).TextColor(p.Ink95)
-		settingsButton(c, SettingsEsc, ButtonPlain, s.Close)
+		SettingsButton(c, SettingsEsc, kit.ButtonPlain, s.Close)
 	})
 	s.tabBar(c)
 	switch s.tab {
@@ -528,7 +531,7 @@ func (s *Settings) body(c *ui.Context) {
 		s.tintRows(c)
 		ui.Row(c).Shrink(0).Justify(ui.End).Padding(12, theme.ModalPadX).Margin(12, 0, 0, 0).
 			BorderWidth(1, 0, 0, 0).BorderColor(p.Hairline).Children(func() {
-			settingsButton(c, SettingsDone, ButtonPlain, s.Close)
+			SettingsButton(c, SettingsDone, kit.ButtonPlain, s.Close)
 		})
 	}
 }
@@ -590,24 +593,24 @@ func (s *Settings) updatesTab(c *ui.Context) {
 	})
 	ui.Row(c).Shrink(0).AlignItems(ui.Center).Justify(ui.End).Gap(14).Padding(12, theme.ModalPadX).Margin(12, 0, 0, 0).
 		BorderWidth(1, 0, 0, 0).BorderColor(p.Hairline).Children(func() {
-		var check ClickFn
+		var check kit.ClickFn
 		if live {
 			check = s.Check
 		}
 		if s.ready {
 			check = nil
 		}
-		settingsButton(c, SettingsCheck, ButtonOutlined, check)
+		SettingsButton(c, SettingsCheck, kit.ButtonOutlined, check)
 		if s.ready {
-			settingsButton(c, SettingsRestart, ButtonFilled, s.RestartNow)
+			SettingsButton(c, SettingsRestart, kit.ButtonFilled, s.RestartNow)
 		} else if s.found != nil {
-			var install ClickFn
+			var install kit.ClickFn
 			if live {
 				install = s.Install
 			}
-			settingsButton(c, SettingsInstall, ButtonFilled, install)
+			SettingsButton(c, SettingsInstall, kit.ButtonFilled, install)
 		}
-		settingsButton(c, SettingsDone, ButtonPlain, s.Close)
+		SettingsButton(c, SettingsDone, kit.ButtonPlain, s.Close)
 	})
 }
 
@@ -645,20 +648,20 @@ func (s *Settings) appearanceRow(c *ui.Context) {
 	}
 }
 
-// settingsButton is a button of the Settings dialog, drawn from the palette of the current theme
+// SettingsButton is a button of the Settings dialog, drawn from the palette of the current theme
 // (D155). A nil click is a dim button that does nothing. Filled is ink-100 with text on the ground:
 // the owner acts. Plain has no border and underlines on hover. Outlined has the input line.
-func settingsButton(c *ui.Context, label string, style ButtonStyle, click ClickFn) {
+func SettingsButton(c *ui.Context, label string, style kit.ButtonStyle, click kit.ClickFn) {
 	p := theme.Current()
 	live := click != nil
 	el := ui.ButtonBase(c).Label(label).Height(theme.AnswerButtonHeight).Shrink(0).
 		PaddingX(theme.AnswerButtonPadX).AlignItems(ui.Center).Radius(theme.AnswerButtonRadius)
 	text := p.Ink42
 	switch {
-	case style == ButtonFilled && live:
+	case style == kit.ButtonFilled && live:
 		el = el.Background(p.Ink100)
 		text = p.Ground
-	case style == ButtonPlain:
+	case style == kit.ButtonPlain:
 		if live {
 			text = p.Ink62
 		}
@@ -674,10 +677,10 @@ func settingsButton(c *ui.Context, label string, style ButtonStyle, click ClickF
 	el = el.TextColor(text)
 	el.Children(func() {
 		t := ui.Text(c, label)
-		if style == ButtonFilled && live {
+		if style == kit.ButtonFilled && live {
 			t = t.Bold()
 		}
-		if style == ButtonPlain && live && el.Hovered() {
+		if style == kit.ButtonPlain && live && el.Hovered() {
 			t.Underline()
 		}
 	})
@@ -701,11 +704,11 @@ func (s *Settings) tintRows(c *ui.Context) {
 		tintSlider(c, LabelBackground, &s.tintWin)
 		tintSlider(c, LabelPanels, &s.tintPan)
 		ui.Row(c).AlignItems(ui.Center).Justify(ui.End).Children(func() {
-			var reset ClickFn
+			var reset kit.ClickFn
 			if s.ResetTint != nil {
 				reset = s.ResetTint
 			}
-			settingsButton(c, TintReset, ButtonPlain, reset)
+			SettingsButton(c, TintReset, kit.ButtonPlain, reset)
 		})
 	})
 }

@@ -167,10 +167,10 @@ func (p *WorkerPanel) View(c *ui.Context) {
 			Gap(theme.NeedGap).PaddingX(theme.PanelPadX).Children(func() {
 			icons.Sized(c, tabmodel.WorkerIcon(w), theme.IconSizeSmall).Shrink(0)
 			ui.Text(c, w.Name).Bold().SingleLine().Grow(1).MinWidth(0)
-			p.button(c, WorkerInterrupt, ButtonOutlined, func() { p.interrupt(w) })
-			label, style := WorkerStop, ButtonOutlined
+			p.button(c, WorkerInterrupt, kit.ButtonOutlined, func() { p.interrupt(w) })
+			label, style := WorkerStop, kit.ButtonOutlined
 			if p.armed == w.Address {
-				label, style = WorkerConfirmStop, ButtonFilled
+				label, style = WorkerConfirmStop, kit.ButtonFilled
 			}
 			p.button(c, label, style, func() { p.stop(w) })
 		})
@@ -179,7 +179,7 @@ func (p *WorkerPanel) View(c *ui.Context) {
 		}
 		if label, open := p.Entry.For(w); open != nil {
 			ui.Row(c).FillWidth().Shrink(0).PaddingX(theme.PanelPadX).Children(func() {
-				p.button(c, label, ButtonOutlined, open)
+				p.button(c, label, kit.ButtonOutlined, open)
 			})
 		}
 		if p.err != "" {
@@ -193,8 +193,8 @@ func (p *WorkerPanel) View(c *ui.Context) {
 	})
 }
 
-func (p *WorkerPanel) button(c *ui.Context, label string, style ButtonStyle, click func()) {
-	cardButton(c, label, style, theme.Current().Ink95, click)
+func (p *WorkerPanel) button(c *ui.Context, label string, style kit.ButtonStyle, click func()) {
+	kit.CardButton(c, label, style, theme.Current().Ink95, click)
 }
 
 // workerFacts are the lines under the name: role and issue, worktree, status.

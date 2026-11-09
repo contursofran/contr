@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/hc/hctest"
 	"github.com/contursofran/contr/internal/usage"
 )
@@ -100,10 +101,10 @@ func TestPlanUsageInTheSidebarFoot(t *testing.T) {
 	waitFor("plan values", func() bool { tx := labels(); return tx["38%"] && tx["12%"] })
 	for _, theme := range []string{"Dark", "Light"} {
 		c.call(t, "menu", map[string]any{"path": []string{"contr", "Settings…"}})
-		waitFor("settings", func() bool { return labels()[app.LabelSettings] })
+		waitFor("settings", func() bool { return labels()[settings.LabelSettings] })
 		click(theme)
 		c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "key", "key": "Escape"}}})
-		waitFor("settings closed", func() bool { return !labels()[app.LabelSettings] })
+		waitFor("settings closed", func() bool { return !labels()[settings.LabelSettings] })
 		time.Sleep(500 * time.Millisecond)
 		claude, codexBar, gear := c.boundsOf(t, "Claude meter"), c.boundsOf(t, "Codex meter"), c.boundsOf(t, app.LabelSettingsOpen)
 		if !(claude.X < codexBar.X && codexBar.X+codexBar.Width < gear.X) {

@@ -1,7 +1,6 @@
-package app
+package settings
 
 import (
-	"context"
 	"errors"
 	"slices"
 	"strings"
@@ -12,36 +11,14 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/theme/themetest"
 	"github.com/contursofran/contr/internal/app/view"
 )
 
 // fakeUpdates is an update service that the test controls.
-type fakeUpdates struct {
-	enabled    bool
-	info       *UpdateInfo
-	checkErr   error
-	installErr error
-	checks     int
-	installs   int
-	// progress is sent to the install callback.
-	progress [][2]int64
-}
-
-func (f *fakeUpdates) Enabled() bool { return f.enabled }
-
-func (f *fakeUpdates) Check(context.Context) (*UpdateInfo, error) {
-	f.checks++
-	return f.info, f.checkErr
-}
-
-func (f *fakeUpdates) Install(_ context.Context, progress func(done, total int64)) error {
-	f.installs++
-	for _, p := range f.progress {
-		progress(p[0], p[1])
-	}
-	return f.installErr
-}
+type fakeUpdates = apptest.Updates[UpdateInfo]
 
 type settingsRig struct {
 	t         *testing.T
@@ -91,7 +68,7 @@ func (r *settingsRig) hasText(want string) bool {
 }
 
 func TestSettingsShowsTheVersionAndClosesWithEscAndDone(t *testing.T) {
-	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	r := newSettingsRig(t, &fakeUpdates{On: true})
 	if r.has(LabelSettings) {
 		t.Fatal("modal shows before it opens")
 	}
@@ -121,14 +98,14 @@ func TestSettingsShowsTheVersionAndClosesWithEscAndDone(t *testing.T) {
 }
 
 func TestSettingsSaysUpdatesAreOffWhenTheBuildHasNoKey(t *testing.T) {
-	u := &fakeUpdates{enabled: false}
+	u := &fakeUpdates{On: false}
 	r := newSettingsRig(t, u)
 	r.openUpdates()
 	if !r.hasText(TextUpdatesOff) {
 		t.Fatalf("no off text in %v", r.texts())
 	}
 	r.tt.Click(SettingsCheck)
-	if u.checks != 0 {
+	if u.Checks != 0 {
 		t.Error("Check for updates ran with updates off")
 	}
 }
@@ -142,19 +119,19 @@ func TestSettingsWithoutAnUpdateServiceSaysUpdatesAreOff(t *testing.T) {
 }
 
 func TestSettingsReportsUpToDate(t *testing.T) {
-	u := &fakeUpdates{enabled: true}
+	u := &fakeUpdates{On: true}
 	r := newSettingsRig(t, u)
 	r.openUpdates()
 	r.tt.Click(SettingsCheck)
 	r.tt.Frame()
-	if u.checks != 1 || !r.hasText(TextUpToDate) || r.has(SettingsInstall) {
-		t.Fatalf("checks %d, texts %v", u.checks, r.texts())
+	if u.Checks != 1 || !r.hasText(TextUpToDate) || r.has(SettingsInstall) {
+		t.Fatalf("checks %d, texts %v", u.Checks, r.texts())
 	}
 }
 
 func TestSettingsShowsTheNotesOfANewerVersionAndInstalls(t *testing.T) {
-	u := &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0", Notes: "## 1.3.0\n\n- Fixed the sidebar"},
-		progress: [][2]int64{{50, 100}, {100, 100}}}
+	u := &fakeUpdates{On: true, Info: &UpdateInfo{Version: "1.3.0", Notes: "## 1.3.0\n\n- Fixed the sidebar"},
+		Progress: [][2]int64{{50, 100}, {100, 100}}}
 	r := newSettingsRig(t, u)
 	r.openUpdates()
 	r.tt.Click(SettingsCheck)
@@ -167,8 +144,8 @@ func TestSettingsShowsTheNotesOfANewerVersionAndInstalls(t *testing.T) {
 	}
 	r.tt.Click(SettingsInstall)
 	r.tt.Frame()
-	if u.installs != 1 || r.relaunch != 1 {
-		t.Fatalf("installs %d, relaunches %d", u.installs, r.relaunch)
+	if u.Installs != 1 || r.relaunch != 1 {
+		t.Fatalf("installs %d, relaunches %d", u.Installs, r.relaunch)
 	}
 	if got := r.s.percent.Load(); got != 100 {
 		t.Errorf("progress = %d, want 100", got)
@@ -179,7 +156,7 @@ func TestSettingsShowsTheNotesOfANewerVersionAndInstalls(t *testing.T) {
 }
 
 func TestSettingsShowsACheckError(t *testing.T) {
-	u := &fakeUpdates{enabled: true, checkErr: errors.New("offline")}
+	u := &fakeUpdates{On: true, CheckErr: errors.New("offline")}
 	r := newSettingsRig(t, u)
 	r.openUpdates()
 	r.tt.Click(SettingsCheck)
@@ -190,7 +167,7 @@ func TestSettingsShowsACheckError(t *testing.T) {
 	if r.hasText(TextUpToDate) {
 		t.Error("a failed check says up to date")
 	}
-	u.checkErr = nil
+	u.CheckErr = nil
 	r.tt.Click(SettingsCheck)
 	r.tt.Frame()
 	if r.hasText("failed") {
@@ -199,7 +176,7 @@ func TestSettingsShowsACheckError(t *testing.T) {
 }
 
 func TestSettingsShowsAnInstallErrorAndDoesNotRelaunch(t *testing.T) {
-	u := &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}, installErr: errors.New("bad signature")}
+	u := &fakeUpdates{On: true, Info: &UpdateInfo{Version: "1.3.0"}, InstallErr: errors.New("bad signature")}
 	r := newSettingsRig(t, u)
 	r.openUpdates()
 	r.tt.Click(SettingsCheck)
@@ -215,7 +192,7 @@ func TestSettingsShowsAnInstallErrorAndDoesNotRelaunch(t *testing.T) {
 }
 
 func TestSettingsButtonsDoNothingWhileWorkRuns(t *testing.T) {
-	u := &fakeUpdates{enabled: true}
+	u := &fakeUpdates{On: true}
 	var held []func()
 	r := newSettingsRig(t, u)
 	r.s.Env.Run = view.Runner{Go: func(f func()) { held = append(held, f) }}
@@ -254,7 +231,7 @@ func waitFor(t *testing.T, ch chan struct{}) {
 }
 
 func TestStartChecksInstallsTheUpdateInTheBackgroundWithoutARelaunch(t *testing.T) {
-	u := &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}}
+	u := &fakeUpdates{On: true, Info: &UpdateInfo{Version: "1.3.0"}}
 	s, redrawn, _ := scheduleRig(t, u, time.Hour, nil)
 	relaunch := 0
 	s.Relaunch = func() { relaunch++ }
@@ -269,24 +246,24 @@ func TestStartChecksInstallsTheUpdateInTheBackgroundWithoutARelaunch(t *testing.
 		waitFor(t, redrawn)
 	}
 	info, _, ok := s.Installed()
-	if !ok || info.Version != "1.3.0" || u.installs != 1 {
-		t.Fatalf("installed %v %q after %d installs; want 1.3.0 after 1", ok, info.Version, u.installs)
+	if !ok || info.Version != "1.3.0" || u.Installs != 1 {
+		t.Fatalf("installed %v %q after %d installs; want 1.3.0 after 1", ok, info.Version, u.Installs)
 	}
 	if relaunch != 0 {
 		t.Error("a background install relaunched contr")
 	}
 	s.RestartNow()
-	if relaunch != 1 || u.installs != 1 {
-		t.Errorf("Restart now: relaunch %d, installs %d; want 1 and 1", relaunch, u.installs)
+	if relaunch != 1 || u.Installs != 1 {
+		t.Errorf("Restart now: relaunch %d, installs %d; want 1 and 1", relaunch, u.Installs)
 	}
 }
 
 func TestABackgroundInstallErrorShowsInSettingsOnly(t *testing.T) {
-	u := &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}, installErr: errors.New("disk full")}
+	u := &fakeUpdates{On: true, Info: &UpdateInfo{Version: "1.3.0"}, InstallErr: errors.New("disk full")}
 	r := newSettingsRig(t, u)
 	status := 0
 	r.s.Env.Status = func(string) { status++ }
-	r.s.autoCheck()
+	r.s.AutoCheck()
 	if _, _, ok := r.s.Installed(); ok {
 		t.Fatal("a failed download is ready")
 	}
@@ -300,9 +277,9 @@ func TestABackgroundInstallErrorShowsInSettingsOnly(t *testing.T) {
 }
 
 func TestSettingsOffersRestartNowWhenAnUpdateIsReady(t *testing.T) {
-	u := &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}}
+	u := &fakeUpdates{On: true, Info: &UpdateInfo{Version: "1.3.0"}}
 	r := newSettingsRig(t, u)
-	r.s.autoCheck()
+	r.s.AutoCheck()
 	r.openUpdates()
 	if !r.has(SettingsRestart) || r.has(SettingsInstall) {
 		t.Fatalf("no Restart now in Settings: %q", r.texts())
@@ -316,7 +293,7 @@ func TestSettingsOffersRestartNowWhenAnUpdateIsReady(t *testing.T) {
 }
 
 func TestStartChecksChecksAgainEveryInterval(t *testing.T) {
-	u := &fakeUpdates{enabled: true}
+	u := &fakeUpdates{On: true}
 	_, redrawn, _ := scheduleRig(t, u, 5*time.Millisecond, nil)
 	waitFor(t, redrawn)
 	waitFor(t, redrawn)
@@ -324,7 +301,7 @@ func TestStartChecksChecksAgainEveryInterval(t *testing.T) {
 }
 
 func TestStartChecksSkipsAHiddenWindow(t *testing.T) {
-	u := &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}}
+	u := &fakeUpdates{On: true, Info: &UpdateInfo{Version: "1.3.0"}}
 	var visible atomic.Bool
 	_, redrawn, _ := scheduleRig(t, u, 5*time.Millisecond, visible.Load)
 	time.Sleep(60 * time.Millisecond) // many intervals pass
@@ -336,22 +313,22 @@ func TestStartChecksSkipsAHiddenWindow(t *testing.T) {
 }
 
 func TestStartChecksStaysQuietOnAnErrorAndWhenUpdatesAreOff(t *testing.T) {
-	u := &fakeUpdates{enabled: true, checkErr: errors.New("offline")}
+	u := &fakeUpdates{On: true, CheckErr: errors.New("offline")}
 	s, redrawn, _ := scheduleRig(t, u, time.Hour, nil)
 	waitFor(t, redrawn)
 	if s.Ready() || s.err != "" {
 		t.Errorf("a failed check shows: ready %v, err %q", s.Ready(), s.err)
 	}
-	off := &fakeUpdates{enabled: false, info: &UpdateInfo{Version: "1.3.0"}}
+	off := &fakeUpdates{On: false, Info: &UpdateInfo{Version: "1.3.0"}}
 	s2, redrawn2, _ := scheduleRig(t, off, time.Hour, nil)
 	waitFor(t, redrawn2)
-	if s2.Ready() || off.checks != 0 {
+	if s2.Ready() || off.Checks != 0 {
 		t.Error("a build with updates off checked")
 	}
 }
 
 func TestStartChecksStops(t *testing.T) {
-	u := &fakeUpdates{enabled: true}
+	u := &fakeUpdates{On: true}
 	_, redrawn, stop := scheduleRig(t, u, 5*time.Millisecond, nil)
 	waitFor(t, redrawn)
 	stop()
@@ -372,7 +349,7 @@ func TestStartChecksWithoutAServiceDoesNothing(t *testing.T) {
 }
 
 func TestSettingsInstallErrorReachesTheStatusMessage(t *testing.T) {
-	u := &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}, installErr: errors.New("no space")}
+	u := &fakeUpdates{On: true, Info: &UpdateInfo{Version: "1.3.0"}, InstallErr: errors.New("no space")}
 	r := newSettingsRig(t, u)
 	var msgs []string
 	r.s.Env.Status = func(m string) { msgs = append(msgs, m) }
@@ -385,57 +362,57 @@ func TestSettingsInstallErrorReachesTheStatusMessage(t *testing.T) {
 }
 
 func TestSetVisibleChecksAtOnceWhenNoCheckRan(t *testing.T) {
-	u := &fakeUpdates{enabled: true}
+	u := &fakeUpdates{On: true}
 	s := &Settings{Updates: u}
 	s.SetVisible(false)
-	if u.checks != 0 {
+	if u.Checks != 0 {
 		t.Fatal("a hiding window was checked")
 	}
 	s.SetVisible(true) // launch while hidden: no check ran yet
-	if u.checks != 1 {
-		t.Fatalf("checks = %d, want 1", u.checks)
+	if u.Checks != 1 {
+		t.Fatalf("checks = %d, want 1", u.Checks)
 	}
 }
 
 func TestSetVisibleChecksOnlyWhenTheLastCheckIsOld(t *testing.T) {
-	u := &fakeUpdates{enabled: true}
+	u := &fakeUpdates{On: true}
 	now := time.Date(2026, 11, 4, 9, 0, 0, 0, time.UTC)
 	s := &Settings{Updates: u, Every: time.Hour, Now: func() time.Time { return now }}
-	s.autoCheck()
-	if u.checks != 1 {
-		t.Fatalf("checks = %d after the first check", u.checks)
+	s.AutoCheck()
+	if u.Checks != 1 {
+		t.Fatalf("checks = %d after the first check", u.Checks)
 	}
 	now = now.Add(59 * time.Minute)
 	s.SetVisible(true)
-	if u.checks != 1 {
-		t.Errorf("a recent check ran again: %d", u.checks)
+	if u.Checks != 1 {
+		t.Errorf("a recent check ran again: %d", u.Checks)
 	}
 	now = now.Add(2 * time.Minute) // 61 minutes: a scheduled check fell while hidden
 	s.SetVisible(true)
-	if u.checks != 2 {
-		t.Errorf("checks = %d, want 2 after the missed interval", u.checks)
+	if u.Checks != 2 {
+		t.Errorf("checks = %d, want 2 after the missed interval", u.Checks)
 	}
 	s.SetVisible(true) // shown again at once: the schedule restarted
-	if u.checks != 2 {
-		t.Errorf("checks = %d, want 2 right after a check", u.checks)
+	if u.Checks != 2 {
+		t.Errorf("checks = %d, want 2 right after a check", u.Checks)
 	}
 }
 
 func TestSkippedHiddenCheckDoesNotCountAsACheck(t *testing.T) {
-	u := &fakeUpdates{enabled: true}
+	u := &fakeUpdates{On: true}
 	hidden := false
 	s := &Settings{Updates: u, Visible: func() bool { return !hidden }}
 	hidden = true
-	s.autoCheck() // timer fires while hidden
+	s.AutoCheck() // timer fires while hidden
 	hidden = false
 	s.SetVisible(true)
-	if u.checks != 1 {
-		t.Fatalf("checks = %d, want 1", u.checks)
+	if u.Checks != 1 {
+		t.Fatalf("checks = %d, want 1", u.Checks)
 	}
 }
 
 func TestSettingsAppearanceRowShowsTheThreeChoices(t *testing.T) {
-	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	r := newSettingsRig(t, &fakeUpdates{On: true})
 	r.open()
 	for _, name := range AppearanceNames {
 		if !r.has(name) {
@@ -448,7 +425,7 @@ func TestSettingsAppearanceRowShowsTheThreeChoices(t *testing.T) {
 }
 
 func TestSettingsAppearanceRowChangesTheSource(t *testing.T) {
-	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	r := newSettingsRig(t, &fakeUpdates{On: true})
 	cur := mygo.ThemeSystem
 	var set []mygo.ThemeSource
 	r.s.Appearance = func() mygo.ThemeSource { return cur }
@@ -473,7 +450,7 @@ func TestSettingsAppearanceRowChangesTheSource(t *testing.T) {
 }
 
 func TestSettingsAppearanceRowDoesNotSetAgainForTheSameChoice(t *testing.T) {
-	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	r := newSettingsRig(t, &fakeUpdates{On: true})
 	calls := 0
 	r.s.Appearance = func() mygo.ThemeSource { return mygo.ThemeDark }
 	r.s.SetAppearance = func(mygo.ThemeSource) { calls++ }
@@ -487,7 +464,7 @@ func TestSettingsAppearanceRowDoesNotSetAgainForTheSameChoice(t *testing.T) {
 }
 
 func TestSettingsAppearanceRowNeedsNoHandlers(t *testing.T) {
-	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	r := newSettingsRig(t, &fakeUpdates{On: true})
 	r.open()
 	if err := r.tt.Click("Light"); err != nil {
 		t.Fatal(err)
@@ -496,7 +473,7 @@ func TestSettingsAppearanceRowNeedsNoHandlers(t *testing.T) {
 }
 
 func TestSettingsShowsTheHCVersion(t *testing.T) {
-	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	r := newSettingsRig(t, &fakeUpdates{On: true})
 	r.s.CoreVersion = func() (string, bool) { return "0.9.3", true }
 	r.openUpdates()
 	if !r.hasText("hc 0.9.3") || !r.hasText("contr 1.2.3") {
@@ -505,7 +482,7 @@ func TestSettingsShowsTheHCVersion(t *testing.T) {
 }
 
 func TestSettingsSaysThatHCIsNotConnected(t *testing.T) {
-	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	r := newSettingsRig(t, &fakeUpdates{On: true})
 	r.openUpdates()
 	if !r.hasText(TextCoreOff) {
 		t.Fatalf("no %q without a source: %v", TextCoreOff, r.texts())
@@ -518,7 +495,7 @@ func TestSettingsSaysThatHCIsNotConnected(t *testing.T) {
 }
 
 func TestSettingsReadyFollowsTheFoundUpdate(t *testing.T) {
-	u := &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}}
+	u := &fakeUpdates{On: true, Info: &UpdateInfo{Version: "1.3.0"}}
 	r := newSettingsRig(t, u)
 	if r.s.Ready() {
 		t.Fatal("ready before a check")
@@ -533,22 +510,21 @@ func TestSettingsReadyFollowsTheFoundUpdate(t *testing.T) {
 // An open Settings dialog reads the palette of the current theme on every build: after a switch
 // to Light its card is the Light ground, not the Dark one it was built with (#400, D155).
 func TestOpenSettingsDialogChangesWithTheTheme(t *testing.T) {
-	restoreTheme(t)
 	panelPixel := func(r *settingsRig) [3]uint8 {
 		t.Helper()
 		b, ok := r.tt.Find(LabelSettings)
 		if !ok {
 			t.Fatal("no Settings dialog")
 		}
-		p := pixelAt(r.tt.Image(), b.X+6, b.Y+6)
+		p := apptest.PixelAt(r.tt.Image(), b.X+6, b.Y+6)
 		return [3]uint8{p.R, p.G, p.B}
 	}
 	want := func(p *theme.Palette) [3]uint8 {
 		c := p.Ground
 		return [3]uint8{c.R, c.G, c.B}
 	}
-	f := theme.Follow(&fakeTheme{}, &fakeWindow{}, mygo.ThemeDark)
-	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	f := themetest.Follow(t, mygo.ThemeDark)
+	r := newSettingsRig(t, &fakeUpdates{On: true})
 	r.open()
 	if got := panelPixel(r); got != want(theme.Dark) {
 		t.Fatalf("dark card = %v, want %v", got, want(theme.Dark))
@@ -566,7 +542,7 @@ func TestOpenSettingsDialogChangesWithTheTheme(t *testing.T) {
 }
 
 func TestSettingsShowsTheTintSlidersWithValues(t *testing.T) {
-	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	r := newSettingsRig(t, &fakeUpdates{On: true})
 	r.s.Tint = func() (float64, float64) { return 30, 55 }
 	r.open()
 	for _, want := range []string{LabelBackground, LabelPanels, "30%", "55%", TintReset} {
@@ -594,7 +570,7 @@ func (r *settingsRig) clickSlider(t *testing.T, name, value string, frac float32
 // A slider has the name that shows on screen: the name text and the slider
 // are two elements with the same name, and nothing is named "... alpha".
 func TestSettingsTintSliderNameMatchesTheScreenText(t *testing.T) {
-	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	r := newSettingsRig(t, &fakeUpdates{On: true})
 	r.s.Tint = func() (float64, float64) { return 30, 55 }
 	r.s.SetTint = func(w, p float64) {}
 	r.open()
@@ -615,7 +591,7 @@ func TestSettingsTintSliderNameMatchesTheScreenText(t *testing.T) {
 }
 
 func TestSettingsTintSliderCallsSetTint(t *testing.T) {
-	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	r := newSettingsRig(t, &fakeUpdates{On: true})
 	win, pan := 30.0, 55.0
 	var calls [][2]float64
 	r.s.Tint = func() (float64, float64) { return win, pan }
@@ -634,7 +610,7 @@ func TestSettingsTintSliderCallsSetTint(t *testing.T) {
 }
 
 func TestSettingsTintResetCallsResetTint(t *testing.T) {
-	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	r := newSettingsRig(t, &fakeUpdates{On: true})
 	resets := 0
 	r.s.Tint = func() (float64, float64) { return 30, 55 }
 	r.s.ResetTint = func() { resets++ }
@@ -648,7 +624,7 @@ func TestSettingsTintResetCallsResetTint(t *testing.T) {
 }
 
 func TestSettingsWithoutTintHandlersHasNoSliders(t *testing.T) {
-	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	r := newSettingsRig(t, &fakeUpdates{On: true})
 	r.open()
 	if r.hasText(LabelBackground) {
 		t.Error("sliders show without a Tint source")
@@ -656,7 +632,7 @@ func TestSettingsWithoutTintHandlersHasNoSliders(t *testing.T) {
 }
 
 func TestSettingsTintSliderFollowsAClickOnTheTrack(t *testing.T) {
-	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	r := newSettingsRig(t, &fakeUpdates{On: true})
 	win, pan := 30.0, 55.0
 	r.s.Tint = func() (float64, float64) { return win, pan }
 	r.s.SetTint = func(w, p float64) { win, pan = w, p }
@@ -680,73 +656,73 @@ func TestCheckEveryIsFifteenMinutes(t *testing.T) {
 }
 
 func TestATickAfterASleepChecksOnTheWallClock(t *testing.T) {
-	u := &fakeUpdates{enabled: true}
+	u := &fakeUpdates{On: true}
 	now := time.Now()
 	s := fakeClockSettings(u, &now)
 	s.dueCheck()
-	if u.checks != 1 {
-		t.Fatalf("checks = %d at the first tick", u.checks)
+	if u.Checks != 1 {
+		t.Fatalf("checks = %d at the first tick", u.Checks)
 	}
 	now = now.Add(14 * time.Minute)
 	s.dueCheck()
-	if u.checks != 1 {
-		t.Fatalf("a tick inside 15 minutes checked: %d", u.checks)
+	if u.Checks != 1 {
+		t.Fatalf("a tick inside 15 minutes checked: %d", u.Checks)
 	}
 	now = now.Add(5 * time.Hour) // the Mac slept: wall time jumps
 	s.dueCheck()
-	if u.checks != 2 {
-		t.Errorf("checks = %d after a sleep, want 2", u.checks)
+	if u.Checks != 2 {
+		t.Errorf("checks = %d after a sleep, want 2", u.Checks)
 	}
 }
 
 func TestActivatedChecksOnlyAfterTenMinutes(t *testing.T) {
-	u := &fakeUpdates{enabled: true}
+	u := &fakeUpdates{On: true}
 	now := time.Now()
 	s := fakeClockSettings(u, &now)
 	s.Activated()
-	if u.checks != 1 {
-		t.Fatalf("checks = %d on the first activation", u.checks)
+	if u.Checks != 1 {
+		t.Fatalf("checks = %d on the first activation", u.Checks)
 	}
 	now = now.Add(9 * time.Minute)
 	s.Activated()
-	if u.checks != 1 {
-		t.Errorf("an activation inside 10 minutes checked: %d", u.checks)
+	if u.Checks != 1 {
+		t.Errorf("an activation inside 10 minutes checked: %d", u.Checks)
 	}
 	now = now.Add(2 * time.Minute)
 	s.Activated()
-	if u.checks != 2 {
-		t.Errorf("checks = %d after 11 minutes, want 2", u.checks)
+	if u.Checks != 2 {
+		t.Errorf("checks = %d after 11 minutes, want 2", u.Checks)
 	}
 	(&Settings{}).Activated() // no service: nothing
 }
 
 func TestAFailedCheckDoesNotResetTheAge(t *testing.T) {
-	u := &fakeUpdates{enabled: true, checkErr: errors.New("offline")}
+	u := &fakeUpdates{On: true, CheckErr: errors.New("offline")}
 	now := time.Now()
 	s := fakeClockSettings(u, &now)
 	s.dueCheck()
 	now = now.Add(time.Minute)
 	s.dueCheck() // the next tick tries again
-	if u.checks != 2 {
-		t.Fatalf("checks = %d, want 2: a failed check reset the age", u.checks)
+	if u.Checks != 2 {
+		t.Fatalf("checks = %d, want 2: a failed check reset the age", u.Checks)
 	}
-	u.checkErr = nil
+	u.CheckErr = nil
 	now = now.Add(time.Minute)
 	s.dueCheck()
 	now = now.Add(time.Minute)
 	s.dueCheck()
-	if u.checks != 3 {
-		t.Errorf("checks = %d, want 3: a good check did not reset the age", u.checks)
+	if u.Checks != 3 {
+		t.Errorf("checks = %d, want 3: a good check did not reset the age", u.Checks)
 	}
 }
 
 func TestADueCheckThatFindsAnUpdateInstallsInTheBackground(t *testing.T) {
-	u := &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}}
+	u := &fakeUpdates{On: true, Info: &UpdateInfo{Version: "1.3.0"}}
 	now := time.Now()
 	s := fakeClockSettings(u, &now)
 	s.Activated()
-	if _, _, ok := s.Installed(); !ok || u.installs != 1 {
-		t.Errorf("installed %v after %d installs; want a background install", ok, u.installs)
+	if _, _, ok := s.Installed(); !ok || u.Installs != 1 {
+		t.Errorf("installed %v after %d installs; want a background install", ok, u.Installs)
 	}
 }
 
@@ -772,7 +748,7 @@ func recordRig(u *fakeUpdates) (*Settings, *[]recorded) {
 }
 
 func TestAnInstallRecordsTheUpdateBeforeTheRelaunch(t *testing.T) {
-	s, log := recordRig(&fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}})
+	s, log := recordRig(&fakeUpdates{On: true, Info: &UpdateInfo{Version: "1.3.0"}})
 	s.enabled = true
 	s.Check()
 	s.Install()
@@ -784,8 +760,8 @@ func TestAnInstallRecordsTheUpdateBeforeTheRelaunch(t *testing.T) {
 }
 
 func TestABackgroundInstallRecordsTheUpdate(t *testing.T) {
-	s, log := recordRig(&fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}})
-	s.autoCheck()
+	s, log := recordRig(&fakeUpdates{On: true, Info: &UpdateInfo{Version: "1.3.0"}})
+	s.AutoCheck()
 	at := time.Date(2026, 11, 9, 10, 0, 0, 0, time.UTC)
 	want := []recorded{{"record", "1.3.0", "1.2.3", at}}
 	if !slices.Equal(*log, want) {
@@ -797,8 +773,8 @@ func TestABackgroundInstallRecordsTheUpdate(t *testing.T) {
 }
 
 func TestAFailedInstallRecordsNothing(t *testing.T) {
-	s, log := recordRig(&fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}, installErr: errors.New("offline")})
-	s.autoCheck()
+	s, log := recordRig(&fakeUpdates{On: true, Info: &UpdateInfo{Version: "1.3.0"}, InstallErr: errors.New("offline")})
+	s.AutoCheck()
 	s.Install()
 	if len(*log) != 0 {
 		t.Errorf("calls %+v after failed installs", *log)
@@ -806,7 +782,7 @@ func TestAFailedInstallRecordsNothing(t *testing.T) {
 }
 
 func TestAFailedRecordStillRelaunches(t *testing.T) {
-	s, log := recordRig(&fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}})
+	s, log := recordRig(&fakeUpdates{On: true, Info: &UpdateInfo{Version: "1.3.0"}})
 	s.RecordInstall = func(UpdateInfo, string, time.Time) error { return errors.New("disk full") }
 	s.enabled = true
 	s.Check()
