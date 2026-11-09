@@ -8,10 +8,52 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 )
+
+func TestCleanEnv(t *testing.T) {
+	in := []string{
+		"PATH=/usr/bin", "CLAUDECODE=1", "CLAUDE_CODE_CHILD_SESSION=1",
+		"CLAUDE_CODE_MESSAGING_TOKEN=x", "CLAUDECODEX=keep",
+		"CLAUDE_CODE=keep", "HOME=/h", "MY_CLAUDE_CODE_X=keep",
+	}
+	got := CleanEnv(in)
+	want := []string{"PATH=/usr/bin", "CLAUDECODEX=keep", "CLAUDE_CODE=keep", "HOME=/h", "MY_CLAUDE_CODE_X=keep"}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("CleanEnv = %q, want %q", got, want)
+	}
+}
+
+// Command starts hc without Claude Code variables and keeps its env argument.
+func TestCommandStartsWithCleanEnv(t *testing.T) {
+	t.Setenv("CLAUDECODE", "1")
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "s")
+	t.Setenv("KEEP_ME", "yes")
+	fake := filepath.Join(t.TempDir(), "hc")
+	if err := os.WriteFile(fake, []byte("#!/bin/sh\nenv\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	p, err := Command(fake, []string{"EXTRA=1", "CLAUDE_CODE_FROM_ARG=1"})(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, _ := io.ReadAll(p.R)
+	_ = p.Close()
+	got := string(out)
+	for _, bad := range []string{"CLAUDECODE=", "CLAUDE_CODE_SESSION_ID="} {
+		if strings.Contains(got, bad) {
+			t.Errorf("env has %s", bad)
+		}
+	}
+	for _, ok := range []string{"KEEP_ME=yes", "EXTRA=1", "CLAUDE_CODE_FROM_ARG=1"} {
+		if !strings.Contains(got, ok) {
+			t.Errorf("env lacks %s", ok)
+		}
+	}
+}
 
 // fakeConn is the core's side of one connection.
 type fakeConn struct {
