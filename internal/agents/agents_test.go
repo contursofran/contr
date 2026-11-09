@@ -150,7 +150,7 @@ func TestDefaultExplorer(t *testing.T) {
 
 // TestSpawnNoProfile: the error for an unknown profile names the file that
 // was read and the profiles that it has (#484).
-// unclean checks that argv starts with hc.CleanArgv's words (D215) and returns
+// unclean checks that argv starts with hc.CleanArgv's words (D216) and returns
 // the rest: the agent's own argv.
 func unclean(t *testing.T, argv any) []any {
 	t.Helper()
@@ -531,7 +531,7 @@ func TestWorkerDecodesProjectLabel(t *testing.T) {
 	}
 }
 
-// D215: a claude worker starts through hc.CleanArgv, so the Claude Code
+// D216: a claude worker starts through hc.CleanArgv, so the Claude Code
 // session variables of the core's environment are gone; other programs start
 // as they are, and the env param keeps CONTR_COORDINATOR.
 func TestSpawnStartsClaudeWithoutSessionVariables(t *testing.T) {

@@ -139,7 +139,7 @@ var cleanScript = `for v in $(env | sed -n -E 's/^(` + claudeVar + `|` + claudeP
 const cleanName = "contr-clean-env"
 
 // CleanArgv returns argv started through /bin/sh with the variables that
-// CleanEnv removes unset (D215). terminal.run sets env on top of the core's
+// CleanEnv removes unset (D216). terminal.run sets env on top of the core's
 // environment and cannot unset a name, and contr cannot read the core's
 // environment, so the shell removes them when the terminal starts.
 func CleanArgv(argv []string) []string {

@@ -100,7 +100,7 @@ func TestHookCoordinatorStopQuiet(t *testing.T) {
 	}
 }
 
-// D215: a coordinator with no transcript file does nothing and does not fail;
+// D216: a coordinator with no transcript file does nothing and does not fail;
 // a transcript that cannot be read still fails.
 func TestHookCoordinatorStopWithoutTranscript(t *testing.T) {
 	r := newCoordRig(t, orchestrateLine, usageLine(240000))

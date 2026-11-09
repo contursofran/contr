@@ -553,7 +553,7 @@ func (m *Manager) Spawn(ctx context.Context, s Spec) (Worker, error) {
 		argv = append(argv, s.Task)
 	}
 	// A Claude worker starts without the Claude Code session variables of
-	// the core's environment, so Claude Code saves its transcript (D215).
+	// the core's environment, so Claude Code saves its transcript (D216).
 	if isClaude(argv) {
 		argv = hc.CleanArgv(argv)
 	}

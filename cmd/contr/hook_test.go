@@ -70,7 +70,7 @@ func TestHookPrefersLastAssistantMessage(t *testing.T) {
 	}
 }
 
-// D215: with no transcript file, the worker still reports its last message
+// D216: with no transcript file, the worker still reports its last message
 // and RESULT.md, and the report says that it may repeat one.
 func TestHookReportsWithoutTranscript(t *testing.T) {
 	dir := t.TempDir()

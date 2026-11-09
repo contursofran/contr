@@ -138,7 +138,7 @@ func runHook(args []string, stdin io.Reader, stdout, stderr io.Writer, dial func
 
 // workerStop sends the coordinator a report for a turn that sent none. With
 // no transcript file (Claude Code saved none), it cannot tell whether the
-// turn sent one, so it sends a report that says it may repeat one (D215).
+// turn sent one, so it sends a report that says it may repeat one (D216).
 func (h *hook) workerStop() error {
 	coordinator := h.getenv(agents.EnvCoordinator)
 	turn, err := readTurn(h.in.TranscriptPath)
@@ -174,7 +174,7 @@ func (h *hook) workerStop() error {
 
 // coordinatorStop asks a coordinator, once per compaction, to save its state
 // when the context nears the compaction window. With no transcript file it
-// does nothing (D215).
+// does nothing (D216).
 func (h *hook) coordinatorStop() error {
 	if h.in.StopHookActive || h.in.TranscriptPath == "" {
 		return nil

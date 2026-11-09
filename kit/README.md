@@ -42,6 +42,11 @@ The `--plugin-dir` sessions below still work with the plugin installed.
    `CONTR_COORDINATOR` and report with `hc send`. When a worker's turn ends
    without one, the kit's Stop hook (`hooks/hooks.json`, `contr hook stop`)
    sends the coordinator "ended its turn without a report. Last words: …".
+   When Claude Code saved no transcript, the hook cannot tell whether the
+   turn sent a report, so it sends "ended its turn; it may have sent a report
+   already …" with the last words (D216). Workers start without the
+   `CLAUDECODE` and `CLAUDE_CODE_*` variables of the hc core, so Claude Code
+   saves their transcripts.
    The hook does nothing in sessions without `CONTR_COORDINATOR`.
 4. Compaction: in a coordinator (a session that ran `/contr:orchestrate`, or an
    hc terminal with role orchestrator), the Stop hook keeps the turn going
