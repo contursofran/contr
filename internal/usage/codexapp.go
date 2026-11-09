@@ -1,4 +1,4 @@
-// Codex's app-server as a usage source (D206). `codex app-server` speaks
+// Codex's app-server as a usage source (D209). `codex app-server` speaks
 // JSON-RPC over stdio, one JSON message per line. CodexApp starts it, sends
 // initialize, the initialized notification and account/rateLimits/read, closes
 // stdin and waits for the process to end. contr reads no Codex file for this.

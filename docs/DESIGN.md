@@ -386,28 +386,9 @@ board panel, with the stage columns 44 wide (`plan build review CI you`).
 Enter motion: up 10 px and fade in, 0.22 s. Esc (with the focus), `board ▾`
 or a click outside closes it.
 
-## Projects modal **(being built)**
+## Projects modal
 
-Opens from the `projects` pill in the Spaces header (D113); there is no menu item and no shortcut. Built today: the header, the filter field (narrows the list by name; drag-reorder under a filter are off), the open list with drag reorder and `close`, and `Done`. `recent` (projects not open, each with `open`) and `+ open folder…` (D116). Clone from GitHub (D117): a field for `owner/name` or a URL, a destination preview, `Choose folder…` and `Clone`, with `Cloning…` and red errors. An overlay over the whole
-window with the `scrim`; the dialog is 580 wide, 110 from the top, centred,
-`bg.overlay`, shadow 0 24 80 rgba(0,0,0,.6). Enter motion: up 8 px and fade
-in, 0.22 s.
-
-- Header (padding 16×18×12): `Projects` (700, 14 px), `N open` (dim), then a
-  ghost `esc`.
-- Filter field (margin 0×18×12, border #2E2E2E, radius 8, padding 8×12):
-  placeholder `> filter, or paste a path or a GitHub URL…` (#555555).
-- `open in contr · drag to reorder the sidebar` (11 px, dim): one row per
-  open project (padding 8×10, radius 8, gap 12): a grip `⋮⋮` (#3A3A3A), a
-  28×28 tile (radius 7, bg #1F1F1F, initials 700 11 px), the name (700) over
-  `<folder> · <N worktrees · N need you>` (11 px, #5A5A5A), then a secondary
-  `close`. Drag changes the sidebar order.
-- `recent`: closed projects, the same row without the grip, the tile and
-  name dimmer, and a primary `open`.
-- Footer (top border #262626, padding 12×18, gap 14): ghost `+ open folder…`,
-  ghost `clone from GitHub…`, spacer, primary `Done`.
-- `close` hides the project in contr only (D70); the order, hidden and recent lists live in `projects.json` (D63). Esc (with the focus in the
-  modal), `esc` or `Done` closes the modal.
+Opens from the "Open projects" item of the Projects head `+` menu (D171). It is one palette dialog: a search field that also takes a GitHub repo or a path, one list (`Add`, `Open · N`, `Recent`) and a footer with the keys. Layout, states, keys and copy are in `docs/spec/ProjectsModal.md` (D207). Hide keeps D70: it hides a project in contr only. The order, hidden and recent lists live in `projects.json` (D63).
 
 ## PR viewer (#151–#154) **(hidden until it is redesigned, D127, D147)**
 

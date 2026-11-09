@@ -31,7 +31,7 @@ func Unread() Reading {
 
 // ReadPlans reads each plan from its source, in [Plans] order. Codex comes
 // from codexApp (codex app-server) first; when that gives nil, from the newest
-// rollout file under codexHome (D206). A nil codexApp, an empty stateDir or
+// rollout file under codexHome (D209). A nil codexApp, an empty stateDir or
 // codexHome, or a source with no usable data, gives nil usage for that source.
 // It blocks: run it on a goroutine.
 func ReadPlans(stateDir, codexHome string, codexApp func() *PlanUsage) Reading {
