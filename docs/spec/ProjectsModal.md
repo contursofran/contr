@@ -1,6 +1,6 @@
 # ProjectsModal
 
-One palette dialog that shows, adds and hides the projects of the sidebar (#494, D209).
+One palette dialog that shows, adds and hides the projects of the sidebar (#494, D207).
 
 Opens from the "Open projects" item of the Projects head `+` menu (D171). The owner-approved mock-up of #494 is the picture; no spec image exists yet (the sheet part comes in slice 6).
 
@@ -127,7 +127,7 @@ Exact strings:
 - `ui.Toast` with an action for Hide (`toast.md`); the frame owns it.
 - Use `kit` parts where they fit. Do not draw rows by hand.
 
-## Decided questions (#494, D209)
+## Decided questions (#494, D207)
 
 - Q1: `N need you` may use `blocked` text in this one place. The `blocked` row of `tokens.md` says so.
 - Q2: the first Esc clears the field; Esc on an empty field closes.

@@ -45,7 +45,7 @@ Generated from the design system `tokens.json`. Views use the names; `internal/a
 | `ink-24` | `rgba(255,255,255,0.24)` | `rgba(0,0,0,0.313)` | Deleted file names (struck through) and removed-line counts in the file tree. 2.2:1: dim on purpose, kept from the canvas. |
 | `ink-22` | `rgba(255,255,255,0.22)` | `rgba(0,0,0,0.287)` | Icon and counts of a deleted file. 2:1: dim on purpose, kept from the canvas. |
 | `terminal-text` | `rgba(255,255,255,0.82)` | `rgba(0,0,0,0.815)` | Default terminal text before the agent CLI paints its own colors. 12.4:1 on panel. |
-| `blocked` | `#f07178` | `#c73947` | The one hue in the chrome: red for an agent that is blocked or asks the owner. Loader glyphs and the Claude glyph only, never fills or text runs, except the `N need you` meta of the projects modal (D209). 6.4:1 on panel, 5.8:1 on glass-float. Light: #c73947, 4.9:1 on panel. |
+| `blocked` | `#f07178` | `#c73947` | The one hue in the chrome: red for an agent that is blocked or asks the owner. Loader glyphs and the Claude glyph only, never fills or text runs, except the `N need you` meta of the projects modal (D207). 6.4:1 on panel, 5.8:1 on glass-float. Light: #c73947, 4.9:1 on panel. |
 | `claude` | `#d97757` | `#c15f3c` | Stroke of the Claude agent glyph (orchestrators) while it works or idles. 5.85:1 on panel. Light: #c15f3c, 4.1:1 on panel (#d97757 is only 2.9:1 on light). |
 | `focus-ring` | `rgba(255,255,255,0.5)` | `rgba(0,0,0,0.45)` | The 1px keyboard focus ring of every button, 2px outside it. |
 | `lights` | `rgba(255,255,255,0.14)` | `rgba(0,0,0,0.14)` | Previews only: the traffic-light stand-ins. macOS draws the real ones. |
