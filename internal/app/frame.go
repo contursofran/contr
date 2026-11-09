@@ -756,6 +756,7 @@ func (f *Frame) titleBar(c *ui.Context, sidebarW float32, narrow bool) {
 		f.bar.setTabs(f.titleTabs())
 		f.bar.selectTab, f.bar.closeTab = f.selectTab, f.closeTab
 		f.bar.closeOthers, f.bar.moveTab = f.closeOtherTabs, f.moveTab
+		f.bar.stopTab = f.stopTab
 		f.bar.newTab = nil
 		if f.NewTerm != nil {
 			f.bar.newTab = f.newTerminal
@@ -895,6 +896,13 @@ func (f *Frame) selectTab(t Tab) {
 func (f *Frame) closeTab(t Tab) {
 	if f.CloseTerm != nil && t.Closable() {
 		f.CloseTerm.Start(t.Address)
+	}
+}
+
+// stopTab stops the agent of an agent tab (D219), as Stop of its sidebar row does.
+func (f *Frame) stopTab(t Tab) {
+	if f.SpacesList != nil && !t.Plain {
+		f.SpacesList.StopAgent(t.Address, t.Title)
 	}
 }
 
@@ -1147,6 +1155,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		Toast: f.Toasts.ShowAction,
 	}
 	f.ProjectsModal.Switch = f.SpacesList.Switch
+	f.SpacesList.OnHide = f.ProjectsModal.hide
 	f.ProjectsModal.Orchestrated = f.SpacesList.Orchestrated
 	f.SpacesList.OnProjects = f.ProjectsModal.Toggle
 	f.SpacesList.OnReordered = f.ProjectsModal.changed

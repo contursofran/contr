@@ -333,6 +333,15 @@ func (l *SpacesList) agentMenu(m *ui.Menu, a agentLine) {
 	}
 }
 
+// StopAgent stops the agent at address, as Stop of its row does. name is for
+// the status message. UI thread.
+func (l *SpacesList) StopAgent(address, name string) {
+	if l.Source == nil {
+		return
+	}
+	l.act(agents.Worker{Address: address, Name: name}, "stopped", l.Source.Stop)
+}
+
 func (l *SpacesList) act(w agents.Worker, done string, do func(string) error) {
 	l.Run.Do(func() func() {
 		err := do(w.Address)

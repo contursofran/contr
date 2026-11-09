@@ -48,6 +48,8 @@ type titleBar struct {
 	// closeOthers takes the tab whose menu chose "Close others": the frame closes every plain tab
 	// except it. Nil: the menu has no such item.
 	closeOthers func(keep Tab)
+	// stopTab takes the agent tab whose menu chose "Stop" (D219). Nil: the item is off.
+	stopTab func(Tab)
 	// moveTab takes the address of a plain tab that was dropped on another plain tab: from takes
 	// the place of to. Nil: the tabs do not drag.
 	moveTab func(from, to string)
@@ -208,7 +210,14 @@ func middleClick(ev ui.InputEvent, bounds ui.Rect, closeTab func()) bool {
 
 // tabMenu fills the context menu of tab t. Close and Close others close plain terminals only
 // (D85): Close is off on an agent tab, and Close others never closes t when t is an agent tab.
+// An agent tab has Stop first (D219): the menu choice is the confirmation, as on the agent row.
 func (b *titleBar) tabMenu(m *ui.Menu, t Tab) {
+	if !t.Plain {
+		if m.Item(MenuStop).Disabled(b.stopTab == nil).Chosen() && b.stopTab != nil {
+			b.stopTab(t)
+		}
+		m.Separator()
+	}
 	closable := t.Closable() && b.closeTab != nil
 	if m.Item(MenuClose).Disabled(!closable).Chosen() && closable {
 		b.closeTab(t)
