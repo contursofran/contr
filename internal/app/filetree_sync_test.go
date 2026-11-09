@@ -52,7 +52,6 @@ func TestFileTreeFollowsTheGroups(t *testing.T) {
 	w := &fakeWindow{visible: true}
 	f := NewFrame()
 	f.Files.Watch = func(string, func()) (func(), error) { return func() {}, nil }
-	f.LoadProjects = func() (*projects.Store, error) { return store, nil }
 	f.StartAgents = func(func()) (AgentSource, func()) {
 		return &source{snap: agentstate.Snapshot{CoreVersion: "0.1.18",
 			Orchestrators: []agents.Worker{orchW("o", "lead", "p")}}}, func() {}
@@ -61,9 +60,10 @@ func TestFileTreeFollowsTheGroups(t *testing.T) {
 	defer stop()
 	f.Selection.Select(state.Selected{Kind: state.KindOrchestrator, ID: "o"})
 	if got := f.Files.Shown(); got != "" {
-		t.Fatalf("before the projects load the tree shows %q", got)
+		t.Fatalf("before the projects are set the tree shows %q", got)
 	}
-	w.flush() // the projects land and the groups change
+	// The projects land as loadProjects lands them, on the UI thread: no goroutine to wait for.
+	f.SpacesList.SetProjects(store)
 	if got := f.Files.Shown(); got != dir {
 		t.Errorf("after the groups changed the tree shows %q, want %q", got, dir)
 	}
