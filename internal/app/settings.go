@@ -111,7 +111,7 @@ type Settings struct {
 	// OnReady runs on the UI thread when a background install ends well (D176). May be nil.
 	OnReady func(UpdateInfo)
 	// RecordInstall saves the installed version, the version that runs (from) and when the
-	// install ended, for What's new at the next start (D207). It runs off the UI thread when an
+	// install ended, for What's new at the next start (D209). It runs off the UI thread when an
 	// install ends well, before any relaunch. Nil saves nothing.
 	RecordInstall func(info UpdateInfo, from string, at time.Time) error
 	// Invalidate redraws the window; may be nil.

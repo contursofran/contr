@@ -54,16 +54,18 @@ func TestSpawnOrchestratorStartsTheProfileWithRoleAndNoParent(t *testing.T) {
 	}
 }
 
-func TestSpawnOrchestratorNamesTheFileWhenTheProfileIsMissing(t *testing.T) {
-	getenv, path := orchEnv(t, "")
-	dialed := false
-	dial := func(context.Context, func(string) string) (agentsCore, error) { dialed = true; return &cliCore{}, nil }
-	err := spawnOrchestrator(context.Background(), getenv, dial, "/work/p", time.Now())
-	if err == nil || !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), `"orchestrator"`) {
-		t.Fatalf("error %v", err)
-	}
-	if dialed {
-		t.Error("no connection without the profile")
+// `+ new` works with no agents.json and with a file in the old format (D206).
+func TestSpawnOrchestratorUsesTheDefaultProfile(t *testing.T) {
+	for name, body := range map[string]string{"no file": "", "old format": `{"version":1,"presets":[{"name":"x"}]}`} {
+		getenv, _ := orchEnv(t, body)
+		core := &cliCore{reply: map[string]any{"terminal.run": worker("t4", "o", "live", nil)}}
+		dial := func(context.Context, func(string) string) (agentsCore, error) { return core, nil }
+		if err := spawnOrchestrator(context.Background(), getenv, dial, t.TempDir(), time.Now()); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if len(core.params) != 1 || core.params[0]["labels"].(map[string]any)["profile"] != "orchestrator" {
+			t.Fatalf("%s: params %v", name, core.params)
+		}
 	}
 }
 

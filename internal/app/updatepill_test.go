@@ -162,7 +162,7 @@ func TestNoteLinesListsItemsWithoutHeadings(t *testing.T) {
 	}
 }
 
-// updatedRig is a frame that starts as version 0.4.0, after an update from 0.3.2 (D207).
+// updatedRig is a frame that starts as version 0.4.0, after an update from 0.3.2 (D209).
 type updatedRig struct {
 	f     *Frame
 	tt    *ui.Tester

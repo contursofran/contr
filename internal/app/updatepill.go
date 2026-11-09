@@ -4,7 +4,7 @@ package app
 // bar shows "Restart to update" left of the diff summary. A click opens a panel under it
 // (PopoverBase) with the version, the release notes and "Restart now". The first time a version
 // is ready, one toast drops under the pill. On the first start of a version that contr installed,
-// the same pill says "Updated to X" and its panel opens by itself with What's new (D207). The
+// the same pill says "Updated to X" and its panel opens by itself with What's new (D209). The
 // methods run on the UI thread.
 
 import (
@@ -30,9 +30,9 @@ const (
 	UpdateWhatsNew   = "What's new"
 	UpdateToastBody  = "It downloaded in the background. Restart when you like: agents keep running."
 	UpdateAgentsNote = "Agents keep running. Their terminals live in hc; contr opens them again after the restart, in about 2 s."
-	// UpdatedPrefix starts the text of the pill after an update: "Updated to 0.4.0" (D207).
+	// UpdatedPrefix starts the text of the pill after an update: "Updated to 0.4.0" (D209).
 	UpdatedPrefix = "Updated to "
-	// UpdateGotIt is the button that closes the What's new panel after an update (D207).
+	// UpdateGotIt is the button that closes the What's new panel after an update (D209).
 	UpdateGotIt = "Got it"
 )
 
@@ -54,13 +54,13 @@ type updateUI struct {
 	pending string
 	// pill is the pill of this build; zero when it does not show.
 	pill ui.Element
-	// after is the update that the running version came from, while its What's new shows (D207).
+	// after is the update that the running version came from, while its What's new shows (D209).
 	after *updated.Note
 	// run saves the note as shown, off the UI thread.
 	run Runner
 }
 
-// loadUpdated reads the note of the last install off the UI thread (D207). When it is of the
+// loadUpdated reads the note of the last install off the UI thread (D209). When it is of the
 // running version and did not show yet, the "Updated to" pill shows with its panel open. A
 // missing file shows nothing; a bad one is logged.
 func (f *Frame) loadUpdated(run Runner, invalidate func()) {
@@ -85,7 +85,7 @@ func (f *Frame) loadUpdated(run Runner, invalidate func()) {
 }
 
 // recordInstall is Settings.RecordInstall: it saves the installed update through SaveUpdated,
-// not shown yet (D207). It runs off the UI thread.
+// not shown yet (D209). It runs off the UI thread.
 func (f *Frame) recordInstall(info UpdateInfo, from string, at time.Time) error {
 	if f.SaveUpdated == nil {
 		return nil
@@ -131,7 +131,7 @@ func (f *Frame) updateReady(info UpdateInfo) {
 }
 
 // updatePill builds the pill and its panel while an update is ready, or the "Updated to" pill
-// after an update (D207).
+// after an update (D209).
 func (f *Frame) updatePill(c *ui.Context) {
 	f.upd.pill = ui.Element{}
 	if f.Settings == nil {
@@ -154,7 +154,7 @@ func (f *Frame) updatePill(c *ui.Context) {
 }
 
 // updatedPill is the pill on the first start after an update, with What's new open under it
-// (D207). Once the panel closes (Got it, Return, Escape or a press outside), the pill goes and
+// (D209). Once the panel closes (Got it, Return, Escape or a press outside), the pill goes and
 // the note is saved as shown.
 func (f *Frame) updatedPill(c *ui.Context) {
 	n := f.upd.after
@@ -211,7 +211,7 @@ func floatCard(el ui.Element) {
 }
 
 // updatePanel is the panel body: head, What's new, the agents note and the foot. After an update
-// (D207) it has no agents note, and its foot has only Got it.
+// (D209) it has no agents note, and its foot has only Got it.
 func (f *Frame) updatePanel(c *ui.Context, info UpdateInfo, from string, at time.Time, after bool) {
 	p := theme.Current()
 	meta := theme.StyleMeta

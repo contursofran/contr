@@ -118,7 +118,14 @@ type Config struct {
 	// it in the "no profile" error, so the owner sees which file was read
 	// (#484).
 	Source string `json:"-"`
+	// Notice is a note for the owner that LoadConfig made while it read the
+	// file, or "". Today it says the file is in the old Swift format (D206).
+	Notice string `json:"-"`
 }
+
+// OldFormatNotice is the Notice for an agents.json that has a presets key
+// and no profiles key: the file of the old Swift app.
+const OldFormatNotice = "agents.json is in the old format (presets); its presets are ignored and the default profiles apply"
 
 // EnvCoordinator holds the address of the terminal that started a worker, so
 // the worker can report with `hc send "$CONTR_COORDINATOR" …`.
@@ -130,10 +137,11 @@ func DefaultConfig() Config {
 		return Profile{Argv: []string{"claude", "--model", model, "--effort", effort, "--permission-mode", "auto"}}
 	}
 	return Config{Flow: DefaultFlow(), Profiles: map[string]Profile{
-		"builder":  claude("sonnet", "medium"),
-		"planner":  claude("opus", "low"),
-		"reviewer": claude("opus", "low"),
-		"debugger": claude("opus", "xhigh"),
+		"orchestrator": claude("opus", "medium"),
+		"builder":      claude("sonnet", "medium"),
+		"planner":      claude("opus", "low"),
+		"reviewer":     claude("opus", "low"),
+		"debugger":     claude("opus", "xhigh"),
 	}}
 }
 
@@ -174,7 +182,9 @@ func flagValue(argv []string, flag string) string {
 
 // LoadConfig reads a JSON config file over the defaults: a profile in the file
 // replaces the default of the same name, and a flow key missing from the
-// file's flow keeps its default. A missing file gives the defaults.
+// file's flow keeps its default. A missing file gives the defaults. A file
+// with a presets key and no profiles key is the old Swift format: it loads
+// with the defaults, Notice says so, and the file is not changed.
 func LoadConfig(path string) (Config, error) {
 	cfg := DefaultConfig()
 	cfg.Source = path
@@ -189,6 +199,14 @@ func LoadConfig(path string) (Config, error) {
 	file := Config{Flow: DefaultFlow()}
 	if err := json.Unmarshal(data, &file); err != nil {
 		return cfg, fmt.Errorf("agents: %s: %w", path, err)
+	}
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(data, &keys); err == nil {
+		_, presets := keys["presets"]
+		_, profiles := keys["profiles"]
+		if presets && !profiles {
+			cfg.Notice = OldFormatNotice
+		}
 	}
 	if file.Kit != "" {
 		cfg.Kit = file.Kit

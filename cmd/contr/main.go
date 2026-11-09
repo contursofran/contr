@@ -182,6 +182,7 @@ func openWindow(icons bool) int {
 		// The model on line 2 of an agent row comes from the profile. A config
 		// that does not read is reported by the agent state; the defaults serve here.
 		cfg, _ := agents.LoadConfig(configPath(os.Getenv))
+		frame.AgentsNotice = cfg.Notice
 		frame.ModelOf = cfg.ModelOf
 		frame.EffortOf = cfg.EffortOf
 		frame.LoadProjects = func() (*projects.Store, error) {
@@ -236,7 +237,7 @@ func openWindow(icons bool) int {
 		frame.PickFolder = pickFolder
 		frame.Updates = updateService()
 		frame.Relaunch = func() { mygo.App.Relaunch() }
-		// The note of the last install lives in contr's state folder (D207).
+		// The note of the last install lives in contr's state folder (D209).
 		updatedPath := updated.Path(usage.StateDir())
 		frame.LoadUpdated = func() (updated.Note, error) {
 			if updatedPath == "" {

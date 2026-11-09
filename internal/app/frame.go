@@ -87,7 +87,7 @@ type Frame struct {
 	Updates Updates
 	// Relaunch restarts contr after an update installs.
 	Relaunch func()
-	// LoadUpdated reads the note of the last install, and SaveUpdated writes it (D207). Both
+	// LoadUpdated reads the note of the last install, and SaveUpdated writes it (D209). Both
 	// run on a goroutine. Nil reads or saves nothing.
 	LoadUpdated func() (updated.Note, error)
 	SaveUpdated func(updated.Note) error
@@ -190,6 +190,10 @@ type Frame struct {
 	// fakes first) and ends them with its stop function.
 	Host  *host.Host
 	Usage *usage.Sampler
+
+	// AgentsNotice is a note about agents.json that LoadConfig made at start
+	// (the old format, D206). [Frame.Attach] shows it once in the toasts.
+	AgentsNotice string
 
 	// NewOrch is the `+ new` action. [Frame.Attach] makes it when PickFolder
 	// and SpawnOrchestrator are set.
@@ -1054,6 +1058,9 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.Files.Post, f.Files.Invalidate = w.Update, w.Invalidate
 	f.Toasts = state.NewToasts(w.Invalidate)
 	f.Files.Status = f.Toasts.Show
+	if f.AgentsNotice != "" {
+		f.Toasts.Show(f.AgentsNotice)
+	}
 	f.Session.Post, f.Session.Invalidate, f.Session.OpenURL = w.Update, w.Invalidate, openURL
 	if f.Session.StateDir == "" {
 		f.Session.StateDir = usage.StateDir()
@@ -1071,7 +1078,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		agentSnap = src.Snapshot
 		f.agentSnap = agentSnap
 		run := Runner{Post: w.Update}
-		f.Card = &QuestionsCard{Source: src, Run: run, Invalidate: w.Invalidate,
+		f.Card = &QuestionsCard{Source: src, Run: run, Invalidate: w.Invalidate, Status: f.Toasts.Show,
 			Select: func(address string, orchestrator bool) {
 				kind := state.KindWorker
 				if orchestrator {

@@ -726,7 +726,7 @@ type recorded struct {
 }
 
 // recordRig is a Settings with a pending update of 1.3.0 whose RecordInstall and Relaunch log
-// their calls in order (D207).
+// their calls in order (D209).
 func recordRig(u *fakeUpdates) (*Settings, *[]recorded) {
 	var log []recorded
 	at := time.Date(2026, 11, 9, 10, 0, 0, 0, time.UTC)

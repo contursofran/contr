@@ -24,6 +24,7 @@ what the redesign does not settle.
 | [StatusGlyph.md](StatusGlyph.md) | braille spinner and Claude glyph |
 | [ServerRow.md](ServerRow.md) | one machine that runs hc |
 | [ProjectRow.md](ProjectRow.md) | one project in the sidebar |
+| [ProjectsModal.md](ProjectsModal.md) | the palette dialog that shows, adds and hides projects |
 | [AgentRow.md](AgentRow.md) | one orchestrator or worker |
 | [Terminal.md](Terminal.md) | the hc terminal of the selected tab |
 | [QuestionsNotch.md](QuestionsNotch.md) | glass tab at the top of each terminal of the project |
@@ -194,7 +195,7 @@ Esc is never a window shortcut: it interrupts Claude Code in the terminal.
 | Context sheet (`⌘J`) | QuestionsCard impacts and a collapsible section | replaced; no sheet (D125); code removed (D147) |
 | Footer 26: plan usage | UsageMeter | replaced; removed (D146): CPU and memory on ServerRow, versions in Settings, messages as toasts (D126) |
 | Pin bar (removed) | Outline and OutlineCard | new |
-| Board pop-up, PR viewer, Review, projects modal, settings | unchanged; restyle with the tokens | Review, projects modal and settings restyled; the board pop-up and PR viewer disabled (D122, D127); hidden behind one switch, code kept (D147) |
+| Board pop-up, PR viewer, Review, settings | unchanged; restyle with the tokens | Review and settings restyled; the projects modal is redesigned in [ProjectsModal.md](ProjectsModal.md) (D209); the board pop-up and PR viewer disabled (D122, D127); hidden behind one switch, code kept (D147) |
 
 ## Open points
 

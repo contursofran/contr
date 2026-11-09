@@ -1,5 +1,5 @@
 // Package updated keeps the update that contr installed last, so the first start of that
-// version can show What's new (D207). It is one small JSON file in contr's state folder.
+// version can show What's new (D209). It is one small JSON file in contr's state folder.
 package updated
 
 import (
