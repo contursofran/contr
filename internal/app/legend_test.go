@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/theme"
 )
@@ -88,7 +89,7 @@ func TestLegendChangesWithTheTheme(t *testing.T) {
 	tt := ui.NewTester((&Legend{}).View, 480, 420)
 	tt.Frame()
 	at := func() [3]uint8 {
-		p := pixelAt(tt.Image(), 470, 410)
+		p := apptest.PixelAt(tt.Image(), 470, 410)
 		return [3]uint8{p.R, p.G, p.B}
 	}
 	g := theme.Dark.Ground

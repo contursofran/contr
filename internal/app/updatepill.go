@@ -17,6 +17,7 @@ import (
 
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/updated"
@@ -88,7 +89,7 @@ func (f *Frame) loadUpdated(env view.Env) {
 
 // recordInstall is Settings.RecordInstall: it saves the installed update through Deps.Updated.Save,
 // not shown yet (D209). It runs off the UI thread.
-func (f *Frame) recordInstall(info UpdateInfo, from string, at time.Time) error {
+func (f *Frame) recordInstall(info settings.UpdateInfo, from string, at time.Time) error {
 	if f.deps.Updated.Save == nil {
 		return nil
 	}
@@ -127,7 +128,7 @@ func (f *Frame) updatedShown() {
 // updateReady is Settings.OnReady: it queues the one toast of the version. The ready pill takes
 // the place of the "Updated to" pill: that note is marked shown and its panel closes. The ready
 // panel stays closed until the owner opens it (#533).
-func (f *Frame) updateReady(info UpdateInfo) {
+func (f *Frame) updateReady(info settings.UpdateInfo) {
 	f.updatedShown()
 	if f.upd.toasted == nil {
 		f.upd.toasted = map[string]bool{}
@@ -178,7 +179,7 @@ func (f *Frame) updatedPill(c *ui.Context) {
 			f.updatedShown()
 		}
 		panel.Children(func() {
-			f.updatePanel(c, UpdateInfo{Version: n.Version, Notes: n.Notes}, n.From, n.InstalledAt, true)
+			f.updatePanel(c, settings.UpdateInfo{Version: n.Version, Notes: n.Notes}, n.From, n.InstalledAt, true)
 		})
 	})
 	if panel.Dismissed() {
@@ -224,7 +225,7 @@ func floatCardFill(p *theme.Palette) ui.Color { return p.FloatSolid }
 
 // updatePanel is the panel body: head, What's new, the agents note and the foot. After an update
 // (D209) it has no agents note, and its foot has only Got it.
-func (f *Frame) updatePanel(c *ui.Context, info UpdateInfo, from string, at time.Time, after bool) {
+func (f *Frame) updatePanel(c *ui.Context, info settings.UpdateInfo, from string, at time.Time, after bool) {
 	p := theme.Current()
 	meta := theme.StyleMeta
 	ui.Row(c).AlignItems(ui.Center).Gap(theme.Space8).Padding(theme.Space14, theme.Space16, theme.Space10, theme.Space16).Children(func() {
@@ -255,12 +256,12 @@ func (f *Frame) updatePanel(c *ui.Context, info UpdateInfo, from string, at time
 		BorderWidth(1, 0, 0, 0).BorderColor(p.Hairline).Children(func() {
 		if after {
 			ui.Text(c, sinceText("Updated", time.Now(), at)).NoWrap().Grow(1).TextColor(p.Ink50)
-			settingsButton(c, UpdateGotIt+" ⏎", ButtonFilled, f.updatedShown)
+			settings.SettingsButton(c, UpdateGotIt+" ⏎", kit.ButtonFilled, f.updatedShown)
 			return
 		}
 		ui.Text(c, sinceText("Downloaded", time.Now(), at)).NoWrap().Grow(1).TextColor(p.Ink50)
-		settingsButton(c, UpdateLater, ButtonPlain, func() { f.upd.open = false })
-		settingsButton(c, SettingsRestart+" ⏎", ButtonFilled, f.Settings.RestartNow)
+		settings.SettingsButton(c, UpdateLater, kit.ButtonPlain, func() { f.upd.open = false })
+		settings.SettingsButton(c, settings.SettingsRestart+" ⏎", kit.ButtonFilled, f.Settings.RestartNow)
 	})
 }
 
@@ -333,8 +334,8 @@ func (f *Frame) updateToast(c *ui.Context, t ui.Toast) {
 		})
 		ui.Text(c, t.Description).TextColor(p.Ink62)
 		ui.Row(c).Justify(ui.End).Gap(theme.Space8).Margin(theme.Space4, 0, 0, 0).Children(func() {
-			settingsButton(c, UpdateLater, ButtonPlain, func() { c.CloseToast(t.ID) })
-			settingsButton(c, SettingsRestart, ButtonFilled, func() {
+			settings.SettingsButton(c, UpdateLater, kit.ButtonPlain, func() { c.CloseToast(t.ID) })
+			settings.SettingsButton(c, settings.SettingsRestart, kit.ButtonFilled, func() {
 				c.CloseToast(t.ID)
 				f.Settings.RestartNow()
 			})

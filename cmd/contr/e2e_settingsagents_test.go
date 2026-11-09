@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
 
@@ -89,7 +90,7 @@ func TestSettingsAgentsTab(t *testing.T) {
 
 	wait(app.LabelNewTab)
 	c.call(t, "menu", map[string]any{"path": []string{"contr", "Settings…"}})
-	wait(app.LabelSettings)
+	wait(settings.LabelSettings)
 	for _, theme := range []string{"Dark", "Light"} {
 		click("General")
 		click(theme)
@@ -98,7 +99,7 @@ func TestSettingsAgentsTab(t *testing.T) {
 			c.capture(t, filepath.Join(out, "settings-"+tab+"-"+theme+".png"))
 			if tab == "Agents" {
 				// The Flow section is on top; scroll to the Roles below it.
-				b := c.boundsOf(t, app.LabelAgentsScroll)
+				b := c.boundsOf(t, settings.LabelAgentsScroll)
 				c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "wheel", "x": b.X + b.Width/2, "y": b.Y + b.Height/2, "dy": 600, "precise": true}}})
 				time.Sleep(600 * time.Millisecond)
 				c.capture(t, filepath.Join(out, "settings-Agents-roles-"+theme+".png"))

@@ -7,6 +7,7 @@ import (
 	"github.com/contursofran/contr/internal/app/ghsource"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/reviewview"
+	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
@@ -208,7 +209,7 @@ func (f *Frame) attachSettings(w Window, env view.Env) (stop func()) {
 		f.Toasts.Show(f.themeErr.Error())
 		f.themeErr = nil
 	}
-	f.Settings = &Settings{Updates: f.deps.Updates, Version: Version, CoreVersion: f.coreVersion, Env: env,
+	f.Settings = &settings.Settings{Updates: f.deps.Updates, Version: settings.Version, CoreVersion: f.coreVersion, Env: env,
 		Relaunch: f.deps.Relaunch, OnReady: f.updateReady, Visible: func() bool { return f.Visibility == nil || f.Visibility.Visible() },
 		AgentsConfig: f.deps.AgentsConfig, Appearance: f.Appearance, SetAppearance: f.SetAppearance,
 		Tint: f.Tint, SetTint: f.SetTint, ResetTint: f.ResetTint, RecordInstall: f.recordInstall}

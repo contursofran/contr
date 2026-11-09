@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
@@ -73,7 +74,7 @@ func TestWindowGaps(t *testing.T) {
 	for deadline := time.Now().Add(20 * time.Second); c.boundsOf(t, app.LabelTabs).Width == 0 && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
 	}
 	c.call(t, "menu", map[string]any{"path": []string{"contr", "Settings…"}})
-	for deadline := time.Now().Add(20 * time.Second); !has(app.LabelSettings) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+	for deadline := time.Now().Add(20 * time.Second); !has(settings.LabelSettings) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
 	}
 	click := func(label string) {
 		t.Helper()

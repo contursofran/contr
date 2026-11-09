@@ -25,6 +25,7 @@ import (
 	"github.com/contursofran/contr/internal/app/ghsource"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/reviewview"
+	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
@@ -88,7 +89,7 @@ type Frame struct {
 	// ProjectsModal is the projects modal (D110), made in Attach.
 	ProjectsModal *ProjectsModal
 	// Settings is the Settings modal, made in Attach.
-	Settings *Settings
+	Settings *settings.Settings
 	// Worker is the panel's worker view. [Frame.Attach] makes it while the viewers are
 	// shown (D147); else it stays nil.
 	Worker *WorkerPanel

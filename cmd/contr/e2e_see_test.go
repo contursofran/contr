@@ -14,6 +14,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/session"
 	"github.com/contursofran/contr/internal/updated"
@@ -90,8 +91,8 @@ var seeFixtures = map[string]seeFixture{
 	"updated": {
 		about: "the first start after an update: the Updated to pill with What's new open (D209)",
 		setup: func(t *testing.T, h *harness) {
-			n := updated.Note{Version: app.Version, From: "0.0.9", InstalledAt: time.Now().Add(-3 * time.Minute),
-				Notes: "## " + app.Version + "\n- What's new opens after an update\n- Faster tab switching\n- Light theme fixes"}
+			n := updated.Note{Version: settings.Version, From: "0.0.9", InstalledAt: time.Now().Add(-3 * time.Minute),
+				Notes: "## " + settings.Version + "\n- What's new opens after an update\n- Faster tab switching\n- Light theme fixes"}
 			if err := updated.Save(updated.Path(filepath.Join(h.dir, "state")), n); err != nil {
 				t.Fatal(err)
 			}

@@ -88,7 +88,7 @@ Each tab is named by its text. Dropdowns are named `<Role> CLI`, `<Role> model` 
 ## Build in MyGo
 
 `ui.TabsBase`, `ui.SelectBase`, `Text.SingleLine().Ellipsis`. Code:
-`internal/app/settings.go` (tab bar), `internal/app/settings_agents.go` (Agents tab).
+`internal/app/settings/settings.go` (tab bar), `internal/app/settings/settings_agents.go` (Agents tab).
 
 ## Tests
 

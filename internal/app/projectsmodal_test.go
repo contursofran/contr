@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
@@ -554,7 +555,7 @@ func TestProjectsModalChangesWithTheTheme(t *testing.T) {
 		if !ok {
 			t.Fatalf("no %q", label)
 		}
-		p := pixelAt(r.tt.Image(), b.X+dx, b.Y+dy)
+		p := apptest.PixelAt(r.tt.Image(), b.X+dx, b.Y+dy)
 		return [3]uint8{p.R, p.G, p.B}
 	}
 	rgb := func(c ui.Color) [3]uint8 { return [3]uint8{c.R, c.G, c.B} }

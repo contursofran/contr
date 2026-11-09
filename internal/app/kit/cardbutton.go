@@ -1,6 +1,6 @@
-package app
+package kit
 
-// The button that cards and panels share: the button styles and cardButton.
+// The button that cards and panels share: the button styles and CardButton.
 
 import (
 	"github.com/egoist/mygo/ui"
@@ -33,10 +33,10 @@ func OptionStyle(recommended bool) ButtonStyle {
 	return ButtonOutlined
 }
 
-// cardButton is a card button. With click nil the board takes no actions:
+// CardButton is a card button. With click nil the board takes no actions:
 // the button is dim and does nothing. The button's accessible name is its
 // label. colour is the text colour of a live plain button.
-func cardButton(c *ui.Context, label string, style ButtonStyle, colour ui.Color, click ClickFn) {
+func CardButton(c *ui.Context, label string, style ButtonStyle, colour ui.Color, click ClickFn) {
 	live := click != nil
 	el := ui.ButtonBase(c).Label(label).Height(theme.AnswerButtonHeight).Shrink(0).
 		PaddingX(theme.AnswerButtonPadX).AlignItems(ui.Center).Radius(theme.AnswerButtonRadius)

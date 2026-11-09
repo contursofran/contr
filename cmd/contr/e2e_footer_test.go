@@ -12,6 +12,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
@@ -141,13 +142,13 @@ func TestNoFooter(t *testing.T) {
 	openSettings := func() {
 		t.Helper()
 		click(app.LabelSettingsOpen)
-		waitFor("settings", func() bool { return has(app.LabelSettings) })
+		waitFor("settings", func() bool { return has(settings.LabelSettings) })
 		time.Sleep(500 * time.Millisecond)
 	}
 	closeSettings := func() {
 		t.Helper()
 		c.key(t, "Escape")
-		waitFor("settings closed", func() bool { return !has(app.LabelSettings) })
+		waitFor("settings closed", func() bool { return !has(settings.LabelSettings) })
 		time.Sleep(400 * time.Millisecond)
 	}
 	pick := func(appearance string) {
