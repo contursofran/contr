@@ -49,6 +49,16 @@ var seeFixtures = map[string]seeFixture{
 		},
 		ready: "lead, ",
 	},
+	"todo": {
+		about: "the workers fixture with one to-do that holds a command in backticks (#498)",
+		setup: func(t *testing.T, h *harness) {
+			seeWorkers(t, h)
+			h.owner(t, `{"questions":[],
+"todos":[{"id":"T1","project":"demo","kind":"do","text":"Run `+"`go run ./tmp/usagecheck`"+` and paste the plan rows it prints into the issue","pinned":"2026-11-03T10:02:00Z"}],
+"next_question":1,"next_todo":2}`)
+		},
+		ready: "lead, ",
+	},
 	"wide": {
 		about: "the core sized a worker's terminal to 300x60 before the app shows it (#481)",
 		setup: func(t *testing.T, h *harness) {

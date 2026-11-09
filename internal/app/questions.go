@@ -31,6 +31,10 @@ const (
 	// QuestionsPromptChanged shows when the worker's menu changed after the
 	// owner saw it; nothing was sent.
 	QuestionsPromptChanged = "The prompt changed; look again."
+	// LabelCopyCode starts the label of a code chip: "Copy <text>" (D204).
+	LabelCopyCode = "Copy "
+	// QuestionsCopied is the toast after a click on a code chip.
+	QuestionsCopied = "Copied"
 )
 
 // keyOptions are the digit keys; the key at index i picks place i.
@@ -78,6 +82,8 @@ type QuestionsCard struct {
 	Invalidate func()
 	// Select selects the worker at an address (Focus worker); may be nil.
 	Select func(address string, orchestrator bool)
+	// Status shows a short message as a toast (D126); may be nil.
+	Status func(string)
 
 	open    bool
 	key     string // the item shown
