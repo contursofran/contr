@@ -190,7 +190,7 @@ func TestFramePanelRowClickShowsTheWorker(t *testing.T) {
 	f.Panel = &BoardPanel{Snapshot: src.Snapshot, Scope: scope, Needs: NeedItems(src.Snapshot, scope),
 		Select: func(a string) { f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: a}) }}
 	f.Slots.Panel = f.Panel.View
-	tt := ui.NewTester(f.panelBox, theme.PanelWidth, theme.WindowHeight)
+	tt := ui.NewTester(panelBox(f), theme.PanelWidth, theme.WindowHeight)
 	tt.Frame()
 	box(t, tt, LabelBoardRoot)
 	tt.Click(WorkRowLabel(WorkRows(src.snap, "a")[1]))
