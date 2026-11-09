@@ -127,7 +127,7 @@ func openMetaParts(g spaces.RepoGroup, home string) (path, branch, live string, 
 		}
 	}
 	if needYou > 0 {
-		live = strconv.Itoa(needYou) + " need you"
+		live = needYouText(needYou)
 	}
 	if home != "" {
 		if path == home {
@@ -137,4 +137,13 @@ func openMetaParts(g spaces.RepoGroup, home string) (path, branch, live string, 
 		}
 	}
 	return path, g.Branch, live, needYou
+}
+
+// needYouText is the count of worktrees that need the owner: `1 needs you`,
+// `N need you` (spec ProjectsModal, Copy).
+func needYouText(n int) string {
+	if n == 1 {
+		return "1 needs you"
+	}
+	return strconv.Itoa(n) + " need you"
 }
