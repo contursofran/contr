@@ -33,22 +33,42 @@ func (f fakeCtx) Context(id string) (usage.Context, bool) { c, ok := f.ctx[id]; 
 
 func TestContextMeterShowsTheContextOfTheSelectedTerminal(t *testing.T) {
 	src := fakeCtx{fakeLeft{}, map[string]usage.Context{"t1": {Tokens: 90000, Size: 200000}, "t2": {Tokens: 200000, Size: 200000}}}
-	got := contextMeter(src, "t1")
+	got := contextMeter(src, "t1", usage.Context{})
 	want := kit.Meter{Label: "Context", Value: "90k of 200k  45%", Percent: 45, Has: true}
 	if got != want {
 		t.Errorf("context %+v, want %+v", got, want)
 	}
-	if got := contextMeter(src, "t2"); got.Percent != 100 || got.Value != "200k of 200k  100%" {
+	if got := contextMeter(src, "t2", usage.Context{}); got.Percent != 100 || got.Value != "200k of 200k  100%" {
 		t.Errorf("full context %+v", got)
 	}
-	// No terminal selected, a terminal with no file, or no sampler: no data.
+	// No terminal selected, a terminal with no file and no labels, or no sampler: no data.
 	for _, id := range []string{"", "t3"} {
-		if got := contextMeter(src, id); got.Has || got.Value != "" {
+		if got := contextMeter(src, id, usage.Context{}); got.Has || got.Value != "" {
 			t.Errorf("terminal %q: context %+v has data", id, got)
 		}
 	}
-	if got := contextMeter(nil, "t1"); got.Has {
+	if got := contextMeter(nil, "t1", usage.Context{}); got.Has {
 		t.Errorf("nil source: context %+v has data", got)
+	}
+}
+
+// Without a status line file the meter falls back to the Stop hook's labels,
+// in the same format; the file wins when there is one (D205).
+func TestContextMeterFallsBackToTheHookLabels(t *testing.T) {
+	src := fakeCtx{fakeLeft{}, map[string]usage.Context{"t1": {Tokens: 90000, Size: 200000}}}
+	labels := usage.Context{Tokens: 90000, Size: 160000}
+	if got := contextMeter(src, "t1", labels); got.Value != "90k of 200k  45%" {
+		t.Errorf("with a file: %+v, want the file", got)
+	}
+	want := kit.Meter{Label: "Context", Value: "90k of 160k  56%", Percent: 56, Has: true}
+	if got := contextMeter(src, "t2", labels); got != want {
+		t.Errorf("no file: %+v, want %+v", got, want)
+	}
+	if got := contextMeter(nil, "t2", labels); got != want {
+		t.Errorf("no sampler: %+v, want %+v", got, want)
+	}
+	if got := contextMeter(src, "", labels); got.Has {
+		t.Errorf("no selection: %+v has data", got)
 	}
 }
 

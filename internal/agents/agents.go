@@ -17,6 +17,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -43,6 +44,12 @@ const (
 	// session that ran /contr:orchestrate, so its row shows that it
 	// orchestrates before it has workers (D191).
 	LabelOrchestrating = "contr.orchestrating"
+	// LabelContext and LabelContextLimit are set by the kit's Stop hook on a
+	// Claude Code session's own terminal: the context size in tokens and the
+	// window Claude Code compacts at (D189). The Context meter falls back to
+	// them when the session runs no status line (D205).
+	LabelContext      = "contr.context"
+	LabelContextLimit = "contr.context-limit"
 )
 
 // RoleOrchestrator is the role label of an orchestrator agent.
@@ -250,6 +257,12 @@ type Worker struct {
 	// Orchestrating is true when the kit's Stop hook saw /contr:orchestrate
 	// in the session (LabelOrchestrating, D191).
 	Orchestrating bool `json:"orchestrating,omitempty"`
+	// ContextTokens and ContextLimit are the context size and the compaction
+	// window that the kit's Stop hook put on the terminal (LabelContext,
+	// LabelContextLimit). Both are zero when a label is missing or not a
+	// positive integer (D205).
+	ContextTokens uint64 `json:"context_tokens,omitempty"`
+	ContextLimit  uint64 `json:"context_limit,omitempty"`
 	// Task is what a worker is doing, for line 1 of its row: the cleaned
 	// terminal title. Set by the agent model; empty when the title is not
 	// usable (D169).
@@ -319,6 +332,7 @@ func (t terminal) worker() Worker {
 
 		Orchestrating: t.Labels[LabelOrchestrating] != "",
 	}
+	w.ContextTokens, w.ContextLimit = contextLabels(t.Labels)
 	if t.Name != nil {
 		w.Name = *t.Name
 	}
@@ -832,6 +846,17 @@ func sortWorkers(ws []Worker) {
 }
 
 // orText is s, else other when s is empty.
+// contextLabels reads LabelContext and LabelContextLimit. Both must be
+// positive integers; else it gives no data (0, 0).
+func contextLabels(labels map[string]string) (tokens, limit uint64) {
+	t, errT := strconv.ParseUint(labels[LabelContext], 10, 64)
+	l, errL := strconv.ParseUint(labels[LabelContextLimit], 10, 64)
+	if errT != nil || errL != nil || t == 0 || l == 0 {
+		return 0, 0
+	}
+	return t, l
+}
+
 func orText(s, other string) string {
 	if s != "" {
 		return s
