@@ -27,7 +27,9 @@ Claude Code runs them and gives them the hook input on stdin.
 
 stop, in a worker (CONTR_COORDINATOR is set): a turn that sent no report
 with hc send gets one, "ended its turn without a report. Last words: …",
-sent to the coordinator. It never stops the turn.
+sent to the coordinator. When Claude Code saved no transcript, it cannot
+tell whether the turn sent one: it sends "ended its turn; it may have sent a
+report already …" with the last words. It never stops the turn.
 
 stop, in a coordinator (a session that ran /contr:orchestrate, or an hc
 terminal with role orchestrator): once the context passes CONTR_SAVE_AT
@@ -134,11 +136,14 @@ func runHook(args []string, stdin io.Reader, stdout, stderr io.Writer, dial func
 	return 0
 }
 
-// workerStop sends the coordinator a report for a turn that sent none.
+// workerStop sends the coordinator a report for a turn that sent none. With
+// no transcript file (Claude Code saved none), it cannot tell whether the
+// turn sent one, so it sends a report that says it may repeat one (D215).
 func (h *hook) workerStop() error {
 	coordinator := h.getenv(agents.EnvCoordinator)
 	turn, err := readTurn(h.in.TranscriptPath)
-	if err != nil {
+	noTranscript := errors.Is(err, os.ErrNotExist)
+	if err != nil && !noTranscript {
 		return err
 	}
 	if turn.Reported {
@@ -149,6 +154,9 @@ func (h *hook) workerStop() error {
 		said = turn.Said
 	}
 	text := missedReport(said, h.in.Cwd)
+	if noTranscript {
+		text = unsureReport(said, h.in.Cwd)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -165,12 +173,16 @@ func (h *hook) workerStop() error {
 }
 
 // coordinatorStop asks a coordinator, once per compaction, to save its state
-// when the context nears the compaction window.
+// when the context nears the compaction window. With no transcript file it
+// does nothing (D215).
 func (h *hook) coordinatorStop() error {
 	if h.in.StopHookActive || h.in.TranscriptPath == "" {
 		return nil
 	}
 	tokens, model, err := agents.ContextAndModel(h.in.TranscriptPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
@@ -534,6 +546,17 @@ func readTurn(path string) (agents.Turn, error) {
 // words on one line, cut to saidMax characters, and RESULT.md when the
 // worker's folder has one.
 func missedReport(said, cwd string) string {
+	return report("ended its turn without a report", said, cwd)
+}
+
+// unsureReport is the report for a turn with no transcript: as missedReport,
+// but it says that it may repeat a report the worker sent.
+func unsureReport(said, cwd string) string {
+	return report("ended its turn; it may have sent a report already (no transcript, so contr cannot tell)", said, cwd)
+}
+
+// report is lead, the worker's last words and RESULT.md, as missedReport.
+func report(lead, said, cwd string) string {
 	said = strings.Join(strings.Fields(said), " ")
 	if r := []rune(said); len(r) > saidMax {
 		said = string(r[:saidMax]) + "…"
@@ -541,7 +564,7 @@ func missedReport(said, cwd string) string {
 	if said == "" {
 		said = "(none)"
 	}
-	text := "ended its turn without a report. Last words: " + said
+	text := lead + ". Last words: " + said
 	if cwd != "" {
 		if _, err := os.Stat(filepath.Join(cwd, "RESULT.md")); err == nil {
 			text += "; RESULT.md in " + cwd

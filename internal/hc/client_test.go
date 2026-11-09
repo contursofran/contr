@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -24,6 +25,39 @@ func TestCleanEnv(t *testing.T) {
 	want := []string{"PATH=/usr/bin", "CLAUDECODEX=keep", "CLAUDE_CODE=keep", "HOME=/h", "MY_CLAUDE_CODE_X=keep"}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("CleanEnv = %q, want %q", got, want)
+	}
+}
+
+// CleanArgv unsets, when the program starts, the same variables as CleanEnv,
+// and runs argv with its words as they are.
+func TestCleanArgvUnsetsWhatCleanEnvRemoves(t *testing.T) {
+	argv := CleanArgv([]string{"/bin/sh", "-c", `printf '%s|' "$@"; echo; env`, "x", "a b", "$HOME", ""})
+	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Env = []string{
+		"PATH=/usr/bin:/bin", "CLAUDECODE=1", "CLAUDE_CODE_CHILD_SESSION=1",
+		"CLAUDE_CODE_MESSAGING_TOKEN=x", "CLAUDECODEX=keep", "CLAUDE_CODE=keep",
+		"MY_CLAUDE_CODE_X=keep", "CONTR_COORDINATOR=t1", "HC_TERMINAL_ID=t2",
+		"MULTI=one\nCLAUDE_CODE_NOT_SET=x",
+	}
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	words, env, _ := strings.Cut(string(out), "\n")
+	if words != "a b|$HOME||" {
+		t.Errorf("words = %q", words)
+	}
+	set := map[string]bool{}
+	for _, line := range strings.Split(env, "\n") {
+		if name, _, ok := strings.Cut(line, "="); ok {
+			set[name] = true
+		}
+	}
+	for _, kv := range cmd.Env {
+		name, _, _ := strings.Cut(kv, "=")
+		if want := !ClaudeSessionVar(name); set[name] != want {
+			t.Errorf("%s: set = %v, want %v", name, set[name], want)
+		}
 	}
 }
 

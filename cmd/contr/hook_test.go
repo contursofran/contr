@@ -70,6 +70,24 @@ func TestHookPrefersLastAssistantMessage(t *testing.T) {
 	}
 }
 
+// D215: with no transcript file, the worker still reports its last message
+// and RESULT.md, and the report says that it may repeat one.
+func TestHookReportsWithoutTranscript(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "RESULT.md"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	in := `{"transcript_path":"` + filepath.Join(dir, "gone.jsonl") + `","cwd":"` + dir + `","last_assistant_message":"PR #5 is open."}`
+	code, stderr, core, _ := hookRun(t, workerEnv, in)
+	if code != 0 || len(core.calls) != 1 || core.calls[0] != "terminal.send" {
+		t.Fatalf("code %d, stderr %q, calls %v", code, stderr, core.calls)
+	}
+	want := "ended its turn; it may have sent a report already (no transcript, so contr cannot tell). Last words: PR #5 is open.; RESULT.md in " + dir
+	if p := core.params[0]; p["terminal"] != "t1" || p["text"] != want {
+		t.Errorf("params = %v", p)
+	}
+}
+
 func TestHookQuiet(t *testing.T) {
 	// A turn that reported sends nothing.
 	if code, stderr, core, _ := hookRun(t, workerEnv, "", hookPrompt, hookSend, hookWords); code != 0 || len(core.calls) != 0 {
@@ -85,8 +103,10 @@ func TestHookErrors(t *testing.T) {
 	if code, stderr, _, _ := hookRun(t, workerEnv, "not json"); code != 1 || !strings.Contains(stderr, "bad hook input") {
 		t.Errorf("bad input: code %d, stderr %q", code, stderr)
 	}
-	if code, stderr, _, _ := hookRun(t, workerEnv, `{"transcript_path":"/nonexistent/t.jsonl"}`); code != 1 || !strings.Contains(stderr, "contr hook:") {
-		t.Errorf("missing transcript: code %d, stderr %q", code, stderr)
+	// A transcript that exists but cannot be read still fails.
+	dir := t.TempDir()
+	if code, stderr, core, _ := hookRun(t, workerEnv, `{"transcript_path":"`+dir+`"}`); code != 1 || !strings.Contains(stderr, "contr hook:") || len(core.calls) != 0 {
+		t.Errorf("unreadable transcript: code %d, stderr %q, calls %v", code, stderr, core.calls)
 	}
 	if code, stderr, _, _ := hookRun(t, workerEnv, `{}`); code != 1 || !strings.Contains(stderr, "no transcript_path") {
 		t.Errorf("no transcript path: code %d, stderr %q", code, stderr)

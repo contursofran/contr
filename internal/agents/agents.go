@@ -552,6 +552,11 @@ func (m *Manager) Spawn(ctx context.Context, s Spec) (Worker, error) {
 	if s.Task != "" {
 		argv = append(argv, s.Task)
 	}
+	// A Claude worker starts without the Claude Code session variables of
+	// the core's environment, so Claude Code saves its transcript (D215).
+	if isClaude(argv) {
+		argv = hc.CleanArgv(argv)
+	}
 	env := map[string]string{}
 	if setup, main := m.setupFor(ctx, s.Worktree); setup != "" {
 		argv = withSetup(setup, argv)
@@ -635,7 +640,7 @@ func (m *Manager) OpenTerminal(ctx context.Context, s TerminalSpec) (Worker, err
 // already (D203).
 func (m *Manager) agentArgv(agent string, argv []string) []string {
 	out := append([]string(nil), argv...)
-	if len(out) == 0 || filepath.Base(out[0]) != "claude" {
+	if !isClaude(out) {
 		return out
 	}
 	head := []string{out[0]}
@@ -655,6 +660,11 @@ func (m *Manager) agentArgv(agent string, argv []string) []string {
 		}
 	}
 	return append(head, out[1:]...)
+}
+
+// isClaude tells whether argv runs the claude command.
+func isClaude(argv []string) bool {
+	return len(argv) > 0 && filepath.Base(argv[0]) == "claude"
 }
 
 // hasFlag reports whether args set flag, as `flag v` or `flag=v`.

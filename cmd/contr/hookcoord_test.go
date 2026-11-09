@@ -100,6 +100,20 @@ func TestHookCoordinatorStopQuiet(t *testing.T) {
 	}
 }
 
+// D215: a coordinator with no transcript file does nothing and does not fail;
+// a transcript that cannot be read still fails.
+func TestHookCoordinatorStopWithoutTranscript(t *testing.T) {
+	r := newCoordRig(t, orchestrateLine, usageLine(240000))
+	r.tr = filepath.Join(r.dir, "gone.jsonl")
+	if code, out, errs := r.run("stop", nil); code != 0 || out != "" || errs != "" || len(r.core.calls) != 0 {
+		t.Errorf("no transcript: code %d out %q err %q calls %v", code, out, errs, r.core.calls)
+	}
+	r.tr = r.dir
+	if code, _, errs := r.run("stop", nil); code != 1 || !strings.Contains(errs, "contr hook:") {
+		t.Errorf("unreadable transcript: code %d err %q", code, errs)
+	}
+}
+
 func TestHookCoordinatorByLabel(t *testing.T) {
 	r := newCoordRig(t, usageLine(240000))
 	w := worker("t1", "orch", "live", nil)
