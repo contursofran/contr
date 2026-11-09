@@ -105,17 +105,24 @@ func (q *QuestionsCard) body(c *ui.Context, p *theme.Palette, items []NeedTab, t
 	q.keys(c, p, t, snap, len(items))
 }
 
-// chipLabel is the text of a chip: the title of the item. A blocked worker
-// that gave no message shows its name.
+// chipLabel is the text of a chip: the title of the item without the
+// backticks of its code spans. A blocked worker that gave no message shows
+// its name.
 func chipLabel(t NeedTab) string {
 	if t.Title == "" {
 		return t.Key
 	}
-	return t.Title
+	return plainText(t.Title)
 }
 
-// name is the name of the card for assistive technology: the question.
+// name is the name of the card for assistive technology: the question,
+// without the backticks of its code spans.
 func (q *QuestionsCard) name(t NeedTab, snap agentstate.Snapshot) string {
+	return plainText(q.rawName(t, snap))
+}
+
+// rawName is the question of the card as the agent wrote it.
+func (q *QuestionsCard) rawName(t NeedTab, snap agentstate.Snapshot) string {
 	switch t.Kind {
 	case NeedQuestion:
 		if o, ok := q.question(snap); ok {
@@ -179,7 +186,7 @@ func (q *QuestionsCard) chips(c *ui.Context, p *theme.Palette, items []NeedTab, 
 func (q *QuestionsCard) questionBody(c *ui.Context, p *theme.Palette, t NeedTab, snap agentstate.Snapshot) {
 	o, ok := q.question(snap)
 	if !ok {
-		styled(ui.Text(c, t.Title), theme.StyleQuestion).Padding(2, theme.Space12).TextColor(p.Ink100)
+		styled(ui.Text(c, plainText(t.Title)), theme.StyleQuestion).Padding(2, theme.Space12).TextColor(p.Ink100)
 		return
 	}
 	q.heading(c, p, o.Question, contextLine(o.From))
@@ -368,7 +375,7 @@ func (q *QuestionsCard) codeText(c *ui.Context, p *theme.Palette, s string, st t
 				continue
 			}
 			chip := ui.RichText(c, ui.Span{Text: t.Text, Font: theme.FontMono, Size: theme.StyleMeta.Size,
-				Background: p.HoverStrong, Radius: theme.Radius4}).Label(LabelCopyCode + t.Text).Cursor(ui.CursorPointer)
+				Background: p.HoverStrong, Radius: theme.Radius4, PaddingX: theme.Space4, PaddingY: theme.Space2}).Label(LabelCopyCode + t.Text).Cursor(ui.CursorPointer)
 			if chip.Clicked() {
 				q.copyCode(c, t.Text)
 			}

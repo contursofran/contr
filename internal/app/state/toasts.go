@@ -1,6 +1,10 @@
 package state
 
-import "sync"
+import (
+	"strconv"
+	"sync"
+	"sync/atomic"
+)
 
 // Toasts holds the short messages that the window shows as toasts (D126). A
 // message can come from any goroutine: Show keeps it and asks the window to
@@ -11,6 +15,16 @@ type Toasts struct {
 
 	mu      sync.Mutex
 	pending []string
+	actions []ToastAction
+	seq     atomic.Uint64
+}
+
+// ToastAction is a message with a button, such as Undo. OnAction runs on the
+// UI thread when the owner presses the button.
+type ToastAction struct {
+	ID           string
+	Text, Action string
+	OnAction     func()
 }
 
 // NewToasts returns an empty queue. onChange may be nil. It runs after each
@@ -44,5 +58,29 @@ func (t *Toasts) Take() []string {
 	defer t.mu.Unlock()
 	out := t.pending
 	t.pending = nil
+	return out
+}
+
+// ShowAction queues a message with a button that runs undo (D207). An empty
+// text is ignored.
+func (t *Toasts) ShowAction(text, action string, undo func()) {
+	if text == "" {
+		return
+	}
+	t.mu.Lock()
+	t.actions = append(t.actions, ToastAction{ID: "action-" + strconv.FormatUint(t.seq.Add(1), 10), Text: text, Action: action, OnAction: undo})
+	t.mu.Unlock()
+	if t.onChange != nil {
+		t.onChange()
+	}
+}
+
+// TakeActions returns the queued messages with a button, oldest first, and
+// empties that queue.
+func (t *Toasts) TakeActions() []ToastAction {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	out := t.actions
+	t.actions = nil
 	return out
 }

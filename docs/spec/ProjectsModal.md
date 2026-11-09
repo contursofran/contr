@@ -75,7 +75,7 @@ Exact strings:
 - Every change saves at once (D63). There is no `Done`. Esc or a click outside closes the dialog.
 - The meta of an open row is `<path with ~> · <branch> · <live state>`. A part with no value is left out.
 - Live state (Q5): the `Hold` text of the top holder of the main worktree row, for example `orchestrator idle`. When worktree rows need the owner (`HoldYou`), `N need you` takes its place. A 6 px `claude` dot comes before the live state, `N need you` too, when an orchestrator holds the row. Only the path shrinks with an ellipsis; the branch and the live state keep their width.
-- Hide (D70) hides the project in contr only. It never closes an hc terminal or stops an agent. It also touches the project in `recent`, so it is the first row of Recent (Q8). The toast has `Undo`: it shows the project again and restores its old place in the order. Undo still works after the dialog closes (Q7).
+- Hide (D70) hides the project in contr only. It never closes an hc terminal or stops an agent. It also touches the project in `recent`, so it is the first row of Recent (Q8). The toast has `Undo`: it shows the project again and restores its old place in the order. Undo puts the project back at its old place in the current order; later changes stay. Undo still works after the dialog closes (Q7).
 - Open row: Enter or a click switches the sidebar to the project and closes the dialog.
 - Recent row: Enter or a click shows the project again (D70) and adds it to the sidebar. A hidden project shows in Recent while it has a `recent` entry.
 - Recent keeps at most 10 entries, newest first, each project once (D116).

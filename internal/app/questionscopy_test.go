@@ -31,10 +31,35 @@ func TestTodoCodeSpanShowsAsChipWithoutBackticks(t *testing.T) {
 	if _, ok := r.tt.Find(LabelCopyCode + copyCmd); !ok {
 		t.Fatalf("no code chip %q in %q", LabelCopyCode+copyCmd, r.tt.Texts())
 	}
-	// The paragraph reads without the backticks; the head chip keeps the
-	// raw title.
+	// The paragraph reads without the backticks.
 	if !r.tt.HasText("Run " + copyCmd + " and report") {
 		t.Errorf("no paragraph without backticks in %q", r.tt.Texts())
+	}
+}
+
+func TestTodoChipTabShowsNoBackticks(t *testing.T) {
+	r, _ := copyRig(t)
+	want := "Run " + copyCmd + " and report"
+	if _, ok := r.tt.Find(want); !ok {
+		t.Fatalf("no item tab %q in %q", want, r.tt.Texts())
+	}
+	for _, s := range r.tt.Texts() {
+		if strings.Contains(s, "`") {
+			t.Errorf("text %q shows a backtick", s)
+		}
+	}
+}
+
+func TestCardNameShowsNoBackticks(t *testing.T) {
+	r, _ := copyRig(t)
+	items := r.notch.Items()
+	i := slices.IndexFunc(items, func(it NeedTab) bool { return it.Key == "T1" })
+	if i < 0 {
+		t.Fatalf("no item T1")
+	}
+	want := "Run " + copyCmd + " and report"
+	if got := r.card.name(items[i], r.src.snap); got != want {
+		t.Errorf("name = %q, want %q", got, want)
 	}
 }
 

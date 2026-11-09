@@ -1144,6 +1144,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		PickFolder: f.OpenFolder, Resolve: f.ProjectKey,
 		CloneParent: f.CloneParent, PickParent: f.PickCloneParent, CloneRun: f.CloneRun,
 		Save: f.SaveProjects, Run: Runner{Post: w.Update}, Status: f.Toasts.Show, Invalidate: w.Invalidate,
+		Toast: f.Toasts.ShowAction,
 	}
 	f.ProjectsModal.Switch = f.SpacesList.Switch
 	f.ProjectsModal.Orchestrated = f.SpacesList.Orchestrated
