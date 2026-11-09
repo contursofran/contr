@@ -118,6 +118,9 @@ func TestLoadConfig(t *testing.T) {
 	if _, ok := cfg.Profiles["reviewer"]; !ok {
 		t.Error("default reviewer dropped")
 	}
+	if _, ok := cfg.Profiles["explorer"]; !ok {
+		t.Error("default explorer dropped")
+	}
 	if cfg.Source != path {
 		t.Errorf("source = %q, want %q", cfg.Source, path)
 	}
@@ -132,12 +135,25 @@ func TestLoadConfig(t *testing.T) {
 	}
 }
 
+// TestDefaultExplorer: the explorer profile is Claude, Sonnet, medium effort,
+// permission mode auto (#523).
+func TestDefaultExplorer(t *testing.T) {
+	cfg := DefaultConfig()
+	want := []string{"claude", "--model", "sonnet", "--effort", "medium", "--permission-mode", "auto"}
+	if got := cfg.Profiles["explorer"].Argv; !reflect.DeepEqual(got, want) {
+		t.Errorf("explorer argv = %v, want %v", got, want)
+	}
+	if cfg.ModelOf("explorer") != "sonnet" || cfg.EffortOf("explorer") != "medium" {
+		t.Errorf("explorer model %q effort %q", cfg.ModelOf("explorer"), cfg.EffortOf("explorer"))
+	}
+}
+
 // TestSpawnNoProfile: the error for an unknown profile names the file that
 // was read and the profiles that it has (#484).
 func TestSpawnNoProfile(t *testing.T) {
 	for _, tc := range []struct{ source, want string }{
-		{"", `agents: no profile "planner-high"; profiles: builder, debugger, orchestrator, planner, reviewer`},
-		{"/cfg/agents.json (not found)", `agents: no profile "planner-high" in /cfg/agents.json (not found); profiles: builder, debugger, orchestrator, planner, reviewer`},
+		{"", `agents: no profile "planner-high"; profiles: builder, debugger, explorer, orchestrator, planner, reviewer`},
+		{"/cfg/agents.json (not found)", `agents: no profile "planner-high" in /cfg/agents.json (not found); profiles: builder, debugger, explorer, orchestrator, planner, reviewer`},
 	} {
 		cfg := DefaultConfig()
 		cfg.Source = tc.source
@@ -464,7 +480,7 @@ func TestLoadConfigReadsTheKit(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg, err := LoadConfig(path)
-	if err != nil || cfg.Kit != "/k" || len(cfg.Profiles) != 5 {
+	if err != nil || cfg.Kit != "/k" || len(cfg.Profiles) != 6 {
 		t.Errorf("cfg = %+v, %v", cfg, err)
 	}
 }
