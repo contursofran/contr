@@ -8,7 +8,6 @@ import (
 	"sync/atomic"
 
 	"github.com/contursofran/contr/internal/agents"
-	"github.com/contursofran/contr/internal/app"
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/hc"
@@ -129,8 +128,8 @@ func (l *lazySource) Reconnect() {
 
 // startAgents gives the frame its agent state. dial connects to the core; the
 // model dials through it again after the connection ended (#559).
-func startAgents(getenv func(string) string, dial func(context.Context, func(string) string) (agentsCore, error)) func(notify func()) (app.AgentSource, func()) {
-	return func(notify func()) (app.AgentSource, func()) {
+func startAgents(getenv func(string) string, dial func(context.Context, func(string) string) (agentsCore, error)) func(notify func()) (agentstate.AgentSource, func()) {
+	return func(notify func()) (agentstate.AgentSource, func()) {
 		src := &lazySource{}
 		ctx, cancel := context.WithCancel(context.Background())
 		done := make(chan struct{})

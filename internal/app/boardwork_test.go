@@ -87,9 +87,9 @@ func boardTester(p *BoardPanel) *ui.Tester {
 	}, theme.PanelWidth, 900)
 }
 
-func newBoardPanel(snap agentstate.Snapshot, project string) (*BoardPanel, func() []NeedTab) {
+func newBoardPanel(snap agentstate.Snapshot, project string) (*BoardPanel, func() []agentstate.NeedTab) {
 	get, scope := func() agentstate.Snapshot { return snap }, func() string { return project }
-	tabs := NeedItems(get, scope)
+	tabs := agentstate.NeedItems(get, scope)
 	return &BoardPanel{Snapshot: get, Scope: scope, Needs: tabs}, tabs
 }
 
@@ -154,9 +154,9 @@ func TestResolvedTabIsDoneAndNotCounted(t *testing.T) {
 func TestClickingARowSelectsAndClickingANeedOpens(t *testing.T) {
 	p, _ := newBoardPanel(boardSnap(), "a")
 	var picked string
-	var opened NeedTab
+	var opened agentstate.NeedTab
 	p.Select = func(a string) { picked = a }
-	p.Open = func(t NeedTab) { opened = t }
+	p.Open = func(t agentstate.NeedTab) { opened = t }
 	tt := boardTester(p)
 	tt.Frame()
 	tt.Click(WorkRowLabel(WorkRows(boardSnap(), "a")[1]))
@@ -182,7 +182,7 @@ func TestNoWrapUpControl(t *testing.T) {
 
 func TestFramePanelRowClickShowsTheWorker(t *testing.T) {
 	enableViewers(t)
-	src := &source{snap: boardSnap(), text: "out"}
+	src := &source{Snap: boardSnap(), Text: "out"}
 	f := NewFrame(Deps{})
 	f.Selection = state.NewSelection(nil)
 	f.Selection.Select(state.Selected{Kind: state.KindOrchestrator, ID: "o1"})
@@ -190,13 +190,13 @@ func TestFramePanelRowClickShowsTheWorker(t *testing.T) {
 	f.agentSnap = src.Snapshot
 	f.takeSnapshot()
 	scope := f.scope
-	f.Panel = &BoardPanel{Snapshot: src.Snapshot, Scope: scope, Needs: NeedItems(src.Snapshot, scope),
+	f.Panel = &BoardPanel{Snapshot: src.Snapshot, Scope: scope, Needs: agentstate.NeedItems(src.Snapshot, scope),
 		Select: func(a string) { f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: a}) }}
 	f.Slots.Panel = f.Panel.View
 	tt := ui.NewTester(panelBox(f), theme.PanelWidth, theme.WindowHeight)
 	tt.Frame()
 	apptest.Box(t, tt, LabelBoardRoot)
-	tt.Click(WorkRowLabel(WorkRows(src.snap, "a")[1]))
+	tt.Click(WorkRowLabel(WorkRows(src.Snap, "a")[1]))
 	tt.Frame()
 	apptest.Box(t, tt, LabelWorkerPanel)
 }

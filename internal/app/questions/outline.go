@@ -1,4 +1,4 @@
-package app
+package questions
 
 // The outline (docs/spec/Outline.md and OutlineCard.md): a column of short
 // ticks on the right edge of the orchestrator terminal, one for each message
@@ -191,6 +191,15 @@ func (o *Outline) Focus(addr string) {
 		o.state(addr).gained = now
 	}
 	o.Env.Redraw()
+}
+
+// Focused is the terminal that has the focus now, as the last [Outline.Focus] told; "" for none
+// or a nil Outline.
+func (o *Outline) Focused() string {
+	if o == nil {
+		return ""
+	}
+	return o.focused
 }
 
 // isNew tells whether a message of the terminal came while the owner was away.

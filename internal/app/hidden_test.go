@@ -6,6 +6,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
@@ -30,10 +31,10 @@ func TestHiddenViewersHaveNoEntryPoint(t *testing.T) {
 	f := NewFrame(Deps{})
 	r := newPRRig(t)
 	f.PR = r.pane
-	src := &source{snap: boardSnap(), text: "out"}
+	src := &source{Snap: boardSnap(), Text: "out"}
 	f.Selection = state.NewSelection(nil)
 	f.Worker = &WorkerPanel{Source: src, Selection: f.Selection}
-	f.Panel = &BoardPanel{Snapshot: src.Snapshot, Needs: NeedItems(src.Snapshot, nil)}
+	f.Panel = &BoardPanel{Snapshot: src.Snapshot, Needs: agentstate.NeedItems(src.Snapshot, nil)}
 	f.Slots.Panel = f.Panel.View
 	tt := ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)
 	tt.Frame()
@@ -85,13 +86,13 @@ func (s readSource) Read(name string, _ int) (string, error) {
 // change, as the notify of StartAgents does.
 func attachWithWorker(t *testing.T) (*Frame, readSource) {
 	t.Helper()
-	src := readSource{source: &source{snap: boardSnap()}, reads: make(chan string, 16)}
+	src := readSource{source: &source{Snap: boardSnap()}, reads: make(chan string, 16)}
 	w := &fakeWindow{visible: true}
 	f := NewFrame(Deps{})
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	var notify func()
-	f.deps.StartAgents = func(n func()) (AgentSource, func()) { notify = n; return src, func() {} }
+	f.deps.StartAgents = func(n func()) (agentstate.AgentSource, func()) { notify = n; return src, func() {} }
 	t.Cleanup(f.Attach(w))
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t1"})
 	notify()

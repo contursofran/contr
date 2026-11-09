@@ -37,8 +37,8 @@ func TestPRMergeMarksItemDoneAndTellsPrincipal(t *testing.T) {
 	src := &source{}
 	r, g := mergeRig(t, "orch-1", src)
 	mergeClick(t, r, g)
-	if len(src.told) != 1 || src.told[0] != [2]string{"orch-1", "contr: PR #642 merged at " + shortSHA(r.pane.Loaded().HeadSHA)} {
-		t.Fatalf("told %v", src.told)
+	if len(src.Told) != 1 || src.Told[0] != [2]string{"orch-1", "contr: PR #642 merged at " + shortSHA(r.pane.Loaded().HeadSHA)} {
+		t.Fatalf("told %v", src.Told)
 	}
 	if !r.tt.HasText(LabelPRMerged) || r.tt.HasText(LabelPRMerge) || r.tt.HasText(LabelPRComment) {
 		t.Errorf("texts %q", r.tt.Texts())
@@ -55,8 +55,8 @@ func TestPRMergeNoOrchestratorSaysNoOneTold(t *testing.T) {
 	src := &source{}
 	r, g := mergeRig(t, "", src)
 	mergeClick(t, r, g)
-	if len(src.told) != 0 {
-		t.Errorf("told %v", src.told)
+	if len(src.Told) != 0 {
+		t.Errorf("told %v", src.Told)
 	}
 	if !r.tt.HasText(LabelPRMergedNoOne) {
 		t.Errorf("texts %q", r.tt.Texts())
@@ -64,7 +64,7 @@ func TestPRMergeNoOrchestratorSaysNoOneTold(t *testing.T) {
 }
 
 func TestPRMergeTellFailsShowsError(t *testing.T) {
-	src := &source{tellErr: errors.New("no terminal")}
+	src := &source{TellErr: errors.New("no terminal")}
 	r, g := mergeRig(t, "orch-1", src)
 	mergeClick(t, r, g)
 	if !r.tt.HasText(LabelPRMergedBare) || !r.tt.HasText("principal not told: no terminal") || r.tt.HasText(LabelPRMerged) {
@@ -79,8 +79,8 @@ func TestPRMergedFooterTakesNoMoreWrites(t *testing.T) {
 	n := len(g.writes())
 	r.pane.merge()
 	r.flush()
-	if len(g.writes()) != n || len(src.told) != 1 {
-		t.Errorf("a second merge ran: writes %v told %v", g.writes(), src.told)
+	if len(g.writes()) != n || len(src.Told) != 1 {
+		t.Errorf("a second merge ran: writes %v told %v", g.writes(), src.Told)
 	}
 }
 

@@ -1,4 +1,4 @@
-package app
+package questions
 
 import (
 	"errors"
@@ -10,6 +10,7 @@ import (
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/apptest"
+	"github.com/contursofran/contr/internal/app/ghsource/ghsourcetest"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/owner"
@@ -24,7 +25,7 @@ type resolver struct{ *source }
 func (r resolver) Answer(id, a string) error {
 	err := r.source.Answer(id, a)
 	if err == nil {
-		r.source.snap.Resolved = append(r.source.snap.Resolved, id)
+		r.source.Snap.Resolved = append(r.source.Snap.Resolved, id)
 	}
 	return err
 }
@@ -32,7 +33,7 @@ func (r resolver) Answer(id, a string) error {
 func (r resolver) Done(id string) error {
 	err := r.source.Done(id)
 	if err == nil {
-		r.source.snap.Resolved = append(r.source.snap.Resolved, id)
+		r.source.Snap.Resolved = append(r.source.Snap.Resolved, id)
 	}
 	return err
 }
@@ -45,7 +46,7 @@ const (
 // askSource has two questions (the first with impacts, refs and a source), a
 // to-do and a blocked worker, all of project a.
 func askSource() *source {
-	return &source{snap: agentstate.Snapshot{
+	return &source{Snap: agentstate.Snapshot{
 		Questions: []owner.Question{
 			{ID: "D1", Project: "a", From: "b-250", Title: "Which db?", Question: "Which database should it use?",
 				Options: []string{"sqlite", "postgres", "files"}, Recommended: recommended(1),
@@ -54,7 +55,7 @@ func askSource() *source {
 			{ID: "D2", Project: "a", Title: "Ship now?", Question: "Ship the release today?", Options: []string{"yes", "no"}},
 		},
 		Todos:   []owner.Todo{{ID: "T1", Project: "a", Kind: "do", Text: "Test the bag"}},
-		Workers: []agents.Worker{blockedWorker("b-2", "a", "Allow rm?")},
+		Workers: []agents.Worker{apptest.BlockedWorker("b-2", "a", "Allow rm?")},
 	}}
 }
 
@@ -102,9 +103,9 @@ func newQRig(t *testing.T, src *source) *qRig {
 func (r *qRig) open(key string) {
 	r.t.Helper()
 	items := r.notch.Items()
-	i := slices.IndexFunc(items, func(t NeedTab) bool { return t.Key == key })
+	i := slices.IndexFunc(items, func(t agentstate.NeedTab) bool { return t.Key == key })
 	if i < 0 {
-		r.t.Fatalf("no item %s in %v", key, keys(items))
+		r.t.Fatalf("no item %s in %v", key, apptest.Keys(items))
 	}
 	r.card.Open(items[i])
 	r.tt.Frame()
@@ -124,7 +125,7 @@ func TestChipsAreQuestionsThenTodosThenBlockedMenus(t *testing.T) {
 	r := newQRig(t, askSource())
 	// The source lists the blocked menu first (the needs row order); the card
 	// puts the questions first, then the to-do, then the blocked menu (D124).
-	if got := keys(r.notch.Items()); !slices.Equal(got, []string{"D1", "D2", "T1", "b-2"}) {
+	if got := apptest.Keys(r.notch.Items()); !slices.Equal(got, []string{"D1", "D2", "T1", "b-2"}) {
 		t.Fatalf("items %v, want D1 D2 T1 b-2", got)
 	}
 	r.open("D1")
@@ -164,6 +165,24 @@ func TestChipClickSwitchesItem(t *testing.T) {
 	r.tt.Frame()
 	if !r.tt.HasText(QuestionsDone) {
 		t.Errorf("a to-do shows its done action: %q", r.tt.Texts())
+	}
+}
+
+func TestKeyIsTheItemTheCardShows(t *testing.T) {
+	r := newQRig(t, askSource())
+	if got := r.card.Key(); got != "" {
+		t.Errorf("key %q before the card opens", got)
+	}
+	r.open("D1")
+	if got := r.card.Key(); got != "D1" {
+		t.Errorf("key %q, want D1", got)
+	}
+	if err := r.tt.Click("Ship now?"); err != nil {
+		t.Fatal(err)
+	}
+	r.tt.Frame()
+	if got := r.card.Key(); got != "D2" {
+		t.Errorf("key %q after a chip click, want D2", got)
 	}
 }
 
@@ -207,12 +226,12 @@ func TestDetailsShowsOnlyWithRefsOrSourceAndOpensAndCloses(t *testing.T) {
 		t.Fatalf("Details shows with no refs or source: %q", r.tt.Texts())
 	}
 	// A source alone is enough, and refs alone too.
-	r.src.snap.Questions[1].Source = "an excerpt"
+	r.src.Snap.Questions[1].Source = "an excerpt"
 	r.tt.Frame()
 	if !r.tt.HasText(LabelQuestionsDetails) {
 		t.Fatalf("Details missing for a source: %q", r.tt.Texts())
 	}
-	r.src.snap.Questions[1].Source, r.src.snap.Questions[1].Refs = "", []string{"PR 7"}
+	r.src.Snap.Questions[1].Source, r.src.Snap.Questions[1].Refs = "", []string{"PR 7"}
 	r.tt.Frame()
 	if !r.tt.HasText(LabelQuestionsDetails) {
 		t.Fatalf("Details missing for refs: %q", r.tt.Texts())
@@ -250,8 +269,8 @@ func TestClickAChoiceSendsItAndMovesToTheNextItem(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.tt.Frame()
-	if len(src.answers) != 1 || src.answers[0] != [2]string{"D1", "files"} {
-		t.Fatalf("answers %v", src.answers)
+	if len(src.Answers) != 1 || src.Answers[0] != [2]string{"D1", "files"} {
+		t.Fatalf("answers %v", src.Answers)
 	}
 	if !r.card.IsOpen() || !r.tt.HasText("Ship the release today?") || r.tt.HasText("Which database should it use?") {
 		t.Errorf("the card should show the next question: open=%v texts %q", r.card.IsOpen(), r.tt.Texts())
@@ -259,7 +278,7 @@ func TestClickAChoiceSendsItAndMovesToTheNextItem(t *testing.T) {
 }
 
 func TestLastAnswerClosesTheCardAndTheNotch(t *testing.T) {
-	src := &source{snap: agentstate.Snapshot{Questions: []owner.Question{
+	src := &source{Snap: agentstate.Snapshot{Questions: []owner.Question{
 		{ID: "D2", Project: "a", Title: "Ship now?", Question: "Ship the release today?", Options: []string{"yes", "no"}}}}}
 	r := newQRig(t, src)
 	r.open("D2")
@@ -272,7 +291,7 @@ func TestLastAnswerClosesTheCardAndTheNotch(t *testing.T) {
 		t.Errorf("open=%v texts %q, want a closed card and no notch", r.card.IsOpen(), r.tt.Texts())
 	}
 	// A new question does not open the card by itself.
-	src.snap.Questions = append(src.snap.Questions, owner.Question{ID: "D3", Project: "a", Title: "More?", Question: "More?"})
+	src.Snap.Questions = append(src.Snap.Questions, owner.Question{ID: "D3", Project: "a", Title: "More?", Question: "More?"})
 	r.tt.Frame()
 	if r.card.IsOpen() || !r.tt.HasText("1 question") || r.tt.HasText("Or type an answer") {
 		t.Errorf("the card opened by itself: open=%v texts %q", r.card.IsOpen(), r.tt.Texts())
@@ -285,23 +304,23 @@ func TestKeysPickEnterSendsPickedElseRecommended(t *testing.T) {
 	r.open("D1")
 	// Enter with nothing picked sends the recommended choice (postgres).
 	r.tt.Key(0, ui.KeyEnter)
-	if len(src.answers) != 1 || src.answers[0] != [2]string{"D1", "postgres"} {
-		t.Fatalf("Enter sent %v, want the recommended choice", src.answers)
+	if len(src.Answers) != 1 || src.Answers[0] != [2]string{"D1", "postgres"} {
+		t.Fatalf("Enter sent %v, want the recommended choice", src.Answers)
 	}
 
 	src = askSource()
 	r = newQRig(t, src)
 	r.open("D1")
 	r.tt.Key(0, ui.Key3) // third place: files
-	if len(src.answers) != 0 {
-		t.Fatalf("a number key sent %v, it only picks", src.answers)
+	if len(src.Answers) != 0 {
+		t.Fatalf("a number key sent %v, it only picks", src.Answers)
 	}
 	if r.card.picked != 2 {
 		t.Fatalf("picked %d, want 2", r.card.picked)
 	}
 	r.tt.Key(0, ui.KeyEnter)
-	if len(src.answers) != 1 || src.answers[0][1] != "files" {
-		t.Errorf("Enter sent %v, want the picked choice", src.answers)
+	if len(src.Answers) != 1 || src.Answers[0][1] != "files" {
+		t.Errorf("Enter sent %v, want the picked choice", src.Answers)
 	}
 
 	r = newQRig(t, askSource())
@@ -317,8 +336,8 @@ func TestEnterWithoutRecommendedOrPickSendsNothing(t *testing.T) {
 	r := newQRig(t, src)
 	r.open("D2")
 	r.tt.Key(0, ui.KeyEnter)
-	if len(src.answers) != 0 {
-		t.Errorf("Enter sent %v with nothing picked and no recommended choice", src.answers)
+	if len(src.Answers) != 0 {
+		t.Errorf("Enter sent %v with nothing picked and no recommended choice", src.Answers)
 	}
 }
 
@@ -336,8 +355,8 @@ func TestTypedTextBeatsThePickAndNumbersTypeInTheField(t *testing.T) {
 		t.Fatalf("picked %d text %q: a number typed in the field must stay text", r.card.picked, r.card.text)
 	}
 	r.tt.Key(0, ui.KeyEnter)
-	if len(src.answers) != 1 || src.answers[0] != [2]string{"D1", "2 weeks"} {
-		t.Errorf("answers %v", src.answers)
+	if len(src.Answers) != 1 || src.Answers[0] != [2]string{"D1", "2 weeks"} {
+		t.Errorf("answers %v", src.Answers)
 	}
 }
 
@@ -398,15 +417,15 @@ func TestKeysWorkOnlyWithTheFocusInTheCard(t *testing.T) {
 	r.tt.Frame()
 	r.tt.ClickAt(450, 300)
 	r.tt.Frame()
-	r.card.Open(NeedTab{Kind: NeedQuestion, Key: "D1"})
+	r.card.Open(agentstate.NeedTab{Kind: agentstate.NeedQuestion, Key: "D1"})
 	r.card.focus = false
 	r.tt.Frame()
 	r.tt.Frame()
 	for _, k := range []ui.Key{ui.Key1, ui.Key2, ui.KeyEnter, ui.KeyTab} {
 		r.tt.Key(0, k)
 	}
-	if len(src.answers) != 0 || r.card.picked != -1 || r.card.key != "D1" {
-		t.Errorf("the card took keys without the focus: answers %v picked %d key %q", src.answers, r.card.picked, r.card.key)
+	if len(src.Answers) != 0 || r.card.picked != -1 || r.card.key != "D1" {
+		t.Errorf("the card took keys without the focus: answers %v picked %d key %q", src.Answers, r.card.picked, r.card.key)
 	}
 	if !r.card.IsOpen() {
 		t.Error("the card closed")
@@ -422,7 +441,7 @@ func TestAnswerRunsOffTheUIThread(t *testing.T) {
 	if err := r.tt.Click("sqlite"); err != nil {
 		t.Fatal(err)
 	}
-	if len(src.answers) != 0 {
+	if len(src.Answers) != 0 {
 		t.Fatal("Answer ran on the UI thread")
 	}
 	// A second send while the first runs does nothing more.
@@ -433,14 +452,14 @@ func TestAnswerRunsOffTheUIThread(t *testing.T) {
 		t.Fatalf("%d jobs queued, want 1", len(queued))
 	}
 	queued[0]()
-	if len(src.answers) != 1 || src.answers[0][1] != "sqlite" {
-		t.Errorf("answers %v", src.answers)
+	if len(src.Answers) != 1 || src.Answers[0][1] != "sqlite" {
+		t.Errorf("answers %v", src.Answers)
 	}
 }
 
 func TestSendErrorKeepsTheCardAndShowsIt(t *testing.T) {
 	src := askSource()
-	src.actionErr = errors.New("answer saved; coordinator not reached")
+	src.ActionErr = errors.New("answer saved; coordinator not reached")
 	r := newQRig(t, src)
 	r.open("D1")
 	if err := r.tt.Click("sqlite"); err != nil {
@@ -457,8 +476,8 @@ func TestEmptyFieldSendsNothing(t *testing.T) {
 	r := newQRig(t, src)
 	r.open("D2")
 	r.tt.Key(0, ui.KeyEnter)
-	if len(src.answers) != 0 {
-		t.Errorf("answers %v", src.answers)
+	if len(src.Answers) != 0 {
+		t.Errorf("answers %v", src.Answers)
 	}
 }
 
@@ -470,8 +489,8 @@ func TestEnterInTheFocusedEmptyFieldSendsNothing(t *testing.T) {
 	r.tt.Click(LabelQuestionsField)
 	r.tt.Key(0, ui.KeyEnter)
 	r.tt.Frame()
-	if len(src.answers) != 0 {
-		t.Errorf("answers %v", src.answers)
+	if len(src.Answers) != 0 {
+		t.Errorf("answers %v", src.Answers)
 	}
 }
 
@@ -479,13 +498,13 @@ func TestQuestionAnsweredElsewhereLeavesTheChips(t *testing.T) {
 	src := askSource()
 	r := newQRig(t, src)
 	r.open("D1")
-	src.snap.Resolved = []string{"D2"}
+	src.Snap.Resolved = []string{"D2"}
 	r.tt.Frame()
 	if r.tt.HasText("Ship now?") || !r.tt.HasText("Which db?") {
 		t.Errorf("texts %q", r.tt.Texts())
 	}
 	// The item shown goes: the card moves to the item now at its place.
-	src.snap.Resolved = []string{"D1"}
+	src.Snap.Resolved = []string{"D1"}
 	r.tt.Frame()
 	r.tt.Frame()
 	if r.tt.HasText("Which database should it use?") || !r.card.IsOpen() {
@@ -503,8 +522,8 @@ func TestTodoIsMarkedDone(t *testing.T) {
 	if err := r.tt.Click(QuestionsDone); err != nil {
 		t.Fatal(err)
 	}
-	if len(src.dones) != 1 || src.dones[0] != "T1" {
-		t.Errorf("dones %v", src.dones)
+	if len(src.Dones) != 1 || src.Dones[0] != "T1" {
+		t.Errorf("dones %v", src.Dones)
 	}
 	r.tt.Frame()
 	if r.tt.HasText("Test the bag") && r.card.key == "T1" {
@@ -514,7 +533,7 @@ func TestTodoIsMarkedDone(t *testing.T) {
 
 func TestTodoDoneErrorKeepsTheCard(t *testing.T) {
 	src := askSource()
-	src.actionErr = errors.New("disk full")
+	src.ActionErr = errors.New("disk full")
 	r := newQRig(t, src)
 	r.open("T1")
 	r.tt.Key(0, ui.KeyEnter)
@@ -527,18 +546,18 @@ func TestTodoDoneErrorKeepsTheCard(t *testing.T) {
 func menuRig(t *testing.T, texts ...string) *qRig {
 	t.Helper()
 	src := askSource()
-	src.snap.Workers[0].Turn = 1
-	src.snap.Workers[0].Address = "t9"
-	src.snap.Workers[0].Command = "claude"
-	src.snap.Workers[0].Kind = "permission"
-	src.text = claudeMenu
-	src.texts = texts
+	src.Snap.Workers[0].Turn = 1
+	src.Snap.Workers[0].Address = "t9"
+	src.Snap.Workers[0].Command = "claude"
+	src.Snap.Workers[0].Kind = "permission"
+	src.Text = claudeMenu
+	src.Texts = texts
 	return newQRig(t, src)
 }
 
 func TestBlockedMenuShowsQuestionAndChoices(t *testing.T) {
 	r := menuRig(t)
-	r.src.text = "────────\n" + claudeMenu
+	r.src.Text = "────────\n" + claudeMenu
 	r.open("b-2")
 	if !r.tt.HasText("Do you want to proceed?") || !r.tt.HasText("rm -rf build") {
 		t.Fatalf("question or command missing: %q", r.tt.Texts())
@@ -557,11 +576,11 @@ func TestBlockedMenuAnswerReachesTheWorkerTerminal(t *testing.T) {
 	if err := r.tt.Click("Yes"); err != nil {
 		t.Fatal(err)
 	}
-	if len(r.src.sent) != 1 || string(r.src.sent[0]) != "1" || r.src.sentTo[0] != "t9" {
-		t.Errorf("sent %q to %v", r.src.sent, r.src.sentTo)
+	if len(r.src.Sent) != 1 || string(r.src.Sent[0]) != "1" || r.src.SentTo[0] != "t9" {
+		t.Errorf("sent %q to %v", r.src.Sent, r.src.SentTo)
 	}
-	if len(r.src.answers) != 0 {
-		t.Errorf("a menu answer went to the owner store: %v", r.src.answers)
+	if len(r.src.Answers) != 0 {
+		t.Errorf("a menu answer went to the owner store: %v", r.src.Answers)
 	}
 	if !r.card.IsOpen() {
 		t.Error("the card stays until the worker leaves blocked")
@@ -572,12 +591,12 @@ func TestBlockedMenuDigitSendsAndEnterDoesNothing(t *testing.T) {
 	r := menuRig(t)
 	r.open("b-2")
 	r.tt.Key(0, ui.KeyEnter)
-	if len(r.src.sent) != 0 {
-		t.Fatalf("Enter sent %q", r.src.sent)
+	if len(r.src.Sent) != 0 {
+		t.Fatalf("Enter sent %q", r.src.Sent)
 	}
 	r.tt.Key(0, ui.Key2)
-	if len(r.src.sent) != 1 || string(r.src.sent[0]) != "2" || r.src.sentTo[0] != "t9" {
-		t.Errorf("sent %q to %v", r.src.sent, r.src.sentTo)
+	if len(r.src.Sent) != 1 || string(r.src.Sent[0]) != "2" || r.src.SentTo[0] != "t9" {
+		t.Errorf("sent %q to %v", r.src.Sent, r.src.SentTo)
 	}
 }
 
@@ -588,20 +607,20 @@ func TestBlockedMenuPromptChangedSendsNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.tt.Frame()
-	if len(r.src.sent) != 0 || !r.tt.HasText(QuestionsPromptChanged) || !r.tt.HasText("No") {
-		t.Errorf("sent %q texts %q", r.src.sent, r.tt.Texts())
+	if len(r.src.Sent) != 0 || !r.tt.HasText(QuestionsPromptChanged) || !r.tt.HasText("No") {
+		t.Errorf("sent %q texts %q", r.src.Sent, r.tt.Texts())
 	}
 }
 
 func TestBlockedMenuWithoutAMenuShowsTheMessage(t *testing.T) {
 	r := menuRig(t)
-	r.src.text = "nothing to see"
+	r.src.Text = "nothing to see"
 	r.open("b-2")
 	if !r.tt.HasText("Allow rm?") || !r.tt.HasText(QuestionsFocusWorker) || r.tt.HasText("Yes") {
 		t.Errorf("texts %q", r.tt.Texts())
 	}
 	r = menuRig(t)
-	r.src.readErr = errors.New("core gone")
+	r.src.ReadErr = errors.New("core gone")
 	r.open("b-2")
 	if !r.tt.HasText("core gone") || r.tt.HasText("Yes") {
 		t.Errorf("texts %q", r.tt.Texts())
@@ -610,7 +629,7 @@ func TestBlockedMenuWithoutAMenuShowsTheMessage(t *testing.T) {
 
 func TestBlockedMenuSendErrorKeepsTheCard(t *testing.T) {
 	r := menuRig(t)
-	r.src.sendErr = errors.New("keys failed")
+	r.src.SendErr = errors.New("keys failed")
 	r.open("b-2")
 	if err := r.tt.Click("Yes"); err != nil {
 		t.Fatal(err)
@@ -629,8 +648,8 @@ func TestBlockedMenuTextChoiceAndFocusWorkerSelectTheWorker(t *testing.T) {
 	if err := r.tt.Click("No, and tell Claude what to do differently"); err != nil {
 		t.Fatal(err)
 	}
-	if len(r.src.sent) != 0 || got != "t9" || r.card.IsOpen() {
-		t.Errorf("sent %q, selected %q, open %v", r.src.sent, got, r.card.IsOpen())
+	if len(r.src.Sent) != 0 || got != "t9" || r.card.IsOpen() {
+		t.Errorf("sent %q, selected %q, open %v", r.src.Sent, got, r.card.IsOpen())
 	}
 	r = menuRig(t)
 	got = ""
@@ -647,16 +666,16 @@ func TestBlockedMenuTextChoiceAndFocusWorkerSelectTheWorker(t *testing.T) {
 func TestBlockedMenuRereadsOnANewTurnAndGoesWhenUnblocked(t *testing.T) {
 	r := menuRig(t)
 	r.open("b-2")
-	n := len(r.src.read)
+	n := len(r.src.Reads)
 	if n != 1 {
 		t.Fatalf("%d reads after open, want 1", n)
 	}
-	r.src.snap.Workers[0].Turn = 2
+	r.src.Snap.Workers[0].Turn = 2
 	r.tt.Frame()
-	if len(r.src.read) != n+1 {
-		t.Errorf("%d reads after a new turn, want %d", len(r.src.read), n+1)
+	if len(r.src.Reads) != n+1 {
+		t.Errorf("%d reads after a new turn, want %d", len(r.src.Reads), n+1)
 	}
-	r.src.snap.Workers[0].Status = "working"
+	r.src.Snap.Workers[0].Status = "working"
 	r.tt.Frame()
 	r.tt.Frame()
 	if r.tt.HasText("Do you want to proceed?") || r.card.key == "b-2" {
@@ -665,22 +684,22 @@ func TestBlockedMenuRereadsOnANewTurnAndGoesWhenUnblocked(t *testing.T) {
 }
 
 func TestBlockedMenuOpensTheWorkerPR(t *testing.T) {
-	entry, calls := entryRig(307)
-	src := &source{snap: agentstate.Snapshot{Workers: []agents.Worker{apptest.EntryWorker}}}
-	src.snap.Workers[0].Status = "blocked"
+	entry, calls := ghsourcetest.EntryRig(307)
+	src := &source{Snap: agentstate.Snapshot{Workers: []agents.Worker{apptest.EntryWorker}}}
+	src.Snap.Workers[0].Status = "blocked"
 	r := newQRig(t, src)
 	r.card.Entry = entry
 	r.open(apptest.EntryWorker.Name)
 	if err := r.tt.Click("Open PR #307"); err != nil {
 		t.Fatalf("%v; texts %q", err, r.tt.Texts())
 	}
-	if len(calls.prs) != 1 || calls.prs[0] != [2]any{"/wt/a", 307} || r.card.IsOpen() {
-		t.Errorf("calls %v open %v", calls.prs, r.card.IsOpen())
+	if len(calls.PRs) != 1 || calls.PRs[0] != [2]any{"/wt/a", 307} || r.card.IsOpen() {
+		t.Errorf("calls %v open %v", calls.PRs, r.card.IsOpen())
 	}
 }
 
 func TestCardOptionsPutTheRecommendedFirstWithItsImpact(t *testing.T) {
-	q := askSource().snap.Questions[0]
+	q := askSource().Snap.Questions[0]
 	opts := CardOptions(q)
 	if opts[0].Text != "postgres" || !opts[0].Recommended || opts[0].Impact != "Needs a server; scales out." {
 		t.Errorf("first %+v", opts[0])
@@ -696,7 +715,7 @@ func TestCardOptionsPutTheRecommendedFirstWithItsImpact(t *testing.T) {
 
 func TestChipOfABlockedWorkerWithoutAMessageShowsItsName(t *testing.T) {
 	src := askSource()
-	src.snap.Workers[0].Msg = ""
+	src.Snap.Workers[0].Msg = ""
 	r := newQRig(t, src)
 	r.open("b-2")
 	if !r.tt.HasText("b-2") {

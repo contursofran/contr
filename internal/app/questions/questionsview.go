@@ -1,4 +1,4 @@
-package app
+package questions
 
 // The view of the questions card (docs/spec/QuestionsCard.md). It builds a
 // PopoverBase from the notch: chips, the item, Details and the keys line.
@@ -21,21 +21,16 @@ import (
 // owner through the orchestrator.
 const questionsVia = "via orchestrator"
 
-// styled sets the font of a text from a type style.
-func styled(t ui.Element, st theme.TextStyle) ui.Element {
-	return t.Font(st.Stack()).FontSize(st.Size).FontWeight(st.Weight)
-}
-
 // View builds the card for items, which must be the open items of the
 // project, anchored to the notch. It builds nothing while the card is closed.
-func (q *QuestionsCard) View(c *ui.Context, anchor ui.Element, items []NeedTab) {
+func (q *QuestionsCard) View(c *ui.Context, anchor ui.Element, items []agentstate.NeedTab) {
 	if !q.open || len(items) == 0 || q.Source == nil {
 		return
 	}
 	snap := q.Source.Snapshot()
 	idx := q.sync(items)
 	t := items[idx]
-	if t.Kind == NeedBlocked {
+	if t.Kind == agentstate.NeedBlocked {
 		q.watchBlocked(snap, t)
 	}
 	p := theme.Current()
@@ -89,18 +84,18 @@ func (q *QuestionsCard) View(c *ui.Context, anchor ui.Element, items []NeedTab) 
 func questionsCardFill(p *theme.Palette) ui.Color { return p.FloatSolid }
 
 // body builds what the card holds: the chips, the item, the failure and the keys.
-func (q *QuestionsCard) body(c *ui.Context, p *theme.Palette, items []NeedTab, t NeedTab, snap agentstate.Snapshot) {
+func (q *QuestionsCard) body(c *ui.Context, p *theme.Palette, items []agentstate.NeedTab, t agentstate.NeedTab, snap agentstate.Snapshot) {
 	q.chips(c, p, items, t)
 	switch t.Kind {
-	case NeedQuestion:
+	case agentstate.NeedQuestion:
 		q.questionBody(c, p, t, snap)
-	case NeedTodo:
+	case agentstate.NeedTodo:
 		q.todoBody(c, p, t, snap)
-	case NeedBlocked:
+	case agentstate.NeedBlocked:
 		q.blockedBody(c, p, t, snap)
 	}
 	if msg := q.foot(snap); msg != "" {
-		styled(ui.Text(c, msg), theme.StyleSmall).Padding(0, theme.Space12).TextColor(p.Ink62)
+		kit.Styled(ui.Text(c, msg), theme.StyleSmall).Padding(0, theme.Space12).TextColor(p.Ink62)
 	}
 	q.keys(c, p, t, snap, len(items))
 }
@@ -108,7 +103,7 @@ func (q *QuestionsCard) body(c *ui.Context, p *theme.Palette, items []NeedTab, t
 // chipLabel is the text of a chip: the title of the item without the
 // backticks of its code spans. A blocked worker that gave no message shows
 // its name.
-func chipLabel(t NeedTab) string {
+func chipLabel(t agentstate.NeedTab) string {
 	if t.Title == "" {
 		return t.Key
 	}
@@ -117,22 +112,22 @@ func chipLabel(t NeedTab) string {
 
 // name is the name of the card for assistive technology: the question,
 // without the backticks of its code spans.
-func (q *QuestionsCard) name(t NeedTab, snap agentstate.Snapshot) string {
+func (q *QuestionsCard) name(t agentstate.NeedTab, snap agentstate.Snapshot) string {
 	return plainText(q.rawName(t, snap))
 }
 
 // rawName is the question of the card as the agent wrote it.
-func (q *QuestionsCard) rawName(t NeedTab, snap agentstate.Snapshot) string {
+func (q *QuestionsCard) rawName(t agentstate.NeedTab, snap agentstate.Snapshot) string {
 	switch t.Kind {
-	case NeedQuestion:
+	case agentstate.NeedQuestion:
 		if o, ok := q.question(snap); ok {
 			return o.Question
 		}
-	case NeedTodo:
+	case agentstate.NeedTodo:
 		if o, ok := q.todo(snap); ok {
 			return o.Text
 		}
-	case NeedBlocked:
+	case agentstate.NeedBlocked:
 		if q.menu != nil && q.menu.Question != "" {
 			return q.menu.Question
 		}
@@ -150,7 +145,7 @@ func (q *QuestionsCard) foot(snap agentstate.Snapshot) string {
 
 // chips builds the head: the glyph, a chip for each item and "via
 // orchestrator" at the right.
-func (q *QuestionsCard) chips(c *ui.Context, p *theme.Palette, items []NeedTab, t NeedTab) {
+func (q *QuestionsCard) chips(c *ui.Context, p *theme.Palette, items []agentstate.NeedTab, t agentstate.NeedTab) {
 	sel := q.idx
 	// The glyph and "via orchestrator" stay on the first line of the chips.
 	ui.Row(c).AlignItems(ui.Start).Gap(theme.Space8).Children(func() {
@@ -169,11 +164,11 @@ func (q *QuestionsCard) chips(c *ui.Context, p *theme.Palette, items []NeedTab, 
 						s = s.InsetShadow(l.X, l.Y, l.Blur, l.Wide, l.Color)
 					}
 				}
-				s.Children(func() { styled(ui.Text(c, chipLabel(it)), theme.StyleChip).SingleLine().TextColor(ink) })
+				s.Children(func() { kit.Styled(ui.Text(c, chipLabel(it)), theme.StyleChip).SingleLine().TextColor(ink) })
 			}
 		})
-		if t.Kind != NeedBlocked {
-			styled(ui.Text(c, questionsVia), theme.StyleSmall).NoWrap().Shrink(0).Margin(theme.Space4, 0, 0, 0).TextColor(p.Ink35)
+		if t.Kind != agentstate.NeedBlocked {
+			kit.Styled(ui.Text(c, questionsVia), theme.StyleSmall).NoWrap().Shrink(0).Margin(theme.Space4, 0, 0, 0).TextColor(p.Ink35)
 		}
 	})
 	if sel != q.idx {
@@ -183,10 +178,10 @@ func (q *QuestionsCard) chips(c *ui.Context, p *theme.Palette, items []NeedTab, 
 
 // questionBody builds a question: the text, the context line, the choices and
 // the field, then Details.
-func (q *QuestionsCard) questionBody(c *ui.Context, p *theme.Palette, t NeedTab, snap agentstate.Snapshot) {
+func (q *QuestionsCard) questionBody(c *ui.Context, p *theme.Palette, t agentstate.NeedTab, snap agentstate.Snapshot) {
 	o, ok := q.question(snap)
 	if !ok {
-		styled(ui.Text(c, plainText(t.Title)), theme.StyleQuestion).Padding(2, theme.Space12).TextColor(p.Ink100)
+		kit.Styled(ui.Text(c, plainText(t.Title)), theme.StyleQuestion).Padding(2, theme.Space12).TextColor(p.Ink100)
 		return
 	}
 	q.heading(c, p, o.Question, contextLine(o.From))
@@ -215,7 +210,7 @@ func contextLine(from string) string {
 func (q *QuestionsCard) heading(c *ui.Context, p *theme.Palette, question, context string) {
 	q.codeText(c, p, question, theme.StyleQuestion).Padding(2, theme.Space12).TextColor(p.Ink100)
 	if context != "" {
-		styled(ui.Text(c, context), theme.StyleSmall).Wrap().Padding(0, theme.Space12).TextColor(p.Ink42)
+		kit.Styled(ui.Text(c, context), theme.StyleSmall).Wrap().Padding(0, theme.Space12).TextColor(p.Ink42)
 	}
 }
 
@@ -229,23 +224,23 @@ func (q *QuestionsCard) choice(c *ui.Context, p *theme.Palette, i int, label str
 		b = b.Background(p.Hover)
 	}
 	b.Children(func() {
-		styled(ui.Text(c, strconv.Itoa(i+1)), theme.StyleMeta).NoWrap().Shrink(0).Width(theme.Space12).TextColor(p.Ink32)
+		kit.Styled(ui.Text(c, strconv.Itoa(i+1)), theme.StyleMeta).NoWrap().Shrink(0).Width(theme.Space12).TextColor(p.Ink32)
 		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 			ui.Row(c).AlignItems(ui.Center).Gap(theme.Space8).Children(func() {
-				styled(ui.Text(c, label), theme.StyleBody).Wrap().TextColor(p.Ink90)
+				kit.Styled(ui.Text(c, label), theme.StyleBody).Wrap().TextColor(p.Ink90)
 				if recommended {
-					styled(ui.Text(c, "recommended"), theme.StyleMeta).NoWrap().Shrink(0).TextColor(p.Ink32)
+					kit.Styled(ui.Text(c, "recommended"), theme.StyleMeta).NoWrap().Shrink(0).TextColor(p.Ink32)
 				}
 			})
 			if impact != "" {
-				styled(ui.Text(c, impact), theme.StyleSmall).Wrap().TextColor(p.Ink42)
+				kit.Styled(ui.Text(c, impact), theme.StyleSmall).Wrap().TextColor(p.Ink42)
 			}
 		})
 	})
 }
 
 // field builds the field for a free answer.
-func (q *QuestionsCard) field(c *ui.Context, p *theme.Palette, t NeedTab) {
+func (q *QuestionsCard) field(c *ui.Context, p *theme.Palette, t agentstate.NeedTab) {
 	in := ui.TextInputBase(c.Key("questions-field"), &q.text).Label(LabelQuestionsField).Placeholder(LabelQuestionsField).
 		PlaceholderColor(p.Ink30).TextColor(p.Ink90).Height(30).FillWidth().Shrink(0).PaddingX(theme.Space12).
 		Radius(theme.Radius8).Border(1, p.InputLine).Margin(theme.Space4, 0, 0, 0)
@@ -264,13 +259,13 @@ func (q *QuestionsCard) detailsSection(c *ui.Context, p *theme.Palette, refs []s
 		if q.details {
 			arrow = "▾"
 		}
-		styled(ui.Text(c, arrow), theme.StyleSmall).NoWrap().TextColor(p.Ink42)
-		styled(ui.Text(c, LabelQuestionsDetails), theme.StyleSmall).NoWrap().TextColor(p.Ink42)
+		kit.Styled(ui.Text(c, arrow), theme.StyleSmall).NoWrap().TextColor(p.Ink42)
+		kit.Styled(ui.Text(c, LabelQuestionsDetails), theme.StyleSmall).NoWrap().TextColor(p.Ink42)
 	})
 	col.Panel(func() {
 		ui.Column(c).Padding(0, theme.Space12).Gap(theme.Space4).Children(func() {
 			if len(refs) > 0 {
-				styled(ui.Text(c, strings.Join(refs, "  ")), theme.StyleSmall).Wrap().TextColor(p.Ink42)
+				kit.Styled(ui.Text(c, strings.Join(refs, "  ")), theme.StyleSmall).Wrap().TextColor(p.Ink42)
 			}
 			if source != "" {
 				q.codeText(c, p, source, theme.StyleSmall).TextColor(p.Ink42)
@@ -280,7 +275,7 @@ func (q *QuestionsCard) detailsSection(c *ui.Context, p *theme.Palette, refs []s
 }
 
 // todoBody builds a to-do: its text and the done action.
-func (q *QuestionsCard) todoBody(c *ui.Context, p *theme.Palette, t NeedTab, snap agentstate.Snapshot) {
+func (q *QuestionsCard) todoBody(c *ui.Context, p *theme.Palette, t agentstate.NeedTab, snap agentstate.Snapshot) {
 	text := t.Title
 	from := ""
 	if o, ok := q.todo(snap); ok {
@@ -296,19 +291,19 @@ func (q *QuestionsCard) todoBody(c *ui.Context, p *theme.Palette, t NeedTab, sna
 	if b.Hovered() {
 		b = b.Background(p.Hover)
 	}
-	b.Children(func() { styled(ui.Text(c, QuestionsDone), theme.StyleBody).NoWrap().TextColor(p.Ink100) })
+	b.Children(func() { kit.Styled(ui.Text(c, QuestionsDone), theme.StyleBody).NoWrap().TextColor(p.Ink100) })
 }
 
 // blockedBody builds the menu of a blocked worker: the detail, the question
 // and the choices. Without a menu it shows the worker's message and Focus
 // worker.
-func (q *QuestionsCard) blockedBody(c *ui.Context, p *theme.Palette, t NeedTab, snap agentstate.Snapshot) {
+func (q *QuestionsCard) blockedBody(c *ui.Context, p *theme.Palette, t agentstate.NeedTab, snap agentstate.Snapshot) {
 	if q.menu == nil {
 		q.heading(c, p, t.Title, "")
 	} else {
 		// The detail first: for a permission, the tool and its command.
 		if len(q.menu.Detail) > 0 {
-			styled(ui.Text(c, strings.Join(q.menu.Detail, "\n")), theme.StyleMeta).Wrap().Padding(2, theme.Space12).TextColor(p.Ink62)
+			kit.Styled(ui.Text(c, strings.Join(q.menu.Detail, "\n")), theme.StyleMeta).Wrap().Padding(2, theme.Space12).TextColor(p.Ink62)
 		}
 		q.heading(c, p, q.menu.Question, "")
 		for i, ch := range q.menu.Choices {
@@ -322,7 +317,7 @@ func (q *QuestionsCard) blockedBody(c *ui.Context, p *theme.Palette, t NeedTab, 
 		link := func(label string, click func()) {
 			b := ui.ButtonBase(c).Label(label).Shrink(0).Cursor(ui.CursorPointer).OnClick(click)
 			b.Children(func() {
-				tx := styled(ui.Text(c, label), theme.StyleSmall).NoWrap().TextColor(p.Ink62)
+				tx := kit.Styled(ui.Text(c, label), theme.StyleSmall).NoWrap().TextColor(p.Ink62)
 				if b.Hovered() {
 					tx.Underline()
 				}
@@ -338,17 +333,17 @@ func (q *QuestionsCard) blockedBody(c *ui.Context, p *theme.Palette, t NeedTab, 
 }
 
 // keys builds the keys line, with the keys the item takes.
-func (q *QuestionsCard) keys(c *ui.Context, p *theme.Palette, t NeedTab, snap agentstate.Snapshot, n int) {
+func (q *QuestionsCard) keys(c *ui.Context, p *theme.Palette, t agentstate.NeedTab, snap agentstate.Snapshot, n int) {
 	var parts []string
 	switch t.Kind {
-	case NeedQuestion:
+	case agentstate.NeedQuestion:
 		if o, ok := q.question(snap); ok && len(o.Options) > 0 {
 			parts = append(parts, "1-"+strconv.Itoa(min(len(o.Options), len(keyOptions)))+" pick")
 		}
 		parts = append(parts, "⏎ send")
-	case NeedTodo:
+	case agentstate.NeedTodo:
 		parts = append(parts, "⏎ done")
-	case NeedBlocked:
+	case agentstate.NeedBlocked:
 		if q.menu != nil && len(q.menu.Choices) > 0 {
 			parts = append(parts, "1-"+strconv.Itoa(min(len(q.menu.Choices), len(keyOptions)))+" send")
 		}
@@ -357,7 +352,7 @@ func (q *QuestionsCard) keys(c *ui.Context, p *theme.Palette, t NeedTab, snap ag
 		parts = append(parts, "⇥ next")
 	}
 	parts = append(parts, "esc close")
-	styled(ui.Text(c, strings.Join(parts, "  ")), theme.StyleMeta).NoWrap().Padding(theme.Space6, theme.Space12, 0).TextColor(p.Ink32)
+	kit.Styled(ui.Text(c, strings.Join(parts, "  ")), theme.StyleMeta).NoWrap().Padding(theme.Space6, theme.Space12, 0).TextColor(p.Ink32)
 }
 
 // codeText builds a wrapped paragraph of s in style st. Its backtick spans
@@ -366,9 +361,9 @@ func (q *QuestionsCard) keys(c *ui.Context, p *theme.Palette, t NeedTab, snap ag
 func (q *QuestionsCard) codeText(c *ui.Context, p *theme.Palette, s string, st theme.TextStyle) ui.Element {
 	parts := splitCode(s)
 	if !slices.ContainsFunc(parts, func(t textPart) bool { return t.Code }) {
-		return styled(ui.Text(c, s), st).Wrap()
+		return kit.Styled(ui.Text(c, s), st).Wrap()
 	}
-	return styled(ui.RichText(c), st).Wrap().Children(func() {
+	return kit.Styled(ui.RichText(c), st).Wrap().Children(func() {
 		for _, t := range parts {
 			if !t.Code {
 				ui.Text(c, t.Text)

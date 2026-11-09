@@ -6,6 +6,8 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/questions"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/usage"
@@ -45,8 +47,8 @@ func handlersSet() []bool {
 	return set
 }
 
-func hasLayer(o *TerminalOverlay, name string) bool {
-	return slices.ContainsFunc(o.layers, func(l *overlayLayer) bool { return l.name == name })
+func hasLayer(o *kit.TerminalOverlay, name string) bool {
+	return slices.Contains(o.Names(), name)
 }
 
 // The stop of Attach keeps the order of the parts (#570): the menu handlers clear first, then the
@@ -60,11 +62,11 @@ func TestAttachStopOrder(t *testing.T) {
 	})
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
-	f.deps.StartAgents = func(func()) (AgentSource, func()) {
-		src := &source{snap: agentstate.Snapshot{Workers: []agents.Worker{{Name: "b1", Address: "a", Live: true}}}}
+	f.deps.StartAgents = func(func()) (agentstate.AgentSource, func()) {
+		src := &source{Snap: agentstate.Snapshot{Workers: []agents.Worker{{Name: "b1", Address: "a", Live: true}}}}
 		return src, func() {
 			log = append(log, "agents")
-			if hasLayer(&f.Overlay, LabelOutline) {
+			if hasLayer(&f.Overlay, questions.LabelOutline) {
 				t.Error("the agent state stopped before the outline was removed")
 			}
 			if f.SpacesList.closed {
@@ -76,7 +78,7 @@ func TestAttachStopOrder(t *testing.T) {
 	if got := handlersSet(); slices.Contains(got, false) {
 		t.Fatalf("after Attach the menu handlers set are %v, want all", got)
 	}
-	if !hasLayer(&f.Overlay, LabelOutline) {
+	if !hasLayer(&f.Overlay, questions.LabelOutline) {
 		t.Fatal("Attach should add the outline layer")
 	}
 	stop()

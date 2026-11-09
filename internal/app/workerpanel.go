@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui/editor"
 
 	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/ghsource"
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/kit"
@@ -36,7 +37,7 @@ const (
 type WorkerPanel struct {
 	// Entry opens the worker's pull request or issue (D106).
 	Entry     ghsource.WorkerEntry
-	Source    AgentSource
+	Source    agentstate.AgentSource
 	Selection *state.Selection
 	// Env runs the hc calls off the UI thread, redraws and shows messages.
 	Env view.Env

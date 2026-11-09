@@ -184,8 +184,8 @@ func TestAttachWiresCmdWToTheSourceClose(t *testing.T) {
 	f := NewFrame(Deps{})
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
-	src := &source{snap: agentstate.Snapshot{Terminals: []agents.Worker{{Name: "term-1", Address: "tp", Role: agents.RoleTerminal, Live: true}}}}
-	f.deps.StartAgents = func(func()) (AgentSource, func()) { return src, func() {} }
+	src := &source{Snap: agentstate.Snapshot{Terminals: []agents.Worker{{Name: "term-1", Address: "tp", Role: agents.RoleTerminal, Live: true}}}}
+	f.deps.StartAgents = func(func()) (agentstate.AgentSource, func()) { return src, func() {} }
 	stop := f.Attach(w)
 	if f.CloseTerm == nil {
 		t.Fatal("Attach did not make the close action")
@@ -199,7 +199,7 @@ func TestAttachWiresCmdWToTheSourceClose(t *testing.T) {
 	var stopped, closed []string
 	for deadline := time.Now().Add(5 * time.Second); len(closed)+len(stopped) == 0 && time.Now().Before(deadline); {
 		time.Sleep(time.Millisecond)
-		stopped, closed = src.calls()
+		stopped, closed = src.Calls()
 	}
 	// The close result reaches the window through a later Update: flush until
 	// it has run (it clears the closed terminal's selection), so no update is

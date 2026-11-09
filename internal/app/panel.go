@@ -32,11 +32,11 @@ type BoardPanel struct {
 	Scope func() string
 	// Needs returns the tabs of the needs-you section, the same as the row
 	// under the terminal.
-	Needs func() []NeedTab
+	Needs func() []agentstate.NeedTab
 	// Select runs when a work row is clicked, with the worker's address.
 	Select func(address string)
 	// Open runs when a needs-you line is clicked.
-	Open func(NeedTab)
+	Open func(agentstate.NeedTab)
 	// OpenPR runs when a work row's number is clicked, with the worktree and the number.
 	OpenPR func(dir string, n int)
 	// OpenIssue runs when the number of a work row with no pull request is clicked, with the
@@ -75,7 +75,7 @@ func (p *BoardPanel) View(c *ui.Context) {
 		if prob := p.Snapshot().Problem; prob != "" {
 			TextLine(c, LabelBoardProblem, prob, theme.Current().Ink50)
 		}
-		var tabs []NeedTab
+		var tabs []agentstate.NeedTab
 		if p.Needs != nil {
 			tabs = p.Needs()
 		}

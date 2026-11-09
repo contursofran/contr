@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/icons"
+	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/projects"
@@ -217,7 +218,7 @@ func projectsModalFill(p *theme.Palette) ui.Color { return p.FloatSolid }
 func kbd(c *ui.Context, text string) {
 	p := theme.Current()
 	ui.Box(c).Shrink(0).Padding(theme.Space2, theme.Space4).Radius(theme.ModalKbdRadius).Border(1, p.InputLine).Children(func() {
-		styled(ui.Text(c, text), theme.StyleKbd).NoWrap().TextColor(p.Ink45)
+		kit.Styled(ui.Text(c, text), theme.StyleKbd).NoWrap().TextColor(p.Ink45)
 	})
 }
 
@@ -290,7 +291,7 @@ func (m *ProjectsModal) body(c *ui.Context) {
 
 	if len(lines) == 0 {
 		if k, _, _ := classifyQuery(m.query); k == queryFilter && m.text() != "" {
-			styled(ui.Text(c, ProjectsNoMatch(m.text())), theme.StyleSmall).Wrap().Shrink(0).TextAlign(ui.Center).
+			kit.Styled(ui.Text(c, ProjectsNoMatch(m.text())), theme.StyleSmall).Wrap().Shrink(0).TextAlign(ui.Center).
 				Padding(theme.ModalEmptyPadY, theme.Space12).TextColor(p.Ink45)
 		}
 	} else {
@@ -344,7 +345,7 @@ func (m *ProjectsModal) footer(c *ui.Context, rows []paletteRow) {
 		hint := func(key, label string) {
 			ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(theme.Space6).Children(func() {
 				kbd(c, key)
-				styled(ui.Text(c, label), theme.StyleChip).NoWrap().TextColor(p.Ink45)
+				kit.Styled(ui.Text(c, label), theme.StyleChip).NoWrap().TextColor(p.Ink45)
 			})
 		}
 		hint("↑↓", "move")
@@ -367,8 +368,8 @@ func (m *ProjectsModal) footer(c *ui.Context, rows []paletteRow) {
 			text = p.Ink100
 		}
 		b.Children(func() {
-			styled(ui.Text(c, ProjectsOpenFolder), theme.StyleSmall).NoWrap().TextColor(text)
-			styled(ui.Text(c, "⌘O"), theme.StyleKbd).NoWrap().TextColor(p.Ink45)
+			kit.Styled(ui.Text(c, ProjectsOpenFolder), theme.StyleSmall).NoWrap().TextColor(text)
+			kit.Styled(ui.Text(c, "⌘O"), theme.StyleKbd).NoWrap().TextColor(p.Ink45)
 		})
 	})
 }
@@ -377,9 +378,9 @@ func (m *ProjectsModal) footer(c *ui.Context, rows []paletteRow) {
 func (m *ProjectsModal) section(c *ui.Context, l line) {
 	p := theme.Current()
 	ui.Row(c).AlignItems(ui.Center).Padding(theme.Space10, theme.Space10, theme.Space4).Children(func() {
-		styled(ui.Text(c, l.head), theme.StyleLabel).NoWrap().Grow(1).TextColor(p.Ink45)
+		kit.Styled(ui.Text(c, l.head), theme.StyleLabel).NoWrap().Grow(1).TextColor(p.Ink45)
 		if l.hint != "" {
-			styled(ui.Text(c, l.hint), theme.StyleChip).NoWrap().TextColor(p.Ink30)
+			kit.Styled(ui.Text(c, l.hint), theme.StyleChip).NoWrap().TextColor(p.Ink30)
 		}
 	})
 }
@@ -391,10 +392,10 @@ func (m *ProjectsModal) nameText(c *ui.Context, name string, weight int, colour 
 	st.Weight = weight
 	spans := nameSpans(name, m.text(), p.Ink100)
 	if len(spans) == 1 {
-		styled(ui.Text(c, name), st).SingleLine().MinWidth(0).TextColor(colour)
+		kit.Styled(ui.Text(c, name), st).SingleLine().MinWidth(0).TextColor(colour)
 		return
 	}
-	styled(ui.RichText(c, spans...), st).SingleLine().MinWidth(0).TextColor(colour)
+	kit.Styled(ui.RichText(c, spans...), st).SingleLine().MinWidth(0).TextColor(colour)
 }
 
 // nameSpans splits name around the match of f: the match is underlined in
@@ -461,10 +462,10 @@ func (m *ProjectsModal) row(c *ui.Context, rows []paletteRow, i int, home string
 		if r.kind == rowOpen && active && m.text() == "" {
 			grip = "⋮⋮"
 		}
-		styled(ui.Text(c, grip), theme.StyleSmall).Width(theme.ModalGrip).Shrink(0).NoWrap().TextColor(p.Ink30)
+		kit.Styled(ui.Text(c, grip), theme.StyleSmall).Width(theme.ModalGrip).Shrink(0).NoWrap().TextColor(p.Ink30)
 		ui.Box(c).Width(theme.ModalTile).Height(theme.ModalTile).Shrink(0).Radius(theme.Radius8).
 			Background(p.Selected).Center().Children(func() {
-			styled(ui.Text(c, projectInitials(name)), theme.StyleTile).TextColor(p.Ink62)
+			kit.Styled(ui.Text(c, projectInitials(name)), theme.StyleTile).TextColor(p.Ink62)
 		})
 		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 			m.nameText(c, name, weight, nameColour)
@@ -482,15 +483,15 @@ func (m *ProjectsModal) row(c *ui.Context, rows []paletteRow, i int, home string
 				if b.Hovered() {
 					b = b.Background(p.Hover)
 				}
-				b.Children(func() { styled(ui.Text(c, ProjectsHide), theme.StyleSmall).NoWrap().TextColor(p.Ink45) })
+				b.Children(func() { kit.Styled(ui.Text(c, ProjectsHide), theme.StyleSmall).NoWrap().TextColor(p.Ink45) })
 			}
 			if selected {
-				styled(ui.Text(c, "⏎ switch"), theme.StyleMeta).NoWrap().Shrink(0).TextColor(p.Ink38)
+				kit.Styled(ui.Text(c, "⏎ switch"), theme.StyleMeta).NoWrap().Shrink(0).TextColor(p.Ink38)
 			}
 		case active:
-			styled(ui.Text(c, "⏎ open"), theme.StyleMeta).NoWrap().Shrink(0).TextColor(p.Ink38)
+			kit.Styled(ui.Text(c, "⏎ open"), theme.StyleMeta).NoWrap().Shrink(0).TextColor(p.Ink38)
 		default:
-			styled(ui.Text(c, age), theme.StyleMeta).NoWrap().Shrink(0).TextColor(p.Ink30)
+			kit.Styled(ui.Text(c, age), theme.StyleMeta).NoWrap().Shrink(0).TextColor(p.Ink30)
 		}
 	})
 }
@@ -504,10 +505,10 @@ func (m *ProjectsModal) metaText(c *ui.Context, meta string, needYou int) {
 		t = needYouText(needYou)
 	}
 	if t == "" || !strings.HasSuffix(meta, t) {
-		styled(ui.Text(c, meta), theme.StyleValue).SingleLine().MinWidth(0).TextColor(p.Ink38)
+		kit.Styled(ui.Text(c, meta), theme.StyleValue).SingleLine().MinWidth(0).TextColor(p.Ink38)
 		return
 	}
-	styled(ui.RichText(c,
+	kit.Styled(ui.RichText(c,
 		ui.Span{Text: strings.TrimSuffix(meta, t)},
 		ui.Span{Text: t, Color: p.Blocked},
 	), theme.StyleValue).SingleLine().MinWidth(0).TextColor(p.Ink38)
@@ -520,7 +521,7 @@ func (m *ProjectsModal) openMetaView(c *ui.Context, g spaces.RepoGroup, home str
 	p := theme.Current()
 	path, branch, live, needYou := openMetaParts(g, home)
 	ink := func(s string) {
-		styled(ui.Text(c, s), theme.StyleValue).NoWrap().Shrink(0).TextColor(p.Ink38)
+		kit.Styled(ui.Text(c, s), theme.StyleValue).NoWrap().Shrink(0).TextColor(p.Ink38)
 	}
 	// The parts have even gaps: a space token between them, none inside a text.
 	gap := func() { ui.Box(c).Width(theme.Space6).Height(1).Shrink(0) }
@@ -531,7 +532,7 @@ func (m *ProjectsModal) openMetaView(c *ui.Context, g spaces.RepoGroup, home str
 	}
 	ui.Row(c).AlignItems(ui.Center).MinWidth(0).Children(func() {
 		if path != "" {
-			styled(ui.Text(c, path), theme.StyleValue).SingleLine().MinWidth(0).TextColor(p.Ink38)
+			kit.Styled(ui.Text(c, path), theme.StyleValue).SingleLine().MinWidth(0).TextColor(p.Ink38)
 		}
 		if branch != "" {
 			if path != "" {
@@ -553,7 +554,7 @@ func (m *ProjectsModal) openMetaView(c *ui.Context, g spaces.RepoGroup, home str
 		if needYou > 0 {
 			colour = p.Blocked
 		}
-		styled(ui.Text(c, live), theme.StyleValue).NoWrap().Shrink(0).TextColor(colour)
+		kit.Styled(ui.Text(c, live), theme.StyleValue).NoWrap().Shrink(0).TextColor(colour)
 	})
 }
 

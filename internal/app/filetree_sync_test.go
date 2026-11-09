@@ -50,8 +50,8 @@ func TestFileTreeFollowsTheGroups(t *testing.T) {
 	store := &projects.Store{}
 	store.AddFolder(filepath.Join(dir, ".git"), dir)
 	w := &fakeWindow{visible: true}
-	f := NewFrame(Deps{StartAgents: func(func()) (AgentSource, func()) {
-		return &source{snap: agentstate.Snapshot{CoreVersion: "0.1.18",
+	f := NewFrame(Deps{StartAgents: func(func()) (agentstate.AgentSource, func()) {
+		return &source{Snap: agentstate.Snapshot{CoreVersion: "0.1.18",
 			Orchestrators: []agents.Worker{orchW("o", "lead", "p")}}}, func() {}
 	}})
 	f.Files.Watch = func(string, func()) (func(), error) { return func() {}, nil }
