@@ -29,3 +29,20 @@ func TestSplitCode(t *testing.T) {
 		})
 	}
 }
+
+func TestChipLabel(t *testing.T) {
+	for _, tc := range []struct {
+		name, title, want string
+	}{
+		{"none", "Test the bag", "Test the bag"},
+		{"one span", "Run `go run ./tmp/usagecheck` now", "Run go run ./tmp/usagecheck now"},
+		{"unclosed", "Run `go test", "Run `go test"},
+		{"empty title", "", "b-250"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := chipLabel(NeedTab{Key: "b-250", Title: tc.title}); got != tc.want {
+				t.Errorf("chipLabel(%q) = %q, want %q", tc.title, got, tc.want)
+			}
+		})
+	}
+}

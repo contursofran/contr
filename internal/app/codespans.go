@@ -44,3 +44,13 @@ func splitCode(s string) []textPart {
 		s = s[open+2+end:]
 	}
 }
+
+// plainText is s without the backticks of its code spans: the parts of
+// splitCode joined. An unclosed backtick stays.
+func plainText(s string) string {
+	var b strings.Builder
+	for _, t := range splitCode(s) {
+		b.WriteString(t.Text)
+	}
+	return b.String()
+}
