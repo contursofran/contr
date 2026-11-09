@@ -1252,6 +1252,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		stopChecks()
 		offActive()
 		f.Files.Close()
+		f.Review.Close()
 		f.Session.Close()
 		unwatch()
 		term()

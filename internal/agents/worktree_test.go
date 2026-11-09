@@ -249,3 +249,18 @@ func TestReviewWorktree(t *testing.T) {
 		t.Error("PR 0: no error")
 	}
 }
+
+// runGit keeps its message: the git subcommand and git's stderr.
+func TestRunGitErrorNamesTheCommandAndStderr(t *testing.T) {
+	gitEnv(t)
+	dir := t.TempDir()
+	t.Setenv("GIT_CEILING_DIRECTORIES", filepath.Dir(dir))
+	_, err := runGit(context.Background(), dir, "rev-parse", "HEAD")
+	if err == nil || !strings.HasPrefix(err.Error(), "git rev-parse: fatal: not a git repository") {
+		t.Fatalf("error %v", err)
+	}
+	_, err = runGit(context.Background(), filepath.Join(dir, "missing"), "status")
+	if err == nil || !strings.HasPrefix(err.Error(), "git status: fatal: cannot change to") {
+		t.Fatalf("error %v", err)
+	}
+}

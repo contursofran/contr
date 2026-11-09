@@ -25,7 +25,7 @@ func TestEntriesRespectGitignoreAndSortFoldersFirst(t *testing.T) {
 	s.write("build/out.bin", "x")
 	s.write("debug.log", "x")
 	s.write("new.txt", "x")
-	got, err := s.repo().Entries("")
+	got, err := s.repo().Entries(t.Context(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +34,7 @@ func TestEntriesRespectGitignoreAndSortFoldersFirst(t *testing.T) {
 		t.Errorf("entries %v, want %v", names(got), want)
 	}
 	// One level only: the folder is read on its own.
-	sub, err := s.repo().Entries("src")
+	sub, err := s.repo().Entries(t.Context(), "src")
 	if err != nil || !reflect.DeepEqual(names(sub), []string{"main.go"}) {
 		t.Errorf("src entries %v, %v", names(sub), err)
 	}
@@ -44,11 +44,11 @@ func TestEntriesOutsideGitShowEverythingButNoDotGit(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "a.log"), []byte("x"), 0o644)
 	os.MkdirAll(filepath.Join(dir, ".git"), 0o755)
-	got, err := Repo{Dir: dir, Base: "main"}.Entries("")
+	got, err := Repo{Dir: dir, Base: "main"}.Entries(t.Context(), "")
 	if err != nil || !reflect.DeepEqual(names(got), []string{"a.log"}) {
 		t.Errorf("entries %v, %v", names(got), err)
 	}
-	if _, err := (Repo{Dir: dir}).Entries("missing"); err == nil {
+	if _, err := (Repo{Dir: dir}).Entries(t.Context(), "missing"); err == nil {
 		t.Error("a missing folder gave no error")
 	}
 }
@@ -62,7 +62,7 @@ func TestChangesCountsModifiedNewAndDeleted(t *testing.T) {
 	os.Remove(filepath.Join(s.dir, "gone.go"))
 	s.write("fresh.go", "x\ny\nz") // untracked, 3 lines without the final newline
 	s.write("skip.log", "ignored\n")
-	got, err := s.repo().Changes()
+	got, err := s.repo().Changes(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,14 +79,14 @@ func TestChangesCountsModifiedNewAndDeleted(t *testing.T) {
 }
 
 func TestChangesNotARepoAndBinaryNewFile(t *testing.T) {
-	got, err := Repo{Dir: t.TempDir(), Base: "main"}.Changes()
+	got, err := Repo{Dir: t.TempDir(), Base: "main"}.Changes(t.Context())
 	if err != nil || got != nil {
 		t.Errorf("not a repo: %v, %v", got, err)
 	}
 	s := scratch(t) // no commit yet: every file is new
 	s.write("bin.dat", "a\x00b")
 	s.write("t.txt", "one\n")
-	got, err = s.repo().Changes()
+	got, err = s.repo().Changes(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,10 +100,10 @@ func TestCurrentIsTheCheckedOutBranch(t *testing.T) {
 	s := scratch(t)
 	s.commit("base", map[string]string{"f": "1\n"})
 	s.git("checkout", "-b", "topic")
-	if got := s.repo().Current(); got != "topic" {
+	if got := s.repo().Current(t.Context()); got != "topic" {
 		t.Errorf("current %q, want topic", got)
 	}
-	if got := (Repo{Dir: t.TempDir()}).Current(); got != "" {
+	if got := (Repo{Dir: t.TempDir()}).Current(t.Context()); got != "" {
 		t.Errorf("outside git: %q", got)
 	}
 }
