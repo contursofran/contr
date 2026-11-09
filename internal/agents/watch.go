@@ -5,8 +5,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/contursofran/contr/internal/hc"
+)
+
+// The time limits of the watch's calls to the core (D223). subscribeLimit
+// covers the subscribe: a dial, the hello and the snapshot; 20 s, as
+// OpenTerminal. getLimit covers the terminal.get of one event; 10 s, as the
+// hooks. A call that passes its limit ends the watch with
+// context.DeadlineExceeded. Variables so tests can shorten them.
+var (
+	subscribeLimit = 20 * time.Second
+	getLimit       = 10 * time.Second
 )
 
 // Watch follows the workers, finished ones included, until ctx ends or the
@@ -32,7 +43,9 @@ func (m *Manager) watch(ctx context.Context, fn func([]Worker), foreign bool) er
 	if foreign {
 		f = hc.Filter{}
 	}
-	s, err := m.core.Subscribe(ctx, f)
+	sctx, cancel := context.WithTimeout(ctx, subscribeLimit)
+	s, err := m.core.Subscribe(sctx, f)
+	cancel() // the stream does not use sctx after Subscribe returns
 	if err != nil {
 		return err
 	}
@@ -102,7 +115,9 @@ func (m *Manager) apply(ctx context.Context, ws map[string]Worker, e hc.Event, f
 		return had, nil
 	}
 	var raw json.RawMessage
-	err := m.core.Call(ctx, "terminal.get", map[string]any{"terminal": e.Terminal}, &raw)
+	gctx, cancel := context.WithTimeout(ctx, getLimit)
+	err := m.core.Call(gctx, "terminal.get", map[string]any{"terminal": e.Terminal}, &raw)
+	cancel()
 	if hc.IsKind(err, "not_found") {
 		delete(ws, e.Terminal)
 		return had, nil
