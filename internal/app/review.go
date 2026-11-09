@@ -59,10 +59,8 @@ type Review struct {
 	// want is a file that the next branch read should open, if the branch
 	// changes it ([Review.OpenFile]).
 	want string
-	// gen counts the reads started. A result of an older read is dropped.
-	gen uint64
-	// cancel ends the read in flight; nil when none is.
-	cancel context.CancelFunc
+	// reads drops the result of an older read and ends its context.
+	reads Latest
 	// git runs git; nil runs the `git` command. timeout is the time limit
 	// of one read; 0 is gitReadTimeout. Tests set both.
 	git     git.InputRunner
@@ -91,22 +89,13 @@ func (r *Review) ByCommit() bool            { return r.mode == reviewByCommit }
 // the time limit.
 func (r *Review) run(read func(ctx context.Context) func()) {
 	r.drop()
-	ctx, cancel := context.WithCancel(context.Background())
-	r.cancel = cancel
-	gen, limit := r.gen, r.timeout
+	limit := r.timeout
 	if limit <= 0 {
 		limit = gitReadTimeout
 	}
-	r.Env.Do(func() func() {
-		rctx, stop := context.WithTimeout(ctx, limit)
-		apply := read(rctx)
-		stop()
+	r.reads.Read(r.Env, limit, func(ctx context.Context) func() {
+		apply := read(ctx)
 		return func() {
-			if gen != r.gen {
-				return
-			}
-			r.cancel()
-			r.cancel = nil
 			apply()
 			r.Env.Redraw()
 		}
@@ -114,13 +103,7 @@ func (r *Review) run(read func(ctx context.Context) func()) {
 }
 
 // drop ends the read in flight, and its result is not applied.
-func (r *Review) drop() {
-	r.gen++
-	if r.cancel != nil {
-		r.cancel()
-		r.cancel = nil
-	}
-}
+func (r *Review) drop() { r.reads.Reset() }
 
 // Close ends the read in flight, and its result is not applied. Call it
 // when the view ends (the window closes).

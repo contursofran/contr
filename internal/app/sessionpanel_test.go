@@ -212,3 +212,31 @@ func TestFilesPanelShowsSessionAboveTheTree(t *testing.T) {
 		t.Errorf("todos at %v, files head at %v: want the todos above", todos, head)
 	}
 }
+
+// A watch event of the terminal shown before starts no read.
+func TestSessionOldWatchEventReadsNothing(t *testing.T) {
+	var h heldEnv
+	id := "t1"
+	var notify func()
+	p := &SessionPanel{StateDir: t.TempDir(), Terminal: func() string { return id }, Env: h.env(),
+		Watch: func(_ string, n func()) (func(), error) { notify = n; return func() {}, nil }}
+	p.sync()
+	h.runAll()
+	old := notify
+	id = "t2"
+	p.sync()
+	h.runAll()
+	old()
+	for _, f := range h.done {
+		f()
+	}
+	h.done = nil
+	if len(h.work) != 0 {
+		t.Fatalf("%d reads started by an old watch event", len(h.work))
+	}
+	notify()
+	h.done[0]()
+	if len(h.work) != 1 {
+		t.Fatalf("%d reads started by a watch event, want 1", len(h.work))
+	}
+}

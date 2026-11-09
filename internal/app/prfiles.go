@@ -62,14 +62,13 @@ type prFiles struct {
 func (p *PRPane) loadFiles() {
 	f := &p.filesState
 	f.started, f.shown = true, -1
-	gen := p.gen
 	mk := p.Client
 	if mk == nil {
 		mk = github.New
 	}
 	client := mk(p.dir)
 	n := p.number
-	p.Env.Do(func() func() {
+	p.reads.Do(p.Env, func() func() {
 		files, err := client.Files(context.Background(), n)
 		var threads []github.Thread
 		var terr error
@@ -77,9 +76,6 @@ func (p *PRPane) loadFiles() {
 			threads, terr = client.Threads(context.Background(), n)
 		}
 		return func() {
-			if gen != p.gen {
-				return
-			}
 			f.loaded = true
 			if err != nil {
 				f.err = err.Error()
@@ -303,8 +299,8 @@ func (p *PRPane) writeThread(do func(context.Context, github.Client) error, ok f
 		return
 	}
 	f.busy, f.writeErr = true, ""
-	gen, client, n := p.gen, p.client, p.number
-	p.Env.Do(func() func() {
+	client, n := p.client, p.number
+	p.reads.Do(p.Env, func() func() {
 		err := do(context.Background(), client)
 		var threads []github.Thread
 		var terr error
@@ -312,9 +308,6 @@ func (p *PRPane) writeThread(do func(context.Context, github.Client) error, ok f
 			threads, terr = client.Threads(context.Background(), n)
 		}
 		return func() {
-			if gen != p.gen {
-				return
-			}
 			f.busy = false
 			switch {
 			case err != nil:

@@ -75,18 +75,14 @@ type FileTree struct {
 	onlyChanged  bool
 	openFiltered map[string]*bool
 	err          string
-	// gen counts the reads started; a result of an older read is dropped.
-	// session counts the folders shown, so a watch event of an old folder is
-	// dropped.
-	gen, session uint64
-	stopWatch    func()
-	mu           sync.Mutex
-	timer        *time.Timer
-
-	// ctx ends when gen changes: a newer read started or the tree closed.
-	// cancel ends it.
-	ctx    context.Context
-	cancel context.CancelFunc
+	// reads drops the result of an older read and ends its context: a newer
+	// read started or the tree closed. session counts the folders shown, so a
+	// watch event of an old folder is dropped.
+	reads     Latest
+	session   uint64
+	stopWatch func()
+	mu        sync.Mutex
+	timer     *time.Timer
 }
 
 // NewFileTree returns a tree that shows dir() once it is built.
@@ -143,7 +139,7 @@ func (t *FileTree) setDir(dir string) {
 	}
 	t.mu.Unlock()
 	t.dir, t.session = dir, t.session+1
-	t.newGen()
+	t.reads.Reset()
 	t.repo = review.Repo{Dir: dir, Base: reviewBase, Git: t.Git}
 	t.changes, t.byPath, t.err, t.changesOK = nil, nil, "", false
 	t.loaded, t.loading = map[string][]review.Entry{}, map[string]bool{}
@@ -160,8 +156,8 @@ func (t *FileTree) setDir(dir string) {
 // goroutine. It also reads the folders that are loading, so a result that a
 // newer read dropped is not lost.
 func (t *FileTree) read(rels []string) {
-	t.newGen()
-	gen, repo, ctx, limit := t.gen, t.repo, t.ctx, t.limit()
+	t.reads.Reset()
+	repo := t.repo
 	want := map[string]bool{"": true}
 	for _, r := range rels {
 		want[r] = true
@@ -172,9 +168,7 @@ func (t *FileTree) read(rels []string) {
 	for r := range want {
 		t.loading[r] = true
 	}
-	t.Env.Do(func() func() {
-		ctx, stop := context.WithTimeout(ctx, limit)
-		defer stop()
+	t.reads.Read(t.Env, t.limit(), func(ctx context.Context) func() {
 		changes, cerr := repo.Changes(ctx)
 		entries := map[string][]review.Entry{}
 		errs := map[string]error{}
@@ -183,9 +177,6 @@ func (t *FileTree) read(rels []string) {
 			entries[rel], errs[rel] = es, err
 		}
 		return func() {
-			if gen != t.gen {
-				return
-			}
 			t.setChanges(changes)
 			t.changesOK = cerr == nil
 			for rel := range want {
@@ -209,15 +200,10 @@ func (t *FileTree) loadDir(rel string) {
 		return
 	}
 	t.loading[rel] = true
-	gen, repo, ctx, limit := t.gen, t.repo, t.ctx, t.limit()
-	t.Env.Do(func() func() {
-		ctx, stop := context.WithTimeout(ctx, limit)
-		defer stop()
+	repo := t.repo
+	t.reads.Read(t.Env, t.limit(), func(ctx context.Context) func() {
 		es, err := repo.Entries(ctx, rel)
 		return func() {
-			if gen != t.gen {
-				return
-			}
 			delete(t.loading, rel)
 			t.loaded[rel] = es // nil after an error, so it is not read again
 			if err != nil {
@@ -226,16 +212,6 @@ func (t *FileTree) loadDir(rel string) {
 			t.Env.Redraw()
 		}
 	})
-}
-
-// newGen starts a new generation of reads: it ends the reads of the old one,
-// and their results are dropped.
-func (t *FileTree) newGen() {
-	t.gen++
-	if t.cancel != nil {
-		t.cancel()
-	}
-	t.ctx, t.cancel = context.WithCancel(context.Background())
 }
 
 // limit is the time limit of one read.

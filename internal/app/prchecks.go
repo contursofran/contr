@@ -105,13 +105,10 @@ func (p *PRPane) readChecks(t checksTrigger, stamp termStamp) {
 	if t == checksWorkerEvent {
 		p.checks.stamp = stamp
 	}
-	gen, n, client := p.gen, p.number, p.client
-	p.Env.Do(func() func() {
+	n, client := p.number, p.client
+	p.reads.Do(p.Env, func() func() {
 		rows, err := client.Checks(context.Background(), n)
 		return func() {
-			if gen != p.gen {
-				return
-			}
 			p.checks.inflight, p.checks.loaded = false, true
 			if err != nil {
 				p.checks.err = err.Error()

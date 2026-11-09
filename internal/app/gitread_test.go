@@ -107,7 +107,7 @@ func TestReviewReadPastTheTimeLimitFails(t *testing.T) {
 	if !strings.Contains(r.Err(), "deadline exceeded") {
 		t.Fatalf("err %q, want the time limit", r.Err())
 	}
-	if r.cancel != nil {
+	if r.reads.Busy() {
 		t.Fatal("no read is in flight after the result")
 	}
 }
@@ -137,6 +137,18 @@ func TestFileTreeCloseEndsTheRead(t *testing.T) {
 	ctx := g.first(t)
 	ft.Close()
 	ended(t, ctx, context.Canceled)
+}
+
+func TestFileTreeReadAfterCloseIsDropped(t *testing.T) {
+	ft, g, q := blockedTree(t, time.Hour)
+	ft.Sync()
+	ctx := g.first(t)
+	ft.Close()
+	ended(t, ctx, context.Canceled)
+	q.run(t) // the old result is dropped
+	if ft.err != "" || len(ft.loaded) != 0 {
+		t.Fatalf("result applied after Close: err %q, loaded %d", ft.err, len(ft.loaded))
+	}
 }
 
 func TestFileTreeReadPastTheTimeLimitFails(t *testing.T) {
