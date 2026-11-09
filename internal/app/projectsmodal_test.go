@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -574,11 +575,19 @@ func TestProjectsModalChangesWithTheTheme(t *testing.T) {
 }
 
 // The projects modal has an opaque fill, float-solid, so the terminal behind it does not show
-// through its rows (#546, D217). Modals are never glass-float.
+// through its rows (#546, D217). Modals are never glass-float, and float-solid has no blur.
 func TestTheProjectsModalFillIsFloatSolid(t *testing.T) {
 	for name, p := range map[string]*theme.Palette{"dark": theme.Dark, "light": theme.Light} {
 		if got := projectsModalFill(p); got != p.FloatSolid || got.A != 255 {
 			t.Errorf("%s: the projects modal fill %v is not the opaque float-solid %v", name, got, p.FloatSolid)
 		}
+	}
+	// A glass.Blur material draws the blurred, scrimmed backdrop in place of the fill: no blur.
+	src, err := os.ReadFile("projectsmodal_view.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(src), "glass.Blur{") {
+		t.Error("the projects modal panel has a glass.Blur material: it hides the float-solid fill")
 	}
 }

@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/icons"
@@ -196,7 +195,7 @@ func (m *ProjectsModal) View(c *ui.Context) {
 	d := ui.DialogBase(c, &open, func(backdrop, panel ui.Element) {
 		backdrop.Background(p.Scrim).Justify(ui.Start).AlignItems(ui.Center).Padding(theme.ModalTop, 0, 0, 0)
 		panel.Label(LabelProjects).Column().Width(theme.ProjectsWidth).Background(projectsModalFill(p)).
-			Material(glass.Blur{Radius: theme.GlassBlur}).Border(1, p.FloatLine).Radius(theme.Radius14)
+			Border(1, p.FloatLine).Radius(theme.Radius14)
 		for _, l := range p.ShadowFloat {
 			if !l.Inset {
 				panel.Shadow(l.X, l.Y, l.Blur, l.Wide, l.Color)
