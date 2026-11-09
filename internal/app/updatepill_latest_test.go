@@ -47,7 +47,7 @@ func TestANewerVersionWhileReadyShowsInThePillAndToast(t *testing.T) {
 	}
 	r.tt.Frame()
 	texts = r.tt.Texts()
-	for _, want := range []string{"contr 1.4.0", "from 1.2.3", "Latest update"} {
+	for _, want := range []string{"contr 1.4.0", "from 1.2.3", "Latest update", "Update pill", "Faster tabs"} {
 		if !slices.Contains(texts, want) {
 			t.Errorf("the panel has no %q: %q", want, texts)
 		}

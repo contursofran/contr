@@ -56,3 +56,61 @@ func field(nums []int, i int) int {
 	}
 	return 0
 }
+
+// JoinNotes joins the release notes of a newer version and the notes contr installed before it,
+// newest first, with a blank line between (D226). Each notes text starts with its "## <version>"
+// heading. A section of earlier whose version is also a heading in newer is left out, so no
+// version shows twice.
+func JoinNotes(newer, earlier string) string {
+	newer, earlier = strings.TrimSpace(newer), strings.TrimSpace(earlier)
+	have := map[string]bool{}
+	for _, sec := range noteSections(newer) {
+		if v := sectionVersion(sec); v != "" {
+			have[v] = true
+		}
+	}
+	parts := []string{}
+	if newer != "" {
+		parts = append(parts, newer)
+	}
+	for _, sec := range noteSections(earlier) {
+		if v := sectionVersion(sec); v != "" && have[v] {
+			continue
+		}
+		if sec = strings.TrimSpace(sec); sec != "" {
+			parts = append(parts, sec)
+		}
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+// noteSections splits notes before each "## " heading line.
+func noteSections(notes string) []string {
+	var secs []string
+	var cur []string
+	for _, l := range strings.Split(notes, "\n") {
+		if strings.HasPrefix(l, "## ") && len(cur) > 0 {
+			secs = append(secs, strings.Join(cur, "\n"))
+			cur = nil
+		}
+		cur = append(cur, l)
+	}
+	if len(cur) > 0 {
+		secs = append(secs, strings.Join(cur, "\n"))
+	}
+	return secs
+}
+
+// sectionVersion is the version of a "## <version>" or "## [<version>] …" heading, or "".
+func sectionVersion(sec string) string {
+	head, _, _ := strings.Cut(sec, "\n")
+	rest, ok := strings.CutPrefix(head, "## ")
+	if !ok {
+		return ""
+	}
+	f := strings.Fields(rest)
+	if len(f) == 0 {
+		return ""
+	}
+	return strings.TrimPrefix(strings.Trim(f[0], "[]"), "v")
+}

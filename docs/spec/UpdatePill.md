@@ -43,7 +43,9 @@ Shared rules: [README.md](README.md). Design: boards 8 and 9 of the from-zero ca
 - The scheduled check (every 15 minutes on the wall clock, and when the app becomes active after 10 minutes; D198) installs a newer version in the background, without a relaunch.
 - While an update is ready, the checks go on. A version newer than the ready one installs in the
   background over it; the pill, the panel, the toast and Settings then show the newer version, and
-  its toast takes the place of the older one. A failed install of it keeps the ready one (D226).
+  its toast takes the place of the older one. Its notes keep the ready one's after them, newest
+  first, so What's new shows each version contr installed since the running one; a version contr
+  never saw has no notes. A failed install of it keeps the ready one (D226).
 - A click on the pill opens or closes the panel. A press outside or Escape closes it.
 - `Restart now` (panel, toast, Settings) first checks once, with a 5 s limit. A version newer
   than the ready one installs, then `Settings.Relaunch` runs once. A failed check or install
@@ -90,4 +92,5 @@ Shared rules: [README.md](README.md). Design: boards 8 and 9 of the from-zero ca
 - A newer version while one is ready (D226): it installs and the pill, panel and toast show it;
   the same version installs nothing; a failed install keeps the ready one; Restart now installs a
   newer one first and relaunches once, and after a failed check relaunches into the ready one;
-  `updated.json` keeps `from` as the version that ran before the first install.
+  `updated.json` keeps `from` as the version that ran before the first install, and the notes of
+  each installed version, newest first.

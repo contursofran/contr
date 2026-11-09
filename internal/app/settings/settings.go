@@ -396,7 +396,7 @@ func (s *Settings) checked(info *UpdateInfo, err error, started time.Time) {
 }
 
 // background installs info off the UI thread, without a relaunch (D176). When the install ends
-// well, info is the ready update. A failed install is logged; with no ready update it shows in
+// well, info is the ready update; over a ready update, its notes keep the ready one's after them. A failed install is logged; with no ready update it shows in
 // Settings, not as a toast, and the owner can try "Install and restart" there. A ready update
 // stays ready when the install of a newer one fails (D226).
 func (s *Settings) background(info UpdateInfo) {
@@ -406,6 +406,9 @@ func (s *Settings) background(info UpdateInfo) {
 	s.installing = true
 	if !s.ready {
 		s.err = ""
+	} else if s.found != nil {
+		// What's new covers each version contr installed since the running one (D226).
+		info.Notes = JoinNotes(info.Notes, s.found.Notes)
 	}
 	s.percent.Store(0)
 	s.Env.Do(func() func() {

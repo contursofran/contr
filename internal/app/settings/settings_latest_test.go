@@ -59,7 +59,7 @@ func TestACheckWhileReadyInstallsANewerVersion(t *testing.T) {
 	if !slices.Equal(ready, []string{"1.4.0"}) {
 		t.Errorf("OnReady %v, want 1.4.0", ready)
 	}
-	if s.found.Notes != "- two" || s.status() != "contr 1.4.0 is ready: restart to update" {
+	if s.found.Notes != "- two\n\n- one" || s.status() != "contr 1.4.0 is ready: restart to update" {
 		t.Errorf("notes %q, status %q", s.found.Notes, s.status())
 	}
 	if len(*log) != 1 || (*log)[0].version != "1.4.0" || (*log)[0].from != "1.2.3" {
@@ -239,6 +239,56 @@ func TestNewer(t *testing.T) {
 	} {
 		if got := Newer(c.a, c.b); got != c.want {
 			t.Errorf("Newer(%q, %q) = %v, want %v", c.a, c.b, got, c.want)
+		}
+	}
+}
+
+func TestAnInstallOverAReadyUpdateKeepsTheEarlierNotes(t *testing.T) {
+	u := &fakeUpdates{On: true, Info: &UpdateInfo{Version: "1.3", Notes: "## 1.3\n- Third"}}
+	s, log := recordRig(u)
+	s.Version = "1.2"
+	var notes []string
+	s.RecordInstall = func(info UpdateInfo, from string, _ time.Time) error {
+		*log = append(*log, recorded{what: "record", version: info.Version, from: from})
+		notes = append(notes, info.Notes)
+		return nil
+	}
+	s.AutoCheck()
+	u.Info = &UpdateInfo{Version: "1.4", Notes: "## 1.4\n- Fourth"}
+	s.AutoCheck()
+	want := "## 1.4\n- Fourth\n\n## 1.3\n- Third"
+	if len(notes) != 2 || notes[1] != want {
+		t.Fatalf("recorded notes %q, want the last %q", notes, want)
+	}
+	if (*log)[1].version != "1.4" || (*log)[1].from != "1.2" {
+		t.Errorf("recorded %+v, want 1.4 from 1.2", (*log)[1])
+	}
+	if info, _, _ := s.Installed(); info.Notes != want {
+		t.Errorf("ready notes %q, want %q", info.Notes, want)
+	}
+}
+
+func TestAFailedInstallOverAReadyUpdateKeepsItsNotes(t *testing.T) {
+	s, u, _ := readyRig(t)
+	u.Info, u.InstallErr = &UpdateInfo{Version: "1.4.0", Notes: "- two"}, errors.New("offline")
+	s.AutoCheck()
+	if info, _, _ := s.Installed(); info.Notes != "- one" {
+		t.Errorf("ready notes %q, want %q", info.Notes, "- one")
+	}
+}
+
+func TestJoinNotes(t *testing.T) {
+	for _, c := range []struct{ newer, earlier, want string }{
+		{"## 1.4\n- a", "## 1.3\n- b", "## 1.4\n- a\n\n## 1.3\n- b"},
+		{"## 1.5\n- c\n", "## 1.4\n- a\n\n## 1.3\n- b\n", "## 1.5\n- c\n\n## 1.4\n- a\n\n## 1.3\n- b"},
+		{"## 1.4\n- a", "## 1.4\n- old\n\n## 1.3\n- b", "## 1.4\n- a\n\n## 1.3\n- b"},
+		{"## [v1.4] - 2026-11-09\n- a", "## 1.4\n- old", "## [v1.4] - 2026-11-09\n- a"},
+		{"## 1.4\n- a", "", "## 1.4\n- a"},
+		{"", "## 1.3\n- b", "## 1.3\n- b"},
+		{"- a", "- b", "- a\n\n- b"},
+	} {
+		if got := JoinNotes(c.newer, c.earlier); got != c.want {
+			t.Errorf("JoinNotes(%q, %q) = %q, want %q", c.newer, c.earlier, got, c.want)
 		}
 	}
 }
