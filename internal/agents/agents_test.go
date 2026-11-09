@@ -136,8 +136,8 @@ func TestLoadConfig(t *testing.T) {
 // was read and the profiles that it has (#484).
 func TestSpawnNoProfile(t *testing.T) {
 	for _, tc := range []struct{ source, want string }{
-		{"", `agents: no profile "planner-high"; profiles: builder, debugger, planner, reviewer`},
-		{"/cfg/agents.json (not found)", `agents: no profile "planner-high" in /cfg/agents.json (not found); profiles: builder, debugger, planner, reviewer`},
+		{"", `agents: no profile "planner-high"; profiles: builder, debugger, orchestrator, planner, reviewer`},
+		{"/cfg/agents.json (not found)", `agents: no profile "planner-high" in /cfg/agents.json (not found); profiles: builder, debugger, orchestrator, planner, reviewer`},
 	} {
 		cfg := DefaultConfig()
 		cfg.Source = tc.source
@@ -463,7 +463,7 @@ func TestLoadConfigReadsTheKit(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg, err := LoadConfig(path)
-	if err != nil || cfg.Kit != "/k" || len(cfg.Profiles) != 4 {
+	if err != nil || cfg.Kit != "/k" || len(cfg.Profiles) != 5 {
 		t.Errorf("cfg = %+v, %v", cfg, err)
 	}
 }

@@ -23,7 +23,6 @@ const (
 	TextAgentsFoot   = "Applies to agents started from now on"
 	AgentsReset      = "Reset to defaults"
 	TextCustom       = "Custom"
-	TextNotSet       = "not set"
 	TextClaudeCode   = "Claude Code"
 	TextAgentsNoPath = "no agents.json path"
 )
@@ -49,13 +48,11 @@ var RoleEfforts = []string{"low", "medium", "high", "xhigh", "max"}
 // claudeProgram is the program of the Claude Code CLI.
 const claudeProgram = "claude"
 
-// roleDefault is the profile that Reset to defaults and a first pick start from. The
-// orchestrator is not in DefaultConfig; its suggestion is claude opus medium.
+// roleDefault is the profile that Reset to defaults and a pick on another program start from.
+// Every role is in DefaultConfig (D201).
 func roleDefault(profile string) agents.Profile {
-	if p, ok := agents.DefaultConfig().Profiles[profile]; ok {
-		return agents.Profile{Argv: slices.Clone(p.Argv), Agent: p.Agent}
-	}
-	return agents.Profile{Argv: []string{claudeProgram, "--model", "opus", "--effort", "medium", "--permission-mode", "auto"}}
+	p := agents.DefaultConfig().Profiles[profile]
+	return agents.Profile{Argv: slices.Clone(p.Argv), Agent: p.Agent}
 }
 
 // flagValue is the value of --name (or --name=) in argv, and whether it is there.
@@ -147,12 +144,9 @@ func pickRole(cfg *agents.Config, profile, what, v string) {
 	cfg.Profiles[profile] = p
 }
 
-// resetRoles puts each role back to its default. A missing orchestrator stays missing.
+// resetRoles puts each role back to its default.
 func resetRoles(cfg *agents.Config) {
 	for _, r := range Roles {
-		if _, ok := cfg.Profiles[r.Profile]; !ok && r.Profile == agents.RoleOrchestrator {
-			continue
-		}
 		cfg.Profiles[r.Profile] = roleDefault(r.Profile)
 	}
 }
@@ -282,12 +276,9 @@ func (s *Settings) agentsFoot(c *ui.Context) {
 // roleRow is one role: its name and what it does, the three dropdowns, and the command line.
 func (s *Settings) roleRow(c *ui.Context, r Role) {
 	p := theme.Current()
-	prof, have := s.ag.cfg.Profiles[r.Profile]
+	prof := s.ag.cfg.Profiles[r.Profile]
 	cli, model, effort := roleValues(prof.Argv)
 	empty := TextCustom
-	if !have {
-		empty = TextNotSet
-	}
 	ui.Column(c).Label(r.Name+" role").Gap(4).Padding(8, 0).BorderWidth(1, 0, 0, 0).BorderColor(p.Hairline).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
 			ui.Column(c).Width(180).Children(func() {
@@ -312,9 +303,6 @@ func (s *Settings) roleRow(c *ui.Context, r Role) {
 			}
 		})
 		line := commandLine(prof.Argv)
-		if !have {
-			line = TextNotSet + " · suggested: " + commandLine(roleDefault(r.Profile).Argv)
-		}
 		ui.Text(c, line).SingleLine().Ellipsis("…").MinWidth(0).TextColor(p.Ink62).
 			Font(theme.StyleValue.Family()).FontSize(theme.StyleValue.Size)
 	})

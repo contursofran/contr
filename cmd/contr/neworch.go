@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -83,16 +82,12 @@ func orchestratorName(dir string, now time.Time) string {
 
 // spawnOrchestrator starts the orchestrator profile in dir, with role
 // orchestrator and no parent: the same as `contr agents spawn --role
-// orchestrator --no-parent`. A missing profile gives an error that names the
-// profiles file.
+// orchestrator --no-parent`. DefaultConfig has the profile, so it needs no file
+// (D201).
 func spawnOrchestrator(ctx context.Context, getenv func(string) string, dial func(context.Context, func(string) string) (agentsCore, error), dir string, now time.Time) error {
-	path := configPath(getenv)
-	cfg, err := agents.LoadConfig(path)
+	cfg, err := agents.LoadConfig(configPath(getenv))
 	if err != nil {
 		return err
-	}
-	if _, ok := cfg.Profiles[orchestratorProfile]; !ok {
-		return fmt.Errorf("no %q profile in %s", orchestratorProfile, path)
 	}
 	if kit := getenv("CONTR_KIT"); kit != "" {
 		cfg.Kit = kit
