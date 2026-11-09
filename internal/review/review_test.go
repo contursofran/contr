@@ -70,7 +70,7 @@ func TestBranchesSkipBaseAndCount(t *testing.T) {
 	s.git("checkout", "-b", "a")
 	s.commit("one", map[string]string{"f.txt": "1\n3\nx\ny\n"}) // -1 (2), +2
 	s.commit("two", map[string]string{"g.txt": "g\n"})          // +1
-	got, err := s.repo().Branches()
+	got, err := s.repo().Branches(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestBranchesSortedByName(t *testing.T) {
 	s.commit("base", map[string]string{"f": "1\n"})
 	s.git("branch", "z")
 	s.git("branch", "b")
-	got, err := s.repo().Branches()
+	got, err := s.repo().Branches(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestFilesStatuses(t *testing.T) {
 	s.commit("work", map[string]string{"add.txt": "1\n2\n3\n", "mod.txt": "a\nB\nc\n"})
 	s.git("rm", "-q", "del.txt")
 	s.git("commit", "-m", "rm")
-	files, err := s.repo().Files("b")
+	files, err := s.repo().Files(t.Context(), "b")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestFilesBinary(t *testing.T) {
 	s.commit("base", map[string]string{"f": "1\n"})
 	s.git("checkout", "-b", "b")
 	s.commit("bin", map[string]string{"img.bin": "a\x00b\x00\x01"})
-	files, err := s.repo().Files("b")
+	files, err := s.repo().Files(t.Context(), "b")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestFilesSinceMergeBase(t *testing.T) {
 	s.commit("mine", map[string]string{"mine.txt": "m\n"})
 	s.git("checkout", "main")
 	s.commit("later", map[string]string{"later.txt": "l\n"})
-	files, err := s.repo().Files("b")
+	files, err := s.repo().Files(t.Context(), "b")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,7 @@ func TestCommitsOldestFirstNoMerges(t *testing.T) {
 	s.commit("later", map[string]string{"later.txt": "l\n"})
 	s.git("checkout", "b")
 	s.git("merge", "--no-ff", "-m", "merge main", "main")
-	got, err := s.repo().Commits("b")
+	got, err := s.repo().Commits(t.Context(), "b")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func TestCommitsOldestFirstNoMerges(t *testing.T) {
 func TestCommitFilesRootCommit(t *testing.T) {
 	s := scratch(t)
 	root := s.commit("root", map[string]string{"a.txt": "1\n", "d/b.txt": "2\n3\n"})
-	files, err := s.repo().CommitFiles(root)
+	files, err := s.repo().CommitFiles(t.Context(), root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +193,7 @@ func TestTextsWholeBranch(t *testing.T) {
 	s.commit("two", map[string]string{"f.txt": "new\n"})
 	s.git("checkout", "main")
 	s.commit("later", map[string]string{"f.txt": "main moved\n"})
-	before, after, err := s.repo().Texts("b", "", "f.txt")
+	before, after, err := s.repo().Texts(t.Context(), "b", "", "f.txt")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,11 +210,11 @@ func TestTextsAddedDeleted(t *testing.T) {
 	s.git("rm", "-q", "gone.txt")
 	s.git("commit", "-m", "rm")
 	r := s.repo()
-	before, after, err := r.Texts("b", "", "new.txt")
+	before, after, err := r.Texts(t.Context(), "b", "", "new.txt")
 	if err != nil || before != "" || after != "hi\n" {
 		t.Errorf("added: %q %q %v", before, after, err)
 	}
-	before, after, err = r.Texts("b", "", "gone.txt")
+	before, after, err = r.Texts(t.Context(), "b", "", "gone.txt")
 	if err != nil || before != "bye\n" || after != "" {
 		t.Errorf("deleted: %q %q %v", before, after, err)
 	}
@@ -228,11 +228,11 @@ func TestTextsCommitOnlyItsChange(t *testing.T) {
 	s.commit("two", map[string]string{"p.txt": "v2\n"})
 	sha3 := s.commit("three", map[string]string{"p.txt": "v3\n"})
 	r := s.repo()
-	before, after, err := r.Texts("b", sha1, "p.txt")
+	before, after, err := r.Texts(t.Context(), "b", sha1, "p.txt")
 	if err != nil || before != "" || after != "v1\n" {
 		t.Errorf("first: %q %q %v", before, after, err)
 	}
-	before, after, err = r.Texts("b", sha3, "p.txt")
+	before, after, err = r.Texts(t.Context(), "b", sha3, "p.txt")
 	if err != nil || before != "v2\n" || after != "v3\n" {
 		t.Errorf("last: %q %q %v", before, after, err)
 	}
@@ -241,7 +241,7 @@ func TestTextsCommitOnlyItsChange(t *testing.T) {
 func TestTextsRootCommit(t *testing.T) {
 	s := scratch(t)
 	root := s.commit("root", map[string]string{"a.txt": "1\n"})
-	before, after, err := s.repo().Texts("main", root, "a.txt")
+	before, after, err := s.repo().Texts(t.Context(), "main", root, "a.txt")
 	if err != nil || before != "" || after != "1\n" {
 		t.Fatalf("%q %q %v", before, after, err)
 	}
@@ -252,7 +252,7 @@ func TestGitErrorHasStderr(t *testing.T) {
 	// A temporary folder inside a repository would find that repository.
 	t.Setenv("GIT_CEILING_DIRECTORIES", filepath.Dir(dir))
 	r := Repo{Dir: dir, Base: "main"}
-	_, err := r.Branches()
+	_, err := r.Branches(t.Context())
 	if err == nil {
 		t.Fatal("want an error")
 	}
@@ -266,14 +266,14 @@ func TestUnicodePath(t *testing.T) {
 	s.commit("base", map[string]string{"f": "1\n"})
 	s.git("checkout", "-b", "b")
 	s.commit("add", map[string]string{"ñ.txt": "uno\n"})
-	files, err := s.repo().Files("b")
+	files, err := s.repo().Files(t.Context(), "b")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(files) != 1 || files[0].Path != "ñ.txt" || files[0].Added != 1 {
 		t.Fatalf("got %+v", files)
 	}
-	_, after, err := s.repo().Texts("b", "", "ñ.txt")
+	_, after, err := s.repo().Texts(t.Context(), "b", "", "ñ.txt")
 	if err != nil || after != "uno\n" {
 		t.Fatalf("texts %q %v", after, err)
 	}
@@ -286,7 +286,7 @@ func TestTotalAddsUpTheChangesOfTheWorkTree(t *testing.T) {
 	s.commit("one", map[string]string{"a.txt": "1\n"}) // committed: -2
 	s.write("b.txt", "x\ny\n")                         // uncommitted: +1
 	s.write("c.txt", "p\nq\n")                         // untracked: +2
-	files, err := s.repo().Changes()
+	files, err := s.repo().Changes(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}

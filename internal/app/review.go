@@ -1,13 +1,16 @@
 package app
 
 import (
+	"context"
 	"strconv"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/review"
 )
 
@@ -15,6 +18,9 @@ const (
 	reviewListW = 260
 	// reviewBase is the branch that the others are compared with (D27).
 	reviewBase = "main"
+	// gitReadTimeout is the time that one read of the Review view or of the
+	// file tree may run. A git that hangs then ends with an error.
+	gitReadTimeout = 30 * time.Second
 )
 
 // The two modes of the switch, as option indexes.
@@ -58,6 +64,12 @@ type Review struct {
 	invalidate func()
 	// gen counts the reads started. A result of an older read is dropped.
 	gen uint64
+	// cancel ends the read in flight; nil when none is.
+	cancel context.CancelFunc
+	// git runs git; nil runs the `git` command. timeout is the time limit
+	// of one read; 0 is gitReadTimeout. Tests set both.
+	git     git.InputRunner
+	timeout time.Duration
 }
 
 // NewReview returns an empty view. post runs a func on the UI thread
@@ -88,20 +100,49 @@ func (r *Review) redraw() {
 }
 
 // run reads on a goroutine and applies the result on the UI thread, unless a
-// newer read started meanwhile.
-func (r *Review) run(read func() func()) {
-	r.gen++
-	gen := r.gen
+// newer read started meanwhile. It ends the read in flight. read gets a
+// context that ends when a newer read starts, when the view closes, or at
+// the time limit.
+func (r *Review) run(read func(ctx context.Context) func()) {
+	r.drop()
+	ctx, cancel := context.WithCancel(context.Background())
+	r.cancel = cancel
+	gen, limit := r.gen, r.timeout
+	if limit <= 0 {
+		limit = gitReadTimeout
+	}
 	r.start(func() {
-		apply := read()
+		rctx, stop := context.WithTimeout(ctx, limit)
+		apply := read(rctx)
+		stop()
 		r.post(func() {
 			if gen != r.gen {
 				return
 			}
+			r.cancel()
+			r.cancel = nil
 			apply()
 			r.redraw()
 		})
 	})
+}
+
+// drop ends the read in flight, and its result is not applied.
+func (r *Review) drop() {
+	r.gen++
+	if r.cancel != nil {
+		r.cancel()
+		r.cancel = nil
+	}
+}
+
+// Close ends the read in flight. It reports whether a read was in flight:
+// the view then misses what that read was to show. Call it when the view
+// closes.
+func (r *Review) Close() (stopped bool) {
+	stopped = r.cancel != nil
+	r.drop()
+	return stopped
 }
 
 // SetRepo shows the repository in dir. An empty dir shows "Select a
@@ -114,22 +155,22 @@ func (r *Review) OpenFile(dir, rel string) { r.setRepo(dir, rel) }
 
 func (r *Review) setRepo(dir, want string) {
 	r.want = want
-	r.repo = review.Repo{Dir: dir, Base: reviewBase}
+	r.repo = review.Repo{Dir: dir, Base: reviewBase, Git: r.git}
 	r.branches, r.branch, r.files, r.file = nil, "", nil, ""
 	r.commits, r.commit, r.code, r.binary, r.err = nil, "", nil, false, ""
 	r.branchesRead = false
 	r.mode = reviewWhole
 	if dir == "" {
-		r.gen++ // drop reads in flight
+		r.drop()
 		r.redraw()
 		return
 	}
 	repo := r.repo
-	r.run(func() func() {
-		bs, err := repo.Branches()
+	r.run(func(ctx context.Context) func() {
+		bs, err := repo.Branches(ctx)
 		cur := ""
 		if want != "" {
-			cur = repo.Current()
+			cur = repo.Current(ctx)
 		}
 		return func() {
 			r.branches, r.err, r.branchesRead = bs, errText(err), true
@@ -155,11 +196,11 @@ func (r *Review) selectBranch(name string) {
 	r.commit, r.commits = "", nil
 	r.redraw()
 	repo, byCommit := r.repo, r.ByCommit()
-	r.run(func() func() {
-		fs, err := repo.Files(name)
+	r.run(func(ctx context.Context) func() {
+		fs, err := repo.Files(ctx, name)
 		var cs []review.Commit
 		if err == nil {
-			cs, err = repo.Commits(name)
+			cs, err = repo.Commits(ctx, name)
 		}
 		return func() {
 			r.files, r.commits, r.err = fs, cs, errText(err)
@@ -201,8 +242,8 @@ func (r *Review) SelectCommit(sha string) {
 	r.commit, r.file, r.files, r.code, r.binary = sha, "", nil, nil, false
 	r.redraw()
 	repo := r.repo
-	r.run(func() func() {
-		fs, err := repo.CommitFiles(sha)
+	r.run(func(ctx context.Context) func() {
+		fs, err := repo.CommitFiles(ctx, sha)
 		return func() {
 			r.files, r.err = fs, errText(err)
 			if err == nil && len(fs) > 0 {
@@ -227,12 +268,12 @@ func (r *Review) SelectFile(path string) {
 	}
 	r.redraw()
 	if r.binary {
-		r.gen++ // drop reads in flight
+		r.drop()
 		return
 	}
 	repo := r.repo
-	r.run(func() func() {
-		before, after, err := repo.Texts(branch, sha, path)
+	r.run(func(ctx context.Context) func() {
+		before, after, err := repo.Texts(ctx, branch, sha, path)
 		return func() {
 			r.err = errText(err)
 			if err == nil {

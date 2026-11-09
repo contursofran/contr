@@ -2,8 +2,8 @@ package review
 
 import (
 	"bytes"
+	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -19,8 +19,8 @@ type Entry struct {
 const maxCountBytes = 1 << 20
 
 // IsRepo reports whether Dir is inside a git work tree.
-func (r Repo) IsRepo() bool {
-	out, err := r.git("rev-parse", "--is-inside-work-tree")
+func (r Repo) IsRepo(ctx context.Context) bool {
+	out, err := r.git(ctx, "rev-parse", "--is-inside-work-tree")
 	return err == nil && strings.TrimSpace(out) == "true"
 }
 
@@ -29,23 +29,23 @@ func (r Repo) IsRepo() bool {
 // changes, and the new files that git does not ignore. A deleted file is in
 // the list with status Deleted. A folder that is not a git work tree gives no
 // changes and no error.
-func (r Repo) Changes() ([]File, error) {
-	if !r.IsRepo() {
+func (r Repo) Changes(ctx context.Context) ([]File, error) {
+	if !r.IsRepo(ctx) {
 		return nil, nil
 	}
-	if _, err := r.git("rev-parse", "--verify", "--quiet", "HEAD"); err != nil {
+	if _, err := r.git(ctx, "rev-parse", "--verify", "--quiet", "HEAD"); err != nil {
 		// No commit yet: every file that git does not ignore is new.
-		return r.untracked()
+		return r.untracked(ctx)
 	}
 	from := "HEAD"
-	if mb, err := r.git("merge-base", r.Base, "HEAD"); err == nil {
+	if mb, err := r.git(ctx, "merge-base", r.Base, "HEAD"); err == nil {
 		from = strings.TrimSpace(mb)
 	}
-	files, err := r.filesFrom([]string{"diff", "--no-renames"}, from)
+	files, err := r.filesFrom(ctx, []string{"diff", "--no-renames"}, from)
 	if err != nil {
 		return nil, err
 	}
-	more, err := r.untracked()
+	more, err := r.untracked(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -54,8 +54,8 @@ func (r Repo) Changes() ([]File, error) {
 
 // untracked lists the new files that git does not ignore, with their line
 // counts. A file that is too big, or binary, shows without counts.
-func (r Repo) untracked() ([]File, error) {
-	out, err := r.git("ls-files", "-z", "--others", "--exclude-standard")
+func (r Repo) untracked(ctx context.Context) ([]File, error) {
+	out, err := r.git(ctx, "ls-files", "-z", "--others", "--exclude-standard")
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +97,7 @@ func lineCount(data []byte) int {
 // itself) one level deep: folders first, then files, each by name. The .git
 // folder and the paths that git ignores are left out. In a folder that is not
 // a git work tree nothing is ignored.
-func (r Repo) Entries(rel string) ([]Entry, error) {
+func (r Repo) Entries(ctx context.Context, rel string) ([]Entry, error) {
 	des, err := os.ReadDir(filepath.Join(r.Dir, filepath.FromSlash(rel)))
 	if err != nil {
 		return nil, err
@@ -117,7 +117,10 @@ func (r Repo) Entries(rel string) ([]Entry, error) {
 		list = append(list, Entry{Name: de.Name(), Dir: dir})
 		paths = append(paths, joinRel(rel, de.Name()))
 	}
-	ignored := r.ignored(paths)
+	ignored := r.ignored(ctx, paths)
+	if err := ctx.Err(); err != nil {
+		return nil, err // the ignored paths are not known
+	}
 	kept := list[:0]
 	for i, e := range list {
 		if !ignored[paths[i]] {
@@ -145,20 +148,17 @@ func SortEntries(list []Entry) {
 
 // ignored asks git which of paths it ignores. It returns none when Dir is not
 // a git work tree or git fails: the tree then shows every path.
-func (r Repo) ignored(paths []string) map[string]bool {
+func (r Repo) ignored(ctx context.Context, paths []string) map[string]bool {
 	set := map[string]bool{}
-	if len(paths) == 0 || !r.IsRepo() {
+	if len(paths) == 0 || !r.IsRepo(ctx) {
 		return set
 	}
-	cmd := exec.Command("git", "-C", r.Dir, "check-ignore", "-z", "--stdin")
-	cmd.Stdin = strings.NewReader(strings.Join(paths, "\x00") + "\x00")
-	var out bytes.Buffer
-	cmd.Stdout = &out
+	out, err := r.gitInput(ctx, strings.NewReader(strings.Join(paths, "\x00")+"\x00"), "check-ignore", "-z", "--stdin")
 	// Exit status 1 means that no path is ignored.
-	if err := cmd.Run(); err != nil && out.Len() == 0 {
+	if err != nil {
 		return set
 	}
-	for _, p := range strings.Split(out.String(), "\x00") {
+	for _, p := range strings.Split(out, "\x00") {
 		if p != "" {
 			set[p] = true
 		}
