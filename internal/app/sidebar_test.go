@@ -338,8 +338,8 @@ func TestTheBranchIsReadOffTheUIThread(t *testing.T) {
 	live := &spSnap{s: spTree(spPane("w1:p1", wt, nil))}
 	var started []func()
 	read := 0
-	l := NewSpacesList(live.get, nil, nil)
-	l.start = func(f func()) { started = append(started, f) }
+	l := NewSpacesList(live.get, nil, Env{})
+	l.Env.Run.Go = func(f func()) { started = append(started, f) }
 	scan := l.scanFn
 	l.scanFn = func(cwds []string) (s git.Scan) { read++; return scan(cwds) }
 	l.Sync()
@@ -381,7 +381,7 @@ func TestAHeadChangeReadsGitOnAGoroutine(t *testing.T) {
 	wt, _ := oneWorktree(t, base)
 	h := newSpaces(t, spTree(spPane("w1:p1", wt, nil)))
 	var started []func()
-	h.list.start = func(f func()) { started = append(started, f) }
+	h.list.Env.Run.Go = func(f func()) { started = append(started, f) }
 	for _, head := range h.heads {
 		head.changed()
 	}
@@ -432,8 +432,8 @@ func TestAFailedWatchIsReported(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
 	live := &spSnap{s: spTree(spPane("w1:p1", wt, nil))}
-	l := NewSpacesList(live.get, nil, nil)
-	l.start = func(f func()) { f() }
+	l := NewSpacesList(live.get, nil, Env{})
+	l.Env.Run.Go = func(f func()) { f() }
 	l.WatchHead = func(context.Context, string, func()) error { return errors.New("watch limit") }
 	var got error
 	l.OnError = func(err error) { got = err }

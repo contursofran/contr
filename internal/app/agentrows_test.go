@@ -47,7 +47,7 @@ func newRows(t *testing.T) *rowsHarness {
 	}
 	src := &source{}
 	h.list.Source = src
-	h.list.Run = Runner{Go: func(f func()) { f() }}
+	h.list.Env.Run = Runner{Go: func(f func()) { f() }}
 	lead := orchestratorIn("lead", cwds[0])
 	lead.Profile, lead.LastOutput = "orchestrator", rowsNow.Add(-2*time.Minute)
 	h.send(agentstate.Snapshot{CoreVersion: "0.1.18",
@@ -265,7 +265,7 @@ func TestAClickOnAnAgentRowSelectsItAndTheTabsFollow(t *testing.T) {
 func TestInterruptAndStopFromTheContextMenuCallTheSource(t *testing.T) {
 	h := newRows(t)
 	var told []string
-	h.list.Status = func(s string) { told = append(told, s) }
+	h.list.Env.Status = func(s string) { told = append(told, s) }
 	if err := h.tt.RightClick("b-241, working, 241, sonnet"); err != nil {
 		t.Fatal(err)
 	}
@@ -294,7 +294,7 @@ func TestAFailedMenuActionShowsItsError(t *testing.T) {
 	h := newRows(t)
 	h.src.actionErr = errors.New("hc: gone")
 	var told []string
-	h.list.Status = func(s string) { told = append(told, s) }
+	h.list.Env.Status = func(s string) { told = append(told, s) }
 	h.tt.RightClick("b-242, working, sonnet")
 	if err := h.tt.ChooseMenuItem(MenuStop); err != nil {
 		t.Fatal(err)

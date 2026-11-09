@@ -52,7 +52,7 @@ func newOutline(t *testing.T, todos ...owner.Todo) *outlineFixture {
 			Todos:         f.todo,
 		}
 	}
-	f.o = NewOutline(snap, f.sel, func() {})
+	f.o = NewOutline(snap, f.sel, Env{})
 	f.o.Now = func() time.Time { return f.now }
 	f.o.start = outlineClockStart
 	f.ov.Add(LabelOutline, f.o.View)
@@ -355,7 +355,7 @@ func TestOutlineViewDoesNoFileReads(t *testing.T) {
 		s := m.Snapshot()
 		s.Orchestrators = []agents.Worker{{Address: orchAddr, Project: "contr", Role: agents.RoleOrchestrator}}
 		return s
-	}, sel, func() {})
+	}, sel, Env{})
 	o.start = outlineClockStart
 	tt := ui.NewTester(func(c *ui.Context) { theme.Apply(c); ui.Box(c).Fill().Children(func() { o.View(c) }) }, 900, 600)
 	if _, ok := tt.Find("Ship the outline, new"); !ok {
@@ -410,7 +410,7 @@ func TestOutlineFocusIgnoresANilOutline(t *testing.T) {
 // while the window has the focus.
 func TestFrameTellsTheOutlineWhichTerminalHasTheFocus(t *testing.T) {
 	f, w, _, _ := terminalFrame(t, nil)
-	f.Outline = NewOutline(func() agentstate.Snapshot { return agentstate.Snapshot{} }, f.Selection, w.Invalidate)
+	f.Outline = NewOutline(func() agentstate.Snapshot { return agentstate.Snapshot{} }, f.Selection, Env{Invalidate: w.Invalidate})
 	w.blur()
 	f.Selection.Select(state.Selected{Kind: state.KindOrchestrator, ID: orchAddr})
 	if f.Outline.focused != "" {

@@ -361,17 +361,14 @@ func (l *SpacesList) CloseAgent(address, name string) {
 }
 
 func (l *SpacesList) act(w agents.Worker, done string, do func(string) error) {
-	l.Run.Do(func() func() {
+	l.Env.Do(func() func() {
 		err := do(w.Address)
 		return func() {
-			if l.Status == nil {
-				return
-			}
 			if err != nil {
-				l.Status(err.Error())
+				l.Env.Show(err.Error())
 				return
 			}
-			l.Status(w.Name + " " + done)
+			l.Env.Show(w.Name + " " + done)
 		}
 	})
 }

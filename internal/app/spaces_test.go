@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -143,8 +144,8 @@ func newSpaces(t *testing.T, live agentstate.Snapshot) *spacesHarness {
 	t.Helper()
 	h := &spacesHarness{t: t, live: &spSnap{s: live}, sel: state.NewSelection(nil),
 		host: &fakeHost{}, heads: map[string]*fakeHead{}}
-	h.list = NewSpacesList(h.live.get, h.sel, nil)
-	h.list.start = func(f func()) { f() }
+	h.list = NewSpacesList(h.live.get, h.sel, Env{})
+	h.list.Env.Run.Go = func(f func()) { f() }
 	h.list.Host = h.host
 	h.list.WatchHead = func(ctx context.Context, path string, changed func()) error {
 		h.heads[path] = &fakeHead{changed: changed, ctx: ctx}
@@ -266,8 +267,8 @@ func TestAScanLandsThroughThePostFunc(t *testing.T) {
 	wt, _ := oneWorktree(t, base)
 	live := &spSnap{s: spTree(spPane("w1:p1", wt, nil))}
 	var started, posted []func()
-	l := NewSpacesList(live.get, state.NewSelection(nil), func(f func()) { posted = append(posted, f) })
-	l.start = func(f func()) { started = append(started, f) }
+	l := NewSpacesList(live.get, state.NewSelection(nil), Env{Run: Runner{Post: func(f func()) { posted = append(posted, f) }}})
+	l.Env.Run.Go = func(f func()) { started = append(started, f) }
 	l.Sync()
 	if len(l.Groups()) != 0 || len(started) != 1 {
 		t.Fatalf("groups %+v, started %d: the scan has not run", l.Groups(), len(started))
@@ -287,8 +288,8 @@ func TestAScanThatLostTheTreeIsDropped(t *testing.T) {
 	wt, _ := oneWorktree(t, base)
 	live := &spSnap{s: spTree(spPane("w1:p1", wt, nil))}
 	var started []func()
-	l := NewSpacesList(live.get, state.NewSelection(nil), nil)
-	l.start = func(f func()) { started = append(started, f) }
+	l := NewSpacesList(live.get, state.NewSelection(nil), Env{})
+	l.Env.Run.Go = func(f func()) { started = append(started, f) }
 	l.Sync()
 	live.set(hcDown())
 	l.Sync()
@@ -305,8 +306,8 @@ func TestOnlyTheNewestScanLands(t *testing.T) {
 	repo := filepath.Join(base, "repo")
 	live := &spSnap{s: spTree(spPane("w1:p1", wt, nil))}
 	var started []func()
-	l := NewSpacesList(live.get, state.NewSelection(nil), nil)
-	l.start = func(f func()) { started = append(started, f) }
+	l := NewSpacesList(live.get, state.NewSelection(nil), Env{})
+	l.Env.Run.Go = func(f func()) { started = append(started, f) }
 	l.Sync()
 	live.set(spTree(spPane("w1:p1", wt, nil), spPane("w1:p2", repo, nil)))
 	l.Sync()
@@ -320,9 +321,9 @@ func TestOnlyTheNewestScanLands(t *testing.T) {
 func TestTheScanFuncGetsTheCwdsInTreeOrder(t *testing.T) {
 	live := &spSnap{s: spTree(spPane("w1:p1", "/x/b", nil), spPane("w1:p2", "/x/a", nil), spPane("w1:p3", "/x/b", nil))}
 	var got []string
-	l := NewSpacesList(live.get, nil, nil)
+	l := NewSpacesList(live.get, nil, Env{})
 	l.scanFn = func(cwds []string) git.Scan { got = cwds; return git.Scan{} }
-	l.start = func(f func()) { f() }
+	l.Env.Run.Go = func(f func()) { f() }
 	l.Sync()
 	if want := []string{"/x/b", "/x/a"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("cwds %q, want %q", got, want)
@@ -350,4 +351,27 @@ func (f *fakeHost) set(s host.Stats) {
 
 func stats(cpu float32, used, total uint64) host.Stats {
 	return host.Stats{CPUPercent: cpu, MemUsed: used, MemTotal: total}
+}
+
+// The HEAD watch blocks until its context ends, so it starts a goroutine even
+// in a zero Env, where other work runs at once.
+func TestSpacesHeadWatchDoesNotBlockInAZeroEnv(t *testing.T) {
+	l := NewSpacesList(nil, nil, Env{})
+	started := make(chan struct{})
+	l.WatchHead = func(ctx context.Context, _ string, _ func()) error {
+		close(started)
+		<-ctx.Done()
+		return nil
+	}
+	done := make(chan struct{})
+	go func() { l.watchHead(t.TempDir()); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("watchHead blocked its caller")
+	}
+	<-started
+	for _, cancel := range l.heads {
+		cancel()
+	}
 }

@@ -45,15 +45,10 @@ type FileTree struct {
 	// in Finder. Either may be nil.
 	Open   func(dir, rel string)
 	Reveal func(abs string)
-	// Status shows a read error. Nil drops it.
-	Status func(string)
-	// Post runs fn on the UI thread (Window.Update); nil runs it at once.
-	Post func(func())
-	// Invalidate asks for a redraw; nil in tests.
-	Invalidate func()
-	// Start runs fn on a goroutine; nil starts one (at once when Post is nil
-	// too). Tests run fn at once.
-	Start func(func())
+	// Env runs the reads off the UI thread, redraws and shows read errors.
+	// The zero Env (a tree that no window owns) reads at once, so nothing
+	// reaches the tree from another goroutine.
+	Env Env
 	// Watch watches dir and calls notify on a change, from any goroutine.
 	// Nil uses mygo.WatchFiles.
 	Watch func(dir string, notify func()) (stop func(), err error)
@@ -97,33 +92,6 @@ type FileTree struct {
 // NewFileTree returns a tree that shows dir() once it is built.
 func NewFileTree(dir func() string) *FileTree {
 	return &FileTree{Dir: dir}
-}
-
-func (t *FileTree) post(fn func()) {
-	if t.Post == nil {
-		fn()
-		return
-	}
-	t.Post(fn)
-}
-
-// start runs fn on a goroutine. Without Start and Post (a tree that no window
-// owns) it runs fn at once, so nothing reaches the tree from another goroutine.
-func (t *FileTree) start(fn func()) {
-	switch {
-	case t.Start != nil:
-		t.Start(fn)
-	case t.Post == nil:
-		fn()
-	default:
-		go fn()
-	}
-}
-
-func (t *FileTree) redraw() {
-	if t.Invalidate != nil {
-		t.Invalidate()
-	}
 }
 
 // Sync points the tree at the folder that Dir gives, even when no view draws it. The title bar
@@ -181,7 +149,7 @@ func (t *FileTree) setDir(dir string) {
 	t.loaded, t.loading = map[string][]review.Entry{}, map[string]bool{}
 	t.opened, t.openFiltered = map[string]*bool{}, map[string]*bool{}
 	if dir == "" {
-		t.redraw()
+		t.Env.Redraw()
 		return
 	}
 	t.read(nil)
@@ -204,7 +172,7 @@ func (t *FileTree) read(rels []string) {
 	for r := range want {
 		t.loading[r] = true
 	}
-	t.start(func() {
+	t.Env.Do(func() func() {
 		ctx, stop := context.WithTimeout(ctx, limit)
 		defer stop()
 		changes, cerr := repo.Changes(ctx)
@@ -214,7 +182,7 @@ func (t *FileTree) read(rels []string) {
 			es, err := repo.Entries(ctx, rel)
 			entries[rel], errs[rel] = es, err
 		}
-		t.post(func() {
+		return func() {
 			if gen != t.gen {
 				return
 			}
@@ -230,8 +198,8 @@ func (t *FileTree) read(rels []string) {
 			if cerr != nil {
 				t.fail(cerr)
 			}
-			t.redraw()
-		})
+			t.Env.Redraw()
+		}
 	})
 }
 
@@ -242,11 +210,11 @@ func (t *FileTree) loadDir(rel string) {
 	}
 	t.loading[rel] = true
 	gen, repo, ctx, limit := t.gen, t.repo, t.ctx, t.limit()
-	t.start(func() {
+	t.Env.Do(func() func() {
 		ctx, stop := context.WithTimeout(ctx, limit)
 		defer stop()
 		es, err := repo.Entries(ctx, rel)
-		t.post(func() {
+		return func() {
 			if gen != t.gen {
 				return
 			}
@@ -255,8 +223,8 @@ func (t *FileTree) loadDir(rel string) {
 			if err != nil {
 				t.fail(err)
 			}
-			t.redraw()
-		})
+			t.Env.Redraw()
+		}
 	})
 }
 
@@ -280,9 +248,7 @@ func (t *FileTree) limit() time.Duration {
 
 func (t *FileTree) fail(err error) {
 	t.err = err.Error()
-	if t.Status != nil {
-		t.Status(t.err)
-	}
+	t.Env.Show(t.err)
 }
 
 func (t *FileTree) setChanges(list []review.File) {
@@ -317,7 +283,7 @@ func (t *FileTree) changed(session uint64) {
 		wait = fileReadDebounce
 	}
 	fire := func() {
-		t.post(func() {
+		t.Env.Post(func() {
 			if session != t.session {
 				return
 			}
@@ -376,7 +342,7 @@ func watchFolder(dir string, notify func()) (func(), error) {
 // Head builds the filter toggle of the panel head.
 func (t *FileTree) Head(c *ui.Context) {
 	kit.IconButton(c, kit.IconButtonOpts{Icon: "filter", Label: LabelFileFilter, On: &t.onlyChanged,
-		OnClick: t.redraw})
+		OnClick: t.Env.Redraw})
 }
 
 // View builds the tree. It reads nothing on the UI thread.
@@ -618,7 +584,7 @@ func (t *FileTree) click(row ui.Element, rel string, dir bool, open *bool) {
 	}
 	if dir {
 		*open = !*open
-		t.redraw()
+		t.Env.Redraw()
 		return
 	}
 	if t.Open != nil {

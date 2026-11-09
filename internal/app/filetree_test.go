@@ -37,7 +37,7 @@ func newTreeRig(t *testing.T, dir string) *treeRig {
 	t.Helper()
 	r := &treeRig{t: t, dir: dir}
 	r.ft = NewFileTree(func() string { return r.dir })
-	r.ft.Start = func(fn func()) { r.starts++; fn() }
+	r.ft.Env.Run.Go = func(fn func()) { r.starts++; fn() }
 	r.ft.Debounce = -1
 	r.ft.Open = func(d, rel string) { r.opened = append(r.opened, [2]string{d, rel}) }
 	r.ft.Reveal = func(abs string) { r.revealed = append(r.revealed, abs) }
@@ -269,7 +269,7 @@ func TestFilesDirFollowsTheSelectedAgent(t *testing.T) {
 func TestFileTreeSkipsTheWatchlessFolderAndShowsReadErrors(t *testing.T) {
 	r := newTreeRig(t, filepath.Join(t.TempDir(), "missing"))
 	var shown []string
-	r.ft.Status = func(s string) { shown = append(shown, s) }
+	r.ft.Env.Status = func(s string) { shown = append(shown, s) }
 	r.reset()
 	r.frame()
 	if len(shown) == 0 {
@@ -290,7 +290,7 @@ func TestFileTreeWatchEventReadsAgainOffTheUIThread(t *testing.T) {
 	r := newTreeRig(t, dir)
 	var mu sync.Mutex
 	var jobs []func()
-	r.ft.Start = func(fn func()) { mu.Lock(); jobs = append(jobs, fn); mu.Unlock() }
+	r.ft.Env.Run.Go = func(fn func()) { mu.Lock(); jobs = append(jobs, fn); mu.Unlock() }
 	r.frame()
 	run := func() {
 		mu.Lock()
@@ -309,7 +309,7 @@ func TestFileTreeWatchEventReadsAgainOffTheUIThread(t *testing.T) {
 	write(t, dir, "two.txt", "x")
 	// The event comes from the watch goroutine; the read is queued, not run.
 	posted := 0
-	r.ft.Post = func(fn func()) { posted++; fn() }
+	r.ft.Env.Run.Post = func(fn func()) { posted++; fn() }
 	r.notify()
 	mu.Lock()
 	queued := len(jobs)
@@ -333,7 +333,7 @@ func TestFileTreeWatchEventsAreDebounced(t *testing.T) {
 	r := newTreeRig(t, dir)
 	r.ft.Debounce = 30 * time.Millisecond
 	reads := make(chan struct{}, 8)
-	r.ft.Start = func(fn func()) { reads <- struct{}{}; fn() }
+	r.ft.Env.Run.Go = func(fn func()) { reads <- struct{}{}; fn() }
 	r.reset()
 	r.frame()
 	<-reads
@@ -423,7 +423,7 @@ func TestFileTreeEmptyStates(t *testing.T) {
 // The frame has the tree in the files slot, and the board is gone from it.
 func TestFramePanelShowsTheFileTreeNotTheBoard(t *testing.T) {
 	f, tt := newTester(t)
-	f.Files.Start = func(fn func()) { fn() }
+	f.Files.Env.Run.Go = func(fn func()) { fn() }
 	f.Files.Watch = func(string, func()) (func(), error) { return func() {}, nil }
 	tt.Frame()
 	box(t, tt, LabelFileTree)
@@ -478,7 +478,7 @@ func TestFileTreeKeysMoveAndOpen(t *testing.T) {
 // pressing the key that opened the context sheet, leaves the file tree in the slot.
 func TestFramePanelStaysTheFileTreeWhateverIsSelected(t *testing.T) {
 	f, tt := newTester(t)
-	f.Files.Start = func(fn func()) { fn() }
+	f.Files.Env.Run.Go = func(fn func()) { fn() }
 	f.Files.Watch = func(string, func()) (func(), error) { return func() {}, nil }
 	f.Selection = state.NewSelection(nil)
 	f.Worker = &WorkerPanel{Source: panelSource(), Selection: f.Selection}
@@ -499,7 +499,7 @@ func TestFramePanelStaysTheFileTreeWhateverIsSelected(t *testing.T) {
 // and artifacts sit above it (D197).
 func TestFilesPanelHeadSaysFiles(t *testing.T) {
 	f, tt := newTester(t)
-	f.Files.Start = func(fn func()) { fn() }
+	f.Files.Env.Run.Go = func(fn func()) { fn() }
 	f.Files.Watch = func(string, func()) (func(), error) { return func() {}, nil }
 	f.openProject = "contr"
 	tt.Frame()

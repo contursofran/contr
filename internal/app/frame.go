@@ -936,16 +936,16 @@ func (f *Frame) syncAgents() {
 // loadProjects reads the projects store off the UI thread and gives it to the
 // sidebar (D109). A read error shows in the status message; the store is then
 // empty, so the sidebar keeps the tree order, and the file stays as it is (D63).
-func (f *Frame) loadProjects(w Window) {
+func (f *Frame) loadProjects(env Env) {
 	load := f.LoadProjects
 	if load == nil {
 		return
 	}
-	go func() {
+	env.Do(func() func() {
 		store, err := load()
-		w.Update(func() {
+		return func() {
 			if err != nil {
-				f.Toasts.Show(err.Error())
+				env.Show(err.Error())
 			}
 			if store == nil {
 				f.SpacesList.ReleaseLaunch()
@@ -954,23 +954,23 @@ func (f *Frame) loadProjects(w Window) {
 				f.SpacesList.Adopt = err == nil
 				f.SpacesList.SetProjects(store)
 			}
-		})
-	}()
+		}
+	})
 }
 
 // loadWidths reads the saved widths off the UI thread (D111). A bad file shows
 // in the status message and the defaults stay. A width the owner already
 // dragged is not replaced.
-func (f *Frame) loadWidths(w Window) {
+func (f *Frame) loadWidths(env Env) {
 	load := f.LoadWidths
 	if load == nil {
 		return
 	}
-	go func() {
+	env.Do(func() func() {
 		saved, err := load()
-		w.Update(func() {
+		return func() {
 			if err != nil {
-				f.Toasts.Show(err.Error())
+				env.Show(err.Error())
 			}
 			if f.widthsTouched {
 				return
@@ -981,9 +981,9 @@ func (f *Frame) loadWidths(w Window) {
 			if saved.Panel > 0 {
 				f.panelW = clampWidth(saved.Panel, theme.PanelMinWidth, theme.PanelMaxWidth)
 			}
-			w.Invalidate()
-		})
-	}()
+			env.Redraw()
+		}
+	})
 }
 
 // syncIssueTitles starts the issue title reads for the workers (D174).
@@ -1045,16 +1045,15 @@ func (f *Frame) syncWorkerPRs() {
 // thread, after the window exists. The returned function ends the watching.
 func (f *Frame) Attach(w Window) (stop func()) {
 	f.Selection = state.NewSelection(func() { f.syncOpen(); w.Invalidate(); f.syncReview(); f.syncTerminal() })
-	f.Review = NewReview(w.Update, w.Invalidate)
-	f.Files.Post, f.Files.Invalidate = w.Update, w.Invalidate
 	f.Toasts = state.NewToasts(w.Invalidate)
-	f.Files.Status = f.Toasts.Show
 	// env is the window's Env for the views: one value, not a field per view.
 	env := Env{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate, Status: f.Toasts.Show, OpenURL: openURL}
+	f.Review = NewReview(env)
+	f.Files.Env = env
 	if f.AgentsNotice != "" {
 		f.Toasts.Show(f.AgentsNotice)
 	}
-	f.Session.Post, f.Session.Invalidate, f.Session.OpenURL = w.Update, w.Invalidate, openURL
+	f.Session.Env = env
 	if f.Session.StateDir == "" {
 		f.Session.StateDir = statedir.Dir()
 	}
@@ -1093,7 +1092,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	}
 	removeOutline := func() {}
 	if agentSnap != nil {
-		f.Outline = NewOutline(agentSnap, f.Selection, w.Invalidate)
+		f.Outline = NewOutline(agentSnap, f.Selection, env)
 		removeOutline = f.Overlay.Add(LabelOutline, f.Outline.View)
 	}
 	if f.Host == nil {
@@ -1101,7 +1100,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	}
 	// The git scan runs on a goroutine and lands through Window.Update.
 	if f.SpacesList == nil {
-		f.SpacesList = NewSpacesList(agentSnap, f.Selection, w.Update)
+		f.SpacesList = NewSpacesList(agentSnap, f.Selection, env)
 	}
 	f.SpacesList.Host = f.Host
 	f.SpacesList.ByKey = func(do func()) { f.keyNav = true; do(); f.keyNav = false }
@@ -1112,7 +1111,6 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.SpacesList.StatusEffort = f.statusEffort
 	f.SpacesList.StatusModel = f.statusModel
 	f.SpacesList.Titles = f.IssueTitles
-	f.SpacesList.Run, f.SpacesList.Status = Runner{Post: w.Update}, f.Toasts.Show
 	f.SpacesList.Entry = f.agentRowEntry()
 	f.SpacesList.Ages = &AgeClock{Tick: w.Invalidate}
 	if src != nil {
@@ -1170,8 +1168,8 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.Slots.Spaces = f.SpacesList.View
 	f.SpacesList.HoldLaunch = f.LoadProjects != nil
 	f.SpacesList.Sync()
-	f.loadProjects(w)
-	f.loadWidths(w)
+	f.loadProjects(env)
+	f.loadWidths(env)
 	f.Notch = &Notch{Snapshot: agentSnap, Project: func() string { return f.openProject }}
 	if src != nil {
 		f.Notch.Open = f.Card.Open

@@ -57,8 +57,8 @@ func (s *reviewRepo) branchWithTwoCommits() {
 // reads started.
 func newTestReview() (*Review, *int) {
 	reads := 0
-	r := NewReview(nil, nil)
-	r.start = func(f func()) { reads++; f() }
+	r := NewReview(Env{})
+	r.Env.Run.Go = func(f func()) { reads++; f() }
 	return r, &reads
 }
 
@@ -157,7 +157,7 @@ func TestReviewStaleReadDropped(t *testing.T) {
 	s.commit("three", map[string]string{"c.txt": "c\n"})
 	r, _ := newTestReview()
 	var held []func()
-	r.start = func(f func()) { held = append(held, f) }
+	r.Env.Run.Go = func(f func()) { held = append(held, f) }
 	r.SetRepo(s.dir)
 	held[0]() // branches b, c arrive; the read of b's files (held[1]) is held
 	if len(held) != 2 || r.Branch() != "b" {

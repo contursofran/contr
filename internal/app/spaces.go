@@ -7,7 +7,7 @@ package app
 // (D52, docs/spec/ProjectRow.md).
 //
 // MyGo builds the whole view on a redraw. The git scan runs on a goroutine
-// and its result reaches the list through the post func. A branch change is
+// and its result reaches the list through Env. A branch change is
 // not polled: the list watches the HEAD file of each repo (WatchHead) and
 // scans again when it changes.
 
@@ -74,9 +74,9 @@ type SpacesList struct {
 	// Source is what the context menu of an agent row calls. Nil: Interrupt
 	// and Stop are off.
 	Source AgentActions
-	// Run runs the actions off the UI thread; Status tells their result.
-	Run    Runner
-	Status func(string)
+	// Env runs the git scans, the HEAD watches and the agent actions off the
+	// UI thread, and shows the result of an action.
+	Env Env
 	// Entry opens the pull request of an agent from its menu.
 	Entry WorkerEntry
 	// ModelOf names the model of an agent profile for line 2. Nil: none.
@@ -105,11 +105,8 @@ type SpacesList struct {
 	snap      func() agentstate.Snapshot
 	selection *state.Selection
 
-	// scanFn reads git. It runs on a goroutine, started by start.
+	// scanFn reads git. It runs off the UI thread, through Env.
 	scanFn func([]string) git.Scan
-	start  func(func())
-	// post runs fn on the UI thread (Window.Update). Nil runs it at once.
-	post func(func())
 
 	groups []spaces.RepoGroup
 	// projects is the owner's order and hidden groups (D109). Nil keeps the
@@ -159,13 +156,11 @@ type SpacesList struct {
 }
 
 // NewSpacesList returns the list. snap (may be nil) gives the hc terminals,
-// selection the clicks. post (may be nil) runs a func on the UI thread, as
-// Window.Update does. The list is empty until [SpacesList.Sync], which the
+// selection the clicks. env runs the git reads off the UI thread. The list is empty until [SpacesList.Sync], which the
 // owner calls at the start and when the agents changed.
-func NewSpacesList(snap func() agentstate.Snapshot, selection *state.Selection, post func(func())) *SpacesList {
+func NewSpacesList(snap func() agentstate.Snapshot, selection *state.Selection, env Env) *SpacesList {
 	return &SpacesList{
-		snap: snap, selection: selection, post: post,
-		scanFn: git.ScanCwds, start: func(f func()) { go f() },
+		snap: snap, selection: selection, Env: env, scanFn: git.ScanCwds,
 		folded: map[string]bool{}, heads: map[string]context.CancelFunc{},
 	}
 }
@@ -343,25 +338,16 @@ func (l *SpacesList) startScan(cwds []string) {
 	l.scanned = slices.Clone(cwds)
 	l.scans++
 	scanFn := l.scanFn
-	l.start(func() {
+	l.Env.Do(func() func() {
 		scan := scanFn(cwds)
-		l.later(func() {
+		return func() {
 			if gen != l.gen {
 				return
 			}
 			l.scan = scan
 			l.rebuild()
-		})
+		}
 	})
-}
-
-// later runs fn on the UI thread.
-func (l *SpacesList) later(fn func()) {
-	if l.post != nil {
-		l.post(fn)
-		return
-	}
-	fn()
 }
 
 func (l *SpacesList) rebuild() {
@@ -441,15 +427,18 @@ func (l *SpacesList) watchHead(dir string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	l.heads[dir] = cancel
 	watch := l.WatchHead
-	changed := func() { l.later(l.rescan) }
-	l.start(func() {
+	changed := func() { l.Env.Post(l.rescan) }
+	// The watch blocks until ctx ends, so it goes through Env.Run, which
+	// starts a goroutine even in a zero Env.
+	l.Env.Run.Do(func() func() {
 		if err := watch(ctx, filepath.Join(dir, "HEAD"), changed); err != nil && ctx.Err() == nil {
-			l.later(func() {
+			return func() {
 				if l.OnError != nil {
 					l.OnError(err)
 				}
-			})
+			}
 		}
+		return nil
 	})
 }
 
