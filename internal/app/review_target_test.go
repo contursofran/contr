@@ -5,13 +5,14 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/state"
 )
 
 func TestReviewTargetOfHcTabs(t *testing.T) {
-	o := orchW("o", "lead", "p")
+	o := apptest.OrchW("o", "lead", "p")
 	o.Worktree = "/wt/orch"
-	w := workW("w", "b1", "p")
+	w := apptest.WorkW("w", "b1", "p")
 	w.Worktree = "/wt/work"
 	term := agents.Worker{Address: "t", Name: "sh", Project: "p", Role: "terminal", Live: true, Worktree: "/wt/term"}
 	snap := agentstate.Snapshot{
@@ -51,9 +52,9 @@ func TestReviewTargetOfHcTabs(t *testing.T) {
 // contextLabels gives the Stop hook's context of the selected terminal, and
 // nothing for a worktree, an unknown address or no agents (D205).
 func TestContextLabelsOfTheSelectedTerminal(t *testing.T) {
-	o := orchW("o", "lead", "p")
+	o := apptest.OrchW("o", "lead", "p")
 	o.ContextTokens, o.ContextLimit = 90000, 160000
-	w := workW("w", "b1", "p")
+	w := apptest.WorkW("w", "b1", "p")
 	snap := agentstate.Snapshot{Orchestrators: []agents.Worker{o}, Workers: []agents.Worker{w}}
 	f := &Frame{Selection: state.NewSelection(nil)}
 	f.agentSnap = func() agentstate.Snapshot { return snap }

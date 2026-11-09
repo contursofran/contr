@@ -8,75 +8,10 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/state"
+	"github.com/contursofran/contr/internal/app/tabmodel"
 )
 
 // ---- model: order and move ----
-
-func plainTabs(addrs ...string) []Tab {
-	tabs := []Tab{{Address: "o", Title: "lead", Orchestrator: true}}
-	for _, a := range addrs {
-		tabs = append(tabs, Tab{Address: a, Title: a, Plain: true})
-	}
-	return tabs
-}
-
-func TestOrderTabsKeepsTheAgentFirstAndFollowsTheOrder(t *testing.T) {
-	got := addrs(OrderTabs(plainTabs("t1", "t2", "t3"), []string{"t3", "t1", "t2"}))
-	if want := []string{"o", "t3", "t1", "t2"}; !slices.Equal(got, want) {
-		t.Errorf("order %v, want %v", got, want)
-	}
-	// An order that names the agent tab does not move it.
-	got = addrs(OrderTabs(plainTabs("t1", "t2"), []string{"t2", "o", "t1"}))
-	if want := []string{"o", "t2", "t1"}; !slices.Equal(got, want) {
-		t.Errorf("order with the agent named %v, want %v", got, want)
-	}
-}
-
-func TestOrderTabsPutsUnknownTabsAfterTheKnownOnesInTheirOwnOrder(t *testing.T) {
-	got := addrs(OrderTabs(plainTabs("t1", "new1", "t2", "new2"), []string{"t2", "gone", "t1"}))
-	if want := []string{"o", "t2", "t1", "new1", "new2"}; !slices.Equal(got, want) {
-		t.Errorf("order %v, want %v", got, want)
-	}
-	if got := addrs(OrderTabs(plainTabs("t1", "t2"), nil)); !slices.Equal(got, []string{"o", "t1", "t2"}) {
-		t.Errorf("no order changed the tabs: %v", got)
-	}
-}
-
-func TestMoveTabTakesThePlaceOfTheTabItIsDroppedOn(t *testing.T) {
-	tabs := plainTabs("t1", "t2", "t3")
-	cases := []struct {
-		from, to string
-		want     []string
-	}{
-		{"t1", "t3", []string{"t2", "t3", "t1"}}, // right: after the target
-		{"t3", "t1", []string{"t3", "t1", "t2"}}, // left: before the target
-		{"t1", "t2", []string{"t2", "t1", "t3"}},
-	}
-	for _, c := range cases {
-		got, ok := MoveTab(tabs, c.from, c.to)
-		if !ok || !slices.Equal(got, c.want) {
-			t.Errorf("MoveTab(%s, %s) = %v, %v; want %v", c.from, c.to, got, ok, c.want)
-		}
-	}
-}
-
-func TestMoveTabNeverMovesOrDisplacesTheAgentTab(t *testing.T) {
-	tabs := plainTabs("t1", "t2")
-	for _, c := range [][2]string{{"o", "t1"}, {"t1", "o"}, {"t1", "t1"}, {"t1", "nope"}, {"nope", "t1"}} {
-		if got, ok := MoveTab(tabs, c[0], c[1]); ok {
-			t.Errorf("MoveTab(%s, %s) = %v, want no move", c[0], c[1], got)
-		}
-	}
-}
-
-func TestOnlyAPlainTabIsMovable(t *testing.T) {
-	if (Tab{Orchestrator: true}).Movable() || (Tab{}).Movable() {
-		t.Error("an agent tab is movable")
-	}
-	if !(Tab{Plain: true}).Movable() {
-		t.Error("a plain tab is not movable")
-	}
-}
 
 // ---- middle-click ----
 
@@ -121,7 +56,7 @@ func TestOtherButtonsAndEventsAreNotMiddleClicks(t *testing.T) {
 
 func TestTabMenuListsCloseAndCloseOthers(t *testing.T) {
 	b := newBar(t, tabsOf(), true)
-	b.bar.closeOthers = func(Tab) {}
+	b.bar.closeOthers = func(tabmodel.Tab) {}
 	b.tt.Frame()
 	if err := b.tt.RightClick("go test ./..."); err != nil {
 		t.Fatal(err)
@@ -146,8 +81,8 @@ func TestTabMenuCloseClosesThatPlainTab(t *testing.T) {
 
 func TestTabMenuCloseOthersKeepsTheTabThatWasClicked(t *testing.T) {
 	b := newBar(t, tabsOf(), true)
-	var kept []Tab
-	b.bar.closeOthers = func(k Tab) { kept = append(kept, k) }
+	var kept []tabmodel.Tab
+	b.bar.closeOthers = func(k tabmodel.Tab) { kept = append(kept, k) }
 	b.tt.Frame()
 	if err := b.tt.RightClick("go test ./..."); err != nil {
 		t.Fatal(err)
@@ -165,8 +100,8 @@ func TestTabMenuCloseOthersKeepsTheTabThatWasClicked(t *testing.T) {
 
 func TestTabMenuOnAnAgentTabCannotCloseIt(t *testing.T) {
 	b := newBar(t, tabsOf(), true)
-	var kept []Tab
-	b.bar.closeOthers = func(k Tab) { kept = append(kept, k) }
+	var kept []tabmodel.Tab
+	b.bar.closeOthers = func(k tabmodel.Tab) { kept = append(kept, k) }
 	b.tt.Frame()
 	if err := b.tt.RightClick("lead"); err != nil {
 		t.Fatal(err)
@@ -187,10 +122,10 @@ func TestTabMenuOnAnAgentTabCannotCloseIt(t *testing.T) {
 }
 
 func TestTabMenuCloseOthersIsOffWithoutAnotherPlainTab(t *testing.T) {
-	b := newBar(t, []Tab{{Address: "o", Title: "lead", Orchestrator: true, Selected: true},
+	b := newBar(t, []tabmodel.Tab{{Address: "o", Title: "lead", Orchestrator: true, Selected: true},
 		{Address: "t1", Title: "only", Plain: true}}, true)
 	called := 0
-	b.bar.closeOthers = func(Tab) { called++ }
+	b.bar.closeOthers = func(tabmodel.Tab) { called++ }
 	b.tt.Frame()
 	if err := b.tt.RightClick("only"); err != nil {
 		t.Fatal(err)
@@ -264,7 +199,7 @@ func newThreeTabFrame(t *testing.T) *closeFrame {
 
 func TestCloseOthersStopsTheOtherPlainTerminalsOnly(t *testing.T) {
 	cf := newThreeTabFrame(t)
-	cf.closeOtherTabs(Tab{Address: "tp2", Plain: true})
+	cf.closeOtherTabs(tabmodel.Tab{Address: "tp2", Plain: true})
 	if slices.Contains(cf.stopped, "tp2") || slices.Contains(cf.stopped, "o") {
 		t.Errorf("stopped %v: the kept tab or the agent was stopped", cf.stopped)
 	}
@@ -276,7 +211,7 @@ func TestCloseOthersStopsTheOtherPlainTerminalsOnly(t *testing.T) {
 
 func TestCloseOthersFromTheAgentTabStopsEveryPlainTerminalButNotTheAgent(t *testing.T) {
 	cf := newThreeTabFrame(t)
-	cf.closeOtherTabs(Tab{Address: "o", Orchestrator: true})
+	cf.closeOtherTabs(tabmodel.Tab{Address: "o", Orchestrator: true})
 	slices.Sort(cf.stopped)
 	if want := []string{"tp", "tp2", "tp3"}; !slices.Equal(cf.stopped, want) {
 		t.Errorf("stopped %v, want %v", cf.stopped, want)
@@ -313,7 +248,7 @@ func TestFrameMoveTabReordersThePlainTabsAndKeepsTheAgentFirst(t *testing.T) {
 func TestAClosedTerminalLeavesTheOrderOfTheOthers(t *testing.T) {
 	cf := newThreeTabFrame(t)
 	cf.moveTab("tp3", "tp")
-	cf.closeTab(Tab{Address: "tp", Plain: true})
+	cf.closeTab(tabmodel.Tab{Address: "tp", Plain: true})
 	if got := termsOfProjectP(cf); !slices.Equal(got, []string{"o", "tp3", "tp2"}) {
 		t.Errorf("after closing tp: %v", got)
 	}

@@ -6,6 +6,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/projects"
 )
@@ -52,7 +53,7 @@ func TestFileTreeFollowsTheGroups(t *testing.T) {
 	w := &fakeWindow{visible: true}
 	f := NewFrame(Deps{StartAgents: func(func()) (AgentSource, func()) {
 		return &source{snap: agentstate.Snapshot{CoreVersion: "0.1.18",
-			Orchestrators: []agents.Worker{orchW("o", "lead", "p")}}}, func() {}
+			Orchestrators: []agents.Worker{apptest.OrchW("o", "lead", "p")}}}, func() {}
 	}})
 	f.Files.Watch = func(string, func()) (func(), error) { return func() {}, nil }
 	stop := f.Attach(w)

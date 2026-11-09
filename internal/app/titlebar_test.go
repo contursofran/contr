@@ -15,6 +15,7 @@ import (
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/files"
 	"github.com/contursofran/contr/internal/app/state"
+	"github.com/contursofran/contr/internal/app/tabmodel"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/theme/themetest"
 	"github.com/contursofran/contr/internal/review"
@@ -22,8 +23,8 @@ import (
 
 // tabsOf is the tabs of project p: the orchestrator "lead" (selected), a plain terminal with a
 // title and a plain terminal with none.
-func tabsOf() []Tab {
-	return []Tab{
+func tabsOf() []tabmodel.Tab {
+	return []tabmodel.Tab{
 		{Address: "o", Title: "lead", Orchestrator: true, Selected: true},
 		{Address: "t1", Title: "go test ./...", Plain: true},
 		{Address: "t2", Title: "$ repo", Plain: true},
@@ -34,19 +35,19 @@ func tabsOf() []Tab {
 type barTest struct {
 	bar       *titleBar
 	tt        *ui.Tester
-	picked    []Tab
-	closed    []Tab
+	picked    []tabmodel.Tab
+	closed    []tabmodel.Tab
 	news      int
 	searches  int
 	panelOpen bool
 	toggles   int
 }
 
-func newBar(t *testing.T, tabs []Tab, panelOpen bool) *barTest {
+func newBar(t *testing.T, tabs []tabmodel.Tab, panelOpen bool) *barTest {
 	t.Helper()
 	b := &barTest{bar: &titleBar{}, panelOpen: panelOpen}
-	b.bar.selectTab = func(tab Tab) { b.picked = append(b.picked, tab) }
-	b.bar.closeTab = func(tab Tab) { b.closed = append(b.closed, tab) }
+	b.bar.selectTab = func(tab tabmodel.Tab) { b.picked = append(b.picked, tab) }
+	b.bar.closeTab = func(tab tabmodel.Tab) { b.closed = append(b.closed, tab) }
 	b.bar.newTab = func() { b.news++ }
 	b.bar.search = func() { b.searches++ }
 	b.bar.setTabs(tabs)
@@ -94,7 +95,7 @@ func TestTabsShowTheirTitlesAndGlyphs(t *testing.T) {
 }
 
 func TestAWorkerTabGlyphSaysItsState(t *testing.T) {
-	tabs := []Tab{{Address: "w", Title: "#5 · fix-x", State: tabState(agents.Worker{Status: "blocked", Live: true}), Selected: true}}
+	tabs := []tabmodel.Tab{{Address: "w", Title: "#5 · fix-x", State: tabmodel.TabState(agents.Worker{Status: "blocked", Live: true}), Selected: true}}
 	b := newBar(t, tabs, true)
 	if !b.has("needs you") {
 		t.Errorf("a blocked agent shows no needs-you glyph; texts %q", b.tt.Texts())
@@ -242,9 +243,9 @@ func TestThePanelToggleFollowsTheFrameAndKeepsItsPlace(t *testing.T) {
 }
 
 func TestManyTabsShrinkThenClip(t *testing.T) {
-	var tabs []Tab
+	var tabs []tabmodel.Tab
 	for n := range 40 {
-		tabs = append(tabs, Tab{Address: fmt.Sprintf("t%d", n), Title: fmt.Sprintf("terminal-number-%d", n), Plain: true, Selected: n == 0})
+		tabs = append(tabs, tabmodel.Tab{Address: fmt.Sprintf("t%d", n), Title: fmt.Sprintf("terminal-number-%d", n), Plain: true, Selected: n == 0})
 	}
 	b := newBar(t, tabs, true)
 	row := b.rect(t, LabelTabs)
@@ -260,7 +261,7 @@ func TestManyTabsShrinkThenClip(t *testing.T) {
 
 func TestATabTitleLongerThanTheMaxWidthIsCut(t *testing.T) {
 	long := "a-very-long-terminal-title-that-goes-past-the-maximum-width-of-a-tab"
-	b := newBar(t, []Tab{{Address: "t", Title: long, Plain: true, Selected: true}}, true)
+	b := newBar(t, []tabmodel.Tab{{Address: "t", Title: long, Plain: true, Selected: true}}, true)
 	if w := b.rect(t, long).W; w > theme.SizeTabMaxWidth {
 		t.Errorf("tab is %v wide, want at most %d", w, theme.SizeTabMaxWidth)
 	}
@@ -282,7 +283,7 @@ func stripOf(b *barTest, x0, x1 float32) []ui.Color {
 // The shown title and the close button look as in a tab with the literal text "start…".
 func TestALongTitleEndsInAnEllipsisInsideTheTab(t *testing.T) {
 	long := "Herdr worker orchestrator with a very long title"
-	b := newBar(t, []Tab{{Address: "t", Title: long, Plain: true, Selected: true}}, true)
+	b := newBar(t, []tabmodel.Tab{{Address: "t", Title: long, Plain: true, Selected: true}}, true)
 	b.tt.Frame()
 	tab := b.rect(t, long)
 	closeBox := b.rect(t, LabelCloseTab)
@@ -321,7 +322,7 @@ func TestALongTitleEndsInAnEllipsisInsideTheTab(t *testing.T) {
 }
 
 func TestATabTitleThatFitsHasNoEllipsis(t *testing.T) {
-	b := newBar(t, []Tab{{Address: "t", Title: "zsh", Plain: true, Selected: true}}, true)
+	b := newBar(t, []tabmodel.Tab{{Address: "t", Title: "zsh", Plain: true, Selected: true}}, true)
 	for _, s := range b.tt.Texts() {
 		if strings.HasSuffix(s, "…") {
 			t.Errorf("text %q has an ellipsis", s)
@@ -340,7 +341,7 @@ func TestTheTabTooltipHoldsTheFullTitle(t *testing.T) {
 		return n
 	}
 	for name, tip := range map[string]string{"no tip": "", "tip with a name": "w"} {
-		b := newBar(t, []Tab{{Address: "t", Title: long, Tip: tip, Plain: true, Selected: true}}, true)
+		b := newBar(t, []tabmodel.Tab{{Address: "t", Title: long, Tip: tip, Plain: true, Selected: true}}, true)
 		before := count(b)
 		r := b.rect(t, long)
 		b.tt.Move(r.X+r.W/2, r.Y+r.H/2)
@@ -349,10 +350,10 @@ func TestTheTabTooltipHoldsTheFullTitle(t *testing.T) {
 			t.Errorf("%s: no tooltip with the full title; texts %q", name, b.tt.Texts())
 		}
 	}
-	if got := tabTooltip(Tab{Title: "a", Tip: "w"}); got != "a · w" {
+	if got := tabTooltip(tabmodel.Tab{Title: "a", Tip: "w"}); got != "a · w" {
 		t.Errorf("tooltip %q, want %q", got, "a · w")
 	}
-	if got := tabTooltip(Tab{Title: "a", Tip: "a · t1"}); got != "a · t1" {
+	if got := tabTooltip(tabmodel.Tab{Title: "a", Tip: "a · t1"}); got != "a · t1" {
 		t.Errorf("tooltip %q, want the tip as given", got)
 	}
 }
@@ -396,13 +397,13 @@ func agentFrame(t *testing.T, snap *agentstate.Snapshot) (*Frame, *ui.Tester) {
 // tabSnap is project p with the orchestrator lead and the workers b1 (working) and b2 (idle),
 // and project q with the worker b3.
 func tabSnap() agentstate.Snapshot {
-	w1 := workW("w1", "b1", "p")
+	w1 := apptest.WorkW("w1", "b1", "p")
 	w1.Status = "working"
-	w2 := workW("w2", "b2", "p")
+	w2 := apptest.WorkW("w2", "b2", "p")
 	w2.Status = "idle"
-	other := workW("w3", "b3", "q")
+	other := apptest.WorkW("w3", "b3", "q")
 	other.Status = "idle"
-	o := orchW("o", "lead", "p")
+	o := apptest.OrchW("o", "lead", "p")
 	o.Status = "idle"
 	return agentstate.Snapshot{Orchestrators: []agents.Worker{o}, Workers: []agents.Worker{w1, w2, other}}
 }
@@ -419,7 +420,7 @@ func tabTexts(tt *ui.Tester) []string {
 
 func TestTheBarShowsTheTabsOfTheStartAgent(t *testing.T) {
 	snap := tabSnap()
-	snap.Terminals = []agents.Worker{termW("t1", "term-1", "p", "/work/repo"), termW("tq", "term-q", "q", "/work/other")}
+	snap.Terminals = []agents.Worker{apptest.TermW("t1", "term-1", "p", "/work/repo"), apptest.TermW("tq", "term-q", "q", "/work/other")}
 	_, tt := agentFrame(t, &snap)
 	tt.Frame()
 	if got := tabTexts(tt); !slices.Equal(got, []string{"lead", "$ repo"}) {
@@ -429,8 +430,8 @@ func TestTheBarShowsTheTabsOfTheStartAgent(t *testing.T) {
 
 func TestTabsFollowTheSelectedAgent(t *testing.T) {
 	snap := tabSnap()
-	snap.Workers[2] = workW("w3", "b3", "p")
-	snap.Terminals = []agents.Worker{termW("t1", "term-1", "p", "/work/repo")}
+	snap.Workers[2] = apptest.WorkW("w3", "b3", "p")
+	snap.Terminals = []agents.Worker{apptest.TermW("t1", "term-1", "p", "/work/repo")}
 	f, tt := agentFrame(t, &snap)
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "w1"})
 	tt.Frame()
@@ -450,7 +451,7 @@ func TestTabsFollowTheSelectedAgent(t *testing.T) {
 	}
 	// An agent of another project shows its own project's terminals.
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "w4"})
-	snap.Workers = append(snap.Workers, workW("w4", "b4", "q"))
+	snap.Workers = append(snap.Workers, apptest.WorkW("w4", "b4", "q"))
 	f.syncAgents()
 	tt.Frame()
 	if slices.Contains(tabTexts(tt), "$ repo") {
@@ -460,7 +461,7 @@ func TestTabsFollowTheSelectedAgent(t *testing.T) {
 
 func TestClickingATabInTheFrameSelectsIt(t *testing.T) {
 	snap := tabSnap()
-	snap.Terminals = []agents.Worker{termW("t1", "term-1", "p", "/work/repo")}
+	snap.Terminals = []agents.Worker{apptest.TermW("t1", "term-1", "p", "/work/repo")}
 	f, tt := agentFrame(t, &snap)
 	tt.Frame()
 	if err := tt.Click("$ repo"); err != nil {
@@ -523,7 +524,7 @@ func TestNoAgentSourceShowsNoTabs(t *testing.T) {
 
 func TestArrowKeysChooseTheNextTabAndSelectIt(t *testing.T) {
 	snap := tabSnap()
-	snap.Terminals = []agents.Worker{termW("t1", "term-1", "p", "/work/repo")}
+	snap.Terminals = []agents.Worker{apptest.TermW("t1", "term-1", "p", "/work/repo")}
 	f, tt := agentFrame(t, &snap)
 	f.Selection.Select(state.Selected{Kind: state.KindOrchestrator, ID: "o"})
 	tt.Frame()
@@ -540,7 +541,7 @@ func TestArrowKeysChooseTheNextTabAndSelectIt(t *testing.T) {
 
 func TestSelectingATabClosesTheReviewView(t *testing.T) {
 	snap := tabSnap()
-	snap.Terminals = []agents.Worker{termW("t1", "term-1", "p", "/work/repo")}
+	snap.Terminals = []agents.Worker{apptest.TermW("t1", "term-1", "p", "/work/repo")}
 	f, tt := agentFrame(t, &snap)
 	f.Review, _ = newTestReview()
 	f.ToggleReview()
@@ -564,7 +565,7 @@ func TestTheCloseButtonStopsAPlainTerminalAndNeverAnAgent(t *testing.T) {
 	if !apptest.Absent(cf.tt, LabelCloseTab) {
 		t.Fatal("an agent tab has a close button")
 	}
-	cf.closeTab(Tab{Address: "o", Orchestrator: true}) // even a direct call stops nothing
+	cf.closeTab(tabmodel.Tab{Address: "o", Orchestrator: true}) // even a direct call stops nothing
 	if len(cf.stopped) != 0 {
 		t.Errorf("stopped %v", cf.stopped)
 	}
@@ -670,7 +671,7 @@ func TestTheSelectedTabIsAPillInBothThemes(t *testing.T) {
 // The tab row has 8pt above and 8pt below it in the title bar (D177): the panels start
 // where the title bar ends.
 func TestTabRowHasEqualSpaceAboveAndBelow(t *testing.T) {
-	bar := &titleBar{selectTab: func(Tab) {}, closeTab: func(Tab) {}, newTab: func() {}, search: func() {}}
+	bar := &titleBar{selectTab: func(tabmodel.Tab) {}, closeTab: func(tabmodel.Tab) {}, newTab: func() {}, search: func() {}}
 	bar.setTabs(tabsOf())
 	tt := ui.NewTester(func(c *ui.Context) {
 		ui.Row(c).Label(LabelTitleBar).FillWidth().Height(theme.TitleBarHeight).AlignItems(ui.Center).Children(func() {

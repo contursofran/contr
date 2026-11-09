@@ -13,6 +13,7 @@ import (
 	"github.com/contursofran/contr/internal/app/files"
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/tabmodel"
 	"github.com/contursofran/contr/internal/app/theme"
 )
 
@@ -41,18 +42,18 @@ const middleButton = 2
 
 // titleBar holds the tabs the bar shows and where its clicks go.
 type titleBar struct {
-	tabs []Tab
+	tabs []tabmodel.Tab
 	// selectTab takes the tab that a click picked. It may be nil: the click is dropped.
-	selectTab func(Tab)
+	selectTab func(tabmodel.Tab)
 	// closeTab takes the plain tab whose close button was clicked. Nil: no close buttons.
-	closeTab func(Tab)
+	closeTab func(tabmodel.Tab)
 	// closeOthers takes the tab whose menu chose "Close others": the frame closes every plain tab
 	// except it. Nil: the menu has no such item.
-	closeOthers func(keep Tab)
+	closeOthers func(keep tabmodel.Tab)
 	// stopTab takes the agent tab whose menu chose "Stop" (D219). Nil: the item is off.
-	stopTab func(Tab)
+	stopTab func(tabmodel.Tab)
 	// closeAgent takes the agent tab whose menu chose "Close" (D219): stop and remove. Nil: off.
-	closeAgent func(Tab)
+	closeAgent func(tabmodel.Tab)
 	// moveTab takes the address of a plain tab that was dropped on another plain tab: from takes
 	// the place of to. Nil: the tabs do not drag.
 	moveTab func(from, to string)
@@ -70,7 +71,7 @@ type titleBar struct {
 }
 
 // setTabs takes in the tabs and tells whether they differ from the last ones.
-func (b *titleBar) setTabs(tabs []Tab) bool {
+func (b *titleBar) setTabs(tabs []tabmodel.Tab) bool {
 	if slices.Equal(b.tabs, tabs) {
 		return false
 	}
@@ -132,7 +133,7 @@ func (b *titleBar) tabRow(c *ui.Context) {
 
 // tab draws one tab: the glyph, the title (SingleLine: NoWrap().Ellipsis() does not cut a title that
 // is wider than the tab, D175) and, on the selected plain terminal, the close button.
-func (b *titleBar) tab(c *ui.Context, tab ui.Element, t Tab) {
+func (b *titleBar) tab(c *ui.Context, tab ui.Element, t tabmodel.Tab) {
 	p := theme.Current()
 	el := tab.Label(t.Title).Height(theme.SizeRowHeight).MaxWidth(theme.SizeTabMaxWidth).MinWidth(0).Shrink(1).
 		Padding(0, theme.Space10).Gap(theme.Space8).AlignItems(ui.Center).Radius(theme.Radius8)
@@ -182,7 +183,7 @@ func (b *titleBar) tab(c *ui.Context, tab ui.Element, t Tab) {
 
 // tabTooltip is the tooltip of a tab. A long title ends in an ellipsis (D175), so the tooltip always
 // holds the whole title: the tip as given, with the title in front when the tip does not have it.
-func tabTooltip(t Tab) string {
+func tabTooltip(t tabmodel.Tab) string {
 	switch {
 	case t.Tip == "":
 		return t.Title
@@ -215,9 +216,9 @@ func middleClick(ev ui.InputEvent, bounds ui.Rect, closeTab func()) bool {
 // (D85): Close is off on an agent tab, and Close others never closes t when t is an agent tab.
 // An agent tab has Stop first, and its Close stops the agent and removes the terminal (D219):
 // the menu choice is the confirmation, as on the agent row.
-func (b *titleBar) tabMenu(m *ui.Menu, t Tab) {
+func (b *titleBar) tabMenu(m *ui.Menu, t tabmodel.Tab) {
 	if !t.Plain {
-		if m.Item(MenuStop).Disabled(b.stopTab == nil).Chosen() && b.stopTab != nil {
+		if m.Item(tabmodel.MenuStop).Disabled(b.stopTab == nil).Chosen() && b.stopTab != nil {
 			b.stopTab(t)
 		}
 		if m.Item(MenuClose).Disabled(b.closeAgent == nil).Chosen() && b.closeAgent != nil {
@@ -236,7 +237,7 @@ func (b *titleBar) tabMenu(m *ui.Menu, t Tab) {
 }
 
 // hasOtherPlain tells whether the bar has a plain tab other than t.
-func (b *titleBar) hasOtherPlain(t Tab) bool {
+func (b *titleBar) hasOtherPlain(t tabmodel.Tab) bool {
 	for _, o := range b.tabs {
 		if o.Plain && o.Address != t.Address {
 			return true
@@ -247,7 +248,7 @@ func (b *titleBar) hasOtherPlain(t Tab) bool {
 
 // glyph is the leading part of a tab: the Claude mark for an orchestrator, the status glyph for
 // a worker, the terminal icon for a plain terminal.
-func (b *titleBar) glyph(c *ui.Context, t Tab) {
+func (b *titleBar) glyph(c *ui.Context, t tabmodel.Tab) {
 	if t.Plain {
 		if s := icons.Line("terminal"); s != nil {
 			ui.Icon(c, s).Size(14, 14).Shrink(0)
