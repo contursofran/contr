@@ -521,7 +521,6 @@ func (f *Frame) View(c *ui.Context) {
 		if f.SpacesList != nil {
 			f.SpacesList.compact = f.icons
 		}
-		f.Files.Sync() // the diff summary counts what the tree lists, also while the panel is hidden
 		f.titleBar(c, sidebar, narrowWindow(win))
 		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Padding(0, theme.PanelGap, theme.PanelGap).Children(func() {
 			f.panels(c, sidebar, files, showFiles)
@@ -1108,6 +1107,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.SpacesList.OnOpen = func() { f.focusTerm = true; w.Invalidate() }
 	f.SpacesList.OnPick = f.SpacesList.OnOpen
 	f.SpacesList.ModelOf = f.ModelOf
+	f.SpacesList.OnGroups = func() { f.Files.Sync() } // the folder of the tree follows the groups (#585)
 	f.SpacesList.EffortOf = f.EffortOf
 	f.SpacesList.StatusEffort = f.statusEffort
 	f.SpacesList.StatusModel = f.statusModel

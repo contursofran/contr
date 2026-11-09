@@ -90,9 +90,9 @@ func NewFileTree(dir func() string) *FileTree {
 	return &FileTree{Dir: dir}
 }
 
-// Sync points the tree at the folder that Dir gives, even when no view draws it. The title bar
-// calls it, so the diff summary stays current while the files panel is hidden. Cheap when the
-// folder did not change; it reads on a goroutine.
+// Sync points the tree at the folder that Dir gives, even when no view draws it. The frame calls
+// it after each change that can move the folder (#585), so the diff summary stays current while
+// the files panel is hidden. Cheap when the folder did not change; it reads on a goroutine.
 func (t *FileTree) Sync() { t.sync() }
 
 // Summary is the total of the changes that the tree lists: what the DiffSummary shows. ok is

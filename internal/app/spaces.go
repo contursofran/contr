@@ -116,6 +116,9 @@ type SpacesList struct {
 	// store (D149). The frame sets it once the store has loaded well, so that
 	// a store that failed to read is never written over.
 	Adopt bool
+	// OnGroups runs on the UI thread after each rebuild of the groups. Nil
+	// does nothing.
+	OnGroups func()
 	// OnAdopted runs on the UI thread after the list added projects to the
 	// store: the frame saves the store, off the UI thread.
 	OnAdopted func()
@@ -361,6 +364,9 @@ func (l *SpacesList) rebuild() {
 	l.pickLaunch()
 	if adopted && l.OnAdopted != nil {
 		l.OnAdopted()
+	}
+	if l.OnGroups != nil {
+		l.OnGroups()
 	}
 }
 

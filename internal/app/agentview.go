@@ -45,8 +45,17 @@ func (f *Frame) takeSnapshot() {
 // stored snapshot and the selection. It runs after an agent change, a selection change and a tab
 // move. The open project follows the selected orchestrator, worker or plain terminal, and keeps
 // its last value for any other selection; the agent keeps its last value while a plain terminal
-// or a worktree is selected. Without agents nothing changes and there are no tabs. UI thread.
+// or a worktree is selected. Without agents nothing changes and there are no tabs. Then it points
+// the file tree at its folder, which can follow these values (#585). UI thread.
 func (f *Frame) syncOpen() {
+	f.openState()
+	if f.Files != nil {
+		f.Files.Sync()
+	}
+}
+
+// openState computes the values of [Frame.syncOpen].
+func (f *Frame) openState() {
 	if f.agentSnap == nil {
 		f.tabs = nil
 		return
