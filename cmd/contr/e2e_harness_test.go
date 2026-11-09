@@ -244,7 +244,7 @@ type fullNode struct {
 	ID      string   `json:"id"`
 	Parent  string   `json:"parent"`
 	Role    string   `json:"role"`
-	Key     string   `json:"key"`
+	Key     any      `json:"key"`
 	Label   string   `json:"label"`
 	Value   string   `json:"value"`
 	Bounds  rect     `json:"bounds"`
@@ -282,8 +282,8 @@ func (c *client) dump(t *testing.T, path string) {
 		if n.Value != "" {
 			fmt.Fprintf(&b, " value=%q", n.Value)
 		}
-		if n.Key != "" {
-			fmt.Fprintf(&b, " key=%s", n.Key)
+		if n.Key != nil {
+			fmt.Fprintf(&b, " key=%v", n.Key)
 		}
 		r := n.Bounds
 		fmt.Fprintf(&b, " @%s,%s %sx%s", num(r.X), num(r.Y), num(r.Width), num(r.Height))

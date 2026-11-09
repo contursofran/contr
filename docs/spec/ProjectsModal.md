@@ -23,7 +23,7 @@ Opens from the "Open projects" item of the Projects head `+` menu (D171). The ow
 
 | Part | Value |
 |---|---|
-| Dialog | Overlay with `scrim`. Fill `glass-float`, border `float-line`, shadow `shadow-float`, width 560, radius `radius-14`, 110 px from the top, centred. Enter motion: up 8 px and fade in, 0.22 s. |
+| Dialog | Backdrop `scrim`. Fill `glass-float`, border `float-line`, shadow `shadow-float`, width 560, radius `radius-14`, 110 px from the top, centred. Enter motion: up 8 px and fade in, 0.22 s. |
 | Search | One `ui.SearchField`, padding 14×16, no border, `hairline` below. Text 15 px `ink-100`; placeholder `ink-30`; search icon `ink-38`; a `kbd` `esc` at the right. It has the focus when the dialog opens. |
 | List | One `ui.List`; padding 6; scrolls after 360 px. |
 | Section | Padding 10×10×4. Name 11 px, weight 500, `ink-45`. Hint 11 px `ink-30`, at the right. |
@@ -74,7 +74,7 @@ Exact strings:
 
 - Every change saves at once (D63). There is no `Done`. Esc or a click outside closes the dialog.
 - The meta of an open row is `<path with ~> · <branch> · <live state>`. A part with no value is left out.
-- Live state (Q5): the `Hold` text of the top holder of the main worktree row, for example `orchestrator idle`. When worktree rows need the owner (`HoldYou`), `N need you` takes its place. A 6 px `claude` dot comes before the live state when an orchestrator holds the row.
+- Live state (Q5): the `Hold` text of the top holder of the main worktree row, for example `orchestrator idle`. When worktree rows need the owner (`HoldYou`), `N need you` takes its place. A 6 px `claude` dot comes before the live state, `N need you` too, when an orchestrator holds the row. Only the path shrinks with an ellipsis; the branch and the live state keep their width.
 - Hide (D70) hides the project in contr only. It never closes an hc terminal or stops an agent. It also touches the project in `recent`, so it is the first row of Recent (Q8). The toast has `Undo`: it shows the project again and restores its old place in the order. Undo still works after the dialog closes (Q7).
 - Open row: Enter or a click switches the sidebar to the project and closes the dialog.
 - Recent row: Enter or a click shows the project again (D70) and adds it to the sidebar. A hidden project shows in Recent while it has a `recent` entry.
@@ -91,7 +91,7 @@ Exact strings:
 |---|---|
 | `↑` `↓` | Move the selection; stop at the ends. |
 | `⏎` | Run the selected row (see the Enter label). |
-| `⌘⌫` | Hide the selected open row. |
+| `⌘⌫` | Hide the selected open row, only while the field is empty. With text in the field it deletes text, as in any field. The footer shows `⌘⌫ hide` only then. |
 | `⌘O` | Open the folder dialog (same as the ghost button). |
 | Esc | With text in the field: clear it. With an empty field: close the dialog (Q2). |
 
@@ -122,7 +122,7 @@ Exact strings:
 ## Build in MyGo
 
 - One `ui.List` over one slice of rows. `ListState.Header` names the sections. `ListState.Reorder` is on only while the field is empty (`list.md`, `drag-and-drop.md`).
-- `ui.SearchField` for the field (`search-field.md`); it clears on the first Esc.
+- `ui.TextInputBase` with a search icon for the field, not `ui.SearchField`: `SearchField` keeps its input inside, which takes Backspace and Esc before `OnTextKey` sees them. The field clears itself on the first Esc and leaves `⌘⌫` to hide an open row while it is empty.
 - `ui.Progress`, indeterminate, restyled, for the clone line (`progress.md`).
 - `ui.Toast` with an action for Hide (`toast.md`); the frame owns it.
 - Use `kit` parts where they fit. Do not draw rows by hand.
