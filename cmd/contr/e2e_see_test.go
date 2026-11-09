@@ -88,6 +88,31 @@ var seeFixtures = map[string]seeFixture{
 		},
 		ready: app.UpdatedPrefix,
 	},
+	"projects": {
+		about: "three projects (demo, api, site): demo has an orchestrator and a builder, the others one builder each",
+		setup: func(t *testing.T, h *harness) {
+			demo := h.repo(t, "demo", "main")
+			api := h.repo(t, "api", "main")
+			site := h.repo(t, "site", "main")
+			h.spawn(t,
+				agents.Spec{Name: "lead", Profile: "claude-idle", Role: agents.RoleOrchestrator, Project: "demo", Worktree: demo},
+				agents.Spec{Name: "b201-s1-notch", Profile: "claude-working", Role: "builder", Issue: "201", Project: "demo", Worktree: demo},
+				agents.Spec{Name: "b310-s1-routes", Profile: "claude-idle", Role: "builder", Issue: "310", Project: "api", Worktree: api},
+				agents.Spec{Name: "b411-s1-footer", Profile: "claude-working", Role: "builder", Issue: "411", Project: "site", Worktree: site},
+			)
+		},
+		ready: "lead, ",
+	},
+	"oldformat": {
+		about: "the workers fixture with an agents.json in the old format (presets)",
+		setup: func(t *testing.T, h *harness) {
+			seeWorkers(t, h)
+			if err := os.WriteFile(filepath.Join(h.dir, "agents.json"), []byte(`{"version":1,"presets":[{"name":"x"}]}`), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		},
+		ready: "lead, ",
+	},
 	"session": {
 		about: "the orchestrator lead with the todos and artifacts of canvas board 11 (D197)",
 		setup: seeSession,

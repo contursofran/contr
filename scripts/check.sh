@@ -31,4 +31,6 @@ scripts/test-release.sh
 scripts/test-agent-metrics.sh
 # The two checks above, on small temporary repos.
 scripts/test-checks.sh
+# The scratch-app script: arguments and stop, on fake processes.
+scripts/test-explore.sh
 echo "check: ok"
