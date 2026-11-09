@@ -256,8 +256,11 @@ func TestSee(t *testing.T) {
 		c := h.launch(t)
 		c.waitLabel(t, f.ready)
 		c.settle(t)
-		for _, l := range press {
+		for i, l := range press {
 			c.press(t, l)
+			if i < len(press)-1 { // a menu or a dialog opens before the next press
+				c.settle(t)
+			}
 		}
 		if len(press) > 0 {
 			c.settle(t)
