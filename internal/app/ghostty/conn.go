@@ -5,10 +5,14 @@ package ghostty
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"sync"
 	"time"
+
+	gterm "github.com/egoist/mygo/plugins/terminal"
+	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/hc"
 )
@@ -40,6 +44,7 @@ type Stream interface {
 	Write(p []byte) (int, error)
 	Resize(cols, rows uint16) error
 	Focus(focused bool) error
+	SetDisplay(d hc.Display) error
 	Close() error
 }
 
@@ -137,6 +142,7 @@ type Conn struct {
 	cols      uint16
 	rows      uint16
 	cell      [2]int
+	colors    hc.Display // fg, bg and cursor of the view's theme; Cell is unused
 	state     State
 	watching  bool     // attach as an observer: no size, focus or input
 	takeover  bool     // Write closed the observer stream to attach with input
@@ -238,6 +244,9 @@ func (c *Conn) Read(p []byte) (int, error) {
 // keeps the input, in order, and sends it first once attached; it also tries
 // an attach. After the program ended it returns ErrNotRunning.
 func (c *Conn) Write(p []byte) (int, error) {
+	if isSchemeReport(p) { // hc pushes the report itself (D213)
+		return len(p), nil
+	}
 	c.mu.Lock()
 	if c.stopped {
 		c.mu.Unlock()
@@ -279,6 +288,60 @@ func (c *Conn) Write(p []byte) (int, error) {
 		_ = s.Focus(true)
 	}
 	return s.Write(p)
+}
+
+// isSchemeReport tells if p is exactly the color scheme report that the
+// plugin writes when the theme turns dark or light (CSI ? 997 ; 1 n or 2 n).
+// It is no input from the owner.
+func isSchemeReport(p []byte) bool {
+	s := string(p)
+	return s == "\x1b[?997;1n" || s == "\x1b[?997;2n"
+}
+
+// sameColors tells if the colors (not the cell size) of a and of the attach
+// display b are equal. A nil b has no colors.
+func sameColors(a hc.Display, b *hc.Display) bool {
+	var x hc.Display
+	if b != nil {
+		x = *b
+	}
+	eq := func(p, q *string) bool { return (p == nil) == (q == nil) && (p == nil || *p == *q) }
+	return eq(a.FG, x.FG) && eq(a.BG, x.BG) && eq(a.Cursor, x.Cursor)
+}
+
+// hex returns col as "#rrggbb". A == 0 means "not set": a fully transparent
+// color sends nothing, and the result is nil.
+func hex(col ui.Color) *string {
+	if col.A == 0 {
+		return nil
+	}
+	s := fmt.Sprintf("#%02x%02x%02x", col.R, col.G, col.B)
+	return &s
+}
+
+// UseTheme keeps the colors of the view's theme (the terminal plugin calls it
+// at the first build and on each appearance change). The next attach sends
+// them with the display. While the stream has input, hc gets them at once and
+// answers the program's color queries with them. An observer stream cannot
+// set colors: hc ignores them (D91), so they wait for the next attach with
+// input (D213).
+func (c *Conn) UseTheme(t *gterm.Theme) error {
+	if t == nil {
+		return nil
+	}
+	d := hc.Display{FG: hex(t.Foreground), BG: hex(t.Background), Cursor: hex(t.Cursor)}
+	c.mu.Lock()
+	c.colors = d
+	s, send := c.stream, c.stream != nil && !c.watching
+	if c.cell[0] > 0 && c.cell[1] > 0 {
+		cell := c.cell
+		d.Cell = &cell
+	}
+	c.mu.Unlock()
+	if !send {
+		return nil
+	}
+	return s.SetDisplay(d)
 }
 
 // ResizePixels tells hc the size the view fits. The size is kept for the next
@@ -532,9 +595,13 @@ func (c *Conn) run() {
 	c.mu.Lock()
 	p := hc.AttachParams{Cols: c.cols, Rows: c.rows, History: HistoryLines, Resumed: c.resumed,
 		Observe: c.watching, ResizeNotifications: true}
+	d := c.colors
 	if c.cell[0] > 0 && c.cell[1] > 0 {
 		cell := c.cell
-		p.Display = &hc.Display{Cell: &cell}
+		d.Cell = &cell
+	}
+	if d != (hc.Display{}) {
+		p.Display = &d
 	}
 	c.mu.Unlock()
 	s, err := c.src.Attach(c.ctx, p)
@@ -562,7 +629,20 @@ func (c *Conn) run() {
 	c.stream, c.attaching, c.resumed, c.noRetry = s, false, true, false
 	fitting := c.fitting
 	cols, rows, focused := c.cols, c.rows, c.focused && !fitting
+	// UseTheme may have run during the attach, when it had no stream to tell.
+	var recolor *hc.Display
+	if !p.Observe && !sameColors(c.colors, p.Display) {
+		d := c.colors
+		if c.cell[0] > 0 && c.cell[1] > 0 {
+			cell := c.cell
+			d.Cell = &cell
+		}
+		recolor = &d
+	}
 	c.mu.Unlock()
+	if recolor != nil {
+		_ = s.SetDisplay(*recolor)
+	}
 	if !p.Observe {
 		if cols != p.Cols || rows != p.Rows { // the view's size changed during the attach
 			_ = s.Resize(cols, rows)

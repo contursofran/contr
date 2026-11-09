@@ -232,10 +232,33 @@ type Spec struct {
 	Profile  string
 	Role     string // defaults to the profile name
 	Issue    string
-	Worktree string // the working folder
-	Task     string // the first message, if any
-	Parent   string // hc terminal that gets notes about the worker; empty for none
-	Project  string // the project name; no control characters
+	Worktree string  // the working folder
+	Task     string  // the first message, if any
+	Parent   string  // hc terminal that gets notes about the worker; empty for none
+	Project  string  // the project name; no control characters
+	Colors   *Colors // the terminal's colors for the program's color queries; nil for hc's default
+}
+
+// Colors are the foreground, background and cursor colors of the terminal
+// theme, each "#rrggbb". hc answers a program's color queries (OSC 10, 11,
+// 12) with them, so Claude Code's auto theme sees the right background.
+type Colors struct{ FG, BG, Cursor string }
+
+// display is the display of terminal.run, or nil for no colors.
+func (c *Colors) display() map[string]any {
+	if c == nil {
+		return nil
+	}
+	d := map[string]any{}
+	for k, v := range map[string]string{"fg": c.FG, "bg": c.BG, "cursor": c.Cursor} {
+		if v != "" {
+			d[k] = v
+		}
+	}
+	if len(d) == 0 {
+		return nil
+	}
+	return d
 }
 
 // Worker is one worker as hc reports it.
@@ -544,6 +567,9 @@ func (m *Manager) Spawn(ctx context.Context, s Spec) (Worker, error) {
 	if len(env) > 0 {
 		params["env"] = env
 	}
+	if d := s.Colors.display(); d != nil {
+		params["display"] = d
+	}
 	if s.Parent != "" {
 		params["parent"] = s.Parent
 	} else {
@@ -559,9 +585,10 @@ func (m *Manager) Spawn(ctx context.Context, s Spec) (Worker, error) {
 // TerminalSpec describes a plain terminal.
 type TerminalSpec struct {
 	Name    string
-	Project string // the open project; empty for none
-	Dir     string // the start folder; empty for the core's default
-	Shell   string // empty for $SHELL, then /bin/zsh
+	Project string  // the open project; empty for none
+	Dir     string  // the start folder; empty for the core's default
+	Shell   string  // empty for $SHELL, then /bin/zsh
+	Colors  *Colors // as Spec.Colors
 }
 
 // OpenTerminal starts a login shell in an hc terminal and returns it. The
@@ -588,6 +615,9 @@ func (m *Manager) OpenTerminal(ctx context.Context, s TerminalSpec) (Worker, err
 	params := map[string]any{"argv": []string{shell, "-l"}, "name": s.Name, "labels": labels, "wait": false, "outlive_parent": true, "no_parent": true}
 	if s.Dir != "" {
 		params["cwd"] = s.Dir
+	}
+	if d := s.Colors.display(); d != nil {
+		params["display"] = d
 	}
 	var raw json.RawMessage
 	if err := m.core.Call(ctx, "terminal.run", params, &raw); err != nil {
