@@ -454,7 +454,7 @@ func (m *ProjectsModal) openMetaView(c *ui.Context, g spaces.RepoGroup, home str
 		ink(" · ")
 		if orch {
 			ui.Box(c).Label(LabelProjectsDot).Width(theme.ModalDot).Height(theme.ModalDot).Shrink(0).
-				Radius(theme.ModalDot / 2).Background(p.Claude).Margin(0, theme.Space6, 0, 0)
+				Radius(theme.ModalDot/2).Background(p.Claude).Margin(0, theme.Space6, 0, 0)
 		}
 		colour := p.Ink38
 		if needYou > 0 {
