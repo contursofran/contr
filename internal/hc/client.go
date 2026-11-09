@@ -100,8 +100,25 @@ func Find(path, home string, dirs []string) (string, error) {
 	return "", ErrNotFound
 }
 
+// CleanEnv returns environ without CLAUDECODE and the CLAUDE_CODE_* variables.
+// The hc server keeps the environment of the `hc connect` that starts it, and
+// every terminal it opens inherits that. A server started inside a Claude Code
+// session would mark all its terminals as child sessions of that session.
+func CleanEnv(environ []string) []string {
+	out := make([]string, 0, len(environ))
+	for _, kv := range environ {
+		name, _, _ := strings.Cut(kv, "=")
+		if name == "CLAUDECODE" || strings.HasPrefix(name, "CLAUDE_CODE_") {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return out
+}
+
 // Command returns a Dialer that starts `<path> connect` with env added to the
-// environment of this process. An empty path means hc, found with Find when
+// environment of this process, less CLAUDECODE and CLAUDE_CODE_* (CleanEnv).
+// The env argument is kept as it is. An empty path means hc, found with Find when
 // the Dialer runs, so building the Dialer does no file work; when hc is not
 // found, the Dialer returns that error.
 func Command(path string, env []string) Dialer {
@@ -116,9 +133,7 @@ func Command(path string, env []string) Dialer {
 			path = found
 		}
 		cmd := exec.Command(path, "connect")
-		if len(env) > 0 {
-			cmd.Env = append(cmd.Environ(), env...)
-		}
+		cmd.Env = append(CleanEnv(cmd.Environ()), env...)
 		w, err := cmd.StdinPipe()
 		if err != nil {
 			return Pipe{}, err
