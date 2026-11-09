@@ -9,6 +9,7 @@ package app
 import (
 	"strconv"
 
+	"github.com/egoist/mygo/plugins/glass"
 	gterm "github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
 
@@ -112,7 +113,7 @@ func (f *Frame) findView(c *ui.Context) {
 	ui.Row(c.Key("find" + strconv.Itoa(fd.gen))).Absolute().Top(theme.Space10).Left(0).Right(0).
 		PaddingEnd(theme.Space14).Justify(ui.End).PassThrough().Children(func() {
 		bar = ui.FindBar(c, &fd.open, &fd.query, n, &cur)
-		bar.Radius(theme.Radius12).Background(p.GlassFloat).
+		bar.Radius(theme.Radius12).Background(p.GlassFloat).Material(glass.Blur{Radius: theme.GlassBlur}).
 			BorderWidth(1).BorderColor(p.FloatLine)
 	})
 	if bar.Changed() && n > 0 {
