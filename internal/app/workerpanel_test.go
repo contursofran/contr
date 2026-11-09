@@ -41,7 +41,7 @@ func newFollowRig(t *testing.T) *followRig {
 	f.Selection = stateSelection()
 	f.Worker = &WorkerPanel{Source: src, Selection: f.Selection, Run: Runner{Go: func(f func()) { f() }}}
 	f.Slots.Panel = func(c *ui.Context) { ui.Text(c, "[board]") }
-	return &followRig{f: f, src: src, tt: ui.NewTester(f.panelBox, theme.PanelWidth, theme.WindowHeight)}
+	return &followRig{f: f, src: src, tt: ui.NewTester(panelBox(f), theme.PanelWidth, theme.WindowHeight)}
 }
 
 func (r *followRig) frame() { r.tt.Frame() }
