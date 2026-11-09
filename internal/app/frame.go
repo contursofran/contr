@@ -552,10 +552,12 @@ func (f *Frame) terminalPanel(c *ui.Context) {
 // stay in the code but are not shown (D122); see panelBox.
 func (f *Frame) filesPanel(c *ui.Context) {
 	kit.Panel(c, kit.PanelOpts{Name: LabelPanelFiles,
-		Top:    func() { f.Session.View(c) },
-		Head:   func() { f.Files.Head(c) },
-		Body:   func() { f.Files.View(c) },
-		Footer: func() { kit.UsageMeter(c, []kit.Meter{contextMeter(f.planUsage(), f.selectedTerminal(), f.contextLabels())}) }})
+		Top:  func() { f.Session.View(c) },
+		Head: func() { f.Files.Head(c) },
+		Body: func() { f.Files.View(c) },
+		Footer: func() {
+			kit.UsageMeter(c, []kit.Meter{contextMeter(f.planUsage(), f.selectedTerminal(), f.contextLabels())})
+		}})
 }
 
 // selectedTerminal is the hc terminal of the selected orchestrator, worker or
