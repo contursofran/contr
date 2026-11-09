@@ -2,7 +2,7 @@
 
 One palette dialog that shows, adds and hides the projects of the sidebar (#494, D207).
 
-Opens from the "Open projects" item of the Projects head `+` menu (D171). The owner-approved mock-up of #494 is the picture; no spec image exists yet (the sheet part comes in slice 6).
+Opens from the "Open projects" item of the Projects head `+` menu (D171). The owner-approved mock-up of #494 is the picture; no spec image exists. `scripts/sheet.sh ProjectsModal` draws the states that `scripts/see.sh` cannot reach (running clone, clone error, path error, no match, the toast), with no image above them.
 
 ## Anatomy
 
