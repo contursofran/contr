@@ -13,6 +13,7 @@ import (
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/apptest"
+	"github.com/contursofran/contr/internal/app/files"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/theme/themetest"
@@ -69,7 +70,7 @@ func (b *barTest) has(label string) bool { _, ok := b.tt.Find(label); return ok 
 
 func (b *barTest) rect(t *testing.T, label string) ui.Rect {
 	t.Helper()
-	return box(t, b.tt, label)
+	return apptest.Box(t, b.tt, label)
 }
 
 func TestTabsShowTheirTitlesAndGlyphs(t *testing.T) {
@@ -235,7 +236,7 @@ func TestThePanelToggleFollowsTheFrameAndKeepsItsPlace(t *testing.T) {
 	if f.PanelOpen() {
 		t.Error("the toggle should close the panel")
 	}
-	if got := box(t, tt, LabelFilesToggle).X + theme.SizeIconButton; got != theme.WindowWidth-theme.TitleBarPadEnd {
+	if got := apptest.Box(t, tt, LabelFilesToggle).X + theme.SizeIconButton; got != theme.WindowWidth-theme.TitleBarPadEnd {
 		t.Errorf("toggle right edge %v, want %d", got, theme.WindowWidth-theme.TitleBarPadEnd)
 	}
 }
@@ -498,24 +499,24 @@ func TestAStatusChangeInTheSnapshotRedrawsTheGlyph(t *testing.T) {
 	f, tt := agentFrame(t, &snap)
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "w1"})
 	tt.Frame()
-	if absent(tt, "working") {
+	if apptest.Absent(tt, "working") {
 		t.Fatal("a working worker shows no working glyph")
 	}
 	snap.Workers = append([]agents.Worker(nil), snap.Workers...)
 	snap.Workers[0].Status = "blocked"
 	f.syncAgents()
 	tt.Frame()
-	if absent(tt, "needs you") || !absent(tt, "working") {
+	if apptest.Absent(tt, "needs you") || !apptest.Absent(tt, "working") {
 		t.Errorf("the tab should show needs you; texts %q", tt.Texts())
 	}
 }
 
 func TestNoAgentSourceShowsNoTabs(t *testing.T) {
 	_, tt := newTester(t)
-	if !absent(tt, LabelTabs) && box(t, tt, LabelTabs).W != 0 {
+	if !apptest.Absent(tt, LabelTabs) && apptest.Box(t, tt, LabelTabs).W != 0 {
 		t.Error("the tabs row shows without agents")
 	}
-	if absent(tt, LabelFilesToggle) {
+	if apptest.Absent(tt, LabelFilesToggle) {
 		t.Error("the files toggle should stay")
 	}
 }
@@ -560,7 +561,7 @@ func TestTheCloseButtonStopsAPlainTerminalAndNeverAnAgent(t *testing.T) {
 	// The agent's own tab is selected: no close button, so no way to stop it from the bar.
 	cf.Selection.Select(state.Selected{Kind: state.KindOrchestrator, ID: "o"})
 	cf.tt.Frame()
-	if !absent(cf.tt, LabelCloseTab) {
+	if !apptest.Absent(cf.tt, LabelCloseTab) {
 		t.Fatal("an agent tab has a close button")
 	}
 	cf.closeTab(Tab{Address: "o", Orchestrator: true}) // even a direct call stops nothing
@@ -581,7 +582,7 @@ func TestTheCloseButtonStopsAPlainTerminalAndNeverAnAgent(t *testing.T) {
 func TestTheDiffSummaryFollowsTheSelectedAgentAndReadsOnlyThroughTheTree(t *testing.T) {
 	repo := apptest.NewRepo(t)
 	repo.Git("checkout", "-b", "feature")
-	write(t, repo.Dir, "new.go", "a\nb\nc\n") // untracked: +3
+	apptest.Write(t, repo.Dir, "new.go", "a\nb\nc\n") // untracked: +3
 	snap := tabSnap()
 	snap.Workers[0].Worktree = repo.Dir
 	f, tt := agentFrame(t, &snap)
@@ -607,7 +608,7 @@ func TestTheDiffSummaryClickOpensReviewInTheFrame(t *testing.T) {
 	snap := tabSnap()
 	f, tt := agentFrame(t, &snap)
 	f.Review, _ = newTestReview()
-	f.Diff = readyDiff(review.Summary{Added: 1, Files: 1})
+	f.Diff = files.ReadyDiff(review.Summary{Added: 1, Files: 1})
 	tt.Frame()
 	if err := tt.Click("1 line added, 1 file. Open review"); err != nil {
 		t.Fatal(err)

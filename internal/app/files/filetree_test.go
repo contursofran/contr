@@ -1,4 +1,4 @@
-package app
+package files
 
 import (
 	"os"
@@ -11,11 +11,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/contursofran/contr/internal/agents"
-	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/kit"
-	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/review"
 )
@@ -48,7 +45,7 @@ func newTreeRig(t *testing.T, dir string) *treeRig {
 	}
 	r.tt = ui.NewTester(func(c *ui.Context) {
 		theme.Apply(c)
-		kit.Panel(c, kit.PanelOpts{Name: LabelPanelFiles, Head: func() { r.ft.Head(c) }, Body: func() { r.ft.View(c) }})
+		kit.Panel(c, kit.PanelOpts{Name: "Files", Head: func() { r.ft.Head(c) }, Body: func() { r.ft.View(c) }})
 	}, theme.SizeFilesWidth, 600)
 	return r
 }
@@ -61,34 +58,23 @@ func (r *treeRig) reset() { r.ft.setDir(""); r.stops = 0 }
 
 func (r *treeRig) has(label string) bool { _, ok := r.tt.Find(label); return ok }
 
-func write(t *testing.T, dir, rel, text string) {
-	t.Helper()
-	p := filepath.Join(dir, filepath.FromSlash(rel))
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
 // changedRepo is a repo on branch "feature" with a modified, a new, a deleted
 // and an ignored file, and a folder with a file in it.
 func changedRepo(t *testing.T) string {
 	s := apptest.NewRepo(t)
-	write(t, s.Dir, ".gitignore", "*.log\nbuild/\n")
-	write(t, s.Dir, "mod.go", "1\n2\n3\n")
-	write(t, s.Dir, "gone.md", "a\nb\n")
-	write(t, s.Dir, "src/deep/inner.go", "x\n")
-	write(t, s.Dir, "same.txt", "same\n")
+	apptest.Write(t, s.Dir, ".gitignore", "*.log\nbuild/\n")
+	apptest.Write(t, s.Dir, "mod.go", "1\n2\n3\n")
+	apptest.Write(t, s.Dir, "gone.md", "a\nb\n")
+	apptest.Write(t, s.Dir, "src/deep/inner.go", "x\n")
+	apptest.Write(t, s.Dir, "same.txt", "same\n")
 	s.Git("add", "-A")
 	s.Git("commit", "-m", "files")
 	s.Git("checkout", "-b", "feature")
-	write(t, s.Dir, "mod.go", "1\n2\n3\n4\n5\n6\n") // +3
+	apptest.Write(t, s.Dir, "mod.go", "1\n2\n3\n4\n5\n6\n") // +3
 	os.Remove(filepath.Join(s.Dir, "gone.md"))
-	write(t, s.Dir, "fresh.go", "a\nb\nc\nd\n")
-	write(t, s.Dir, "noise.log", "ignored\n")
-	write(t, s.Dir, "build/out.bin", "x")
+	apptest.Write(t, s.Dir, "fresh.go", "a\nb\nc\nd\n")
+	apptest.Write(t, s.Dir, "noise.log", "ignored\n")
+	apptest.Write(t, s.Dir, "build/out.bin", "x")
 	return s.Dir
 }
 
@@ -175,7 +161,7 @@ func TestFileTreeFilterShowsChangedFilesOnly(t *testing.T) {
 
 func TestFileTreeFilterFoldersOpenAndShowChangedNestedFiles(t *testing.T) {
 	dir := changedRepo(t)
-	write(t, dir, "src/deep/inner.go", "x\ny\n")
+	apptest.Write(t, dir, "src/deep/inner.go", "x\ny\n")
 	r := newTreeRig(t, dir)
 	r.ft.onlyChanged = true
 	r.frame()
@@ -222,8 +208,8 @@ func TestFileInksAndCounts(t *testing.T) {
 
 func TestFileTreeFollowsTheSelectedFolder(t *testing.T) {
 	a, b := t.TempDir(), t.TempDir()
-	write(t, a, "alpha.txt", "x")
-	write(t, b, "beta.txt", "x")
+	apptest.Write(t, a, "alpha.txt", "x")
+	apptest.Write(t, b, "beta.txt", "x")
 	r := newTreeRig(t, a)
 	r.frame()
 	if !r.has("alpha.txt") || r.has("beta.txt") {
@@ -241,29 +227,6 @@ func TestFileTreeFollowsTheSelectedFolder(t *testing.T) {
 	r.frame()
 	if r.has("beta.txt") || !r.tt.HasText("No folder") {
 		t.Errorf("no folder shows %q", r.tt.Texts())
-	}
-}
-
-func TestFilesDirFollowsTheSelectedAgent(t *testing.T) {
-	f := NewFrame(Deps{})
-	f.Selection = state.NewSelection(nil)
-	f.agentSnap = func() agentstate.Snapshot {
-		return agentstate.Snapshot{
-			Orchestrators: []agents.Worker{{Address: "o1", Project: "p", Worktree: "/work/main"}},
-			Workers:       []agents.Worker{{Address: "w1", Project: "p", Worktree: "/work/wt-1"}},
-		}
-	}
-	f.takeSnapshot()
-	if got := f.filesDir(); got != "" {
-		t.Errorf("no selection and no project: %q", got)
-	}
-	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "w1"})
-	if got := f.filesDir(); got != "/work/wt-1" {
-		t.Errorf("worker selected: %q", got)
-	}
-	f.Selection.Select(state.Selected{Kind: state.KindOrchestrator, ID: "o1"})
-	if got := f.filesDir(); got != "/work/main" {
-		t.Errorf("orchestrator selected: %q", got)
 	}
 }
 
@@ -287,7 +250,7 @@ func TestFileTreeSkipsTheWatchlessFolderAndShowsReadErrors(t *testing.T) {
 // A watch event starts a new read on a goroutine, not on the UI thread.
 func TestFileTreeWatchEventReadsAgainOffTheUIThread(t *testing.T) {
 	dir := t.TempDir()
-	write(t, dir, "one.txt", "x")
+	apptest.Write(t, dir, "one.txt", "x")
 	r := newTreeRig(t, dir)
 	var mu sync.Mutex
 	var jobs []func()
@@ -307,7 +270,7 @@ func TestFileTreeWatchEventReadsAgainOffTheUIThread(t *testing.T) {
 	if !r.has("one.txt") {
 		t.Fatalf("first read missing: %q", r.tt.Texts())
 	}
-	write(t, dir, "two.txt", "x")
+	apptest.Write(t, dir, "two.txt", "x")
 	// The event comes from the watch goroutine; the read is queued, not run.
 	posted := 0
 	r.ft.Env.Run.Post = func(fn func()) { posted++; fn() }
@@ -394,8 +357,8 @@ func TestFileTreeFolderClickOpensIt(t *testing.T) {
 
 func TestFileTreeNotAGitFolderHasNoCounts(t *testing.T) {
 	dir := t.TempDir()
-	write(t, dir, "plain.txt", "x\n")
-	write(t, dir, "skip.log", "x\n")
+	apptest.Write(t, dir, "plain.txt", "x\n")
+	apptest.Write(t, dir, "skip.log", "x\n")
 	r := newTreeRig(t, dir)
 	r.frame()
 	if !r.has("plain.txt") || !r.has("skip.log") {
@@ -421,42 +384,6 @@ func TestFileTreeEmptyStates(t *testing.T) {
 	}
 }
 
-// The frame has the tree in the files slot, and the board is gone from it.
-func TestFramePanelShowsTheFileTreeNotTheBoard(t *testing.T) {
-	f, tt := newTester(t)
-	f.Files.Env.Run.Go = func(fn func()) { fn() }
-	f.Files.Watch = func(string, func()) (func(), error) { return func() {}, nil }
-	tt.Frame()
-	box(t, tt, LabelFileTree)
-	box(t, tt, LabelFileFilter)
-	if !absent(tt, LabelPanel) || !absent(tt, "[panel]") {
-		t.Errorf("the board panel shows: %q", tt.Texts())
-	}
-}
-
-// A click on a file opens it in Review at the current branch.
-func TestFileClickOpensTheFileInReview(t *testing.T) {
-	s := apptest.NewRepo(t)
-	s.Git("checkout", "-b", "other")
-	s.Commit("o", map[string]string{"o.txt": "o\n"})
-	s.Git("checkout", "-b", "work")
-	s.Commit("w", map[string]string{"first.txt": "1\n", "wanted.txt": "w1\nw2\n"})
-	f := NewFrame(Deps{})
-	f.Review, _ = newTestReview()
-	f.openFileInReview(s.Dir, "wanted.txt")
-	if !f.ReviewOpen() {
-		t.Fatal("Review did not open")
-	}
-	if f.Review.Branch() != "work" || f.Review.File() != "wanted.txt" {
-		t.Errorf("review at %q file %q, want work wanted.txt", f.Review.Branch(), f.Review.File())
-	}
-	// A file the branch does not change opens the first file.
-	f.openFileInReview(s.Dir, "base.txt")
-	if f.Review.File() != "first.txt" {
-		t.Errorf("unchanged file: review file %q, want the first", f.Review.File())
-	}
-}
-
 func TestFileTreeKeysMoveAndOpen(t *testing.T) {
 	r := newTreeRig(t, changedRepo(t))
 	r.frame()
@@ -473,42 +400,6 @@ func TestFileTreeKeysMoveAndOpen(t *testing.T) {
 	if !r.has("deep") {
 		t.Errorf("→ did not open the folder: %q", r.tt.Texts())
 	}
-}
-
-// With the board disabled (D122), selecting an orchestrator or a worker, or
-// pressing the key that opened the context sheet, leaves the file tree in the slot.
-func TestFramePanelStaysTheFileTreeWhateverIsSelected(t *testing.T) {
-	f, tt := newTester(t)
-	f.Files.Env.Run.Go = func(fn func()) { fn() }
-	f.Files.Watch = func(string, func()) (func(), error) { return func() {}, nil }
-	f.Selection = state.NewSelection(nil)
-	f.Worker = &WorkerPanel{Source: panelSource(), Selection: f.Selection}
-	for _, sel := range []state.Selected{
-		{Kind: state.KindOrchestrator, ID: "o1"}, {Kind: state.KindWorker, ID: "t1"}, {Kind: state.KindTerminal, ID: "x"},
-	} {
-		f.Selection.Select(sel)
-		tt.Key(ui.Cmd, ui.KeyJ)
-		tt.Frame()
-		box(t, tt, LabelFileTree)
-		if !absent(tt, LabelWorkerPanel) || !absent(tt, LabelPanel) {
-			t.Errorf("%v: the board or worker panel shows", sel.Kind)
-		}
-	}
-}
-
-// The head says "Files", not the project name, now that the agent's todos
-// and artifacts sit above it (D197).
-func TestFilesPanelHeadSaysFiles(t *testing.T) {
-	f, tt := newTester(t)
-	f.Files.Env.Run.Go = func(fn func()) { fn() }
-	f.Files.Watch = func(string, func()) (func(), error) { return func() {}, nil }
-	f.openProject = "contr"
-	tt.Frame()
-	box(t, tt, LabelPanelFiles+" name")
-	if !absent(tt, "contr name") {
-		t.Errorf("the head still shows the project: %q", tt.Texts())
-	}
-	box(t, tt, LabelPanelFiles) // the group keeps its name
 }
 
 // Without a title the head shows the panel name.

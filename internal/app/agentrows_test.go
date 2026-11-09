@@ -65,7 +65,7 @@ func newRows(t *testing.T) *rowsHarness {
 
 func (h *rowsHarness) y(label string) float32 {
 	h.t.Helper()
-	return box(h.t, h.tt, label).Y
+	return apptest.Box(h.t, h.tt, label).Y
 }
 
 func TestTheOrchestratorComesFirstThenItsWorkersOnTheRail(t *testing.T) {
@@ -77,7 +77,7 @@ func TestTheOrchestratorComesFirstThenItsWorkersOnTheRail(t *testing.T) {
 		t.Errorf("order: project %v, lead %v, b-241 %v, b-242 %v, beta %v", proj, lead, b1, b2, other)
 	}
 	// The workers sit on the rail: indented from the orchestrator row.
-	w, o := box(t, h.tt, "b-241, working, 241, sonnet title"), box(t, h.tt, "lead, idle, opus title")
+	w, o := apptest.Box(t, h.tt, "b-241, working, 241, sonnet title"), apptest.Box(t, h.tt, "lead, idle, opus title")
 	if w.X < o.X+kit.RailIndent {
 		t.Errorf("the worker title %+v is not on the rail of the orchestrator %+v", w, o)
 	}
@@ -124,12 +124,12 @@ func TestLineTwoIsNameModelAndAge(t *testing.T) {
 	// The age sits at the right of its row, inside the sidebar: the margins of
 	// the rail do not push it out. "2m" is the orchestrator's, "6m" a worker's.
 	for _, age := range []string{"2m", "6m", "1m"} {
-		end := box(t, h.tt, age)
+		end := apptest.Box(t, h.tt, age)
 		if right := end.X + end.W; right > theme.SidebarWidth-theme.Space6-theme.Space10+1 || right < theme.SidebarWidth-theme.Space6-theme.Space10-8 {
 			t.Errorf("age %q ends at %v, want the right padding of the row at %v", age, right, theme.SidebarWidth-theme.Space6-theme.Space10)
 		}
 	}
-	if box(t, h.tt, "b-241").X > box(t, h.tt, "sonnet").X {
+	if apptest.Box(t, h.tt, "b-241").X > apptest.Box(t, h.tt, "sonnet").X {
 		t.Error("the name comes after the model")
 	}
 }
@@ -143,7 +143,7 @@ func TestAWorkerShowsItsTaskOnLineOneAndItsNameOnLineTwo(t *testing.T) {
 	if titleOf(a, "") != "Agent rows on ui.List" || nameOf(a, "") != "b-241" {
 		t.Errorf("line 1 %q, name on line 2 %q", titleOf(a, ""), nameOf(a, ""))
 	}
-	title, name := box(t, h.tt, "b-241, working, 241, sonnet title"), box(t, h.tt, "b-241")
+	title, name := apptest.Box(t, h.tt, "b-241, working, 241, sonnet title"), apptest.Box(t, h.tt, "b-241")
 	if name.Y <= title.Y {
 		t.Errorf("the name %+v is not under the title %+v", name, title)
 	}
@@ -170,11 +170,11 @@ func TestAWorkerWithNoTaskShowsItsNameOnceOnLineOne(t *testing.T) {
 
 func TestAnOrchestratorIsIndentedUnderItsProject(t *testing.T) {
 	h := newRows(t)
-	proj, lead := box(t, h.tt, "alpha, main text"), box(t, h.tt, "lead, idle, opus title")
+	proj, lead := apptest.Box(t, h.tt, "alpha, main text"), apptest.Box(t, h.tt, "lead, idle, opus title")
 	if lead.X < proj.X+kit.OrchestratorIndent {
 		t.Errorf("orchestrator title %+v is not indented from the project name %+v", lead, proj)
 	}
-	w := box(t, h.tt, "b-241, working, 241, sonnet title")
+	w := apptest.Box(t, h.tt, "b-241, working, 241, sonnet title")
 	if w.X < lead.X+kit.RailIndent {
 		t.Errorf("the worker title %+v is not on the rail inside the orchestrator %+v", w, lead)
 	}
@@ -199,13 +199,13 @@ func TestAnOrchestratorOfOtherMakeShowsItsOwnModelAndKeepsTheAgeRight(t *testing
 		t.Errorf("no model in the label: %q", h.tt.Texts())
 	}
 	for _, age := range []string{"5m", "7m"} {
-		end := box(t, h.tt, age)
+		end := apptest.Box(t, h.tt, age)
 		if right := end.X + end.W; right > theme.SidebarWidth-theme.Space6-theme.Space10+1 || right < theme.SidebarWidth-theme.Space6-theme.Space10-8 {
 			t.Errorf("age %q ends at %v, not at the right edge", age, right)
 		}
 	}
 	// With no model the age still has line 2 under the title.
-	if box(t, h.tt, "7m").Y <= box(t, h.tt, "fo2, idle title").Y {
+	if apptest.Box(t, h.tt, "7m").Y <= apptest.Box(t, h.tt, "fo2, idle title").Y {
 		t.Error("the age of the row with no model is not under its title")
 	}
 }

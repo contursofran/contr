@@ -1,4 +1,7 @@
-package app
+// Package files is the files panel: the file tree of the selected folder, its
+// diff summary for the title bar, and the agent's session (todos and
+// artifacts) above the tree.
+package files
 
 import (
 	"context"

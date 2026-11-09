@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/updated"
@@ -66,7 +67,7 @@ func TestAReadyUpdateShowsThePillAndOneToast(t *testing.T) {
 		!slices.Contains(r.tt.Texts(), UpdateToastBody) {
 		t.Fatalf("no update toast: %q", r.tt.Texts())
 	}
-	pill, toast := box(t, r.tt, LabelUpdatePill), box(t, r.tt, LabelUpdateToast)
+	pill, toast := apptest.Box(t, r.tt, LabelUpdatePill), apptest.Box(t, r.tt, LabelUpdateToast)
 	if toast.Y < pill.Y+pill.H {
 		t.Errorf("the toast %v is not under the pill %v", toast, pill)
 	}
@@ -225,7 +226,7 @@ func TestWhatsNewOpensAtStartAfterAnUpdate(t *testing.T) {
 			t.Errorf("the panel after an update has %q", not)
 		}
 	}
-	pill, panel := box(t, r.tt, updatedPill), box(t, r.tt, LabelUpdatePanel)
+	pill, panel := apptest.Box(t, r.tt, updatedPill), apptest.Box(t, r.tt, LabelUpdatePanel)
 	if panel.Y < pill.Y+pill.H {
 		t.Errorf("the panel %v is not under the pill %v", panel, pill)
 	}
