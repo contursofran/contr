@@ -5,6 +5,7 @@ package app
 // [state.Toasts]; the view gives each to MyGo, which times and stacks them.
 
 import (
+	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/icons"
@@ -46,7 +47,7 @@ func (f *Frame) toastView(c *ui.Context) {
 			toast := ui.ToastBase(c, t)
 			toast.Root.Row().AlignItems(ui.Center).Gap(theme.Space10).MaxWidth(toastMaxWidth).
 				Padding(theme.Space8, theme.Space8, theme.Space8, theme.Space16).Radius(theme.Radius12).
-				Background(p.GlassFloat).Border(1, p.FloatLine)
+				Background(p.GlassFloat).Material(glass.Blur{Radius: theme.GlassBlur}).Border(1, p.FloatLine)
 			for _, l := range p.ShadowFloat {
 				if !l.Inset {
 					toast.Root.Shadow(l.X, l.Y, l.Blur, l.Wide, l.Color)
