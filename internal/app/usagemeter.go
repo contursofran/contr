@@ -26,13 +26,24 @@ type planPercent interface {
 // the sidebar foot (D196, [planMeters]).
 //
 // terminal is the hc terminal of the selected agent ("" for none). Its context
-// comes from the status line it runs (D144); without one the line shows no data.
-func contextMeter(src planPercent, terminal string) kit.Meter {
+// comes from the status line it runs (D144). Without a status line file it
+// comes from labels: the Stop hook's context labels of that terminal, with the
+// compaction window as the size (D205); a zero Size is no labels. With
+// neither, the line shows no data.
+func contextMeter(src planPercent, terminal string, labels usage.Context) kit.Meter {
 	m := kit.Meter{Label: LabelContext}
-	if src != nil && terminal != "" {
-		if c, ok := src.Context(terminal); ok {
-			m.Percent, m.Has, m.Value = c.Percent(), true, c.Label()
-		}
+	if terminal == "" {
+		return m
+	}
+	c, ok := usage.Context{}, false
+	if src != nil {
+		c, ok = src.Context(terminal)
+	}
+	if !ok && labels.Size > 0 {
+		c, ok = labels, true
+	}
+	if ok {
+		m.Percent, m.Has, m.Value = c.Percent(), true, c.Label()
 	}
 	return m
 }
