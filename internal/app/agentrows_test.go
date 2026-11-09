@@ -15,6 +15,7 @@ import (
 	"github.com/contursofran/contr/internal/app/ghsource/ghsourcetest"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/state"
+	"github.com/contursofran/contr/internal/app/tabmodel"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/host"
@@ -251,8 +252,8 @@ func TestAClickOnAnAgentRowSelectsItAndTheTabsFollow(t *testing.T) {
 		snap.Workers[i].Project = "alpha"
 	}
 	snap.Orchestrators[0].Project = "alpha"
-	agent := TabAgent(snap, sel, ok, "alpha", "", "")
-	for _, tab := range TitleTabs(snap, "alpha", "", agent, sel.ID) {
+	agent := tabmodel.TabAgent(snap, sel, ok, "alpha", "", "")
+	for _, tab := range tabmodel.TitleTabs(snap, "alpha", "", agent, sel.ID) {
 		if tab.Selected {
 			chosen = append(chosen, tab.Address)
 		}
@@ -273,7 +274,7 @@ func TestInterruptAndStopFromTheContextMenuCallTheSource(t *testing.T) {
 	if err := h.tt.RightClick("b-241, working, 241, sonnet"); err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(h.tt.Menu(), "|"); !strings.Contains(got, MenuInterrupt) || !strings.Contains(got, MenuStop) || !strings.Contains(got, MenuOpenPR) {
+	if got := strings.Join(h.tt.Menu(), "|"); !strings.Contains(got, MenuInterrupt) || !strings.Contains(got, tabmodel.MenuStop) || !strings.Contains(got, MenuOpenPR) {
 		t.Fatalf("menu %q", got)
 	}
 	if err := h.tt.ChooseMenuItem(MenuInterrupt); err != nil {
@@ -283,7 +284,7 @@ func TestInterruptAndStopFromTheContextMenuCallTheSource(t *testing.T) {
 		t.Errorf("interrupted %v", h.src.Signalled)
 	}
 	h.tt.RightClick("lead, idle, opus")
-	if err := h.tt.ChooseMenuItem(MenuStop); err != nil {
+	if err := h.tt.ChooseMenuItem(tabmodel.MenuStop); err != nil {
 		t.Fatal(err)
 	}
 	if stopped, _ := h.src.Calls(); len(stopped) != 1 || stopped[0] != "lead" {
@@ -300,7 +301,7 @@ func TestAFailedMenuActionShowsItsError(t *testing.T) {
 	var told []string
 	h.list.Env.Status = func(s string) { told = append(told, s) }
 	h.tt.RightClick("b-242, working, sonnet")
-	if err := h.tt.ChooseMenuItem(MenuStop); err != nil {
+	if err := h.tt.ChooseMenuItem(tabmodel.MenuStop); err != nil {
 		t.Fatal(err)
 	}
 	if len(told) != 1 || told[0] != "hc: gone" {
@@ -625,5 +626,15 @@ func TestLineTwoOfAnOrchestratorShowsItsRole(t *testing.T) {
 	h.send(agentstate.Snapshot{CoreVersion: "0.1.18", Orchestrators: []agents.Worker{solo}})
 	if !slices.Contains(h.tt.Texts(), "orchestrator") {
 		t.Errorf("a session that ran /contr:orchestrate: texts %v", h.tt.Texts())
+	}
+}
+
+func TestForeignRowLabelUsesTheReadableName(t *testing.T) {
+	w := agents.Worker{Address: "t1nh", Name: "t1nh", Shown: "contr", Role: agents.RoleOrchestrator, Foreign: true, Live: true}
+	if got := AgentLabel(w, "", ""); !strings.HasPrefix(got, "contr,") {
+		t.Errorf("label %q", got)
+	}
+	if got := tabmodel.RowTip(w); got != "contr · t1nh" {
+		t.Errorf("tip %q", got)
 	}
 }

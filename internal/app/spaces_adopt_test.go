@@ -9,6 +9,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/tabmodel"
 	"github.com/contursofran/contr/internal/projects"
 )
 
@@ -100,7 +101,7 @@ func TestTabsShowAForeignPlainTerminalOfItsProject(t *testing.T) {
 		Terminals: []agents.Worker{foreignTerm("t2", agents.RoleTerminal, "alpha", "/a"),
 			foreignTerm("t3", agents.RoleTerminal, "beta", "/b")},
 	}
-	tabs := TitleTabs(s, "alpha", "", "t1", "")
+	tabs := tabmodel.TitleTabs(s, "alpha", "", "t1", "")
 	if len(tabs) != 2 || tabs[0].Address != "t1" || tabs[1].Address != "t2" || !tabs[1].Plain {
 		t.Errorf("tabs %+v", tabs)
 	}
@@ -199,11 +200,11 @@ func TestTabsKeepTwoReposWithTheSameFolderNameApart(t *testing.T) {
 	b := foreignTerm("tb", agents.RoleTerminal, "app", "/two/app")
 	b.ProjectKey = "/two/app/.git"
 	s := agentstate.Snapshot{Terminals: []agents.Worker{a, b}}
-	tabs := TitleTabs(s, "app", "/two/app/.git", "", "")
+	tabs := tabmodel.TitleTabs(s, "app", "/two/app/.git", "", "")
 	if len(tabs) != 1 || tabs[0].Address != "tb" {
 		t.Errorf("tabs of /two/app: %+v", tabs)
 	}
-	tabs = TitleTabs(s, "app", "/one/app/.git", "", "")
+	tabs = tabmodel.TitleTabs(s, "app", "/one/app/.git", "", "")
 	if len(tabs) != 1 || tabs[0].Address != "ta" {
 		t.Errorf("tabs of /one/app: %+v", tabs)
 	}

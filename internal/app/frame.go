@@ -28,6 +28,7 @@ import (
 	"github.com/contursofran/contr/internal/app/reviewview"
 	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/app/state"
+	"github.com/contursofran/contr/internal/app/tabmodel"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/github"
@@ -153,7 +154,7 @@ type Frame struct {
 	openProject string
 	openKey     string // the git common folder of openProject, when known
 	tabAgent    string
-	tabs        []Tab
+	tabs        []tabmodel.Tab
 	// tabOrder is the order the owner dragged the plain tabs to, as addresses, for the session.
 	tabOrder    []string
 	sidebarOpen bool
@@ -760,7 +761,7 @@ func (f *Frame) terminalDir(project string) string {
 
 // selectTab selects the terminal of a title bar tab. A tab shows its terminal, so it closes the
 // Review view.
-func (f *Frame) selectTab(t Tab) {
+func (f *Frame) selectTab(t tabmodel.Tab) {
 	if f.Selection == nil {
 		return
 	}
@@ -776,21 +777,21 @@ func (f *Frame) selectTab(t Tab) {
 }
 
 // closeTab closes a plain terminal tab (D85). An agent tab has no close button.
-func (f *Frame) closeTab(t Tab) {
+func (f *Frame) closeTab(t tabmodel.Tab) {
 	if f.CloseTerm != nil && t.Closable() {
 		f.CloseTerm.Start(t.Address)
 	}
 }
 
 // stopTab stops the agent of an agent tab (D219), as Stop of its sidebar row does.
-func (f *Frame) stopTab(t Tab) {
+func (f *Frame) stopTab(t tabmodel.Tab) {
 	if f.SpacesList != nil && !t.Plain {
 		f.SpacesList.StopAgent(t.Address, t.Title)
 	}
 }
 
 // closeAgentTab stops the agent of an agent tab and removes its terminal (D219).
-func (f *Frame) closeAgentTab(t Tab) {
+func (f *Frame) closeAgentTab(t tabmodel.Tab) {
 	if f.SpacesList != nil && !t.Plain {
 		f.SpacesList.CloseAgent(t.Address, t.Title)
 	}
@@ -798,7 +799,7 @@ func (f *Frame) closeAgentTab(t Tab) {
 
 // closeOtherTabs closes every plain terminal tab except keep. The agent's own tab never closes
 // (D85). UI thread.
-func (f *Frame) closeOtherTabs(keep Tab) {
+func (f *Frame) closeOtherTabs(keep tabmodel.Tab) {
 	for _, t := range f.bar.tabs {
 		if t.Address != keep.Address {
 			f.closeTab(t)
@@ -809,7 +810,7 @@ func (f *Frame) closeOtherTabs(keep Tab) {
 // moveTab puts the plain tab from in the place of the plain tab to. The agent's own tab does
 // not move. The order lasts for the session. UI thread.
 func (f *Frame) moveTab(from, to string) {
-	order, ok := MoveTab(f.bar.tabs, from, to)
+	order, ok := tabmodel.MoveTab(f.bar.tabs, from, to)
 	if !ok {
 		return
 	}

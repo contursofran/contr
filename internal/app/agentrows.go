@@ -13,16 +13,15 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
-	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/state"
+	"github.com/contursofran/contr/internal/app/tabmodel"
 )
 
 // Labels of the context menu of an agent row.
 const (
 	MenuInterrupt = "Interrupt"
-	MenuStop      = "Stop"
 	// MenuCloseAgent stops the agent and removes its terminal (D219). The tab menu's Close has
 	// the same text.
 	MenuCloseAgent = "Close"
@@ -66,21 +65,6 @@ func roleText(orchestrating bool, workers int) string {
 type sideItem struct {
 	group int
 	agent *agentLine
-}
-
-// workerIcon is the icon for a worker. A program that ended shows done.
-func workerIcon(w agents.Worker) icons.Status {
-	switch {
-	case !w.Live:
-		return icons.Done
-	case w.Status == "working":
-		return icons.Working
-	case w.Status == "blocked" || w.Status == "error":
-		return icons.Blocked
-	case w.Status == "done":
-		return icons.Done
-	}
-	return icons.Idle
 }
 
 // AgeText is the time since t as "now", "3m" or "2h"; days go on as hours.
@@ -249,23 +233,13 @@ func nameOf(a agentLine, issueTitle string) string {
 
 // AgentLabel is the label of an agent row: "<title>, <state>, <issue>, <model>".
 func AgentLabel(w agents.Worker, issue, model string) string {
-	parts := []string{w.DisplayName(), tabState(w).Label()}
+	parts := []string{w.DisplayName(), tabmodel.TabState(w).Label()}
 	for _, p := range []string{issue, model} {
 		if p != "" {
 			parts = append(parts, p)
 		}
 	}
 	return strings.Join(parts, ", ")
-}
-
-// rowTip is the tooltip of an agent row: the name. A terminal contr did not start also shows its
-// hc address, which is no longer its name (D156).
-func rowTip(w agents.Worker) string {
-	n := w.DisplayName()
-	if w.Foreign && w.Address != "" && n != w.Address {
-		return n + " · " + w.Address
-	}
-	return n
 }
 
 // issueText is the issue id of line 2: the label of the worker, as set. An
@@ -287,11 +261,11 @@ func (l *SpacesList) agentRow(c *ui.Context, a agentLine) {
 	}
 	o := kit.AgentRowOpts{
 		CI: ci, Label: label, Title: titleOf(a, it), Name: nameOf(a, it), Model: model,
-		Age: agentAge(a.w, l.clock()), State: tabState(a.w), Orchestrator: a.orchestrator,
+		Age: agentAge(a.w, l.clock()), State: tabmodel.TabState(a.w), Orchestrator: a.orchestrator,
 		Grey:    a.orchestrator && a.role == "",
 		OnClick: func() { l.SelectAgent(a) },
 		Menu:    func(m *ui.Menu) { l.agentMenu(m, a) },
-		Compact: l.compact, Tip: rowTip(a.w),
+		Compact: l.compact, Tip: tabmodel.RowTip(a.w),
 	}
 	if l.selection != nil {
 		if sel, ok := l.selection.Current(); ok {
@@ -326,7 +300,7 @@ func (l *SpacesList) agentMenu(m *ui.Menu, a agentLine) {
 	if m.Item(MenuInterrupt).Disabled(l.Source == nil).Chosen() {
 		l.act(a.w, "interrupted", l.Source.Interrupt)
 	}
-	if m.Item(MenuStop).Disabled(l.Source == nil).Chosen() {
+	if m.Item(tabmodel.MenuStop).Disabled(l.Source == nil).Chosen() {
 		l.act(a.w, "stopped", l.Source.Stop)
 	}
 	if m.Item(MenuCloseAgent).Disabled(l.Source == nil).Chosen() {
