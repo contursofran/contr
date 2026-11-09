@@ -190,10 +190,16 @@ func projectIconInk(p *theme.Palette, selected, empty bool) ui.Color {
 
 // serverRow is the This Mac row. Its `+` stays hidden until remote servers
 // have a source (#149).
+// The offline row is clickable: a click connects to hc at once.
 func (l *SpacesList) serverRow(c *ui.Context) {
+	var click func()
+	if !l.online {
+		click = l.OnRetry
+	}
 	kit.Row(c, kit.RowOpts{
 		Flat: true, Label: ServerLabel(l.online), Text: "This Mac", Meta: l.ServerMeta(), Selected: true,
 		Lead: func() { rowIcon(c, "computer", serverIconInk(theme.Current())) }, Compact: l.compact, Tip: "This Mac",
+		OnClick: click,
 	})
 }
 

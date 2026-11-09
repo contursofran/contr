@@ -32,6 +32,10 @@ type fakeCore struct {
 	snap    hc.Snapshot
 	events  chan hc.Event
 	get     json.RawMessage // the reply to terminal.get
+	// subs, when not empty, gives the result of each Subscribe in turn; when
+	// it runs out, Subscribe gives the default stream. subN counts them.
+	subs []func() (agents.Stream, error)
+	subN atomic.Int32
 }
 
 func (f *fakeCore) Call(_ context.Context, method string, params, result any) error {
@@ -66,6 +70,16 @@ func (f *fakeCore) sends() []call {
 }
 
 func (f *fakeCore) Subscribe(context.Context, hc.Filter) (agents.Stream, error) {
+	f.subN.Add(1)
+	f.mu.Lock()
+	var next func() (agents.Stream, error)
+	if len(f.subs) > 0 {
+		next, f.subs = f.subs[0], f.subs[1:]
+	}
+	f.mu.Unlock()
+	if next != nil {
+		return next()
+	}
 	return &stream{f}, nil
 }
 

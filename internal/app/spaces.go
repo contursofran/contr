@@ -48,6 +48,9 @@ type SpacesList struct {
 	// contr waits; the button shows a dot then. Nil: no dot.
 	OnSettings  func()
 	UpdateReady func() bool
+	// OnRetry runs when the offline This Mac row is clicked: connect to hc
+	// at once (ServerRow spec). Nil: the row has no click.
+	OnRetry func()
 	// Plans gives the plan meters of the sidebar foot, left of the Settings
 	// button (D196). Nil: no meters.
 	Plans func() []kit.Meter

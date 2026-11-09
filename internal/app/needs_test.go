@@ -74,9 +74,24 @@ type source struct {
 	signalled []string // names interrupted
 	stopped   []string
 	closed    []string
-	// mu guards stopped and closed: the frame calls Stop and Close on a
-	// goroutine.
+	// visible and reconnects record SetVisible and Reconnect.
+	visible    []bool
+	reconnects int
+	// mu guards stopped, closed, visible and reconnects: the frame calls
+	// Stop and Close on a goroutine.
 	mu sync.Mutex
+}
+
+func (s *source) SetVisible(v bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.visible = append(s.visible, v)
+}
+
+func (s *source) Reconnect() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.reconnects++
 }
 
 // calls returns copies of the stopped and closed names.
