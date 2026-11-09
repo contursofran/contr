@@ -4,6 +4,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/ghsource"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
@@ -79,9 +80,9 @@ func (f *Frame) attachAgents(w Window, env view.Env) (agentSnap func() agentstat
 	if f.deps.AgentsNotice != "" {
 		f.Toasts.Show(f.deps.AgentsNotice)
 	}
-	gh := &ghQueue{} // one limit for both (#568)
-	f.WorkerPRs = &WorkerPRs{Env: env, GH: gh}
-	f.IssueTitles = &IssueTitles{Env: env, GH: gh}
+	gh := &ghsource.GHQueue{} // one limit for both (#568)
+	f.WorkerPRs = &ghsource.WorkerPRs{Env: env, GH: gh}
+	f.IssueTitles = &ghsource.IssueTitles{Env: env, GH: gh}
 	stopAgents := func() {}
 	if f.deps.StartAgents != nil {
 		src, stopAgents = f.deps.StartAgents(func() { w.Update(f.syncAgents) })
@@ -100,7 +101,7 @@ func (f *Frame) attachAgents(w Window, env view.Env) (agentSnap func() agentstat
 				f.Selection.Select(state.Selected{Kind: kind, ID: address})
 			}}
 		f.CloseTerm = &CloseTerminal{Stop: src.Close, Env: env, Closed: f.terminalClosed}
-		entry := WorkerEntry{PRs: f.WorkerPRs, OpenPR: f.paneOpener(), OpenIssue: f.OpenIssue}
+		entry := ghsource.WorkerEntry{PRs: f.WorkerPRs, OpenPR: f.paneOpener(), OpenIssue: f.OpenIssue}
 		f.Card.Entry = entry
 		if viewersEnabled {
 			f.Worker = &WorkerPanel{Entry: entry, Source: src, Selection: f.Selection, Env: env}

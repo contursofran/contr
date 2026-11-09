@@ -1,20 +1,23 @@
-package app
+// Package ghsource holds the gh reads of the workers: the pull request of each worktree
+// ([WorkerPRs]), the issue titles ([IssueTitles]), the one queue of gh runs for both ([GHQueue])
+// and the entry from a worker to its pull request or issue ([WorkerEntry]).
+package ghsource
 
 import (
 	"github.com/contursofran/contr/internal/app/view"
 )
 
-// ghQueue limits the gh runs of the window: at most [maxGH] go at once, the others wait in
+// GHQueue limits the gh runs of the window: at most [maxGH] go at once, the others wait in
 // order. The frame makes one and gives it to [WorkerPRs] and [IssueTitles], so the limit holds
 // for both together (#568). Use it on the UI thread.
-type ghQueue struct {
+type GHQueue struct {
 	active  int      // gh runs going
 	waiting []func() // gh runs that wait for a free place
 }
 
 // Do runs read off the UI thread through env when a place is free, or later in turn. The
 // function that read returns runs on the UI thread.
-func (q *ghQueue) Do(env view.Env, read func() func()) {
+func (q *GHQueue) Do(env view.Env, read func() func()) {
 	start := func() {
 		q.active++
 		env.Do(func() func() {
