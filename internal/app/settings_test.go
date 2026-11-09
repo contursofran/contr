@@ -578,6 +578,44 @@ func TestSettingsShowsTheTintSlidersWithValues(t *testing.T) {
 	}
 }
 
+// clickSlider clicks a tint slider at frac of its track. The slider and its
+// on-screen name share one name, and Click finds the name text first, so the
+// click goes to the track by position: the track starts after the 90 wide
+// name and a 12 gap, and ends a 12 gap before the value text.
+func (r *settingsRig) clickSlider(t *testing.T, name, value string, frac float32) {
+	t.Helper()
+	nr, ok := r.tt.Find(name)
+	vr, ok2 := r.tt.Find(value)
+	if !ok || !ok2 {
+		t.Fatalf("no %q or %q: %v", name, value, r.texts())
+	}
+	x0, x1 := nr.X+90+12, vr.X-12
+	r.tt.ClickAt(x0+(x1-x0)*frac, nr.Y+nr.H/2)
+}
+
+// A slider has the name that shows on screen: the name text and the slider
+// are two elements with the same name, and nothing is named "... alpha".
+func TestSettingsTintSliderNameMatchesTheScreenText(t *testing.T) {
+	r := newSettingsRig(t, &fakeUpdates{enabled: true})
+	r.s.Tint = func() (float64, float64) { return 30, 55 }
+	r.s.SetTint = func(w, p float64) {}
+	r.open()
+	for _, name := range []string{LabelBackground, LabelPanels} {
+		n := 0
+		for _, s := range r.texts() {
+			if s == name {
+				n++
+			}
+			if s == name+" alpha" {
+				t.Errorf("a slider is named %q, not %q", s, name)
+			}
+		}
+		if n != 2 {
+			t.Errorf("%q: %d elements, want the text and the slider", name, n)
+		}
+	}
+}
+
 func TestSettingsTintSliderCallsSetTint(t *testing.T) {
 	r := newSettingsRig(t, &fakeUpdates{enabled: true})
 	win, pan := 30.0, 55.0
@@ -585,9 +623,7 @@ func TestSettingsTintSliderCallsSetTint(t *testing.T) {
 	r.s.Tint = func() (float64, float64) { return win, pan }
 	r.s.SetTint = func(w, p float64) { win, pan = w, p; calls = append(calls, [2]float64{w, p}) }
 	r.open()
-	if err := r.tt.Click(LabelBackground + " alpha"); err != nil {
-		t.Fatal(err)
-	}
+	r.clickSlider(t, LabelBackground, "30%", 0.5)
 	r.tt.Key(0, ui.KeyHome)
 	r.tt.Frame()
 	r.tt.Frame()
@@ -627,9 +663,7 @@ func TestSettingsTintSliderFollowsAClickOnTheTrack(t *testing.T) {
 	r.s.Tint = func() (float64, float64) { return win, pan }
 	r.s.SetTint = func(w, p float64) { win, pan = w, p }
 	r.open()
-	if err := r.tt.Click(LabelPanels + " alpha"); err != nil {
-		t.Fatal(err)
-	}
+	r.clickSlider(t, LabelPanels, "55%", 0.5)
 	r.tt.Frame()
 	r.tt.Frame()
 	if pan < 45 || pan > 55 || pan == 55 || win != 30 {

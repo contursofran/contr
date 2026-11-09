@@ -14,7 +14,6 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/agentstate"
@@ -149,7 +148,7 @@ func (n *Notch) View(c *ui.Context) {
 	ui.Row(c).Absolute().Top(0).Left(0).Right(0).Justify(ui.Center).PassThrough().Children(func() {
 		b := ui.ButtonBase(c).Label(NotchAccessible(items)).Height(theme.SizeNotchHeight).Shrink(0).
 			Radius(0, 0, theme.Radius12, theme.Radius12).Cursor(ui.CursorPointer).
-			Material(glass.Blur{Radius: theme.GlassBlur}).FocusRing(false).OnClick(n.Toggle)
+			FocusRing(false).OnClick(n.Toggle)
 		b = notchShadow(b, p)
 		focus := b.FocusVisible()
 		b = b.DrawOver(func(pt *ui.Painter, r ui.Rect) {
@@ -170,9 +169,9 @@ func (n *Notch) View(c *ui.Context) {
 		b.Children(func() {
 			// glass-float over the blur, with float-line on the sides and the
 			// bottom (no top border).
-			ui.Row(c).Height(theme.SizeNotchHeight).AlignItems(ui.Center).Gap(theme.Space9).
+			kit.GlassFloat(ui.Row(c).Height(theme.SizeNotchHeight).AlignItems(ui.Center).Gap(theme.Space9).
 				Padding(0, theme.Space16, 0, theme.Space12).
-				Radius(0, 0, theme.Radius12, theme.Radius12).Background(p.GlassFloat).
+				Radius(0, 0, theme.Radius12, theme.Radius12), p).
 				BorderWidth(0, 1, 1, 1).BorderColor(p.FloatLine).Children(func() {
 				kit.StatusGlyph(c, kit.GlyphOpts{State: kit.GlyphNeedsYou, Small: true})
 				ui.Text(c, NotchLabel(items)).NoWrap().TextColor(p.Ink100).
@@ -218,12 +217,11 @@ func (n *Notch) problemView(c *ui.Context) {
 	p := theme.Current()
 	ui.Row(c).Absolute().Top(0).Left(0).Right(0).Justify(ui.Center).PassThrough().Children(func() {
 		b := ui.Box(c).Label(LabelOwnerProblem).Height(theme.SizeNotchHeight).Shrink(0).
-			Radius(0, 0, theme.Radius12, theme.Radius12).
-			Material(glass.Blur{Radius: theme.GlassBlur}).Tooltip(prob)
+			Radius(0, 0, theme.Radius12, theme.Radius12).Tooltip(prob)
 		notchShadow(b, p).Children(func() {
-			ui.Row(c).Height(theme.SizeNotchHeight).AlignItems(ui.Center).Gap(theme.Space9).
+			kit.GlassFloat(ui.Row(c).Height(theme.SizeNotchHeight).AlignItems(ui.Center).Gap(theme.Space9).
 				Padding(0, theme.Space16, 0, theme.Space12).
-				Radius(0, 0, theme.Radius12, theme.Radius12).Background(p.GlassFloat).
+				Radius(0, 0, theme.Radius12, theme.Radius12), p).
 				BorderWidth(0, 1, 1, 1).BorderColor(p.FloatLine).Children(func() {
 				kit.StatusGlyph(c, kit.GlyphOpts{State: kit.GlyphNeedsYou, Small: true})
 				ui.Text(c, TextOwnerProblem).NoWrap().TextColor(p.Blocked).

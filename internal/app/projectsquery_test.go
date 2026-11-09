@@ -93,6 +93,14 @@ func TestOpenMeta(t *testing.T) {
 		t.Errorf("zero count shown: %q", meta)
 	}
 
+	// One row that needs the owner reads "1 needs you", in the meta and in
+	// the parts.
+	one := g
+	one.Rows = []spaces.WorktreeRow{{Root: "/home/me/code/contr", IsMain: true}, {Root: "/w/a", HoldYou: true}}
+	if _, _, live, n1 := openMetaParts(one, "/home/me"); live != "1 needs you" || n1 != 1 {
+		t.Errorf("one need you parts: %q %d", live, n1)
+	}
+
 	g.Rows = append(g.Rows,
 		spaces.WorktreeRow{Root: "/w/a", HoldYou: true},
 		spaces.WorktreeRow{Root: "/w/b", HoldYou: true})

@@ -19,10 +19,10 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/owner"
@@ -355,7 +355,8 @@ func outlineCard(c *ui.Context, tip ui.Element, t OutlineTick) {
 	p := theme.Current()
 	shadow := p.ShadowFloat
 	tip.Label(LabelOutlineCard).Width(theme.SizeOutlineCardWidth).Padding(12, 14, 13, 16).Gap(5).Column().
-		Radius(theme.Radius12).Background(p.GlassFloat).Material(glass.Blur{Radius: theme.GlassBlur}).Border(1, p.FloatLine)
+		Radius(theme.Radius12)
+	kit.GlassFloat(tip, p).Border(1, p.FloatLine)
 	for _, l := range shadow {
 		tip.Shadow(l.X, l.Y, l.Blur, l.Wide, l.Color)
 	}

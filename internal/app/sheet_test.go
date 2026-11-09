@@ -166,6 +166,10 @@ func TestSpecSheet(t *testing.T) {
 	}
 }
 
+// sheetNoImage lists the parts that may have no spec image yet. A missing
+// image of any other part fails the test.
+var sheetNoImage = []string{"ProjectsModal"}
+
 // sheetImage draws the spec image of the part over contr's render, each
 // under a caption.
 func sheetImage(t *testing.T, p sheetPart, themeName string) *image.RGBA {
@@ -173,13 +177,15 @@ func sheetImage(t *testing.T, p sheetPart, themeName string) *image.RGBA {
 	data, err := os.ReadFile(filepath.Join("..", "..", "docs", "spec", "images", p.name+"-"+themeName+".png"))
 	var spec *ui.Bitmap
 	var sw, sh float32
-	if err == nil { // a part may have no spec image yet (ProjectsModal)
+	switch {
+	case err == nil:
 		if spec, err = ui.DecodeBitmap(data); err != nil {
 			t.Fatal(err)
 		}
 		sw, sh = ui.ImageSize(spec)
-	} else if !os.IsNotExist(err) {
-		t.Fatal(err)
+	case os.IsNotExist(err) && slices.Contains(sheetNoImage, p.name):
+	default:
+		t.Fatalf("%s: spec image: %v", p.name, err)
 	}
 	w := max(int(sw), p.w+2*sheetPad)
 	const caption = 28

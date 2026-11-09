@@ -138,6 +138,7 @@ func (c *client) call(t *testing.T, method string, params map[string]any) json.R
 
 type node struct {
 	ID    string `json:"id"`
+	Role  string `json:"role"`
 	Label string `json:"label"`
 }
 
@@ -166,6 +167,19 @@ func (c *client) idOf(t *testing.T, label string) string {
 		}
 	}
 	t.Fatalf("no element %q", label)
+	return ""
+}
+
+// idOfRole is idOf for an element of one role, where a text and a control
+// share a name (a Settings slider and its name on screen).
+func (c *client) idOfRole(t *testing.T, role, label string) string {
+	t.Helper()
+	for _, n := range c.nodes(t) {
+		if n.Role == role && n.Label == label {
+			return n.ID
+		}
+	}
+	t.Fatalf("no %s %q", role, label)
 	return ""
 }
 

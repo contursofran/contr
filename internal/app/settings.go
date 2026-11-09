@@ -734,7 +734,7 @@ func tintSlider(c *ui.Context, label string, v *float64) {
 	const trackH, thumb = 4, 14
 	ui.Row(c).AlignItems(ui.Center).Gap(12).Children(func() {
 		ui.Text(c, label).Width(90).TextColor(p.Ink50)
-		sl := ui.SliderBase(c.Key("tint-"+label), v, 0, 100).Step(1).Label(label + " alpha").Grow(1).Height(24).PaddingX(thumb / 2)
+		sl := ui.SliderBase(c.Key("tint-"+label), v, 0, 100).Step(1).Label(label).Grow(1).Height(24).PaddingX(thumb / 2)
 		at := float32(*v / 100)
 		if c.Direction() == ui.RightToLeft {
 			at = 1 - at
