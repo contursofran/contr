@@ -40,6 +40,9 @@ func TestMemoryIsZeroWithoutATotal(t *testing.T) {
 	}
 }
 
+// barWidth is the bar length the tests give the host, as the app does.
+const barWidth = 60
+
 func TestMemBarPixelsRoundTheShareOfTheBar(t *testing.T) {
 	cases := []struct {
 		s    Stats
@@ -53,8 +56,20 @@ func TestMemBarPixelsRoundTheShareOfTheBar(t *testing.T) {
 		{stats(0, 5, 0), 0},    // no total, no fill
 	}
 	for _, c := range cases {
-		if got := c.s.MemBarPixels(); got != c.want {
+		if got := c.s.MemBarPixels(barWidth); got != c.want {
 			t.Errorf("%+v: %d px, want %d", c.s, got, c.want)
+		}
+	}
+}
+
+func TestMemBarPixelsFollowTheGivenWidth(t *testing.T) {
+	s := stats(0, 50, 100)
+	for _, c := range []struct {
+		width float32
+		want  int
+	}{{100, 50}, {7, 4}, {0, 0}} {
+		if got := s.MemBarPixels(c.width); got != c.want {
+			t.Errorf("width %v: %d px, want %d", c.width, got, c.want)
 		}
 	}
 }
@@ -138,7 +153,7 @@ type fake struct {
 
 func newFake(cpu float32) *fake {
 	f := &fake{clock: &fakeClock{}, reading: stats(cpu, 50, 100)}
-	f.Host = New(func() (Stats, error) { f.calls++; return f.reading, f.err }, func() { f.notified++ })
+	f.Host = New(func() (Stats, error) { f.calls++; return f.reading, f.err }, barWidth, func() { f.notified++ })
 	f.Host.afterFunc = f.clock.afterFunc
 	f.Host.run = func(fn func()) { fn() }
 	return f
@@ -257,15 +272,15 @@ func TestNotifiesWhenTheBarWidthChangesAlone(t *testing.T) {
 	// 6 and 9 of 1000 both show "1%", but the bar moves from 0 px to 1 px.
 	f.reading = stats(40, 6, 1000)
 	f.clock.advance(ResumeGap)
-	if s, _ := f.shown(); s.MemBarPixels() != 0 {
-		t.Fatalf("bar = %d px", s.MemBarPixels())
+	if s, _ := f.shown(); s.MemBarPixels(barWidth) != 0 {
+		t.Fatalf("bar = %d px", s.MemBarPixels(barWidth))
 	}
 	before := f.notified
 	f.reading = stats(40, 9, 1000)
 	f.clock.advance(SampleEvery)
 	s, _ := f.shown()
-	if s.MemLabel() != "1%" || s.MemBarPixels() != 1 {
-		t.Errorf("label %q, bar %d px", s.MemLabel(), s.MemBarPixels())
+	if s.MemLabel() != "1%" || s.MemBarPixels(barWidth) != 1 {
+		t.Errorf("label %q, bar %d px", s.MemLabel(), s.MemBarPixels(barWidth))
 	}
 	if f.notified != before+1 {
 		t.Errorf("the bar width alone should notify once, got %d", f.notified-before)

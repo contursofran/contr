@@ -22,6 +22,7 @@ import (
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/prefs"
 	"github.com/contursofran/contr/internal/projects"
+	"github.com/contursofran/contr/internal/statedir"
 	"github.com/contursofran/contr/internal/updated"
 	"github.com/contursofran/contr/internal/usage"
 	"github.com/contursofran/contr/internal/widths"
@@ -238,7 +239,7 @@ func openWindow(icons bool) int {
 		frame.Updates = updateService()
 		frame.Relaunch = func() { mygo.App.Relaunch() }
 		// The note of the last install lives in contr's state folder (D209).
-		updatedPath := updated.Path(usage.StateDir())
+		updatedPath := updated.Path(statedir.Dir())
 		frame.LoadUpdated = func() (updated.Note, error) {
 			if updatedPath == "" {
 				return updated.Note{}, nil

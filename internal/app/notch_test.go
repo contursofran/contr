@@ -303,7 +303,7 @@ func notchFrame(t *testing.T) (*Frame, *ui.Tester, *source) {
 	t.Helper()
 	w := &fakeWindow{visible: true}
 	f := NewFrame()
-	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
+	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	src := &source{snap: agentstate.Snapshot{
 		Orchestrators: []agents.Worker{

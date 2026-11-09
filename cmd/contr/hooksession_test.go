@@ -3,7 +3,11 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/contursofran/contr/internal/session"
@@ -154,5 +158,38 @@ func TestPostToolArtifactTextBlocks(t *testing.T) {
 func TestPromptHookWorker(t *testing.T) {
 	if out := runSessionEnv(t, t.TempDir(), "prompt", `{"prompt":"fix the bug"}`, map[string]string{"CONTR_COORDINATOR": "c1"}); out != "" {
 		t.Fatalf("worker got %q", out)
+	}
+}
+
+func TestPostToolParallelKeepsAll(t *testing.T) {
+	dir := t.TempDir()
+	const n = 16
+	var wg sync.WaitGroup
+	for i := range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			in := fmt.Sprintf(`{"tool_name":"TaskCreate","tool_input":{"subject":"task %d"},"tool_response":{"task":{"id":"%d"}}}`, i, i)
+			env := map[string]string{"HC_TERMINAL_ID": "t1", "CONTR_STATE_DIR": dir}
+			var out bytes.Buffer
+			runHook([]string{"post-tool"}, strings.NewReader(in), &out, &out, nil, func(k string) string { return env[k] })
+			if out.Len() != 0 {
+				t.Errorf("output %q", out.String())
+			}
+		}()
+	}
+	wg.Wait()
+	if s := readSession(t, dir); len(s.Todos) != n {
+		t.Fatalf("kept %d of %d todos", len(s.Todos), n)
+	}
+}
+
+func TestPostToolOtherToolNoFiles(t *testing.T) {
+	dir := t.TempDir()
+	if _, e := runSession(t, dir, "post-tool", `{"tool_name":"mcp__claude-artifacts__guide","tool_input":{}}`); e != "" {
+		t.Fatalf("stderr %q", e)
+	}
+	if _, err := os.Stat(filepath.Join(dir, session.Dir)); !os.IsNotExist(err) {
+		t.Fatalf("an unrecorded tool made files: %v", err)
 	}
 }

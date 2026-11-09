@@ -271,7 +271,7 @@ func (w *fakeWindow) OnRestore(fn func()) func() {
 func TestAttachWiresTheStateToTheWindow(t *testing.T) {
 	w := &fakeWindow{visible: true}
 	f := NewFrame()
-	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
+	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	stop := f.Attach(w)
 	if f.Visibility == nil || f.Selection == nil || f.Toasts == nil {
@@ -302,7 +302,7 @@ func TestAttachTiesTheSamplersToTheWindowVisibility(t *testing.T) {
 	attach := func(visible bool) (*fakeWindow, func()) {
 		w := &fakeWindow{visible: visible}
 		f := NewFrame()
-		f.Host = host.New(func() (host.Stats, error) { reads <- struct{}{}; return host.Stats{}, nil }, nil)
+		f.Host = host.New(func() (host.Stats, error) { reads <- struct{}{}; return host.Stats{}, nil }, theme.MemBarWidth, nil)
 		f.Usage = usage.NewSampler(usage.Unread, nil)
 		return w, f.Attach(w)
 	}
@@ -333,7 +333,7 @@ func TestAttachTiesTheSamplersToTheWindowVisibility(t *testing.T) {
 func TestAttachWiresTheTerminalToTheWindowFocus(t *testing.T) {
 	w := &fakeWindow{visible: true, focused: true}
 	f := NewFrame()
-	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
+	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	stop := f.Attach(w)
 	if f.Slots.Terminal == nil {
@@ -416,7 +416,7 @@ func TestFrameReviewReplacesTerminal(t *testing.T) {
 func TestAttachStartsAndStopsTheAgentState(t *testing.T) {
 	w := &fakeWindow{visible: true}
 	f := NewFrame()
-	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
+	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	var notify func()
 	stopped := 0
@@ -425,8 +425,8 @@ func TestAttachStartsAndStopsTheAgentState(t *testing.T) {
 		return &source{snap: agentstate.Snapshot{Workers: []agents.Worker{{Name: "b1", Address: "a", Live: true}}}}, func() { stopped++ }
 	}
 	stop := f.Attach(w)
-	if f.Card == nil || f.Worker == nil {
-		t.Error("Attach should wire the questions card and the worker view")
+	if f.Card == nil {
+		t.Error("Attach should wire the questions card")
 	}
 	if f.SpacesList == nil || len(f.SpacesList.snapshot().Workers) != 1 {
 		t.Fatal("the sidebar list should read the snapshot of StartAgents")
@@ -445,7 +445,7 @@ func TestAttachStartsAndStopsTheAgentState(t *testing.T) {
 func TestAttachTiesTheAgentSourceToTheWindow(t *testing.T) {
 	w := &fakeWindow{visible: true}
 	f := NewFrame()
-	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
+	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	src := &source{}
 	f.StartAgents = func(func()) (AgentSource, func()) { return src, func() {} }
@@ -481,7 +481,7 @@ func TestAttachTiesTheAgentSourceToTheWindow(t *testing.T) {
 func TestAttachTellsAHiddenWindowToTheAgentSource(t *testing.T) {
 	w := &fakeWindow{visible: false}
 	f := NewFrame()
-	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
+	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	src := &source{}
 	f.StartAgents = func(func()) (AgentSource, func()) { return src, func() {} }
@@ -506,7 +506,7 @@ func (idleSource) Watch(context.Context) (<-chan hc.Event, func(), error) { retu
 func TestTheTerminalFollowsTheSelectedAgent(t *testing.T) {
 	w := &fakeWindow{visible: true}
 	f := NewFrame()
-	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
+	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	var asked []string
 	f.TerminalSource = func(addr string) ghostty.Source {

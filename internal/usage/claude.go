@@ -20,6 +20,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/contursofran/contr/internal/statedir"
 )
 
 // ClaudeFile is the usage file, under the state dir.
@@ -161,7 +163,7 @@ func readSnapshot(path string) *ClaudeSnapshot {
 // used. Bad input and failed saves are logged, not returned, so the status line
 // keeps working. It returns an error only when stdin or stdout fails.
 func RunStatusline(stdin io.Reader, stdout io.Writer, then []string) error {
-	return runWith(stdin, stdout, then, StateDir(), os.Getenv(EnvTerminal), uint64(time.Now().Unix()), chainTimeout)
+	return runWith(stdin, stdout, then, statedir.Dir(), os.Getenv(statedir.EnvTerminal), uint64(time.Now().Unix()), chainTimeout)
 }
 
 // runWith is RunStatusline with the state dir (empty for none), the hc

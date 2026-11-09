@@ -13,6 +13,7 @@ import (
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/app/state"
+	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/usage"
@@ -181,7 +182,7 @@ func TestTerminalStopClosesTheTerminal(t *testing.T) {
 func TestAHiddenWindowDoesNotRetryAndShowingItDoes(t *testing.T) {
 	w := &fakeWindow{visible: false}
 	f := NewFrame()
-	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
+	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	src := &scriptSource{err: &hc.Error{Kind: "unavailable", Message: "no core"}}
 	f.TerminalSource = func(string) ghostty.Source { return src }
