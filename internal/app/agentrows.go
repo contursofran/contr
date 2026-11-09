@@ -26,7 +26,7 @@ const (
 	// MenuCloseAgent stops the agent and removes its terminal (D219). The tab menu's Close has
 	// the same text.
 	MenuCloseAgent = "Close"
-	MenuOpenPR    = "Open PR"
+	MenuOpenPR     = "Open PR"
 )
 
 // AgentActions is what the context menu of an agent row calls: the agent
