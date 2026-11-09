@@ -74,7 +74,7 @@ func TestQuestionsCard(t *testing.T) {
 	}
 	defer cl.Close()
 
-	// A program named "claude" that prints a permission menu as Claude Code
+	// A program that prints a permission menu as Claude Code
 	// does, then says it is blocked.
 	src := filepath.Join(dir, "fake")
 	if err := os.MkdirAll(src, 0o755); err != nil {
@@ -96,7 +96,7 @@ func main() {
 	time.Sleep(time.Hour)
 }
 `
-	script := filepath.Join(dir, "claude")
+	script := filepath.Join(dir, "fakeagent")
 	for name, content := range map[string]string{"main.go": prog, "go.mod": "module fake\n\ngo 1.27.3\n"} {
 		if err := os.WriteFile(filepath.Join(src, name), []byte(content), 0o644); err != nil {
 			t.Fatal(err)
