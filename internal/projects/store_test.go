@@ -47,6 +47,11 @@ func TestSaveThenLoadRoundTrip(t *testing.T) {
 	if err := s.Save(p); err != nil {
 		t.Fatal(err)
 	}
+	if info, err := os.Stat(p); err != nil {
+		t.Fatal(err)
+	} else if info.Mode().Perm() != 0o600 {
+		t.Errorf("file mode = %v, want 0600", info.Mode().Perm())
+	}
 	got, err := Load(p)
 	if err != nil {
 		t.Fatal(err)

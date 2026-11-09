@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/contursofran/contr/internal/jsonfile"
 	"github.com/contursofran/contr/internal/statedir"
 )
 
@@ -105,19 +106,11 @@ func WriteSnapshot(dir string, snap *ClaudeSnapshot) (bool, error) {
 	if old := readSnapshot(path); old != nil && reflect.DeepEqual(old.Windows, snap.Windows) {
 		return false, nil
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return false, err
-	}
 	data, err := json.MarshalIndent(snap, "", "  ")
 	if err != nil {
 		return false, err
 	}
-	tmp := fmt.Sprintf("%s.%d.tmp", path, os.Getpid())
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return false, err
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
+	if err := jsonfile.Write(path, data, 0o644); err != nil {
 		return false, err
 	}
 	return true, nil

@@ -13,6 +13,11 @@ func TestSaveThenLoad(t *testing.T) {
 	if err := Save(path, Prefs{Appearance: mygo.ThemeLight}); err != nil {
 		t.Fatal(err)
 	}
+	if info, err := os.Stat(path); err != nil {
+		t.Fatal(err)
+	} else if info.Mode().Perm() != 0o600 {
+		t.Errorf("file mode = %v, want 0600", info.Mode().Perm())
+	}
 	got, err := Load(path)
 	if err != nil || got.Source() != mygo.ThemeLight {
 		t.Fatalf("Load = %+v, %v; want light", got, err)

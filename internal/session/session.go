@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	"github.com/contursofran/contr/internal/jsonfile"
 )
 
 // Dir is the folder of the session files, under the state dir.
@@ -179,20 +181,9 @@ func Update(stateDir, id string, f func(*Session) (bool, error)) error {
 
 func write(path string, s *Session) error {
 	s.Schema = Schema
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return err
 	}
-	tmp := fmt.Sprintf("%s.%d.tmp", path, os.Getpid())
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return err
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	return nil
+	return jsonfile.Write(path, data, 0o644)
 }

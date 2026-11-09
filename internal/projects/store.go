@@ -5,13 +5,14 @@ package projects
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
 	"slices"
 	"time"
+
+	"github.com/contursofran/contr/internal/jsonfile"
 )
 
 const version = 1
@@ -59,16 +60,13 @@ func Path() (string, error) {
 // error. A corrupt file gives an empty store and an error; the file stays
 // as it is until the next Save.
 func Load(path string) (*Store, error) {
-	data, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return &Store{}, nil
-	}
-	if err != nil {
-		return &Store{}, fmt.Errorf("projects: read %s: %w", path, err)
-	}
 	var f file
-	if err := json.Unmarshal(data, &f); err != nil {
-		return &Store{}, fmt.Errorf("projects: parse %s: %w", path, err)
+	found, err := jsonfile.Load(path, &f)
+	if err != nil {
+		return &Store{}, fmt.Errorf("projects: %w", err)
+	}
+	if !found {
+		return &Store{}, nil
 	}
 	if f.Version != version {
 		return &Store{}, fmt.Errorf("projects: %s has version %d, want %d", path, f.Version, version)
@@ -93,24 +91,8 @@ func (s *Store) Save(path string) error {
 	if err != nil {
 		return fmt.Errorf("projects: encode: %w", err)
 	}
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("projects: create folder: %w", err)
-	}
-	tmp, err := os.CreateTemp(dir, ".projects-*.tmp")
-	if err != nil {
-		return fmt.Errorf("projects: temp file: %w", err)
-	}
-	name := tmp.Name()
-	_, werr := tmp.Write(data)
-	cerr := tmp.Close()
-	if err := errors.Join(werr, cerr); err != nil {
-		os.Remove(name)
-		return fmt.Errorf("projects: write %s: %w", name, err)
-	}
-	if err := os.Rename(name, path); err != nil {
-		os.Remove(name)
-		return fmt.Errorf("projects: rename to %s: %w", path, err)
+	if err := jsonfile.Write(path, data, 0o600); err != nil {
+		return fmt.Errorf("projects: save: %w", err)
 	}
 	return nil
 }

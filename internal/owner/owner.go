@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"syscall"
 	"time"
+
+	"github.com/contursofran/contr/internal/jsonfile"
 )
 
 // Question is a decision that waits for the owner.
@@ -125,11 +127,7 @@ func (s *Store) update(f func(*State) error) error {
 	if err != nil {
 		return err
 	}
-	tmp := s.Path + ".tmp"
-	if err := os.WriteFile(tmp, append(data, '\n'), 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, s.Path)
+	return jsonfile.Write(s.Path, append(data, '\n'), 0o600)
 }
 
 // Ask adds a question and returns it with its id.
