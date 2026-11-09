@@ -22,7 +22,7 @@ import (
 
 // fakeClaude is a program that looks like Claude Code in a terminal: the welcome box, the
 // conversation, a status line and the prompt box. It tells hc its state with the OSC the hook
-// sends (argument 1: working, idle or blocked:kind=...:msg=..., which also prints a permission menu).
+// sends (last argument: working, idle or blocked:kind=...:msg=..., which also prints a permission menu).
 const fakeClaude = `package main
 
 import (
@@ -34,7 +34,7 @@ import (
 
 func main() {
 	cwd, _ := os.Getwd()
-	state := os.Args[1]
+	state := os.Args[len(os.Args)-1] // contr puts --settings before the profile arguments
 	fmt.Print("\n╭───────────────────────────────────────────────────╮\n")
 	fmt.Print("│ ✻ Welcome to Claude Code!                         │\n")
 	fmt.Print("│                                                   │\n")
