@@ -27,6 +27,17 @@ var (
 	retryMax  = 5 * time.Second
 )
 
+// actionLimit is the time limit of one action of the window on hc (D223):
+// Read, Send, SendKeys, Interrupt, Stop, Close and the message to a
+// coordinator. It includes a dial when the connection ended. 10 s, as the
+// hooks. A variable so tests can shorten it.
+var actionLimit = 10 * time.Second
+
+// action returns a context that ends after actionLimit.
+func action() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), actionLimit)
+}
+
 // retryDelay is the wait after failures failed watches in a row.
 func retryDelay(failures int) time.Duration {
 	d := retryBase
@@ -435,7 +446,9 @@ func (m *Model) send(coordinator, text string) error {
 	if coordinator == "" {
 		return nil
 	}
-	if err := m.mgr.Send(context.Background(), coordinator, text); err != nil {
+	ctx, cancel := action()
+	defer cancel()
+	if err := m.mgr.Send(ctx, coordinator, text); err != nil {
 		m.mu.Lock()
 		m.actProb = "answer saved; coordinator not reached: " + err.Error()
 		m.mu.Unlock()
@@ -458,34 +471,46 @@ func (m *Model) ClearDone() {
 
 // Read returns the last lines of a worker's terminal.
 func (m *Model) Read(name string, lines int) (string, error) {
-	return m.mgr.Read(context.Background(), name, lines)
+	ctx, cancel := action()
+	defer cancel()
+	return m.mgr.Read(ctx, name, lines)
 }
 
 // Send types text into a worker's terminal and presses Enter.
 func (m *Model) Send(name, text string) error {
-	return m.mgr.Send(context.Background(), name, text)
+	ctx, cancel := action()
+	defer cancel()
+	return m.mgr.Send(ctx, name, text)
 }
 
 // SendKeys presses raw keys in a worker's terminal, with no Enter.
 func (m *Model) SendKeys(name string, keys []byte) error {
-	return m.mgr.SendKeys(context.Background(), name, keys)
+	ctx, cancel := action()
+	defer cancel()
+	return m.mgr.SendKeys(ctx, name, keys)
 }
 
 // Interrupt sends the interrupt key to a worker's terminal.
 func (m *Model) Interrupt(name string) error {
-	_, err := m.mgr.Interrupt(context.Background(), name)
+	ctx, cancel := action()
+	defer cancel()
+	_, err := m.mgr.Interrupt(ctx, name)
 	return err
 }
 
 // Stop ends a worker's program and keeps the finished terminal.
 func (m *Model) Stop(name string) error {
-	return m.mgr.Stop(context.Background(), name, true)
+	ctx, cancel := action()
+	defer cancel()
+	return m.mgr.Stop(ctx, name, true)
 }
 
 // Close stops a terminal and removes it from hc, so the watch drops it. It
 // blocks: call it off the UI thread.
 func (m *Model) Close(name string) error {
-	return m.mgr.Stop(context.Background(), name, false)
+	ctx, cancel := action()
+	defer cancel()
+	return m.mgr.Stop(ctx, name, false)
 }
 
 // LiveWorkersOf is the number of live workers whose parent is addr.
