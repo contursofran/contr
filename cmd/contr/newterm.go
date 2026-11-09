@@ -20,14 +20,14 @@ func terminalName(now time.Time, n uint32) string {
 
 // openTerminal starts a login shell in a plain hc terminal for project, in
 // dir, on a connection of its own (D82), and returns the terminal's address.
-func openTerminal(ctx context.Context, getenv func(string) string, dial func(context.Context, func(string) string) (agentsCore, error), project, dir string, now time.Time) (string, error) {
+func openTerminal(ctx context.Context, getenv func(string) string, dial func(context.Context, func(string) string) (agentsCore, error), project, dir string, now time.Time, colors *agents.Colors) (string, error) {
 	core, err := dial(ctx, getenv)
 	if err != nil {
 		return "", err
 	}
 	defer core.Close()
 	w, err := agents.New(core, agents.DefaultConfig()).OpenTerminal(ctx, agents.TerminalSpec{
-		Name: terminalName(now, termCount.Add(1)), Project: project, Dir: dir,
+		Name: terminalName(now, termCount.Add(1)), Project: project, Dir: dir, Colors: colors,
 	})
 	if err != nil {
 		return "", err

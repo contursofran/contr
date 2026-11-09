@@ -27,7 +27,7 @@ Plan meters, in the sidebar foot row (D196):
 | Meter | width 44px, the meter above |
 | Value | mono `value`, `ink-62` |
 
-"Claude ▬ 38%  Codex ▬ 12%", then free space, then the Settings button.
+"Claude ▬ 38%  Codex ▬ 12%", then free space, then the Settings button. The foot has padding `space-10` left and right, so the meters and the button have the same inset; a divider `hairline` with the same insets is above it, and the row has `space-6` above and below (D201).
 
 ## States
 
@@ -48,10 +48,37 @@ Plan meters, in the sidebar foot row (D196):
   agent in `usage/context/<HC_TERMINAL_ID>.json`. The sampler reads the folder
   with the plans. The line shows the file of the selected orchestrator, worker
   or plain terminal as "90k of 200k  45%", and the meter fills to that percent.
-  No file, no selection or a worktree row: "—" and an empty meter. The
-  context is up to one sampler period (60 s) old.
+  The context is up to one sampler period (60 s) old.
+- Context fallback (D205): when the terminal has no file, the line uses the
+  labels that the kit's Stop hook puts on the terminal after each turn:
+  `contr.context` (tokens) and `contr.context-limit`. That limit is the
+  compaction window (the size where Claude Code compacts), not the model's
+  window, so the percent is of the compaction window: "90k of 160k  56%".
+  A label that is missing or not a positive integer is no data. The labels
+  are as old as the last turn.
+- No file and no labels, no selection or a worktree row: "—" and an empty
+  meter.
 - Plans: `internal/usage` on a goroutine; read again on a status line or log
   change. The view reads the sampler's last result and touches no file.
+- Claude plan (D203): Claude Code gives the plan limits (`rate_limits`) only
+  to its status line command. Each Claude session that contr starts (workers
+  and "New orchestrator") gets `--settings` with a `statusLine` that runs
+  `<contr> statusline`. That command saves the windows to `usage/claude.json`
+  and the context, and prints a short line ("opus · 90k of 200k"). A Claude
+  session that contr did not start gives plan data only when the owner's own
+  status line runs `contr statusline`.
+- Codex plan (D210): contr starts `codex app-server` (JSON-RPC over stdio,
+  one JSON message per line), sends `initialize`, the `initialized`
+  notification and `account/rateLimits/read`, then closes stdin and waits for
+  the process to end. The `codex` limit (`rateLimitsByLimitId.codex`, else
+  `rateLimits`) gives the windows: `primary` and `secondary`, `usedPercent`
+  and `resetsAt` (Unix seconds). A read that takes more than 10 s is killed.
+  contr reads no Codex file for this. `codex` comes from PATH, else from the
+  PATH of the owner's interactive login shell (read once per run), so an app
+  opened from Finder finds it too. No `codex`, an error answer (not logged in),
+  a bad answer or a timeout gives no data and is logged once per kind until a
+  read succeeds. Then the newest rollout file under `sessions/` is read, for
+  older Codex versions.
 
 ## Keys and focus
 
@@ -72,7 +99,7 @@ Plan meters, in the sidebar foot row (D196):
 ## Build in MyGo
 
 - `ui.Meter` for each bar (role meter, value 0–100). Style it with the tokens.
-- Data: `internal/usage` (Claude status line, Codex logs).
+- Data: `internal/usage` (Claude status line, `codex app-server`, Codex logs).
 
 ## Do and do not
 
@@ -86,7 +113,7 @@ Plan meters, in the sidebar foot row (D196):
 
 ## Tests
 
-- View: values, no data, 100%.
+- View: values, no data, 100%; the file wins over the labels; labels without a file.
 - The files panel has only Context; the sidebar foot has Claude, then Codex, then the gear, in one row; the icon column has no plan meters.
 
 ## Replaces

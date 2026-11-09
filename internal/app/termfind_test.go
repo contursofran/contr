@@ -9,9 +9,11 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/titlebar"
 	"github.com/contursofran/contr/internal/hc"
 )
 
@@ -36,6 +38,7 @@ func (*recStream) Err() error                      { return nil }
 func (s *recStream) Write(p []byte) (int, error)   { s.log.add(p); return len(p), nil }
 func (*recStream) Resize(uint16, uint16) error     { return nil }
 func (*recStream) Focus(bool) error                { return nil }
+func (*recStream) SetDisplay(hc.Display) error     { return nil }
 func (s *recStream) Close() error                  { s.once.Do(func() { close(s.ev) }); return nil }
 
 type recSource struct{ log *inputLog }
@@ -71,7 +74,7 @@ func findFrameLog(t *testing.T) (*Frame, *fakeWindow, *ui.Tester, *inputLog) {
 	t.Helper()
 	f, w, _, _ := terminalFrame(t, nil)
 	log := &inputLog{}
-	f.TerminalSource = func(string) ghostty.Source { return recSource{log} }
+	f.deps.TerminalSource = func(string) ghostty.Source { return recSource{log} }
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t2"})
 	if f.term == nil {
 		t.Fatal("no terminal after the selection")
@@ -92,7 +95,7 @@ func settle(w *fakeWindow, tt *ui.Tester) {
 
 func TestFindBarIsClosedByDefaultAndKeysDoNothing(t *testing.T) {
 	f, w, tt := findFrame(t)
-	if !absent(tt, LabelFind) {
+	if !apptest.Absent(tt, LabelFind) {
 		t.Fatal("the find bar shows by default")
 	}
 	// With the bar closed, the layer takes no key: next, previous, Enter and Escape do nothing.
@@ -107,7 +110,7 @@ func TestFindBarIsClosedByDefaultAndKeysDoNothing(t *testing.T) {
 	if st := f.term.SearchStatus(); st.Text != "" {
 		t.Errorf("the terminal searches %q with the bar closed", st.Text)
 	}
-	if !absent(tt, LabelFind) {
+	if !apptest.Absent(tt, LabelFind) {
 		t.Error("a key opened the find bar")
 	}
 }
@@ -116,7 +119,7 @@ func TestCmdFOpensTheFindBar(t *testing.T) {
 	f, w, tt := findFrame(t)
 	tt.Key(ui.Cmd, ui.KeyF)
 	settle(w, tt)
-	if !f.find.open || absent(tt, LabelFind) {
+	if !f.find.open || apptest.Absent(tt, LabelFind) {
 		t.Fatalf("⌘F did not open the find bar; open %v, texts %q", f.find.open, tt.Texts())
 	}
 }
@@ -125,7 +128,7 @@ func TestCmdFDoesNothingWithoutATerminal(t *testing.T) {
 	f, _, tt, _ := terminalFrame(t, nil)
 	tt.Key(ui.Cmd, ui.KeyF)
 	tt.Frame()
-	if f.find.open || !absent(tt, LabelFind) {
+	if f.find.open || !apptest.Absent(tt, LabelFind) {
 		t.Error("⌘F opened the find bar with no terminal")
 	}
 }
@@ -202,7 +205,7 @@ func TestEscapeClosesTheFindBarEndsTheSearchAndFocusesTheTerminal(t *testing.T) 
 	}
 	tt.Key(0, ui.KeyEscape)
 	settle(w, tt)
-	if f.find.open || !absent(tt, LabelFind) {
+	if f.find.open || !apptest.Absent(tt, LabelFind) {
 		t.Errorf("Escape did not close the bar; open %v", f.find.open)
 	}
 	if st := f.term.SearchStatus(); st.Text != "" {
@@ -221,20 +224,20 @@ func TestSearchButtonOpensTheFindBarAndShowsItsKey(t *testing.T) {
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t2"})
 	tt := ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)
 	settle(w, tt)
-	if !absent(tt, LabelFind) {
+	if !apptest.Absent(tt, LabelFind) {
 		t.Fatal("the find bar shows before the click")
 	}
-	r := box(t, tt, LabelSearch)
+	r := apptest.Box(t, tt, titlebar.LabelSearch)
 	tt.Move(r.X+r.W/2, r.Y+r.H/2)
 	tt.Advance(time.Second)
 	if !tt.HasText("Search  ⌘F") {
 		t.Errorf("no tooltip \"Search  ⌘F\"; texts %q", tt.Texts())
 	}
-	if err := tt.Click(LabelSearch); err != nil {
+	if err := tt.Click(titlebar.LabelSearch); err != nil {
 		t.Fatal(err)
 	}
 	settle(w, tt)
-	if !f.find.open || absent(tt, LabelFind) {
+	if !f.find.open || apptest.Absent(tt, LabelFind) {
 		t.Errorf("the Search button did not open the find bar; open %v", f.find.open)
 	}
 }
@@ -246,7 +249,7 @@ func TestSelectingAnotherTerminalClosesTheFindBar(t *testing.T) {
 	settle(w, tt)
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t3"})
 	settle(w, tt)
-	if f.find.open || f.find.query != "" || !absent(tt, LabelFind) {
+	if f.find.open || f.find.query != "" || !apptest.Absent(tt, LabelFind) {
 		t.Errorf("the find bar stayed with another terminal: %+v", f.find)
 	}
 }

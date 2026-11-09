@@ -10,11 +10,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -39,6 +44,12 @@ const (
 	// session that ran /contr:orchestrate, so its row shows that it
 	// orchestrates before it has workers (D191).
 	LabelOrchestrating = "contr.orchestrating"
+	// LabelContext and LabelContextLimit are set by the kit's Stop hook on a
+	// Claude Code session's own terminal: the context size in tokens and the
+	// window Claude Code compacts at (D189). The Context meter falls back to
+	// them when the session runs no status line (D205).
+	LabelContext      = "contr.context"
+	LabelContextLimit = "contr.context-limit"
 )
 
 // RoleOrchestrator is the role label of an orchestrator agent.
@@ -102,7 +113,19 @@ type Config struct {
 	Setup    map[string]string  `json:"setup,omitempty"`
 	// Flow is how the orchestrator takes an issue to a merge (D185).
 	Flow Flow `json:"flow"`
+	// Source tells where the profiles come from: the file that LoadConfig
+	// read, with "(not found)" after it when the file is missing. Spawn puts
+	// it in the "no profile" error, so the owner sees which file was read
+	// (#484).
+	Source string `json:"-"`
+	// Notice is a note for the owner that LoadConfig made while it read the
+	// file, or "". Today it says the file is in the old Swift format (D206).
+	Notice string `json:"-"`
 }
+
+// OldFormatNotice is the Notice for an agents.json that has a presets key
+// and no profiles key: the file of the old Swift app.
+const OldFormatNotice = "agents.json is in the old format (presets); its presets are ignored and the default profiles apply"
 
 // EnvCoordinator holds the address of the terminal that started a worker, so
 // the worker can report with `hc send "$CONTR_COORDINATOR" …`.
@@ -114,10 +137,12 @@ func DefaultConfig() Config {
 		return Profile{Argv: []string{"claude", "--model", model, "--effort", effort, "--permission-mode", "auto"}}
 	}
 	return Config{Flow: DefaultFlow(), Profiles: map[string]Profile{
-		"builder":  claude("sonnet", "medium"),
-		"planner":  claude("opus", "low"),
-		"reviewer": claude("opus", "low"),
-		"debugger": claude("opus", "xhigh"),
+		"orchestrator": claude("opus", "medium"),
+		"builder":      claude("sonnet", "medium"),
+		"planner":      claude("opus", "low"),
+		"reviewer":     claude("opus", "low"),
+		"debugger":     claude("opus", "xhigh"),
+		"explorer":     claude("sonnet", "medium"),
 	}}
 }
 
@@ -131,6 +156,16 @@ func (c Config) ModelOf(profile string) string {
 // in its argv. It is "" for an unknown profile or one with no --effort.
 func (c Config) EffortOf(profile string) string {
 	return flagValue(c.Profiles[profile].Argv, "--effort")
+}
+
+// noProfile is the error for a profile that c does not have. It names the
+// profiles file that was read and the profiles that c has.
+func (c Config) noProfile(name string) error {
+	names := slices.Sorted(maps.Keys(c.Profiles))
+	if c.Source == "" {
+		return fmt.Errorf("agents: no profile %q; profiles: %s", name, strings.Join(names, ", "))
+	}
+	return fmt.Errorf("agents: no profile %q in %s; profiles: %s", name, c.Source, strings.Join(names, ", "))
 }
 
 // flagValue is the value after flag (or flag=) in argv, or "".
@@ -148,11 +183,15 @@ func flagValue(argv []string, flag string) string {
 
 // LoadConfig reads a JSON config file over the defaults: a profile in the file
 // replaces the default of the same name, and a flow key missing from the
-// file's flow keeps its default. A missing file gives the defaults.
+// file's flow keeps its default. A missing file gives the defaults. A file
+// with a presets key and no profiles key is the old Swift format: it loads
+// with the defaults, Notice says so, and the file is not changed.
 func LoadConfig(path string) (Config, error) {
 	cfg := DefaultConfig()
+	cfg.Source = path
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
+		cfg.Source = path + " (not found)"
 		return cfg, nil
 	}
 	if err != nil {
@@ -161,6 +200,14 @@ func LoadConfig(path string) (Config, error) {
 	file := Config{Flow: DefaultFlow()}
 	if err := json.Unmarshal(data, &file); err != nil {
 		return cfg, fmt.Errorf("agents: %s: %w", path, err)
+	}
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(data, &keys); err == nil {
+		_, presets := keys["presets"]
+		_, profiles := keys["profiles"]
+		if presets && !profiles {
+			cfg.Notice = OldFormatNotice
+		}
 	}
 	if file.Kit != "" {
 		cfg.Kit = file.Kit
@@ -185,10 +232,33 @@ type Spec struct {
 	Profile  string
 	Role     string // defaults to the profile name
 	Issue    string
-	Worktree string // the working folder
-	Task     string // the first message, if any
-	Parent   string // hc terminal that gets notes about the worker; empty for none
-	Project  string // the project name; no control characters
+	Worktree string  // the working folder
+	Task     string  // the first message, if any
+	Parent   string  // hc terminal that gets notes about the worker; empty for none
+	Project  string  // the project name; no control characters
+	Colors   *Colors // the terminal's colors for the program's color queries; nil for hc's default
+}
+
+// Colors are the foreground, background and cursor colors of the terminal
+// theme, each "#rrggbb". hc answers a program's color queries (OSC 10, 11,
+// 12) with them, so Claude Code's auto theme sees the right background.
+type Colors struct{ FG, BG, Cursor string }
+
+// display is the display of terminal.run, or nil for no colors.
+func (c *Colors) display() map[string]any {
+	if c == nil {
+		return nil
+	}
+	d := map[string]any{}
+	for k, v := range map[string]string{"fg": c.FG, "bg": c.BG, "cursor": c.Cursor} {
+		if v != "" {
+			d[k] = v
+		}
+	}
+	if len(d) == 0 {
+		return nil
+	}
+	return d
 }
 
 // Worker is one worker as hc reports it.
@@ -229,6 +299,12 @@ type Worker struct {
 	// Orchestrating is true when the kit's Stop hook saw /contr:orchestrate
 	// in the session (LabelOrchestrating, D191).
 	Orchestrating bool `json:"orchestrating,omitempty"`
+	// ContextTokens and ContextLimit are the context size and the compaction
+	// window that the kit's Stop hook put on the terminal (LabelContext,
+	// LabelContextLimit). Both are zero when a label is missing or not a
+	// positive integer (D205).
+	ContextTokens uint64 `json:"context_tokens,omitempty"`
+	ContextLimit  uint64 `json:"context_limit,omitempty"`
 	// Task is what a worker is doing, for line 1 of its row: the cleaned
 	// terminal title. Set by the agent model; empty when the title is not
 	// usable (D169).
@@ -298,6 +374,7 @@ func (t terminal) worker() Worker {
 
 		Orchestrating: t.Labels[LabelOrchestrating] != "",
 	}
+	w.ContextTokens, w.ContextLimit = contextLabels(t.Labels)
 	if t.Name != nil {
 		w.Name = *t.Name
 	}
@@ -346,7 +423,7 @@ func (t terminal) runsClaude() bool {
 	if t.Status != nil || t.claudeInFront() {
 		return true
 	}
-	return len(t.Argv) > 0 && filepath.Base(t.Argv[0]) == "claude"
+	return isClaude(program(t.Argv))
 }
 
 // claudeInFront tells if Claude Code is the foreground program, by name or
@@ -359,20 +436,32 @@ func (t terminal) claudeInFront() bool {
 	return n == "claude" || versionName.MatchString(n)
 }
 
-// command is the foreground program's name, else the base of argv[0], or
-// of the agent's argv[0] after a setup wrapper.
+// command is the foreground program's name, else the base of the agent's
+// argv[0] after the setup and clean wrappers.
 func (t terminal) command() string {
 	if t.Foreground != nil && t.Foreground.Name != "" {
 		return t.Foreground.Name
 	}
-	argv := t.Argv
-	if len(argv) > 5 && argv[3] == setupName {
-		argv = argv[5:]
-	}
-	if len(argv) > 0 {
+	if argv := program(t.Argv); len(argv) > 0 {
 		return filepath.Base(argv[0])
 	}
 	return ""
+}
+
+// program returns argv less the setup wrapper (withSetup) and the clean
+// wrapper (hc.CleanArgv), in any nesting.
+func program(argv []string) []string {
+	for {
+		if len(argv) > 5 && argv[3] == setupName {
+			argv = argv[5:]
+			continue
+		}
+		inner, ok := hc.UncleanArgv(argv)
+		if !ok {
+			return argv
+		}
+		argv = inner
+	}
 }
 
 // Orchestrator tells if the worker is an orchestrator.
@@ -400,6 +489,9 @@ type Manager struct {
 
 	getenv func(string) string // reads the environment; tests replace it
 	git    git                 // runs git; tests replace it
+
+	// exe is the contr binary that Claude's status line runs; empty for none.
+	exe string
 }
 
 // New returns a manager on core with the profiles of cfg. A relative kit
@@ -410,14 +502,35 @@ func New(core Core, cfg Config) *Manager {
 			cfg.Kit = abs
 		}
 	}
-	return &Manager{core: core, cfg: cfg, now: time.Now, getenv: os.Getenv, git: runGit}
+	return &Manager{core: core, cfg: cfg, now: time.Now, getenv: os.Getenv, git: runGit, exe: contrExe()}
+}
+
+// contrExe is the absolute path of the running contr binary, found once; ""
+// when it cannot be found.
+var contrExe = sync.OnceValue(func() string {
+	exe, err := os.Executable()
+	if err != nil {
+		slog.Warn("unable to find the contr binary; Claude sessions get no status line", "err", err)
+		return ""
+	}
+	if abs, err := filepath.Abs(exe); err == nil {
+		return abs
+	}
+	return exe
+})
+
+// WithExecutable sets the contr binary path that Claude's status line runs
+// (empty for none) and returns m. New sets it from os.Executable.
+func (m *Manager) WithExecutable(path string) *Manager {
+	m.exe = path
+	return m
 }
 
 // Spawn starts a worker and returns it.
 func (m *Manager) Spawn(ctx context.Context, s Spec) (Worker, error) {
 	p, ok := m.cfg.Profiles[s.Profile]
 	if !ok {
-		return Worker{}, fmt.Errorf("agents: no profile %q", s.Profile)
+		return Worker{}, m.cfg.noProfile(s.Profile)
 	}
 	if s.Name == "" {
 		return Worker{}, errors.New("agents: a worker needs a name")
@@ -451,6 +564,11 @@ func (m *Manager) Spawn(ctx context.Context, s Spec) (Worker, error) {
 	if s.Task != "" {
 		argv = append(argv, s.Task)
 	}
+	// A Claude worker starts without the Claude Code session variables of
+	// the core's environment, so Claude Code saves its transcript (D216).
+	if isClaude(argv) {
+		argv = hc.CleanArgv(argv)
+	}
 	env := map[string]string{}
 	if setup, main := m.setupFor(ctx, s.Worktree); setup != "" {
 		argv = withSetup(setup, argv)
@@ -465,6 +583,9 @@ func (m *Manager) Spawn(ctx context.Context, s Spec) (Worker, error) {
 	}
 	if len(env) > 0 {
 		params["env"] = env
+	}
+	if d := s.Colors.display(); d != nil {
+		params["display"] = d
 	}
 	if s.Parent != "" {
 		params["parent"] = s.Parent
@@ -481,9 +602,10 @@ func (m *Manager) Spawn(ctx context.Context, s Spec) (Worker, error) {
 // TerminalSpec describes a plain terminal.
 type TerminalSpec struct {
 	Name    string
-	Project string // the open project; empty for none
-	Dir     string // the start folder; empty for the core's default
-	Shell   string // empty for $SHELL, then /bin/zsh
+	Project string  // the open project; empty for none
+	Dir     string  // the start folder; empty for the core's default
+	Shell   string  // empty for $SHELL, then /bin/zsh
+	Colors  *Colors // as Spec.Colors
 }
 
 // OpenTerminal starts a login shell in an hc terminal and returns it. The
@@ -511,6 +633,9 @@ func (m *Manager) OpenTerminal(ctx context.Context, s TerminalSpec) (Worker, err
 	if s.Dir != "" {
 		params["cwd"] = s.Dir
 	}
+	if d := s.Colors.display(); d != nil {
+		params["display"] = d
+	}
 	var raw json.RawMessage
 	if err := m.core.Call(ctx, "terminal.run", params, &raw); err != nil {
 		return Worker{}, err
@@ -518,18 +643,66 @@ func (m *Manager) OpenTerminal(ctx context.Context, s TerminalSpec) (Worker, err
 	return decodeWorker(raw)
 }
 
-// agentArgv returns the profile's command. A claude command whose agent
-// (Profile.Agent, else the profile name) has a definition in the kit gets
-// `--plugin-dir <kit> --agent contr:<agent>` after the program name.
+// agentArgv returns the profile's command. With a kit set, a claude command
+// gets `--plugin-dir <kit>` after the program name, unless it has
+// `--plugin-dir` already (D211). When its agent (Profile.Agent, else the
+// profile name) has a definition in the kit, it also gets
+// `--agent contr:<agent>`. Every claude command gets `--settings` with a
+// status line that runs `contr statusline`, unless it has `--settings`
+// already (D203).
 func (m *Manager) agentArgv(agent string, argv []string) []string {
 	out := append([]string(nil), argv...)
-	if m.cfg.Kit == "" || len(out) == 0 || filepath.Base(out[0]) != "claude" {
+	if !isClaude(out) {
 		return out
 	}
-	if _, err := os.Stat(filepath.Join(m.cfg.Kit, "agents", agent+".md")); err != nil {
-		return out
+	head := []string{out[0]}
+	if m.cfg.Kit != "" {
+		if !hasFlag(out[1:], "--plugin-dir") {
+			head = append(head, "--plugin-dir", m.cfg.Kit)
+		}
+		if _, err := os.Stat(filepath.Join(m.cfg.Kit, "agents", agent+".md")); err == nil {
+			head = append(head, "--agent", "contr:"+agent)
+		}
 	}
-	return append([]string{out[0], "--plugin-dir", m.cfg.Kit, "--agent", "contr:" + agent}, out[1:]...)
+	if m.exe != "" && !hasFlag(out[1:], "--settings") {
+		if js, err := statuslineSettings(m.exe); err != nil {
+			slog.Warn("unable to build the status line settings", "err", err)
+		} else {
+			head = append(head, "--settings", js)
+		}
+	}
+	return append(head, out[1:]...)
+}
+
+// isClaude tells whether argv runs the claude command.
+func isClaude(argv []string) bool {
+	return len(argv) > 0 && filepath.Base(argv[0]) == "claude"
+}
+
+// hasFlag reports whether args set flag, as `flag v` or `flag=v`.
+func hasFlag(args []string, flag string) bool {
+	for _, a := range args {
+		if a == flag || strings.HasPrefix(a, flag+"=") {
+			return true
+		}
+	}
+	return false
+}
+
+// statuslineSettings is the --settings JSON that makes Claude Code run
+// `<exe> statusline` as its status line. exe is quoted for a POSIX shell.
+func statuslineSettings(exe string) (string, error) {
+	type statusLine struct {
+		Type    string `json:"type"`
+		Command string `json:"command"`
+	}
+	b, err := json.Marshal(map[string]statusLine{"statusLine": {Type: "command", Command: shellQuote(exe) + " statusline"}})
+	return string(b), err
+}
+
+// shellQuote quotes s as one word for a POSIX shell.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // List returns the workers, sorted by name. With all, finished ones too.
@@ -578,7 +751,7 @@ func (m *Manager) Send(ctx context.Context, name, text string) error {
 // A relative kit path is made absolute, as in New.
 func (m *Manager) WithConfig(cfg Config) *Manager {
 	c := New(m.core, cfg)
-	c.now, c.getenv = m.now, m.getenv
+	c.now, c.getenv, c.exe = m.now, m.getenv, m.exe
 	return c
 }
 
@@ -749,6 +922,17 @@ func sortWorkers(ws []Worker) {
 }
 
 // orText is s, else other when s is empty.
+// contextLabels reads LabelContext and LabelContextLimit. Both must be
+// positive integers; else it gives no data (0, 0).
+func contextLabels(labels map[string]string) (tokens, limit uint64) {
+	t, errT := strconv.ParseUint(labels[LabelContext], 10, 64)
+	l, errL := strconv.ParseUint(labels[LabelContextLimit], 10, 64)
+	if errT != nil || errL != nil || t == 0 || l == 0 {
+		return 0, 0
+	}
+	return t, l
+}
+
 func orText(s, other string) string {
 	if s != "" {
 		return s

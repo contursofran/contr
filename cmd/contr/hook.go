@@ -19,7 +19,7 @@ import (
 
 const hookUsage = `Usage:
   contr hook stop            the kit's Stop hook
-  contr hook session-start   the kit's SessionStart hook (matcher compact)
+  contr hook session-start   the kit's SessionStart hook (startup, compact)
   contr hook post-tool       the kit's PostToolUse hook (todos, artifacts)
   contr hook prompt          the kit's UserPromptSubmit hook
 
@@ -27,7 +27,9 @@ Claude Code runs them and gives them the hook input on stdin.
 
 stop, in a worker (CONTR_COORDINATOR is set): a turn that sent no report
 with hc send gets one, "ended its turn without a report. Last words: …",
-sent to the coordinator. It never stops the turn.
+sent to the coordinator. When Claude Code saved no transcript, it cannot
+tell whether the turn sent one: it sends "ended its turn; it may have sent a
+report already …" with the last words. It never stops the turn.
 
 stop, in a coordinator (a session that ran /contr:orchestrate, or an hc
 terminal with role orchestrator): once the context passes CONTR_SAVE_AT
@@ -37,9 +39,11 @@ In any hc session that is not a worker it also labels the terminal with the
 context size (contr.context, contr.context-limit) for the status strip, and
 with the model and effort (contr.model, contr.effort) for the sidebar row.
 
-session-start, after a compaction in a coordinator: prints the playbook,
-the state file to read, the live workers it started, its open owner
-items and the flow (contr agents flow), which Claude Code adds to the new context.
+session-start, at startup in an hc terminal with role orchestrator (no
+transcript yet, so only the role counts), and after a compaction in a
+coordinator: prints the playbook, the state file to read (at startup, only
+when it exists), the live workers it started, its open owner items and the
+flow (contr agents flow), which Claude Code adds to the new context.
 
 post-tool and prompt run only in an hc terminal (HC_TERMINAL_ID). post-tool
 saves the todo list (TodoWrite, TaskCreate, TaskUpdate) and the artifacts
@@ -132,11 +136,14 @@ func runHook(args []string, stdin io.Reader, stdout, stderr io.Writer, dial func
 	return 0
 }
 
-// workerStop sends the coordinator a report for a turn that sent none.
+// workerStop sends the coordinator a report for a turn that sent none. With
+// no transcript file (Claude Code saved none), it cannot tell whether the
+// turn sent one, so it sends a report that says it may repeat one (D216).
 func (h *hook) workerStop() error {
 	coordinator := h.getenv(agents.EnvCoordinator)
 	turn, err := readTurn(h.in.TranscriptPath)
-	if err != nil {
+	noTranscript := errors.Is(err, os.ErrNotExist)
+	if err != nil && !noTranscript {
 		return err
 	}
 	if turn.Reported {
@@ -147,6 +154,9 @@ func (h *hook) workerStop() error {
 		said = turn.Said
 	}
 	text := missedReport(said, h.in.Cwd)
+	if noTranscript {
+		text = unsureReport(said, h.in.Cwd)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -163,12 +173,16 @@ func (h *hook) workerStop() error {
 }
 
 // coordinatorStop asks a coordinator, once per compaction, to save its state
-// when the context nears the compaction window.
+// when the context nears the compaction window. With no transcript file it
+// does nothing (D216).
 func (h *hook) coordinatorStop() error {
 	if h.in.StopHookActive || h.in.TranscriptPath == "" {
 		return nil
 	}
 	tokens, model, err := agents.ContextAndModel(h.in.TranscriptPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
@@ -195,6 +209,9 @@ func (h *hook) coordinatorStop() error {
 
 // sessionStart gives a coordinator its playbook and state after a compaction.
 func (h *hook) sessionStart() error {
+	if h.in.Source == "startup" {
+		return h.startup()
+	}
 	if h.in.Source != "" && h.in.Source != "compact" {
 		return nil
 	}
@@ -205,6 +222,21 @@ func (h *hook) sessionStart() error {
 		return err
 	}
 	_, err = io.WriteString(h.stdout, h.restoreText())
+	return err
+}
+
+// startup gives a new session the playbook when its hc terminal has role
+// orchestrator (D202). A new session has no transcript, so only the role
+// counts. Nothing is cleared or labeled: the session is new.
+func (h *hook) startup() error {
+	if h.getenv("HC_TERMINAL_ID") == "" {
+		return nil
+	}
+	orch, err := h.orchestratorRole()
+	if err != nil || !orch {
+		return err
+	}
+	_, err = io.WriteString(h.stdout, h.startupText())
 	return err
 }
 
@@ -320,6 +352,12 @@ func (h *hook) coordinator() (bool, error) {
 			return true, nil
 		}
 	}
+	return h.orchestratorRole()
+}
+
+// orchestratorRole tells whether the session's hc terminal has role
+// orchestrator.
+func (h *hook) orchestratorRole() (bool, error) {
 	self := h.getenv("HC_TERMINAL_ID")
 	if self == "" {
 		return false, nil
@@ -346,6 +384,27 @@ func (h *hook) restoreText() string {
 	fmt.Fprintf(&b, "contr: the conversation was compacted. You are the coordinator, and the playbook follows again.\n")
 	fmt.Fprintf(&b, "First read %s: you wrote it before the compaction.\n\n", filepath.Join(h.in.Cwd, stateFile))
 	// The lists come before the playbook, so a cut takes only playbook text.
+	b.WriteString(h.workersText())
+	b.WriteString("\n")
+	b.WriteString(h.ownerText())
+	b.WriteString("\n")
+	b.WriteString(flowText(h.getenv))
+	b.WriteString("\nThe playbook:\n\n")
+	b.WriteString(h.playbook())
+	return cut(b.String(), restoreMax)
+}
+
+// startupText is what a new coordinator gets: who it is, the state file when
+// one exists, its live workers, its open owner items, the flow and the
+// playbook, cut to restoreMax characters.
+func (h *hook) startupText() string {
+	var b strings.Builder
+	b.WriteString("contr: you are the coordinator of this project; the owner gives the goal in the next message.\n")
+	state := filepath.Join(h.in.Cwd, stateFile)
+	if _, err := os.Stat(state); err == nil {
+		fmt.Fprintf(&b, "First read %s: an earlier coordinator of this project wrote it.\n", state)
+	}
+	b.WriteString("\n")
 	b.WriteString(h.workersText())
 	b.WriteString("\n")
 	b.WriteString(h.ownerText())
@@ -487,6 +546,17 @@ func readTurn(path string) (agents.Turn, error) {
 // words on one line, cut to saidMax characters, and RESULT.md when the
 // worker's folder has one.
 func missedReport(said, cwd string) string {
+	return report("ended its turn without a report", said, cwd)
+}
+
+// unsureReport is the report for a turn with no transcript: as missedReport,
+// but it says that it may repeat a report the worker sent.
+func unsureReport(said, cwd string) string {
+	return report("ended its turn; it may have sent a report already (no transcript, so contr cannot tell)", said, cwd)
+}
+
+// report is lead, the worker's last words and RESULT.md, as missedReport.
+func report(lead, said, cwd string) string {
 	said = strings.Join(strings.Fields(said), " ")
 	if r := []rune(said); len(r) > saidMax {
 		said = string(r[:saidMax]) + "…"
@@ -494,7 +564,7 @@ func missedReport(said, cwd string) string {
 	if said == "" {
 		said = "(none)"
 	}
-	text := "ended its turn without a report. Last words: " + said
+	text := lead + ". Last words: " + said
 	if cwd != "" {
 		if _, err := os.Stat(filepath.Join(cwd, "RESULT.md")); err == nil {
 			text += "; RESULT.md in " + cwd

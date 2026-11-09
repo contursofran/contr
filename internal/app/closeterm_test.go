@@ -11,6 +11,8 @@ import (
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/state"
+	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/usage"
 )
@@ -37,11 +39,11 @@ func newCloseFrame(t *testing.T, snap *agentstate.Snapshot) *closeFrame {
 			cf.stopped = append(cf.stopped, addr)
 			if cf.stopErr == nil {
 				cf.snap.Terminals = slices.DeleteFunc(cf.snap.Terminals, func(w agents.Worker) bool { return w.Address == addr })
+				f.syncAgents() // as the change notify does
 			}
 			return cf.stopErr
 		},
-		Run:    Runner{Go: func(f func()) { f() }},
-		Status: func(s string) { cf.statuses = append(cf.statuses, s) },
+		Env:    view.Env{Status: func(s string) { cf.statuses = append(cf.statuses, s) }},
 		Closed: f.terminalClosed,
 	}
 	return cf
@@ -163,7 +165,7 @@ func TestCloseTerminalWithoutStopOrActionDoesNothing(t *testing.T) {
 
 func TestCloseTerminalBusy(t *testing.T) {
 	var jobs []func()
-	c := &CloseTerminal{Stop: func(string) error { return nil }, Run: Runner{Go: func(f func()) { jobs = append(jobs, f) }}}
+	c := &CloseTerminal{Stop: func(string) error { return nil }, Env: view.Env{Run: view.Runner{Go: func(f func()) { jobs = append(jobs, f) }}}}
 	c.Start("a")
 	c.Start("a")
 	c.Start("b")
@@ -179,11 +181,11 @@ func TestCloseTerminalBusy(t *testing.T) {
 
 func TestAttachWiresCmdWToTheSourceClose(t *testing.T) {
 	w := &fakeWindow{visible: true}
-	f := NewFrame()
-	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
+	f := NewFrame(Deps{})
+	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
-	src := &source{snap: agentstate.Snapshot{Terminals: []agents.Worker{{Name: "term-1", Address: "tp", Role: agents.RoleTerminal, Live: true}}}}
-	f.StartAgents = func(func()) (AgentSource, func()) { return src, func() {} }
+	src := &source{Snap: agentstate.Snapshot{Terminals: []agents.Worker{{Name: "term-1", Address: "tp", Role: agents.RoleTerminal, Live: true}}}}
+	f.deps.StartAgents = func(func()) (agentstate.AgentSource, func()) { return src, func() {} }
 	stop := f.Attach(w)
 	if f.CloseTerm == nil {
 		t.Fatal("Attach did not make the close action")
@@ -197,7 +199,7 @@ func TestAttachWiresCmdWToTheSourceClose(t *testing.T) {
 	var stopped, closed []string
 	for deadline := time.Now().Add(5 * time.Second); len(closed)+len(stopped) == 0 && time.Now().Before(deadline); {
 		time.Sleep(time.Millisecond)
-		stopped, closed = src.calls()
+		stopped, closed = src.Calls()
 	}
 	// The close result reaches the window through a later Update: flush until
 	// it has run (it clears the closed terminal's selection), so no update is
@@ -235,6 +237,7 @@ func TestCloseTerminalKeepsAPlainTerminalThatRunsClaude(t *testing.T) {
 	s.Role, s.Session = agents.RoleOrchestrator, true
 	snap.Terminals = nil
 	snap.Orchestrators = append(snap.Orchestrators, s)
+	cf.syncAgents()
 	cf.closeSelectedTerminal()
 	if len(cf.stopped) != 0 {
 		t.Errorf("stopped %v, want none", cf.stopped)

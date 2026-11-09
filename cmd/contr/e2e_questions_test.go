@@ -12,7 +12,8 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/agents"
-	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/questions"
+	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
@@ -178,11 +179,11 @@ func main() {
 	pick := func(appearance string) {
 		t.Helper()
 		c.call(t, "menu", map[string]any{"path": []string{"contr", "Settings…"}})
-		waitFor("settings", func() bool { return has(app.LabelSettings) })
+		waitFor("settings", func() bool { return has(settings.LabelSettings) })
 		click(appearance)
 		time.Sleep(400 * time.Millisecond)
 		c.key(t, "Escape")
-		waitFor("settings closed", func() bool { return !has(app.LabelSettings) })
+		waitFor("settings closed", func() bool { return !has(settings.LabelSettings) })
 		time.Sleep(600 * time.Millisecond)
 	}
 	row := ""
@@ -198,16 +199,16 @@ func main() {
 		t.Helper()
 		waitFor("the notch", func() bool { return has("4 items. Open") })
 		click("4 items. Open")
-		waitFor("the card", func() bool { return has(app.LabelQuestionsChips) })
+		waitFor("the card", func() bool { return has(questions.LabelQuestionsChips) })
 	}
 
 	// The card opens on the first question; the chips follow: the second
 	// question, the to-do, the blocked menu (D124, D140).
 	pick("Dark")
 	openCard()
-	waitFor("the question", func() bool { return has(app.LabelQuestionsField) })
+	waitFor("the question", func() bool { return has(questions.LabelQuestionsField) })
 	capture("dark-question")
-	click(app.LabelQuestionsDetails)
+	click(questions.LabelQuestionsDetails)
 	time.Sleep(600 * time.Millisecond)
 	capture("dark-details")
 	c.key(t, "Tab")
@@ -224,9 +225,9 @@ func main() {
 
 	pick("Light")
 	openCard()
-	waitFor("the question", func() bool { return has(app.LabelQuestionsField) })
+	waitFor("the question", func() bool { return has(questions.LabelQuestionsField) })
 	capture("light-question")
-	click(app.LabelQuestionsDetails)
+	click(questions.LabelQuestionsDetails)
 	time.Sleep(600 * time.Millisecond)
 	capture("light-details")
 	click("b-252-cleanup")

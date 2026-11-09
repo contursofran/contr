@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/contursofran/contr"
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/hc"
 )
@@ -83,6 +84,9 @@ func TestMCPListsAndRunsTheAgentTools(t *testing.T) {
 	)
 	if code != 0 {
 		t.Fatalf("code %d", code)
+	}
+	if v := r["1"]["result"].(map[string]any)["serverInfo"].(map[string]any)["version"]; v != contr.Version() {
+		t.Errorf("server version = %v, want %q", v, contr.Version())
 	}
 	var names []string
 	for _, tool := range r["2"]["result"].(map[string]any)["tools"].([]any) {
@@ -342,8 +346,8 @@ func TestMCPSpawnReadsProfilesEachTime(t *testing.T) {
 	m := &managers{dial: dial, getenv: getenv, cfg: cfg, load: load}
 	spawn := agentTools(m, "")[0].Run
 	args := json.RawMessage(`{"name":"p","profile":"planner-high","task":"plan"}`)
-	if _, err := spawn(context.Background(), args); err == nil || !strings.Contains(err.Error(), `no profile "planner-high"`) {
-		t.Fatalf("before: %v", err)
+	if _, err := spawn(context.Background(), args); err == nil || !strings.Contains(err.Error(), `no profile "planner-high" in `+file+" (not found)") {
+		t.Fatalf("before: %v; want the error to name the file", err)
 	}
 	if err := os.WriteFile(file, []byte(`{"profiles":{"planner-high":{"argv":["claude","--effort","high"]}}}`), 0o600); err != nil {
 		t.Fatal(err)

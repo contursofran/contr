@@ -100,8 +100,64 @@ func Find(path, home string, dirs []string) (string, error) {
 	return "", ErrNotFound
 }
 
+// The Claude Code session variables: claudeVar and each name that starts
+// with claudePrefix. CleanEnv and CleanArgv remove them.
+const (
+	claudeVar    = "CLAUDECODE"
+	claudePrefix = "CLAUDE_CODE_"
+)
+
+// ClaudeSessionVar tells whether name is a Claude Code session variable:
+// CLAUDECODE or CLAUDE_CODE_*.
+func ClaudeSessionVar(name string) bool {
+	return name == claudeVar || strings.HasPrefix(name, claudePrefix)
+}
+
+// CleanEnv returns environ without CLAUDECODE and the CLAUDE_CODE_* variables.
+// The hc server keeps the environment of the `hc connect` that starts it, and
+// every terminal it opens inherits that. A server started inside a Claude Code
+// session would mark all its terminals as child sessions of that session.
+func CleanEnv(environ []string) []string {
+	out := make([]string, 0, len(environ))
+	for _, kv := range environ {
+		name, _, _ := strings.Cut(kv, "=")
+		if ClaudeSessionVar(name) {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return out
+}
+
+// cleanScript unsets the variables that CleanEnv removes, then runs its
+// arguments. A line of a value with several lines can give a name that is
+// not set; unset of that name does nothing.
+var cleanScript = `for v in $(env | sed -n -E 's/^(` + claudeVar + `|` + claudePrefix +
+	`[A-Za-z0-9_]*)=.*/\1/p'); do unset "$v"; done; exec "$@"`
+
+// cleanName is $0 of cleanScript, for ps and error messages.
+const cleanName = "contr-clean-env"
+
+// CleanArgv returns argv started through /bin/sh with the variables that
+// CleanEnv removes unset (D216). terminal.run sets env on top of the core's
+// environment and cannot unset a name, and contr cannot read the core's
+// environment, so the shell removes them when the terminal starts.
+func CleanArgv(argv []string) []string {
+	return append([]string{"/bin/sh", "-c", cleanScript, cleanName}, argv...)
+}
+
+// UncleanArgv returns the argv that CleanArgv wrapped, and true. When argv
+// does not start with the clean wrapper, it returns argv and false.
+func UncleanArgv(argv []string) ([]string, bool) {
+	if len(argv) > 4 && argv[3] == cleanName {
+		return argv[4:], true
+	}
+	return argv, false
+}
+
 // Command returns a Dialer that starts `<path> connect` with env added to the
-// environment of this process. An empty path means hc, found with Find when
+// environment of this process, less CLAUDECODE and CLAUDE_CODE_* (CleanEnv).
+// The env argument is kept as it is. An empty path means hc, found with Find when
 // the Dialer runs, so building the Dialer does no file work; when hc is not
 // found, the Dialer returns that error.
 func Command(path string, env []string) Dialer {
@@ -116,9 +172,7 @@ func Command(path string, env []string) Dialer {
 			path = found
 		}
 		cmd := exec.Command(path, "connect")
-		if len(env) > 0 {
-			cmd.Env = append(cmd.Environ(), env...)
-		}
+		cmd.Env = append(CleanEnv(cmd.Environ()), env...)
 		w, err := cmd.StdinPipe()
 		if err != nil {
 			return Pipe{}, err
@@ -313,6 +367,13 @@ func (c *conn) call(ctx context.Context, method string, params, result any) erro
 	}
 }
 
+// isClosed tells whether the connection has ended or was closed.
+func (c *conn) isClosed() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.closed
+}
+
 func (c *conn) drop(id uint64) {
 	c.mu.Lock()
 	delete(c.pending, id)
@@ -383,6 +444,12 @@ func Dial(ctx context.Context, dial Dialer) (*Client, error) {
 // can be nil). An error reply of the core is an *Error.
 func (cl *Client) Call(ctx context.Context, method string, params, result any) error {
 	return cl.c.call(ctx, method, params, result)
+}
+
+// Closed tells whether the call connection has ended or was closed. A call on
+// it returns ErrNotSent.
+func (cl *Client) Closed() bool {
+	return cl.c.isClosed()
 }
 
 // Close ends the call connection. Pending calls end with ErrClosed. A second

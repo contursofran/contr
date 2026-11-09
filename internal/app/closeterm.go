@@ -1,14 +1,17 @@
 package app
 
+import (
+	"github.com/contursofran/contr/internal/app/view"
+)
+
 // CloseTerminal stops the selected plain terminal: Cmd-W and File > Close
 // Terminal (#246, S4, D85). Its methods run on the UI thread; Stop runs off it.
 type CloseTerminal struct {
 	// Stop ends the hc terminal with an address. It blocks, so Start runs it
 	// off the UI thread. Nil makes Start do nothing.
 	Stop func(addr string) error
-	Run  Runner
-	// Status shows a line as a toast; may be nil.
-	Status func(string)
+	// Env runs Stop off the UI thread and shows its error.
+	Env view.Env
 	// Closed runs on the UI thread after Stop worked; may be nil.
 	Closed func(addr string)
 
@@ -25,14 +28,12 @@ func (c *CloseTerminal) Start(addr string) {
 		c.busy = map[string]bool{}
 	}
 	c.busy[addr] = true
-	c.Run.Do(func() func() {
+	c.Env.Do(func() func() {
 		err := c.Stop(addr)
 		return func() {
 			delete(c.busy, addr)
 			if err != nil {
-				if c.Status != nil {
-					c.Status("Close terminal: " + err.Error())
-				}
+				c.Env.Show("Close terminal: " + err.Error())
 				return
 			}
 			if c.Closed != nil {

@@ -13,6 +13,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/titlebar"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
@@ -104,15 +105,15 @@ func TestPlainTerminal(t *testing.T) {
 		}
 		return false
 	}
-	for deadline := time.Now().Add(20 * time.Second); !has(app.LabelNewTab) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+	for deadline := time.Now().Add(20 * time.Second); !has(titlebar.LabelNewTab) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
 		wake()
 	}
-	if !has(app.LabelNewTab) {
+	if !has(titlebar.LabelNewTab) {
 		t.Fatalf("no + button; labels %v", keys(c.labels(t)))
 	}
 	c.capture(t, filepath.Join(out, "plain-0-start.png"))
 
-	b := c.boundsOf(t, app.LabelNewTab)
+	b := c.boundsOf(t, titlebar.LabelNewTab)
 	c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "click", "x": b.X + b.Width/2, "y": b.Y + b.Height/2}}})
 	first := waitTerminals(1)[0]
 	for deadline := time.Now().Add(20 * time.Second); !has(app.LabelTerminalGrid) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {

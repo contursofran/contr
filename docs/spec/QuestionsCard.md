@@ -10,19 +10,22 @@ Design system page: component QuestionsCard. Shared rules: [README.md](README.md
 
 ## Anatomy
 
-Width `notch-open-width` (600px), padding `space-12`, glass as the notch.
+Width `notch-open-width` (600px), padding `space-12`, fill `float-solid` (opaque, D212),
+`float-line` on the sides and the bottom, `shadow-notch` as the notch.
 
-1. **Head:** needs-you glyph; one chip per open question, then one chip per to-do and per blocked worker menu (D124) ("b-250 checks", `chip` 11.5px, padding `3px 9px`, radius `radius-6`); "via orchestrator" at the right (`ink-35`).
+1. **Head:** needs-you glyph; one chip per open question, then one chip per to-do and per blocked worker menu (D124) ("b-250 checks", `chip` 11.5px, padding `3px 9px`, radius `radius-6`; the title without the backticks of its code spans, clipped with an ellipsis); "via orchestrator" at the right (`ink-35`).
 2. **Question:** `question` style (14/20), `ink-100`, padding `2px 12px`.
 3. **Context:** `small` (12/17), `ink-42`.
 4. **Choices:** each a row, gap `space-12`, with a mono number (11px, `ink-32`), a label (`body`, `ink-90`), an optional "recommended" tag (mono 11px, `ink-32`), and its impact under it (below). An option has no other description: the owner file holds a label and, for each, an impact. Row padding `9px 12px`, radius `radius-9`. The impact of the option (D114) shows under the label, in `small`, `ink-42` (D125).
 5. **Field:** "Or type an answer", height 30px, line `input-line`, radius `radius-8`, placeholder `ink-30`.
 6. **Details:** a collapsible section "Details", closed at first, with the refs and the source excerpt (D114) in `small`, `ink-42`. It shows only when the question has refs or a source (D125).
-7. **Keys:** mono 11px, `ink-32`, by item: a question "1-3 pick  ⏎ send  ⇥ next  esc close"; a to-do "⏎ done  ⇥ next  esc close"; a blocked menu "1-3 send  ⇥ next  esc close". A blocked menu takes no ⏎, so a stray key never approves a permission (D51). The line shows no ⇥ when there is one item.
+7. **Code chip:** a span in backticks in the question, the to-do text or the Details source shows without the backticks, in mono (`meta` size) on `hover-strong`, radius `radius-4`, padding `space-4` across and `space-2` down (D204).
+8. **Keys:** mono 11px, `ink-32`, by item: a question "1-3 pick  ⏎ send  ⇥ next  esc close"; a to-do "⏎ done  ⇥ next  esc close"; a blocked menu "1-3 send  ⇥ next  esc close". A blocked menu takes no ⏎, so a stray key never approves a permission (D51). The line shows no ⇥ when there is one item.
 
 ## States
 
 - **Chip on:** fill `selected`, ring `shadow-selected`, text `ink-100`; other chips `ink-45`.
+- **Code chip hover:** pointer cursor.
 - **Choice hover:** fill `hover`.
 - **Choice picked:** fill `hover` (the same as hover); the keyboard moves it.
 - **Answered:** the card moves to the next question; with none left, the notch hides.
@@ -41,6 +44,8 @@ Width `notch-open-width` (600px), padding `space-12`, glass as the notch.
   the answer is sent to the worker's terminal (D124). The chips are in this
   order: questions, to-dos, blocked menus (D140). The card opens on the first
   question when there is one.
+- The card body is selectable (D204): drag, double-click, Shift with the arrows, ⌘C and the Copy menu copy its texts. Buttons (choices, Done, chips) keep their click; their texts are not selected.
+- A click on a code chip copies its text and shows the toast "Copied" (D126). The card stays open, and its keys keep working.
 - A blocked menu takes no ⏎: only `1`–`9` or a click on a choice sends, so a
   stray key never approves a permission (D51).
 
@@ -57,14 +62,15 @@ Width `notch-open-width` (600px), padding `space-12`, glass as the notch.
 - Send fails: keep the card open and show the error under the field.
 - A question answered elsewhere: drop it from the chips.
 - More than 9 choices: keys pick the first 9.
+- An unclosed backtick or an empty span (``` `` ```) shows as plain text.
 
 ## Accessibility
 
-- Dialog named by the question; choices are radio buttons; the field is labeled "Or type an answer".
+- Dialog named by the question; choices are radio buttons; the field is labeled "Or type an answer"; a code chip is labeled "Copy <text>".
 
 ## Tokens
 
-`notch-open-width`, `glass-float`, `float-line`, `shadow-notch`, `selected`, `shadow-selected`, `hover`, `input-line`, `radius-9`, `radius-8`, `radius-6`, `question`, `body`, `small`, `chip`, `ink-100`, `ink-90`, `ink-45`, `ink-42`, `ink-35`, `ink-32`, `ink-30`.
+`notch-open-width`, `float-solid`, `float-line`, `shadow-notch`, `selected`, `shadow-selected`, `hover`, `input-line`, `hover-strong`, `radius-9`, `radius-8`, `radius-6`, `radius-4`, `space-4`, `space-2`, `question`, `body`, `small`, `chip`, `ink-100`, `ink-90`, `ink-45`, `ink-42`, `ink-35`, `ink-32`, `ink-30`, `meta`.
 
 ## Build in MyGo
 
@@ -72,6 +78,7 @@ Width `notch-open-width` (600px), padding `space-12`, glass as the notch.
 - Details: `CollapsibleBase`.
 - Chips: `SegmentedBase`. Choices: `SelectBase` or a list of `ButtonBase` rows with role radio.
 - Field: `TextInputBase`.
+- Selection: `Selectable()` on the card body. Code chips: a `RichText` paragraph with an inline `RichText` span (mono, background, radius, `PaddingX` / `PaddingY`) per chip; `Context.WriteClipboard` copies.
 - Keys with `c.Shortcut(...)`: 1–9 pick, ⏎ send and go to the next, ⇥ next chip, Esc close.
 - Send the answer with the owner package (`internal/owner`) on a goroutine.
 
@@ -93,6 +100,7 @@ Width `notch-open-width` (600px), padding `space-12`, glass as the notch.
 - View: impacts show under their options; "Details" opens and closes, and hides when there are no refs or source.
 - View: to-do and blocked worker chips show after the questions.
 - View: send error stays and shows.
+- View: a code span shows as a chip without backticks; a click copies and queues "Copied"; ⏎ and Esc work after it; a drag and ⌘C copy the text; an unclosed backtick stays plain; the item tab and the dialog name show the title without backticks.
 - e2e: answer a question on a scratch core and see the notch hide.
 
 ## Replaces

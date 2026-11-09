@@ -9,6 +9,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/contursofran/contr/internal/hc"
 )
 
 // gitEnv makes git in the test ignore the user's git config.
@@ -106,8 +108,8 @@ func TestSpawnRunsTheProjectSetupInANewWorktree(t *testing.T) {
 	}
 	p := f.last().Params
 	argv := p["argv"].([]any)
-	want := []any{"/bin/sh", "-c", setupWrapper, setupName, cfg.Setup[main], "claude"}
-	if !reflect.DeepEqual(argv[:6], want) || argv[len(argv)-1] != "go" {
+	want := []any{"/bin/sh", "-c", setupWrapper, setupName, cfg.Setup[main]}
+	if !reflect.DeepEqual(argv[:5], want) || unclean(t, argv[5:])[0] != "claude" || argv[len(argv)-1] != "go" {
 		t.Errorf("argv = %q", argv)
 	}
 	if env := p["env"].(map[string]any); env[EnvMain] != main || env[EnvCoordinator] != "t0" {
@@ -118,7 +120,7 @@ func TestSpawnRunsTheProjectSetupInANewWorktree(t *testing.T) {
 		if _, err := m.Spawn(context.Background(), Spec{Name: "w", Profile: "builder", Worktree: dir}); err != nil {
 			t.Fatal(err)
 		}
-		if p := f.last().Params; p["argv"].([]any)[0] != "claude" || p["env"] != nil {
+		if p := f.last().Params; unclean(t, p["argv"])[0] != "claude" || p["env"] != nil {
 			t.Errorf("%s: argv %v env %v, want no setup", dir, p["argv"], p["env"])
 		}
 	}
@@ -158,6 +160,28 @@ func TestCommandSkipsTheSetupWrapper(t *testing.T) {
 	tm := terminal{Argv: withSetup("x", []string{"/usr/bin/claude", "--agent", "a"})}
 	if got := tm.command(); got != "claude" {
 		t.Errorf("command = %q", got)
+	}
+}
+
+func TestDeadTerminalReadsTheProgramAfterTheWrappers(t *testing.T) {
+	claude := []string{"/usr/bin/claude", "--agent", "a"}
+	for _, c := range []struct {
+		name   string
+		argv   []string
+		cmd    string
+		claude bool
+	}{
+		{"clean", hc.CleanArgv(claude), "claude", true},
+		{"setup and clean", withSetup("x", hc.CleanArgv(claude)), "claude", true},
+		{"neither", []string{"/bin/zsh", "-l"}, "zsh", false},
+	} {
+		tm := terminal{Argv: c.argv}
+		if got := tm.command(); got != c.cmd {
+			t.Errorf("%s: command = %q, want %q", c.name, got, c.cmd)
+		}
+		if got := tm.runsClaude(); got != c.claude {
+			t.Errorf("%s: runsClaude = %v, want %v", c.name, got, c.claude)
+		}
 	}
 }
 
@@ -223,5 +247,20 @@ func TestReviewWorktree(t *testing.T) {
 	}
 	if _, err := m.ReviewWorktree(ctx, main, 0); err == nil {
 		t.Error("PR 0: no error")
+	}
+}
+
+// runGit keeps its message: the git subcommand and git's stderr.
+func TestRunGitErrorNamesTheCommandAndStderr(t *testing.T) {
+	gitEnv(t)
+	dir := t.TempDir()
+	t.Setenv("GIT_CEILING_DIRECTORIES", filepath.Dir(dir))
+	_, err := runGit(context.Background(), dir, "rev-parse", "HEAD")
+	if err == nil || !strings.HasPrefix(err.Error(), "git rev-parse: fatal: not a git repository") {
+		t.Fatalf("error %v", err)
+	}
+	_, err = runGit(context.Background(), filepath.Join(dir, "missing"), "status")
+	if err == nil || !strings.HasPrefix(err.Error(), "git status: fatal: cannot change to") {
+		t.Fatalf("error %v", err)
 	}
 }

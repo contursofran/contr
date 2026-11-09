@@ -8,6 +8,9 @@ import (
 	"testing"
 	"time"
 
+	gterm "github.com/egoist/mygo/plugins/terminal"
+	"github.com/egoist/mygo/ui"
+
 	"github.com/contursofran/contr/internal/hc"
 )
 
@@ -20,6 +23,7 @@ type fakeStream struct {
 	written []byte
 	resizes [][2]uint16
 	focus   []bool
+	display []hc.Display
 }
 
 func newFakeStream() *fakeStream { return &fakeStream{events: make(chan hc.StreamEvent, 64)} }
@@ -42,6 +46,12 @@ func (s *fakeStream) Focus(f bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.focus = append(s.focus, f)
+	return nil
+}
+func (s *fakeStream) SetDisplay(d hc.Display) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.display = append(s.display, d)
 	return nil
 }
 func (s *fakeStream) end(err error) {
@@ -452,9 +462,9 @@ func TestResizeDuringTheAttachIsSentOnceLive(t *testing.T) {
 	}
 }
 
-// startSized starts a Conn that attaches with input when the test gives the
+// startSizedScreen starts a Conn that attaches with input when the test gives the
 // view's size, so the test can set hooks before the attach starts.
-func startSized(t *testing.T, src *fakeSource) (*Conn, *states, *fakeScreen) {
+func startSizedScreen(t *testing.T, src *fakeSource) (*Conn, *states, *fakeScreen) {
 	t.Helper()
 	fast(t)
 	firstWait = time.Hour // fast restores it on cleanup
@@ -512,7 +522,7 @@ func sizesEnd(t *testing.T, s *fakeStream, scr *fakeScreen, cols, rows int) {
 // the attach's size. The screen and the core end at the view's new size (#487).
 func TestResizeJustAfterAnAttachIsNotUndone(t *testing.T) {
 	src := newFakeSource()
-	c, st, scr := startSized(t, src)
+	c, st, scr := startSizedScreen(t, src)
 	resizeOnSizeRead(t, c, 100, 30)
 	if err := c.ResizePixels(90, 20, 8, 16); err != nil {
 		t.Fatal(err)
@@ -531,7 +541,7 @@ func TestResizeDuringAndJustAfterAnAttachIsNotUndone(t *testing.T) {
 	src := newFakeSource()
 	src.gate0 = make(chan struct{})
 	src.entered = make(chan hc.AttachParams, 4)
-	c, st, scr := startSized(t, src)
+	c, st, scr := startSizedScreen(t, src)
 	resizeOnSizeRead(t, c, 100, 30)
 	if err := c.ResizePixels(90, 20, 8, 16); err != nil {
 		t.Fatal(err)
@@ -1138,4 +1148,169 @@ func TestWatchFitWaitsForTheViewSize(t *testing.T) {
 	if p := src.param(1); p.Observe || p.Cols != 124 || p.Rows != 47 {
 		t.Errorf("fit attach %+v", p)
 	}
+}
+
+func themeOf(fg, bg, cur ui.Color) *gterm.Theme {
+	return &gterm.Theme{Foreground: fg, Background: bg, Cursor: cur}
+}
+
+var (
+	lightBG = ui.Color{R: 0xf5, G: 0xf5, B: 0xf3, A: 255}
+	darkFG  = ui.Color{R: 0x1a, G: 0x1a, B: 0x1a, A: 255}
+)
+
+func strOf(p *string) string {
+	if p == nil {
+		return "<nil>"
+	}
+	return *p
+}
+
+// A theme set before the first attach goes with the attach display, next to
+// the cell size (#521).
+func startSized(t *testing.T, src *fakeSource) (*Conn, *states) {
+	t.Helper()
+	fast(t)
+	firstWait = time.Hour // only the view's size starts the attach; fast restores it
+	st := &states{ch: make(chan State, 256)}
+	c := NewConn(src, Options{OnState: st.on})
+	t.Cleanup(func() { _ = c.Close() })
+	return c, st
+}
+
+func TestUseThemeSetsTheAttachDisplay(t *testing.T) {
+	src := newFakeSource()
+	c, st := startSized(t, src)
+	if err := c.UseTheme(themeOf(darkFG, lightBG, darkFG)); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.ResizePixels(80, 24, 8, 16); err != nil {
+		t.Fatal(err)
+	}
+	st.wait(t, Live)
+	d := src.param(0).Display
+	if d == nil || strOf(d.FG) != "#1a1a1a" || strOf(d.BG) != "#f5f5f3" || strOf(d.Cursor) != "#1a1a1a" {
+		t.Fatalf("display %+v", d)
+	}
+	if d.Cell == nil || *d.Cell != [2]int{8, 16} {
+		t.Errorf("cell %v, want 8x16 kept", d.Cell)
+	}
+}
+
+// A theme with no cursor sends no cursor color; a nil theme does nothing.
+// A theme that comes while the attach is in progress reaches the new stream
+// with SetDisplay: the attach display had no colors.
+func TestUseThemeDuringTheAttachReachesTheNewStream(t *testing.T) {
+	src := newFakeSource()
+	src.gate0 = make(chan struct{})
+	src.entered = make(chan hc.AttachParams, 4)
+	c, st := startSized(t, src)
+	if err := c.ResizePixels(80, 24, 8, 16); err != nil { // starts the attach, which waits
+		t.Fatal(err)
+	}
+	<-src.entered // the attach has its params and waits at the gate
+	if err := c.UseTheme(themeOf(darkFG, lightBG, darkFG)); err != nil {
+		t.Fatal(err)
+	}
+	close(src.gate0)
+	st.wait(t, Live)
+	if d := src.param(0).Display; d == nil || d.BG != nil {
+		t.Fatalf("attach display %+v, want cell only", d)
+	}
+	s := src.stream(t, 0)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.display) != 1 || strOf(s.display[0].BG) != "#f5f5f3" || s.display[0].Cell == nil {
+		t.Errorf("SetDisplay calls %+v", s.display)
+	}
+}
+
+func TestUseThemeSkipsUnsetColors(t *testing.T) {
+	src := newFakeSource()
+	c, st := startSized(t, src)
+	if err := c.UseTheme(nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.UseTheme(themeOf(darkFG, lightBG, ui.Color{})); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.ResizePixels(80, 24, 0, 0); err != nil {
+		t.Fatal(err)
+	}
+	st.wait(t, Live)
+	if d := src.param(0).Display; d == nil || d.Cursor != nil || d.FG == nil {
+		t.Errorf("display %+v", d)
+	}
+}
+
+// With input on the stream, a new theme reaches hc at once with SetDisplay.
+func TestUseThemeSendsDisplayWhileTheStreamHasInput(t *testing.T) {
+	src := newFakeSource()
+	c, st := startSized(t, src)
+	if err := c.ResizePixels(80, 24, 8, 16); err != nil {
+		t.Fatal(err)
+	}
+	st.wait(t, Live)
+	s := src.stream(t, 0)
+	if err := c.UseTheme(themeOf(darkFG, lightBG, darkFG)); err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.display) != 1 || strOf(s.display[0].BG) != "#f5f5f3" || s.display[0].Cell == nil {
+		t.Errorf("SetDisplay calls %+v", s.display)
+	}
+}
+
+// An observer stream gets no SetDisplay (hc ignores it); the colors go with
+// the attach that has input.
+func TestUseThemeWaitsWhileWatching(t *testing.T) {
+	src := newFakeSource()
+	c, st, _ := startWatchSized(t, src)
+	if err := c.ResizePixels(90, 20, 8, 16); err != nil {
+		t.Fatal(err)
+	}
+	st.wait(t, Live)
+	obs := src.stream(t, 0)
+	if err := c.UseTheme(themeOf(darkFG, lightBG, darkFG)); err != nil {
+		t.Fatal(err)
+	}
+	obs.mu.Lock()
+	n := len(obs.display)
+	obs.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("observer got %d SetDisplay calls", n)
+	}
+	if _, err := c.Write([]byte("x")); err != nil {
+		t.Fatal(err)
+	}
+	waitAttaches(t, src, 2)
+	if d := src.param(1).Display; d == nil || strOf(d.BG) != "#f5f5f3" {
+		t.Errorf("take-over display %+v", d)
+	}
+}
+
+// The color scheme reports of the plugin are not input: a watching Conn does
+// not attach for them, and a live one does not send them.
+func TestWriteDropsSchemeReports(t *testing.T) {
+	src := newFakeSource()
+	c, st, _ := startWatchSized(t, src)
+	if err := c.ResizePixels(90, 20, 8, 16); err != nil {
+		t.Fatal(err)
+	}
+	st.wait(t, Live)
+	for _, r := range []string{"\x1b[?997;1n", "\x1b[?997;2n"} {
+		if n, err := c.Write([]byte(r)); err != nil || n != len(r) {
+			t.Errorf("Write(%q) = %d, %v", r, n, err)
+		}
+	}
+	time.Sleep(20 * time.Millisecond)
+	if n := src.attachCount(); n != 1 {
+		t.Errorf("%d attaches, want 1: a report took input", n)
+	}
+	// Other input still takes over, and a longer text with the report is input.
+	if _, err := c.Write([]byte("\x1b[?997;1nx")); err != nil {
+		t.Fatal(err)
+	}
+	waitAttaches(t, src, 2)
 }

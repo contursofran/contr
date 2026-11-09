@@ -6,7 +6,8 @@
 #   scripts/sheet.sh                   every part
 #   scripts/sheet.sh AgentRow ...      only these parts
 #
-# The parts are sheetParts in internal/app/sheet_test.go.
+# Each package under internal/app with spec'd parts has a TestSpecSheet in its
+# sheet_test.go that gives its parts to apptest.SpecSheet (internal/app/apptest/sheet.go).
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -21,7 +22,7 @@ fi
 mkdir -p tmp/sheet
 log=tmp/sheet/log.txt
 status=0
-CONTR_SHEET="$parts" go test -count=1 -run '^TestSpecSheet$' -v ./internal/app >"$log" 2>&1 || status=$?
+CONTR_SHEET="$parts" go test -count=1 -run '^TestSpecSheet$' -v ./internal/app/... >"$log" 2>&1 || status=$?
 
 # The "sheet:" lines of the test, without the file:line prefix.
 sed -n 's/^ *sheet_test\.go:[0-9]*: sheet: //p' "$log"
@@ -29,3 +30,13 @@ if [ "$status" -ne 0 ]; then
 	grep -v '^=== RUN\|^ *sheet_test\.go:[0-9]*: sheet: /' "$log" | tail -40 >&2
 	exit "$status"
 fi
+# A part name that no package has.
+if [ "$parts" != all ]; then
+	for p in $(echo "$parts" | tr ',' ' '); do
+		if ! grep -q "sheet: .*/$p-dark\.png\$" "$log"; then
+			echo "sheet: no part \"$p\"" >&2
+			status=1
+		fi
+	done
+fi
+exit "$status"

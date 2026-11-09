@@ -11,7 +11,9 @@ Generated from the design system `tokens.json`. Views use the names; `internal/a
 | `glow-umber` | `#6b4a2a` | `#ebcfa9` | Canvas only: a blurred desktop glow behind the glass, bottom right. Never paint it in the app. |
 | `glow-graphite` | `#2c3240` | `#cdd2db` | Canvas only: a blurred desktop glow behind the terminal. Never paint it in the app. |
 | `glass-window` | `rgba(20,21,24,0.7)` | `rgba(246,246,248,0.6)` | Window fill over the vibrancy material, under every panel. With glass-blur and glass-saturate. The owner can tune its alpha in Settings (D162); the value here is the default. |
-| `glass-float` | `rgba(34,35,40,0.72)` | `rgba(252,252,253,0.8)` | Floating glass over the terminal: the questions notch and the outline card. With glass-blur and glass-saturate. |
+| `glass-float` | `rgba(34,35,40,0.72)` | `rgba(252,252,253,0.8)` | Floating glass over the terminal: the closed questions notch and the outline card. With glass-blur and glass-saturate. |
+| `float-solid` | `#222328` | `#fcfcfd` | `glass-float` at full alpha: the opaque fill of floating cards with text to read, the update panel, the What's new panel, the open questions card (D212) and the projects modal (D217). Modals and dialogs never use `glass-float`. No blur. |
+| `scrim` | `rgba(8,8,8,0.72)` | `rgba(20,20,20,0.18)` | Backdrop behind the projects modal. |
 | `panel` | `rgba(20,21,24,0.85)` | `rgba(255,255,255,0.7)` | Fill of the three panels: sidebar, terminal, files. The owner can tune its alpha in Settings (D162); the value here is the default. |
 | `panel-line` | `rgba(255,255,255,0.065)` | `rgba(0,0,0,0.06)` | 1px border of the three panels. |
 | `window-line` | `rgba(255,255,255,0.09)` | `rgba(0,0,0,0.1)` | 1px border of the window. |
@@ -45,7 +47,7 @@ Generated from the design system `tokens.json`. Views use the names; `internal/a
 | `ink-24` | `rgba(255,255,255,0.24)` | `rgba(0,0,0,0.313)` | Deleted file names (struck through) and removed-line counts in the file tree. 2.2:1: dim on purpose, kept from the canvas. |
 | `ink-22` | `rgba(255,255,255,0.22)` | `rgba(0,0,0,0.287)` | Icon and counts of a deleted file. 2:1: dim on purpose, kept from the canvas. |
 | `terminal-text` | `rgba(255,255,255,0.82)` | `rgba(0,0,0,0.815)` | Default terminal text before the agent CLI paints its own colors. 12.4:1 on panel. |
-| `blocked` | `#f07178` | `#c73947` | The one hue in the chrome: red for an agent that is blocked or asks the owner. Loader glyphs and the Claude glyph only, never fills or text runs. 6.4:1 on panel, 5.8:1 on glass-float. Light: #c73947, 4.9:1 on panel. |
+| `blocked` | `#f07178` | `#c73947` | The one hue in the chrome: red for an agent that is blocked or asks the owner. Loader glyphs and the Claude glyph only, never fills or text runs, except the `N need you` meta of the projects modal (D207). 6.4:1 on panel, 5.8:1 on glass-float. Light: #c73947, 4.9:1 on panel. |
 | `claude` | `#d97757` | `#c15f3c` | Stroke of the Claude agent glyph (orchestrators) while it works or idles. 5.85:1 on panel. Light: #c15f3c, 4.1:1 on panel (#d97757 is only 2.9:1 on light). |
 | `focus-ring` | `rgba(255,255,255,0.5)` | `rgba(0,0,0,0.45)` | The 1px keyboard focus ring of every button, 2px outside it. |
 | `lights` | `rgba(255,255,255,0.14)` | `rgba(0,0,0,0.14)` | Previews only: the traffic-light stand-ins. macOS draws the real ones. |

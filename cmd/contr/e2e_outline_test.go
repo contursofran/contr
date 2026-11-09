@@ -11,7 +11,8 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/agents"
-	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/questions"
+	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/hc/hctest"
 	"github.com/contursofran/contr/internal/owner"
@@ -126,23 +127,23 @@ func TestOutlineCapture(t *testing.T) {
 		}
 		return false
 	}
-	for deadline := time.Now().Add(15 * time.Second); !has(app.LabelOutlineCount) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+	for deadline := time.Now().Add(15 * time.Second); !has(questions.LabelOutlineCount) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
 		poke()
 	}
-	if !has(app.LabelOutlineCount) || !has("Notch branch merged into main, new") || !has("Release name: pick one before the tag") {
+	if !has(questions.LabelOutlineCount) || !has("Notch branch merged into main, new") || !has("Release name: pick one before the tag") {
 		t.Fatalf("the outline did not show one new tick of three; labels %v", keys(c.labels(t)))
 	}
 	pick := func(appearance string) {
 		t.Helper()
 		c.call(t, "menu", map[string]any{"path": []string{"contr", "Settings…"}})
-		for deadline := time.Now().Add(10 * time.Second); !has(app.LabelSettings) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+		for deadline := time.Now().Add(10 * time.Second); !has(settings.LabelSettings) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
 			poke()
 		}
 		sb := c.boundsOf(t, appearance)
 		c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "click", "x": sb.X + sb.Width/2, "y": sb.Y + sb.Height/2}}})
 		time.Sleep(400 * time.Millisecond)
 		c.key(t, "Escape")
-		for deadline := time.Now().Add(5 * time.Second); has(app.LabelSettings) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+		for deadline := time.Now().Add(5 * time.Second); has(settings.LabelSettings) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
 			poke()
 		}
 		time.Sleep(600 * time.Millisecond)
@@ -150,7 +151,7 @@ func TestOutlineCapture(t *testing.T) {
 	hover := func() {
 		tb := c.boundsOf(t, "Notch branch merged into main, new")
 		c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "pointerMove", "x": tb.X + tb.Width/2, "y": tb.Y + tb.Height/2}}})
-		for deadline := time.Now().Add(10 * time.Second); !has(app.LabelOutlineCard) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+		for deadline := time.Now().Add(10 * time.Second); !has(questions.LabelOutlineCard) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
 		}
 		time.Sleep(400 * time.Millisecond)
 	}
@@ -160,7 +161,7 @@ func TestOutlineCapture(t *testing.T) {
 		time.Sleep(300 * time.Millisecond)
 		c.capture(t, filepath.Join(out, "outline-"+lower(theme)+".png"))
 		hover()
-		if !has(app.LabelOutlineCard) {
+		if !has(questions.LabelOutlineCard) {
 			t.Fatalf("%s: no card on hover; labels %v", theme, keys(c.labels(t)))
 		}
 		c.capture(t, filepath.Join(out, "outline-"+lower(theme)+"-card.png"))
@@ -171,9 +172,9 @@ func TestOutlineCapture(t *testing.T) {
 	// A click marks the tick read: the count goes.
 	tb := c.boundsOf(t, "Notch branch merged into main, new")
 	c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "click", "x": tb.X + tb.Width/2, "y": tb.Y + tb.Height/2}}})
-	for deadline := time.Now().Add(10 * time.Second); has(app.LabelOutlineCount) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+	for deadline := time.Now().Add(10 * time.Second); has(questions.LabelOutlineCount) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
 	}
-	if has(app.LabelOutlineCount) {
+	if has(questions.LabelOutlineCount) {
 		t.Errorf("the count stays after the click; labels %v", keys(c.labels(t)))
 	}
 }

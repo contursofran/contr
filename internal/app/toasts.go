@@ -21,12 +21,16 @@ const (
 	LabelToastClose    = "Close message"
 )
 
-// toastView adds the queued messages and builds the toasts without MyGo's look: glass-float with
-// float-line, as the other floating parts (docs/spec/README.md).
-func (f *Frame) toastView(c *ui.Context) {
+// ToastView draws the toast stack: it adds the queued messages and builds the toasts without
+// MyGo's look: glass-float with float-line, as the other floating parts (docs/spec/README.md). The
+// frame draws it; the ProjectsModal part of the spec sheet uses it too.
+func (f *Frame) ToastView(c *ui.Context) {
 	if f.Toasts != nil {
 		for _, m := range f.Toasts.Take() {
 			c.AddToast(ui.Toast{ID: m, Title: m})
+		}
+		for _, a := range f.Toasts.TakeActions() {
+			c.AddToast(ui.Toast{ID: a.ID, Title: a.Text, Action: a.Action, OnAction: a.OnAction})
 		}
 	}
 	f.queueUpdateToast(c)
@@ -39,9 +43,9 @@ func (f *Frame) toastView(c *ui.Context) {
 				continue
 			}
 			toast := ui.ToastBase(c, t)
-			toast.Root.Row().AlignItems(ui.Center).Gap(theme.Space10).MaxWidth(toastMaxWidth).
-				Padding(theme.Space8, theme.Space8, theme.Space8, theme.Space16).Radius(theme.Radius12).
-				Background(p.GlassFloat).Border(1, p.FloatLine)
+			kit.GlassFloat(toast.Root.Row().AlignItems(ui.Center).Gap(theme.Space10).MaxWidth(toastMaxWidth).
+				Padding(theme.Space8, theme.Space8, theme.Space8, theme.Space16).Radius(theme.Radius12), p).
+				Border(1, p.FloatLine)
 			for _, l := range p.ShadowFloat {
 				if !l.Inset {
 					toast.Root.Shadow(l.X, l.Y, l.Blur, l.Wide, l.Color)
@@ -50,6 +54,11 @@ func (f *Frame) toastView(c *ui.Context) {
 			toast.Root.Transition(ui.ElementTransition{Enter: &ui.Motion{Y: 8}, Exit: &ui.Motion{}})
 			toast.Root.Children(func() {
 				ui.Text(c, t.Title).Grow(1).MinWidth(0).TextColor(p.Ink85)
+				if t.Action != "" {
+					toast.ActionButton().Label(t.Action).Shrink(0).Padding(theme.Space4, theme.Space8).
+						Radius(theme.Radius6).Cursor(ui.CursorPointer).FontWeight(600).TextColor(p.Ink100).
+						Children(func() { ui.Text(c, t.Action) })
+				}
 				toast.CloseButton().Label(LabelToastClose).Size(kit.SizeIconButtonSmall, kit.SizeIconButtonSmall).
 					Shrink(0).AlignItems(ui.Center).Justify(ui.Center).Radius(theme.Radius8).TextColor(p.Ink50).
 					Cursor(ui.CursorPointer).Children(func() {

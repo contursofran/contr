@@ -14,6 +14,8 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/settings"
+	"github.com/contursofran/contr/internal/app/titlebar"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/hc/hctest"
 	"github.com/contursofran/contr/internal/usage"
@@ -119,7 +121,7 @@ func TestUsageMeters(t *testing.T) {
 	}
 	defer cl.Close()
 	mgr := agents.New(agents.HC{Client: cl}, agents.DefaultConfig())
-	nb := c.boundsOf(t, app.LabelNewTab)
+	nb := c.boundsOf(t, titlebar.LabelNewTab)
 	c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "click", "x": nb.X + nb.Width/2, "y": nb.Y + nb.Height/2}}})
 	var addr string
 	for deadline := time.Now().Add(20 * time.Second); addr == "" && time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
@@ -168,14 +170,14 @@ func TestUsageMeters(t *testing.T) {
 	pick := func(appearance string) {
 		t.Helper()
 		c.call(t, "menu", map[string]any{"path": []string{"contr", "Settings…"}})
-		for deadline := time.Now().Add(10 * time.Second); !has(app.LabelSettings) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+		for deadline := time.Now().Add(10 * time.Second); !has(settings.LabelSettings) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
 			poke()
 		}
 		b := c.boundsOf(t, appearance)
 		c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "click", "x": b.X + b.Width/2, "y": b.Y + b.Height/2}}})
 		time.Sleep(400 * time.Millisecond)
 		c.key(t, "Escape")
-		for deadline := time.Now().Add(5 * time.Second); has(app.LabelSettings) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+		for deadline := time.Now().Add(5 * time.Second); has(settings.LabelSettings) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
 			poke()
 		}
 		time.Sleep(600 * time.Millisecond)

@@ -12,6 +12,10 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/questions"
+	"github.com/contursofran/contr/internal/app/settings"
+	"github.com/contursofran/contr/internal/app/sidebar"
+	"github.com/contursofran/contr/internal/app/viewers"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
@@ -140,14 +144,14 @@ func TestNoFooter(t *testing.T) {
 	}
 	openSettings := func() {
 		t.Helper()
-		click(app.LabelSettingsOpen)
-		waitFor("settings", func() bool { return has(app.LabelSettings) })
+		click(sidebar.LabelSettingsOpen)
+		waitFor("settings", func() bool { return has(settings.LabelSettings) })
 		time.Sleep(500 * time.Millisecond)
 	}
 	closeSettings := func() {
 		t.Helper()
 		c.key(t, "Escape")
-		waitFor("settings closed", func() bool { return !has(app.LabelSettings) })
+		waitFor("settings closed", func() bool { return !has(settings.LabelSettings) })
 		time.Sleep(400 * time.Millisecond)
 	}
 	pick := func(appearance string) {
@@ -163,19 +167,19 @@ func TestNoFooter(t *testing.T) {
 		waitFor("tab lead", func() bool { return has("lead") })
 		click("lead")
 		time.Sleep(1500 * time.Millisecond) // the terminal attaches
-		waitFor("owner file problem", func() bool { return has(app.LabelOwnerProblem) })
+		waitFor("owner file problem", func() bool { return has(questions.LabelOwnerProblem) })
 		time.Sleep(500 * time.Millisecond)
 		for _, gone := range []string{"status bar", "needs row", "host-cpu-status", "contr-version"} {
 			if has(gone) {
 				t.Errorf("%s: the v0.2 part %q is still in the window", theme, gone)
 			}
 		}
-		for _, hidden := range []string{app.LabelPRPane, app.LabelBoardRoot, app.LabelWorkerPanel, app.LabelPanel} {
+		for _, hidden := range []string{viewers.LabelPRPane, viewers.LabelBoardRoot, viewers.LabelWorkerPanel, app.LabelPanel} {
 			if has(hidden) {
 				t.Errorf("%s: the hidden viewer %q shows (D147)", theme, hidden)
 			}
 		}
-		if b, side := c.boundsOf(t, app.LabelSettingsOpen), c.boundsOf(t, app.LabelProjectList); b.Y < side.Y+side.Height-1 || b.X > 40 {
+		if b, side := c.boundsOf(t, sidebar.LabelSettingsOpen), c.boundsOf(t, sidebar.LabelProjectList); b.Y < side.Y+side.Height-1 || b.X > 40 {
 			t.Errorf("%s: Settings at %v, not at the bottom left of the sidebar (list %v)", theme, b, side)
 		}
 		c.capture(t, filepath.Join(out, "footer-"+theme+"-window.png"))

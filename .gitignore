@@ -7,3 +7,4 @@
 .DS_Store
 /mygo.json
 RESULT.md
+__pycache__/

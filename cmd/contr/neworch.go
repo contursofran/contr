@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -12,7 +11,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"github.com/contursofran/contr/internal/agents"
-	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/projectsview"
 	"github.com/contursofran/contr/internal/git"
 )
 
@@ -32,7 +31,7 @@ func pickFolder() (string, error) {
 		return "", err
 	}
 	if len(paths) == 0 {
-		return "", app.ErrPickCancelled
+		return "", projectsview.ErrPickCancelled
 	}
 	return paths[0], nil
 }
@@ -50,7 +49,7 @@ func openFolder() (string, error) {
 		return "", err
 	}
 	if len(paths) == 0 {
-		return "", app.ErrPickCancelled
+		return "", projectsview.ErrPickCancelled
 	}
 	mygo.App.AddRecentDocument(paths[0])
 	return paths[0], nil
@@ -83,16 +82,12 @@ func orchestratorName(dir string, now time.Time) string {
 
 // spawnOrchestrator starts the orchestrator profile in dir, with role
 // orchestrator and no parent: the same as `contr agents spawn --role
-// orchestrator --no-parent`. A missing profile gives an error that names the
-// profiles file.
-func spawnOrchestrator(ctx context.Context, getenv func(string) string, dial func(context.Context, func(string) string) (agentsCore, error), dir string, now time.Time) error {
-	path := configPath(getenv)
-	cfg, err := agents.LoadConfig(path)
+// orchestrator --no-parent`. DefaultConfig has the profile, so it needs no file
+// (D206).
+func spawnOrchestrator(ctx context.Context, getenv func(string) string, dial func(context.Context, func(string) string) (agentsCore, error), dir string, now time.Time, colors *agents.Colors) error {
+	cfg, err := agents.LoadConfig(configPath(getenv))
 	if err != nil {
 		return err
-	}
-	if _, ok := cfg.Profiles[orchestratorProfile]; !ok {
-		return fmt.Errorf("no %q profile in %s", orchestratorProfile, path)
 	}
 	if kit := getenv("CONTR_KIT"); kit != "" {
 		cfg.Kit = kit
@@ -107,7 +102,7 @@ func spawnOrchestrator(ctx context.Context, getenv func(string) string, dial fun
 	defer core.Close()
 	_, err = agents.New(core, cfg).Spawn(ctx, agents.Spec{
 		Name: orchestratorName(dir, now), Profile: orchestratorProfile, Role: agents.RoleOrchestrator,
-		Worktree: dir, Project: filepath.Base(dir),
+		Worktree: dir, Project: filepath.Base(dir), Colors: colors,
 	})
 	return err
 }

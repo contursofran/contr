@@ -24,6 +24,7 @@ what the redesign does not settle.
 | [StatusGlyph.md](StatusGlyph.md) | braille spinner and Claude glyph |
 | [ServerRow.md](ServerRow.md) | one machine that runs hc |
 | [ProjectRow.md](ProjectRow.md) | one project in the sidebar |
+| [ProjectsModal.md](ProjectsModal.md) | the palette dialog that shows, adds and hides projects |
 | [AgentRow.md](AgentRow.md) | one orchestrator or worker |
 | [Terminal.md](Terminal.md) | the hc terminal of the selected tab |
 | [QuestionsNotch.md](QuestionsNotch.md) | glass tab at the top of each terminal of the project |
@@ -122,6 +123,10 @@ The owner's from-zero canvas (https://claude.ai/artifact/9bmbRdJc8qDMSRXm6obEb3)
 - Two hues only: `blocked` (red) for an agent that needs the owner, and
   `claude` for the Claude glyph. Diff counts are greys. Terminal output
   keeps its own colors. This replaces D76 for the parts these specs cover.
+- Modals are never transparent (D217). A modal or dialog (`DialogBase`,
+  `Modal`, `AlertDialog`) and a floating card with text to read have an
+  opaque fill: `float-solid` or `ground`. `glass-float` is only for the
+  closed questions notch, the outline card, the find bar and toasts.
 
 ## Icons
 
@@ -130,7 +135,7 @@ The owner's from-zero canvas (https://claude.ai/artifact/9bmbRdJc8qDMSRXm6obEb3)
 - Names: `project`, `computer`, `server`, `folder`, `folder-open`,
   `file-go`, `file-md`, `file`, `close`, `plus`, `search`,
   `sidebar-right`, `filter` (three lines), `terminal`, `settings`, `download`, `chevron-down` (dropdowns), `todo`, `todo-done` and `artifact` (SessionPanel). They go in `assets`.
-- The Claude mark is the official Claude mark (O8 settled, D123): `claude.svg`, one filled shape.
+- The Claude glyph is the Claude Code mascot (D218, replaces the mark of D123): `claude-mascot.svg`, one filled shape.
 
 ## Data
 
@@ -194,7 +199,7 @@ Esc is never a window shortcut: it interrupts Claude Code in the terminal.
 | Context sheet (`⌘J`) | QuestionsCard impacts and a collapsible section | replaced; no sheet (D125); code removed (D147) |
 | Footer 26: plan usage | UsageMeter | replaced; removed (D146): CPU and memory on ServerRow, versions in Settings, messages as toasts (D126) |
 | Pin bar (removed) | Outline and OutlineCard | new |
-| Board pop-up, PR viewer, Review, projects modal, settings | unchanged; restyle with the tokens | Review, projects modal and settings restyled; the board pop-up and PR viewer disabled (D122, D127); hidden behind one switch, code kept (D147) |
+| Board pop-up, PR viewer, Review, settings | unchanged; restyle with the tokens | Review and settings restyled; the projects modal is redesigned in [ProjectsModal.md](ProjectsModal.md) (D207); the board pop-up and PR viewer disabled (D122, D127); hidden behind one switch, code kept (D147) |
 
 ## Open points
 
@@ -218,7 +223,7 @@ The coordinator asks the owner these before the issues that need them.
 6. **O6 Narrow window.** Settled (D128): below about 1100px the files
    panel hides; below about 800px the sidebar collapses to icons.
 7. **O7 Sans font.** Settled: bundle Inter (OFL, a `NOTICE` entry), D121.
-8. **O8 Claude mark.** Settled (D123): the official Claude mark.
+8. **O8 Claude mark.** Settled (D123): the official Claude mark. The status glyph now draws the Claude Code mascot (D218).
 9. **O9 Light terminal palette.** Settled (D129): a known light palette
    (Ghostty or macOS Terminal style), tuned for contrast on the light
    panel. The values come in #345.

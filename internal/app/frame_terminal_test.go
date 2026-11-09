@@ -11,8 +11,10 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/app/state"
+	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/usage"
@@ -26,6 +28,7 @@ func (quietStream) Err() error                      { return nil }
 func (quietStream) Write(p []byte) (int, error)     { return len(p), nil }
 func (quietStream) Resize(uint16, uint16) error     { return nil }
 func (quietStream) Focus(bool) error                { return nil }
+func (quietStream) SetDisplay(hc.Display) error     { return nil }
 func (s quietStream) Close() error                  { return nil }
 
 // scriptSource attaches with err, or with a quiet stream when err is nil. It
@@ -63,10 +66,10 @@ func (s *scriptSource) counts() (attach, closed int) {
 func terminalFrame(t *testing.T, errs map[string]error) (*Frame, *fakeWindow, *ui.Tester, map[string]*scriptSource) {
 	t.Helper()
 	w := &fakeWindow{visible: true}
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	f.Selection = state.NewSelection(f.syncTerminal)
 	srcs := map[string]*scriptSource{}
-	f.TerminalSource = func(addr string) ghostty.Source {
+	f.deps.TerminalSource = func(addr string) ghostty.Source {
 		s := &scriptSource{err: errs[addr], address: addr}
 		srcs[addr] = s
 		return s
@@ -96,7 +99,7 @@ func TestTerminalSlotSaysSelectAnAgentWithoutOne(t *testing.T) {
 	if !strings.Contains(strings.Join(tt.Texts(), "\n"), TerminalOffLine) {
 		t.Errorf("texts %q, want %q", tt.Texts(), TerminalOffLine)
 	}
-	if !absent(tt, LabelTerminalGrid) {
+	if !apptest.Absent(tt, LabelTerminalGrid) {
 		t.Error("a grid shows with no agent selected")
 	}
 }
@@ -116,7 +119,7 @@ func TestTerminalGridIsInsideTheTerminalAreaAndShowsNoLineWhileLive(t *testing.T
 		t.Fatalf("state %+v, want live", f.termState)
 	}
 	tt.Frame()
-	grid, area := box(t, tt, LabelTerminalGrid), box(t, tt, LabelTerminal)
+	grid, area := apptest.Box(t, tt, LabelTerminalGrid), apptest.Box(t, tt, LabelTerminal)
 	if grid.X < area.X || grid.Y < area.Y || grid.X+grid.W > area.X+area.W+0.5 || grid.Y+grid.H > area.Y+area.H+0.5 {
 		t.Errorf("grid %+v is not inside the terminal area %+v", grid, area)
 	}
@@ -162,10 +165,10 @@ func TestSwitchingTheAgentClosesTheOldSource(t *testing.T) {
 
 func TestTerminalStopClosesTheTerminal(t *testing.T) {
 	w := &fakeWindow{visible: true}
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	f.Selection = state.NewSelection(f.syncTerminal)
 	src := &scriptSource{}
-	f.TerminalSource = func(string) ghostty.Source { return src }
+	f.deps.TerminalSource = func(string) ghostty.Source { return src }
 	stop := f.attachTerminal(w)
 	f.Selection.Select(state.Selected{Kind: state.KindOrchestrator, ID: "t1"})
 	stop()
@@ -179,13 +182,13 @@ func TestTerminalStopClosesTheTerminal(t *testing.T) {
 
 func TestAHiddenWindowDoesNotRetryAndShowingItDoes(t *testing.T) {
 	w := &fakeWindow{visible: false}
-	f := NewFrame()
-	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
+	f := NewFrame(Deps{})
+	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	src := &scriptSource{err: &hc.Error{Kind: "unavailable", Message: "no core"}}
-	f.TerminalSource = func(string) ghostty.Source { return src }
-	f.StartAgents = func(func()) (AgentSource, func()) { // t2 is a known worker: the syncs keep it selected
-		return &source{snap: agentstate.Snapshot{Workers: []agents.Worker{{Name: "w2", Address: "t2", Live: true}}}}, func() {}
+	f.deps.TerminalSource = func(string) ghostty.Source { return src }
+	f.deps.StartAgents = func(func()) (agentstate.AgentSource, func()) { // t2 is a known worker: the syncs keep it selected
+		return &source{Snap: agentstate.Snapshot{Workers: []agents.Worker{{Name: "w2", Address: "t2", Live: true}}}}, func() {}
 	}
 	stop := f.Attach(w)
 	defer stop()

@@ -6,7 +6,7 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/projectsview"
 )
 
 // cloneParent is the folder that holds a clone when no project was opened
@@ -40,7 +40,7 @@ func pickCloneParent(def string) (string, error) {
 		return "", err
 	}
 	if len(paths) == 0 {
-		return "", app.ErrPickCancelled
+		return "", projectsview.ErrPickCancelled
 	}
 	return paths[0], nil
 }

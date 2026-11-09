@@ -5,7 +5,7 @@ A Claude Code plugin for agent work with `contr agents`:
 - `agents/`: the builder, planner and reviewer agent definitions.
 - `commands/orchestrate.md`: the coordinator playbook, as `/contr:orchestrate <goal>`.
 - `hooks/hooks.json`: the Stop hook (a worker's turn that sent no report; a coordinator's state
-  before a compaction) and the SessionStart hook after a compaction (the playbook comes back).
+  before a compaction) and the SessionStart hook at startup of an orchestrator and after a compaction (the playbook).
 - `.mcp.json`: starts `contr mcp`, which gives the session the agent tools (spawn, message,
   interrupt, stop, read, list, clear_ended). `stop` removes the
   worker's terminal unless `keep` is set. `contr` must be on the PATH; `scripts/install.sh` links it.
@@ -24,8 +24,10 @@ The `--plugin-dir` sessions below still work with the plugin installed.
 
 1. Point `contr agents` at this folder: set `CONTR_KIT` to its path, or put
    `"kit": "<path>"` in the profiles file (`contr agents help` names it).
-   A claude profile with an agent file here then starts as that agent:
-   `claude --plugin-dir <kit> --agent contr:<profile> …`. A variant names
+   Every claude profile then starts with the kit:
+   `claude --plugin-dir <kit> …`, unless its argv has `--plugin-dir`
+   already (D211). A profile with an agent file here also starts as that
+   agent: `claude --plugin-dir <kit> --agent contr:<profile> …`. A variant names
    its agent: `"planner-high": {"argv": ["claude", "--model", "opus",
    "--effort", "high"], "agent": "planner"}`. The `spawn` tool reads the
    profiles file on each spawn, so a new profile works at once.
@@ -40,12 +42,17 @@ The `--plugin-dir` sessions below still work with the plugin installed.
    `CONTR_COORDINATOR` and report with `hc send`. When a worker's turn ends
    without one, the kit's Stop hook (`hooks/hooks.json`, `contr hook stop`)
    sends the coordinator "ended its turn without a report. Last words: …".
+   When Claude Code saved no transcript, the hook cannot tell whether the
+   turn sent a report, so it sends "ended its turn; it may have sent a report
+   already …" with the last words (D216). Workers start without the
+   `CLAUDECODE` and `CLAUDE_CODE_*` variables of the hc core, so Claude Code
+   saves their transcripts.
    The hook does nothing in sessions without `CONTR_COORDINATOR`.
 4. Compaction: in a coordinator (a session that ran `/contr:orchestrate`, or an
    hc terminal with role orchestrator), the Stop hook keeps the turn going
    once when the context passes `CONTR_SAVE_AT` tokens (default 220000, under
    a 250000 `autoCompactWindow`) and asks for `COORDINATOR-STATE.md`. After
-   Claude Code compacts, the SessionStart hook (matcher `compact`) adds the
+   Claude Code compacts, the SessionStart hook (matcher `startup|compact`) adds the
    playbook, the state file to read, the coordinator's live workers and its
    open owner items. Claude Code's own auto-compaction stays on.
 

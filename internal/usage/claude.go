@@ -17,8 +17,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/contursofran/contr/internal/jsonfile"
+	"github.com/contursofran/contr/internal/statedir"
 )
 
 // ClaudeFile is the usage file, under the state dir.
@@ -102,19 +106,11 @@ func WriteSnapshot(dir string, snap *ClaudeSnapshot) (bool, error) {
 	if old := readSnapshot(path); old != nil && reflect.DeepEqual(old.Windows, snap.Windows) {
 		return false, nil
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return false, err
-	}
 	data, err := json.MarshalIndent(snap, "", "  ")
 	if err != nil {
 		return false, err
 	}
-	tmp := fmt.Sprintf("%s.%d.tmp", path, os.Getpid())
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return false, err
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
+	if err := jsonfile.Write(path, data, 0o644); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -160,7 +156,7 @@ func readSnapshot(path string) *ClaudeSnapshot {
 // used. Bad input and failed saves are logged, not returned, so the status line
 // keeps working. It returns an error only when stdin or stdout fails.
 func RunStatusline(stdin io.Reader, stdout io.Writer, then []string) error {
-	return runWith(stdin, stdout, then, StateDir(), os.Getenv(EnvTerminal), uint64(time.Now().Unix()), chainTimeout)
+	return runWith(stdin, stdout, then, statedir.Dir(), os.Getenv(statedir.EnvTerminal), uint64(time.Now().Unix()), chainTimeout)
 }
 
 // runWith is RunStatusline with the state dir (empty for none), the hc
@@ -192,8 +188,31 @@ func runWith(stdin io.Reader, stdout io.Writer, then []string, dir, terminal str
 		if _, err := stdout.Write(runCapped(then[0], then[1:], input, timeout)); err != nil {
 			return err
 		}
+		return nil
+	}
+	if line := shortLine(string(input), now); line != "" {
+		if _, err := io.WriteString(stdout, line+"\n"); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+// shortLine is the status line contr prints when nothing is chained: the
+// short model name and the context, as "opus · 90k of 200k". A part the input
+// lacks is left out; "" when both are absent.
+func shortLine(input string, now uint64) string {
+	var parts []string
+	var in contextLine
+	if json.Unmarshal([]byte(input), &in) == nil && in.Model != nil {
+		if m := ShortModel(in.Model.ID, in.Model.DisplayName); m != "" {
+			parts = append(parts, m)
+		}
+	}
+	if c := ParseContext(input, now); c != nil {
+		parts = append(parts, fmt.Sprintf("%s of %s", shortTokens(c.Tokens), shortTokens(c.Size)))
+	}
+	return strings.Join(parts, " · ")
 }
 
 // runCapped runs program args… with input on its stdin and returns its stdout,

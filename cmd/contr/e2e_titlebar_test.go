@@ -16,24 +16,27 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/files"
+	"github.com/contursofran/contr/internal/app/titlebar"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
 
 // fakeClaude is a program that looks like Claude Code in a terminal: the welcome box, the
 // conversation, a status line and the prompt box. It tells hc its state with the OSC the hook
-// sends (argument 1: working or idle).
+// sends (last argument: working, idle or blocked:kind=...:msg=..., which also prints a permission menu).
 const fakeClaude = `package main
 
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 )
 
 func main() {
 	cwd, _ := os.Getwd()
-	state := os.Args[1]
+	state := os.Args[len(os.Args)-1] // contr puts --settings before the profile arguments
 	fmt.Print("\n╭───────────────────────────────────────────────────╮\n")
 	fmt.Print("│ ✻ Welcome to Claude Code!                         │\n")
 	fmt.Print("│                                                   │\n")
@@ -46,6 +49,14 @@ func main() {
 	fmt.Print("● Read(docs/spec/TitleBar.md)\n  ⎿  Read 74 lines\n\n")
 	if state == "working" {
 		fmt.Print("✻ Reading the spec… (12s · ↓ 1.4k tokens · esc to interrupt)\n\n")
+	}
+	if strings.HasPrefix(state, "blocked") {
+		fmt.Print("● Bash(rm -rf build/ dist/)\n\n")
+		fmt.Print("────────────────────────────────────────\n Bash command\n\n   rm -rf build/ dist/\n   Remove the old build output\n\n Do you want to proceed?\n")
+		fmt.Print(" ❯ 1. Yes\n   2. Yes, and don't ask again for rm commands in this folder\n   3. No, and tell Claude what to do differently (esc)\n")
+		time.Sleep(time.Second) // hc needs the terminal up before it takes the state
+		fmt.Printf("\x1b]7501;state=%s\x07", state)
+		time.Sleep(time.Hour)
 	}
 	fmt.Print("╭───────────────────────────────────────────────────╮\n")
 	fmt.Print("│ >                                                 │\n")
@@ -300,8 +311,8 @@ func TestTitleBarCapture(t *testing.T) {
 			for n := 1; n <= 2; n++ {
 				// A click can land while the window builds a frame: click again until the terminal exists.
 				for try := 0; try < 5 && plains() < n; try++ {
-					waitFor(c, "the new tab button", func(map[string]bool) bool { return inBar(c, app.LabelNewTab) })
-					click(c, app.LabelNewTab)
+					waitFor(c, "the new tab button", func(map[string]bool) bool { return inBar(c, titlebar.LabelNewTab) })
+					click(c, titlebar.LabelNewTab)
 					for deadline := time.Now().Add(4 * time.Second); plains() < n && time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
 					}
 				}
@@ -309,16 +320,16 @@ func TestTitleBarCapture(t *testing.T) {
 		}
 		waitFor(c, "the two plain terminal tabs", func(map[string]bool) bool {
 			_, _, two := c.plainTabWidths(t)
-			return two && inBar(c, app.LabelNewTab)
+			return two && inBar(c, titlebar.LabelNewTab)
 		})
 		click(c, "lead")
 		time.Sleep(time.Second)
-		for _, want := range []string{"lead", "$ contr", app.LabelNewTab, app.LabelFilesToggle} {
+		for _, want := range []string{"lead", "$ contr", titlebar.LabelNewTab, titlebar.LabelFilesToggle} {
 			if !inBar(c, want) {
 				t.Errorf("%s, orchestrator: no %q in the bar; labels %v", theme, want, keys(c.labels(t)))
 			}
 		}
-		for _, absent := range []string{"Split", "#342 · agent-342-titlebar", app.LabelCloseTab} {
+		for _, absent := range []string{"Split", "#342 · agent-342-titlebar", titlebar.LabelCloseTab} {
 			if inBar(c, absent) {
 				t.Errorf("%s, orchestrator selected: the bar has %q", theme, absent)
 			}
@@ -343,7 +354,7 @@ func TestTitleBarCapture(t *testing.T) {
 		}
 		c.capture(t, filepath.Join(out, "titlebar-"+theme+"-terminal.png"))
 
-		// Select the builder in the sidebar: its own tab replaces the orchestrator's.
+		// Select the builder in the sidebar: its tab joins the shared set, after the orchestrator's (D190).
 		var row string
 		for l := range c.labels(t) {
 			if strings.HasPrefix(l, "b342-s1-titlebar, working, #342") {
@@ -361,8 +372,8 @@ func TestTitleBarCapture(t *testing.T) {
 			}
 		}
 		waitFor(c, "the builder's tab", func(map[string]bool) bool { return inBar(c, "#342 · agent-342-titlebar") })
-		if inBar(c, "lead") {
-			t.Errorf("%s: the orchestrator's tab shows with the builder selected", theme)
+		if !inBar(c, "lead") {
+			t.Errorf("%s: the orchestrator's tab left the bar with the builder selected (the tab set is shared, D190)", theme)
 		}
 		if !inBar(c, "$ contr") {
 			t.Errorf("%s: the plain terminals left the bar with the builder selected", theme)
@@ -373,7 +384,7 @@ func TestTitleBarCapture(t *testing.T) {
 		// rows of the tree add up to the number in the title bar.
 		const summary = "37 lines added, 4 removed, 3 files. Open review"
 		waitFor(c, "the diff summary", func(map[string]bool) bool { return inBar(c, summary) })
-		clickAt(c, app.LabelFileFilter)
+		clickAt(c, files.LabelFileFilter)
 		waitFor(c, "the changed files in the tree", func(l map[string]bool) bool { return l["notes.txt, +5"] })
 		for _, row := range []string{"tabs.go, +23", "notes.txt, +5", "titlebar.go, +9 −4"} {
 			if !c.labels(t)[row] {
@@ -384,7 +395,7 @@ func TestTitleBarCapture(t *testing.T) {
 			t.Errorf("%s: no diff summary with the builder selected", theme)
 		}
 		c.capture(t, filepath.Join(out, "titlebar-"+theme+"-builder.png"))
-		clickAt(c, app.LabelFileFilter)
+		clickAt(c, files.LabelFileFilter)
 
 		// A click on the diff summary opens Review; a click on a tab brings the terminal back.
 		click(c, summary)

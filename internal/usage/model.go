@@ -1,14 +1,11 @@
 // Package usage holds plan usage for contr's status bar: the usage model, with
-// Claude Code's status line and Codex's rollout logs as sources. It has no UI,
-// so `contr statusline` runs without a window.
+// Claude Code's status line, `codex app-server` and Codex's rollout logs as
+// sources. It has no UI, so `contr statusline` runs without a window.
 package usage
 
 import (
 	"fmt"
 	"math"
-	"os"
-	"path/filepath"
-	"runtime"
 )
 
 // PlanID names a plan whose usage contr shows. The values are the ids used in
@@ -86,35 +83,4 @@ func LeftLabel(left float64, ok bool) string {
 		return "–"
 	}
 	return fmt.Sprintf("%d%%", int64(math.Round(left)))
-}
-
-// StateDir is where contr keeps its own files. See StateDirFrom. It returns ""
-// when no folder can be found.
-func StateDir() string {
-	home, _ := os.UserHomeDir()
-	return StateDirFrom(os.Getenv, home, runtime.GOOS == "darwin")
-}
-
-// StateDirFrom returns $CONTR_STATE_DIR; else on macOS
-// "~/Library/Application Support/contr"; else $XDG_STATE_HOME/contr, or
-// ~/.local/state/contr. Empty variables count as unset. The environment and
-// home are passed in so tests need no real variables. An empty home means no
-// home; the result is "" when no folder can be found.
-func StateDirFrom(env func(string) string, home string, macos bool) string {
-	if dir := env("CONTR_STATE_DIR"); dir != "" {
-		return dir
-	}
-	if macos {
-		if home == "" {
-			return ""
-		}
-		return filepath.Join(home, "Library/Application Support/contr")
-	}
-	if state := env("XDG_STATE_HOME"); state != "" {
-		return filepath.Join(state, "contr")
-	}
-	if home == "" {
-		return ""
-	}
-	return filepath.Join(home, ".local/state/contr")
 }

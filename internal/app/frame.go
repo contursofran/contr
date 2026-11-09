@@ -20,11 +20,21 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/files"
 	"github.com/contursofran/contr/internal/app/ghostty"
+	"github.com/contursofran/contr/internal/app/ghsource"
 	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/projectsview"
+	"github.com/contursofran/contr/internal/app/questions"
+	"github.com/contursofran/contr/internal/app/reviewview"
+	"github.com/contursofran/contr/internal/app/settings"
+	"github.com/contursofran/contr/internal/app/sidebar"
 	"github.com/contursofran/contr/internal/app/state"
+	"github.com/contursofran/contr/internal/app/tabmodel"
 	"github.com/contursofran/contr/internal/app/theme"
-	"github.com/contursofran/contr/internal/git"
+	"github.com/contursofran/contr/internal/app/titlebar"
+	"github.com/contursofran/contr/internal/app/view"
+	"github.com/contursofran/contr/internal/app/viewers"
 	"github.com/contursofran/contr/internal/github"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/prefs"
@@ -62,12 +72,14 @@ func placeholder(name string) Slot {
 // Frame is the window's view. Build it with [NewFrame] and give [Frame.View]
 // to the window. Its methods run on the UI thread.
 type Frame struct {
+	// deps is what the frame gets from outside; [NewFrame] sets it.
+	deps  Deps
 	Slots Slots
 	// Overlay is the layer above the terminal for the notch and the outline.
-	Overlay TerminalOverlay
+	Overlay kit.TerminalOverlay
 	// Outline is the message ticks of the orchestrator terminal. [Frame.Attach]
 	// makes it when there is an agent source. Nil otherwise.
-	Outline *Outline
+	Outline *questions.Outline
 	// Visibility, Selection and Toasts are the app state. The frame holds
 	// them for the views in its slots.
 	Visibility *state.Visibility
@@ -77,104 +89,41 @@ type Frame struct {
 	Projects *projects.Store
 	// Card is the questions card. The notch and the board
 	// panel open it; the notch builds it ([Frame.Attach] makes it).
-	Card *QuestionsCard
+	Card *questions.QuestionsCard
 	// Notch is the questions notch in the terminal overlay ([Frame.Attach] makes it).
-	Notch *Notch
+	Notch *questions.Notch
 	// ProjectsModal is the projects modal (D110), made in Attach.
-	ProjectsModal *ProjectsModal
-	// Updates is the update service of the Settings modal (D115). Nil shows "updates are off".
-	Updates Updates
-	// Relaunch restarts contr after an update installs.
-	Relaunch func()
-	// AgentsConfig is the path of agents.json that the Agents tab of Settings edits (D186).
-	AgentsConfig string
+	ProjectsModal *projectsview.ProjectsModal
 	// Settings is the Settings modal, made in Attach.
-	Settings *Settings
-	// Worker is the panel's worker view. [Frame.Attach] makes it. The panel
-	// shows it while a worker is selected.
-	Worker *WorkerPanel
-	// StartAgents follows the agents. [Frame.Attach] calls it once, with a
-	// notify function that is safe from any goroutine, and uses the source
-	// and the stop function it returns. Nil means no agents.
-	StartAgents func(notify func()) (src AgentSource, stop func())
-	// PickFolder and SpawnOrchestrator serve `+ new` (D57): the first asks the
-	// owner for a folder (ErrPickCancelled for none), the second starts the
-	// orchestrator profile there. Both block, so the frame runs them off the
-	// UI thread. Nil makes `+ new` do nothing.
-	PickFolder func() (string, error)
-	// OpenFolder asks the owner for a folder to add to the projects (D116). It
-	// blocks, so the modal calls it off the UI thread.
-	OpenFolder func() (string, error)
-	// CloneParent, PickCloneParent and CloneRun serve the clone part of the
-	// projects modal (D117); see ProjectsModal. An empty CloneParent hides it.
-	CloneParent     string
-	PickCloneParent func(def string) (string, error)
-	CloneRun        git.CloneRunner
-	// ProjectKey returns the project key of a folder (D116); nil uses the folder.
-	ProjectKey func(path string) string
-	// LoadProjects reads the projects store (D109). It runs on a goroutine.
-	// Nil means no store: the frame reads no file.
-	// Nil reads the file in the user config folder.
-	LoadProjects func() (*projects.Store, error)
-	// SaveProjects writes a copy of the store (D110). It runs on a goroutine.
-	// Nil saves nothing.
-	SaveProjects func(*projects.Store) error
-	// ModelOf names the model that an agent profile starts, for line 2 of the
-	// agent rows. Nil shows no model.
-	ModelOf func(profile string) string
-	// EffortOf names the effort that an agent profile starts, for line 2 of
-	// the agent rows (D189). Nil: none.
-	EffortOf func(profile string) string
-	// WatchHead watches a repo's HEAD file for the sidebar's branch (see
-	// SpacesList.WatchHead). Nil: the branch is read when the terminals change.
-	WatchHead func(ctx context.Context, path string, changed func()) error
-	// LoadWidths reads the widths of the sidebar and the panel (D111). It
-	// runs on a goroutine. Nil means the defaults and no file.
-	LoadWidths func() (widths.Widths, error)
-	// SaveWidths writes the widths after a drag. It runs on a goroutine.
-	// Nil saves nothing.
-	SaveWidths func(widths.Widths) error
-	// LoadPrefs reads the settings (D119). [Frame.StartTheme] calls it before the
-	// window shows, so it must be quick. Nil means the defaults and no file.
-	LoadPrefs func() (prefs.Prefs, error)
-	// SavePrefs writes the settings after a change. It runs on a goroutine. Nil
-	// saves nothing.
-	SavePrefs func(prefs.Prefs) error
-	// ThemePlatform is MyGo's theme (mygo.Theme). Nil leaves the palette as it is.
-	ThemePlatform     theme.Platform
-	SpawnOrchestrator func(dir string) error
-	// OpenTerminal serves "+" and Cmd-T (D82): it starts a shell in an hc
-	// terminal for the open project, in dir, and returns its address. It
-	// blocks, so the frame runs it off the UI thread. Nil makes both do
-	// nothing.
-	OpenTerminal func(project, dir string) (string, error)
-	// TerminalSource gives the source of the hc terminal with an address.
-	// The terminal view attaches to the selected agent's terminal through it.
-	// Nil shows no terminal.
-	TerminalSource func(address string) ghostty.Source
+	Settings *settings.Settings
+	// Worker is the panel's worker view. [Frame.Attach] makes it while the viewers are
+	// shown (D147); else it stays nil.
+	Worker *viewers.WorkerPanel
 	// Panel is the board panel. [Frame.Attach] makes it and puts its view in
-	// Slots.Panel. The board is disabled (D122): the files panel does not show it.
-	Panel *BoardPanel
+	// Slots.Panel while the viewers are shown (D147); else it stays nil. The board is
+	// disabled (D122): the files panel does not show it.
+	Panel *viewers.BoardPanel
 	// Files is the tree of the files panel. [NewFrame] makes it.
-	Files *FileTree
+	Files *files.FileTree
 	// Session shows the selected agent's todos and artifacts over the file
 	// tree (D197). [NewFrame] makes it; [Frame.Attach] gives it the state dir.
-	Session *SessionPanel
+	Session *files.SessionPanel
 	// Diff is the title bar's diff summary. It shows the totals of Files. [NewFrame] makes it.
-	Diff *DiffSummary
+	Diff *files.DiffSummary
 	// Review is the Review view. [Frame.Attach] makes it. While the Review toggle is on, it
 	// replaces the terminal area, and it follows the selected project.
-	Review *Review
+	Review *reviewview.Review
 	// SpacesList is the spaces column body. [Frame.Attach] makes it and puts
 	// its view in Slots.Spaces.
-	SpacesList *SpacesList
-	// PR is the pull request pane. [Frame.Attach] makes it. [Frame.OpenPR] opens it at the
+	SpacesList *sidebar.SpacesList
+	// PR is the pull request pane. [Frame.Attach] makes it while the viewers are shown
+	// (D147); else it stays nil. [Frame.OpenPR] opens it at the
 	// right of the terminal area, and the title bar tabs shrink to icon and id (D59).
-	PR *PRPane
+	PR *viewers.PRPane
 	// WorkerPRs finds the pull request of each worker's branch (D104). [Frame.Attach] makes it.
-	WorkerPRs *WorkerPRs
+	WorkerPRs *ghsource.WorkerPRs
 	// IssueTitles reads the issue title of each worker for line 1 of its row (D174). [Frame.Attach] makes it.
-	IssueTitles *IssueTitles
+	IssueTitles *ghsource.IssueTitles
 	// OpenIssueWeb opens issue n of the repository in dir in the browser. [Frame.Attach] sets it;
 	// tests replace it.
 	OpenIssueWeb func(dir string, n int) error
@@ -196,15 +145,20 @@ type Frame struct {
 	// agents.
 	CloseTerm *CloseTerminal
 
-	bar titleBar
+	bar titlebar.TitleBar
 	// upd is the update pill, its panel and its toast (D176).
 	upd updateUI
-	// agentSnap gives the agents; nil before Attach or without agents. openProject is the
-	// project the title bar shows, and tabAgent the address of the agent whose tabs show.
+	// agentSnap reads the agent source; nil before Attach or without agents. Only
+	// [Frame.takeSnapshot] calls it. snap is the state of the last change and byAddr indexes
+	// it by address. openProject is the project the title bar shows, tabAgent the address of
+	// the agent whose tabs show, and tabs the title bar tabs (see agentview.go, #565).
 	agentSnap   func() agentstate.Snapshot
+	snap        agentstate.Snapshot
+	byAddr      map[string]agents.Worker
 	openProject string
 	openKey     string // the git common folder of openProject, when known
 	tabAgent    string
+	tabs        []tabmodel.Tab
 	// tabOrder is the order the owner dragged the plain tabs to, as addresses, for the session.
 	tabOrder    []string
 	sidebarOpen bool
@@ -226,7 +180,7 @@ type Frame struct {
 	follower     *theme.Follower
 	lateWin      lateWindow
 	themeErr     error
-	saveTimer    *time.Timer
+	saveTimer    stopper
 	// term is the plugin's terminal of the selected agent and conn its hc
 	// connection; both are nil with no terminal. termAddr is the hc terminal
 	// they show; termSet is false before the first sync. termState is the
@@ -256,13 +210,14 @@ type Frame struct {
 }
 
 // NewFrame returns a frame with the sidebar and the panel open and
-// placeholder slots.
-func NewFrame() *Frame {
-	f := &Frame{Slots: PlaceholderSlots(), sidebarOpen: true, panelOpen: true,
+// placeholder slots. d is what the frame gets from outside; the zero Deps gives no
+// stores and no agents.
+func NewFrame(d Deps) *Frame {
+	f := &Frame{deps: d, Slots: PlaceholderSlots(), sidebarOpen: true, panelOpen: true,
 		sidebarW: theme.SidebarWidth, panelW: theme.PanelWidth}
-	f.Files = NewFileTree(f.filesDir)
-	f.Diff = &DiffSummary{Tree: f.Files}
-	f.Session = &SessionPanel{Terminal: f.selectedTerminal}
+	f.Files = files.NewFileTree(f.filesDir)
+	f.Diff = &files.DiffSummary{Tree: f.Files}
+	f.Session = &files.SessionPanel{Terminal: f.selectedTerminal}
 	f.Files.Open = f.openFileInReview
 	f.Files.Reveal = func(abs string) { mygo.Shell.ShowItemInFolder(abs) }
 	return f
@@ -286,7 +241,7 @@ func (f *Frame) OpenPR(dir string, n int) {
 	if viewersEnabled && f.PR != nil {
 		f.PR.Open(dir, n)
 		if f.agentSnap != nil {
-			f.PR.Item = itemOf(f.agentSnap().Workers, dir)
+			f.PR.Item = ghsource.ItemOf(f.snap.Workers, dir)
 		}
 	}
 }
@@ -307,7 +262,7 @@ func (f *Frame) prOrchestrator(dir string) string {
 	if f.agentSnap == nil {
 		return ""
 	}
-	snap := f.agentSnap()
+	snap := f.snap
 	project := f.openProject
 	for _, w := range snap.Workers {
 		if w.Worktree != "" && w.Worktree == dir {
@@ -345,15 +300,15 @@ func (f *Frame) OpenPRInBrowser(dir string, n int) {
 
 // agentRowEntry is the entry of the agent rows. Its Open PR opens the browser; it has no
 // OpenPR, so the rows cannot reach the PR pane (D127).
-func (f *Frame) agentRowEntry() WorkerEntry {
-	return WorkerEntry{PRs: f.WorkerPRs, OpenIssue: f.OpenIssue, OpenPRWeb: f.OpenPRInBrowser}
+func (f *Frame) agentRowEntry() ghsource.WorkerEntry {
+	return ghsource.WorkerEntry{PRs: f.WorkerPRs, OpenIssue: f.OpenIssue, OpenPRWeb: f.OpenPRInBrowser}
 }
 
 // openWeb runs open off the UI thread and shows its error in the status message.
 func (f *Frame) openWeb(open func(dir string, n int) error, dir string, n int) {
-	run := Runner{}
+	run := view.Runner{}
 	if f.WorkerPRs != nil {
-		run = f.WorkerPRs.Run
+		run = f.WorkerPRs.Env.Run
 	}
 	run.Do(func() func() {
 		err := open(dir, n)
@@ -436,18 +391,8 @@ func (f *Frame) reviewTarget() string {
 	case state.KindWorktree:
 		return sel.ID
 	case state.KindOrchestrator, state.KindWorker, state.KindTerminal:
-		if f.agentSnap == nil {
-			return ""
-		}
-		s := f.agentSnap()
-		for _, ws := range [][]agents.Worker{s.Orchestrators, s.Workers, s.Terminals} {
-			for _, w := range ws {
-				if w.Address == sel.ID {
-					return w.Worktree
-				}
-			}
-		}
-		return ""
+		w, _ := f.agentAt(sel.ID)
+		return w.Worktree
 	}
 	return ""
 }
@@ -477,8 +422,6 @@ const (
 	LabelTerminalGrid = "terminal grid"
 	LabelReview       = "review area"
 	LabelPanel        = "board panel"
-	// LabelFilesToggle is the title bar button that hides and shows the files panel.
-	LabelFilesToggle = "Hide files"
 	// The three panels of the window (docs/spec/Window.md): screen readers name them so.
 	LabelPanelSidebar  = "Sidebar"
 	LabelPanelTerminal = "Terminal"
@@ -512,9 +455,8 @@ func (f *Frame) View(c *ui.Context) {
 		sidebar, files, showFiles := fitWidths(win, f.sidebarW, f.panelW, f.sidebarOpen, f.panelOpen)
 		f.icons = f.sidebarOpen && compactSidebar(win)
 		if f.SpacesList != nil {
-			f.SpacesList.compact = f.icons
+			f.SpacesList.Compact = f.icons
 		}
-		f.Files.Sync() // the diff summary counts what the tree lists, also while the panel is hidden
 		f.titleBar(c, sidebar, narrowWindow(win))
 		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Padding(0, theme.PanelGap, theme.PanelGap).Children(func() {
 			f.panels(c, sidebar, files, showFiles)
@@ -526,7 +468,7 @@ func (f *Frame) View(c *ui.Context) {
 		if f.Settings != nil {
 			f.Settings.View(c)
 		}
-		f.toastView(c)
+		f.ToastView(c)
 	})
 }
 
@@ -559,13 +501,15 @@ func (f *Frame) terminalPanel(c *ui.Context) {
 // filesPanel is the files slot: the agent's todos and artifacts (D197), the file tree under the
 // head "Files", and the Context meter in its footer (the plan meters are in the sidebar foot,
 // D196). The v0.2 board and worker panel
-// stay in the code but are not shown (D122); see panelBox.
+// stay in the code but are not shown (D122, D147).
 func (f *Frame) filesPanel(c *ui.Context) {
 	kit.Panel(c, kit.PanelOpts{Name: LabelPanelFiles,
-		Top:    func() { f.Session.View(c) },
-		Head:   func() { f.Files.Head(c) },
-		Body:   func() { f.Files.View(c) },
-		Footer: func() { kit.UsageMeter(c, []kit.Meter{contextMeter(f.planUsage(), f.selectedTerminal())}) }})
+		Top:  func() { f.Session.View(c) },
+		Head: func() { f.Files.Head(c) },
+		Body: func() { f.Files.View(c) },
+		Footer: func() {
+			kit.UsageMeter(c, []kit.Meter{contextMeter(f.planUsage(), f.selectedTerminal(), f.contextLabels())})
+		}})
 }
 
 // selectedTerminal is the hc terminal of the selected orchestrator, worker or
@@ -579,6 +523,14 @@ func (f *Frame) selectedTerminal() string {
 		return sel.ID
 	}
 	return ""
+}
+
+// contextLabels is the context that the Stop hook put on the labels of the
+// selected terminal (D205), for the Context meter when that terminal has no
+// status line file. Zero when there is none.
+func (f *Frame) contextLabels() usage.Context {
+	w, _ := f.agentAt(f.selectedTerminal())
+	return usage.Context{Tokens: w.ContextTokens, Size: w.ContextLimit}
 }
 
 // planUsage is the usage sampler as the meters read it. A nil sampler (a
@@ -654,7 +606,14 @@ func (f *Frame) split(c *ui.Context, stored *float32, shown, lo, hi float32, rtl
 
 // widthsSaveDelay is how long a divider must rest before its widths are
 // saved (D111).
-var widthsSaveDelay = 400 * time.Millisecond
+const widthsSaveDelay = 400 * time.Millisecond
+
+// stopper is a timer that waits: Stop cancels it (as time.Timer.Stop does).
+type stopper interface{ Stop() bool }
+
+// widthsAfterFunc starts the timer of the widths save. It is time.AfterFunc;
+// tests replace it to fire the timer themselves, with no wait on wall time.
+var widthsAfterFunc = func(d time.Duration, fn func()) stopper { return time.AfterFunc(d, fn) }
 
 // saveWidthsAfterDrag saves the widths once the dividers rest for
 // widthsSaveDelay, off the UI thread: every move restarts the wait, so a
@@ -664,7 +623,7 @@ func (f *Frame) saveWidthsAfterDrag() {
 		return
 	}
 	f.movedNow = false
-	save := f.SaveWidths
+	save := f.deps.Widths.Save
 	if save == nil {
 		return
 	}
@@ -673,7 +632,7 @@ func (f *Frame) saveWidthsAfterDrag() {
 	}
 	w := widths.Widths{Sidebar: f.sidebarW, Panel: f.panelW}
 	post := f.post
-	f.saveTimer = time.AfterFunc(widthsSaveDelay, func() {
+	f.saveTimer = widthsAfterFunc(widthsSaveDelay, func() {
 		if err := save(w); err != nil && post != nil {
 			post(func() { f.Toasts.Show(err.Error()) })
 		}
@@ -690,25 +649,6 @@ func (f *Frame) content(c *ui.Context) {
 			f.PR.View(c)
 		}
 	})
-}
-
-// panelBox draws the v0.2 right panel (board or worker). It draws nothing while the viewers
-// are hidden (D147, [viewersEnabled]); the redesign (#333) decides where it goes.
-func (f *Frame) panelBox(c *ui.Context) {
-	if !viewersEnabled {
-		return
-	}
-	ui.Box(c).Label(LabelPanel).FillWidth().FillHeight().Children(func() { f.panel(c) })
-}
-
-// panel draws the worker view while a worker is selected, and the slot (the
-// board) otherwise: the panel follows the selected tab.
-func (f *Frame) panel(c *ui.Context) {
-	if f.Worker != nil && f.Worker.Following() {
-		f.Worker.View(c)
-		return
-	}
-	f.run(c, f.Slots.Panel)
 }
 
 // titleBar draws the 46px row at the top of the glass: a drag area that keeps
@@ -728,17 +668,18 @@ func (f *Frame) titleBar(c *ui.Context, sidebarW float32, narrow bool) {
 			corner = max(sidebarW+2*theme.PanelGap, corner)
 		}
 		ui.Box(c).Width(corner).FillHeight().Shrink(0)
-		f.bar.setTabs(f.titleTabs())
-		f.bar.selectTab, f.bar.closeTab = f.selectTab, f.closeTab
-		f.bar.closeOthers, f.bar.moveTab = f.closeOtherTabs, f.moveTab
-		f.bar.newTab = nil
+		f.bar.SetTabs(f.titleTabs())
+		f.bar.SelectTab, f.bar.CloseTab = f.selectTab, f.closeTab
+		f.bar.CloseOthers, f.bar.MoveTab = f.closeOtherTabs, f.moveTab
+		f.bar.StopTab, f.bar.CloseAgent = f.stopTab, f.closeAgentTab
+		f.bar.NewTab = nil
 		if f.NewTerm != nil {
-			f.bar.newTab = f.newTerminal
+			f.bar.NewTab = f.newTerminal
 		}
-		f.bar.diff, f.bar.openReview = f.Diff, f.openReviewView
-		f.bar.search = f.openFind
-		f.bar.update = f.updatePill
-		f.bar.build(c, f.panelOpen && !narrow, narrow, f.TogglePanel)
+		f.bar.Diff, f.bar.OpenReview = f.Diff, f.openReviewView
+		f.bar.Search = f.openFind
+		f.bar.Update = f.updatePill
+		f.bar.Build(c, f.panelOpen && !narrow, narrow, f.TogglePanel)
 	})
 }
 
@@ -764,28 +705,6 @@ func (f *Frame) terminal(c *ui.Context) {
 	})
 }
 
-// titleTabs returns the tabs of the selected agent. The open project follows the selected
-// orchestrator, worker or plain terminal, and keeps its last value for any other selection; the
-// agent keeps its last value while a plain terminal or a worktree is selected.
-func (f *Frame) titleTabs() []Tab {
-	if f.agentSnap == nil {
-		return nil
-	}
-	snap := f.agentSnap()
-	var sel state.Selected
-	var ok bool
-	if f.Selection != nil {
-		sel, ok = f.Selection.Current()
-	}
-	f.openProject, f.openKey = OpenProjectKey(snap, sel, ok, f.openProject, f.openKey)
-	f.tabAgent = TabAgent(snap, sel, ok, f.openProject, f.openKey, f.tabAgent)
-	selected := ""
-	if ok && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker || sel.Kind == state.KindTerminal) {
-		selected = sel.ID
-	}
-	return OrderTabs(TitleTabs(snap, f.openProject, f.openKey, f.tabAgent, selected), f.tabOrder)
-}
-
 // newTerminal opens a plain terminal in the open project (D82). Its folder is
 // the worktree of the project's first orchestrator, else the home folder.
 // UI thread.
@@ -809,7 +728,7 @@ func (f *Frame) closeSelectedTerminal() {
 	if !ok || sel.Kind != state.KindTerminal {
 		return
 	}
-	if f.agentSnap != nil && !slices.ContainsFunc(f.agentSnap().Terminals, func(w agents.Worker) bool { return w.Address == sel.ID }) {
+	if f.agentSnap != nil && !slices.ContainsFunc(f.snap.Terminals, func(w agents.Worker) bool { return w.Address == sel.ID }) {
 		return
 	}
 	f.CloseTerm.Start(sel.ID)
@@ -835,7 +754,7 @@ func (f *Frame) terminalClosed(addr string) {
 // terminalDir is the start folder of a new terminal in project.
 func (f *Frame) terminalDir(project string) string {
 	if f.agentSnap != nil {
-		for _, o := range f.agentSnap().Orchestrators {
+		for _, o := range f.snap.Orchestrators {
 			if o.Project == project && o.Worktree != "" {
 				return o.Worktree
 			}
@@ -851,7 +770,7 @@ func (f *Frame) terminalDir(project string) string {
 
 // selectTab selects the terminal of a title bar tab. A tab shows its terminal, so it closes the
 // Review view.
-func (f *Frame) selectTab(t Tab) {
+func (f *Frame) selectTab(t tabmodel.Tab) {
 	if f.Selection == nil {
 		return
 	}
@@ -867,16 +786,30 @@ func (f *Frame) selectTab(t Tab) {
 }
 
 // closeTab closes a plain terminal tab (D85). An agent tab has no close button.
-func (f *Frame) closeTab(t Tab) {
+func (f *Frame) closeTab(t tabmodel.Tab) {
 	if f.CloseTerm != nil && t.Closable() {
 		f.CloseTerm.Start(t.Address)
 	}
 }
 
+// stopTab stops the agent of an agent tab (D219), as Stop of its sidebar row does.
+func (f *Frame) stopTab(t tabmodel.Tab) {
+	if f.SpacesList != nil && !t.Plain {
+		f.SpacesList.StopAgent(t.Address, t.Title)
+	}
+}
+
+// closeAgentTab stops the agent of an agent tab and removes its terminal (D219).
+func (f *Frame) closeAgentTab(t tabmodel.Tab) {
+	if f.SpacesList != nil && !t.Plain {
+		f.SpacesList.CloseAgent(t.Address, t.Title)
+	}
+}
+
 // closeOtherTabs closes every plain terminal tab except keep. The agent's own tab never closes
 // (D85). UI thread.
-func (f *Frame) closeOtherTabs(keep Tab) {
-	for _, t := range f.bar.tabs {
+func (f *Frame) closeOtherTabs(keep tabmodel.Tab) {
+	for _, t := range f.bar.Tabs {
 		if t.Address != keep.Address {
 			f.closeTab(t)
 		}
@@ -886,7 +819,7 @@ func (f *Frame) closeOtherTabs(keep Tab) {
 // moveTab puts the plain tab from in the place of the plain tab to. The agent's own tab does
 // not move. The order lasts for the session. UI thread.
 func (f *Frame) moveTab(from, to string) {
-	order, ok := MoveTab(f.bar.tabs, from, to)
+	order, ok := tabmodel.MoveTab(f.bar.Tabs, from, to)
 	if !ok {
 		return
 	}
@@ -897,6 +830,7 @@ func (f *Frame) moveTab(from, to string) {
 		}
 	}
 	f.tabOrder = order
+	f.syncOpen()
 }
 
 // Window is the part of a MyGo window that [Frame.Attach] uses.
@@ -911,12 +845,12 @@ type Window interface {
 
 // scope is the project the board shows: the selected orchestrator's,
 // or "" (all projects) when none is selected.
-func (f *Frame) scope(src AgentSource) string {
+func (f *Frame) scope() string {
 	sel, ok := f.Selection.Current()
 	if !ok || sel.Kind != state.KindOrchestrator {
 		return ""
 	}
-	for _, o := range src.Snapshot().Orchestrators {
+	for _, o := range f.snap.Orchestrators {
 		if o.Address == sel.ID {
 			return o.Project
 		}
@@ -924,7 +858,10 @@ func (f *Frame) scope(src AgentSource) string {
 	return ""
 }
 
+// syncAgents takes the snapshot of a change and gives it to the parts that follow the agents.
+// UI thread.
 func (f *Frame) syncAgents() {
+	f.takeSnapshot()
 	if f.Worker != nil {
 		f.Worker.Sync()
 	}
@@ -932,7 +869,7 @@ func (f *Frame) syncAgents() {
 		f.SpacesList.Sync()
 	}
 	if f.PR != nil && f.agentSnap != nil {
-		f.PR.OnAgentsSync(f.agentSnap().Workers)
+		f.PR.OnAgentsSync(f.snap.Workers)
 	}
 	f.syncWorkerPRs()
 	f.syncIssueTitles()
@@ -941,16 +878,16 @@ func (f *Frame) syncAgents() {
 // loadProjects reads the projects store off the UI thread and gives it to the
 // sidebar (D109). A read error shows in the status message; the store is then
 // empty, so the sidebar keeps the tree order, and the file stays as it is (D63).
-func (f *Frame) loadProjects(w Window) {
-	load := f.LoadProjects
+func (f *Frame) loadProjects(env view.Env) {
+	load := f.deps.Projects.Load
 	if load == nil {
 		return
 	}
-	go func() {
+	env.Do(func() func() {
 		store, err := load()
-		w.Update(func() {
+		return func() {
 			if err != nil {
-				f.Toasts.Show(err.Error())
+				env.Show(err.Error())
 			}
 			if store == nil {
 				f.SpacesList.ReleaseLaunch()
@@ -959,23 +896,23 @@ func (f *Frame) loadProjects(w Window) {
 				f.SpacesList.Adopt = err == nil
 				f.SpacesList.SetProjects(store)
 			}
-		})
-	}()
+		}
+	})
 }
 
 // loadWidths reads the saved widths off the UI thread (D111). A bad file shows
 // in the status message and the defaults stay. A width the owner already
 // dragged is not replaced.
-func (f *Frame) loadWidths(w Window) {
-	load := f.LoadWidths
+func (f *Frame) loadWidths(env view.Env) {
+	load := f.deps.Widths.Load
 	if load == nil {
 		return
 	}
-	go func() {
+	env.Do(func() func() {
 		saved, err := load()
-		w.Update(func() {
+		return func() {
 			if err != nil {
-				f.Toasts.Show(err.Error())
+				env.Show(err.Error())
 			}
 			if f.widthsTouched {
 				return
@@ -986,15 +923,15 @@ func (f *Frame) loadWidths(w Window) {
 			if saved.Panel > 0 {
 				f.panelW = clampWidth(saved.Panel, theme.PanelMinWidth, theme.PanelMaxWidth)
 			}
-			w.Invalidate()
-		})
-	}()
+			env.Redraw()
+		}
+	})
 }
 
 // syncIssueTitles starts the issue title reads for the workers (D174).
 func (f *Frame) syncIssueTitles() {
 	if f.IssueTitles != nil && f.agentSnap != nil {
-		f.IssueTitles.Sync(f.agentSnap().Workers)
+		f.IssueTitles.Sync(f.snap.Workers)
 	}
 }
 
@@ -1017,148 +954,17 @@ func (f *Frame) statusEffort(address string) string {
 	return c.Effort
 }
 
-// syncWorkerPRs starts the pull request reads for the workers now (D104).
-func (f *Frame) syncWorkerPRs() {
-	if f.WorkerPRs != nil && f.agentSnap != nil {
-		f.WorkerPRs.Sync(f.agentSnap().Workers)
-	}
-}
-
-// Attach connects the frame's state to the window. A change of any of them
-// redraws the window; Visibility follows the window. Call it once, on the UI
-// thread, after the window exists. The returned function ends the watching.
-func (f *Frame) Attach(w Window) (stop func()) {
-	f.Selection = state.NewSelection(func() { w.Invalidate(); f.syncReview(); f.syncTerminal() })
-	f.Review = NewReview(w.Update, w.Invalidate)
-	f.Files.Post, f.Files.Invalidate = w.Update, w.Invalidate
-	f.Toasts = state.NewToasts(w.Invalidate)
-	f.Files.Status = f.Toasts.Show
-	f.Session.Post, f.Session.Invalidate, f.Session.OpenURL = w.Update, w.Invalidate, openURL
-	if f.Session.StateDir == "" {
-		f.Session.StateDir = usage.StateDir()
-	}
-	f.PR = &PRPane{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate, OpenURL: openURL}
-	f.WorkerPRs = &WorkerPRs{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate}
-	f.IssueTitles = &IssueTitles{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate}
-	var agentSnap func() agentstate.Snapshot
-	var src AgentSource
-	stopAgents := func() {}
-	if f.StartAgents != nil {
-		src, stopAgents = f.StartAgents(func() { w.Update(f.syncAgents) })
-	}
-	if src != nil {
-		agentSnap = src.Snapshot
-		f.agentSnap = agentSnap
-		run := Runner{Post: w.Update}
-		f.Card = &QuestionsCard{Source: src, Run: run, Invalidate: w.Invalidate,
-			Select: func(address string, orchestrator bool) {
-				kind := state.KindWorker
-				if orchestrator {
-					kind = state.KindOrchestrator
-				}
-				f.Selection.Select(state.Selected{Kind: kind, ID: address})
-			}}
-		f.CloseTerm = &CloseTerminal{Stop: src.Close, Run: run, Status: f.Toasts.Show, Closed: f.terminalClosed}
-		setCloseTerminalHandler(func() { w.Update(f.closeSelectedTerminal) })
-		entry := WorkerEntry{PRs: f.WorkerPRs, OpenPR: f.paneOpener(), OpenIssue: f.OpenIssue}
-		f.Card.Entry = entry
-		f.Worker = &WorkerPanel{Entry: entry, Source: src, Selection: f.Selection, Run: run, Status: f.Toasts.Show, Invalidate: w.Invalidate}
-		f.PR.Orchestrator, f.PR.Send = f.prOrchestrator, src.Send
-	}
-	removeOutline := func() {}
-	if agentSnap != nil {
-		f.Outline = NewOutline(agentSnap, f.Selection, w.Invalidate)
-		removeOutline = f.Overlay.Add(LabelOutline, f.Outline.View)
-	}
-	if f.Host == nil {
-		f.Host = host.NewSystem(w.Invalidate)
-	}
-	// The git scan runs on a goroutine and lands through Window.Update.
-	if f.SpacesList == nil {
-		f.SpacesList = NewSpacesList(agentSnap, f.Selection, w.Update)
-	}
-	f.SpacesList.Host = f.Host
-	f.SpacesList.ByKey = func(do func()) { f.keyNav = true; do(); f.keyNav = false }
-	f.SpacesList.OnOpen = func() { f.focusTerm = true; w.Invalidate() }
-	f.SpacesList.OnPick = f.SpacesList.OnOpen
-	f.SpacesList.ModelOf = f.ModelOf
-	f.SpacesList.EffortOf = f.EffortOf
-	f.SpacesList.StatusEffort = f.statusEffort
-	f.SpacesList.StatusModel = f.statusModel
-	f.SpacesList.Titles = f.IssueTitles
-	f.SpacesList.Run, f.SpacesList.Status = Runner{Post: w.Update}, f.Toasts.Show
-	f.SpacesList.Entry = f.agentRowEntry()
-	f.SpacesList.Ages = &AgeClock{Tick: w.Invalidate}
-	if src != nil {
-		f.SpacesList.Source = src
-	}
-	f.SpacesList.WatchHead = f.WatchHead
-	f.SpacesList.OnError = func(err error) { f.Toasts.Show(err.Error()) }
-	if f.PickFolder != nil && f.SpawnOrchestrator != nil {
-		f.NewOrch = &NewOrchestrator{Pick: f.PickFolder, Spawn: f.SpawnOrchestrator,
-			Run: Runner{Post: w.Update}, Status: f.Toasts.Show}
-		f.SpacesList.OnNew = f.NewOrch.Start
-		f.SpacesList.OnNewIn = f.NewOrch.StartIn
-	}
-	if f.OpenTerminal != nil {
-		f.NewTerm = &NewTerminal{Open: f.OpenTerminal, Run: Runner{Post: w.Update}, Status: f.Toasts.Show,
-			Select: func(addr string) { f.Selection.Select(state.Selected{Kind: state.KindTerminal, ID: addr}) }}
-		setNewTerminalHandler(func() { w.Update(f.newTerminal) })
-	}
-	f.ProjectsModal = &ProjectsModal{
-		Groups: f.SpacesList.Groups,
-		Store:  func() *projects.Store { return f.Projects },
-		Apply: func() {
-			if f.Projects != nil {
-				f.SpacesList.SetProjects(f.Projects)
-			}
-		},
-		PickFolder: f.OpenFolder, Resolve: f.ProjectKey,
-		CloneParent: f.CloneParent, PickParent: f.PickCloneParent, CloneRun: f.CloneRun,
-		Save: f.SaveProjects, Run: Runner{Post: w.Update}, Status: f.Toasts.Show, Invalidate: w.Invalidate,
-	}
-	f.SpacesList.OnProjects = f.ProjectsModal.Toggle
-	f.SpacesList.OnReordered = f.ProjectsModal.changed
-	f.SpacesList.OnAdopted = f.ProjectsModal.changed
-	f.lateWin.set(w)
-	if f.themeErr != nil {
-		f.Toasts.Show(f.themeErr.Error())
-		f.themeErr = nil
-	}
-	f.Settings = &Settings{Updates: f.Updates, Version: Version, CoreVersion: f.coreVersion, Run: Runner{Post: w.Update},
-		Relaunch: f.Relaunch, OnReady: f.updateReady, Invalidate: w.Invalidate, Visible: func() bool { return f.Visibility == nil || f.Visibility.Visible() },
-		AgentsConfig: f.AgentsConfig, Status: f.Toasts.Show, Appearance: f.Appearance, SetAppearance: f.SetAppearance,
-		Tint: f.Tint, SetTint: f.SetTint, ResetTint: f.ResetTint}
-	setSettingsHandler(func() { w.Update(f.Settings.Toggle) })
-	setSidebarHandler(func() { w.Update(f.ToggleSidebar) })
-	f.SpacesList.OnSettings = func() { f.Settings.Toggle() }
-	f.SpacesList.UpdateReady = f.Settings.Ready
-	f.SpacesList.Plans = func() []kit.Meter { return planMeters(f.planUsage()) }
-	stopChecks := f.Settings.StartChecks()
-	offActive := mygo.App.OnDidBecomeActive(func() { w.Update(f.Settings.Activated) })
-	f.Slots.Spaces = f.SpacesList.View
-	f.SpacesList.HoldLaunch = f.LoadProjects != nil
-	f.SpacesList.Sync()
-	f.loadProjects(w)
-	f.loadWidths(w)
+// attachBoard makes the board panel and puts its view in Slots.Panel. [Frame.Attach] calls it
+// only while the viewers are shown (D147).
+func (f *Frame) attachBoard(agentSnap func() agentstate.Snapshot, src agentstate.AgentSource) {
 	var scope func() string
 	if src != nil {
-		scope = func() string { return f.scope(src) }
+		scope = f.scope
 	}
-	f.Notch = &Notch{Snapshot: agentSnap, Project: func() string { return f.openProject }}
-	if src != nil {
-		f.Notch.Open = f.Card.Open
-		f.Notch.Close = f.Card.Close
-		f.Notch.Opened = f.Card.IsOpen
-		f.Notch.Panel = f.Card.View
-	}
-	f.Overlay.Add(LabelNotchLayer, f.Notch.View)
-	f.Panel = &BoardPanel{Snapshot: agentSnap, Needs: NeedItems(agentSnap, scope)}
+	f.Panel = &viewers.BoardPanel{Snapshot: agentSnap, Needs: agentstate.NeedItems(agentSnap, scope)}
 	f.Panel.OpenPR = f.paneOpener()
 	f.Panel.OpenIssue = f.OpenIssue
 	f.Panel.PRs = f.WorkerPRs
-	f.syncWorkerPRs()
-	f.syncIssueTitles()
 	if src != nil {
 		f.Panel.Scope = scope
 		f.Panel.Open = f.Card.Open
@@ -1167,46 +973,12 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		}
 	}
 	f.Slots.Panel = f.Panel.View
-	if f.Usage == nil {
-		f.Usage = usage.NewFileSampler(w.Invalidate)
-	}
-	f.Visibility = state.NewVisibility(func(visible bool) {
-		f.SpacesList.Ages.SetVisible(visible)
-		f.Host.SetVisible(visible)
-		f.Usage.SetVisible(visible)
-		w.Update(func() {
-			if f.conn != nil {
-				f.conn.SetVisible(visible)
-			}
-		})
-		w.Update(func() { f.Settings.SetVisible(visible) })
-		if visible {
-			w.Update(f.syncReview)
-		}
-	})
-	// Visibility starts as visible, so a window that starts hidden is the only change that Watch
-	// reports. The samplers start hidden: tell them the window state now.
-	f.Host.SetVisible(w.IsVisible())
-	f.Usage.SetVisible(w.IsVisible())
-	f.SpacesList.Ages.SetVisible(w.IsVisible())
-	unwatch := f.Visibility.Watch(w)
-	term := f.attachTerminal(w)
-	return func() {
-		setNewTerminalHandler(nil)
-		setSidebarHandler(nil)
-		setCloseTerminalHandler(nil)
-		setSettingsHandler(nil)
-		stopChecks()
-		offActive()
-		f.Files.Close()
-		f.Session.Close()
-		unwatch()
-		term()
-		removeOutline()
-		stopAgents()
-		f.SpacesList.Close()
-		f.Host.Close()
-		f.Usage.Close()
+}
+
+// syncWorkerPRs starts the pull request reads for the workers now (D104).
+func (f *Frame) syncWorkerPRs() {
+	if f.WorkerPRs != nil && f.agentSnap != nil {
+		f.WorkerPRs.Sync(f.snap.Workers)
 	}
 }
 
@@ -1301,7 +1073,7 @@ func (f *Frame) syncTerminal() {
 		return
 	}
 	addr := ""
-	if f.Selection != nil && f.TerminalSource != nil {
+	if f.Selection != nil && f.deps.TerminalSource != nil {
 		if sel, ok := f.Selection.Current(); ok && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker || sel.Kind == state.KindTerminal) {
 			addr = sel.ID
 		}
@@ -1320,7 +1092,7 @@ func (f *Frame) syncTerminal() {
 	}
 	post, invalidate := f.post, f.invalidate
 	var conn *ghostty.Conn
-	conn = ghostty.NewConn(f.TerminalSource(addr), ghostty.Options{Watch: true, OnState: func(s ghostty.State) {
+	conn = ghostty.NewConn(f.deps.TerminalSource(addr), ghostty.Options{Watch: true, OnState: func(s ghostty.State) {
 		post(func() {
 			if f.conn == conn {
 				f.termState = s
@@ -1355,7 +1127,7 @@ func (f *Frame) coreVersion() (string, bool) {
 	if f.agentSnap == nil {
 		return "", false
 	}
-	v := f.agentSnap().CoreVersion
+	v := f.snap.CoreVersion
 	return v, v != ""
 }
 

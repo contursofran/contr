@@ -119,13 +119,13 @@ func TestNewTerminalItemCallsTheFramesHandlerAndDoesNothingWithoutOne(t *testing
 	it := find(t, BuildMenus().Items()[1].Submenu, "New Terminal")
 	it.Click(it, nil) // no window: must not panic
 	n := 0
-	setNewTerminalHandler(func() { n++ })
-	defer setNewTerminalHandler(nil)
+	setHandler(handlerNewTerminal, func() { n++ })
+	defer setHandler(handlerNewTerminal, nil)
 	it.Click(it, nil)
 	if n != 1 {
 		t.Errorf("handler ran %d times, want 1", n)
 	}
-	setNewTerminalHandler(nil)
+	setHandler(handlerNewTerminal, nil)
 	it.Click(it, nil)
 	if n != 1 {
 		t.Errorf("handler ran after it was cleared")
@@ -143,13 +143,13 @@ func TestCloseTerminalItemCallsTheFramesHandlerAndDoesNothingWithoutOne(t *testi
 	it := find(t, BuildMenus().Items()[1].Submenu, "Close Terminal")
 	it.Click(it, nil) // no window: must not panic
 	n := 0
-	setCloseTerminalHandler(func() { n++ })
-	defer setCloseTerminalHandler(nil)
+	setHandler(handlerCloseTerminal, func() { n++ })
+	defer setHandler(handlerCloseTerminal, nil)
 	it.Click(it, nil)
 	if n != 1 {
 		t.Errorf("handler ran %d times, want 1", n)
 	}
-	setCloseTerminalHandler(nil)
+	setHandler(handlerCloseTerminal, nil)
 	it.Click(it, nil)
 	if n != 1 {
 		t.Errorf("handler ran after it was cleared")
@@ -175,13 +175,13 @@ func TestTheAppMenuHasSettingsOnCmdCommaAndCallsTheFramesHandler(t *testing.T) {
 	}
 	it.Click(it, nil) // no window: must not panic
 	n := 0
-	setSettingsHandler(func() { n++ })
-	defer setSettingsHandler(nil)
+	setHandler(handlerSettings, func() { n++ })
+	defer setHandler(handlerSettings, nil)
 	it.Click(it, nil)
 	if n != 1 {
 		t.Errorf("handler ran %d times, want 1", n)
 	}
-	setSettingsHandler(nil)
+	setHandler(handlerSettings, nil)
 	it.Click(it, nil)
 	if n != 1 {
 		t.Errorf("handler ran after it was cleared")
@@ -199,10 +199,35 @@ func TestTheViewMenuHasToggleSidebarOnCmdB(t *testing.T) {
 	}
 	it.Click(it, nil) // no window: must not panic
 	n := 0
-	setSidebarHandler(func() { n++ })
-	defer setSidebarHandler(nil)
+	setHandler(handlerSidebar, func() { n++ })
+	defer setHandler(handlerSidebar, nil)
 	it.Click(it, nil)
 	if n != 1 {
 		t.Errorf("handler ran %d times, want 1", n)
+	}
+}
+
+// Each item of the handler table runs its own handler only.
+func TestEachHandlerItemRunsOnlyItsOwnHandler(t *testing.T) {
+	var ran [handlerCount]int
+	for id := range handlerCount {
+		setHandler(id, func() { ran[id]++ })
+		defer setHandler(id, nil)
+	}
+	for id := range handlerCount {
+		it := handlerItem(id)
+		if it.Label != handlerActions[id].label {
+			t.Errorf("item %d label %q, want %q", id, it.Label, handlerActions[id].label)
+		}
+		it.Click(it, nil)
+		for other := range handlerCount {
+			want := 0
+			if other <= id {
+				want = 1
+			}
+			if ran[other] != want {
+				t.Errorf("after item %d: handler %d ran %d times, want %d", id, other, ran[other], want)
+			}
+		}
 	}
 }

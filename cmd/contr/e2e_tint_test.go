@@ -11,7 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/settings"
+	"github.com/contursofran/contr/internal/app/titlebar"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
 
@@ -89,18 +90,18 @@ func TestTintSliders(t *testing.T) {
 		return string(data)
 	}
 
-	wait(app.LabelNewTab)
+	wait(titlebar.LabelNewTab)
 	c.call(t, "menu", map[string]any{"path": []string{"contr", "Settings…"}})
-	wait(app.LabelSettings)
+	wait(settings.LabelSettings)
 	click("Dark")
 	for _, name := range []string{"dark", "light"} {
 		if name == "light" {
 			click("Light")
 		}
 		// Step the Background slider down and the Panels slider up: the values show beside them.
-		for i, label := range []string{app.LabelBackground, app.LabelPanels} {
+		for i, label := range []string{settings.LabelBackground, settings.LabelPanels} {
 			action := []string{"decrement", "increment"}[i]
-			id := c.idOf(t, label+" alpha")
+			id := c.idOfRole(t, "slider", label)
 			for n := 0; n < 10; n++ {
 				c.call(t, "act", map[string]any{"id": id, "action": action})
 			}

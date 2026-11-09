@@ -7,12 +7,18 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"github.com/contursofran/contr/internal/app/apptest"
+	"github.com/contursofran/contr/internal/app/settings"
+	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/view"
+	"github.com/contursofran/contr/internal/updated"
 )
 
 type pillRig struct {
 	f        *Frame
 	tt       *ui.Tester
-	u        *fakeUpdates
+	u        *apptest.Updates[settings.UpdateInfo]
 	relaunch int
 }
 
@@ -21,15 +27,15 @@ func newPillRig(t *testing.T, installErr error) *pillRig {
 	t.Helper()
 	f, tt := toastFrame()
 	r := &pillRig{f: f, tt: tt}
-	r.u = &fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0", Notes: "## 1.3.0\n- Update pill\n- Faster tabs"}, installErr: installErr}
-	f.Settings = &Settings{Updates: r.u, Version: "1.2.3", Run: Runner{Go: func(fn func()) { fn() }},
+	r.u = &apptest.Updates[settings.UpdateInfo]{On: true, Info: &settings.UpdateInfo{Version: "1.3.0", Notes: "## 1.3.0\n- Update pill\n- Faster tabs"}, InstallErr: installErr}
+	f.Settings = &settings.Settings{Updates: r.u, Version: "1.2.3",
 		Relaunch: func() { r.relaunch++ }, OnReady: f.updateReady}
 	tt.Frame()
 	return r
 }
 
 func (r *pillRig) ready() {
-	r.f.Settings.autoCheck()
+	r.f.Settings.AutoCheck()
 	r.tt.Frame()
 	r.tt.Frame()
 }
@@ -62,7 +68,7 @@ func TestAReadyUpdateShowsThePillAndOneToast(t *testing.T) {
 		!slices.Contains(r.tt.Texts(), UpdateToastBody) {
 		t.Fatalf("no update toast: %q", r.tt.Texts())
 	}
-	pill, toast := box(t, r.tt, LabelUpdatePill), box(t, r.tt, LabelUpdateToast)
+	pill, toast := apptest.Box(t, r.tt, LabelUpdatePill), apptest.Box(t, r.tt, LabelUpdateToast)
 	if toast.Y < pill.Y+pill.H {
 		t.Errorf("the toast %v is not under the pill %v", toast, pill)
 	}
@@ -78,7 +84,7 @@ func TestTheUpdateToastDoesNotComeBackAfterLater(t *testing.T) {
 	if r.has(LabelUpdateToast) {
 		t.Fatal("the toast stays after Later")
 	}
-	r.f.updateReady(UpdateInfo{Version: "1.3.0"})
+	r.f.updateReady(settings.UpdateInfo{Version: "1.3.0"})
 	r.tt.Frame()
 	r.settle()
 	if r.has(LabelUpdateToast) {
@@ -106,7 +112,7 @@ func TestThePillOpensThePanelAndRestartNowRelaunches(t *testing.T) {
 			t.Errorf("the panel has no %q: %q", want, texts)
 		}
 	}
-	if err := r.tt.Click(SettingsRestart + " ⏎"); err != nil {
+	if err := r.tt.Click(settings.SettingsRestart + " ⏎"); err != nil {
 		t.Fatal(err)
 	}
 	if r.relaunch != 1 {
@@ -137,13 +143,13 @@ func TestAFailedDownloadShowsNoPill(t *testing.T) {
 	}
 }
 
-func TestDownloadedText(t *testing.T) {
+func TestSinceText(t *testing.T) {
 	now := time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
 	for _, c := range []struct {
 		ago  time.Duration
 		want string
 	}{{10 * time.Second, "Downloaded just now"}, {3 * time.Minute, "Downloaded 3 min ago"}, {2 * time.Hour, "Downloaded 2 h ago"}} {
-		if got := downloadedText(now, now.Add(-c.ago)); got != c.want {
+		if got := sinceText("Downloaded", now, now.Add(-c.ago)); got != c.want {
 			t.Errorf("%v ago: %q, want %q", c.ago, got, c.want)
 		}
 	}
@@ -157,4 +163,235 @@ func TestNoteLinesListsItemsWithoutHeadings(t *testing.T) {
 	if got := noteLines("just text\n"); !slices.Equal(got, []string{"just text"}) {
 		t.Errorf("plain notes = %q", got)
 	}
+}
+
+// updatedRig is a frame that starts as version 0.4.0, after an update from 0.3.2 (D209).
+type updatedRig struct {
+	f     *Frame
+	tt    *ui.Tester
+	saved []updated.Note
+}
+
+// atOnce is an Env whose work runs at once on the caller's goroutine: the load
+// and the save of the note end before the call returns, so a test reads saved
+// with no race and no wait.
+var atOnce = view.Env{Run: view.Runner{Go: func(fn func()) { fn() }}}
+
+// newUpdatedRig starts a frame whose loader gives note n (or err), with the work run at once.
+func newUpdatedRig(t *testing.T, n updated.Note, err error) *updatedRig {
+	t.Helper()
+	f, tt := toastFrame()
+	r := &updatedRig{f: f, tt: tt}
+	f.Settings = &settings.Settings{Version: "0.4.0"}
+	f.deps.Updated.Load = func() (updated.Note, error) { return n, err }
+	f.deps.Updated.Save = func(n updated.Note) error { r.saved = append(r.saved, n); return nil }
+	tt.Frame()
+	f.loadUpdated(atOnce)
+	tt.Frame()
+	tt.Frame()
+	return r
+}
+
+func (r *updatedRig) has(label string) bool {
+	_, ok := r.tt.Find(label)
+	return ok
+}
+
+func dueNote() updated.Note {
+	return updated.Note{Version: "0.4.0", From: "0.3.2", Notes: "## 0.4.0\n- What's new panel\n- Faster tabs",
+		InstalledAt: time.Now().Add(-3*time.Minute - 10*time.Second)}
+}
+
+const updatedPill = UpdatedPrefix + "0.4.0"
+
+// closedAndShown checks that the pill and the panel went and the note was saved as shown once.
+func (r *updatedRig) closedAndShown(t *testing.T) {
+	t.Helper()
+	r.tt.Frame()
+	if r.has(LabelUpdatePanel) || r.has(updatedPill) {
+		t.Error("the pill or the panel stays after the panel closed")
+	}
+	if len(r.saved) != 1 || !r.saved[0].Shown || r.saved[0].Version != "0.4.0" || r.saved[0].From != "0.3.2" {
+		t.Errorf("saved %+v, want one shown note of 0.4.0", r.saved)
+	}
+}
+
+func TestWhatsNewOpensAtStartAfterAnUpdate(t *testing.T) {
+	r := newUpdatedRig(t, dueNote(), nil)
+	if !r.has(updatedPill) || !r.has(LabelUpdatePanel) {
+		t.Fatalf("no pill or panel at start: %q", r.tt.Texts())
+	}
+	texts := r.tt.Texts()
+	for _, want := range []string{updatedPill, "contr 0.4.0", "from 0.3.2", UpdateWhatsNew, "What's new panel", "Faster tabs", "Updated 3 min ago", UpdateGotIt + " ⏎"} {
+		if !slices.Contains(texts, want) {
+			t.Errorf("no %q: %q", want, texts)
+		}
+	}
+	for _, not := range []string{UpdateAgentsNote, UpdateLater, settings.SettingsRestart + " ⏎", LabelUpdatePill} {
+		if slices.Contains(texts, not) {
+			t.Errorf("the panel after an update has %q", not)
+		}
+	}
+	pill, panel := apptest.Box(t, r.tt, updatedPill), apptest.Box(t, r.tt, LabelUpdatePanel)
+	if panel.Y < pill.Y+pill.H {
+		t.Errorf("the panel %v is not under the pill %v", panel, pill)
+	}
+	if len(r.saved) != 0 {
+		t.Errorf("saved %+v before the panel closed", r.saved)
+	}
+}
+
+func TestGotItClosesWhatsNewAndMarksItShown(t *testing.T) {
+	r := newUpdatedRig(t, dueNote(), nil)
+	if err := r.tt.Click(UpdateGotIt + " ⏎"); err != nil {
+		t.Fatal(err)
+	}
+	r.closedAndShown(t)
+}
+
+func TestReturnPressesGotIt(t *testing.T) {
+	r := newUpdatedRig(t, dueNote(), nil)
+	r.tt.Key(0, ui.KeyEnter)
+	r.closedAndShown(t)
+}
+
+func TestEscapeClosesWhatsNew(t *testing.T) {
+	r := newUpdatedRig(t, dueNote(), nil)
+	r.tt.Key(0, ui.KeyEscape)
+	r.closedAndShown(t)
+}
+
+func TestAPressOutsideClosesWhatsNew(t *testing.T) {
+	r := newUpdatedRig(t, dueNote(), nil)
+	r.tt.ClickAt(theme.WindowWidth/2, theme.WindowHeight-40)
+	r.closedAndShown(t)
+}
+
+func TestWhatsNewDoesNotShowAgain(t *testing.T) {
+	r := newUpdatedRig(t, dueNote(), nil)
+	if err := r.tt.Click(UpdateGotIt + " ⏎"); err != nil {
+		t.Fatal(err)
+	}
+	r.tt.Frame()
+	again := newUpdatedRig(t, r.saved[0], nil)
+	if again.has(updatedPill) || again.has(LabelUpdatePanel) {
+		t.Error("What's new shows again after it was shown")
+	}
+}
+
+func TestWhatsNewShowsNothingForOtherCases(t *testing.T) {
+	other := dueNote()
+	other.Version = "0.3.2"
+	for name, c := range map[string]struct {
+		n   updated.Note
+		err error
+	}{
+		"missing file":  {updated.Note{}, nil},
+		"corrupt file":  {updated.Note{}, errors.New("updated: parse: bad")},
+		"other version": {other, nil},
+	} {
+		r := newUpdatedRig(t, c.n, c.err)
+		if r.has(LabelUpdatePanel) || r.has(updatedPill) || r.has(UpdatedPrefix+"0.3.2") {
+			t.Errorf("%s: What's new shows", name)
+		}
+		if len(r.saved) != 0 {
+			t.Errorf("%s: saved %+v", name, r.saved)
+		}
+	}
+}
+
+func TestAnInstallRecordsTheNoteForTheNextStart(t *testing.T) {
+	f, _ := toastFrame()
+	var saved []updated.Note
+	f.deps.Updated.Save = func(n updated.Note) error { saved = append(saved, n); return nil }
+	at := time.Date(2026, 11, 9, 10, 0, 0, 0, time.UTC)
+	if err := f.recordInstall(settings.UpdateInfo{Version: "0.4.0", Notes: "- x"}, "0.3.2", at); err != nil {
+		t.Fatal(err)
+	}
+	want := updated.Note{Version: "0.4.0", From: "0.3.2", Notes: "- x", InstalledAt: at}
+	if len(saved) != 1 || saved[0] != want {
+		t.Errorf("saved %+v, want %+v", saved, want)
+	}
+	f.deps.Updated.Save = nil
+	if err := f.recordInstall(settings.UpdateInfo{Version: "0.4.0"}, "0.3.2", at); err != nil {
+		t.Errorf("no saver: %v", err)
+	}
+}
+
+// The update panel and What's new have an opaque fill, float-solid, so the rows behind them do
+// not cut through their text (#524, D212). float-solid is glass-float at full alpha.
+func TestTheUpdatePanelFillIsFloatSolid(t *testing.T) {
+	for name, p := range map[string]*theme.Palette{"dark": theme.Dark, "light": theme.Light} {
+		if floatCardFill(p) != p.FloatSolid {
+			t.Errorf("%s: the update panel fill is not float-solid", name)
+		}
+		s, g := p.FloatSolid, p.GlassFloat
+		if s.A != 255 || s.R != g.R || s.G != g.G || s.B != g.B {
+			t.Errorf("%s: float-solid %v is not glass-float %v at full alpha", name, s, g)
+		}
+	}
+}
+
+// whatsNewThenReady starts version 1.2.3 after an update with What's new open, closes its panel
+// by hand when closed is true (the pill stays), then makes 1.3.0 ready (#533).
+func whatsNewThenReady(t *testing.T, closed bool) (*pillRig, *[]updated.Note) {
+	t.Helper()
+	r := newPillRig(t, nil)
+	var saved []updated.Note
+	r.f.deps.Updated.Save = func(n updated.Note) error { saved = append(saved, n); return nil }
+	n := dueNote()
+	n.Version, n.From = "1.2.3", "1.2.0"
+	r.f.deps.Updated.Load = func() (updated.Note, error) { return n, nil }
+	r.f.loadUpdated(atOnce)
+	r.tt.Frame()
+	if !r.has(UpdatedPrefix+"1.2.3") || !r.has(LabelUpdatePanel) {
+		t.Fatalf("no What's new at start: %q", r.tt.Texts())
+	}
+	if closed {
+		r.f.upd.afterOpen = false
+	}
+	r.ready()
+	return r, &saved
+}
+
+func checkReadyAfterWhatsNew(t *testing.T, r *pillRig, saved []updated.Note) {
+	t.Helper()
+	if !r.has(LabelUpdatePill) {
+		t.Fatalf("no ready pill: %q", r.tt.Texts())
+	}
+	if r.has(UpdatedPrefix + "1.2.3") {
+		t.Error("the Updated to pill stays next to the ready pill")
+	}
+	if r.has(LabelUpdatePanel) || r.f.upd.open {
+		t.Error("the ready panel opened by itself")
+	}
+	if !r.has(LabelUpdateToast) {
+		t.Error("no ready toast")
+	}
+	if len(saved) != 1 || !saved[0].Shown || saved[0].Version != "1.2.3" {
+		t.Errorf("saved %+v, want one shown note of 1.2.3", saved)
+	}
+	r.tt.Key(0, ui.KeyEnter)
+	r.tt.Frame()
+	if r.relaunch != 0 {
+		t.Errorf("relaunch = %d after Return with the ready panel closed", r.relaunch)
+	}
+}
+
+func TestAReadyUpdateWhileWhatsNewIsOpenKeepsItsPanelClosed(t *testing.T) {
+	r, saved := whatsNewThenReady(t, false)
+	checkReadyAfterWhatsNew(t, r, *saved)
+}
+
+func TestAReadyUpdateAfterWhatsNewClosedKeepsItsPanelClosed(t *testing.T) {
+	r, saved := whatsNewThenReady(t, true)
+	checkReadyAfterWhatsNew(t, r, *saved)
+}
+
+func TestAClickOnTheUpdatedPillClosesWhatsNew(t *testing.T) {
+	r := newUpdatedRig(t, dueNote(), nil)
+	if err := r.tt.Click(updatedPill); err != nil {
+		t.Fatal(err)
+	}
+	r.closedAndShown(t)
 }

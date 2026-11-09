@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/agents"
-	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/questions"
 )
 
 // TestQuestionsCardFromTheRow runs the built app against a
@@ -36,7 +36,7 @@ func TestQuestionsCardFromTheRow(t *testing.T) {
 	const notch = "2 items. Open"
 	c.waitLabel(t, notch)
 	c.press(t, notch)
-	if !c.labels(t)[app.LabelQuestionsField] {
+	if !c.labels(t)[questions.LabelQuestionsField] {
 		t.Fatalf("the questions card did not open; labels %v", keys(c.labels(t)))
 	}
 	h.capture(t, c, "answer-card.png")

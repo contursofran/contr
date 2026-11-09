@@ -48,8 +48,8 @@ Shared rules: [README.md](README.md). Design: board 10 of the from-zero canvas.
 - **Custom:** a profile of another program, or with a model or effort that is not in the
   lists. The dropdowns that cannot show its value say `Custom` (`ink-50`); the command line
   shows the argv as it is. Nothing writes it until the owner picks a value.
-- **Not set:** no `orchestrator` profile. The dropdowns say `not set`, and the line says
-  `not set · suggested: claude --model opus --effort medium --permission-mode auto`.
+- **Default orchestrator:** with no `orchestrator` profile in the file, the row shows the
+  default of `DefaultConfig`: Claude Code, Opus, medium (D206). There is no `not set` state.
 - **Error:** a failed read or save shows under the head in `blocked`, and goes to the log.
 
 ## Behavior
@@ -58,9 +58,9 @@ Shared rules: [README.md](README.md). Design: board 10 of the from-zero canvas.
 - A pick sets `--model` or `--effort` in the profile's argv and keeps the other arguments. A
   pick on a profile of another program, or on a missing one, starts from the role's default.
   Then the config is saved off the UI thread.
-- `Reset to defaults` puts each role back to `DefaultConfig`, and an orchestrator that exists
-  to the suggested default. A missing orchestrator stays missing. The flow goes back to
-  `DefaultFlow`.
+- `Reset to defaults` puts each role back to `DefaultConfig`. The flow goes back to
+  `DefaultFlow`. Saving does not write a profile that equals its default and that the file did
+  not have.
 - A change in the Flow section is saved the same way as a role pick.
 - Saving writes only profiles that the file had or that differ from `DefaultConfig`, and keeps
   keys that contr does not know.
@@ -88,7 +88,7 @@ Each tab is named by its text. Dropdowns are named `<Role> CLI`, `<Role> model` 
 ## Build in MyGo
 
 `ui.TabsBase`, `ui.SelectBase`, `Text.SingleLine().Ellipsis`. Code:
-`internal/app/settings.go` (tab bar), `internal/app/settings_agents.go` (Agents tab).
+`internal/app/settings/settings.go` (tab bar), `internal/app/settings/settings_agents.go` (Agents tab).
 
 ## Tests
 

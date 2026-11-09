@@ -93,8 +93,11 @@ var builderLabels = map[string]string{LabelApp: AppAgent, LabelRole: "builder", 
 
 func TestLoadConfig(t *testing.T) {
 	dir := t.TempDir()
-	cfg, err := LoadConfig(filepath.Join(dir, "missing.json"))
-	if err != nil || !reflect.DeepEqual(cfg, DefaultConfig()) {
+	missing := filepath.Join(dir, "missing.json")
+	cfg, err := LoadConfig(missing)
+	want := DefaultConfig()
+	want.Source = missing + " (not found)"
+	if err != nil || !reflect.DeepEqual(cfg, want) {
 		t.Fatalf("missing file: %v, %+v", err, cfg)
 	}
 
@@ -115,6 +118,12 @@ func TestLoadConfig(t *testing.T) {
 	if _, ok := cfg.Profiles["reviewer"]; !ok {
 		t.Error("default reviewer dropped")
 	}
+	if _, ok := cfg.Profiles["explorer"]; !ok {
+		t.Error("default explorer dropped")
+	}
+	if cfg.Source != path {
+		t.Errorf("source = %q, want %q", cfg.Source, path)
+	}
 
 	for _, bad := range []string{`{"profiles":{"x":{"argv":[]}}}`, `{not json`} {
 		if err := os.WriteFile(path, []byte(bad), 0o600); err != nil {
@@ -122,6 +131,52 @@ func TestLoadConfig(t *testing.T) {
 		}
 		if _, err := LoadConfig(path); err == nil {
 			t.Errorf("%s: no error", bad)
+		}
+	}
+}
+
+// TestDefaultExplorer: the explorer profile is Claude, Sonnet, medium effort,
+// permission mode auto (#523).
+func TestDefaultExplorer(t *testing.T) {
+	cfg := DefaultConfig()
+	want := []string{"claude", "--model", "sonnet", "--effort", "medium", "--permission-mode", "auto"}
+	if got := cfg.Profiles["explorer"].Argv; !reflect.DeepEqual(got, want) {
+		t.Errorf("explorer argv = %v, want %v", got, want)
+	}
+	if cfg.ModelOf("explorer") != "sonnet" || cfg.EffortOf("explorer") != "medium" {
+		t.Errorf("explorer model %q effort %q", cfg.ModelOf("explorer"), cfg.EffortOf("explorer"))
+	}
+}
+
+// TestSpawnNoProfile: the error for an unknown profile names the file that
+// was read and the profiles that it has (#484).
+// unclean checks that argv starts with hc.CleanArgv's words (D216) and returns
+// the rest: the agent's own argv.
+func unclean(t *testing.T, argv any) []any {
+	t.Helper()
+	got := argv.([]any)
+	head := hc.CleanArgv(nil)
+	if len(got) < len(head) {
+		t.Fatalf("argv = %q, want the clean wrapper first", got)
+	}
+	for i, w := range head {
+		if got[i] != w {
+			t.Fatalf("argv = %q, want the clean wrapper first", got)
+		}
+	}
+	return got[len(head):]
+}
+
+func TestSpawnNoProfile(t *testing.T) {
+	for _, tc := range []struct{ source, want string }{
+		{"", `agents: no profile "planner-high"; profiles: builder, debugger, explorer, orchestrator, planner, reviewer`},
+		{"/cfg/agents.json (not found)", `agents: no profile "planner-high" in /cfg/agents.json (not found); profiles: builder, debugger, explorer, orchestrator, planner, reviewer`},
+	} {
+		cfg := DefaultConfig()
+		cfg.Source = tc.source
+		_, err := New(&fakeCore{}, cfg).Spawn(context.Background(), Spec{Name: "p", Profile: "planner-high"})
+		if err == nil || err.Error() != tc.want {
+			t.Errorf("source %q: err = %v, want %s", tc.source, err, tc.want)
 		}
 	}
 }
@@ -136,7 +191,7 @@ func TestSpawn(t *testing.T) {
 			return term("t7", p["name"].(string), "live", labels, map[string]any{"state": "blocked", "kind": "permission", "msg": "allow?"}), nil
 		},
 	}}
-	m := New(f, DefaultConfig())
+	m := New(f, DefaultConfig()).WithExecutable("")
 	wt := t.TempDir()
 	w, err := m.Spawn(context.Background(), Spec{Name: "b-158", Profile: "builder", Issue: "158", Worktree: wt, Task: "read TASK.md"})
 	if err != nil {
@@ -147,7 +202,7 @@ func TestSpawn(t *testing.T) {
 		t.Errorf("worker\n got %+v\nwant %+v", w, want)
 	}
 	p := f.last().Params
-	if got := p["argv"]; !reflect.DeepEqual(got, []any{"claude", "--model", "sonnet", "--effort", "medium", "--permission-mode", "auto", "read TASK.md"}) {
+	if got := unclean(t, p["argv"]); !reflect.DeepEqual(got, []any{"claude", "--model", "sonnet", "--effort", "medium", "--permission-mode", "auto", "read TASK.md"}) {
 		t.Errorf("argv = %v", got)
 	}
 	if p["cwd"] != wt || p["env"] != nil || p["no_parent"] != true || p["outlive_parent"] != true || p["wait"] != false || p["parent"] != nil {
@@ -164,7 +219,7 @@ func TestSpawn(t *testing.T) {
 	if l := p["labels"].(map[string]any); l[LabelRole] != "reviewer" || l[LabelIssue] != nil {
 		t.Errorf("labels = %v", l)
 	}
-	if got := len(p["argv"].([]any)); got != 7 {
+	if got := len(unclean(t, p["argv"])); got != 7 {
 		t.Errorf("argv without a task has %d words", got)
 	}
 
@@ -412,7 +467,7 @@ func TestSpawnStartsTheKitAgent(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Kit = kit
 	cfg.Profiles["shell"] = Profile{Argv: []string{"sh"}}
-	m := New(f, cfg)
+	m := New(f, cfg).WithExecutable("")
 	argvOf := func(profile string) []any {
 		t.Helper()
 		if _, err := m.Spawn(context.Background(), Spec{Name: "w", Profile: profile}); err != nil {
@@ -421,16 +476,17 @@ func TestSpawnStartsTheKitAgent(t *testing.T) {
 		return f.last().Params["argv"].([]any)
 	}
 	want := []any{"claude", "--plugin-dir", kit, "--agent", "contr:builder", "--model", "sonnet", "--effort", "medium", "--permission-mode", "auto"}
-	if got := argvOf("builder"); !reflect.DeepEqual(got, want) {
+	if got := unclean(t, argvOf("builder")); !reflect.DeepEqual(got, want) {
 		t.Errorf("builder argv\n got %v\nwant %v", got, want)
 	}
-	if got := argvOf("reviewer"); got[1] != "--model" {
-		t.Errorf("a profile with no agent file gets the kit: %v", got)
+	// No agent file: the kit loads, with no --agent (D211).
+	if got := unclean(t, argvOf("reviewer")); !reflect.DeepEqual(got[:4], []any{"claude", "--plugin-dir", kit, "--model"}) {
+		t.Errorf("a profile with no agent file: %v", got)
 	}
 	if got := argvOf("shell"); !reflect.DeepEqual(got, []any{"sh"}) {
 		t.Errorf("a non-claude profile changed: %v", got)
 	}
-	if got := New(f, DefaultConfig()).agentArgv("builder", []string{"claude"}); !reflect.DeepEqual(got, []string{"claude"}) {
+	if got := New(f, DefaultConfig()).WithExecutable("").agentArgv("builder", []string{"claude"}); !reflect.DeepEqual(got, []string{"claude"}) {
 		t.Errorf("no kit: %v", got)
 	}
 }
@@ -441,7 +497,7 @@ func TestLoadConfigReadsTheKit(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg, err := LoadConfig(path)
-	if err != nil || cfg.Kit != "/k" || len(cfg.Profiles) != 4 {
+	if err != nil || cfg.Kit != "/k" || len(cfg.Profiles) != 6 {
 		t.Errorf("cfg = %+v, %v", cfg, err)
 	}
 }
@@ -457,7 +513,7 @@ func TestNewMakesARelativeKitAbsolute(t *testing.T) {
 	}
 	cfg := DefaultConfig()
 	cfg.Kit = "kit"
-	got := New(&fakeCore{}, cfg).agentArgv("builder", []string{"claude"})
+	got := New(&fakeCore{}, cfg).WithExecutable("").agentArgv("builder", []string{"claude"})
 	abs, _ := filepath.Abs("kit")
 	if len(got) < 3 || got[2] != abs || !filepath.IsAbs(got[2]) {
 		t.Errorf("argv = %v, want the kit as %s", got, abs)
@@ -472,6 +528,43 @@ func TestWorkerDecodesProjectLabel(t *testing.T) {
 	}
 	if w.Project != "x" {
 		t.Errorf("Project = %q, want x", w.Project)
+	}
+}
+
+// D216: a claude worker starts through hc.CleanArgv, so the Claude Code
+// session variables of the core's environment are gone; other programs start
+// as they are, and the env param keeps CONTR_COORDINATOR.
+func TestSpawnStartsClaudeWithoutSessionVariables(t *testing.T) {
+	f := &fakeCore{handle: map[string]func(map[string]any) (any, error){
+		"terminal.run": func(map[string]any) (any, error) { return term("t1", "w", "live", nil, nil), nil },
+	}}
+	cfg := DefaultConfig()
+	cfg.Profiles["codex"] = Profile{Argv: []string{"codex", "--model", "x"}}
+	cfg.Profiles["abs"] = Profile{Argv: []string{"/usr/local/bin/claude"}}
+	m := New(f, cfg).WithExecutable("")
+	spawn := func(profile string) map[string]any {
+		t.Helper()
+		if _, err := m.Spawn(context.Background(), Spec{Name: "w", Profile: profile, Parent: "t0", Task: "go"}); err != nil {
+			t.Fatal(err)
+		}
+		return f.last().Params
+	}
+	p := spawn("builder")
+	if got := unclean(t, p["argv"]); got[0] != "claude" || got[len(got)-1] != "go" {
+		t.Errorf("builder argv = %q", got)
+	}
+	if !reflect.DeepEqual(p["env"], map[string]any{EnvCoordinator: "t0"}) {
+		t.Errorf("builder env = %v", p["env"])
+	}
+	if got := unclean(t, spawn("abs")["argv"]); got[0] != "/usr/local/bin/claude" {
+		t.Errorf("claude by path argv = %q", got)
+	}
+	p = spawn("codex")
+	if got := p["argv"]; !reflect.DeepEqual(got, []any{"codex", "--model", "x", "go"}) {
+		t.Errorf("codex argv = %q", got)
+	}
+	if !reflect.DeepEqual(p["env"], map[string]any{EnvCoordinator: "t0"}) {
+		t.Errorf("codex env = %v", p["env"])
 	}
 }
 
@@ -748,20 +841,20 @@ func TestProfileAgentPicksTheKitAgent(t *testing.T) {
 	f := &fakeCore{handle: map[string]func(map[string]any) (any, error){
 		"terminal.run": func(map[string]any) (any, error) { return term("t1", "p", "live", nil, nil), nil },
 	}}
-	m := New(f, cfg)
+	m := New(f, cfg).WithExecutable("")
 	if _, err := m.Spawn(context.Background(), Spec{Name: "p", Profile: "planner-high"}); err != nil {
 		t.Fatal(err)
 	}
-	argv := f.last().Params["argv"].([]any)
+	argv := unclean(t, f.last().Params["argv"])
 	want := []any{"claude", "--plugin-dir", kit, "--agent", "contr:planner", "--effort", "high"}
 	if !reflect.DeepEqual(argv, want) {
 		t.Errorf("argv = %v, want %v", argv, want)
 	}
-	// No agent field and no kit file of that name: the argv as written.
+	// No agent field and no kit file of that name: the kit, no --agent.
 	if _, err := m.Spawn(context.Background(), Spec{Name: "o", Profile: "odd"}); err != nil {
 		t.Fatal(err)
 	}
-	if argv := f.last().Params["argv"].([]any); !reflect.DeepEqual(argv, []any{"claude"}) {
+	if argv := unclean(t, f.last().Params["argv"]); !reflect.DeepEqual(argv, []any{"claude", "--plugin-dir", kit}) {
 		t.Errorf("odd argv = %v", argv)
 	}
 }
@@ -924,6 +1017,33 @@ func TestWorkerOrchestratingFromTheHookLabel(t *testing.T) {
 	}
 }
 
+// TestWorkerContextFromTheHookLabels: the Stop hook's context labels give
+// the tokens and the compaction window; a missing, bad or zero value gives
+// no data (D205).
+func TestWorkerContextFromTheHookLabels(t *testing.T) {
+	for _, c := range []struct {
+		name          string
+		labels        map[string]string
+		tokens, limit uint64
+	}{
+		{"valid", map[string]string{LabelContext: "90000", LabelContextLimit: "160000"}, 90000, 160000},
+		{"no labels", nil, 0, 0},
+		{"no limit", map[string]string{LabelContext: "90000"}, 0, 0},
+		{"no tokens", map[string]string{LabelContextLimit: "160000"}, 0, 0},
+		{"cleared tokens", map[string]string{LabelContext: "", LabelContextLimit: "160000"}, 0, 0},
+		{"bad tokens", map[string]string{LabelContext: "90k", LabelContextLimit: "160000"}, 0, 0},
+		{"negative tokens", map[string]string{LabelContext: "-5", LabelContextLimit: "160000"}, 0, 0},
+		{"bad limit", map[string]string{LabelContext: "90000", LabelContextLimit: "x"}, 0, 0},
+		{"zero limit", map[string]string{LabelContext: "90000", LabelContextLimit: "0"}, 0, 0},
+		{"zero tokens", map[string]string{LabelContext: "0", LabelContextLimit: "160000"}, 0, 0},
+	} {
+		w, err := decodeWorker(raw(term("t1", "a", "live", c.labels, nil)))
+		if err != nil || w.ContextTokens != c.tokens || w.ContextLimit != c.limit {
+			t.Errorf("%s: tokens %d limit %d (%v), want %d %d", c.name, w.ContextTokens, w.ContextLimit, err, c.tokens, c.limit)
+		}
+	}
+}
+
 // TestSendKeepsTheWholeText: a long text with backticks, quotes and newlines,
 // and a short one, reach terminal.send unchanged (#483).
 func TestSendKeepsTheWholeText(t *testing.T) {
@@ -964,5 +1084,156 @@ func TestSendReportsARefusedSend(t *testing.T) {
 		if err := New(f, DefaultConfig()).Send(context.Background(), "w1", "hi"); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("err = %v, want %q", err, want)
 		}
+	}
+}
+
+func TestClaudeArgvGetsTheStatusLine(t *testing.T) {
+	kit := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(kit, "agents"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(kit, "agents", "builder.md"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := DefaultConfig()
+	cfg.Kit = kit
+	exe := "/Applications/My Apps/contr's/contr"
+	m := New(&fakeCore{}, cfg).WithExecutable(exe)
+
+	settings := func(argv []string) string {
+		t.Helper()
+		for i, a := range argv {
+			if a == "--settings" {
+				return argv[i+1]
+			}
+		}
+		t.Fatalf("no --settings in %v", argv)
+		return ""
+	}
+	for _, agent := range []string{"builder", "orchestrator"} { // the second has no kit file
+		got := m.agentArgv(agent, []string{"claude", "--model", "opus"})
+		var s struct {
+			StatusLine struct{ Type, Command string }
+		}
+		if err := json.Unmarshal([]byte(settings(got)), &s); err != nil {
+			t.Fatalf("%s: settings are not JSON: %v", agent, err)
+		}
+		want := `'/Applications/My Apps/contr'\''s/contr' statusline`
+		if s.StatusLine.Type != "command" || s.StatusLine.Command != want {
+			t.Errorf("%s: statusLine = %+v, want command %s", agent, s.StatusLine, want)
+		}
+		if got[len(got)-2] != "--model" || got[len(got)-1] != "opus" {
+			t.Errorf("%s: profile flags moved: %v", agent, got)
+		}
+	}
+
+	own := []string{"claude", "--settings", `{"x":1}`, "--model", "opus"}
+	if got := m.agentArgv("orchestrator", own); !reflect.DeepEqual(got, append([]string{"claude", "--plugin-dir", kit}, own[1:]...)) {
+		t.Errorf("argv with --settings changed: %v", got)
+	}
+	eq := []string{"claude", "--settings=/p.json"}
+	if got := m.agentArgv("orchestrator", eq); !reflect.DeepEqual(got, []string{"claude", "--plugin-dir", kit, "--settings=/p.json"}) {
+		t.Errorf("argv with --settings= changed: %v", got)
+	}
+	codex := []string{"codex", "--model", "x"}
+	if got := m.agentArgv("builder", codex); !reflect.DeepEqual(got, codex) {
+		t.Errorf("codex argv changed: %v", got)
+	}
+	noKit := New(&fakeCore{}, DefaultConfig()).WithExecutable("/bin/contr")
+	if got := noKit.agentArgv("builder", []string{"claude"}); len(got) != 3 || got[1] != "--settings" {
+		t.Errorf("no kit: %v", got)
+	}
+	if got := m.WithExecutable("").agentArgv("orchestrator", []string{"claude"}); !reflect.DeepEqual(got, []string{"claude", "--plugin-dir", kit}) {
+		t.Errorf("no binary: %v", got)
+	}
+}
+
+func TestSpawnPutsTheStatusLineInTheOrchestratorArgv(t *testing.T) {
+	f := &fakeCore{handle: map[string]func(map[string]any) (any, error){
+		"terminal.run": func(map[string]any) (any, error) { return term("t1", "o", "live", nil, nil), nil },
+	}}
+	cfg := DefaultConfig()
+	cfg.Kit = t.TempDir() // no agent files
+	cfg.Profiles["orchestrator"] = Profile{Argv: []string{"claude"}}
+	m := New(f, cfg).WithExecutable("/bin/contr")
+	if _, err := m.Spawn(context.Background(), Spec{Name: "o", Profile: "orchestrator"}); err != nil {
+		t.Fatal(err)
+	}
+	argv := unclean(t, f.last().Params["argv"])
+	if argv[0] != "claude" || argv[1] != "--plugin-dir" || argv[2] != cfg.Kit || argv[3] != "--settings" {
+		t.Errorf("argv = %v", argv)
+	}
+}
+
+// D211: every claude argv loads the kit; --agent only with an agent file.
+func TestAgentArgvLoadsTheKitInEveryClaudeArgv(t *testing.T) {
+	kit := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(kit, "agents"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(kit, "agents", "builder.md"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := DefaultConfig()
+	cfg.Kit = kit
+	m := New(&fakeCore{}, cfg).WithExecutable("")
+	for _, c := range []struct {
+		agent string
+		argv  []string
+		want  []string
+	}{
+		{"orchestrator", []string{"claude", "--model", "opus"}, []string{"claude", "--plugin-dir", kit, "--model", "opus"}},
+		{"builder", []string{"claude"}, []string{"claude", "--plugin-dir", kit, "--agent", "contr:builder"}},
+		{"orchestrator", []string{"claude", "--plugin-dir", "/own"}, []string{"claude", "--plugin-dir", "/own"}},
+		{"orchestrator", []string{"claude", "--plugin-dir=/own"}, []string{"claude", "--plugin-dir=/own"}},
+		{"builder", []string{"claude", "--plugin-dir", "/own"}, []string{"claude", "--agent", "contr:builder", "--plugin-dir", "/own"}},
+		{"orchestrator", []string{"/usr/local/bin/claude"}, []string{"/usr/local/bin/claude", "--plugin-dir", kit}},
+		{"orchestrator", []string{"codex", "--model", "x"}, []string{"codex", "--model", "x"}},
+		{"builder", []string{"codex"}, []string{"codex"}},
+	} {
+		if got := m.agentArgv(c.agent, c.argv); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s %v:\n got %v\nwant %v", c.agent, c.argv, got, c.want)
+		}
+	}
+	noKit := New(&fakeCore{}, DefaultConfig()).WithExecutable("")
+	if got := noKit.agentArgv("orchestrator", []string{"claude"}); !reflect.DeepEqual(got, []string{"claude"}) {
+		t.Errorf("no kit: %v", got)
+	}
+}
+
+func TestSpawnSendsDisplayColors(t *testing.T) {
+	f := &fakeCore{handle: map[string]func(map[string]any) (any, error){
+		"terminal.run": func(map[string]any) (any, error) { return term("t1", "w", "live", builderLabels, nil), nil },
+	}}
+	m := New(f, DefaultConfig()).WithExecutable("")
+	c := &Colors{FG: "#1a1a1a", BG: "#f5f5f3", Cursor: "#222222"}
+	if _, err := m.Spawn(context.Background(), Spec{Name: "w", Profile: "builder", Colors: c}); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]any{"fg": "#1a1a1a", "bg": "#f5f5f3", "cursor": "#222222"}
+	if got := f.last().Params["display"]; !reflect.DeepEqual(got, want) {
+		t.Errorf("display = %v, want %v", got, want)
+	}
+	// No colors, or empty colors: no display, so hc keeps its default.
+	for _, c := range []*Colors{nil, {}} {
+		if _, err := m.Spawn(context.Background(), Spec{Name: "w", Profile: "builder", Colors: c}); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := f.last().Params["display"]; ok {
+			t.Errorf("colors %+v: display sent", c)
+		}
+	}
+}
+
+func TestOpenTerminalSendsDisplayColors(t *testing.T) {
+	f := openTermCore()
+	m := New(f, DefaultConfig())
+	c := &Colors{FG: "#1a1a1a", BG: "#f5f5f3"}
+	if _, err := m.OpenTerminal(context.Background(), TerminalSpec{Name: "term-1", Shell: "/bin/sh", Colors: c}); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]any{"fg": "#1a1a1a", "bg": "#f5f5f3"}
+	if got := f.last().Params["display"]; !reflect.DeepEqual(got, want) {
+		t.Errorf("display = %v, want %v", got, want)
 	}
 }

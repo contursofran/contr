@@ -11,7 +11,8 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/agents"
-	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/questions"
+	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
@@ -77,7 +78,7 @@ func TestQuestionsNotch(t *testing.T) {
 	}
 
 	ownerFile := filepath.Join(dir, "owner.json")
-	const questions = `{"id":"D1","project":"demo","title":"b-250 checks: merge now?","question":"CI for #250 is green except e2e. Merge now or wait for e2e?","options":["merge now","wait for e2e"],"recommended":1,"asked":"2026-11-05T10:00:00Z"},
+	const questionsJSON = `{"id":"D1","project":"demo","title":"b-250 checks: merge now?","question":"CI for #250 is green except e2e. Merge now or wait for e2e?","options":["merge now","wait for e2e"],"recommended":1,"asked":"2026-11-05T10:00:00Z"},
 {"id":"D2","project":"demo","title":"b-251 retry: keep the old name?","question":"Keep the old name for the retry flag?","options":["keep","rename"],"asked":"2026-11-05T10:01:00Z"},
 {"id":"D3","project":"other","title":"b-9 other project","question":"Not for demo.","options":["yes","no"],"asked":"2026-11-05T10:02:00Z"}`
 	const todo = `{"id":"T1","project":"demo","kind":"do","text":"Test the notch on the Mac","pinned":"2026-11-05T10:03:00Z"}`
@@ -87,7 +88,7 @@ func TestQuestionsNotch(t *testing.T) {
 		if withTodo {
 			todos = todo
 		}
-		doc := `{"questions":[` + questions + `],"todos":[` + todos + `],"next_question":4,"next_todo":2}`
+		doc := `{"questions":[` + questionsJSON + `],"todos":[` + todos + `],"next_question":4,"next_todo":2}`
 		tmp := ownerFile + ".tmp"
 		if err := os.WriteFile(tmp, []byte(doc), 0o600); err != nil {
 			t.Fatal(err)
@@ -147,11 +148,11 @@ func TestQuestionsNotch(t *testing.T) {
 	pick := func(appearance string) {
 		t.Helper()
 		c.call(t, "menu", map[string]any{"path": []string{"contr", "Settings…"}})
-		waitFor("settings", func() bool { return has(app.LabelSettings) })
+		waitFor("settings", func() bool { return has(settings.LabelSettings) })
 		click(appearance)
 		time.Sleep(400 * time.Millisecond)
 		c.key(t, "Escape")
-		waitFor("settings closed", func() bool { return !has(app.LabelSettings) })
+		waitFor("settings closed", func() bool { return !has(settings.LabelSettings) })
 		time.Sleep(600 * time.Millisecond)
 	}
 	waitNotch := func(label string) {
@@ -181,6 +182,6 @@ func TestQuestionsNotch(t *testing.T) {
 	c.capture(t, filepath.Join(out, "notch-light-orchestrator.png"))
 
 	click("3 items. Open")
-	waitFor("questions card", func() bool { return has(app.LabelQuestionsField) })
+	waitFor("questions card", func() bool { return has(questions.LabelQuestionsField) })
 	c.capture(t, filepath.Join(out, "notch-light-card.png"))
 }

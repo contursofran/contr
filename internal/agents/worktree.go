@@ -1,15 +1,15 @@
 package agents
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	gitpkg "github.com/contursofran/contr/internal/git"
 )
 
 // EnvMain holds the main checkout of a worker's worktree while the setup
@@ -28,16 +28,17 @@ const setupWrapper = `/bin/sh -c "$1" || { s=$?; echo "contr: worktree setup fai
 type git func(ctx context.Context, dir string, args ...string) (string, error)
 
 func runGit(ctx context.Context, dir string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	out, err := cmd.Output()
+	// -C, not the runner's folder, so a missing dir gives git's own message.
+	out, err := gitpkg.ExecRunner{}.Run(ctx, "", append([]string{"-C", dir}, args...)...)
 	if err != nil {
-		msg := strings.TrimSpace(stderr.String())
-		if msg == "" {
-			msg = err.Error()
+		var ge *gitpkg.Error
+		if !errors.As(err, &ge) {
+			return "", fmt.Errorf("git %s: %w", args[0], err)
 		}
-		return "", fmt.Errorf("git %s: %s", args[0], msg)
+		if ge.Stderr == "" {
+			return "", fmt.Errorf("git %s: %w", args[0], ge.Err)
+		}
+		return "", fmt.Errorf("git %s: %s", args[0], ge.Stderr)
 	}
 	return strings.TrimSpace(string(out)), nil
 }

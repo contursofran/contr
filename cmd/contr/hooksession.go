@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/session"
-	"github.com/contursofran/contr/internal/usage"
+	"github.com/contursofran/contr/internal/statedir"
 )
 
 // artifactsPrefix starts the tool names of the artifacts MCP server.
@@ -40,7 +40,7 @@ type toolInput struct {
 // runSessionHook is `contr hook post-tool` and `contr hook prompt`. It always
 // returns 0: these hooks never block Claude Code. Errors go to stderr.
 func runSessionHook(name string, stdin io.Reader, stdout, stderr io.Writer, getenv func(string) string, stateDir string, now time.Time) int {
-	id := getenv(usage.EnvTerminal)
+	id := getenv(statedir.EnvTerminal)
 	if id == "" {
 		return 0
 	}
@@ -82,27 +82,37 @@ func postToolHook(stdin io.Reader, stateDir, id string, now uint64) error {
 	if err := json.NewDecoder(stdin).Decode(&in); err != nil {
 		return fmt.Errorf("bad hook input: %w", err)
 	}
-	s, err := session.Read(stateDir, id)
-	if err != nil {
-		// A bad file is replaced, not kept forever.
-		s = &session.Session{}
+	if !recordedTool(in.ToolName) {
+		return nil
 	}
-	var changed bool
-	switch {
-	case in.ToolName == "TodoWrite":
-		changed, err = todoWrite(s, in.ToolInput)
-	case in.ToolName == "TaskCreate":
-		changed, err = taskCreate(s, in.ToolInput, in.ToolResponse)
-	case in.ToolName == "TaskUpdate":
-		changed, err = taskUpdate(s, in.ToolInput)
-	case artifactTools[strings.TrimPrefix(in.ToolName, artifactsPrefix)] && strings.HasPrefix(in.ToolName, artifactsPrefix):
-		changed = artifactCall(s, in.ToolInput, in.ToolResponse, now)
+	// One locked update: hooks of parallel tool calls may run at the same time.
+	return session.Update(stateDir, id, func(s *session.Session) (bool, error) {
+		var changed bool
+		var err error
+		switch {
+		case in.ToolName == "TodoWrite":
+			changed, err = todoWrite(s, in.ToolInput)
+		case in.ToolName == "TaskCreate":
+			changed, err = taskCreate(s, in.ToolInput, in.ToolResponse)
+		case in.ToolName == "TaskUpdate":
+			changed, err = taskUpdate(s, in.ToolInput)
+		default:
+			changed = artifactCall(s, in.ToolInput, in.ToolResponse, now)
+		}
+		if err == nil && changed {
+			s.UpdatedAt = now
+		}
+		return changed, err
+	})
+}
+
+// recordedTool reports whether post-tool records calls of the tool name.
+func recordedTool(name string) bool {
+	switch name {
+	case "TodoWrite", "TaskCreate", "TaskUpdate":
+		return true
 	}
-	if err != nil || !changed {
-		return err
-	}
-	s.UpdatedAt = now
-	return session.Write(stateDir, id, s)
+	return strings.HasPrefix(name, artifactsPrefix) && artifactTools[strings.TrimPrefix(name, artifactsPrefix)]
 }
 
 func todoWrite(s *session.Session, raw json.RawMessage) (bool, error) {
@@ -242,9 +252,9 @@ func findArtifact(v any, a *session.Artifact, depth int) {
 	}
 }
 
-// sessionStateDir is usage.StateDir, read through getenv so tests can set
+// sessionStateDir is statedir.Dir, read through getenv so tests can set
 // CONTR_STATE_DIR.
 func sessionStateDir(getenv func(string) string) string {
 	home, _ := os.UserHomeDir()
-	return usage.StateDirFrom(getenv, home, runtime.GOOS == "darwin")
+	return statedir.From(getenv, home, runtime.GOOS == "darwin")
 }

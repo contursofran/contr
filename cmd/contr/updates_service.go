@@ -2,7 +2,7 @@
 
 package main
 
-import "github.com/contursofran/contr/internal/app"
+import "github.com/contursofran/contr/internal/app/settings"
 
 // updateService is MyGo's updater (D115).
-func updateService() app.Updates { return &mygoUpdates{} }
+func updateService() settings.Updates { return &mygoUpdates{} }

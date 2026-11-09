@@ -32,7 +32,7 @@ Design system page: component Terminal. Shared rules: [README.md](README.md).
   panel (D129). The 16 colors and their contrast ratios are in
   [tokens.md](tokens.md), ANSI. The plugin draws solid colors, so contr gives
   it `terminal-text` and `panel` flattened over the ground (D133).
-- The overlay layer (`TerminalOverlay` in `internal/app`) builds nothing
+- The overlay layer (`TerminalOverlay` in `internal/app/kit`) builds nothing
   while no overlay is set. A layer draws small floating elements placed with
   `Absolute`; it never covers the grid, so the terminal keeps the pointer and
   the keys. A layer gets keys only while one of its elements has the focus.

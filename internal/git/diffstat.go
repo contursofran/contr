@@ -1,12 +1,10 @@
 package git
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"log"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -20,27 +18,6 @@ const DiffTimeout = 5 * time.Second
 type DiffStat struct {
 	Added   int
 	Removed int
-}
-
-// Runner runs git in dir and gives its output. Tests use a fake.
-type Runner interface {
-	Run(ctx context.Context, dir string, args ...string) ([]byte, error)
-}
-
-// ExecRunner runs the `git` command.
-type ExecRunner struct{}
-
-// Run runs `git args...` in dir. It stops when ctx ends.
-func (ExecRunner) Run(ctx context.Context, dir string, args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "git", args...)
-	cmd.Dir = dir
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
-	}
-	return out, nil
 }
 
 // Diff counts the changed lines of the worktree at dir against the merge base

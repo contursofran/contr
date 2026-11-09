@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -392,5 +393,23 @@ func TestAFailingStdinIsAnError(t *testing.T) {
 	var out bytes.Buffer
 	if err := runWith(broken{}, &out, nil, "", "", now, chainTimeout); err == nil {
 		t.Fatal("want an error")
+	}
+}
+
+func TestStatuslinePrintsAShortLineWhenNothingIsChained(t *testing.T) {
+	for _, c := range []struct{ name, in, want string }{
+		{"full", `{"model":{"id":"claude-opus-4-1","display_name":"Opus 4.1"},"context_window":{"context_window_size":200000,"current_usage":{"input_tokens":2000,"cache_creation_input_tokens":8000,"cache_read_input_tokens":80000}}}`, "opus · 90k of 200k\n"},
+		{"model only", `{"model":{"id":"claude-sonnet-4","display_name":"Sonnet"}}`, "sonnet\n"},
+		{"context only", ctxLine, "90k of 200k\n"},
+		{"empty", `{}`, ""},
+		{"not json", `x`, ""},
+	} {
+		var out strings.Builder
+		if err := runWith(strings.NewReader(c.in), &out, nil, "", "", 1, chainTimeout); err != nil {
+			t.Fatal(err)
+		}
+		if out.String() != c.want {
+			t.Errorf("%s: printed %q, want %q", c.name, out.String(), c.want)
+		}
 	}
 }

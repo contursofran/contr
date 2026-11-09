@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"log"
+	"sync"
 	"sync/atomic"
 
 	"github.com/contursofran/contr/internal/agents"
-	"github.com/contursofran/contr/internal/app"
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/hc"
@@ -28,6 +28,11 @@ func terminalSource(getenv func(string) string) func(address string) ghostty.Sou
 type lazySource struct {
 	model atomic.Pointer[agentstate.Model]
 	fail  atomic.Pointer[string] // why the connection failed
+
+	// mu orders SetVisible with the store of the model, so a value set
+	// before the model is up is not lost. hidden is the last value.
+	mu     sync.Mutex
+	hidden bool
 }
 
 var errNoAgents = errors.New("agents not connected")
@@ -104,15 +109,33 @@ func (l *lazySource) Close(name string) error {
 	return errNoAgents
 }
 
-// startAgents gives the frame its agent state.
-func startAgents(getenv func(string) string) func(notify func()) (app.AgentSource, func()) {
-	return func(notify func()) (app.AgentSource, func()) {
+// SetVisible tells the model whether the window shows (D9).
+func (l *lazySource) SetVisible(visible bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.hidden = !visible
+	if m := l.model.Load(); m != nil {
+		m.SetVisible(visible)
+	}
+}
+
+// Reconnect asks the model to connect to hc at once.
+func (l *lazySource) Reconnect() {
+	if m := l.model.Load(); m != nil {
+		m.Reconnect()
+	}
+}
+
+// startAgents gives the frame its agent state. dial connects to the core; the
+// model dials through it again after the connection ended (#559).
+func startAgents(getenv func(string) string, dial func(context.Context, func(string) string) (agentsCore, error)) func(notify func()) (agentstate.AgentSource, func()) {
+	return func(notify func()) (agentstate.AgentSource, func()) {
 		src := &lazySource{}
 		ctx, cancel := context.WithCancel(context.Background())
 		done := make(chan struct{})
 		go func() {
 			defer close(done)
-			m, closeCore, err := openAgentState(ctx, getenv, notify)
+			m, closeCore, err := openAgentState(getenv, dial, notify)
 			if err != nil {
 				log.Printf("contr: agents: %v", err)
 				msg := "agents: " + err.Error()
@@ -121,7 +144,10 @@ func startAgents(getenv func(string) string) func(notify func()) (app.AgentSourc
 				return
 			}
 			defer closeCore()
+			src.mu.Lock()
 			src.model.Store(m)
+			m.SetVisible(!src.hidden)
+			src.mu.Unlock()
 			m.Start(ctx)
 			notify()
 			<-ctx.Done()
@@ -131,7 +157,10 @@ func startAgents(getenv func(string) string) func(notify func()) (app.AgentSourc
 	}
 }
 
-func openAgentState(ctx context.Context, getenv func(string) string, notify func()) (*agentstate.Model, func(), error) {
+// openAgentState reads the profiles and owner.json and builds the model on an
+// agents.Redial. It does not dial: the first watch of the model does, off the
+// UI thread.
+func openAgentState(getenv func(string) string, dial func(context.Context, func(string) string) (agentsCore, error), notify func()) (*agentstate.Model, func(), error) {
 	cfg, err := agents.LoadConfig(configPath(getenv))
 	if err != nil {
 		return nil, nil, err
@@ -140,13 +169,18 @@ func openAgentState(ctx context.Context, getenv func(string) string, notify func
 	if err != nil {
 		return nil, nil, err
 	}
-	core, err := dialAgents(ctx, getenv)
-	if err != nil {
-		return nil, nil, err
+	r := agents.NewRedial(func(ctx context.Context) (agents.Conn, error) {
+		c, err := dial(ctx, getenv)
+		if err != nil {
+			return nil, err // no typed nil in the interface
+		}
+		return c, nil
+	})
+	m := agentstate.New(agents.New(r, cfg), store, notify)
+	r.OnDial = func(c agents.Conn) {
+		if h, ok := c.(agents.HC); ok && h.Client != nil {
+			m.SetCoreVersion(h.Client.Hello.Version)
+		}
 	}
-	m := agentstate.New(agents.New(core, cfg), store, notify)
-	if h, ok := core.(agents.HC); ok && h.Client != nil {
-		m.SetCoreVersion(h.Client.Hello.Version)
-	}
-	return m, func() { _ = core.Close() }, nil
+	return m, func() { _ = r.Close() }, nil
 }

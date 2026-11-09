@@ -13,13 +13,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/contursofran/contr/internal/jsonfile"
 )
 
 // ContextDir is the folder of the context files, under the state dir.
 const ContextDir = "usage/context"
-
-// EnvTerminal names the variable that holds the hc terminal of the agent.
-const EnvTerminal = "HC_TERMINAL_ID"
 
 // Context is the context window of one agent.
 type Context struct {
@@ -147,19 +146,11 @@ func WriteContext(dir, id string, c *Context) (bool, error) {
 	if old := readContext(path); old != nil && old.Tokens == c.Tokens && old.Size == c.Size && old.Model == c.Model && old.Effort == c.Effort {
 		return false, nil
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return false, err
-	}
 	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
 		return false, err
 	}
-	tmp := fmt.Sprintf("%s.%d.tmp", path, os.Getpid())
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return false, err
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
+	if err := jsonfile.Write(path, data, 0o644); err != nil {
 		return false, err
 	}
 	return true, nil

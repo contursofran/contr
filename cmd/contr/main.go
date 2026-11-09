@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log"
@@ -18,9 +19,12 @@ import (
 	"github.com/contursofran/contr/assets"
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/files"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/prefs"
 	"github.com/contursofran/contr/internal/projects"
+	"github.com/contursofran/contr/internal/statedir"
+	"github.com/contursofran/contr/internal/updated"
 	"github.com/contursofran/contr/internal/usage"
 	"github.com/contursofran/contr/internal/widths"
 	"github.com/egoist/mygo/plugins/terminal"
@@ -161,6 +165,62 @@ func keepGlassActive(w activeAppearer, opts mygo.WindowOptions) {
 	w.SetActiveAppearance(true)
 }
 
+// frameDeps returns what the frame gets from outside: the stores, the pickers, the agents
+// and the update service.
+func frameDeps() app.Deps {
+	// The model on line 2 of an agent row comes from the profile. A config
+	// that does not read is reported by the agent state; the defaults serve here.
+	cfg, _ := agents.LoadConfig(configPath(os.Getenv))
+	home, _ := os.UserHomeDir()
+	return app.Deps{
+		Projects: app.StoreAt(projects.Path, projects.Load,
+			func(path string, s *projects.Store) error { return s.Save(path) }),
+		Widths:  app.StoreAt(widths.Path, widths.Load, widths.Save),
+		Prefs:   app.StoreAt(prefs.Path, prefs.Load, prefs.Save),
+		Updated: updatedStore(updated.Path(statedir.Dir())),
+
+		StartAgents:    startAgents(os.Getenv, dialAgents),
+		AgentsNotice:   cfg.Notice,
+		AgentsConfig:   configPath(os.Getenv),
+		ModelOf:        cfg.ModelOf,
+		EffortOf:       cfg.EffortOf,
+		WatchHead:      files.WatchFile,
+		TerminalSource: terminalSource(os.Getenv),
+		OpenTerminal: func(project, dir string) (string, error) {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			return openTerminal(ctx, os.Getenv, dialAgents, project, dir, time.Now(), appColors())
+		},
+		PickFolder: pickFolder,
+		SpawnOrchestrator: func(dir string) error {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			return spawnOrchestrator(ctx, os.Getenv, dialAgents, dir, time.Now(), appColors())
+		},
+
+		OpenFolder:      openFolder,
+		CloneParent:     cloneParent(home),
+		PickCloneParent: pickCloneParent,
+		ProjectKey:      projectKey,
+
+		Updates:       updateService(),
+		Relaunch:      func() { mygo.App.Relaunch() },
+		ThemePlatform: mygo.Theme,
+	}
+}
+
+// updatedStore keeps the note of the last install in contr's state folder, at path (D209).
+// With no state folder (path ""), there is no note to read and an install cannot record one.
+func updatedStore(path string) app.Store[updated.Note] {
+	if path == "" {
+		return app.Store[updated.Note]{
+			Load: func() (updated.Note, error) { return updated.Note{}, nil },
+			Save: func(updated.Note) error { return errors.New("no state folder") },
+		}
+	}
+	return app.StoreAt(func() (string, error) { return path, nil }, updated.Load, updated.Save)
+}
+
 // openWindow opens the frame, or the legend with icons, and runs until the
 // last window closes. It returns the exit code.
 func openWindow(icons bool) int {
@@ -174,77 +234,7 @@ func openWindow(icons bool) int {
 	if icons {
 		opts.Content = ui.View((&app.Legend{}).View)
 	} else {
-		frame = app.NewFrame()
-		frame.StartAgents = startAgents(os.Getenv)
-		frame.WatchHead = app.WatchFile
-		// The model on line 2 of an agent row comes from the profile. A config
-		// that does not read is reported by the agent state; the defaults serve here.
-		cfg, _ := agents.LoadConfig(configPath(os.Getenv))
-		frame.ModelOf = cfg.ModelOf
-		frame.EffortOf = cfg.EffortOf
-		frame.LoadProjects = func() (*projects.Store, error) {
-			path, err := projects.Path()
-			if err != nil {
-				return nil, err
-			}
-			return projects.Load(path)
-		}
-		frame.SaveProjects = func(s *projects.Store) error {
-			path, err := projects.Path()
-			if err != nil {
-				return err
-			}
-			return s.Save(path)
-		}
-		frame.LoadWidths = func() (widths.Widths, error) {
-			path, err := widths.Path()
-			if err != nil {
-				return widths.Widths{}, err
-			}
-			return widths.Load(path)
-		}
-		frame.SaveWidths = func(w widths.Widths) error {
-			path, err := widths.Path()
-			if err != nil {
-				return err
-			}
-			return widths.Save(path, w)
-		}
-		frame.LoadPrefs = func() (prefs.Prefs, error) {
-			path, err := prefs.Path()
-			if err != nil {
-				return prefs.Prefs{}, err
-			}
-			return prefs.Load(path)
-		}
-		frame.SavePrefs = func(p prefs.Prefs) error {
-			path, err := prefs.Path()
-			if err != nil {
-				return err
-			}
-			return prefs.Save(path, p)
-		}
-		frame.ThemePlatform = mygo.Theme
-		frame.TerminalSource = terminalSource(os.Getenv)
-		frame.OpenTerminal = func(project, dir string) (string, error) {
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-			defer cancel()
-			return openTerminal(ctx, os.Getenv, dialAgents, project, dir, time.Now())
-		}
-		frame.PickFolder = pickFolder
-		frame.Updates = updateService()
-		frame.Relaunch = func() { mygo.App.Relaunch() }
-		frame.AgentsConfig = configPath(os.Getenv)
-		frame.OpenFolder = openFolder
-		frame.ProjectKey = projectKey
-		home, _ := os.UserHomeDir()
-		frame.CloneParent = cloneParent(home)
-		frame.PickCloneParent = pickCloneParent
-		frame.SpawnOrchestrator = func(dir string) error {
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-			defer cancel()
-			return spawnOrchestrator(ctx, os.Getenv, dialAgents, dir, time.Now())
-		}
+		frame = app.NewFrame(frameDeps())
 		opts.Content = ui.View(frame.View)
 	}
 	backgroundOptions(&opts)

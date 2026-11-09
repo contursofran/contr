@@ -12,7 +12,8 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/agents"
-	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/files"
+	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
@@ -137,7 +138,7 @@ func TestFileTreePanel(t *testing.T) {
 		time.Sleep(600 * time.Millisecond)
 	}
 
-	waitLabel(app.LabelFileTree)
+	waitLabel(files.LabelFileTree)
 	// Select the worktree row of the repo in the sidebar.
 	var row string
 	for deadline := time.Now().Add(25 * time.Second); row == "" && time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
@@ -178,14 +179,14 @@ func TestFileTreePanel(t *testing.T) {
 
 	for _, theme := range []string{"Dark", "Light"} {
 		c.call(t, "menu", map[string]any{"path": []string{"contr", "Settings…"}})
-		waitLabel(app.LabelSettings)
+		waitLabel(settings.LabelSettings)
 		click(theme)
 		c.call(t, "menu", map[string]any{"path": []string{"contr", "Settings…"}})
 		time.Sleep(700 * time.Millisecond)
 		wake()
 		c.capture(t, filepath.Join(out, "filetree-"+strings.ToLower(theme)+".png"))
 	}
-	click(app.LabelFileFilter)
+	click(files.LabelFileFilter)
 	time.Sleep(600 * time.Millisecond)
 	labels = c.labels(t)
 	if labels["README.md"] || labels["keep.go"] || !labels["new.go, +3"] || !labels["old.go, −4"] {

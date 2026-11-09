@@ -3,6 +3,7 @@
 package main
 
 import (
+	"encoding/json"
 	"maps"
 	"os"
 	"path/filepath"
@@ -12,8 +13,11 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/session"
+	"github.com/contursofran/contr/internal/updated"
 )
 
 // seeFixture is a state of the app that scripts/see.sh can show.
@@ -32,20 +36,39 @@ var seeFixtures = map[string]seeFixture{
 		setup: func(t *testing.T, h *harness) {},
 		ready: "Sidebar",
 	},
+	"projects": {
+		about: "the workers fixture and a second project, demo-rune, in the recent list; press Open projects",
+		setup: func(t *testing.T, h *harness) {
+			seeWorkers(t, h)
+			h.recentProject(t, "demo-rune")
+		},
+		ready: "Sidebar",
+	},
 	"workers": {
 		about: "project demo: an orchestrator and two builders, one working",
 		setup: seeWorkers,
 		ready: "lead, ",
 	},
 	"questions": {
-		about: "the workers fixture with two questions and a to-do for the owner",
+		about: "the workers fixture with a blocked worker (permission menu), two questions and a to-do for the owner",
 		setup: func(t *testing.T, h *harness) {
-			seeWorkers(t, h)
+			repo := seeWorkersRepo(t, h)
+			h.spawn(t, agents.Spec{Name: "b252-s1-cleanup", Profile: "claude-blocked", Role: "builder", Issue: "252", Project: "demo", Worktree: repo})
 			h.owner(t, `{"questions":[
 {"id":"D1","project":"demo","title":"Which database for the cache?","question":"The cache needs a store. Redis is fast but one more service; sqlite is already in the app. Which one should it use?","options":["sqlite","redis","files"],"recommended":0,"asked":"2026-11-03T10:00:00Z"},
 {"id":"D2","project":"demo","title":"Keep the old outline ticks?","question":"The new outline replaces the pin bar. Remove the old ticks now, or after one release?","options":["now","after one release"],"recommended":0,"asked":"2026-11-03T10:05:00Z"}],
 "todos":[{"id":"T1","project":"demo","kind":"do","text":"Test the notch drag on the Mac","pinned":"2026-11-03T10:02:00Z"}],
 "next_question":3,"next_todo":2}`)
+		},
+		ready: "lead, ",
+	},
+	"todo": {
+		about: "the workers fixture with one to-do that holds a command in backticks (#498)",
+		setup: func(t *testing.T, h *harness) {
+			seeWorkers(t, h)
+			h.owner(t, `{"questions":[],
+"todos":[{"id":"T1","project":"demo","kind":"do","text":"Run `+"`go run ./tmp/usagecheck`"+` and paste the plan rows it prints into the issue","pinned":"2026-11-03T10:02:00Z"}],
+"next_question":1,"next_todo":2}`)
 		},
 		ready: "lead, ",
 	},
@@ -56,6 +79,50 @@ var seeFixtures = map[string]seeFixture{
 			h.sizeTerminal(t, "b203-wide", 300, 60)
 		},
 		ready: "b203-wide",
+	},
+	"context": {
+		about: "the workers fixture; lead has no status line file, only the Stop hook's context labels (D205)",
+		setup: func(t *testing.T, h *harness) {
+			seeWorkers(t, h)
+			h.labelTerminal(t, "lead", map[string]string{agents.LabelContext: "90000", agents.LabelContextLimit: "160000"})
+		},
+		ready: "lead, ",
+	},
+	"updated": {
+		about: "the first start after an update: the Updated to pill with What's new open (D209)",
+		setup: func(t *testing.T, h *harness) {
+			n := updated.Note{Version: settings.Version, From: "0.0.9", InstalledAt: time.Now().Add(-3 * time.Minute),
+				Notes: "## " + settings.Version + "\n- What's new opens after an update\n- Faster tab switching\n- Light theme fixes"}
+			if err := updated.Save(updated.Path(filepath.Join(h.dir, "state")), n); err != nil {
+				t.Fatal(err)
+			}
+		},
+		ready: app.UpdatedPrefix,
+	},
+	"multi": {
+		about: "three projects (demo, api, site): demo has an orchestrator and a builder, the others one builder each",
+		setup: func(t *testing.T, h *harness) {
+			demo := h.repo(t, "demo", "main")
+			api := h.repo(t, "api", "main")
+			site := h.repo(t, "site", "main")
+			h.spawn(t,
+				agents.Spec{Name: "lead", Profile: "claude-idle", Role: agents.RoleOrchestrator, Project: "demo", Worktree: demo},
+				agents.Spec{Name: "b201-s1-notch", Profile: "claude-working", Role: "builder", Issue: "201", Project: "demo", Worktree: demo},
+				agents.Spec{Name: "b310-s1-routes", Profile: "claude-idle", Role: "builder", Issue: "310", Project: "api", Worktree: api},
+				agents.Spec{Name: "b411-s1-footer", Profile: "claude-working", Role: "builder", Issue: "411", Project: "site", Worktree: site},
+			)
+		},
+		ready: "lead, ",
+	},
+	"oldformat": {
+		about: "the workers fixture with an agents.json in the old format (presets)",
+		setup: func(t *testing.T, h *harness) {
+			seeWorkers(t, h)
+			if err := os.WriteFile(filepath.Join(h.dir, "agents.json"), []byte(`{"version":1,"presets":[{"name":"x"}]}`), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		},
+		ready: "lead, ",
 	},
 	"session": {
 		about: "the orchestrator lead with the todos and artifacts of canvas board 11 (D197)",
@@ -92,6 +159,25 @@ func (h *harness) sizeTerminal(t *testing.T, name string, cols, rows uint16) {
 	t.Fatalf("no worker %q", name)
 }
 
+// labelTerminal sets labels on the worker's terminal, as the kit's Stop hook
+// does.
+func (h *harness) labelTerminal(t *testing.T, name string, labels map[string]string) {
+	t.Helper()
+	ws, err := h.mgr.List(h.ctx, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, w := range ws {
+		if w.Name == name {
+			if err := h.cl.Call(h.ctx, "terminal.label", map[string]any{"terminal": w.Address, "labels": labels}, nil); err != nil {
+				t.Fatal(err)
+			}
+			return
+		}
+	}
+	t.Fatalf("no worker %q", name)
+}
+
 // seeSession spawns lead and writes the session file of its terminal, as the
 // kit's hooks do (D195).
 func seeSession(t *testing.T, h *harness) {
@@ -123,18 +209,41 @@ func seeSession(t *testing.T, h *harness) {
 	}
 }
 
-func seeWorkers(t *testing.T, h *harness) {
+// recentProject puts a project that is not open in the recent list of the
+// scratch projects file.
+func (h *harness) recentProject(t *testing.T, name string) {
+	t.Helper()
+	dir := filepath.Join(h.home, "Library", "Application Support", "contr")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(h.home, "code", name)
+	doc, err := json.Marshal(map[string]any{"version": 1, "recent": []map[string]any{
+		{"dir": filepath.Join(path, ".git"), "path": path, "at": time.Now().Add(-10 * time.Minute)}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "projects.json"), doc, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func seeWorkers(t *testing.T, h *harness) { seeWorkersRepo(t, h) }
+
+// seeWorkersRepo spawns the workers fixture and returns its repository.
+func seeWorkersRepo(t *testing.T, h *harness) string {
 	repo := h.repo(t, "demo", "main")
 	h.spawn(t,
 		agents.Spec{Name: "lead", Profile: "claude-idle", Role: agents.RoleOrchestrator, Project: "demo", Worktree: repo},
 		agents.Spec{Name: "b201-s1-notch", Profile: "claude-working", Role: "builder", Issue: "201", Project: "demo", Worktree: repo},
 		agents.Spec{Name: "b202-s1-outline", Profile: "claude-idle", Role: "builder", Issue: "202", Project: "demo", Worktree: repo},
 	)
+	return repo
 }
 
 // TestSee is scripts/see.sh (#457, D178). It starts the fixture CONTR_SEE
 // names, in the themes of CONTR_SEE_THEME (dark, light or both), presses the
-// labels of CONTR_SEE_PRESS (one per line) in order, and writes
+// labels of CONTR_SEE_PRESS (one per line, `type:<text>` types text) in order, and writes
 // tmp/see/<fixture>-<theme>.png and tmp/see/<fixture>-<theme>.txt, the tree
 // of elements. Without CONTR_SEE it lists the fixtures.
 func TestSee(t *testing.T) {
@@ -178,8 +287,15 @@ func TestSee(t *testing.T) {
 		c := h.launch(t)
 		c.waitLabel(t, f.ready)
 		c.settle(t)
-		for _, l := range press {
-			c.press(t, l)
+		for i, l := range press {
+			if text, ok := strings.CutPrefix(l, "type:"); ok { // type into the focused field
+				c.text(t, text)
+			} else {
+				c.press(t, l)
+			}
+			if i < len(press)-1 { // a menu or a dialog opens before the next press
+				c.settle(t)
+			}
 		}
 		if len(press) > 0 {
 			c.settle(t)

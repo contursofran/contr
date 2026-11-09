@@ -7,11 +7,88 @@ import (
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 )
+
+func TestCleanEnv(t *testing.T) {
+	in := []string{
+		"PATH=/usr/bin", "CLAUDECODE=1", "CLAUDE_CODE_CHILD_SESSION=1",
+		"CLAUDE_CODE_MESSAGING_TOKEN=x", "CLAUDECODEX=keep",
+		"CLAUDE_CODE=keep", "HOME=/h", "MY_CLAUDE_CODE_X=keep",
+	}
+	got := CleanEnv(in)
+	want := []string{"PATH=/usr/bin", "CLAUDECODEX=keep", "CLAUDE_CODE=keep", "HOME=/h", "MY_CLAUDE_CODE_X=keep"}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("CleanEnv = %q, want %q", got, want)
+	}
+}
+
+// CleanArgv unsets, when the program starts, the same variables as CleanEnv,
+// and runs argv with its words as they are.
+func TestCleanArgvUnsetsWhatCleanEnvRemoves(t *testing.T) {
+	argv := CleanArgv([]string{"/bin/sh", "-c", `printf '%s|' "$@"; echo; env`, "x", "a b", "$HOME", ""})
+	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Env = []string{
+		"PATH=/usr/bin:/bin", "CLAUDECODE=1", "CLAUDE_CODE_CHILD_SESSION=1",
+		"CLAUDE_CODE_MESSAGING_TOKEN=x", "CLAUDECODEX=keep", "CLAUDE_CODE=keep",
+		"MY_CLAUDE_CODE_X=keep", "CONTR_COORDINATOR=t1", "HC_TERMINAL_ID=t2",
+		"MULTI=one\nCLAUDE_CODE_NOT_SET=x",
+	}
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	words, env, _ := strings.Cut(string(out), "\n")
+	if words != "a b|$HOME||" {
+		t.Errorf("words = %q", words)
+	}
+	set := map[string]bool{}
+	for _, line := range strings.Split(env, "\n") {
+		if name, _, ok := strings.Cut(line, "="); ok {
+			set[name] = true
+		}
+	}
+	for _, kv := range cmd.Env {
+		name, _, _ := strings.Cut(kv, "=")
+		if want := !ClaudeSessionVar(name); set[name] != want {
+			t.Errorf("%s: set = %v, want %v", name, set[name], want)
+		}
+	}
+}
+
+// Command starts hc without Claude Code variables and keeps its env argument.
+func TestCommandStartsWithCleanEnv(t *testing.T) {
+	t.Setenv("CLAUDECODE", "1")
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "s")
+	t.Setenv("KEEP_ME", "yes")
+	fake := filepath.Join(t.TempDir(), "hc")
+	if err := os.WriteFile(fake, []byte("#!/bin/sh\nenv\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	p, err := Command(fake, []string{"EXTRA=1", "CLAUDE_CODE_FROM_ARG=1"})(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, _ := io.ReadAll(p.R)
+	_ = p.Close()
+	got := string(out)
+	for _, bad := range []string{"CLAUDECODE=", "CLAUDE_CODE_SESSION_ID="} {
+		if strings.Contains(got, bad) {
+			t.Errorf("env has %s", bad)
+		}
+	}
+	for _, ok := range []string{"KEEP_ME=yes", "EXTRA=1", "CLAUDE_CODE_FROM_ARG=1"} {
+		if !strings.Contains(got, ok) {
+			t.Errorf("env lacks %s", ok)
+		}
+	}
+}
 
 // fakeConn is the core's side of one connection.
 type fakeConn struct {
@@ -390,4 +467,51 @@ func TestCommandLooksUpHcOnlyWhenDialing(t *testing.T) {
 		t.Fatalf("dial after hc appeared: %v", err)
 	}
 	_ = p.Close()
+}
+
+func TestUncleanArgvReturnsTheWrappedArgv(t *testing.T) {
+	in := []string{"claude", "--agent", "a"}
+	if got, ok := UncleanArgv(CleanArgv(in)); !ok || !reflect.DeepEqual(got, in) {
+		t.Errorf("wrapped: %q %v", got, ok)
+	}
+	if got, ok := UncleanArgv(in); ok || !reflect.DeepEqual(got, in) {
+		t.Errorf("not wrapped: %q %v", got, ok)
+	}
+}
+
+func TestClosedFollowsTheConnection(t *testing.T) {
+	end := make(chan struct{})
+	cl, err := Dial(ctx(t), fakeDialer(t, func(f *fakeConn) {
+		f.hello(1)
+		<-end // then end the core side of the pipe
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cl.Close()
+	if cl.Closed() {
+		t.Fatal("Closed() = true on a live connection")
+	}
+	close(end)
+	deadline := time.Now().Add(5 * time.Second)
+	for !cl.Closed() {
+		if time.Now().After(deadline) {
+			t.Fatal("Closed() stays false after the core went away")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	cl2, err := Dial(ctx(t), fakeDialer(t, func(f *fakeConn) {
+		f.hello(1)
+		f.next()
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cl2.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if !cl2.Closed() {
+		t.Fatal("Closed() = false after Close")
+	}
 }

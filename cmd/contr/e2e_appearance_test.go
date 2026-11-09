@@ -13,8 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/titlebar"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
 
@@ -92,9 +93,9 @@ func TestAppearanceRow(t *testing.T) {
 		return string(data)
 	}
 
-	wait(app.LabelNewTab)
+	wait(titlebar.LabelNewTab)
 	c.call(t, "menu", map[string]any{"path": []string{"contr", "Settings…"}})
-	wait(app.LabelSettings)
+	wait(settings.LabelSettings)
 	time.Sleep(500 * time.Millisecond)
 	c.capture(t, filepath.Join(out, "appearance-0-system.png"))
 
@@ -128,7 +129,7 @@ func checkGround(t *testing.T, c *client, path string, p *theme.Palette) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b := c.boundsOf(t, app.LabelSettings)
+	b := c.boundsOf(t, settings.LabelSettings)
 	// The card is centered, so twice its center is the window width in DIPs.
 	scale := float64(img.Bounds().Dx()) / (2 * (b.X + b.Width/2))
 	at := func(x, y float64) [3]int {

@@ -116,6 +116,7 @@ func newHarness(t *testing.T) *harness {
 		`draw() { printf "\033[2J\033[H"; set -- $(stty size); echo "grid $2x$1"; i=0; while [ $i -lt $2 ]; do printf %d $((i % 10)); i=$((i+1)); done; echo; }; trap draw WINCH; draw; while :; do sleep 1; done`}}
 	cfg.Profiles["claude-idle"] = agents.Profile{Argv: []string{claude, "idle"}}
 	cfg.Profiles["claude-working"] = agents.Profile{Argv: []string{claude, "working"}}
+	cfg.Profiles["claude-blocked"] = agents.Profile{Argv: []string{claude, "blocked:kind=permission:msg=Allow%20rm"}}
 	h.mgr = agents.New(agents.HC{Client: cl}, cfg)
 	return h
 }
@@ -132,6 +133,9 @@ func (h *harness) buildFakeClaude(t *testing.T) string {
 			t.Fatal(err)
 		}
 	}
+	// Named "claude": the app reads a worker's menu only from a claude command.
+	// contr puts --settings before the profile arguments, so the fake reads its
+	// state from the last argument (#532).
 	bin := filepath.Join(h.dir, "claude")
 	mk := exec.Command("go", "build", "-o", bin, ".")
 	mk.Dir = src
@@ -158,6 +162,29 @@ func (h *harness) spawn(t *testing.T, specs ...agents.Spec) {
 		if _, err := h.mgr.Spawn(h.ctx, s); err != nil {
 			t.Fatalf("spawn %s: %v", s.Name, err)
 		}
+		if want := fakeStates[s.Profile]; want != "" {
+			h.waitStatus(t, s.Name, want)
+		}
+	}
+}
+
+// fakeStates is the status each fake Claude profile reports.
+var fakeStates = map[string]string{"claude-working": "working", "claude-blocked": "blocked"}
+
+// waitStatus waits until hc reports the status of the worker, so a fixture
+// shows a state that is already set when the app starts.
+func (h *harness) waitStatus(t *testing.T, name, want string) {
+	t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		w, err := h.mgr.Get(h.ctx, name)
+		if err == nil && w.Status == want {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("worker %s: status %q (err %v), want %q", name, w.Status, err, want)
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 
@@ -244,7 +271,7 @@ type fullNode struct {
 	ID      string   `json:"id"`
 	Parent  string   `json:"parent"`
 	Role    string   `json:"role"`
-	Key     string   `json:"key"`
+	Key     any      `json:"key"`
 	Label   string   `json:"label"`
 	Value   string   `json:"value"`
 	Bounds  rect     `json:"bounds"`
@@ -282,8 +309,8 @@ func (c *client) dump(t *testing.T, path string) {
 		if n.Value != "" {
 			fmt.Fprintf(&b, " value=%q", n.Value)
 		}
-		if n.Key != "" {
-			fmt.Fprintf(&b, " key=%s", n.Key)
+		if n.Key != nil {
+			fmt.Fprintf(&b, " key=%v", n.Key)
 		}
 		r := n.Bounds
 		fmt.Fprintf(&b, " @%s,%s %sx%s", num(r.X), num(r.Y), num(r.Width), num(r.Height))
