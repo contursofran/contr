@@ -11,6 +11,7 @@ import (
 
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/ghostty"
+	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/hc"
@@ -214,10 +215,10 @@ func attachesAfter(w *fakeWindow, tt *ui.Tester, src *scriptSource, n int) int {
 func TestEmptyOverlayBuildsNothingAndKeysReachTheTerminal(t *testing.T) {
 	f, w, tt, src := keyFrame(t)
 	// The only layer is the find bar's (attachTerminal); it builds nothing while the bar is closed.
-	if len(f.Overlay.layers) != 1 || f.Overlay.layers[0].name != LabelFindLayer {
-		t.Fatalf("layers %v, want only the find bar layer", f.Overlay.layers)
+	if names := f.Overlay.Names(); len(names) != 1 || names[0] != LabelFindLayer {
+		t.Fatalf("layers %v, want only the find bar layer", names)
 	}
-	if !apptest.Absent(tt, LabelTerminalOverlay) || !apptest.Absent(tt, LabelFind) {
+	if !apptest.Absent(tt, kit.LabelTerminalOverlay) || !apptest.Absent(tt, LabelFind) {
 		t.Error("a closed find bar layer draws an element")
 	}
 	tt.Type("x")
@@ -229,7 +230,7 @@ func TestEmptyOverlayBuildsNothingAndKeysReachTheTerminal(t *testing.T) {
 func TestOverlayLayerTakesKeysOnlyWhileFocused(t *testing.T) {
 	f, w, tt, src := keyFrame(t)
 	var field string
-	remove := f.Overlay.Add(LabelTerminalOverlay, func(c *ui.Context) {
+	remove := f.Overlay.Add(kit.LabelTerminalOverlay, func(c *ui.Context) {
 		ui.TextInput(c, &field).Label("overlay field").Absolute().Top(8).Right(8).Width(120)
 	})
 	tt.Frame()
@@ -246,7 +247,7 @@ func TestOverlayLayerTakesKeysOnlyWhileFocused(t *testing.T) {
 	}
 	remove()
 	tt.Frame()
-	if len(f.Overlay.layers) != 1 || !apptest.Absent(tt, "overlay field") {
+	if len(f.Overlay.Names()) != 1 || !apptest.Absent(tt, "overlay field") {
 		t.Error("remove left the layer")
 	}
 }
@@ -254,7 +255,7 @@ func TestOverlayLayerTakesKeysOnlyWhileFocused(t *testing.T) {
 func TestOverlayLayerWithoutFocusLeavesKeysToTheTerminal(t *testing.T) {
 	f, w, tt, src := keyFrame(t)
 	var field string
-	f.Overlay.Add(LabelTerminalOverlay, func(c *ui.Context) {
+	f.Overlay.Add(kit.LabelTerminalOverlay, func(c *ui.Context) {
 		ui.TextInput(c, &field).Label("overlay field").Absolute().Top(8).Right(8).Width(120)
 	})
 	tt.Frame()

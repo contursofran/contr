@@ -37,7 +37,7 @@ func attachCounting(t *testing.T) *countRig {
 	f := NewFrame(Deps{})
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
-	src := &countSource{source: &source{snap: agentstate.Snapshot{
+	src := &countSource{source: &source{Snap: agentstate.Snapshot{
 		Orchestrators: []agents.Worker{
 			{Name: "lead-a", Address: "oa", Project: "a", Role: agents.RoleOrchestrator, Live: true},
 			{Name: "lead-b", Address: "ob", Project: "b", Role: agents.RoleOrchestrator, Live: true},
@@ -45,7 +45,7 @@ func attachCounting(t *testing.T) *countRig {
 		Workers: []agents.Worker{{Name: "b-1", Address: "wa", Project: "a", Status: "working", Live: true}},
 	}}}
 	r := &countRig{f: f, src: src, w: w}
-	f.deps.StartAgents = func(n func()) (AgentSource, func()) { r.notify = n; return src, func() {} }
+	f.deps.StartAgents = func(n func()) (agentstate.AgentSource, func()) { r.notify = n; return src, func() {} }
 	stop := f.Attach(w)
 	t.Cleanup(func() { w.flush(); stop() })
 	r.tt = ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)
@@ -70,7 +70,7 @@ func TestARedrawWithNoChangeReadsNoSnapshot(t *testing.T) {
 			t.Errorf("%+v: three draws read the snapshot %d times, want none", sel, got-before)
 		}
 	}
-	r.src.snap.Workers = append(r.src.snap.Workers, agents.Worker{Name: "b-2", Address: "wa2", Project: "a", Live: true})
+	r.src.Snap.Workers = append(r.src.Snap.Workers, agents.Worker{Name: "b-2", Address: "wa2", Project: "a", Live: true})
 	before := r.src.reads.Load()
 	r.notify()
 	r.w.flush()

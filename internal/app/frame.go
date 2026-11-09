@@ -24,6 +24,7 @@ import (
 	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/app/ghsource"
 	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/questions"
 	"github.com/contursofran/contr/internal/app/reviewview"
 	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/app/state"
@@ -72,10 +73,10 @@ type Frame struct {
 	deps  Deps
 	Slots Slots
 	// Overlay is the layer above the terminal for the notch and the outline.
-	Overlay TerminalOverlay
+	Overlay kit.TerminalOverlay
 	// Outline is the message ticks of the orchestrator terminal. [Frame.Attach]
 	// makes it when there is an agent source. Nil otherwise.
-	Outline *Outline
+	Outline *questions.Outline
 	// Visibility, Selection and Toasts are the app state. The frame holds
 	// them for the views in its slots.
 	Visibility *state.Visibility
@@ -85,9 +86,9 @@ type Frame struct {
 	Projects *projects.Store
 	// Card is the questions card. The notch and the board
 	// panel open it; the notch builds it ([Frame.Attach] makes it).
-	Card *QuestionsCard
+	Card *questions.QuestionsCard
 	// Notch is the questions notch in the terminal overlay ([Frame.Attach] makes it).
-	Notch *Notch
+	Notch *questions.Notch
 	// ProjectsModal is the projects modal (D110), made in Attach.
 	ProjectsModal *ProjectsModal
 	// Settings is the Settings modal, made in Attach.
@@ -945,12 +946,12 @@ func (f *Frame) statusEffort(address string) string {
 
 // attachBoard makes the board panel and puts its view in Slots.Panel. [Frame.Attach] calls it
 // only while the viewers are shown (D147).
-func (f *Frame) attachBoard(agentSnap func() agentstate.Snapshot, src AgentSource) {
+func (f *Frame) attachBoard(agentSnap func() agentstate.Snapshot, src agentstate.AgentSource) {
 	var scope func() string
 	if src != nil {
 		scope = f.scope
 	}
-	f.Panel = &BoardPanel{Snapshot: agentSnap, Needs: NeedItems(agentSnap, scope)}
+	f.Panel = &BoardPanel{Snapshot: agentSnap, Needs: agentstate.NeedItems(agentSnap, scope)}
 	f.Panel.OpenPR = f.paneOpener()
 	f.Panel.OpenIssue = f.OpenIssue
 	f.Panel.PRs = f.WorkerPRs

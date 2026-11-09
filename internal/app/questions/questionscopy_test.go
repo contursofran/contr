@@ -1,4 +1,4 @@
-package app
+package questions
 
 import (
 	"slices"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/owner"
 )
@@ -18,7 +19,7 @@ const copyCmd = "go run ./tmp/usagecheck"
 func copyRig(t *testing.T) (*qRig, *state.Toasts) {
 	t.Helper()
 	src := askSource()
-	src.snap.Todos = []owner.Todo{{ID: "T1", Project: "a", Kind: "do", Text: "Run `" + copyCmd + "` and report"}}
+	src.Snap.Todos = []owner.Todo{{ID: "T1", Project: "a", Kind: "do", Text: "Run `" + copyCmd + "` and report"}}
 	r := newQRig(t, src)
 	toasts := state.NewToasts(nil)
 	r.card.Env.Status = toasts.Show
@@ -53,12 +54,12 @@ func TestTodoChipTabShowsNoBackticks(t *testing.T) {
 func TestCardNameShowsNoBackticks(t *testing.T) {
 	r, _ := copyRig(t)
 	items := r.notch.Items()
-	i := slices.IndexFunc(items, func(it NeedTab) bool { return it.Key == "T1" })
+	i := slices.IndexFunc(items, func(it agentstate.NeedTab) bool { return it.Key == "T1" })
 	if i < 0 {
 		t.Fatalf("no item T1")
 	}
 	want := "Run " + copyCmd + " and report"
-	if got := r.card.name(items[i], r.src.snap); got != want {
+	if got := r.card.name(items[i], r.src.Snap); got != want {
 		t.Errorf("name = %q, want %q", got, want)
 	}
 }
@@ -87,8 +88,8 @@ func TestKeysWorkAfterACodeChipClick(t *testing.T) {
 	}
 	r.tt.Frame()
 	r.tt.Key(0, ui.KeyEnter)
-	if !slices.Equal(r.src.dones, []string{"T1"}) {
-		t.Errorf("Enter after the chip click: dones %v", r.src.dones)
+	if !slices.Equal(r.src.Dones, []string{"T1"}) {
+		t.Errorf("Enter after the chip click: dones %v", r.src.Dones)
 	}
 	r.tt.Frame()
 	r.tt.Key(0, ui.KeyEscape)
@@ -118,7 +119,7 @@ func TestCardTextIsSelectableAndCopies(t *testing.T) {
 
 func TestUnclosedBacktickShowsAsPlainText(t *testing.T) {
 	src := askSource()
-	src.snap.Todos = []owner.Todo{{ID: "T1", Project: "a", Kind: "do", Text: "Run `go test"}}
+	src.Snap.Todos = []owner.Todo{{ID: "T1", Project: "a", Kind: "do", Text: "Run `go test"}}
 	r := newQRig(t, src)
 	r.open("T1")
 	if !r.tt.HasText("Run `go test") {
@@ -131,7 +132,7 @@ func TestUnclosedBacktickShowsAsPlainText(t *testing.T) {
 
 func TestDetailsSourceCodeSpanShowsAsChip(t *testing.T) {
 	src := askSource()
-	src.snap.Questions[0].Source = "see `make check`"
+	src.Snap.Questions[0].Source = "see `make check`"
 	r := newQRig(t, src)
 	r.open("D1")
 	if err := r.tt.Click(LabelQuestionsDetails); err != nil {

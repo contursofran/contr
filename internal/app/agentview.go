@@ -14,7 +14,7 @@ import (
 // storedSource is an [AgentSource] whose Snapshot is the frame's stored snapshot. The actions go
 // to the source.
 type storedSource struct {
-	AgentSource
+	agentstate.AgentSource
 	snap func() agentstate.Snapshot
 }
 

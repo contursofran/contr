@@ -12,6 +12,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/questions"
 	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/hc/hctest"
@@ -164,7 +165,7 @@ func TestNoFooter(t *testing.T) {
 		waitFor("tab lead", func() bool { return has("lead") })
 		click("lead")
 		time.Sleep(1500 * time.Millisecond) // the terminal attaches
-		waitFor("owner file problem", func() bool { return has(app.LabelOwnerProblem) })
+		waitFor("owner file problem", func() bool { return has(questions.LabelOwnerProblem) })
 		time.Sleep(500 * time.Millisecond)
 		for _, gone := range []string{"status bar", "needs row", "host-cpu-status", "contr-version"} {
 			if has(gone) {

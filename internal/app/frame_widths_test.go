@@ -171,8 +171,8 @@ func attachWithWidths(t *testing.T, w widths.Widths, err error) *Frame {
 	f := NewFrame(Deps{})
 	loaded := make(chan struct{})
 	f.deps.Widths.Load = func() (widths.Widths, error) { defer close(loaded); return w, err }
-	f.deps.StartAgents = func(func()) (AgentSource, func()) {
-		return &source{snap: agentstate.Snapshot{}}, func() {}
+	f.deps.StartAgents = func(func()) (agentstate.AgentSource, func()) {
+		return &source{Snap: agentstate.Snapshot{}}, func() {}
 	}
 	stop := f.Attach(win)
 	t.Cleanup(stop)

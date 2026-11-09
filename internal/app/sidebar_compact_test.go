@@ -149,8 +149,8 @@ func TestIconColumnAgentRowKeepsItsContextMenu(t *testing.T) {
 	if err := h.tt.ChooseMenuItem(MenuInterrupt); err != nil {
 		t.Fatal(err)
 	}
-	if len(h.src.signalled) != 1 || h.src.signalled[0] != "b-241" {
-		t.Errorf("interrupted %v", h.src.signalled)
+	if len(h.src.Signalled) != 1 || h.src.Signalled[0] != "b-241" {
+		t.Errorf("interrupted %v", h.src.Signalled)
 	}
 }
 

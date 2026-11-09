@@ -1,4 +1,7 @@
-package app
+// Package questions holds what the owner answers in the terminal: the questions notch and its
+// card (questions, to-dos and blocked menus), the outline of the pinned messages and the code
+// chips of the card.
+package questions
 
 // The questions card (docs/spec/QuestionsCard.md, D124, D125): the open notch.
 // It shows one item at a time: a question with its choices and a field for a
@@ -76,7 +79,7 @@ func resolvedID(snap agentstate.Snapshot, id string) bool { return slices.Contai
 
 // QuestionsCard is the card of the notch. Its methods run on the UI thread.
 type QuestionsCard struct {
-	Source AgentSource
+	Source agentstate.AgentSource
 	// Env runs the hc calls off the UI thread, redraws and shows messages.
 	Env view.Env
 	// Entry opens the pull request or issue of a blocked worker (D106).
@@ -103,7 +106,7 @@ type QuestionsCard struct {
 }
 
 // Open shows the card for t.
-func (q *QuestionsCard) Open(t NeedTab) {
+func (q *QuestionsCard) Open(t agentstate.NeedTab) {
 	q.open, q.focus = true, true
 	q.reset(t.Key)
 	q.err = ""
@@ -119,6 +122,9 @@ func (q *QuestionsCard) Close() {
 // IsOpen tells whether the card shows.
 func (q *QuestionsCard) IsOpen() bool { return q.open }
 
+// Key is the key of the item the card shows, such as "D1".
+func (q *QuestionsCard) Key() string { return q.key }
+
 // reset starts a new item: the field, the pick, Details and the menu clear.
 func (q *QuestionsCard) reset(key string) {
 	q.key, q.text, q.picked, q.details = key, "", -1, false
@@ -127,7 +133,7 @@ func (q *QuestionsCard) reset(key string) {
 
 // show switches to chip i. The card takes the focus again: the control that
 // had it is gone, and the keys must keep working.
-func (q *QuestionsCard) show(items []NeedTab, i int) {
+func (q *QuestionsCard) show(items []agentstate.NeedTab, i int) {
 	q.idx, q.focus = i, true
 	q.reset(items[i].Key)
 	q.err = ""
@@ -137,8 +143,8 @@ func (q *QuestionsCard) show(items []NeedTab, i int) {
 // sync finds the chip of the item shown. An item that went (answered here or
 // elsewhere) is dropped: the card moves to the item now at its place, or the
 // last one. The failure of the last action stays. items must not be empty.
-func (q *QuestionsCard) sync(items []NeedTab) int {
-	if i := slices.IndexFunc(items, func(t NeedTab) bool { return t.Key == q.key }); i >= 0 {
+func (q *QuestionsCard) sync(items []agentstate.NeedTab) int {
+	if i := slices.IndexFunc(items, func(t agentstate.NeedTab) bool { return t.Key == q.key }); i >= 0 {
 		q.idx = i
 		return i
 	}
@@ -150,7 +156,7 @@ func (q *QuestionsCard) sync(items []NeedTab) int {
 }
 
 // next is Tab: the next chip, from the last to the first.
-func (q *QuestionsCard) next(items []NeedTab) {
+func (q *QuestionsCard) next(items []agentstate.NeedTab) {
 	if len(items) > 1 {
 		q.show(items, (q.idx+1)%len(items))
 	}
@@ -211,9 +217,9 @@ func (q *QuestionsCard) done(id string) {
 // enter is the Enter key: the typed text, else the picked choice, else the
 // recommended one; for a to-do, done. A blocked menu takes no Enter, so a
 // stray key never approves a permission (D51).
-func (q *QuestionsCard) enter(t NeedTab, snap agentstate.Snapshot) {
+func (q *QuestionsCard) enter(t agentstate.NeedTab, snap agentstate.Snapshot) {
 	switch t.Kind {
-	case NeedQuestion:
+	case agentstate.NeedQuestion:
 		if q.text != "" {
 			q.answer(t.Key, q.text)
 			return
@@ -229,21 +235,21 @@ func (q *QuestionsCard) enter(t NeedTab, snap agentstate.Snapshot) {
 		case len(opts) > 0 && opts[0].Recommended:
 			q.answer(t.Key, opts[0].Text)
 		}
-	case NeedTodo:
+	case agentstate.NeedTodo:
 		q.done(t.Key)
 	}
 }
 
 // digit is a number key: a question picks the choice, a blocked menu sends it.
 // The keys reach the first nine choices.
-func (q *QuestionsCard) digit(t NeedTab, snap agentstate.Snapshot, pos int) {
+func (q *QuestionsCard) digit(t agentstate.NeedTab, snap agentstate.Snapshot, pos int) {
 	switch t.Kind {
-	case NeedQuestion:
+	case agentstate.NeedQuestion:
 		if o, ok := q.question(snap); ok && pos < len(CardOptions(o)) {
 			q.picked = pos
 			q.Env.Redraw()
 		}
-	case NeedBlocked:
+	case agentstate.NeedBlocked:
 		q.choose(t, pos)
 	}
 }
@@ -262,7 +268,7 @@ func findBlocked(snap agentstate.Snapshot, name string) (agents.Worker, bool) {
 // worker's screen when its turn or message changed (event driven: it follows
 // the snapshot, with no timer). The item goes from the chips when the worker
 // is no longer blocked.
-func (q *QuestionsCard) watchBlocked(snap agentstate.Snapshot, t NeedTab) {
+func (q *QuestionsCard) watchBlocked(snap agentstate.Snapshot, t agentstate.NeedTab) {
 	w, ok := findBlocked(snap, t.Key)
 	if !ok || w.Status != "blocked" {
 		return
@@ -292,7 +298,7 @@ func (q *QuestionsCard) watchBlocked(snap agentstate.Snapshot, t NeedTab) {
 }
 
 // readMenu reads the screen of the worker of t and parses its menu.
-func (q *QuestionsCard) readMenu(t NeedTab) (prompt.Prompt, bool, error) {
+func (q *QuestionsCard) readMenu(t agentstate.NeedTab) (prompt.Prompt, bool, error) {
 	screen, err := q.Source.Read(t.Address, promptLines)
 	if err != nil {
 		return prompt.Prompt{}, false, err
@@ -304,7 +310,7 @@ func (q *QuestionsCard) readMenu(t NeedTab) (prompt.Prompt, bool, error) {
 // choose sends choice i of the menu of t. A choice that asks for typed text
 // focuses the worker. Otherwise the screen is read and parsed again, and the
 // keys go only when the menu is the one the owner saw (D51).
-func (q *QuestionsCard) choose(t NeedTab, i int) {
+func (q *QuestionsCard) choose(t agentstate.NeedTab, i int) {
 	if q.busy || q.menu == nil || i >= len(q.menu.Choices) {
 		return
 	}
@@ -342,7 +348,7 @@ func (q *QuestionsCard) choose(t NeedTab, i int) {
 	})
 }
 
-func (q *QuestionsCard) focusWorker(t NeedTab) {
+func (q *QuestionsCard) focusWorker(t agentstate.NeedTab) {
 	if q.Select != nil {
 		q.Select(t.Address, t.Orchestrator)
 	}

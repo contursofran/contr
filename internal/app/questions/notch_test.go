@@ -1,4 +1,4 @@
-package app
+package questions
 
 import (
 	"context"
@@ -12,12 +12,8 @@ import (
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/apptest"
-	"github.com/contursofran/contr/internal/app/state"
-	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/hc"
-	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/owner"
-	"github.com/contursofran/contr/internal/usage"
 )
 
 // notchRig is a notch in a terminal-sized window. The project follows project.
@@ -26,7 +22,7 @@ type notchRig struct {
 	src     *source
 	tt      *ui.Tester
 	project string
-	opened  []NeedTab
+	opened  []agentstate.NeedTab
 	closes  int
 	isOpen  bool
 }
@@ -37,7 +33,7 @@ func newNotchRig(t *testing.T, src *source, project string) *notchRig {
 	r.n = &Notch{
 		Snapshot: src.Snapshot,
 		Project:  func() string { return r.project },
-		Open:     func(tab NeedTab) { r.opened, r.isOpen = append(r.opened, tab), true },
+		Open:     func(tab agentstate.NeedTab) { r.opened, r.isOpen = append(r.opened, tab), true },
 		Close:    func() { r.closes++; r.isOpen = false },
 		Opened:   func() bool { return r.isOpen },
 	}
@@ -50,28 +46,20 @@ func newNotchRig(t *testing.T, src *source, project string) *notchRig {
 	return r
 }
 
-func qs(project string, n int) []owner.Question {
-	var out []owner.Question
-	for i := 0; i < n; i++ {
-		out = append(out, owner.Question{ID: "D" + string(rune('1'+i)), Project: project, Title: "b-250 checks"})
-	}
-	return out
-}
-
 func TestNotchLabelCountsInWords(t *testing.T) {
-	q := NeedTab{Kind: NeedQuestion}
-	todo := NeedTab{Kind: NeedTodo}
-	blocked := NeedTab{Kind: NeedBlocked}
+	q := agentstate.NeedTab{Kind: agentstate.NeedQuestion}
+	todo := agentstate.NeedTab{Kind: agentstate.NeedTodo}
+	blocked := agentstate.NeedTab{Kind: agentstate.NeedBlocked}
 	for _, tc := range []struct {
-		items []NeedTab
+		items []agentstate.NeedTab
 		want  string
 	}{
 		{nil, ""},
-		{[]NeedTab{q}, "1 question"},
-		{[]NeedTab{q, q}, "2 questions"},
-		{[]NeedTab{q, q, todo}, "3 items"},
-		{[]NeedTab{todo}, "1 item"},
-		{[]NeedTab{q, blocked}, "2 items"},
+		{[]agentstate.NeedTab{q}, "1 question"},
+		{[]agentstate.NeedTab{q, q}, "2 questions"},
+		{[]agentstate.NeedTab{q, q, todo}, "3 items"},
+		{[]agentstate.NeedTab{todo}, "1 item"},
+		{[]agentstate.NeedTab{q, blocked}, "2 items"},
 	} {
 		if got := NotchLabel(tc.items); got != tc.want {
 			t.Errorf("NotchLabel(%d items) = %q, want %q", len(tc.items), got, tc.want)
@@ -85,7 +73,7 @@ func TestNotchShowsAndHidesWithTheData(t *testing.T) {
 	if len(r.tt.Texts()) != 0 {
 		t.Fatalf("notch with no items shows %q", r.tt.Texts())
 	}
-	src.snap.Questions = qs("a", 1)
+	src.Snap.Questions = apptest.Questions("a", 1)
 	r.tt.Frame()
 	if !r.tt.HasText("1 question") {
 		t.Fatalf("texts %q, want 1 question", r.tt.Texts())
@@ -93,12 +81,12 @@ func TestNotchShowsAndHidesWithTheData(t *testing.T) {
 	if _, ok := r.tt.Find("1 question. Open"); !ok {
 		t.Error("no element labelled \"1 question. Open\"")
 	}
-	src.snap.Questions = qs("a", 2)
+	src.Snap.Questions = apptest.Questions("a", 2)
 	r.tt.Frame()
 	if _, ok := r.tt.Find("2 questions. Open"); !ok || !r.tt.HasText("2 questions") {
 		t.Errorf("texts %q, want 2 questions", r.tt.Texts())
 	}
-	src.snap.Questions = nil
+	src.Snap.Questions = nil
 	r.tt.Frame()
 	if len(r.tt.Texts()) != 0 {
 		t.Errorf("notch stays after the data went: %q", r.tt.Texts())
@@ -106,10 +94,10 @@ func TestNotchShowsAndHidesWithTheData(t *testing.T) {
 }
 
 func TestNotchCountsOnlyItsProject(t *testing.T) {
-	src := &source{snap: agentstate.Snapshot{
-		Questions: append(qs("a", 1), owner.Question{ID: "D9", Project: "b", Title: "other"}, owner.Question{ID: "D8", Project: "b", Title: "other"}),
+	src := &source{Snap: agentstate.Snapshot{
+		Questions: append(apptest.Questions("a", 1), owner.Question{ID: "D9", Project: "b", Title: "other"}, owner.Question{ID: "D8", Project: "b", Title: "other"}),
 		Todos:     []owner.Todo{{ID: "T9", Project: "b", Kind: "do", Text: "other"}},
-		Workers:   []agents.Worker{blockedWorker("b-9", "b", "Allow rm?")},
+		Workers:   []agents.Worker{apptest.BlockedWorker("b-9", "b", "Allow rm?")},
 	}}
 	r := newNotchRig(t, src, "a")
 	if !r.tt.HasText("1 question") {
@@ -133,8 +121,8 @@ func TestNotchCountsOnlyItsProject(t *testing.T) {
 }
 
 func TestNotchMixOfQuestionsTodosAndBlockedMenus(t *testing.T) {
-	src := &source{snap: agentstate.Snapshot{
-		Questions: qs("a", 2),
+	src := &source{Snap: agentstate.Snapshot{
+		Questions: apptest.Questions("a", 2),
 		Todos:     []owner.Todo{{ID: "T1", Project: "a", Kind: "know", Text: "CI is slow"}},
 	}}
 	r := newNotchRig(t, src, "a")
@@ -144,8 +132,8 @@ func TestNotchMixOfQuestionsTodosAndBlockedMenus(t *testing.T) {
 	if _, ok := r.tt.Find("3 items. Open"); !ok {
 		t.Error("no element labelled \"3 items. Open\"")
 	}
-	src.snap.Todos = nil
-	src.snap.Workers = []agents.Worker{blockedWorker("b-250", "a", "Allow rm?")}
+	src.Snap.Todos = nil
+	src.Snap.Workers = []agents.Worker{apptest.BlockedWorker("b-250", "a", "Allow rm?")}
 	r.tt.Frame()
 	if !r.tt.HasText("3 items") {
 		t.Errorf("a blocked menu does not count: texts %q", r.tt.Texts())
@@ -153,18 +141,18 @@ func TestNotchMixOfQuestionsTodosAndBlockedMenus(t *testing.T) {
 }
 
 func TestNotchIgnoresResolvedItemsAndABrokenFile(t *testing.T) {
-	src := &source{snap: agentstate.Snapshot{Questions: qs("a", 2), Resolved: []string{"D1"}}}
+	src := &source{Snap: agentstate.Snapshot{Questions: apptest.Questions("a", 2), Resolved: []string{"D1"}}}
 	r := newNotchRig(t, src, "a")
 	if !r.tt.HasText("1 question") {
 		t.Errorf("a resolved question counts: texts %q", r.tt.Texts())
 	}
-	src.snap.OwnerProblem = "owner: owner.json: invalid character"
+	src.Snap.OwnerProblem = "owner: owner.json: invalid character"
 	r.tt.Frame()
 	if r.tt.HasText("1 question") {
 		t.Errorf("notch counts with a broken questions file: %q", r.tt.Texts())
 	}
 	// A problem of hc alone leaves the notch.
-	src.snap.OwnerProblem, src.snap.Problem = "", "hc: gone"
+	src.Snap.OwnerProblem, src.Snap.Problem = "", "hc: gone"
 	r.tt.Frame()
 	if !r.tt.HasText("1 question") {
 		t.Errorf("hc problem hides the notch: %q", r.tt.Texts())
@@ -172,9 +160,9 @@ func TestNotchIgnoresResolvedItemsAndABrokenFile(t *testing.T) {
 }
 
 func TestNotchClickOpensTheCardForTheFirstItem(t *testing.T) {
-	src := &source{snap: agentstate.Snapshot{
-		Questions: qs("a", 1),
-		Workers:   []agents.Worker{blockedWorker("b-250", "a", "Allow rm?")},
+	src := &source{Snap: agentstate.Snapshot{
+		Questions: apptest.Questions("a", 1),
+		Workers:   []agents.Worker{apptest.BlockedWorker("b-250", "a", "Allow rm?")},
 	}}
 	r := newNotchRig(t, src, "a")
 	if err := r.tt.Click("2 items. Open"); err != nil {
@@ -193,7 +181,7 @@ func TestNotchClickOpensTheCardForTheFirstItem(t *testing.T) {
 }
 
 func TestNotchCmdJOpensAndClosesTheCard(t *testing.T) {
-	src := &source{snap: agentstate.Snapshot{Questions: qs("a", 1)}}
+	src := &source{Snap: agentstate.Snapshot{Questions: apptest.Questions("a", 1)}}
 	r := newNotchRig(t, src, "a")
 	r.tt.Key(ui.Cmd, ui.KeyJ)
 	if len(r.opened) != 1 || r.opened[0].Key != "D1" {
@@ -214,7 +202,7 @@ func TestNotchCmdJWithNothingWaitingDoesNothing(t *testing.T) {
 }
 
 func TestNotchKeysOpenItOnlyWhileFocused(t *testing.T) {
-	src := &source{snap: agentstate.Snapshot{Questions: qs("a", 1)}}
+	src := &source{Snap: agentstate.Snapshot{Questions: apptest.Questions("a", 1)}}
 	r := newNotchRig(t, src, "a")
 	r.tt.SetFocused(true)
 	r.tt.Type(" ")
@@ -230,25 +218,6 @@ func TestNotchKeysOpenItOnlyWhileFocused(t *testing.T) {
 	r.tt.Key(0, ui.KeyEnter)
 	if len(r.opened) != 1 {
 		t.Errorf("a focused notch ignores Enter: opened %d", len(r.opened))
-	}
-}
-
-func TestNotchLayerLeavesKeysToTheTerminal(t *testing.T) {
-	f, w, tt, src := keyFrame(t)
-	notch := &Notch{
-		Snapshot: (&source{snap: agentstate.Snapshot{Questions: qs("a", 2)}}).Snapshot,
-		Project:  func() string { return "a" },
-		Open:     func(NeedTab) { t.Error("a key opened the card") },
-	}
-	f.Overlay.Add(LabelNotchLayer, notch.View)
-	tt.Frame()
-	if !tt.HasText("2 questions") {
-		t.Fatalf("the notch did not show in the terminal overlay: %q", tt.Texts())
-	}
-	tt.Type("a")
-	tt.Key(0, ui.KeyEnter)
-	if n := attachesAfter(w, tt, src, 2); n < 2 {
-		t.Errorf("attaches = %d: a key did not reach the terminal under the notch", n)
 	}
 }
 
@@ -298,75 +267,13 @@ func TestNotchFollowsTheFileThroughTheModel(t *testing.T) {
 	}
 }
 
-// notchFrame is an attached frame whose source has an orchestrator and a
-// worker in project a, and one in project b.
-func notchFrame(t *testing.T) (*Frame, *ui.Tester, *source) {
-	t.Helper()
-	w := &fakeWindow{visible: true}
-	f := NewFrame(Deps{})
-	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
-	f.Usage = usage.NewSampler(usage.Unread, nil)
-	src := &source{snap: agentstate.Snapshot{
-		Orchestrators: []agents.Worker{
-			{Name: "lead-a", Address: "oa", Project: "a", Role: agents.RoleOrchestrator, Live: true},
-			{Name: "lead-b", Address: "ob", Project: "b", Role: agents.RoleOrchestrator, Live: true},
-		},
-		Workers:   []agents.Worker{{Name: "b-250", Address: "wa", Project: "a", Status: "working", Live: true}},
-		Questions: append(qs("a", 2), owner.Question{ID: "D7", Project: "b", Title: "b-251 checks"}),
-	}}
-	f.deps.StartAgents = func(func()) (AgentSource, func()) { return src, func() {} }
-	stop := f.Attach(w)
-	t.Cleanup(func() { w.flush(); stop() })
-	tt := ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)
-	return f, tt, src
-}
-
-func TestFrameShowsTheNotchInEveryTerminalOfTheProject(t *testing.T) {
-	f, tt, _ := notchFrame(t)
-	for _, tc := range []struct {
-		kind state.SelectedKind
-		id   string
-		want string
-	}{
-		{state.KindOrchestrator, "oa", "2 questions"},
-		{state.KindWorker, "wa", "2 questions"},
-		{state.KindOrchestrator, "ob", "1 question"},
-	} {
-		f.Selection.Select(state.Selected{Kind: tc.kind, ID: tc.id})
-		tt.Frame()
-		if !tt.HasText(tc.want) {
-			t.Errorf("%s: texts %q, want %q", tc.id, tt.Texts(), tc.want)
-		}
-	}
-}
-
-func TestFrameCmdJOpensTheQuestionsCard(t *testing.T) {
-	f, tt, _ := notchFrame(t)
-	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "wa"})
-	tt.Frame()
-	tt.Key(ui.Cmd, ui.KeyJ)
-	if !f.Card.IsOpen() || f.Card.key != "D1" {
-		t.Fatalf("⌘J: card key %q open=%v, want D1", f.Card.key, f.Card.IsOpen())
-	}
-	tt.Key(ui.Cmd, ui.KeyJ)
-	if f.Card.IsOpen() {
-		t.Error("the second ⌘J left the card open")
-	}
-	if err := tt.Click("2 questions. Open"); err != nil {
-		t.Fatal(err)
-	}
-	if !f.Card.IsOpen() {
-		t.Error("a click on the notch did not open the card")
-	}
-}
-
 func TestNotchShowsAProblemOfTheQuestionsFile(t *testing.T) {
-	src := &source{snap: agentstate.Snapshot{Questions: qs("a", 1)}}
+	src := &source{Snap: agentstate.Snapshot{Questions: apptest.Questions("a", 1)}}
 	r := newNotchRig(t, src, "a")
 	if _, ok := r.tt.Find(LabelOwnerProblem); ok {
 		t.Fatal("the problem shows while the file reads well")
 	}
-	src.snap.OwnerProblem = "owner: owner.json: invalid character"
+	src.Snap.OwnerProblem = "owner: owner.json: invalid character"
 	r.tt.Frame()
 	apptest.Box(t, r.tt, LabelOwnerProblem)
 	if !r.tt.HasText(TextOwnerProblem) {
@@ -380,7 +287,7 @@ func TestNotchShowsAProblemOfTheQuestionsFile(t *testing.T) {
 		t.Errorf("the problem opened a card: %v", r.opened)
 	}
 	// It goes when the file reads again.
-	src.snap.OwnerProblem = ""
+	src.Snap.OwnerProblem = ""
 	r.tt.Frame()
 	if _, ok := r.tt.Find(LabelOwnerProblem); ok {
 		t.Error("the problem stays after the file reads well")
@@ -388,10 +295,10 @@ func TestNotchShowsAProblemOfTheQuestionsFile(t *testing.T) {
 }
 
 func TestNotchProblemClosesAnOpenCard(t *testing.T) {
-	src := &source{snap: agentstate.Snapshot{Questions: qs("a", 1)}}
+	src := &source{Snap: agentstate.Snapshot{Questions: apptest.Questions("a", 1)}}
 	r := newNotchRig(t, src, "a")
 	r.n.Toggle()
-	src.snap.OwnerProblem = "owner: owner.json is locked"
+	src.Snap.OwnerProblem = "owner: owner.json is locked"
 	r.tt.Frame()
 	if r.closes != 1 || r.isOpen {
 		t.Errorf("card closes = %d, open = %v", r.closes, r.isOpen)

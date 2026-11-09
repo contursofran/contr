@@ -81,10 +81,11 @@ that code, move it to the MyGo part in its own small PR.
 |---|---|
 | `cmd/contr` | `main` and the command line |
 | `internal/app` | the window content: frame and views |
-| `internal/app/kit` | shared view parts: list row, +/− counts, switch, code view, card button |
+| `internal/app/kit` | shared view parts: list row, +/− counts, switch, code view, card button, terminal overlay |
 | `internal/app/view` | what each view gets from the frame: `Env`, `Runner`, `Latest` |
 | `internal/app/ghsource` | the gh reads of the workers: pull request per worktree, issue titles, the queue of gh runs, the PR or issue entry |
 | `internal/app/settings` | the Settings modal: General, Agents and Updates tabs, update checks and install |
+| `internal/app/questions` | the questions notch and card, the outline of pinned messages, the code chips |
 | `internal/app/apptest` | test helpers that the tests of more than one `internal/app` package use |
 | `internal/app/reviewview` | the Review view: branches ahead of main, their files or commits, the file as a code view |
 | `internal/app/files` | the files panel: file tree, diff summary, the agent's todos and artifacts |

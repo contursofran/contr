@@ -1,4 +1,4 @@
-package app
+package questions
 
 import (
 	"context"
@@ -12,16 +12,13 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/apptest"
+	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/owner"
-)
-
-const (
-	orchAddr = "w1:t1"
-	workAddr = "w1:t2"
 )
 
 // outlineClockStart is when the outline began in the tests. The pins are placed
@@ -33,7 +30,7 @@ type outlineFixture struct {
 	sel  *state.Selection
 	todo []owner.Todo
 	now  time.Time
-	ov   TerminalOverlay
+	ov   kit.TerminalOverlay
 	tt   *ui.Tester
 }
 
@@ -48,8 +45,8 @@ func newOutline(t *testing.T, todos ...owner.Todo) *outlineFixture {
 	f := &outlineFixture{todo: todos, now: outlineClockStart, sel: state.NewSelection(nil)}
 	snap := func() agentstate.Snapshot {
 		return agentstate.Snapshot{
-			Orchestrators: []agents.Worker{{Address: orchAddr, Project: "contr", Role: agents.RoleOrchestrator}},
-			Workers:       []agents.Worker{{Address: workAddr, Project: "contr", Role: "builder"}},
+			Orchestrators: []agents.Worker{{Address: apptest.OrchAddr, Project: "contr", Role: agents.RoleOrchestrator}},
+			Workers:       []agents.Worker{{Address: apptest.WorkAddr, Project: "contr", Role: "builder"}},
 			Todos:         f.todo,
 		}
 	}
@@ -57,7 +54,7 @@ func newOutline(t *testing.T, todos ...owner.Todo) *outlineFixture {
 	f.o.Now = func() time.Time { return f.now }
 	f.o.start = outlineClockStart
 	f.ov.Add(LabelOutline, f.o.View)
-	f.sel.Select(state.Selected{Kind: state.KindOrchestrator, ID: orchAddr})
+	f.sel.Select(state.Selected{Kind: state.KindOrchestrator, ID: apptest.OrchAddr})
 	f.tt = ui.NewTester(func(c *ui.Context) {
 		theme.Apply(c)
 		ui.Box(c).Fill().Children(func() { f.ov.View(c) })
@@ -142,7 +139,7 @@ func TestOutlineShowsOneTickPerPinInTheOrchestratorTerminalOnly(t *testing.T) {
 	}
 
 	for name, sel := range map[string]state.Selected{
-		"a worker":   {Kind: state.KindWorker, ID: workAddr},
+		"a worker":   {Kind: state.KindWorker, ID: apptest.WorkAddr},
 		"a terminal": {Kind: state.KindTerminal, ID: "w1:t9"},
 		"a worktree": {Kind: state.KindWorktree, ID: "/x"},
 	} {
@@ -181,7 +178,7 @@ func TestOutlineNewMeansAfterTheTerminalLastHadTheFocus(t *testing.T) {
 
 	// The owner comes back: the new tick stays until the owner leaves.
 	f.now = outlineClockStart.Add(30 * time.Minute)
-	f.o.Focus(orchAddr)
+	f.o.Focus(apptest.OrchAddr)
 	f.tt.Frame()
 	if _, v, _ := f.o.view(); v.Count != 1 {
 		t.Errorf("a message that came while away is still new while the terminal has the focus: %+v", v)
@@ -351,10 +348,10 @@ func TestOutlineViewDoesNoFileReads(t *testing.T) {
 	defer func() { cancel(); m.Wait() }()
 
 	sel := state.NewSelection(nil)
-	sel.Select(state.Selected{Kind: state.KindOrchestrator, ID: orchAddr})
+	sel.Select(state.Selected{Kind: state.KindOrchestrator, ID: apptest.OrchAddr})
 	o := NewOutline(func() agentstate.Snapshot {
 		s := m.Snapshot()
-		s.Orchestrators = []agents.Worker{{Address: orchAddr, Project: "contr", Role: agents.RoleOrchestrator}}
+		s.Orchestrators = []agents.Worker{{Address: apptest.OrchAddr, Project: "contr", Role: agents.RoleOrchestrator}}
 		return s
 	}, sel, view.Env{})
 	o.start = outlineClockStart
@@ -407,26 +404,21 @@ func TestOutlineFocusIgnoresANilOutline(t *testing.T) {
 	o.Focus("x") // the frame has no outline without an agent source
 }
 
-// The frame tells the outline which terminal has the focus: the selected one
-// while the window has the focus.
-func TestFrameTellsTheOutlineWhichTerminalHasTheFocus(t *testing.T) {
-	f, w, _, _ := terminalFrame(t, nil)
-	f.Outline = NewOutline(func() agentstate.Snapshot { return agentstate.Snapshot{} }, f.Selection, view.Env{Invalidate: w.Invalidate})
-	w.blur()
-	f.Selection.Select(state.Selected{Kind: state.KindOrchestrator, ID: orchAddr})
-	if f.Outline.focused != "" {
-		t.Errorf("a blurred window gives the focus to %q", f.Outline.focused)
+func TestOutlineFocusedIsTheLastFocus(t *testing.T) {
+	f := newOutline(t)
+	if got := f.o.Focused(); got != "" {
+		t.Errorf("focused %q before any focus", got)
 	}
-	w.focus()
-	if f.Outline.focused != orchAddr {
-		t.Errorf("focus: the outline has %q, want %q", f.Outline.focused, orchAddr)
+	f.o.Focus(apptest.OrchAddr)
+	if got := f.o.Focused(); got != apptest.OrchAddr {
+		t.Errorf("focused %q, want %q", got, apptest.OrchAddr)
 	}
-	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: workAddr})
-	if f.Outline.focused != workAddr {
-		t.Errorf("another terminal: the outline has %q, want %q", f.Outline.focused, workAddr)
+	f.o.Focus("")
+	if got := f.o.Focused(); got != "" {
+		t.Errorf("focused %q after a blur", got)
 	}
-	w.blur()
-	if f.Outline.focused != "" {
-		t.Errorf("blur: the outline has %q", f.Outline.focused)
+	var none *Outline
+	if got := none.Focused(); got != "" {
+		t.Errorf("nil outline focused %q", got)
 	}
 }

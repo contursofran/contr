@@ -1,4 +1,4 @@
-package app
+package agentstate
 
 // The items that wait on the owner: blocked workers first, then questions
 // (D7), then to-dos (T12). The v0.2 needs-you row under the terminal is gone
@@ -10,13 +10,12 @@ import (
 	"strings"
 
 	"github.com/contursofran/contr/internal/agents"
-	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/icons"
 )
 
-// AgentSource is the part of agentstate.Model that the views read and act on.
+// AgentSource is the part of Model that the views read and act on.
 type AgentSource interface {
-	Snapshot() agentstate.Snapshot
+	Snapshot() Snapshot
 	Answer(id, answer string) error
 	Done(id string) error
 	ClearDone()
@@ -70,7 +69,7 @@ func (t NeedTab) Label() string { return t.Key + " " + t.Title }
 // NeedItems returns a function that lists the items for the scope: the project
 // scope returns, or all projects when it is nil or returns "". A nil snap
 // lists nothing.
-func NeedItems(snap func() agentstate.Snapshot, scope func() string) func() []NeedTab {
+func NeedItems(snap func() Snapshot, scope func() string) func() []NeedTab {
 	return func() []NeedTab {
 		if snap == nil {
 			return nil
@@ -79,13 +78,13 @@ func NeedItems(snap func() agentstate.Snapshot, scope func() string) func() []Ne
 		if scope != nil {
 			project = scope()
 		}
-		return needItems(snap(), project)
+		return NeedItemsOf(snap(), project)
 	}
 }
 
-// needItems returns the items of the items for project, or for all
+// NeedItemsOf returns the items of the items for project, or for all
 // projects when project is "": blocked workers, then questions, then to-dos.
-func needItems(snap agentstate.Snapshot, project string) []NeedTab {
+func NeedItemsOf(snap Snapshot, project string) []NeedTab {
 	in := func(p string) bool { return project == "" || p == project }
 	done := make(map[string]bool, len(snap.Resolved))
 	for _, id := range snap.Resolved {

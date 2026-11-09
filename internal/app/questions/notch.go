@@ -1,4 +1,4 @@
-package app
+package questions
 
 // The questions notch (docs/spec/QuestionsNotch.md, D124): a small glass tab
 // that hangs from the top of the terminal while the open project has a
@@ -31,14 +31,14 @@ const LabelNotch = "Open"
 // and "3 items" once a to-do or a blocked menu is among them (D124; "1 item"
 // for a single one). It is
 // empty for no items.
-func NotchLabel(items []NeedTab) string {
+func NotchLabel(items []agentstate.NeedTab) string {
 	n := len(items)
 	if n == 0 {
 		return ""
 	}
 	allQuestions := true
 	for _, t := range items {
-		allQuestions = allQuestions && t.Kind == NeedQuestion
+		allQuestions = allQuestions && t.Kind == agentstate.NeedQuestion
 	}
 	switch {
 	case !allQuestions && n == 1:
@@ -52,7 +52,7 @@ func NotchLabel(items []NeedTab) string {
 }
 
 // NotchAccessible is the screen-reader label: the text, a period and "Open".
-func NotchAccessible(items []NeedTab) string {
+func NotchAccessible(items []agentstate.NeedTab) string {
 	if len(items) == 0 {
 		return ""
 	}
@@ -68,18 +68,18 @@ type Notch struct {
 	Project func() string
 	// Open shows the card for an item; Close hides the card; Opened tells
 	// whether it shows. Each may be nil.
-	Open   func(NeedTab)
+	Open   func(agentstate.NeedTab)
 	Close  func()
 	Opened func() bool
 	// Panel builds the card anchored to the notch while it is open; may be nil.
-	Panel func(c *ui.Context, anchor ui.Element, items []NeedTab)
+	Panel func(c *ui.Context, anchor ui.Element, items []agentstate.NeedTab)
 }
 
 // Items returns the open items of the project: questions, then to-dos, then
 // blocked menus (D124, D140). It returns none while the owner file is broken (the model logs the
 // error and the notch shows the problem, see problemView) or no project is open. Items that the
 // owner resolved in this run do not count.
-func (n *Notch) Items() []NeedTab {
+func (n *Notch) Items() []agentstate.NeedTab {
 	if n.Snapshot == nil || n.Project == nil {
 		return nil
 	}
@@ -91,22 +91,22 @@ func (n *Notch) Items() []NeedTab {
 	if snap.OwnerProblem != "" {
 		return nil
 	}
-	var open []NeedTab
-	for _, t := range needItems(snap, project) {
+	var open []agentstate.NeedTab
+	for _, t := range agentstate.NeedItemsOf(snap, project) {
 		if !t.Resolved {
 			open = append(open, t)
 		}
 	}
-	slices.SortStableFunc(open, func(a, b NeedTab) int { return cardRank(a.Kind) - cardRank(b.Kind) })
+	slices.SortStableFunc(open, func(a, b agentstate.NeedTab) int { return cardRank(a.Kind) - cardRank(b.Kind) })
 	return open
 }
 
 // cardRank orders the chips of the questions card: questions, to-dos, blocked menus.
-func cardRank(k NeedKind) int {
+func cardRank(k agentstate.NeedKind) int {
 	switch k {
-	case NeedQuestion:
+	case agentstate.NeedQuestion:
 		return 0
-	case NeedTodo:
+	case agentstate.NeedTodo:
 		return 1
 	}
 	return 2
