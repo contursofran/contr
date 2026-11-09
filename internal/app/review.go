@@ -136,14 +136,9 @@ func (r *Review) drop() {
 	}
 }
 
-// Close ends the read in flight. It reports whether a read was in flight:
-// the view then misses what that read was to show. Call it when the view
-// closes.
-func (r *Review) Close() (stopped bool) {
-	stopped = r.cancel != nil
-	r.drop()
-	return stopped
-}
+// Close ends the read in flight, and its result is not applied. Call it
+// when the view ends (the window closes).
+func (r *Review) Close() { r.drop() }
 
 // SetRepo shows the repository in dir. An empty dir shows "Select a
 // project" and runs no git.

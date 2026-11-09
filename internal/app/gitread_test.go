@@ -91,16 +91,11 @@ func TestReviewCloseEndsTheRead(t *testing.T) {
 	r, g, q := blockedReview(time.Hour)
 	r.SetRepo(t.TempDir())
 	ctx := g.first(t)
-	if !r.Close() {
-		t.Fatal("Close should report the read in flight")
-	}
+	r.Close()
 	ended(t, ctx, context.Canceled)
 	q.run(t)
 	if r.Err() != "" || r.loaded() {
 		t.Fatalf("result applied after Close: err %q", r.Err())
-	}
-	if r.Close() {
-		t.Fatal("a second Close stops no read")
 	}
 }
 
@@ -112,19 +107,8 @@ func TestReviewReadPastTheTimeLimitFails(t *testing.T) {
 	if !strings.Contains(r.Err(), "deadline exceeded") {
 		t.Fatalf("err %q, want the time limit", r.Err())
 	}
-	if r.Close() {
+	if r.cancel != nil {
 		t.Fatal("no read is in flight after the result")
-	}
-}
-
-func TestFrameHidingReviewReadsAgainAfterAStoppedRead(t *testing.T) {
-	r := NewReview(nil, nil)
-	r.start = func(func()) {} // the read never ends
-	r.SetRepo(t.TempDir())
-	f := &Frame{Review: r, reviewOpen: true, reviewSet: true}
-	f.ToggleReview()
-	if f.reviewSet {
-		t.Fatal("a stopped read should run again when the view shows")
 	}
 }
 

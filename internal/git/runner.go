@@ -44,7 +44,8 @@ func (r ExecRunner) Run(ctx context.Context, dir string, args ...string) ([]byte
 }
 
 // RunInput runs `git args...` in dir with stdin as its standard input. It
-// stops when ctx ends; the error then wraps the error of ctx.
+// stops when ctx ends; the error then wraps the error of ctx. On an error, the
+// output is what git wrote before it ended.
 func (ExecRunner) RunInput(ctx context.Context, dir string, stdin io.Reader, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
@@ -58,7 +59,7 @@ func (ExecRunner) RunInput(ctx context.Context, dir string, stdin io.Reader, arg
 		if ctx.Err() != nil {
 			err = ctx.Err()
 		}
-		return nil, &Error{Args: args, Err: err, Stderr: strings.TrimSpace(stderr.String())}
+		return out, &Error{Args: args, Err: err, Stderr: strings.TrimSpace(stderr.String())}
 	}
 	return out, nil
 }

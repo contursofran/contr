@@ -154,8 +154,9 @@ func (r Repo) ignored(ctx context.Context, paths []string) map[string]bool {
 		return set
 	}
 	out, err := r.gitInput(ctx, strings.NewReader(strings.Join(paths, "\x00")+"\x00"), "check-ignore", "-z", "--stdin")
-	// Exit status 1 means that no path is ignored.
-	if err != nil {
+	// Exit status 1 means that no path is ignored. A failed git that wrote
+	// paths still gives them.
+	if err != nil && out == "" {
 		return set
 	}
 	for _, p := range strings.Split(out, "\x00") {

@@ -72,3 +72,36 @@ func TestEntriesFailWhenTheContextEnded(t *testing.T) {
 		t.Fatalf("error %v, want context.Canceled from git for-each-ref", err)
 	}
 }
+
+// failingIgnoreGit is a work tree whose check-ignore writes a path and then
+// fails.
+type failingIgnoreGit struct{}
+
+func (g failingIgnoreGit) Run(ctx context.Context, dir string, args ...string) ([]byte, error) {
+	return g.RunInput(ctx, dir, nil, args...)
+}
+
+func (failingIgnoreGit) RunInput(_ context.Context, _ string, _ io.Reader, args ...string) ([]byte, error) {
+	switch strings.Join(args[4:], " ") {
+	case "rev-parse --is-inside-work-tree":
+		return []byte("true\n"), nil
+	case "check-ignore -z --stdin":
+		return []byte("out\x00"), &git.Error{Args: args, Err: errors.New("exit status 128")}
+	}
+	return nil, errors.New("unexpected git " + strings.Join(args, " "))
+}
+
+// A check-ignore that fails after it wrote paths still hides those paths.
+func TestEntriesUseTheOutputOfAFailedCheckIgnore(t *testing.T) {
+	s := scratch(t)
+	s.write("out", "x\n")
+	s.write("a.txt", "a\n")
+	r := Repo{Dir: s.dir, Base: "main", Git: failingIgnoreGit{}}
+	es, err := r.Entries(t.Context(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(names(es), " "); got != "a.txt" {
+		t.Fatalf("entries %q, want out hidden", got)
+	}
+}

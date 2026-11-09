@@ -428,9 +428,6 @@ func (f *Frame) ReviewOpen() bool { return f.reviewOpen }
 // ToggleReview shows or hides the Review view. Showing it reads the selected project's repo.
 func (f *Frame) ToggleReview() {
 	f.reviewOpen = !f.reviewOpen
-	if !f.reviewOpen && f.Review != nil && f.Review.Close() {
-		f.reviewSet = false // the stopped read runs again when the view shows
-	}
 	f.syncReview()
 }
 

@@ -73,3 +73,13 @@ func ioPipe(t *testing.T) (*os.File, *os.File) {
 	t.Cleanup(func() { r.Close() })
 	return r, w
 }
+
+// A command that fails after it wrote output gives that output with the
+// error.
+func TestExecRunnerGivesOutputWithTheError(t *testing.T) {
+	needGit(t)
+	out, err := ExecRunner{}.Run(context.Background(), t.TempDir(), "-c", "alias.x=!echo partial; exit 3", "x")
+	if err == nil || string(out) != "partial\n" {
+		t.Fatalf("out %q, err %v; want the output and an error", out, err)
+	}
+}
