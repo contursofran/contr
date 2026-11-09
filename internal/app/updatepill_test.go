@@ -172,6 +172,11 @@ type updatedRig struct {
 	saved []updated.Note
 }
 
+// atOnce is an Env whose work runs at once on the caller's goroutine: the load
+// and the save of the note end before the call returns, so a test reads saved
+// with no race and no wait.
+var atOnce = view.Env{Run: view.Runner{Go: func(fn func()) { fn() }}}
+
 // newUpdatedRig starts a frame whose loader gives note n (or err), with the work run at once.
 func newUpdatedRig(t *testing.T, n updated.Note, err error) *updatedRig {
 	t.Helper()
@@ -181,7 +186,7 @@ func newUpdatedRig(t *testing.T, n updated.Note, err error) *updatedRig {
 	f.deps.Updated.Load = func() (updated.Note, error) { return n, err }
 	f.deps.Updated.Save = func(n updated.Note) error { r.saved = append(r.saved, n); return nil }
 	tt.Frame()
-	f.loadUpdated(view.Env{})
+	f.loadUpdated(atOnce)
 	tt.Frame()
 	tt.Frame()
 	return r
@@ -337,7 +342,7 @@ func whatsNewThenReady(t *testing.T, closed bool) (*pillRig, *[]updated.Note) {
 	n := dueNote()
 	n.Version, n.From = "1.2.3", "1.2.0"
 	r.f.deps.Updated.Load = func() (updated.Note, error) { return n, nil }
-	r.f.loadUpdated(view.Env{})
+	r.f.loadUpdated(atOnce)
 	r.tt.Frame()
 	if !r.has(UpdatedPrefix+"1.2.3") || !r.has(LabelUpdatePanel) {
 		t.Fatalf("no What's new at start: %q", r.tt.Texts())

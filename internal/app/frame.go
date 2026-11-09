@@ -180,7 +180,7 @@ type Frame struct {
 	follower     *theme.Follower
 	lateWin      lateWindow
 	themeErr     error
-	saveTimer    *time.Timer
+	saveTimer    stopper
 	// term is the plugin's terminal of the selected agent and conn its hc
 	// connection; both are nil with no terminal. termAddr is the hc terminal
 	// they show; termSet is false before the first sync. termState is the
@@ -606,7 +606,14 @@ func (f *Frame) split(c *ui.Context, stored *float32, shown, lo, hi float32, rtl
 
 // widthsSaveDelay is how long a divider must rest before its widths are
 // saved (D111).
-var widthsSaveDelay = 400 * time.Millisecond
+const widthsSaveDelay = 400 * time.Millisecond
+
+// stopper is a timer that waits: Stop cancels it (as time.Timer.Stop does).
+type stopper interface{ Stop() bool }
+
+// widthsAfterFunc starts the timer of the widths save. It is time.AfterFunc;
+// tests replace it to fire the timer themselves, with no wait on wall time.
+var widthsAfterFunc = func(d time.Duration, fn func()) stopper { return time.AfterFunc(d, fn) }
 
 // saveWidthsAfterDrag saves the widths once the dividers rest for
 // widthsSaveDelay, off the UI thread: every move restarts the wait, so a
@@ -625,7 +632,7 @@ func (f *Frame) saveWidthsAfterDrag() {
 	}
 	w := widths.Widths{Sidebar: f.sidebarW, Panel: f.panelW}
 	post := f.post
-	f.saveTimer = time.AfterFunc(widthsSaveDelay, func() {
+	f.saveTimer = widthsAfterFunc(widthsSaveDelay, func() {
 		if err := save(w); err != nil && post != nil {
 			post(func() { f.Toasts.Show(err.Error()) })
 		}
