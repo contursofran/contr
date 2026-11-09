@@ -186,6 +186,10 @@ type Frame struct {
 	Host  *host.Host
 	Usage *usage.Sampler
 
+	// AgentsNotice is a note about agents.json that LoadConfig made at start
+	// (the old format, D206). [Frame.Attach] shows it once in the toasts.
+	AgentsNotice string
+
 	// NewOrch is the `+ new` action. [Frame.Attach] makes it when PickFolder
 	// and SpawnOrchestrator are set.
 	NewOrch *NewOrchestrator
@@ -1049,6 +1053,9 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.Files.Post, f.Files.Invalidate = w.Update, w.Invalidate
 	f.Toasts = state.NewToasts(w.Invalidate)
 	f.Files.Status = f.Toasts.Show
+	if f.AgentsNotice != "" {
+		f.Toasts.Show(f.AgentsNotice)
+	}
 	f.Session.Post, f.Session.Invalidate, f.Session.OpenURL = w.Update, w.Invalidate, openURL
 	if f.Session.StateDir == "" {
 		f.Session.StateDir = usage.StateDir()

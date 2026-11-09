@@ -136,12 +136,15 @@ func TestSettingsCustomArgvStaysUntilAPick(t *testing.T) {
 	}
 }
 
-func TestSettingsMissingOrchestratorIsCreatedByAPick(t *testing.T) {
+func TestSettingsOrchestratorShowsTheDefaultAndAPickWritesIt(t *testing.T) {
 	path := writeAgents(t, "")
 	r := newSettingsRig(t, nil)
 	r.openAgents(path)
-	if !r.hasText(TextNotSet + " · suggested: claude --model opus --effort medium --permission-mode auto") {
+	if !r.hasText("claude --model opus --effort medium --permission-mode auto") || r.hasText("not set") {
 		t.Fatalf("texts %q", r.texts())
+	}
+	if fileHasOrchestrator(path) {
+		t.Fatal("opening wrote the default")
 	}
 	r.pick("Orchestrator effort", "high")
 	want := []string{"claude", "--model", "opus", "--effort", "high", "--permission-mode", "auto"}
@@ -163,14 +166,20 @@ func TestSettingsResetPutsTheDefaultsBack(t *testing.T) {
 	}
 }
 
-func TestSettingsResetKeepsAMissingOrchestratorMissing(t *testing.T) {
+func TestSettingsResetDoesNotFreezeTheDefaultOrchestrator(t *testing.T) {
 	path := writeAgents(t, "")
 	r := newSettingsRig(t, nil)
 	r.openAgents(path)
 	r.click(AgentsReset)
-	if got := argvOf(t, path, "orchestrator"); got != nil {
-		t.Fatalf("orchestrator %q", got)
+	if fileHasOrchestrator(path) {
+		t.Fatal("reset wrote the default orchestrator")
 	}
+}
+
+// fileHasOrchestrator reports whether the file itself holds an orchestrator profile.
+func fileHasOrchestrator(path string) bool {
+	data, _ := os.ReadFile(path)
+	return strings.Contains(string(data), "orchestrator")
 }
 
 func TestSettingsAFailedSaveShowsTheError(t *testing.T) {
