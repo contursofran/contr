@@ -27,7 +27,7 @@ Plan meters, in the sidebar foot row (D196):
 | Meter | width 44px, the meter above |
 | Value | mono `value`, `ink-62` |
 
-"Claude ▬ 38%  Codex ▬ 12%", then free space, then the Settings button.
+"Claude ▬ 38%  Codex ▬ 12%", then free space, then the Settings button. The foot has padding `space-10` left and right, so the meters and the button have the same inset; a divider `hairline` with the same insets is above it, and the row has `space-6` above and below (D201).
 
 ## States
 
