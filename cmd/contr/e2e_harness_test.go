@@ -133,9 +133,10 @@ func (h *harness) buildFakeClaude(t *testing.T) string {
 			t.Fatal(err)
 		}
 	}
-	// Not named "claude": hc knows a program of that name as the Claude agent and
-	// sets its status itself, so it ignores the OSC the fake sends (#532).
-	bin := filepath.Join(h.dir, "fakeagent")
+	// Named "claude": the app reads a worker's menu only from a claude command.
+	// contr puts --settings before the profile arguments, so the fake reads its
+	// state from the last argument (#532).
+	bin := filepath.Join(h.dir, "claude")
 	mk := exec.Command("go", "build", "-o", bin, ".")
 	mk.Dir = src
 	mk.Env = append(os.Environ(), "CGO_ENABLED=0")
