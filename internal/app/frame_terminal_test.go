@@ -26,6 +26,7 @@ func (quietStream) Err() error                      { return nil }
 func (quietStream) Write(p []byte) (int, error)     { return len(p), nil }
 func (quietStream) Resize(uint16, uint16) error     { return nil }
 func (quietStream) Focus(bool) error                { return nil }
+func (quietStream) SetDisplay(hc.Display) error     { return nil }
 func (s quietStream) Close() error                  { return nil }
 
 // scriptSource attaches with err, or with a quiet stream when err is nil. It
