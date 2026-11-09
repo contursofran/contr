@@ -332,8 +332,8 @@ func TestWorkerPRBoundsGHRuns(t *testing.T) {
 	}
 	peak := 0
 	for len(r.queue) > 0 {
-		if r.w.active > peak {
-			peak = r.w.active
+		if r.w.GH.active > peak {
+			peak = r.w.GH.active
 		}
 		f := r.queue[0]
 		r.queue = r.queue[1:]
@@ -342,8 +342,8 @@ func TestWorkerPRBoundsGHRuns(t *testing.T) {
 	if peak > 2 || r.runner.calls != 5 {
 		t.Errorf("peak %d gh runs (max %d), %d calls, want 5", peak, 2, r.runner.calls)
 	}
-	if r.w.active != 0 || len(r.w.waiting) != 0 {
-		t.Errorf("active %d, waiting %d at the end", r.w.active, len(r.w.waiting))
+	if r.w.GH.active != 0 || len(r.w.GH.waiting) != 0 {
+		t.Errorf("active %d, waiting %d at the end", r.w.GH.active, len(r.w.GH.waiting))
 	}
 }
 

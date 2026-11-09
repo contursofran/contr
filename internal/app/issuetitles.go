@@ -5,8 +5,8 @@ package app
 // found title is asked again after [titleHitTTL] (the owner may edit it); a failed read (no
 // gh, no network, no such issue) is asked again after [titleMissTTL] and keeps the title that was
 // known. There is no timer: a read starts only from an agents sync, and only for an issue with
-// no fresh answer, so an idle screen does no gh work. At most [maxGH] reads run at once, with
-// the pull request reads counted apart.
+// no fresh answer, so an idle screen does no gh work. At most [maxGH] gh runs go at once, the
+// pull request reads included ([ghQueue]).
 
 import (
 	"context"
@@ -42,10 +42,11 @@ type IssueTitles struct {
 	// Now is the clock. Nil: time.Now.
 	Now func() time.Time
 
+	// GH is the queue of gh runs, shared with [WorkerPRs]. Nil: a queue of its own.
+	GH *ghQueue
+
 	answers  map[titleKey]titleAnswer
 	inflight map[titleKey]bool
-	active   int
-	waiting  []func()
 }
 
 func (t *IssueTitles) now() time.Time {
@@ -122,26 +123,10 @@ func (t *IssueTitles) read(k titleKey) {
 	})
 }
 
-// gh runs a read off the UI thread, with at most [maxGH] at once. Others wait their turn.
+// gh runs a read off the UI thread through the queue [IssueTitles.GH].
 func (t *IssueTitles) gh(read func() func()) {
-	start := func() {
-		t.active++
-		t.Env.Do(func() func() {
-			done := read()
-			return func() {
-				t.active--
-				done()
-				if len(t.waiting) > 0 && t.active < maxGH {
-					next := t.waiting[0]
-					t.waiting = t.waiting[1:]
-					next()
-				}
-			}
-		})
+	if t.GH == nil {
+		t.GH = &ghQueue{}
 	}
-	if t.active >= maxGH {
-		t.waiting = append(t.waiting, start)
-		return
-	}
-	start()
+	t.GH.Do(t.Env, read)
 }
