@@ -47,7 +47,10 @@ type updateToastData struct{ Version string }
 
 // updateUI holds the pill's state.
 type updateUI struct {
+	// open is true while the panel of a ready update is open. Only the owner opens it (#533).
 	open bool
+	// afterOpen is true while the What's new panel after an update is open (D209).
+	afterOpen bool
 	// toasted holds the versions whose toast showed: one toast per version.
 	toasted map[string]bool
 	// pending is a version whose toast waits for the next build.
@@ -98,14 +101,18 @@ func (f *Frame) showUpdated(n updated.Note) {
 	if f.Settings == nil || !n.Due(f.Settings.Version) {
 		return
 	}
-	f.upd.after, f.upd.open = &n, true
+	f.upd.after, f.upd.afterOpen = &n, true
 }
 
-// updatedShown removes the "Updated to" pill and saves its note as shown, off the UI thread.
+// updatedShown removes the "Updated to" pill, closes its panel and saves its note as shown, off
+// the UI thread. It does nothing when the pill does not show.
 func (f *Frame) updatedShown() {
+	if f.upd.after == nil {
+		return
+	}
 	n := *f.upd.after
 	n.Shown = true
-	f.upd.after, f.upd.open = nil, false
+	f.upd.after, f.upd.afterOpen = nil, false
 	if f.SaveUpdated == nil {
 		return
 	}
@@ -118,8 +125,11 @@ func (f *Frame) updatedShown() {
 	})
 }
 
-// updateReady is Settings.OnReady: it queues the one toast of the version.
+// updateReady is Settings.OnReady: it queues the one toast of the version. The ready pill takes
+// the place of the "Updated to" pill: that note is marked shown and its panel closes. The ready
+// panel stays closed until the owner opens it (#533).
 func (f *Frame) updateReady(info UpdateInfo) {
+	f.updatedShown()
 	if f.upd.toasted == nil {
 		f.upd.toasted = map[string]bool{}
 	}
@@ -142,7 +152,7 @@ func (f *Frame) updatePill(c *ui.Context) {
 		f.updatedPill(c)
 		return
 	}
-	pill := f.pillButton(c, LabelUpdatePill)
+	pill := f.pillButton(c, LabelUpdatePill, f.upd.open, func() { f.upd.open = !f.upd.open })
 	ui.PopoverBase(c, pill, &f.upd.open, func(panel ui.Element) {
 		panel.Label(LabelUpdatePanel).AttachTo(pill, ui.AnchorBottomEnd, ui.AnchorTopEnd).Margin(theme.Space8, 0, 0, 0)
 		floatCard(panel)
@@ -154,39 +164,38 @@ func (f *Frame) updatePill(c *ui.Context) {
 }
 
 // updatedPill is the pill on the first start after an update, with What's new open under it
-// (D209). Once the panel closes (Got it, Return, Escape or a press outside), the pill goes and
-// the note is saved as shown.
+// (D209). Once the panel closes (Got it, Return, Escape, a press outside or on the pill), the
+// pill goes and the note is saved as shown.
 func (f *Frame) updatedPill(c *ui.Context) {
 	n := f.upd.after
-	if n == nil {
+	if n == nil || !f.upd.afterOpen {
 		return
 	}
-	if !f.upd.open {
-		f.updatedShown()
-		return
-	}
-	pill := f.pillButton(c, UpdatedPrefix+n.Version)
-	ui.PopoverBase(c, pill, &f.upd.open, func(panel ui.Element) {
+	pill := f.pillButton(c, UpdatedPrefix+n.Version, true, f.updatedShown)
+	panel := ui.PopoverBase(c, pill, &f.upd.afterOpen, func(panel ui.Element) {
 		panel.Label(LabelUpdatePanel).AttachTo(pill, ui.AnchorBottomEnd, ui.AnchorTopEnd).Margin(theme.Space8, 0, 0, 0)
 		floatCard(panel)
 		if panel.OverlayShortcut(0, ui.KeyEnter) {
-			f.upd.open = false
+			f.updatedShown()
 		}
 		panel.Children(func() {
 			f.updatePanel(c, UpdateInfo{Version: n.Version, Notes: n.Notes}, n.From, n.InstalledAt, true)
 		})
 	})
+	if panel.Dismissed() {
+		f.updatedShown()
+	}
 }
 
-// pillButton is the pill: the download icon and text, on ButtonBase. A click opens or closes
-// the panel.
-func (f *Frame) pillButton(c *ui.Context, text string) ui.Element {
+// pillButton is the pill: the download icon and text, on ButtonBase. open gives it the hover
+// fill; a click runs click, which opens or closes the panel.
+func (f *Frame) pillButton(c *ui.Context, text string, open bool, click func()) ui.Element {
 	p := theme.Current()
 	pill := ui.ButtonBase(c).Label(text).Height(theme.SizeIconButton).Shrink(0).
 		PaddingX(theme.Space10).Gap(theme.Space6).AlignItems(ui.Center).Radius(theme.SizeIconButton/2).
 		Border(1, p.FloatLine).Cursor(ui.CursorPointer).MarginEnd(theme.Space8).
-		OnClick(func() { f.upd.open = !f.upd.open })
-	if pill.Hovered() || f.upd.open {
+		OnClick(click)
+	if pill.Hovered() || open {
 		pill = pill.Background(p.Hover)
 	}
 	pill.TextColor(p.Ink100).Children(func() {
@@ -247,7 +256,7 @@ func (f *Frame) updatePanel(c *ui.Context, info UpdateInfo, from string, at time
 		BorderWidth(1, 0, 0, 0).BorderColor(p.Hairline).Children(func() {
 		if after {
 			ui.Text(c, sinceText("Updated", time.Now(), at)).NoWrap().Grow(1).TextColor(p.Ink50)
-			settingsButton(c, UpdateGotIt+" ⏎", ButtonFilled, func() { f.upd.open = false })
+			settingsButton(c, UpdateGotIt+" ⏎", ButtonFilled, f.updatedShown)
 			return
 		}
 		ui.Text(c, sinceText("Downloaded", time.Now(), at)).NoWrap().Grow(1).TextColor(p.Ink50)

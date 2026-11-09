@@ -323,3 +323,67 @@ func TestTheUpdatePanelFillIsFloatSolid(t *testing.T) {
 		}
 	}
 }
+
+// whatsNewThenReady starts version 1.2.3 after an update with What's new open, closes its panel
+// by hand when closed is true (the pill stays), then makes 1.3.0 ready (#533).
+func whatsNewThenReady(t *testing.T, closed bool) (*pillRig, *[]updated.Note) {
+	t.Helper()
+	r := newPillRig(t, nil)
+	var saved []updated.Note
+	r.f.SaveUpdated = func(n updated.Note) error { saved = append(saved, n); return nil }
+	n := dueNote()
+	n.Version, n.From = "1.2.3", "1.2.0"
+	r.f.LoadUpdated = func() (updated.Note, error) { return n, nil }
+	r.f.loadUpdated(Runner{Go: func(fn func()) { fn() }}, nil)
+	r.tt.Frame()
+	if !r.has(UpdatedPrefix+"1.2.3") || !r.has(LabelUpdatePanel) {
+		t.Fatalf("no What's new at start: %q", r.tt.Texts())
+	}
+	if closed {
+		r.f.upd.afterOpen = false
+	}
+	r.ready()
+	return r, &saved
+}
+
+func checkReadyAfterWhatsNew(t *testing.T, r *pillRig, saved []updated.Note) {
+	t.Helper()
+	if !r.has(LabelUpdatePill) {
+		t.Fatalf("no ready pill: %q", r.tt.Texts())
+	}
+	if r.has(UpdatedPrefix + "1.2.3") {
+		t.Error("the Updated to pill stays next to the ready pill")
+	}
+	if r.has(LabelUpdatePanel) || r.f.upd.open {
+		t.Error("the ready panel opened by itself")
+	}
+	if !r.has(LabelUpdateToast) {
+		t.Error("no ready toast")
+	}
+	if len(saved) != 1 || !saved[0].Shown || saved[0].Version != "1.2.3" {
+		t.Errorf("saved %+v, want one shown note of 1.2.3", saved)
+	}
+	r.tt.Key(0, ui.KeyEnter)
+	r.tt.Frame()
+	if r.relaunch != 0 {
+		t.Errorf("relaunch = %d after Return with the ready panel closed", r.relaunch)
+	}
+}
+
+func TestAReadyUpdateWhileWhatsNewIsOpenKeepsItsPanelClosed(t *testing.T) {
+	r, saved := whatsNewThenReady(t, false)
+	checkReadyAfterWhatsNew(t, r, *saved)
+}
+
+func TestAReadyUpdateAfterWhatsNewClosedKeepsItsPanelClosed(t *testing.T) {
+	r, saved := whatsNewThenReady(t, true)
+	checkReadyAfterWhatsNew(t, r, *saved)
+}
+
+func TestAClickOnTheUpdatedPillClosesWhatsNew(t *testing.T) {
+	r := newUpdatedRig(t, dueNote(), nil)
+	if err := r.tt.Click(updatedPill); err != nil {
+		t.Fatal(err)
+	}
+	r.closedAndShown(t)
+}

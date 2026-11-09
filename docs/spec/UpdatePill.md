@@ -33,7 +33,10 @@ Shared rules: [README.md](README.md). Design: boards 8 and 9 of the from-zero ca
 - The toast shows once per version, the first time it is ready.
 - Updated: on the first start of a version that contr installed, the `Updated to` pill shows
   with its panel open. When the panel closes, the pill goes. It shows once per version, also
-  across later restarts. A ready update shows its own pill in its place.
+  across later restarts. A ready update shows its own pill in its place: the `Updated to` panel
+  closes and its note is marked shown, as with `Got it` (#533).
+- The two pills have their own open state. The ready panel opens only from a click on its pill,
+  never by itself; Return restarts only in that panel.
 
 ## Behavior
 
@@ -42,8 +45,8 @@ Shared rules: [README.md](README.md). Design: boards 8 and 9 of the from-zero ca
 - `Restart now` (panel, toast, Settings) calls `Settings.Relaunch`. `Later` closes the panel or
   the toast.
 - A failed download is logged and shows in Settings, not as a toast.
-- After an update, `Got it`, Escape or a press outside closes the panel, removes the pill and
-  marks the note shown.
+- After an update, `Got it`, Return, Escape, a press outside or a click on the pill closes the
+  panel, removes the pill and marks the note shown (saved off the UI thread).
 
 ## Data
 
@@ -76,5 +79,7 @@ Shared rules: [README.md](README.md). Design: boards 8 and 9 of the from-zero ca
   after Later; the panel opens from the pill; Restart now relaunches; Return restarts; a failed
   download shows no pill.
 - After an update: the panel opens at start with the notes; Got it, Return, Escape and a press
-  outside close it and mark it shown; it does not show again; a missing or corrupt file or
+  outside or a click on the pill close it and mark it shown; it does not show again; a missing or corrupt file or
   another version shows nothing. Settings saves the note before the relaunch.
+- A ready update while What's new shows (panel open or closed): the ready pill and its toast show,
+  the ready panel stays closed, the note is saved as shown, and Return does not restart.
