@@ -226,7 +226,7 @@ func runAgents(args []string, stdout, stderr io.Writer, dial func(context.Contex
 			if err != nil {
 				return err
 			}
-			spec := agents.Spec{Name: *name, Profile: *profile, Role: *role, Issue: *issue, Worktree: *worktree, Project: *project, Task: task}
+			spec := agents.Spec{Name: *name, Profile: *profile, Role: *role, Issue: *issue, Worktree: *worktree, Project: *project, Task: task, Colors: storedColors()}
 			if *reviewPR != 0 {
 				if spec.Worktree, err = m.ReviewWorktree(ctx, cmp.Or(*worktree, "."), *reviewPR); err != nil {
 					return err
