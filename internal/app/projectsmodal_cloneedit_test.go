@@ -71,3 +71,43 @@ func TestCloneFailureAfterAnEditGoesToStatus(t *testing.T) {
 		t.Errorf("err %q status %v", r.m.cloneErr, r.status)
 	}
 }
+
+func TestCloneRunningShowsOneRowForTheSameRepo(t *testing.T) {
+	r, _ := cloneRig(t, okRunner(new([][]string)))
+	r.m.Run = Runner{Go: func(f func()) { r.held = append(r.held, f) }}
+	r.typeQuery("acme/widget")
+	r.tt.Key(0, ui.KeyEnter)
+	r.tt.Frame()
+	r.tt.Frame()
+	n := 0
+	for _, s := range r.tt.Texts() {
+		if strings.Contains(s, "acme/widget") && (strings.HasPrefix(s, "Clone ") || strings.HasPrefix(s, "Cloning ")) {
+			n++
+		}
+	}
+	if n != 1 || !r.has(LabelCloneProgress) || !r.shows("Cloning acme/widget") {
+		t.Errorf("%d clone rows, texts %v", n, r.tt.Texts())
+	}
+}
+
+func TestCloneRunningTurnsDragReorderOff(t *testing.T) {
+	r, _ := cloneRig(t, okRunner(new([][]string)))
+	r.m.Run = Runner{Go: func(f func()) { r.held = append(r.held, f) }}
+	r.open()
+	if r.m.list.Reorder == nil {
+		t.Fatal("reorder is off with an empty field")
+	}
+	r.tt.Type("acme/widget")
+	r.tt.Key(0, ui.KeyEnter)
+	r.m.query = "" // the Add row now sits above the open rows
+	r.tt.Frame()
+	r.tt.Frame()
+	if r.m.list.Reorder != nil {
+		t.Error("reorder is on while the clone row shifts the open rows")
+	}
+	r.held[0]()
+	r.tt.Frame()
+	if r.m.list.Reorder == nil {
+		t.Error("reorder stays off after the clone ends")
+	}
+}
