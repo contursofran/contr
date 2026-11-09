@@ -183,6 +183,33 @@ Add packages under `internal/` when a change needs them.
   `tmp/sheet/<Part>-<theme>.png`. It needs no window and no hc. Run it for
   the parts your change touches, look at each sheet, and give the paths in
   your report. Add a part when you build a spec'd component that has none.
+- Real agent check (#543). Use it to see hc status of a real `claude`
+  worker. It uses the model, so run it by hand, not in CI.
+  1. Make a scratch folder under `/tmp` with a `git init` project, a home
+     folder and the XDG folders. Set `HC_SESSION`, `HOME`, the `XDG_*`
+     variables, `CONTR_STATE_DIR`, `CONTR_OWNER_FILE` and
+     `CONTR_AGENTS_CONFIG` to it. Keep your own `USER` and `LOGNAME`.
+  2. In `CONTR_AGENTS_CONFIG`, add a profile with the cheap model:
+     `{"profiles":{"hk":{"argv":["claude","--model","haiku","--effort","low","--permission-mode","default"]}}}`.
+  3. Write `<home>/.claude.json` with `hasCompletedOnboarding` and, for the
+     project's real path (`/private/tmp/...` on macOS), `hasTrustDialogAccepted`.
+     Without it Claude Code waits at a setup or trust dialog and hc shows no
+     status. The scratch home has no login, so the owner must approve a
+     login for the worker (for example `/login` in the worker's terminal).
+     Without a login the worker says "Not logged in".
+  4. `hc server start`, then `contr agents spawn -project demo -profile hk
+     -name w1 -no-parent -worktree <project> "<task>"`. Task: run
+     `sleep 25; ls` in the shell (a tool runs: `working`), then `touch a.txt`
+     (needs a permission in `default` mode: `blocked`).
+  5. Poll `hc ls --json` for `status`, and read the sidebar row of
+     `contr-explore` with agent-desktop. Then `hc kill` the worker, run
+     `hc server stop` and remove the scratch folder.
+
+  Result on 2026-11-09 (Claude Code 2.1.319, hc 0.1.19): the worker row
+  showed `agent` `claude-code` and `status` `blocked` at the login prompt;
+  before the trust dialog was accepted, `agent` was `sh` with no `status`.
+  `working` and the permission `blocked` were not seen, because the scratch
+  home had no login. They are still open.
 - Run the app only against a scratch hc core and a scratch project under
   `/tmp`, never against the owner's core.
 - On the owner's Mac, run one heavy job at a time: an app run with a scratch core,
