@@ -19,7 +19,7 @@ import (
 
 const hookUsage = `Usage:
   contr hook stop            the kit's Stop hook
-  contr hook session-start   the kit's SessionStart hook (matcher compact)
+  contr hook session-start   the kit's SessionStart hook (startup, compact)
   contr hook post-tool       the kit's PostToolUse hook (todos, artifacts)
   contr hook prompt          the kit's UserPromptSubmit hook
 
@@ -37,9 +37,11 @@ In any hc session that is not a worker it also labels the terminal with the
 context size (contr.context, contr.context-limit) for the status strip, and
 with the model and effort (contr.model, contr.effort) for the sidebar row.
 
-session-start, after a compaction in a coordinator: prints the playbook,
-the state file to read, the live workers it started, its open owner
-items and the flow (contr agents flow), which Claude Code adds to the new context.
+session-start, at startup in an hc terminal with role orchestrator (no
+transcript yet, so only the role counts), and after a compaction in a
+coordinator: prints the playbook, the state file to read (at startup, only
+when it exists), the live workers it started, its open owner items and the
+flow (contr agents flow), which Claude Code adds to the new context.
 
 post-tool and prompt run only in an hc terminal (HC_TERMINAL_ID). post-tool
 saves the todo list (TodoWrite, TaskCreate, TaskUpdate) and the artifacts
@@ -195,6 +197,9 @@ func (h *hook) coordinatorStop() error {
 
 // sessionStart gives a coordinator its playbook and state after a compaction.
 func (h *hook) sessionStart() error {
+	if h.in.Source == "startup" {
+		return h.startup()
+	}
 	if h.in.Source != "" && h.in.Source != "compact" {
 		return nil
 	}
@@ -205,6 +210,21 @@ func (h *hook) sessionStart() error {
 		return err
 	}
 	_, err = io.WriteString(h.stdout, h.restoreText())
+	return err
+}
+
+// startup gives a new session the playbook when its hc terminal has role
+// orchestrator (D202). A new session has no transcript, so only the role
+// counts. Nothing is cleared or labeled: the session is new.
+func (h *hook) startup() error {
+	if h.getenv("HC_TERMINAL_ID") == "" {
+		return nil
+	}
+	orch, err := h.orchestratorRole()
+	if err != nil || !orch {
+		return err
+	}
+	_, err = io.WriteString(h.stdout, h.startupText())
 	return err
 }
 
@@ -320,6 +340,12 @@ func (h *hook) coordinator() (bool, error) {
 			return true, nil
 		}
 	}
+	return h.orchestratorRole()
+}
+
+// orchestratorRole tells whether the session's hc terminal has role
+// orchestrator.
+func (h *hook) orchestratorRole() (bool, error) {
 	self := h.getenv("HC_TERMINAL_ID")
 	if self == "" {
 		return false, nil
@@ -346,6 +372,27 @@ func (h *hook) restoreText() string {
 	fmt.Fprintf(&b, "contr: the conversation was compacted. You are the coordinator, and the playbook follows again.\n")
 	fmt.Fprintf(&b, "First read %s: you wrote it before the compaction.\n\n", filepath.Join(h.in.Cwd, stateFile))
 	// The lists come before the playbook, so a cut takes only playbook text.
+	b.WriteString(h.workersText())
+	b.WriteString("\n")
+	b.WriteString(h.ownerText())
+	b.WriteString("\n")
+	b.WriteString(flowText(h.getenv))
+	b.WriteString("\nThe playbook:\n\n")
+	b.WriteString(h.playbook())
+	return cut(b.String(), restoreMax)
+}
+
+// startupText is what a new coordinator gets: who it is, the state file when
+// one exists, its live workers, its open owner items, the flow and the
+// playbook, cut to restoreMax characters.
+func (h *hook) startupText() string {
+	var b strings.Builder
+	b.WriteString("contr: you are the coordinator of this project; the owner gives the goal in the next message.\n")
+	state := filepath.Join(h.in.Cwd, stateFile)
+	if _, err := os.Stat(state); err == nil {
+		fmt.Fprintf(&b, "First read %s: an earlier coordinator of this project wrote it.\n", state)
+	}
+	b.WriteString("\n")
 	b.WriteString(h.workersText())
 	b.WriteString("\n")
 	b.WriteString(h.ownerText())
