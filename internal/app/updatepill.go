@@ -202,13 +202,17 @@ func (f *Frame) pillButton(c *ui.Context, text string) ui.Element {
 // floatCard gives a floating card its look: glass-float, float-line and shadow-float.
 func floatCard(el ui.Element) {
 	p := theme.Current()
-	el.Column().Width(updateWidth).Radius(theme.Radius12).Background(p.GlassFloat).Border(1, p.FloatLine)
+	el.Column().Width(updateWidth).Radius(theme.Radius12).Background(floatCardFill(p)).Border(1, p.FloatLine)
 	for _, l := range p.ShadowFloat {
 		if !l.Inset {
 			el.Shadow(l.X, l.Y, l.Blur, l.Wide, l.Color)
 		}
 	}
 }
+
+// floatCardFill is the fill of the update panel: float-solid, so that the rows behind the
+// panel do not show through its text (#524, D212).
+func floatCardFill(p *theme.Palette) ui.Color { return p.FloatSolid }
 
 // updatePanel is the panel body: head, What's new, the agents note and the foot. After an update
 // (D209) it has no agents note, and its foot has only Got it.

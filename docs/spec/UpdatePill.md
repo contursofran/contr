@@ -11,7 +11,8 @@ Shared rules: [README.md](README.md). Design: boards 8 and 9 of the from-zero ca
   `icon-button`, fully round, `float-line` border, `space-10` side padding, `space-6` gap,
   `space-8` right of it to the diff summary. Hover and open: `hover` fill.
 - **Panel** (below the pill, its right edge on the pill's right edge, `space-8` apart), 340px,
-  `glass-float`, `float-line`, `shadow-float`, `radius-12`:
+  `float-solid` (opaque, so the rows behind it do not show through, D212), `float-line`,
+  `shadow-float`, `radius-12`:
   1. Head: `contr 0.4.0` (bold, `ink-95`) and `from 0.3.2` (`meta`, mono, `ink-50`).
   2. `What's new` (`ink-50`) and the release notes as a short list (`ink-85`).
   3. Note on a `hover` fill, `radius-8`: `server` icon and `Agents keep running. Their terminals
@@ -61,7 +62,7 @@ Shared rules: [README.md](README.md). Design: boards 8 and 9 of the from-zero ca
 
 ## Tokens
 
-`glass-float`, `float-line`, `shadow-float`, `hover`, `hairline`, `ink-100`, `ink-95`, `ink-85`,
+`float-solid`, `float-line`, `shadow-float`, `hover`, `hairline`, `ink-100`, `ink-95`, `ink-85`,
 `ink-62`, `ink-50`, `radius-8`, `radius-12`, `space-4` to `space-16`, `icon-button`.
 
 ## Build in MyGo
