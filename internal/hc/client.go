@@ -100,6 +100,19 @@ func Find(path, home string, dirs []string) (string, error) {
 	return "", ErrNotFound
 }
 
+// The Claude Code session variables: claudeVar and each name that starts
+// with claudePrefix. CleanEnv and CleanArgv remove them.
+const (
+	claudeVar    = "CLAUDECODE"
+	claudePrefix = "CLAUDE_CODE_"
+)
+
+// ClaudeSessionVar tells whether name is a Claude Code session variable:
+// CLAUDECODE or CLAUDE_CODE_*.
+func ClaudeSessionVar(name string) bool {
+	return name == claudeVar || strings.HasPrefix(name, claudePrefix)
+}
+
 // CleanEnv returns environ without CLAUDECODE and the CLAUDE_CODE_* variables.
 // The hc server keeps the environment of the `hc connect` that starts it, and
 // every terminal it opens inherits that. A server started inside a Claude Code
@@ -108,12 +121,38 @@ func CleanEnv(environ []string) []string {
 	out := make([]string, 0, len(environ))
 	for _, kv := range environ {
 		name, _, _ := strings.Cut(kv, "=")
-		if name == "CLAUDECODE" || strings.HasPrefix(name, "CLAUDE_CODE_") {
+		if ClaudeSessionVar(name) {
 			continue
 		}
 		out = append(out, kv)
 	}
 	return out
+}
+
+// cleanScript unsets the variables that CleanEnv removes, then runs its
+// arguments. A line of a value with several lines can give a name that is
+// not set; unset of that name does nothing.
+var cleanScript = `for v in $(env | sed -n -E 's/^(` + claudeVar + `|` + claudePrefix +
+	`[A-Za-z0-9_]*)=.*/\1/p'); do unset "$v"; done; exec "$@"`
+
+// cleanName is $0 of cleanScript, for ps and error messages.
+const cleanName = "contr-clean-env"
+
+// CleanArgv returns argv started through /bin/sh with the variables that
+// CleanEnv removes unset (D216). terminal.run sets env on top of the core's
+// environment and cannot unset a name, and contr cannot read the core's
+// environment, so the shell removes them when the terminal starts.
+func CleanArgv(argv []string) []string {
+	return append([]string{"/bin/sh", "-c", cleanScript, cleanName}, argv...)
+}
+
+// UncleanArgv returns the argv that CleanArgv wrapped, and true. When argv
+// does not start with the clean wrapper, it returns argv and false.
+func UncleanArgv(argv []string) ([]string, bool) {
+	if len(argv) > 4 && argv[3] == cleanName {
+		return argv[4:], true
+	}
+	return argv, false
 }
 
 // Command returns a Dialer that starts `<path> connect` with env added to the

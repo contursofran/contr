@@ -423,7 +423,7 @@ func (t terminal) runsClaude() bool {
 	if t.Status != nil || t.claudeInFront() {
 		return true
 	}
-	return len(t.Argv) > 0 && filepath.Base(t.Argv[0]) == "claude"
+	return isClaude(program(t.Argv))
 }
 
 // claudeInFront tells if Claude Code is the foreground program, by name or
@@ -436,20 +436,32 @@ func (t terminal) claudeInFront() bool {
 	return n == "claude" || versionName.MatchString(n)
 }
 
-// command is the foreground program's name, else the base of argv[0], or
-// of the agent's argv[0] after a setup wrapper.
+// command is the foreground program's name, else the base of the agent's
+// argv[0] after the setup and clean wrappers.
 func (t terminal) command() string {
 	if t.Foreground != nil && t.Foreground.Name != "" {
 		return t.Foreground.Name
 	}
-	argv := t.Argv
-	if len(argv) > 5 && argv[3] == setupName {
-		argv = argv[5:]
-	}
-	if len(argv) > 0 {
+	if argv := program(t.Argv); len(argv) > 0 {
 		return filepath.Base(argv[0])
 	}
 	return ""
+}
+
+// program returns argv less the setup wrapper (withSetup) and the clean
+// wrapper (hc.CleanArgv), in any nesting.
+func program(argv []string) []string {
+	for {
+		if len(argv) > 5 && argv[3] == setupName {
+			argv = argv[5:]
+			continue
+		}
+		inner, ok := hc.UncleanArgv(argv)
+		if !ok {
+			return argv
+		}
+		argv = inner
+	}
 }
 
 // Orchestrator tells if the worker is an orchestrator.
@@ -552,6 +564,11 @@ func (m *Manager) Spawn(ctx context.Context, s Spec) (Worker, error) {
 	if s.Task != "" {
 		argv = append(argv, s.Task)
 	}
+	// A Claude worker starts without the Claude Code session variables of
+	// the core's environment, so Claude Code saves its transcript (D216).
+	if isClaude(argv) {
+		argv = hc.CleanArgv(argv)
+	}
 	env := map[string]string{}
 	if setup, main := m.setupFor(ctx, s.Worktree); setup != "" {
 		argv = withSetup(setup, argv)
@@ -635,7 +652,7 @@ func (m *Manager) OpenTerminal(ctx context.Context, s TerminalSpec) (Worker, err
 // already (D203).
 func (m *Manager) agentArgv(agent string, argv []string) []string {
 	out := append([]string(nil), argv...)
-	if len(out) == 0 || filepath.Base(out[0]) != "claude" {
+	if !isClaude(out) {
 		return out
 	}
 	head := []string{out[0]}
@@ -655,6 +672,11 @@ func (m *Manager) agentArgv(agent string, argv []string) []string {
 		}
 	}
 	return append(head, out[1:]...)
+}
+
+// isClaude tells whether argv runs the claude command.
+func isClaude(argv []string) bool {
+	return len(argv) > 0 && filepath.Base(argv[0]) == "claude"
 }
 
 // hasFlag reports whether args set flag, as `flag v` or `flag=v`.

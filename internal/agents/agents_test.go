@@ -150,6 +150,23 @@ func TestDefaultExplorer(t *testing.T) {
 
 // TestSpawnNoProfile: the error for an unknown profile names the file that
 // was read and the profiles that it has (#484).
+// unclean checks that argv starts with hc.CleanArgv's words (D216) and returns
+// the rest: the agent's own argv.
+func unclean(t *testing.T, argv any) []any {
+	t.Helper()
+	got := argv.([]any)
+	head := hc.CleanArgv(nil)
+	if len(got) < len(head) {
+		t.Fatalf("argv = %q, want the clean wrapper first", got)
+	}
+	for i, w := range head {
+		if got[i] != w {
+			t.Fatalf("argv = %q, want the clean wrapper first", got)
+		}
+	}
+	return got[len(head):]
+}
+
 func TestSpawnNoProfile(t *testing.T) {
 	for _, tc := range []struct{ source, want string }{
 		{"", `agents: no profile "planner-high"; profiles: builder, debugger, explorer, orchestrator, planner, reviewer`},
@@ -185,7 +202,7 @@ func TestSpawn(t *testing.T) {
 		t.Errorf("worker\n got %+v\nwant %+v", w, want)
 	}
 	p := f.last().Params
-	if got := p["argv"]; !reflect.DeepEqual(got, []any{"claude", "--model", "sonnet", "--effort", "medium", "--permission-mode", "auto", "read TASK.md"}) {
+	if got := unclean(t, p["argv"]); !reflect.DeepEqual(got, []any{"claude", "--model", "sonnet", "--effort", "medium", "--permission-mode", "auto", "read TASK.md"}) {
 		t.Errorf("argv = %v", got)
 	}
 	if p["cwd"] != wt || p["env"] != nil || p["no_parent"] != true || p["outlive_parent"] != true || p["wait"] != false || p["parent"] != nil {
@@ -202,7 +219,7 @@ func TestSpawn(t *testing.T) {
 	if l := p["labels"].(map[string]any); l[LabelRole] != "reviewer" || l[LabelIssue] != nil {
 		t.Errorf("labels = %v", l)
 	}
-	if got := len(p["argv"].([]any)); got != 7 {
+	if got := len(unclean(t, p["argv"])); got != 7 {
 		t.Errorf("argv without a task has %d words", got)
 	}
 
@@ -459,11 +476,11 @@ func TestSpawnStartsTheKitAgent(t *testing.T) {
 		return f.last().Params["argv"].([]any)
 	}
 	want := []any{"claude", "--plugin-dir", kit, "--agent", "contr:builder", "--model", "sonnet", "--effort", "medium", "--permission-mode", "auto"}
-	if got := argvOf("builder"); !reflect.DeepEqual(got, want) {
+	if got := unclean(t, argvOf("builder")); !reflect.DeepEqual(got, want) {
 		t.Errorf("builder argv\n got %v\nwant %v", got, want)
 	}
 	// No agent file: the kit loads, with no --agent (D211).
-	if got := argvOf("reviewer"); !reflect.DeepEqual(got[:4], []any{"claude", "--plugin-dir", kit, "--model"}) {
+	if got := unclean(t, argvOf("reviewer")); !reflect.DeepEqual(got[:4], []any{"claude", "--plugin-dir", kit, "--model"}) {
 		t.Errorf("a profile with no agent file: %v", got)
 	}
 	if got := argvOf("shell"); !reflect.DeepEqual(got, []any{"sh"}) {
@@ -511,6 +528,43 @@ func TestWorkerDecodesProjectLabel(t *testing.T) {
 	}
 	if w.Project != "x" {
 		t.Errorf("Project = %q, want x", w.Project)
+	}
+}
+
+// D216: a claude worker starts through hc.CleanArgv, so the Claude Code
+// session variables of the core's environment are gone; other programs start
+// as they are, and the env param keeps CONTR_COORDINATOR.
+func TestSpawnStartsClaudeWithoutSessionVariables(t *testing.T) {
+	f := &fakeCore{handle: map[string]func(map[string]any) (any, error){
+		"terminal.run": func(map[string]any) (any, error) { return term("t1", "w", "live", nil, nil), nil },
+	}}
+	cfg := DefaultConfig()
+	cfg.Profiles["codex"] = Profile{Argv: []string{"codex", "--model", "x"}}
+	cfg.Profiles["abs"] = Profile{Argv: []string{"/usr/local/bin/claude"}}
+	m := New(f, cfg).WithExecutable("")
+	spawn := func(profile string) map[string]any {
+		t.Helper()
+		if _, err := m.Spawn(context.Background(), Spec{Name: "w", Profile: profile, Parent: "t0", Task: "go"}); err != nil {
+			t.Fatal(err)
+		}
+		return f.last().Params
+	}
+	p := spawn("builder")
+	if got := unclean(t, p["argv"]); got[0] != "claude" || got[len(got)-1] != "go" {
+		t.Errorf("builder argv = %q", got)
+	}
+	if !reflect.DeepEqual(p["env"], map[string]any{EnvCoordinator: "t0"}) {
+		t.Errorf("builder env = %v", p["env"])
+	}
+	if got := unclean(t, spawn("abs")["argv"]); got[0] != "/usr/local/bin/claude" {
+		t.Errorf("claude by path argv = %q", got)
+	}
+	p = spawn("codex")
+	if got := p["argv"]; !reflect.DeepEqual(got, []any{"codex", "--model", "x", "go"}) {
+		t.Errorf("codex argv = %q", got)
+	}
+	if !reflect.DeepEqual(p["env"], map[string]any{EnvCoordinator: "t0"}) {
+		t.Errorf("codex env = %v", p["env"])
 	}
 }
 
@@ -791,7 +845,7 @@ func TestProfileAgentPicksTheKitAgent(t *testing.T) {
 	if _, err := m.Spawn(context.Background(), Spec{Name: "p", Profile: "planner-high"}); err != nil {
 		t.Fatal(err)
 	}
-	argv := f.last().Params["argv"].([]any)
+	argv := unclean(t, f.last().Params["argv"])
 	want := []any{"claude", "--plugin-dir", kit, "--agent", "contr:planner", "--effort", "high"}
 	if !reflect.DeepEqual(argv, want) {
 		t.Errorf("argv = %v, want %v", argv, want)
@@ -800,7 +854,7 @@ func TestProfileAgentPicksTheKitAgent(t *testing.T) {
 	if _, err := m.Spawn(context.Background(), Spec{Name: "o", Profile: "odd"}); err != nil {
 		t.Fatal(err)
 	}
-	if argv := f.last().Params["argv"].([]any); !reflect.DeepEqual(argv, []any{"claude", "--plugin-dir", kit}) {
+	if argv := unclean(t, f.last().Params["argv"]); !reflect.DeepEqual(argv, []any{"claude", "--plugin-dir", kit}) {
 		t.Errorf("odd argv = %v", argv)
 	}
 }
@@ -1105,7 +1159,7 @@ func TestSpawnPutsTheStatusLineInTheOrchestratorArgv(t *testing.T) {
 	if _, err := m.Spawn(context.Background(), Spec{Name: "o", Profile: "orchestrator"}); err != nil {
 		t.Fatal(err)
 	}
-	argv := f.last().Params["argv"].([]any)
+	argv := unclean(t, f.last().Params["argv"])
 	if argv[0] != "claude" || argv[1] != "--plugin-dir" || argv[2] != cfg.Kit || argv[3] != "--settings" {
 		t.Errorf("argv = %v", argv)
 	}
