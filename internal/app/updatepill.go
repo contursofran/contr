@@ -68,10 +68,10 @@ type updateUI struct {
 // missing file shows nothing; a bad one is logged.
 func (f *Frame) loadUpdated(env Env) {
 	f.upd.run = env.Run
-	if f.LoadUpdated == nil {
+	if f.deps.Updated.Load == nil {
 		return
 	}
-	load := f.LoadUpdated
+	load := f.deps.Updated.Load
 	env.Do(func() func() {
 		n, err := load()
 		if err != nil {
@@ -85,13 +85,13 @@ func (f *Frame) loadUpdated(env Env) {
 	})
 }
 
-// recordInstall is Settings.RecordInstall: it saves the installed update through SaveUpdated,
+// recordInstall is Settings.RecordInstall: it saves the installed update through Deps.Updated.Save,
 // not shown yet (D209). It runs off the UI thread.
 func (f *Frame) recordInstall(info UpdateInfo, from string, at time.Time) error {
-	if f.SaveUpdated == nil {
+	if f.deps.Updated.Save == nil {
 		return nil
 	}
-	return f.SaveUpdated(updated.Note{Version: info.Version, From: from, Notes: info.Notes, InstalledAt: at})
+	return f.deps.Updated.Save(updated.Note{Version: info.Version, From: from, Notes: info.Notes, InstalledAt: at})
 }
 
 // showUpdated opens What's new for the note when it is due for the running version.
@@ -111,10 +111,10 @@ func (f *Frame) updatedShown() {
 	n := *f.upd.after
 	n.Shown = true
 	f.upd.after, f.upd.afterOpen = nil, false
-	if f.SaveUpdated == nil {
+	if f.deps.Updated.Save == nil {
 		return
 	}
-	save := f.SaveUpdated
+	save := f.deps.Updated.Save
 	f.upd.run.Do(func() func() {
 		if err := save(n); err != nil {
 			log.Printf("contr: mark the installed update shown: %v", err)

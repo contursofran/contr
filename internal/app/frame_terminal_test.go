@@ -65,10 +65,10 @@ func (s *scriptSource) counts() (attach, closed int) {
 func terminalFrame(t *testing.T, errs map[string]error) (*Frame, *fakeWindow, *ui.Tester, map[string]*scriptSource) {
 	t.Helper()
 	w := &fakeWindow{visible: true}
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	f.Selection = state.NewSelection(f.syncTerminal)
 	srcs := map[string]*scriptSource{}
-	f.TerminalSource = func(addr string) ghostty.Source {
+	f.deps.TerminalSource = func(addr string) ghostty.Source {
 		s := &scriptSource{err: errs[addr], address: addr}
 		srcs[addr] = s
 		return s
@@ -164,10 +164,10 @@ func TestSwitchingTheAgentClosesTheOldSource(t *testing.T) {
 
 func TestTerminalStopClosesTheTerminal(t *testing.T) {
 	w := &fakeWindow{visible: true}
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	f.Selection = state.NewSelection(f.syncTerminal)
 	src := &scriptSource{}
-	f.TerminalSource = func(string) ghostty.Source { return src }
+	f.deps.TerminalSource = func(string) ghostty.Source { return src }
 	stop := f.attachTerminal(w)
 	f.Selection.Select(state.Selected{Kind: state.KindOrchestrator, ID: "t1"})
 	stop()
@@ -181,12 +181,12 @@ func TestTerminalStopClosesTheTerminal(t *testing.T) {
 
 func TestAHiddenWindowDoesNotRetryAndShowingItDoes(t *testing.T) {
 	w := &fakeWindow{visible: false}
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	src := &scriptSource{err: &hc.Error{Kind: "unavailable", Message: "no core"}}
-	f.TerminalSource = func(string) ghostty.Source { return src }
-	f.StartAgents = func(func()) (AgentSource, func()) { // t2 is a known worker: the syncs keep it selected
+	f.deps.TerminalSource = func(string) ghostty.Source { return src }
+	f.deps.StartAgents = func(func()) (AgentSource, func()) { // t2 is a known worker: the syncs keep it selected
 		return &source{snap: agentstate.Snapshot{Workers: []agents.Worker{{Name: "w2", Address: "t2", Live: true}}}}, func() {}
 	}
 	stop := f.Attach(w)

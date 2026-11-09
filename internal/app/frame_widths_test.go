@@ -124,7 +124,7 @@ func TestWidthsSaveAfterTheDragEnds(t *testing.T) {
 	var mu sync.Mutex
 	var saved []widths.Widths
 	done := make(chan struct{}, 8)
-	f.SaveWidths = func(w widths.Widths) error {
+	f.deps.Widths.Save = func(w widths.Widths) error {
 		mu.Lock()
 		saved = append(saved, w)
 		mu.Unlock()
@@ -166,10 +166,10 @@ func TestNoSaverSavesNothing(t *testing.T) {
 func attachWithWidths(t *testing.T, w widths.Widths, err error) *Frame {
 	t.Helper()
 	win := &fakeWindow{visible: true}
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	loaded := make(chan struct{})
-	f.LoadWidths = func() (widths.Widths, error) { defer close(loaded); return w, err }
-	f.StartAgents = func(func()) (AgentSource, func()) {
+	f.deps.Widths.Load = func() (widths.Widths, error) { defer close(loaded); return w, err }
+	f.deps.StartAgents = func(func()) (AgentSource, func()) {
 		return &source{snap: agentstate.Snapshot{}}, func() {}
 	}
 	stop := f.Attach(win)

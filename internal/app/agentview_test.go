@@ -34,7 +34,7 @@ type countRig struct {
 func attachCounting(t *testing.T) *countRig {
 	t.Helper()
 	w := &fakeWindow{visible: true}
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	src := &countSource{source: &source{snap: agentstate.Snapshot{
@@ -45,7 +45,7 @@ func attachCounting(t *testing.T) *countRig {
 		Workers: []agents.Worker{{Name: "b-1", Address: "wa", Project: "a", Status: "working", Live: true}},
 	}}}
 	r := &countRig{f: f, src: src, w: w}
-	f.StartAgents = func(n func()) (AgentSource, func()) { r.notify = n; return src, func() {} }
+	f.deps.StartAgents = func(n func()) (AgentSource, func()) { r.notify = n; return src, func() {} }
 	stop := f.Attach(w)
 	t.Cleanup(func() { w.flush(); stop() })
 	r.tt = ui.NewTester(f.View, theme.WindowWidth, theme.WindowHeight)

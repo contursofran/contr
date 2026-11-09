@@ -24,13 +24,11 @@ import (
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
-	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/github"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/prefs"
 	"github.com/contursofran/contr/internal/projects"
 	"github.com/contursofran/contr/internal/statedir"
-	"github.com/contursofran/contr/internal/updated"
 	"github.com/contursofran/contr/internal/usage"
 	"github.com/contursofran/contr/internal/widths"
 )
@@ -64,6 +62,8 @@ func placeholder(name string) Slot {
 // Frame is the window's view. Build it with [NewFrame] and give [Frame.View]
 // to the window. Its methods run on the UI thread.
 type Frame struct {
+	// deps is what the frame gets from outside; [NewFrame] sets it.
+	deps  Deps
 	Slots Slots
 	// Overlay is the layer above the terminal for the notch and the outline.
 	Overlay TerminalOverlay
@@ -84,80 +84,11 @@ type Frame struct {
 	Notch *Notch
 	// ProjectsModal is the projects modal (D110), made in Attach.
 	ProjectsModal *ProjectsModal
-	// Updates is the update service of the Settings modal (D115). Nil shows "updates are off".
-	Updates Updates
-	// Relaunch restarts contr after an update installs.
-	Relaunch func()
-	// LoadUpdated reads the note of the last install, and SaveUpdated writes it (D209). Both
-	// run on a goroutine. Nil reads or saves nothing.
-	LoadUpdated func() (updated.Note, error)
-	SaveUpdated func(updated.Note) error
-	// AgentsConfig is the path of agents.json that the Agents tab of Settings edits (D186).
-	AgentsConfig string
 	// Settings is the Settings modal, made in Attach.
 	Settings *Settings
 	// Worker is the panel's worker view. [Frame.Attach] makes it while the viewers are
 	// shown (D147); else it stays nil.
 	Worker *WorkerPanel
-	// StartAgents follows the agents. [Frame.Attach] calls it once, with a
-	// notify function that is safe from any goroutine, and uses the source
-	// and the stop function it returns. Nil means no agents.
-	StartAgents func(notify func()) (src AgentSource, stop func())
-	// PickFolder and SpawnOrchestrator serve `+ new` (D57): the first asks the
-	// owner for a folder (ErrPickCancelled for none), the second starts the
-	// orchestrator profile there. Both block, so the frame runs them off the
-	// UI thread. Nil makes `+ new` do nothing.
-	PickFolder func() (string, error)
-	// OpenFolder asks the owner for a folder to add to the projects (D116). It
-	// blocks, so the modal calls it off the UI thread.
-	OpenFolder func() (string, error)
-	// CloneParent, PickCloneParent and CloneRun serve the clone part of the
-	// projects modal (D117); see ProjectsModal. An empty CloneParent hides it.
-	CloneParent     string
-	PickCloneParent func(def string) (string, error)
-	CloneRun        git.CloneRunner
-	// ProjectKey returns the project key of a folder (D116); nil uses the folder.
-	ProjectKey func(path string) string
-	// LoadProjects reads the projects store (D109). It runs on a goroutine.
-	// Nil means no store: the frame reads no file.
-	// Nil reads the file in the user config folder.
-	LoadProjects func() (*projects.Store, error)
-	// SaveProjects writes a copy of the store (D110). It runs on a goroutine.
-	// Nil saves nothing.
-	SaveProjects func(*projects.Store) error
-	// ModelOf names the model that an agent profile starts, for line 2 of the
-	// agent rows. Nil shows no model.
-	ModelOf func(profile string) string
-	// EffortOf names the effort that an agent profile starts, for line 2 of
-	// the agent rows (D189). Nil: none.
-	EffortOf func(profile string) string
-	// WatchHead watches a repo's HEAD file for the sidebar's branch (see
-	// SpacesList.WatchHead). Nil: the branch is read when the terminals change.
-	WatchHead func(ctx context.Context, path string, changed func()) error
-	// LoadWidths reads the widths of the sidebar and the panel (D111). It
-	// runs on a goroutine. Nil means the defaults and no file.
-	LoadWidths func() (widths.Widths, error)
-	// SaveWidths writes the widths after a drag. It runs on a goroutine.
-	// Nil saves nothing.
-	SaveWidths func(widths.Widths) error
-	// LoadPrefs reads the settings (D119). [Frame.StartTheme] calls it before the
-	// window shows, so it must be quick. Nil means the defaults and no file.
-	LoadPrefs func() (prefs.Prefs, error)
-	// SavePrefs writes the settings after a change. It runs on a goroutine. Nil
-	// saves nothing.
-	SavePrefs func(prefs.Prefs) error
-	// ThemePlatform is MyGo's theme (mygo.Theme). Nil leaves the palette as it is.
-	ThemePlatform     theme.Platform
-	SpawnOrchestrator func(dir string) error
-	// OpenTerminal serves "+" and Cmd-T (D82): it starts a shell in an hc
-	// terminal for the open project, in dir, and returns its address. It
-	// blocks, so the frame runs it off the UI thread. Nil makes both do
-	// nothing.
-	OpenTerminal func(project, dir string) (string, error)
-	// TerminalSource gives the source of the hc terminal with an address.
-	// The terminal view attaches to the selected agent's terminal through it.
-	// Nil shows no terminal.
-	TerminalSource func(address string) ghostty.Source
 	// Panel is the board panel. [Frame.Attach] makes it and puts its view in
 	// Slots.Panel while the viewers are shown (D147); else it stays nil. The board is
 	// disabled (D122): the files panel does not show it.
@@ -193,10 +124,6 @@ type Frame struct {
 	// fakes first) and ends them with its stop function.
 	Host  *host.Host
 	Usage *usage.Sampler
-
-	// AgentsNotice is a note about agents.json that LoadConfig made at start
-	// (the old format, D206). [Frame.Attach] shows it once in the toasts.
-	AgentsNotice string
 
 	// NewOrch is the `+ new` action. [Frame.Attach] makes it when PickFolder
 	// and SpawnOrchestrator are set.
@@ -273,9 +200,10 @@ type Frame struct {
 }
 
 // NewFrame returns a frame with the sidebar and the panel open and
-// placeholder slots.
-func NewFrame() *Frame {
-	f := &Frame{Slots: PlaceholderSlots(), sidebarOpen: true, panelOpen: true,
+// placeholder slots. d is what the frame gets from outside; the zero Deps gives no
+// stores and no agents.
+func NewFrame(d Deps) *Frame {
+	f := &Frame{deps: d, Slots: PlaceholderSlots(), sidebarOpen: true, panelOpen: true,
 		sidebarW: theme.SidebarWidth, panelW: theme.PanelWidth}
 	f.Files = NewFileTree(f.filesDir)
 	f.Diff = &DiffSummary{Tree: f.Files}
@@ -681,7 +609,7 @@ func (f *Frame) saveWidthsAfterDrag() {
 		return
 	}
 	f.movedNow = false
-	save := f.SaveWidths
+	save := f.deps.Widths.Save
 	if save == nil {
 		return
 	}
@@ -937,7 +865,7 @@ func (f *Frame) syncAgents() {
 // sidebar (D109). A read error shows in the status message; the store is then
 // empty, so the sidebar keeps the tree order, and the file stays as it is (D63).
 func (f *Frame) loadProjects(env Env) {
-	load := f.LoadProjects
+	load := f.deps.Projects.Load
 	if load == nil {
 		return
 	}
@@ -962,7 +890,7 @@ func (f *Frame) loadProjects(env Env) {
 // in the status message and the defaults stay. A width the owner already
 // dragged is not replaced.
 func (f *Frame) loadWidths(env Env) {
-	load := f.LoadWidths
+	load := f.deps.Widths.Load
 	if load == nil {
 		return
 	}
@@ -1050,8 +978,8 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	env := Env{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate, Status: f.Toasts.Show, OpenURL: openURL}
 	f.Review = NewReview(env)
 	f.Files.Env = env
-	if f.AgentsNotice != "" {
-		f.Toasts.Show(f.AgentsNotice)
+	if f.deps.AgentsNotice != "" {
+		f.Toasts.Show(f.deps.AgentsNotice)
 	}
 	f.Session.Env = env
 	if f.Session.StateDir == "" {
@@ -1066,8 +994,8 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	var agentSnap func() agentstate.Snapshot
 	var src AgentSource
 	stopAgents := func() {}
-	if f.StartAgents != nil {
-		src, stopAgents = f.StartAgents(func() { w.Update(f.syncAgents) })
+	if f.deps.StartAgents != nil {
+		src, stopAgents = f.deps.StartAgents(func() { w.Update(f.syncAgents) })
 	}
 	if src != nil {
 		f.agentSnap = src.Snapshot
@@ -1107,8 +1035,8 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.SpacesList.ByKey = func(do func()) { f.keyNav = true; do(); f.keyNav = false }
 	f.SpacesList.OnOpen = func() { f.focusTerm = true; w.Invalidate() }
 	f.SpacesList.OnPick = f.SpacesList.OnOpen
-	f.SpacesList.ModelOf = f.ModelOf
-	f.SpacesList.EffortOf = f.EffortOf
+	f.SpacesList.ModelOf = f.deps.ModelOf
+	f.SpacesList.EffortOf = f.deps.EffortOf
 	f.SpacesList.StatusEffort = f.statusEffort
 	f.SpacesList.StatusModel = f.statusModel
 	f.SpacesList.Titles = f.IssueTitles
@@ -1117,16 +1045,16 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	if src != nil {
 		f.SpacesList.Source = src
 	}
-	f.SpacesList.WatchHead = f.WatchHead
+	f.SpacesList.WatchHead = f.deps.WatchHead
 	f.SpacesList.OnError = func(err error) { f.Toasts.Show(err.Error()) }
-	if f.PickFolder != nil && f.SpawnOrchestrator != nil {
-		f.NewOrch = &NewOrchestrator{Pick: f.PickFolder, Spawn: f.SpawnOrchestrator,
+	if f.deps.PickFolder != nil && f.deps.SpawnOrchestrator != nil {
+		f.NewOrch = &NewOrchestrator{Pick: f.deps.PickFolder, Spawn: f.deps.SpawnOrchestrator,
 			Env: env}
 		f.SpacesList.OnNew = f.NewOrch.Start
 		f.SpacesList.OnNewIn = f.NewOrch.StartIn
 	}
-	if f.OpenTerminal != nil {
-		f.NewTerm = &NewTerminal{Open: f.OpenTerminal, Env: env,
+	if f.deps.OpenTerminal != nil {
+		f.NewTerm = &NewTerminal{Open: f.deps.OpenTerminal, Env: env,
 			Select: func(addr string) { f.Selection.Select(state.Selected{Kind: state.KindTerminal, ID: addr}) }}
 		setHandler(handlerNewTerminal, func() { w.Update(f.newTerminal) })
 	}
@@ -1138,9 +1066,9 @@ func (f *Frame) Attach(w Window) (stop func()) {
 				f.SpacesList.SetProjects(f.Projects)
 			}
 		},
-		PickFolder: f.OpenFolder, Resolve: f.ProjectKey,
-		CloneParent: f.CloneParent, PickParent: f.PickCloneParent, CloneRun: f.CloneRun,
-		Save: f.SaveProjects, Env: env,
+		PickFolder: f.deps.OpenFolder, Resolve: f.deps.ProjectKey,
+		CloneParent: f.deps.CloneParent, PickParent: f.deps.PickCloneParent, CloneRun: f.deps.CloneRun,
+		Save: f.deps.Projects.Save, Env: env,
 		Toast: f.Toasts.ShowAction,
 	}
 	f.ProjectsModal.Switch = f.SpacesList.Switch
@@ -1154,9 +1082,9 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		f.Toasts.Show(f.themeErr.Error())
 		f.themeErr = nil
 	}
-	f.Settings = &Settings{Updates: f.Updates, Version: Version, CoreVersion: f.coreVersion, Env: env,
-		Relaunch: f.Relaunch, OnReady: f.updateReady, Visible: func() bool { return f.Visibility == nil || f.Visibility.Visible() },
-		AgentsConfig: f.AgentsConfig, Appearance: f.Appearance, SetAppearance: f.SetAppearance,
+	f.Settings = &Settings{Updates: f.deps.Updates, Version: Version, CoreVersion: f.coreVersion, Env: env,
+		Relaunch: f.deps.Relaunch, OnReady: f.updateReady, Visible: func() bool { return f.Visibility == nil || f.Visibility.Visible() },
+		AgentsConfig: f.deps.AgentsConfig, Appearance: f.Appearance, SetAppearance: f.SetAppearance,
 		Tint: f.Tint, SetTint: f.SetTint, ResetTint: f.ResetTint, RecordInstall: f.recordInstall}
 	f.loadUpdated(env)
 	setHandler(handlerSettings, func() { w.Update(f.Settings.Toggle) })
@@ -1167,7 +1095,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	stopChecks := f.Settings.StartChecks()
 	offActive := mygo.App.OnDidBecomeActive(func() { w.Update(f.Settings.Activated) })
 	f.Slots.Spaces = f.SpacesList.View
-	f.SpacesList.HoldLaunch = f.LoadProjects != nil
+	f.SpacesList.HoldLaunch = f.deps.Projects.Load != nil
 	f.SpacesList.Sync()
 	f.loadProjects(env)
 	f.loadWidths(env)
@@ -1328,7 +1256,7 @@ func (f *Frame) syncTerminal() {
 		return
 	}
 	addr := ""
-	if f.Selection != nil && f.TerminalSource != nil {
+	if f.Selection != nil && f.deps.TerminalSource != nil {
 		if sel, ok := f.Selection.Current(); ok && (sel.Kind == state.KindOrchestrator || sel.Kind == state.KindWorker || sel.Kind == state.KindTerminal) {
 			addr = sel.ID
 		}
@@ -1347,7 +1275,7 @@ func (f *Frame) syncTerminal() {
 	}
 	post, invalidate := f.post, f.invalidate
 	var conn *ghostty.Conn
-	conn = ghostty.NewConn(f.TerminalSource(addr), ghostty.Options{Watch: true, OnState: func(s ghostty.State) {
+	conn = ghostty.NewConn(f.deps.TerminalSource(addr), ghostty.Options{Watch: true, OnState: func(s ghostty.State) {
 		post(func() {
 			if f.conn == conn {
 				f.termState = s

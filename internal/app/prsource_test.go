@@ -218,7 +218,7 @@ func TestBoardWorkWithoutPROpensTheIssue(t *testing.T) {
 }
 
 func TestFrameOpenIssueRunsOffThreadAndShowsAnError(t *testing.T) {
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	var gotDir string
 	var gotN int
 	var queued []func()
@@ -236,7 +236,7 @@ func TestFrameOpenIssueRunsOffThreadAndShowsAnError(t *testing.T) {
 
 func TestAgentRowOpenPRGoesToTheBrowserNotThePane(t *testing.T) {
 	r := newPRRig(t)
-	f := NewFrame()
+	f := NewFrame(Deps{})
 	f.PR = r.pane
 	var gotDir string
 	var gotN int
