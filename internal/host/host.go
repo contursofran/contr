@@ -13,8 +13,6 @@ import (
 	"log"
 	"sync"
 	"time"
-
-	"github.com/contursofran/contr/internal/app/theme"
 )
 
 // SampleEvery is the steady interval between readings while the window is
@@ -49,10 +47,10 @@ func (s Stats) CPULabel() string {
 	return fmt.Sprintf("%d%%", roundClamp(float64(s.CPUPercent)))
 }
 
-// MemBarPixels is the filled length of the sidebar's memory bar, in whole
-// pixels, 0 to [theme.MemBarWidth].
-func (s Stats) MemBarPixels() int {
-	return roundHalfAway(s.MemFraction() * theme.MemBarWidth)
+// MemBarPixels is the filled length of a memory bar that is width pixels
+// long, in whole pixels, 0 to width.
+func (s Stats) MemBarPixels(width float32) int {
+	return roundHalfAway(s.MemFraction() * width)
 }
 
 // MemLabel is the memory share rounded to a whole percent, for example "62%".
@@ -79,7 +77,9 @@ type shown struct {
 	bar      int
 }
 
-func shownOf(s Stats) shown { return shown{s.CPULabel(), s.MemLabel(), s.MemBarPixels()} }
+func shownOf(s Stats, barWidth float32) shown {
+	return shown{s.CPULabel(), s.MemLabel(), s.MemBarPixels(barWidth)}
+}
 
 // Reader takes one reading. It may block, so the host calls it off the UI
 // thread.
@@ -93,6 +93,7 @@ type stopper interface{ Stop() bool }
 // Invalidate).
 type Host struct {
 	read     Reader
+	barWidth float32
 	onChange func()
 
 	// afterFunc and run are replaced in tests: a fake clock, and a runner
@@ -110,10 +111,13 @@ type Host struct {
 }
 
 // New returns a host that is hidden: it takes no reading until
-// SetVisible(true). onChange may be nil. It runs when a shown value changes.
-func New(read Reader, onChange func()) *Host {
+// SetVisible(true). barWidth is the length of the views' memory bar, in
+// pixels; the UI gives it, so this package does not read the theme. onChange
+// may be nil. It runs when a shown value changes.
+func New(read Reader, barWidth float32, onChange func()) *Host {
 	return &Host{
 		read:      read,
+		barWidth:  barWidth,
 		onChange:  onChange,
 		afterFunc: func(d time.Duration, f func()) stopper { return time.AfterFunc(d, f) },
 		run:       func(f func()) { go f() },
@@ -121,7 +125,9 @@ func New(read Reader, onChange func()) *Host {
 }
 
 // NewSystem returns a host that reads this machine.
-func NewSystem(onChange func()) *Host { return New(SystemReader(), onChange) }
+func NewSystem(barWidth float32, onChange func()) *Host {
+	return New(SystemReader(), barWidth, onChange)
+}
 
 // Stats returns the latest published reading, or false until the first one.
 func (h *Host) Stats() (Stats, bool) {
@@ -194,7 +200,7 @@ func (h *Host) tick(gen uint64) {
 	}
 	changed := false
 	if err == nil {
-		changed = !h.has || shownOf(h.stats) != shownOf(s)
+		changed = !h.has || shownOf(h.stats, h.barWidth) != shownOf(s, h.barWidth)
 		h.stats, h.has = s, true
 	}
 	h.timer = h.afterFunc(SampleEvery, func() { h.run(func() { h.tick(gen) }) })

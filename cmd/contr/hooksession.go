@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/session"
-	"github.com/contursofran/contr/internal/usage"
+	"github.com/contursofran/contr/internal/statedir"
 )
 
 // artifactsPrefix starts the tool names of the artifacts MCP server.
@@ -40,7 +40,7 @@ type toolInput struct {
 // runSessionHook is `contr hook post-tool` and `contr hook prompt`. It always
 // returns 0: these hooks never block Claude Code. Errors go to stderr.
 func runSessionHook(name string, stdin io.Reader, stdout, stderr io.Writer, getenv func(string) string, stateDir string, now time.Time) int {
-	id := getenv(usage.EnvTerminal)
+	id := getenv(statedir.EnvTerminal)
 	if id == "" {
 		return 0
 	}
@@ -252,9 +252,9 @@ func findArtifact(v any, a *session.Artifact, depth int) {
 	}
 }
 
-// sessionStateDir is usage.StateDir, read through getenv so tests can set
+// sessionStateDir is statedir.Dir, read through getenv so tests can set
 // CONTR_STATE_DIR.
 func sessionStateDir(getenv func(string) string) string {
 	home, _ := os.UserHomeDir()
-	return usage.StateDirFrom(getenv, home, runtime.GOOS == "darwin")
+	return statedir.From(getenv, home, runtime.GOOS == "darwin")
 }

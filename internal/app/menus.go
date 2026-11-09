@@ -9,7 +9,7 @@ func BuildMenus() *mygo.Menu {
 		{Label: "contr", Submenu: []*mygo.MenuItem{
 			actionAbout.item(),
 			mygo.Separator(),
-			settingsItem(),
+			handlerItem(handlerSettings),
 			mygo.Separator(),
 			actionHide.item(),
 			actionHideOthers.item(),
@@ -17,8 +17,8 @@ func BuildMenus() *mygo.Menu {
 			actionQuit.item(),
 		}},
 		{Label: "File", Submenu: []*mygo.MenuItem{
-			newTerminalItem(),
-			closeTerminalItem(),
+			handlerItem(handlerNewTerminal),
+			handlerItem(handlerCloseTerminal),
 		}},
 		{Label: "Edit", Submenu: []*mygo.MenuItem{
 			actionCopy.item(),
@@ -26,7 +26,7 @@ func BuildMenus() *mygo.Menu {
 			actionSelectAll.item(),
 		}},
 		{Label: "View", Submenu: []*mygo.MenuItem{
-			sidebarItem(),
+			handlerItem(handlerSidebar),
 		}},
 		{Label: "Window", Submenu: []*mygo.MenuItem{
 			actionMinimize.item(),

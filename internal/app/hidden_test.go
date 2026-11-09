@@ -87,7 +87,7 @@ func attachWithWorker(t *testing.T) (*Frame, readSource) {
 	src := readSource{source: &source{snap: boardSnap()}, reads: make(chan string, 16)}
 	w := &fakeWindow{visible: true}
 	f := NewFrame()
-	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
+	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	var notify func()
 	f.StartAgents = func(n func()) (AgentSource, func()) { notify = n; return src, func() {} }
