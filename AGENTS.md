@@ -205,6 +205,19 @@ Add packages under `internal/` when a change needs them.
 - On the owner's Mac, run one heavy job at a time: an app run with a scratch core,
   an e2e run or a release build. `go build` and `go test` are light and can
   run in parallel.
+- CI does not run the e2e tests or the `hccore` tests (D227). It only
+  compiles them (`go vet -tags 'e2e bench hccore' ./...` in
+  `scripts/check.sh`). A change that breaks one of them shows only when
+  someone runs it. So:
+  - A builder runs the e2e and `hccore` tests that cover the code it
+    changes, on the owner's Mac, one heavy job at a time:
+    `go test -tags e2e -run <Test> ./cmd/contr`. The PR body names the tests
+    and their result.
+  - Before a PR that changes many views or the frame merges (a refactor, a
+    package move), its builder runs the whole e2e suite:
+    `go test -tags e2e ./cmd/contr`.
+  - A release runs on each push to `main`, so no e2e run comes before a
+    release by itself.
 
 ## Workflow (decision D27)
 
