@@ -15,8 +15,8 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/contursofran/contr"
 	"github.com/contursofran/contr/internal/agents"
-	"github.com/contursofran/contr/internal/app"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/mcp"
 	"github.com/contursofran/contr/internal/owner"
@@ -127,7 +127,7 @@ func runMCP(stdin io.Reader, stdout, stderr io.Writer, dial func(context.Context
 		return 1
 	}
 	tools := append(agentTools(m, getenv("HC_TERMINAL_ID")), ownerTools(store, projectName(getenv), getenv("HC_TERMINAL_ID"))...)
-	srv := mcp.New("contr", app.Version, tools)
+	srv := mcp.New("contr", contr.Version(), tools)
 	if err := srv.Serve(ctx, stdin, stdout); err != nil && !errors.Is(err, context.Canceled) {
 		fmt.Fprintf(stderr, "contr mcp: %v\n", err)
 		return 1

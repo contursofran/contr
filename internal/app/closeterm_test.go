@@ -11,6 +11,7 @@ import (
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/state"
+	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/usage"
 )
@@ -180,7 +181,7 @@ func TestCloseTerminalBusy(t *testing.T) {
 func TestAttachWiresCmdWToTheSourceClose(t *testing.T) {
 	w := &fakeWindow{visible: true}
 	f := NewFrame()
-	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
+	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	src := &source{snap: agentstate.Snapshot{Terminals: []agents.Worker{{Name: "term-1", Address: "tp", Role: agents.RoleTerminal, Live: true}}}}
 	f.StartAgents = func(func()) (AgentSource, func()) { return src, func() {} }

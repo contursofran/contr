@@ -20,9 +20,6 @@ import (
 // ContextDir is the folder of the context files, under the state dir.
 const ContextDir = "usage/context"
 
-// EnvTerminal names the variable that holds the hc terminal of the agent.
-const EnvTerminal = "HC_TERMINAL_ID"
-
 // Context is the context window of one agent.
 type Context struct {
 	Schema uint32 `json:"schema"`

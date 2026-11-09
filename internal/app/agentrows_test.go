@@ -525,7 +525,7 @@ func TestAnAgeMovesWithTheClockOnARedraw(t *testing.T) {
 func TestTheFrameTiesTheClockToTheWindowVisibility(t *testing.T) {
 	w := &fakeWindow{visible: true}
 	f := NewFrame()
-	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
+	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	stop := f.Attach(w)
 	defer stop()
@@ -550,7 +550,7 @@ func TestTheFrameTiesTheClockToTheWindowVisibility(t *testing.T) {
 func TestAttachStartsTheWindowHiddenWithNoClock(t *testing.T) {
 	w := &fakeWindow{visible: false}
 	f := NewFrame()
-	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
+	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	stop := f.Attach(w)
 	defer stop()

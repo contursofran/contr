@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/contursofran/contr"
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/hc"
 )
@@ -83,6 +84,9 @@ func TestMCPListsAndRunsTheAgentTools(t *testing.T) {
 	)
 	if code != 0 {
 		t.Fatalf("code %d", code)
+	}
+	if v := r["1"]["result"].(map[string]any)["serverInfo"].(map[string]any)["version"]; v != contr.Version() {
+		t.Errorf("server version = %v, want %q", v, contr.Version())
 	}
 	var names []string
 	for _, tool := range r["2"]["result"].(map[string]any)["tools"].([]any) {

@@ -15,6 +15,7 @@ import (
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/review"
 )
 
@@ -59,6 +60,10 @@ type FileTree struct {
 	// Debounce is the quiet time before a watch event reads again; nil uses
 	// fileReadDebounce, and a negative value reads at once.
 	Debounce time.Duration
+	// Git runs git; nil runs the `git` command. Timeout is the time limit of
+	// one read; 0 is gitReadTimeout.
+	Git     git.InputRunner
+	Timeout time.Duration
 
 	dir     string
 	repo    review.Repo
@@ -82,6 +87,11 @@ type FileTree struct {
 	stopWatch    func()
 	mu           sync.Mutex
 	timer        *time.Timer
+
+	// ctx ends when gen changes: a newer read started or the tree closed.
+	// cancel ends it.
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 // NewFileTree returns a tree that shows dir() once it is built.
@@ -136,7 +146,7 @@ func (t *FileTree) Shown() string { return t.dir }
 // OnlyChanged tells whether the filter shows the changed files only.
 func (t *FileTree) OnlyChanged() bool { return t.onlyChanged }
 
-// Close ends the watch. Call it when the window ends.
+// Close ends the watch and the reads in flight. Call it when the window ends.
 func (t *FileTree) Close() { t.setDir("") }
 
 // sync points the tree at the folder that Dir gives. Cheap when it did not
@@ -164,8 +174,9 @@ func (t *FileTree) setDir(dir string) {
 		t.timer = nil
 	}
 	t.mu.Unlock()
-	t.dir, t.gen, t.session = dir, t.gen+1, t.session+1
-	t.repo = review.Repo{Dir: dir, Base: reviewBase}
+	t.dir, t.session = dir, t.session+1
+	t.newGen()
+	t.repo = review.Repo{Dir: dir, Base: reviewBase, Git: t.Git}
 	t.changes, t.byPath, t.err, t.changesOK = nil, nil, "", false
 	t.loaded, t.loading = map[string][]review.Entry{}, map[string]bool{}
 	t.opened, t.openFiltered = map[string]*bool{}, map[string]*bool{}
@@ -181,8 +192,8 @@ func (t *FileTree) setDir(dir string) {
 // goroutine. It also reads the folders that are loading, so a result that a
 // newer read dropped is not lost.
 func (t *FileTree) read(rels []string) {
-	t.gen++
-	gen, repo := t.gen, t.repo
+	t.newGen()
+	gen, repo, ctx, limit := t.gen, t.repo, t.ctx, t.limit()
 	want := map[string]bool{"": true}
 	for _, r := range rels {
 		want[r] = true
@@ -194,11 +205,13 @@ func (t *FileTree) read(rels []string) {
 		t.loading[r] = true
 	}
 	t.start(func() {
-		changes, cerr := repo.Changes()
+		ctx, stop := context.WithTimeout(ctx, limit)
+		defer stop()
+		changes, cerr := repo.Changes(ctx)
 		entries := map[string][]review.Entry{}
 		errs := map[string]error{}
 		for rel := range want {
-			es, err := repo.Entries(rel)
+			es, err := repo.Entries(ctx, rel)
 			entries[rel], errs[rel] = es, err
 		}
 		t.post(func() {
@@ -228,9 +241,11 @@ func (t *FileTree) loadDir(rel string) {
 		return
 	}
 	t.loading[rel] = true
-	gen, repo := t.gen, t.repo
+	gen, repo, ctx, limit := t.gen, t.repo, t.ctx, t.limit()
 	t.start(func() {
-		es, err := repo.Entries(rel)
+		ctx, stop := context.WithTimeout(ctx, limit)
+		defer stop()
+		es, err := repo.Entries(ctx, rel)
 		t.post(func() {
 			if gen != t.gen {
 				return
@@ -243,6 +258,24 @@ func (t *FileTree) loadDir(rel string) {
 			t.redraw()
 		})
 	})
+}
+
+// newGen starts a new generation of reads: it ends the reads of the old one,
+// and their results are dropped.
+func (t *FileTree) newGen() {
+	t.gen++
+	if t.cancel != nil {
+		t.cancel()
+	}
+	t.ctx, t.cancel = context.WithCancel(context.Background())
+}
+
+// limit is the time limit of one read.
+func (t *FileTree) limit() time.Duration {
+	if t.Timeout > 0 {
+		return t.Timeout
+	}
+	return gitReadTimeout
 }
 
 func (t *FileTree) fail(err error) {

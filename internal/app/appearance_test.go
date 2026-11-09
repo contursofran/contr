@@ -76,7 +76,7 @@ func TestStartThemeFallsBackToSystem(t *testing.T) {
 
 func TestStartThemeShowsAReadErrorWhenTheFrameAttaches(t *testing.T) {
 	f, _ := themeFrame(t, func() (prefs.Prefs, error) { return prefs.Prefs{}, errors.New("bad file") })
-	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
+	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	f.StartTheme()
 	stop := f.Attach(&fakeWindow{visible: true})
@@ -88,7 +88,7 @@ func TestStartThemeShowsAReadErrorWhenTheFrameAttaches(t *testing.T) {
 
 func TestAttachShowsTheAgentsNoticeOnce(t *testing.T) {
 	f, _ := themeFrame(t, nil)
-	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
+	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	f.AgentsNotice = "agents.json is in the old format"
 	stop := f.Attach(&fakeWindow{visible: true})
