@@ -562,6 +562,25 @@ func (l *SpacesList) Activate(g spaces.RepoGroup) {
 		l.Fold(g.CommonDir)
 		return
 	}
+	l.selectProject(g)
+}
+
+// Switch selects the project with this common dir, as a click on its row
+// does, but never folds it (the projects modal, D207).
+func (l *SpacesList) Switch(dir string) {
+	if l.selection == nil {
+		return
+	}
+	for _, g := range l.Groups() {
+		if g.CommonDir == dir {
+			l.selectProject(g)
+			return
+		}
+	}
+}
+
+// selectProject selects the orchestrator of g, else its main checkout.
+func (l *SpacesList) selectProject(g spaces.RepoGroup) {
 	for _, o := range l.snapshot().Orchestrators {
 		if l.holdsAddress(g, o.Address) {
 			l.selection.Select(state.Selected{Kind: state.KindOrchestrator, ID: o.Address})
