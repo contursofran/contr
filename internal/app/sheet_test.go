@@ -95,6 +95,13 @@ var sheetParts = []sheetPart{
 
 var sheetFonts sync.Once
 
+func init() {
+	// The states of the projects modal in a grid (D207): columns and rows of
+	// the states, each under its caption.
+	sheetParts = append(sheetParts, sheetPart{"ProjectsModal", pmCols*pmW + (pmCols-1)*pmGap,
+		pmRows*(pmH+pmCaptH) + (pmRows-1)*pmGap, projectsModalSheet})
+}
+
 // sheetView is a part as the app shows it: on the ground, in the app's fonts
 // and MyGo theme.
 func sheetView(p sheetPart) func(c *ui.Context) {
@@ -164,17 +171,23 @@ func TestSpecSheet(t *testing.T) {
 func sheetImage(t *testing.T, p sheetPart, themeName string) *image.RGBA {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join("..", "..", "docs", "spec", "images", p.name+"-"+themeName+".png"))
-	if err != nil {
+	var spec *ui.Bitmap
+	var sw, sh float32
+	if err == nil { // a part may have no spec image yet (ProjectsModal)
+		if spec, err = ui.DecodeBitmap(data); err != nil {
+			t.Fatal(err)
+		}
+		sw, sh = ui.ImageSize(spec)
+	} else if !os.IsNotExist(err) {
 		t.Fatal(err)
 	}
-	spec, err := ui.DecodeBitmap(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sw, sh := ui.ImageSize(spec)
 	w := max(int(sw), p.w+2*sheetPad)
 	const caption = 28
 	h := int(sh) + p.h + 2*sheetPad + 2*caption
+	specNote := "spec: docs/spec/images/" + p.name + "-" + themeName + ".png"
+	if spec == nil {
+		specNote = "spec: no image yet; the spec is docs/spec/" + p.name + ".md"
+	}
 	return ui.Render(func(c *ui.Context) {
 		ui.Column(c).Width(float32(w)).Height(float32(h)).Background(theme.Current().Ground).
 			Font(theme.FontFamilySans).FontSize(theme.FontSize).Children(func() {
@@ -183,8 +196,10 @@ func sheetImage(t *testing.T, p sheetPart, themeName string) *image.RGBA {
 					ui.Text(c, s).TextColor(theme.Current().Ink100)
 				})
 			}
-			label("spec: docs/spec/images/" + p.name + "-" + themeName + ".png")
-			ui.Image(c, spec)
+			label(specNote)
+			if spec != nil {
+				ui.Image(c, spec)
+			}
 			label("contr: " + p.name + ", " + themeName)
 			sheetView(p)(c)
 		})

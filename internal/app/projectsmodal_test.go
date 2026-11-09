@@ -103,7 +103,7 @@ func TestProjectsModalOpensAndListsProjects(t *testing.T) {
 			t.Errorf("no text %q in %v", want, texts)
 		}
 	}
-	if !slices.Contains(texts, "1 need you") {
+	if !slices.Contains(texts, "1 needs you") {
 		t.Errorf("no need-you meta in %v", texts)
 	}
 	r.m.Toggle()
@@ -316,7 +316,7 @@ func TestProjectsModalDotAlsoBeforeNeedYou(t *testing.T) {
 	r := newModalRig(t)
 	r.m.Orchestrated = func(g spaces.RepoGroup) bool { return g.Name == "a" } // a has a HoldYou row
 	r.open()
-	if !r.has(LabelProjectsDot) || !slices.Contains(r.tt.Texts(), "1 need you") {
+	if !r.has(LabelProjectsDot) || !slices.Contains(r.tt.Texts(), "1 needs you") {
 		t.Errorf("dot %v, texts %v", r.has(LabelProjectsDot), r.tt.Texts())
 	}
 }

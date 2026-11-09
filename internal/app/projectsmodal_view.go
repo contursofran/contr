@@ -497,7 +497,7 @@ func (m *ProjectsModal) metaText(c *ui.Context, meta string, needYou int) {
 	p := theme.Current()
 	t := ""
 	if needYou > 0 {
-		t = strconv.Itoa(needYou) + " need you"
+		t = needYouText(needYou)
 	}
 	if t == "" || !strings.HasSuffix(meta, t) {
 		styled(ui.Text(c, meta), theme.StyleValue).SingleLine().MinWidth(0).TextColor(p.Ink38)
