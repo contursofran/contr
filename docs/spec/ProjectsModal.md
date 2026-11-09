@@ -83,6 +83,7 @@ Exact strings:
 - Path row: Enter expands `~` and checks the folder on a goroutine. A path that is not a folder shows a red line under the row, `not a folder: <path>`, with no `Try again` (Q6).
 - Drag reorders only in the Open section and only when the field is empty. A drop on Recent is ignored.
 - Editing the field moves the selection to the first row and clears a clone error.
+- A running clone keeps its row (`Cloning ...`, the progress line, `Cancel`) at the top of the list, above the matches of the field, whatever the field says. When the clone ends, the field clears only if it still holds the text that started the clone. A failure after an edit goes to the status line.
 - The pointer moves the selection; the keys move it too.
 
 ## Keys

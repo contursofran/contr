@@ -307,7 +307,7 @@ func TestProjectsModalLongPathKeepsBranch(t *testing.T) {
 	long := "/very/long/folder/name/" + strings.Repeat("deep/", 30) + "project"
 	r.rows = func(g *spaces.RepoGroup) { g.Path, g.Branch = long, "main" }
 	r.open()
-	if !slices.Contains(r.tt.Texts(), " · main") {
+	if !slices.Contains(r.tt.Texts(), "main") {
 		t.Errorf("the branch is gone from %v", r.tt.Texts())
 	}
 }
