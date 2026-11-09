@@ -66,12 +66,13 @@ func (q *QuestionsCard) View(c *ui.Context, anchor ui.Element, items []NeedTab) 
 			q.focus = false
 			q.handle.Focus(c)
 		}
-		// glass-float over the blur, with float-line on the sides and the bottom.
+		// float-solid, so the rows behind do not show through the text (D212), with
+		// float-line on the sides and the bottom.
 		panel.Children(func() {
 			// Selectable: the owner can select and copy the texts of the
 			// card (D204). Buttons and the field keep their own input.
 			ui.Column(c).Width(width).Padding(theme.Space12).Gap(theme.Space4).
-				Radius(0, 0, theme.Radius12, theme.Radius12).Background(p.GlassFloat).
+				Radius(0, 0, theme.Radius12, theme.Radius12).Background(questionsCardFill(p)).
 				BorderWidth(0, 1, 1, 1).BorderColor(p.FloatLine).Selectable().Children(func() {
 				q.body(c, p, items, t, snap)
 			})
@@ -83,7 +84,11 @@ func (q *QuestionsCard) View(c *ui.Context, anchor ui.Element, items []NeedTab) 
 	}
 }
 
-// body builds what the glass holds: the chips, the item, the failure and the keys.
+// questionsCardFill is the fill of the open questions card: float-solid (#524, D212). The
+// closed notch keeps glass-float.
+func questionsCardFill(p *theme.Palette) ui.Color { return p.FloatSolid }
+
+// body builds what the card holds: the chips, the item, the failure and the keys.
 func (q *QuestionsCard) body(c *ui.Context, p *theme.Palette, items []NeedTab, t NeedTab, snap agentstate.Snapshot) {
 	q.chips(c, p, items, t)
 	switch t.Kind {
