@@ -1,4 +1,4 @@
-package app
+package projectsview
 
 import (
 	"errors"
@@ -14,6 +14,7 @@ import (
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/theme/themetest"
 	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/projects"
 )
@@ -421,7 +422,7 @@ func TestProjectsModalWithoutStoreChangesNothing(t *testing.T) {
 	r := newModalRig(t)
 	r.m.Store = func() *projects.Store { return nil }
 	r.open()
-	r.m.hide("/w/a/.git")
+	r.m.Hide("/w/a/.git")
 	r.m.reorder([]int{0}, 2)
 	if len(r.saved) != 0 {
 		t.Error("saved without a store")
@@ -546,7 +547,6 @@ func TestProjectsModalRecentOpensAProjectAgain(t *testing.T) {
 // The open modal reads the palette on every build: after a switch to Light its card is the Light
 // ground and its selected row the Light selected fill (#403, D157).
 func TestProjectsModalChangesWithTheTheme(t *testing.T) {
-	restoreTheme(t)
 	r := newModalRig(t)
 	r.open()
 	pixel := func(label string, dx, dy float32) [3]uint8 {
@@ -570,7 +570,7 @@ func TestProjectsModalChangesWithTheTheme(t *testing.T) {
 		}
 	}
 	check(theme.Dark)
-	theme.Follow(&fakeTheme{}, &fakeWindow{}, mygo.ThemeLight).Stop()
+	themetest.Use(t, mygo.ThemeLight)
 	r.tt.Frame()
 	check(theme.Light)
 }

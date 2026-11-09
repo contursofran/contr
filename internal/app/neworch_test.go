@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/contursofran/contr/internal/app/apptest"
+	"github.com/contursofran/contr/internal/app/projectsview"
 	"github.com/contursofran/contr/internal/app/sidebar"
 	"github.com/contursofran/contr/internal/app/view"
 )
@@ -51,7 +52,7 @@ func TestPlusNewPicksAFolderAndSpawns(t *testing.T) {
 
 func TestPlusNewCancelledPickerSpawnsNothing(t *testing.T) {
 	n := newOrch(t)
-	n.pickFn = func() (string, error) { return "", ErrPickCancelled }
+	n.pickFn = func() (string, error) { return "", projectsview.ErrPickCancelled }
 	if err := addItem(n.h.tt, sidebar.LabelProjectsNew); err != nil {
 		t.Fatal(err)
 	}

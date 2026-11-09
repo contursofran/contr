@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/projectsview"
 	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/app/titlebar"
 	"github.com/contursofran/contr/internal/hc/hctest"
@@ -93,13 +93,13 @@ func TestProjectsModalColors(t *testing.T) {
 		click(name)
 		click(settings.SettingsDone)
 		click("Open projects")
-		wait(app.LabelProjects)
+		wait(projectsview.LabelProjects)
 		time.Sleep(500 * time.Millisecond)
 		c.capture(t, filepath.Join(out, "projects-modal-"+strings.ToLower(name)+".png"))
 		c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "key", "key": "Escape"}}})
-		for deadline := time.Now().Add(10 * time.Second); has(app.LabelProjects) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+		for deadline := time.Now().Add(10 * time.Second); has(projectsview.LabelProjects) && time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
 		}
-		if has(app.LabelProjects) {
+		if has(projectsview.LabelProjects) {
 			t.Fatal("Esc did not close the projects modal")
 		}
 	}

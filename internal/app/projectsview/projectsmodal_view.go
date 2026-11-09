@@ -1,4 +1,4 @@
-package app
+package projectsview
 
 // The view of the projects modal (D207): search field, one list, footer.
 
@@ -258,7 +258,7 @@ func (m *ProjectsModal) searchField(c *ui.Context, rows []paletteRow) {
 				if k.Text() != "" || r == nil || r.kind != rowOpen {
 					return false
 				}
-				m.hide(r.group.CommonDir)
+				m.Hide(r.group.CommonDir)
 				return true
 			case k.Key == ui.KeyEscape && k.Mods == 0 && k.Text() != "":
 				k.SetText("")
@@ -479,7 +479,7 @@ func (m *ProjectsModal) row(c *ui.Context, rows []paletteRow, i int, home string
 		case r.kind == rowOpen:
 			if active {
 				b := ui.ButtonBase(c).Label(ProjectsHideOf(name)).Shrink(0).Padding(theme.Space4, theme.Space8).
-					Radius(theme.Radius6).Cursor(ui.CursorPointer).OnClick(func() { m.hide(r.group.CommonDir) })
+					Radius(theme.Radius6).Cursor(ui.CursorPointer).OnClick(func() { m.Hide(r.group.CommonDir) })
 				if b.Hovered() {
 					b = b.Background(p.Hover)
 				}

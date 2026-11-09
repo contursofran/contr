@@ -1,4 +1,4 @@
-package app
+package projectsview
 
 // The Add rows of the projects modal (D207): clone a GitHub repo, or open a
 // folder by its path. The search field holds the repo or the path.

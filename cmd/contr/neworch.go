@@ -11,7 +11,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"github.com/contursofran/contr/internal/agents"
-	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/projectsview"
 	"github.com/contursofran/contr/internal/git"
 )
 
@@ -31,7 +31,7 @@ func pickFolder() (string, error) {
 		return "", err
 	}
 	if len(paths) == 0 {
-		return "", app.ErrPickCancelled
+		return "", projectsview.ErrPickCancelled
 	}
 	return paths[0], nil
 }
@@ -49,7 +49,7 @@ func openFolder() (string, error) {
 		return "", err
 	}
 	if len(paths) == 0 {
-		return "", app.ErrPickCancelled
+		return "", projectsview.ErrPickCancelled
 	}
 	mygo.App.AddRecentDocument(paths[0])
 	return paths[0], nil

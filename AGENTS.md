@@ -85,6 +85,7 @@ that code, move it to the MyGo part in its own small PR.
 | `internal/app/view` | what each view gets from the frame: `Env`, `Runner`, `Latest` |
 | `internal/app/ghsource` | the gh reads of the workers: pull request per worktree, issue titles, the queue of gh runs, the PR or issue entry |
 | `internal/app/settings` | the Settings modal: General, Agents and Updates tabs, update checks and install |
+| `internal/app/projectsview` | the projects modal: list, filter, add a folder or a clone, hide |
 | `internal/app/questions` | the questions notch and card, the outline of pinned messages, the code chips |
 | `internal/app/apptest` | test helpers that the tests of more than one `internal/app` package use |
 | `internal/app/reviewview` | the Review view: branches ahead of main, their files or commits, the file as a code view |
@@ -190,11 +191,14 @@ Add packages under `internal/` when a change needs them.
   (`newHarness`, `h.spawn`, `h.owner`, `h.theme`, `h.launch`, `c.press`).
   Do not set up the scratch home and env by hand.
 - To compare a component with its spec, run `scripts/sheet.sh [Part…]`
-  (D179). It draws each part of `sheetParts` (`internal/app/sheet_test.go`)
-  under its image in `docs/spec/images`, in Dark and Light, and writes
-  `tmp/sheet/<Part>-<theme>.png`. It needs no window and no hc. Run it for
-  the parts your change touches, look at each sheet, and give the paths in
-  your report. Add a part when you build a spec'd component that has none.
+  (D179). It draws each part under its image in `docs/spec/images`, in Dark
+  and Light, and writes `tmp/sheet/<Part>-<theme>.png`. It needs no window
+  and no hc. The parts are in the `sheet_test.go` of each package under
+  `internal/app`: its `TestSpecSheet` gives them to `apptest.SpecSheet`
+  (`internal/app/apptest/sheet.go`). Run it for the parts your change
+  touches, look at each sheet, and give the paths in your report. Add a part
+  to the `sheet_test.go` of the component's package when you build a spec'd
+  component that has none.
 - Run the app only against a scratch hc core and a scratch project under
   `/tmp`, never against the owner's core.
 - On the owner's Mac, run one heavy job at a time: an app run with a scratch core,

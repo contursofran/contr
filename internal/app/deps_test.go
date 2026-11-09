@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/contursofran/contr/internal/app/projectsview"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/projects"
@@ -56,7 +57,7 @@ func TestNewFrameTakesTheDeps(t *testing.T) {
 	}
 	f = attach(Deps{
 		Projects:          Store[*projects.Store]{Load: func() (*projects.Store, error) { return nil, nil }},
-		PickFolder:        func() (string, error) { return "", ErrPickCancelled },
+		PickFolder:        func() (string, error) { return "", projectsview.ErrPickCancelled },
 		SpawnOrchestrator: func(string) error { return nil },
 		OpenTerminal:      func(string, string) (string, error) { return "", nil },
 	})

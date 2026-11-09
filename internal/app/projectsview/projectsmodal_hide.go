@@ -1,4 +1,4 @@
-package app
+package projectsview
 
 // Hide and Undo of the projects modal (D207). Hide takes a project out of the
 // sidebar in contr only (D70) and puts it at the top of Recent. A toast of the
@@ -11,11 +11,14 @@ import (
 	"github.com/contursofran/contr/internal/app/spaces"
 )
 
+// ProjectsUndo is the label of the Undo button of the hide toast.
+const ProjectsUndo = "Undo"
+
 // hiddenToast is the text of the toast after Hide.
 func hiddenToast(name string) string { return name + " hidden from the sidebar" }
 
-// hide hides the project and offers Undo in a toast.
-func (m *ProjectsModal) hide(dir string) {
+// Hide hides the project and offers Undo in a toast.
+func (m *ProjectsModal) Hide(dir string) {
 	st := m.store()
 	if st == nil {
 		return
@@ -38,7 +41,7 @@ func (m *ProjectsModal) hide(dir string) {
 	}
 	st.Hide(dir)
 	st.Touch(dir, path, now())
-	m.changed()
+	m.Changed()
 	if m.Toast != nil {
 		m.Toast(hiddenToast(name), ProjectsUndo, m.undoOnce(dir, place))
 	}
@@ -119,5 +122,5 @@ func (m *ProjectsModal) unhide(dir string, p place) {
 		i = j
 	}
 	st.SetOrder(slices.Insert(cur, i, dir))
-	m.changed()
+	m.Changed()
 }
