@@ -110,6 +110,10 @@ type Settings struct {
 	Relaunch func()
 	// OnReady runs on the UI thread when a background install ends well (D176). May be nil.
 	OnReady func(UpdateInfo)
+	// RecordInstall saves the installed version, the version that runs (from) and when the
+	// install ended, for What's new at the next start (D207). It runs off the UI thread when an
+	// install ends well, before any relaunch. Nil saves nothing.
+	RecordInstall func(info UpdateInfo, from string, at time.Time) error
 	// Invalidate redraws the window; may be nil.
 	Invalidate func()
 	// Visible tells whether the window shows; nil means it does. Hidden windows get no checks.
@@ -368,6 +372,10 @@ func (s *Settings) background() {
 				s.redraw()
 			}
 		})
+		var at time.Time
+		if err == nil {
+			at = s.recordInstall(info)
+		}
 		return func() {
 			s.installing = false
 			if err != nil {
@@ -376,13 +384,25 @@ func (s *Settings) background() {
 				s.redraw()
 				return
 			}
-			s.ready, s.readyAt = true, s.now()
+			s.ready, s.readyAt = true, at
 			if s.OnReady != nil {
 				s.OnReady(info)
 			}
 			s.redraw()
 		}
 	})
+}
+
+// recordInstall saves the installed version through RecordInstall and returns when the install
+// ended. It runs off the UI thread. A failed save is logged: the update still works.
+func (s *Settings) recordInstall(info UpdateInfo) time.Time {
+	at := s.now()
+	if s.RecordInstall != nil {
+		if err := s.RecordInstall(info, s.Version, at); err != nil {
+			log.Printf("contr: save the installed update: %v", err)
+		}
+	}
+	return at
 }
 
 // Check looks for a newer version. The "Check for updates" button runs it.
@@ -421,6 +441,7 @@ func (s *Settings) Install() {
 	s.installing, s.err = true, ""
 	s.percent.Store(0)
 	s.redraw()
+	info := *s.found
 	s.Run.Do(func() func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
@@ -430,6 +451,9 @@ func (s *Settings) Install() {
 				s.redraw()
 			}
 		})
+		if err == nil {
+			s.recordInstall(info)
+		}
 		return func() {
 			s.installing = false
 			if err != nil {

@@ -718,3 +718,69 @@ func TestADueCheckThatFindsAnUpdateInstallsInTheBackground(t *testing.T) {
 		t.Errorf("installed %v after %d installs; want a background install", ok, u.installs)
 	}
 }
+
+// recorded is one RecordInstall call, or the relaunch ("relaunch").
+type recorded struct {
+	what, version, from string
+	at                  time.Time
+}
+
+// recordRig is a Settings with a pending update of 1.3.0 whose RecordInstall and Relaunch log
+// their calls in order (D207).
+func recordRig(u *fakeUpdates) (*Settings, *[]recorded) {
+	var log []recorded
+	at := time.Date(2026, 11, 9, 10, 0, 0, 0, time.UTC)
+	s := &Settings{Updates: u, Version: "1.2.3", Run: Runner{Go: func(f func()) { f() }},
+		Now:      func() time.Time { return at },
+		Relaunch: func() { log = append(log, recorded{what: "relaunch"}) },
+		RecordInstall: func(info UpdateInfo, from string, at time.Time) error {
+			log = append(log, recorded{what: "record", version: info.Version, from: from, at: at})
+			return nil
+		}}
+	return s, &log
+}
+
+func TestAnInstallRecordsTheUpdateBeforeTheRelaunch(t *testing.T) {
+	s, log := recordRig(&fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}})
+	s.enabled = true
+	s.Check()
+	s.Install()
+	at := time.Date(2026, 11, 9, 10, 0, 0, 0, time.UTC)
+	want := []recorded{{"record", "1.3.0", "1.2.3", at}, {what: "relaunch"}}
+	if !slices.Equal(*log, want) {
+		t.Errorf("calls %+v, want %+v", *log, want)
+	}
+}
+
+func TestABackgroundInstallRecordsTheUpdate(t *testing.T) {
+	s, log := recordRig(&fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}})
+	s.autoCheck()
+	at := time.Date(2026, 11, 9, 10, 0, 0, 0, time.UTC)
+	want := []recorded{{"record", "1.3.0", "1.2.3", at}}
+	if !slices.Equal(*log, want) {
+		t.Errorf("calls %+v, want %+v", *log, want)
+	}
+	if _, readyAt, ok := s.Installed(); !ok || !readyAt.Equal(at) {
+		t.Errorf("Installed: at %v, ok %v", readyAt, ok)
+	}
+}
+
+func TestAFailedInstallRecordsNothing(t *testing.T) {
+	s, log := recordRig(&fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}, installErr: errors.New("offline")})
+	s.autoCheck()
+	s.Install()
+	if len(*log) != 0 {
+		t.Errorf("calls %+v after failed installs", *log)
+	}
+}
+
+func TestAFailedRecordStillRelaunches(t *testing.T) {
+	s, log := recordRig(&fakeUpdates{enabled: true, info: &UpdateInfo{Version: "1.3.0"}})
+	s.RecordInstall = func(UpdateInfo, string, time.Time) error { return errors.New("disk full") }
+	s.enabled = true
+	s.Check()
+	s.Install()
+	if !slices.Equal(*log, []recorded{{what: "relaunch"}}) {
+		t.Errorf("calls %+v, want the relaunch", *log)
+	}
+}
