@@ -86,6 +86,18 @@ func TestStartThemeShowsAReadErrorWhenTheFrameAttaches(t *testing.T) {
 	}
 }
 
+func TestAttachShowsTheAgentsNoticeOnce(t *testing.T) {
+	f, _ := themeFrame(t, nil)
+	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, nil)
+	f.Usage = usage.NewSampler(usage.Unread, nil)
+	f.AgentsNotice = "agents.json is in the old format"
+	stop := f.Attach(&fakeWindow{visible: true})
+	defer stop()
+	if got := f.Toasts.Pending(); len(got) != 1 || got[0] != f.AgentsNotice {
+		t.Errorf("toasts %q", got)
+	}
+}
+
 func TestSetAppearanceAppliesAtOnceAndStores(t *testing.T) {
 	f, p := themeFrame(t, nil)
 	var mu sync.Mutex

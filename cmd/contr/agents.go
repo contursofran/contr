@@ -47,7 +47,11 @@ Flags can come before or after the other arguments. After --, every word is
 part of the task.
 
 Environment:
-  CONTR_AGENTS_CONFIG   profiles file (default: the user config folder, contr/agents.json):
+  CONTR_AGENTS_CONFIG   profiles file (default: the user config folder, contr/agents.json).
+                        Built-in profiles: orchestrator (claude opus, medium effort), builder,
+                        planner, reviewer, debugger. A profile in the file replaces the
+                        built-in one of the same name. A file with "presets" and no
+                        "profiles" is the old format: it is ignored and help says so.
                         {"kit": DIR, "profiles": {NAME: {"argv": [...], "agent": KIT_AGENT}},
                          "setup": {MAIN_CHECKOUT: SHELL_COMMAND},
                          "flow": {"plan": "never|when-needed|always", "review": "none|code|every",
@@ -109,6 +113,9 @@ func runAgents(args []string, stdout, stderr io.Writer, dial func(context.Contex
 		_, _ = io.WriteString(w, agentsUsage)
 		if code == 0 {
 			_, _ = io.WriteString(w, "\n"+flowText(getenv))
+			if cfg, err := agents.LoadConfig(configPath(getenv)); err == nil && cfg.Notice != "" {
+				_, _ = io.WriteString(w, "\nNote: "+cfg.Notice+".\n")
+			}
 		}
 		return code
 	}

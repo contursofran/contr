@@ -136,8 +136,8 @@ func TestLoadConfig(t *testing.T) {
 // was read and the profiles that it has (#484).
 func TestSpawnNoProfile(t *testing.T) {
 	for _, tc := range []struct{ source, want string }{
-		{"", `agents: no profile "planner-high"; profiles: builder, debugger, planner, reviewer`},
-		{"/cfg/agents.json (not found)", `agents: no profile "planner-high" in /cfg/agents.json (not found); profiles: builder, debugger, planner, reviewer`},
+		{"", `agents: no profile "planner-high"; profiles: builder, debugger, orchestrator, planner, reviewer`},
+		{"/cfg/agents.json (not found)", `agents: no profile "planner-high" in /cfg/agents.json (not found); profiles: builder, debugger, orchestrator, planner, reviewer`},
 	} {
 		cfg := DefaultConfig()
 		cfg.Source = tc.source
@@ -158,7 +158,7 @@ func TestSpawn(t *testing.T) {
 			return term("t7", p["name"].(string), "live", labels, map[string]any{"state": "blocked", "kind": "permission", "msg": "allow?"}), nil
 		},
 	}}
-	m := New(f, DefaultConfig())
+	m := New(f, DefaultConfig()).WithExecutable("")
 	wt := t.TempDir()
 	w, err := m.Spawn(context.Background(), Spec{Name: "b-158", Profile: "builder", Issue: "158", Worktree: wt, Task: "read TASK.md"})
 	if err != nil {
@@ -434,7 +434,7 @@ func TestSpawnStartsTheKitAgent(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Kit = kit
 	cfg.Profiles["shell"] = Profile{Argv: []string{"sh"}}
-	m := New(f, cfg)
+	m := New(f, cfg).WithExecutable("")
 	argvOf := func(profile string) []any {
 		t.Helper()
 		if _, err := m.Spawn(context.Background(), Spec{Name: "w", Profile: profile}); err != nil {
@@ -452,7 +452,7 @@ func TestSpawnStartsTheKitAgent(t *testing.T) {
 	if got := argvOf("shell"); !reflect.DeepEqual(got, []any{"sh"}) {
 		t.Errorf("a non-claude profile changed: %v", got)
 	}
-	if got := New(f, DefaultConfig()).agentArgv("builder", []string{"claude"}); !reflect.DeepEqual(got, []string{"claude"}) {
+	if got := New(f, DefaultConfig()).WithExecutable("").agentArgv("builder", []string{"claude"}); !reflect.DeepEqual(got, []string{"claude"}) {
 		t.Errorf("no kit: %v", got)
 	}
 }
@@ -463,7 +463,7 @@ func TestLoadConfigReadsTheKit(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg, err := LoadConfig(path)
-	if err != nil || cfg.Kit != "/k" || len(cfg.Profiles) != 4 {
+	if err != nil || cfg.Kit != "/k" || len(cfg.Profiles) != 5 {
 		t.Errorf("cfg = %+v, %v", cfg, err)
 	}
 }
@@ -479,7 +479,7 @@ func TestNewMakesARelativeKitAbsolute(t *testing.T) {
 	}
 	cfg := DefaultConfig()
 	cfg.Kit = "kit"
-	got := New(&fakeCore{}, cfg).agentArgv("builder", []string{"claude"})
+	got := New(&fakeCore{}, cfg).WithExecutable("").agentArgv("builder", []string{"claude"})
 	abs, _ := filepath.Abs("kit")
 	if len(got) < 3 || got[2] != abs || !filepath.IsAbs(got[2]) {
 		t.Errorf("argv = %v, want the kit as %s", got, abs)
@@ -770,7 +770,7 @@ func TestProfileAgentPicksTheKitAgent(t *testing.T) {
 	f := &fakeCore{handle: map[string]func(map[string]any) (any, error){
 		"terminal.run": func(map[string]any) (any, error) { return term("t1", "p", "live", nil, nil), nil },
 	}}
-	m := New(f, cfg)
+	m := New(f, cfg).WithExecutable("")
 	if _, err := m.Spawn(context.Background(), Spec{Name: "p", Profile: "planner-high"}); err != nil {
 		t.Fatal(err)
 	}
@@ -946,6 +946,33 @@ func TestWorkerOrchestratingFromTheHookLabel(t *testing.T) {
 	}
 }
 
+// TestWorkerContextFromTheHookLabels: the Stop hook's context labels give
+// the tokens and the compaction window; a missing, bad or zero value gives
+// no data (D205).
+func TestWorkerContextFromTheHookLabels(t *testing.T) {
+	for _, c := range []struct {
+		name          string
+		labels        map[string]string
+		tokens, limit uint64
+	}{
+		{"valid", map[string]string{LabelContext: "90000", LabelContextLimit: "160000"}, 90000, 160000},
+		{"no labels", nil, 0, 0},
+		{"no limit", map[string]string{LabelContext: "90000"}, 0, 0},
+		{"no tokens", map[string]string{LabelContextLimit: "160000"}, 0, 0},
+		{"cleared tokens", map[string]string{LabelContext: "", LabelContextLimit: "160000"}, 0, 0},
+		{"bad tokens", map[string]string{LabelContext: "90k", LabelContextLimit: "160000"}, 0, 0},
+		{"negative tokens", map[string]string{LabelContext: "-5", LabelContextLimit: "160000"}, 0, 0},
+		{"bad limit", map[string]string{LabelContext: "90000", LabelContextLimit: "x"}, 0, 0},
+		{"zero limit", map[string]string{LabelContext: "90000", LabelContextLimit: "0"}, 0, 0},
+		{"zero tokens", map[string]string{LabelContext: "0", LabelContextLimit: "160000"}, 0, 0},
+	} {
+		w, err := decodeWorker(raw(term("t1", "a", "live", c.labels, nil)))
+		if err != nil || w.ContextTokens != c.tokens || w.ContextLimit != c.limit {
+			t.Errorf("%s: tokens %d limit %d (%v), want %d %d", c.name, w.ContextTokens, w.ContextLimit, err, c.tokens, c.limit)
+		}
+	}
+}
+
 // TestSendKeepsTheWholeText: a long text with backticks, quotes and newlines,
 // and a short one, reach terminal.send unchanged (#483).
 func TestSendKeepsTheWholeText(t *testing.T) {
@@ -986,5 +1013,83 @@ func TestSendReportsARefusedSend(t *testing.T) {
 		if err := New(f, DefaultConfig()).Send(context.Background(), "w1", "hi"); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("err = %v, want %q", err, want)
 		}
+	}
+}
+
+func TestClaudeArgvGetsTheStatusLine(t *testing.T) {
+	kit := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(kit, "agents"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(kit, "agents", "builder.md"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := DefaultConfig()
+	cfg.Kit = kit
+	exe := "/Applications/My Apps/contr's/contr"
+	m := New(&fakeCore{}, cfg).WithExecutable(exe)
+
+	settings := func(argv []string) string {
+		t.Helper()
+		for i, a := range argv {
+			if a == "--settings" {
+				return argv[i+1]
+			}
+		}
+		t.Fatalf("no --settings in %v", argv)
+		return ""
+	}
+	for _, agent := range []string{"builder", "orchestrator"} { // the second has no kit file
+		got := m.agentArgv(agent, []string{"claude", "--model", "opus"})
+		var s struct {
+			StatusLine struct{ Type, Command string }
+		}
+		if err := json.Unmarshal([]byte(settings(got)), &s); err != nil {
+			t.Fatalf("%s: settings are not JSON: %v", agent, err)
+		}
+		want := `'/Applications/My Apps/contr'\''s/contr' statusline`
+		if s.StatusLine.Type != "command" || s.StatusLine.Command != want {
+			t.Errorf("%s: statusLine = %+v, want command %s", agent, s.StatusLine, want)
+		}
+		if got[len(got)-2] != "--model" || got[len(got)-1] != "opus" {
+			t.Errorf("%s: profile flags moved: %v", agent, got)
+		}
+	}
+
+	own := []string{"claude", "--settings", `{"x":1}`, "--model", "opus"}
+	if got := m.agentArgv("orchestrator", own); !reflect.DeepEqual(got, own) {
+		t.Errorf("argv with --settings changed: %v", got)
+	}
+	eq := []string{"claude", "--settings=/p.json"}
+	if got := m.agentArgv("orchestrator", eq); !reflect.DeepEqual(got, eq) {
+		t.Errorf("argv with --settings= changed: %v", got)
+	}
+	codex := []string{"codex", "--model", "x"}
+	if got := m.agentArgv("builder", codex); !reflect.DeepEqual(got, codex) {
+		t.Errorf("codex argv changed: %v", got)
+	}
+	noKit := New(&fakeCore{}, DefaultConfig()).WithExecutable("/bin/contr")
+	if got := noKit.agentArgv("builder", []string{"claude"}); len(got) != 3 || got[1] != "--settings" {
+		t.Errorf("no kit: %v", got)
+	}
+	if got := m.WithExecutable("").agentArgv("orchestrator", []string{"claude"}); !reflect.DeepEqual(got, []string{"claude"}) {
+		t.Errorf("no binary: %v", got)
+	}
+}
+
+func TestSpawnPutsTheStatusLineInTheOrchestratorArgv(t *testing.T) {
+	f := &fakeCore{handle: map[string]func(map[string]any) (any, error){
+		"terminal.run": func(map[string]any) (any, error) { return term("t1", "o", "live", nil, nil), nil },
+	}}
+	cfg := DefaultConfig()
+	cfg.Kit = t.TempDir() // no agent files
+	cfg.Profiles["orchestrator"] = Profile{Argv: []string{"claude"}}
+	m := New(f, cfg).WithExecutable("/bin/contr")
+	if _, err := m.Spawn(context.Background(), Spec{Name: "o", Profile: "orchestrator"}); err != nil {
+		t.Fatal(err)
+	}
+	argv := f.last().Params["argv"].([]any)
+	if argv[0] != "claude" || argv[1] != "--settings" {
+		t.Errorf("argv = %v", argv)
 	}
 }

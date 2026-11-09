@@ -29,6 +29,7 @@ import (
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/prefs"
 	"github.com/contursofran/contr/internal/projects"
+	"github.com/contursofran/contr/internal/updated"
 	"github.com/contursofran/contr/internal/usage"
 	"github.com/contursofran/contr/internal/widths"
 )
@@ -86,6 +87,10 @@ type Frame struct {
 	Updates Updates
 	// Relaunch restarts contr after an update installs.
 	Relaunch func()
+	// LoadUpdated reads the note of the last install, and SaveUpdated writes it (D209). Both
+	// run on a goroutine. Nil reads or saves nothing.
+	LoadUpdated func() (updated.Note, error)
+	SaveUpdated func(updated.Note) error
 	// AgentsConfig is the path of agents.json that the Agents tab of Settings edits (D186).
 	AgentsConfig string
 	// Settings is the Settings modal, made in Attach.
@@ -185,6 +190,10 @@ type Frame struct {
 	// fakes first) and ends them with its stop function.
 	Host  *host.Host
 	Usage *usage.Sampler
+
+	// AgentsNotice is a note about agents.json that LoadConfig made at start
+	// (the old format, D206). [Frame.Attach] shows it once in the toasts.
+	AgentsNotice string
 
 	// NewOrch is the `+ new` action. [Frame.Attach] makes it when PickFolder
 	// and SpawnOrchestrator are set.
@@ -436,18 +445,8 @@ func (f *Frame) reviewTarget() string {
 	case state.KindWorktree:
 		return sel.ID
 	case state.KindOrchestrator, state.KindWorker, state.KindTerminal:
-		if f.agentSnap == nil {
-			return ""
-		}
-		s := f.agentSnap()
-		for _, ws := range [][]agents.Worker{s.Orchestrators, s.Workers, s.Terminals} {
-			for _, w := range ws {
-				if w.Address == sel.ID {
-					return w.Worktree
-				}
-			}
-		}
-		return ""
+		w, _ := f.agentAt(sel.ID)
+		return w.Worktree
 	}
 	return ""
 }
@@ -562,10 +561,12 @@ func (f *Frame) terminalPanel(c *ui.Context) {
 // stay in the code but are not shown (D122); see panelBox.
 func (f *Frame) filesPanel(c *ui.Context) {
 	kit.Panel(c, kit.PanelOpts{Name: LabelPanelFiles,
-		Top:    func() { f.Session.View(c) },
-		Head:   func() { f.Files.Head(c) },
-		Body:   func() { f.Files.View(c) },
-		Footer: func() { kit.UsageMeter(c, []kit.Meter{contextMeter(f.planUsage(), f.selectedTerminal())}) }})
+		Top:  func() { f.Session.View(c) },
+		Head: func() { f.Files.Head(c) },
+		Body: func() { f.Files.View(c) },
+		Footer: func() {
+			kit.UsageMeter(c, []kit.Meter{contextMeter(f.planUsage(), f.selectedTerminal(), f.contextLabels())})
+		}})
 }
 
 // selectedTerminal is the hc terminal of the selected orchestrator, worker or
@@ -579,6 +580,30 @@ func (f *Frame) selectedTerminal() string {
 		return sel.ID
 	}
 	return ""
+}
+
+// contextLabels is the context that the Stop hook put on the labels of the
+// selected terminal (D205), for the Context meter when that terminal has no
+// status line file. Zero when there is none.
+func (f *Frame) contextLabels() usage.Context {
+	w, _ := f.agentAt(f.selectedTerminal())
+	return usage.Context{Tokens: w.ContextTokens, Size: w.ContextLimit}
+}
+
+// agentAt is the orchestrator, worker or terminal at hc address id.
+func (f *Frame) agentAt(id string) (agents.Worker, bool) {
+	if id == "" || f.agentSnap == nil {
+		return agents.Worker{}, false
+	}
+	s := f.agentSnap()
+	for _, ws := range [][]agents.Worker{s.Orchestrators, s.Workers, s.Terminals} {
+		for _, w := range ws {
+			if w.Address == id {
+				return w, true
+			}
+		}
+	}
+	return agents.Worker{}, false
 }
 
 // planUsage is the usage sampler as the meters read it. A nil sampler (a
@@ -1033,6 +1058,9 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.Files.Post, f.Files.Invalidate = w.Update, w.Invalidate
 	f.Toasts = state.NewToasts(w.Invalidate)
 	f.Files.Status = f.Toasts.Show
+	if f.AgentsNotice != "" {
+		f.Toasts.Show(f.AgentsNotice)
+	}
 	f.Session.Post, f.Session.Invalidate, f.Session.OpenURL = w.Update, w.Invalidate, openURL
 	if f.Session.StateDir == "" {
 		f.Session.StateDir = usage.StateDir()
@@ -1050,7 +1078,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		agentSnap = src.Snapshot
 		f.agentSnap = agentSnap
 		run := Runner{Post: w.Update}
-		f.Card = &QuestionsCard{Source: src, Run: run, Invalidate: w.Invalidate,
+		f.Card = &QuestionsCard{Source: src, Run: run, Invalidate: w.Invalidate, Status: f.Toasts.Show,
 			Select: func(address string, orchestrator bool) {
 				kind := state.KindWorker
 				if orchestrator {
@@ -1128,7 +1156,8 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.Settings = &Settings{Updates: f.Updates, Version: Version, CoreVersion: f.coreVersion, Run: Runner{Post: w.Update},
 		Relaunch: f.Relaunch, OnReady: f.updateReady, Invalidate: w.Invalidate, Visible: func() bool { return f.Visibility == nil || f.Visibility.Visible() },
 		AgentsConfig: f.AgentsConfig, Status: f.Toasts.Show, Appearance: f.Appearance, SetAppearance: f.SetAppearance,
-		Tint: f.Tint, SetTint: f.SetTint, ResetTint: f.ResetTint}
+		Tint: f.Tint, SetTint: f.SetTint, ResetTint: f.ResetTint, RecordInstall: f.recordInstall}
+	f.loadUpdated(Runner{Post: w.Update}, w.Invalidate)
 	setSettingsHandler(func() { w.Update(f.Settings.Toggle) })
 	setSidebarHandler(func() { w.Update(f.ToggleSidebar) })
 	f.SpacesList.OnSettings = func() { f.Settings.Toggle() }

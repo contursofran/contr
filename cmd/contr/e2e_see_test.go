@@ -12,8 +12,10 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/app"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/session"
+	"github.com/contursofran/contr/internal/updated"
 )
 
 // seeFixture is a state of the app that scripts/see.sh can show.
@@ -49,6 +51,16 @@ var seeFixtures = map[string]seeFixture{
 		},
 		ready: "lead, ",
 	},
+	"todo": {
+		about: "the workers fixture with one to-do that holds a command in backticks (#498)",
+		setup: func(t *testing.T, h *harness) {
+			seeWorkers(t, h)
+			h.owner(t, `{"questions":[],
+"todos":[{"id":"T1","project":"demo","kind":"do","text":"Run `+"`go run ./tmp/usagecheck`"+` and paste the plan rows it prints into the issue","pinned":"2026-11-03T10:02:00Z"}],
+"next_question":1,"next_todo":2}`)
+		},
+		ready: "lead, ",
+	},
 	"wide": {
 		about: "the core sized a worker's terminal to 300x60 before the app shows it (#481)",
 		setup: func(t *testing.T, h *harness) {
@@ -56,6 +68,25 @@ var seeFixtures = map[string]seeFixture{
 			h.sizeTerminal(t, "b203-wide", 300, 60)
 		},
 		ready: "b203-wide",
+	},
+	"context": {
+		about: "the workers fixture; lead has no status line file, only the Stop hook's context labels (D205)",
+		setup: func(t *testing.T, h *harness) {
+			seeWorkers(t, h)
+			h.labelTerminal(t, "lead", map[string]string{agents.LabelContext: "90000", agents.LabelContextLimit: "160000"})
+		},
+		ready: "lead, ",
+	},
+	"updated": {
+		about: "the first start after an update: the Updated to pill with What's new open (D209)",
+		setup: func(t *testing.T, h *harness) {
+			n := updated.Note{Version: app.Version, From: "0.0.9", InstalledAt: time.Now().Add(-3 * time.Minute),
+				Notes: "## " + app.Version + "\n- What's new opens after an update\n- Faster tab switching\n- Light theme fixes"}
+			if err := updated.Save(updated.Path(filepath.Join(h.dir, "state")), n); err != nil {
+				t.Fatal(err)
+			}
+		},
+		ready: app.UpdatedPrefix,
 	},
 	"session": {
 		about: "the orchestrator lead with the todos and artifacts of canvas board 11 (D197)",
@@ -88,6 +119,25 @@ func (h *harness) sizeTerminal(t *testing.T, name string, cols, rows uint16) {
 		time.Sleep(300 * time.Millisecond)
 		_ = s.Close()
 		return
+	}
+	t.Fatalf("no worker %q", name)
+}
+
+// labelTerminal sets labels on the worker's terminal, as the kit's Stop hook
+// does.
+func (h *harness) labelTerminal(t *testing.T, name string, labels map[string]string) {
+	t.Helper()
+	ws, err := h.mgr.List(h.ctx, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, w := range ws {
+		if w.Name == name {
+			if err := h.cl.Call(h.ctx, "terminal.label", map[string]any{"terminal": w.Address, "labels": labels}, nil); err != nil {
+				t.Fatal(err)
+			}
+			return
+		}
 	}
 	t.Fatalf("no worker %q", name)
 }

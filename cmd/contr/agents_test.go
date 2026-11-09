@@ -387,3 +387,23 @@ func TestAgentsFlowPrintsTheFlow(t *testing.T) {
 		t.Fatalf("help with a bad flow: code %d out %q", code, out)
 	}
 }
+
+func TestAgentsHelpShowsTheOldFormatNotice(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agents.json")
+	body := `{"version":1,"presets":[{"name":"x"}]}`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	env := map[string]string{"CONTR_AGENTS_CONFIG": path}
+	code, out, _ := run(t, &cliCore{}, env, "help")
+	if code != 0 || !strings.Contains(out, "old format") {
+		t.Fatalf("help: code %d out %q", code, out)
+	}
+	if data, _ := os.ReadFile(path); string(data) != body {
+		t.Errorf("the file changed: %q", data)
+	}
+	env["CONTR_AGENTS_CONFIG"] = filepath.Join(t.TempDir(), "none.json")
+	if _, out, _ := run(t, &cliCore{}, env, "help"); strings.Contains(out, "Note: agents.json") {
+		t.Errorf("notice without an old file: %q", out)
+	}
+}
