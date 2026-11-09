@@ -18,7 +18,6 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/spaces"
-	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/projects"
 )
@@ -32,9 +31,12 @@ const (
 	LabelProjectsSearch = "Search projects, or paste a GitHub repo or a path"
 	ProjectsHide        = "Hide"
 	ProjectsOpenFolder  = "Open folder…"
-	LabelCloneRemote    = "Clone from GitHub"
-	ProjectsClone       = "Clone"
-	ProjectsCloneFolder = "Choose folder…"
+	LabelCloneRow       = "clone row"
+	LabelPathRow        = "path row"
+	LabelCloneProgress  = "Clone progress"
+	ProjectsChangeDir   = "Change folder"
+	ProjectsCancel      = "Cancel"
+	ProjectsTryAgain    = "Try again"
 )
 
 // ProjectsRow is the label of a project row; ProjectsHideOf is its Hide
@@ -95,11 +97,12 @@ type ProjectsModal struct {
 	sel, hover int
 	// moved is true after a key moved sel: the list then scrolls to it.
 	moved bool
-	// remote is the text of the clone field; parent is the folder the owner
-	// picked ("" means CloneParent); cloning is true while git runs; cloneErr
-	// is the text of the last failure.
-	remote string
-	parent string
+	// parent is the folder the owner picked for a clone ("" means the default
+	// parent); cloning is true while git runs; cloneErr is the text of the
+	// last clone failure and pathErr that of the last path row failure. An
+	// edit of the field clears both.
+	parent  string
+	pathErr string
 	// defParent is the kept default parent; "" means CloneParent.
 	defParent string
 	cloning   bool
@@ -123,6 +126,7 @@ func (m *ProjectsModal) Toggle() {
 		m.refreshDefault()
 	}
 	m.query, m.sel, m.hover = "", 0, -1
+	m.cloneErr, m.pathErr = "", ""
 	m.redraw()
 }
 
@@ -285,10 +289,14 @@ func (m *ProjectsModal) openFolder() {
 // The URL and the folder are empty while the field is empty; err is set when
 // the field is not a remote.
 func (m *ProjectsModal) cloneDest() (url, dest string, err error) {
-	if strings.TrimSpace(m.remote) == "" {
+	in := strings.TrimSuffix(m.text(), "/")
+	if in == "" {
 		return "", "", nil
 	}
-	url, name, err := git.ParseRemote(m.remote)
+	if strings.HasPrefix(in, "github.com/") { // a form classifyQuery accepts
+		in = "https://" + in
+	}
+	url, name, err := git.ParseRemote(in)
 	if err != nil {
 		return "", "", err
 	}
@@ -331,12 +339,7 @@ func (m *ProjectsModal) clone() {
 		return
 	}
 	url, dest, err := m.cloneDest()
-	if err != nil || url == "" {
-		m.cloneErr = "enter owner/name or a URL"
-		if err != nil {
-			m.cloneErr = "not a repository: " + strings.TrimSpace(m.remote)
-		}
-		m.redraw()
+	if err != nil || url == "" { // the row shows only for a text that parses
 		return
 	}
 	m.cloning, m.cloneErr = true, ""
@@ -361,7 +364,7 @@ func (m *ProjectsModal) clone() {
 				m.redraw()
 				return
 			}
-			m.remote, m.parent = "", ""
+			m.query, m.parent, m.sel = "", "", 0
 			m.add(key, dest)
 		}
 	})
@@ -470,42 +473,6 @@ func (m *ProjectsModal) flush() {
 				m.saving = true
 				m.flush()
 			}
-		}
-	})
-}
-
-// cloneSection is the clone part: the field, the destination preview and the
-// buttons. A busy state or the last error shows below.
-func (m *ProjectsModal) cloneSection(c *ui.Context) {
-	p := theme.Current()
-	if m.CloneParent == "" {
-		return
-	}
-	_, dest, perr := m.cloneDest()
-	ui.Column(c).Shrink(0).Padding(10, theme.ModalPadX).Gap(6).
-		BorderWidth(1, 0, 0, 0).BorderColor(p.Hairline).Children(func() {
-		ui.Text(c, "clone from GitHub").TextColor(p.Ink50)
-		ui.Row(c).AlignItems(ui.Center).Gap(12).Children(func() {
-			if ui.TextInput(c, &m.remote).Label(LabelCloneRemote).Placeholder("owner/name or a URL").Grow(1).MinWidth(0).
-				Submitted() {
-				m.clone()
-			}
-			if m.PickParent != nil {
-				cardButton(c, ProjectsCloneFolder, ButtonOutlined, p.Ink95, m.chooseParent)
-			}
-			label := ProjectsClone
-			if m.cloning {
-				label = "Cloning…"
-			}
-			cardButton(c, label, ButtonOutlined, p.Ink95, m.clone)
-		})
-		switch {
-		case m.cloneErr != "":
-			ui.Text(c, m.cloneErr).TextColor(p.Blocked)
-		case perr != nil:
-			ui.Text(c, "not a repository yet").TextColor(p.Ink50)
-		case dest != "":
-			ui.Text(c, "→ "+dest).SingleLine().MinWidth(0).TextColor(p.Ink62)
 		}
 	})
 }

@@ -212,7 +212,7 @@ func seeWorkers(t *testing.T, h *harness) {
 
 // TestSee is scripts/see.sh (#457, D178). It starts the fixture CONTR_SEE
 // names, in the themes of CONTR_SEE_THEME (dark, light or both), presses the
-// labels of CONTR_SEE_PRESS (one per line) in order, and writes
+// labels of CONTR_SEE_PRESS (one per line, `type:<text>` types text) in order, and writes
 // tmp/see/<fixture>-<theme>.png and tmp/see/<fixture>-<theme>.txt, the tree
 // of elements. Without CONTR_SEE it lists the fixtures.
 func TestSee(t *testing.T) {
@@ -257,6 +257,10 @@ func TestSee(t *testing.T) {
 		c.waitLabel(t, f.ready)
 		c.settle(t)
 		for _, l := range press {
+			if text, ok := strings.CutPrefix(l, "type:"); ok { // type into the focused field
+				c.text(t, text)
+				continue
+			}
 			c.press(t, l)
 		}
 		if len(press) > 0 {

@@ -4,6 +4,7 @@ package app
 
 import (
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -42,6 +43,8 @@ type rowKind int
 const (
 	rowOpen   rowKind = iota // switch the sidebar to the project
 	rowRecent                // show the project again
+	rowClone                 // clone a GitHub repo (Add)
+	rowPath                  // open a folder by its path (Add)
 )
 
 // paletteRow is one selectable row of the list.
@@ -49,18 +52,45 @@ type paletteRow struct {
 	kind  rowKind
 	group spaces.RepoGroup // rowOpen
 	entry projects.Entry   // rowRecent
+	owner string           // rowClone
+	repo  string           // rowClone: the folder name
+	path  string           // rowPath: the text of the field
 }
 
 func (r paletteRow) name() string {
-	if r.kind == rowOpen {
+	switch r.kind {
+	case rowOpen:
 		return r.group.Name
+	case rowClone:
+		return r.owner + "/" + r.repo
+	case rowPath:
+		return pathBase(r.path)
 	}
 	return storedName(r.entry.Dir, r.entry.Path)
 }
 
+// pathBase is the last element of a typed path; `~` and `/` stand for themselves.
+func pathBase(p string) string {
+	if b := filepath.Base(strings.TrimRight(p, "/")); b != "." && b != "" {
+		return b
+	}
+	return p
+}
+
+// add tells whether the row is an Add row.
+func (r paletteRow) add() bool { return r.kind == rowClone || r.kind == rowPath }
+
 // rows are the selectable rows: the open groups that match the field, then
 // the recent projects that match it.
 func (m *ProjectsModal) rows() []paletteRow {
+	// A repo or a path replaces the list with one Add row. A repo needs a
+	// clone folder; without one the text filters like any other text.
+	switch k, owner, repo := classifyQuery(m.query); {
+	case k == queryRepo && m.CloneParent != "":
+		return []paletteRow{{kind: rowClone, owner: owner, repo: repo}}
+	case k == queryPath:
+		return []paletteRow{{kind: rowPath, path: m.text()}}
+	}
 	var out []paletteRow
 	for _, g := range m.shown() {
 		out = append(out, paletteRow{kind: rowOpen, group: g})
@@ -89,6 +119,9 @@ func (m *ProjectsModal) lines(rows []paletteRow) []line {
 		hint = "drag to reorder the sidebar"
 	}
 	for i, r := range rows {
+		if i == 0 && r.add() {
+			out = append(out, line{head: "Add", row: -1})
+		}
 		if i == 0 && r.kind == rowOpen {
 			out = append(out, line{head: "Open · " + strconv.Itoa(len(m.groupsAll())), hint: hint, row: -1})
 		}
@@ -103,8 +136,15 @@ func (m *ProjectsModal) lines(rows []paletteRow) []line {
 // run does Enter on a row: switch to an open project and close, or show a
 // recent project again.
 func (m *ProjectsModal) run(r paletteRow) {
-	if r.kind == rowRecent {
+	switch r.kind {
+	case rowRecent:
 		m.openRecent(r.entry)
+		return
+	case rowClone:
+		m.clone() // does nothing while a clone runs
+		return
+	case rowPath:
+		m.openPath(r.path)
 		return
 	}
 	if m.Switch != nil {
@@ -114,12 +154,18 @@ func (m *ProjectsModal) run(r paletteRow) {
 }
 
 // enterLabel is the word of the footer for the selected row.
-func enterLabel(rows []paletteRow, sel int) string {
+func (m *ProjectsModal) enterLabel(rows []paletteRow, sel int) string {
 	switch {
 	case sel < 0 || sel >= len(rows):
 		return ""
-	case rows[sel].kind == rowRecent:
+	case rows[sel].kind == rowRecent, rows[sel].kind == rowPath:
 		return "open"
+	case rows[sel].kind == rowClone && m.cloning:
+		return "wait"
+	case rows[sel].kind == rowClone && m.cloneErr != "":
+		return "try again"
+	case rows[sel].kind == rowClone:
+		return "clone"
 	}
 	return "switch"
 }
@@ -197,12 +243,14 @@ func (m *ProjectsModal) searchField(c *ui.Context, rows []paletteRow) {
 			case k.Key == ui.KeyEscape && k.Mods == 0 && k.Text() != "":
 				k.SetText("")
 				m.query, m.sel = "", 0
+				m.cloneErr, m.pathErr = "", ""
 				return true
 			}
 			return false
 		})
 		if in.Changed() {
 			m.sel = 0
+			m.cloneErr, m.pathErr = "", ""
 		}
 		if in.Submitted() && r != nil {
 			m.run(*r)
@@ -229,7 +277,6 @@ func (m *ProjectsModal) body(c *ui.Context) {
 	} else {
 		m.listView(c, rows, lines)
 	}
-	m.cloneSection(c)
 	m.footer(c, rows)
 }
 
@@ -241,6 +288,8 @@ func (m *ProjectsModal) listView(c *ui.Context, rows []paletteRow, lines []line)
 			return l.head
 		case rows[l.row].kind == rowOpen:
 			return rows[l.row].group.CommonDir
+		case rows[l.row].add():
+			return "add"
 		}
 		return "recent:" + rows[l.row].entry.Dir
 	}
@@ -278,7 +327,7 @@ func (m *ProjectsModal) footer(c *ui.Context, rows []paletteRow) {
 			})
 		}
 		hint("↑↓", "move")
-		if lb := enterLabel(rows, m.sel); lb != "" {
+		if lb := m.enterLabel(rows, m.sel); lb != "" {
 			hint("⏎", lb)
 		}
 		if m.sel < len(rows) && rows[m.sel].kind == rowOpen && m.text() == "" {
@@ -343,7 +392,14 @@ func (m *ProjectsModal) row(c *ui.Context, rows []paletteRow, i int, home string
 	r := rows[i]
 	name := r.name()
 	selected := i == m.sel
-	el := ui.Row(c).Label(ProjectsRow(name)).AlignItems(ui.Center).Gap(theme.Space10).
+	label := ProjectsRow(name)
+	switch r.kind {
+	case rowClone:
+		label = LabelCloneRow
+	case rowPath:
+		label = LabelPathRow
+	}
+	el := ui.Row(c).Label(label).AlignItems(ui.Center).Gap(theme.Space10).
 		Padding(theme.Space7, theme.Space10, theme.Space7, theme.Space4).Radius(theme.Radius8).Cursor(ui.CursorPointer).
 		OnClick(func() { m.sel = i; m.run(r) })
 	hovered := el.Hovered()
@@ -360,6 +416,10 @@ func (m *ProjectsModal) row(c *ui.Context, rows []paletteRow, i int, home string
 		el = el.Background(p.Hover)
 	}
 	active := selected || hovered
+	if r.add() {
+		el.Children(func() { m.addRowView(c, r, active, selected) })
+		return
+	}
 	meta, age, orch := "", "", false
 	if r.kind == rowOpen {
 		orch = m.Orchestrated != nil && m.Orchestrated(r.group)
@@ -441,17 +501,29 @@ func (m *ProjectsModal) openMetaView(c *ui.Context, g spaces.RepoGroup, home str
 	ink := func(s string) {
 		styled(ui.Text(c, s), theme.StyleValue).NoWrap().Shrink(0).TextColor(p.Ink38)
 	}
+	// The parts have even gaps: a space token between them, none inside a text.
+	gap := func() { ui.Box(c).Width(theme.Space6).Height(1).Shrink(0) }
+	sep := func() {
+		gap()
+		ink("·")
+		gap()
+	}
 	ui.Row(c).AlignItems(ui.Center).MinWidth(0).Children(func() {
 		if path != "" {
 			styled(ui.Text(c, path), theme.StyleValue).SingleLine().MinWidth(0).TextColor(p.Ink38)
 		}
 		if branch != "" {
-			ink(" · " + branch)
+			if path != "" {
+				sep()
+			}
+			ink(branch)
 		}
 		if live == "" {
 			return
 		}
-		ink(" · ")
+		if path != "" || branch != "" {
+			sep()
+		}
 		if orch {
 			ui.Box(c).Label(LabelProjectsDot).Width(theme.ModalDot).Height(theme.ModalDot).Shrink(0).
 				Radius(theme.ModalDot/2).Background(p.Claude).Margin(0, theme.Space6, 0, 0)
