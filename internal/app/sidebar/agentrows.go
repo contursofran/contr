@@ -1,4 +1,4 @@
-package app
+package sidebar
 
 // The agent rows of the sidebar (docs/spec/AgentRow.md): under each project,
 // its orchestrator first, then its workers on the rail. They sit in the same
@@ -138,7 +138,7 @@ func agentLines(g spaces.RepoGroup, s agentstate.Snapshot) []agentLine {
 // items are the rows of the list: each project, then its agents unless the
 // project is folded.
 func (l *SpacesList) items() []sideItem {
-	s := l.snapshot()
+	s := l.Snapshot()
 	var out []sideItem
 	for i, g := range l.groups {
 		out = append(out, sideItem{group: i})
@@ -265,7 +265,7 @@ func (l *SpacesList) agentRow(c *ui.Context, a agentLine) {
 		Grey:    a.orchestrator && a.role == "",
 		OnClick: func() { l.SelectAgent(a) },
 		Menu:    func(m *ui.Menu) { l.agentMenu(m, a) },
-		Compact: l.compact, Tip: tabmodel.RowTip(a.w),
+		Compact: l.Compact, Tip: tabmodel.RowTip(a.w),
 	}
 	if l.selection != nil {
 		if sel, ok := l.selection.Current(); ok {
@@ -373,7 +373,7 @@ func (l *SpacesList) dropGoneSelection() {
 	if !ok || (sel.Kind != state.KindOrchestrator && sel.Kind != state.KindWorker) {
 		return
 	}
-	s := l.snapshot()
+	s := l.Snapshot()
 	list := s.Workers
 	if sel.Kind == state.KindOrchestrator {
 		list = s.Orchestrators
@@ -428,7 +428,7 @@ func (l *SpacesList) target(it sideItem) state.Selected {
 		return state.Selected{Kind: kind, ID: a.w.Address}
 	}
 	g := l.groups[it.group]
-	for _, o := range l.snapshot().Orchestrators {
+	for _, o := range l.Snapshot().Orchestrators {
 		if l.holdsAddress(g, o.Address) {
 			return state.Selected{Kind: state.KindOrchestrator, ID: o.Address}
 		}

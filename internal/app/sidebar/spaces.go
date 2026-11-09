@@ -1,4 +1,4 @@
-package app
+package sidebar
 
 // The projects of the sidebar: one group for each repo that an hc terminal
 // sits in, and one empty group for each stored project that no terminal sits
@@ -101,9 +101,9 @@ type SpacesList struct {
 	// Now is the clock; nil means time.Now. Tests replace it.
 	Now func() time.Time
 
-	// compact makes the rows icons only (D128). The frame sets it on each
+	// Compact makes the rows icons only (D128). The frame sets it on each
 	// frame from the window width.
-	compact bool
+	Compact bool
 
 	snap      func() agentstate.Snapshot
 	selection *state.Selection
@@ -268,18 +268,9 @@ func (l *SpacesList) withStored(groups []spaces.RepoGroup) []spaces.RepoGroup {
 		if slices.ContainsFunc(groups, func(g spaces.RepoGroup) bool { return g.CommonDir == d }) {
 			continue
 		}
-		groups = append(groups, spaces.RepoGroup{CommonDir: d, Name: storedName(d, l.projects.Path(d)), Path: l.projects.Path(d)})
+		groups = append(groups, spaces.RepoGroup{CommonDir: d, Name: spaces.StoredName(d, l.projects.Path(d)), Path: l.projects.Path(d)})
 	}
 	return groups
-}
-
-// storedName is the name of a stored project: the repo folder, as the scan
-// names it.
-func storedName(dir, path string) string {
-	if filepath.Base(dir) == ".git" {
-		return filepath.Base(filepath.Dir(dir))
-	}
-	return filepath.Base(path)
 }
 
 // Sync brings the list up to the hc terminals and the connection. It starts
@@ -307,8 +298,11 @@ func (l *SpacesList) Close() {
 	}
 }
 
-// snapshot is the agent state, empty without a source.
-func (l *SpacesList) snapshot() agentstate.Snapshot {
+// Closed reports that Close ran. The frame tests check the order of the stops with it.
+func (l *SpacesList) Closed() bool { return l.closed }
+
+// Snapshot is the agent state, empty without a source.
+func (l *SpacesList) Snapshot() agentstate.Snapshot {
 	if l.snap == nil {
 		return agentstate.Snapshot{}
 	}
@@ -317,7 +311,7 @@ func (l *SpacesList) snapshot() agentstate.Snapshot {
 
 // terms are the hc terminals: orchestrators, workers, then plain terminals.
 func (l *SpacesList) terms() []spaces.Term {
-	return spaceTerms(l.snapshot())
+	return spaceTerms(l.Snapshot())
 }
 
 func spaceTerms(s agentstate.Snapshot) []spaces.Term {
@@ -353,7 +347,7 @@ func (l *SpacesList) startScan(cwds []string) {
 }
 
 func (l *SpacesList) rebuild() {
-	snap := l.snapshot()
+	snap := l.Snapshot()
 	built := spaces.Build(spaceTerms(snap), l.scan)
 	adopted := l.adopt(built)
 	groups := l.applyProjects(built)
@@ -581,7 +575,7 @@ func (l *SpacesList) Switch(dir string) {
 
 // Orchestrated tells whether an orchestrator holds a terminal in project g.
 func (l *SpacesList) Orchestrated(g spaces.RepoGroup) bool {
-	for _, o := range l.snapshot().Orchestrators {
+	for _, o := range l.Snapshot().Orchestrators {
 		if l.holdsAddress(g, o.Address) {
 			return true
 		}
@@ -591,7 +585,7 @@ func (l *SpacesList) Orchestrated(g spaces.RepoGroup) bool {
 
 // selectProject selects the orchestrator of g, else its main checkout.
 func (l *SpacesList) selectProject(g spaces.RepoGroup) {
-	for _, o := range l.snapshot().Orchestrators {
+	for _, o := range l.Snapshot().Orchestrators {
 		if l.holdsAddress(g, o.Address) {
 			l.selection.Select(state.Selected{Kind: state.KindOrchestrator, ID: o.Address})
 			return

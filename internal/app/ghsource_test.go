@@ -4,9 +4,7 @@ package app
 
 import (
 	"errors"
-	"slices"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -21,19 +19,6 @@ import (
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/usage"
 )
-
-type titleRig struct {
-	*apptest.GHRig
-	t      *ghsource.IssueTitles
-	runner *apptest.TitleRunner
-}
-
-func newTitleRig() *titleRig {
-	r := &titleRig{GHRig: &apptest.GHRig{Now: time.Unix(5000, 0)},
-		runner: &apptest.TitleRunner{Out: map[string]string{"241": `{"title":"Agent rows on ui.List"}`}}}
-	r.t = &ghsource.IssueTitles{Env: r.Env(), Client: apptest.ClientOf(r.runner), Now: r.Clock}
-	return r
-}
 
 func TestAttachGivesOneGHQueueToPRsAndTitles(t *testing.T) {
 	f, _ := themeFrame(t, nil)
@@ -229,106 +214,5 @@ func TestFrameOpenPRSetsTheItemOfTheWorker(t *testing.T) {
 	f.OpenPR("/elsewhere", 642)
 	if r.pane.Item != "" {
 		t.Errorf("item %q for a folder with no worker", r.pane.Item)
-	}
-}
-
-// The row shows the issue title on line 1, so the worker name moves to line 2. A row with no
-// title and no task shows the name once, on line 1.
-func TestAWorkerRowShowsTheIssueTitleAndTheNameMovesToLineTwo(t *testing.T) {
-	h := newRows(t)
-	r := newTitleRig()
-	h.list.Titles = r.t
-	snap := h.live.get()
-	h.send(snap)
-	if slices.Contains(h.tt.Texts(), "b-241") {
-		t.Fatalf("the name is on line 2 before any title: %q", h.tt.Texts())
-	}
-	r.t.Sync(snap.Workers)
-	r.Flush()
-	h.send(snap)
-	if !slices.Contains(h.tt.Texts(), "b-241") {
-		t.Errorf("the name is not on line 2 once the issue title is on line 1: %q", h.tt.Texts())
-	}
-	l := &SpacesList{Titles: r.t}
-	a := agentLine{w: snap.Workers[0]}
-	if got := titleOf(a, l.issueTitle(a)); got != "Agent rows on ui.List" {
-		t.Errorf("line 1 %q", got)
-	}
-	// The issue title wins over the task; a failed read later keeps it.
-	a.w.Task = "terminal title"
-	r.runner.Err = errors.New("offline")
-	r.Now = r.Now.Add(ghsource.TitleHitTTL + time.Second)
-	r.t.Sync(snap.Workers)
-	r.Flush()
-	if got := titleOf(a, l.issueTitle(a)); got != "Agent rows on ui.List" {
-		t.Errorf("line 1 %q after an error", got)
-	}
-	// With no issue title, the task is line 1.
-	if got := titleOf(a, ""); got != "terminal title" {
-		t.Errorf("fallback %q", got)
-	}
-}
-
-func TestAnOrchestratorRowNeverShowsAnIssueTitle(t *testing.T) {
-	a := agentLine{w: agents.Worker{Name: "lead", Issue: "241", Worktree: "/wt/a"}, orchestrator: true}
-	l := &SpacesList{}
-	if got := l.issueTitle(a); got != "" {
-		t.Errorf("title %q", got)
-	}
-	if got := titleOf(a, "Some title"); got != "lead" {
-		t.Errorf("line 1 %q", got)
-	}
-}
-
-func TestTheModelComesFromTheStatusLineWhenArgvHasNone(t *testing.T) {
-	h := newRows(t)
-	h.list.ModelOf = func(string) string { return "" }
-	h.list.StatusModel = func(addr string) string {
-		if addr == "lead" {
-			return "opus"
-		}
-		return ""
-	}
-	snap := h.live.get()
-	snap.Orchestrators[0].Model = ""
-	h.send(snap)
-	if !h.tt.HasText("opus") {
-		t.Errorf("no model from the status line in %q", h.tt.Texts())
-	}
-	// argv wins over the status line.
-	snap.Orchestrators[0].Model = "haiku"
-	h.send(snap)
-	if !h.tt.HasText("haiku") {
-		t.Errorf("no model from argv in %q", h.tt.Texts())
-	}
-}
-
-func TestLineTwoShowsTheEffortAfterTheModel(t *testing.T) {
-	h := newRows(t)
-	h.list.ModelOf = func(string) string { return "" }
-	h.list.EffortOf = func(string) string { return "" }
-	h.list.StatusEffort = func(addr string) string {
-		if addr == "lead" {
-			return "medium"
-		}
-		return ""
-	}
-	snap := h.live.get()
-	snap.Orchestrators[0].Model = "opus"
-	h.send(snap)
-	if !h.tt.HasText("opus medium") {
-		t.Errorf("no effort from the status line in %q", h.tt.Texts())
-	}
-	// The hook's label (Worker.Effort) wins over the status line.
-	snap.Orchestrators[0].Effort = "high"
-	h.send(snap)
-	if !h.tt.HasText("opus high") {
-		t.Errorf("no effort from the label in %q", h.tt.Texts())
-	}
-	// The profile's effort wins over both.
-	h.list.EffortOf = func(string) string { return "low" }
-	h.send(snap)
-	if !h.tt.HasText("opus low") {
-		t.Errorf("no effort from the profile in %q", h.tt.Texts())
 	}
 }

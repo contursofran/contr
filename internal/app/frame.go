@@ -27,6 +27,7 @@ import (
 	"github.com/contursofran/contr/internal/app/questions"
 	"github.com/contursofran/contr/internal/app/reviewview"
 	"github.com/contursofran/contr/internal/app/settings"
+	"github.com/contursofran/contr/internal/app/sidebar"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/tabmodel"
 	"github.com/contursofran/contr/internal/app/theme"
@@ -112,7 +113,7 @@ type Frame struct {
 	Review *reviewview.Review
 	// SpacesList is the spaces column body. [Frame.Attach] makes it and puts
 	// its view in Slots.Spaces.
-	SpacesList *SpacesList
+	SpacesList *sidebar.SpacesList
 	// PR is the pull request pane. [Frame.Attach] makes it while the viewers are shown
 	// (D147); else it stays nil. [Frame.OpenPR] opens it at the
 	// right of the terminal area, and the title bar tabs shrink to icon and id (D59).
@@ -452,7 +453,7 @@ func (f *Frame) View(c *ui.Context) {
 		sidebar, files, showFiles := fitWidths(win, f.sidebarW, f.panelW, f.sidebarOpen, f.panelOpen)
 		f.icons = f.sidebarOpen && compactSidebar(win)
 		if f.SpacesList != nil {
-			f.SpacesList.compact = f.icons
+			f.SpacesList.Compact = f.icons
 		}
 		f.titleBar(c, sidebar, narrowWindow(win))
 		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Padding(0, theme.PanelGap, theme.PanelGap).Children(func() {

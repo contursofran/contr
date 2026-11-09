@@ -1,4 +1,4 @@
-package app
+package sidebar
 
 // Tests of the sidebar chrome of the mock-up (#436): project groups, the
 // This Mac icon and the divider above the Settings button.
@@ -13,7 +13,7 @@ import (
 )
 
 func TestProjectGroupsHaveAirBetweenThem(t *testing.T) {
-	h := newSpaces(t, spTree())
+	h := newSpaces(t, apptest.SpTree())
 	s := &projects.Store{}
 	s.AddFolder("/proj/gamma/.git", "/proj/gamma")
 	s.AddFolder("/proj/delta/.git", "/proj/delta")
@@ -55,7 +55,7 @@ func TestRowIconInksAreTokens(t *testing.T) {
 }
 
 func TestADividerSitsAboveTheSettingsButton(t *testing.T) {
-	h := newSpaces(t, spTree())
+	h := newSpaces(t, apptest.SpTree())
 	tt := h.tt
 	tt.Frame()
 	b := apptest.Box(t, tt, LabelSettingsOpen)

@@ -1,10 +1,11 @@
-package app
+package sidebar
 
 import (
 	"testing"
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/state"
 )
 
@@ -21,7 +22,7 @@ func TestLaunchSelectsTheFirstOrchestratorOfTheFirstProject(t *testing.T) {
 	h, cwds := freshLaunch(t)
 	h.send(agentstate.Snapshot{CoreVersion: "0.1.18",
 		Orchestrators: []agents.Worker{orchestratorIn("lead-0", cwds[0]), orchestratorIn("lead-1", cwds[1])},
-		Workers:       []agents.Worker{spPane("w1:p9", cwds[0], nil)}})
+		Workers:       []agents.Worker{apptest.SpPane("w1:p9", cwds[0], nil)}})
 	want := "lead-0"
 	if !h.list.holdsAddress(h.group(0), want) {
 		want = "lead-1"
@@ -35,7 +36,7 @@ func TestLaunchSelectsTheFirstOrchestratorOfTheFirstProject(t *testing.T) {
 func TestLaunchSelectsTheFirstWorkerWithoutOrchestrators(t *testing.T) {
 	h, cwds := freshLaunch(t)
 	h.send(agentstate.Snapshot{CoreVersion: "0.1.18",
-		Workers: []agents.Worker{spPane("w1:p1", cwds[0], nil), spPane("w1:p2", cwds[1], nil)}})
+		Workers: []agents.Worker{apptest.SpPane("w1:p1", cwds[0], nil), apptest.SpPane("w1:p2", cwds[1], nil)}})
 	want := "w1:p1"
 	if !h.list.holdsAddress(h.group(0), want) {
 		want = "w1:p2"
@@ -48,7 +49,7 @@ func TestLaunchSelectsTheFirstWorkerWithoutOrchestrators(t *testing.T) {
 
 func TestLaunchStaysEmptyWithNothingLive(t *testing.T) {
 	h, cwds := freshLaunch(t)
-	w := spPane("w1:p1", cwds[0], nil)
+	w := apptest.SpPane("w1:p1", cwds[0], nil)
 	w.Live = false
 	h.send(agentstate.Snapshot{CoreVersion: "0.1.18", Workers: []agents.Worker{w}})
 	if sel, ok := h.sel.Current(); ok {
@@ -61,7 +62,7 @@ func TestLaunchKeepsTheOwnersSelection(t *testing.T) {
 	h.sel.Select(state.Selected{Kind: state.KindWorker, ID: "w1:p2"})
 	h.send(agentstate.Snapshot{CoreVersion: "0.1.18",
 		Orchestrators: []agents.Worker{orchestratorIn("lead", cwds[0])},
-		Workers:       []agents.Worker{spPane("w1:p2", cwds[1], nil)}})
+		Workers:       []agents.Worker{apptest.SpPane("w1:p2", cwds[1], nil)}})
 	if sel, _ := h.sel.Current(); sel.ID != "w1:p2" {
 		t.Errorf("selection %+v, want w1:p2", sel)
 	}

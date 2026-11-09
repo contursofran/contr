@@ -14,6 +14,7 @@ import (
 	"github.com/contursofran/contr/internal/app"
 	"github.com/contursofran/contr/internal/app/questions"
 	"github.com/contursofran/contr/internal/app/settings"
+	"github.com/contursofran/contr/internal/app/sidebar"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
@@ -142,7 +143,7 @@ func TestNoFooter(t *testing.T) {
 	}
 	openSettings := func() {
 		t.Helper()
-		click(app.LabelSettingsOpen)
+		click(sidebar.LabelSettingsOpen)
 		waitFor("settings", func() bool { return has(settings.LabelSettings) })
 		time.Sleep(500 * time.Millisecond)
 	}
@@ -177,7 +178,7 @@ func TestNoFooter(t *testing.T) {
 				t.Errorf("%s: the hidden viewer %q shows (D147)", theme, hidden)
 			}
 		}
-		if b, side := c.boundsOf(t, app.LabelSettingsOpen), c.boundsOf(t, app.LabelProjectList); b.Y < side.Y+side.Height-1 || b.X > 40 {
+		if b, side := c.boundsOf(t, sidebar.LabelSettingsOpen), c.boundsOf(t, sidebar.LabelProjectList); b.Y < side.Y+side.Height-1 || b.X > 40 {
 			t.Errorf("%s: Settings at %v, not at the bottom left of the sidebar (list %v)", theme, b, side)
 		}
 		c.capture(t, filepath.Join(out, "footer-"+theme+"-window.png"))

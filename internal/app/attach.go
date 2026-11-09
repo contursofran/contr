@@ -9,6 +9,7 @@ import (
 	"github.com/contursofran/contr/internal/app/questions"
 	"github.com/contursofran/contr/internal/app/reviewview"
 	"github.com/contursofran/contr/internal/app/settings"
+	"github.com/contursofran/contr/internal/app/sidebar"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
@@ -133,7 +134,7 @@ func (f *Frame) attachSidebar(w Window, env view.Env, agentSnap func() agentstat
 		f.Usage = usage.NewFileSampler(w.Invalidate)
 	}
 	if f.SpacesList == nil {
-		f.SpacesList = NewSpacesList(agentSnap, f.Selection, env)
+		f.SpacesList = sidebar.NewSpacesList(agentSnap, f.Selection, env)
 	}
 	l := f.SpacesList
 	l.Host = f.Host
@@ -147,7 +148,7 @@ func (f *Frame) attachSidebar(w Window, env view.Env, agentSnap func() agentstat
 	l.StatusModel = f.statusModel
 	l.Titles = f.IssueTitles
 	l.Entry = f.agentRowEntry()
-	l.Ages = &AgeClock{Tick: w.Invalidate}
+	l.Ages = &sidebar.AgeClock{Tick: w.Invalidate}
 	l.Plans = func() []kit.Meter { return planMeters(f.planUsage()) }
 	if src != nil {
 		l.Source = src

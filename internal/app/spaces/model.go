@@ -7,6 +7,7 @@ package spaces
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/git"
@@ -224,4 +225,13 @@ func ApplyStats(groups []RepoGroup, stats map[string]git.DiffStat) {
 			}
 		}
 	}
+}
+
+// StoredName is the name of a stored project: the repo folder, as the scan
+// names it.
+func StoredName(dir, path string) string {
+	if filepath.Base(dir) == ".git" {
+		return filepath.Base(filepath.Dir(dir))
+	}
+	return filepath.Base(path)
 }

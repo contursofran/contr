@@ -68,7 +68,7 @@ func (r paletteRow) name() string {
 	case rowPath:
 		return pathBase(r.path)
 	}
-	return storedName(r.entry.Dir, r.entry.Path)
+	return spaces.StoredName(r.entry.Dir, r.entry.Path)
 }
 
 // pathBase is the last element of a typed path; `~` and `/` stand for themselves.
@@ -113,7 +113,7 @@ func (m *ProjectsModal) queryRows() []paletteRow {
 	}
 	f := m.text()
 	for _, e := range m.recent() {
-		if _, _, ok := matchSpan(storedName(e.Dir, e.Path), f); ok || f == "" {
+		if _, _, ok := matchSpan(spaces.StoredName(e.Dir, e.Path), f); ok || f == "" {
 			out = append(out, paletteRow{kind: rowRecent, entry: e})
 		}
 	}
