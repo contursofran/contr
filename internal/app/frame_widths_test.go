@@ -2,7 +2,6 @@ package app
 
 import (
 	"errors"
-	"sync"
 	"testing"
 	"time"
 
@@ -118,49 +117,99 @@ func TestDividerShowsAResizeCursor(t *testing.T) {
 	}
 }
 
+// fakeTimer is a widths save timer that fires only when the test calls fire.
+type fakeTimer struct {
+	d       time.Duration
+	fn      func()
+	stopped bool
+}
+
+func (ft *fakeTimer) Stop() bool {
+	was := !ft.stopped
+	ft.stopped = true
+	return was
+}
+
+// fakeWidthsTimers replaces widthsAfterFunc for the test and returns the
+// timers it started, in order. No timer fires by itself.
+func fakeWidthsTimers(t *testing.T) *[]*fakeTimer {
+	t.Helper()
+	var timers []*fakeTimer
+	old := widthsAfterFunc
+	widthsAfterFunc = func(d time.Duration, fn func()) stopper {
+		ft := &fakeTimer{d: d, fn: fn}
+		timers = append(timers, ft)
+		return ft
+	}
+	t.Cleanup(func() { widthsAfterFunc = old })
+	return &timers
+}
+
+// live returns the timers that were not stopped.
+func live(timers []*fakeTimer) []*fakeTimer {
+	var out []*fakeTimer
+	for _, ft := range timers {
+		if !ft.stopped {
+			out = append(out, ft)
+		}
+	}
+	return out
+}
+
+// Each move of a drag restarts the wait, so the widths save once, after the
+// drag ends (D111). The timers are fake: no part of the test waits on wall time.
 func TestWidthsSaveAfterTheDragEnds(t *testing.T) {
-	old := widthsSaveDelay
-	widthsSaveDelay = 100 * time.Millisecond
-	defer func() { widthsSaveDelay = old }()
+	timers := fakeWidthsTimers(t)
 	f, tt := newTester(t)
-	var mu sync.Mutex
 	var saved []widths.Widths
-	done := make(chan struct{}, 8)
 	f.deps.Widths.Save = func(w widths.Widths) error {
-		mu.Lock()
 		saved = append(saved, w)
-		mu.Unlock()
-		done <- struct{}{}
 		return nil
 	}
 	y := float32(400)
 	x := sidebarDivider(t, tt)
 	tt.Move(x, y)
 	tt.Press(x, y)
+	tt.Move(x+4, y)
+	first := len(*timers)
+	if first == 0 {
+		t.Fatal("a move started no save timer")
+	}
 	tt.Move(x+8, y)
-	mu.Lock()
-	n := len(saved)
-	mu.Unlock()
-	if n != 0 {
-		t.Fatalf("saved %d times during the drag, want 0", n)
+	if len(*timers) <= first {
+		t.Fatal("a second move started no new save timer")
+	}
+	for _, ft := range (*timers)[:first] {
+		if !ft.stopped {
+			t.Error("a later move did not stop the wait of an earlier move")
+		}
 	}
 	tt.Release(x+8, y)
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("no save after the drag")
+	if len(saved) != 0 {
+		t.Fatalf("saved %d times during the drag, want 0", len(saved))
 	}
-	mu.Lock()
-	defer mu.Unlock()
+	wait := live(*timers)
+	if len(wait) != 1 {
+		t.Fatalf("%d save timers wait after the drag, want 1", len(wait))
+	}
+	if wait[0].d != widthsSaveDelay {
+		t.Errorf("save delay %v, want %v", wait[0].d, widthsSaveDelay)
+	}
+	wait[0].fn()
 	if len(saved) != 1 || saved[0].Sidebar != 320 || saved[0].Panel != theme.PanelWidth {
 		t.Errorf("saved %+v, want one save of 320 and %d", saved, theme.PanelWidth)
 	}
 }
 
+// With no saver, a drag starts no save timer.
 func TestNoSaverSavesNothing(t *testing.T) {
+	timers := fakeWidthsTimers(t)
 	_, tt := newTester(t)
 	drag(tt, sidebarDivider(t, tt), 340) // must not panic with SaveWidths nil
 	tt.Frame()
+	if len(*timers) != 0 {
+		t.Errorf("%d save timers with no saver, want 0", len(*timers))
+	}
 }
 
 // attachWithWidths attaches a frame whose loader gives w and err, and waits
