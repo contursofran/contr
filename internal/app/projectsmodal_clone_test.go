@@ -12,6 +12,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/git"
 )
 
@@ -102,7 +103,7 @@ func TestCloneShowsProgressAndCancelStopsGit(t *testing.T) {
 		ctx = c
 		return "", c.Err()
 	})
-	r.m.Env.Run = Runner{Go: func(f func()) { r.held = append(r.held, f) }}
+	r.m.Env.Run = view.Runner{Go: func(f func()) { r.held = append(r.held, f) }}
 	r.typeQuery("acme/widget")
 	r.tt.Key(0, ui.KeyEnter)
 	if !r.m.cloning || !r.shows("Cloning acme/widget") || !r.has(LabelCloneProgress) || !r.has(ProjectsCancel) || !r.shows("⏎ wait") {
@@ -168,7 +169,7 @@ func TestCloneDestinationExistsShowsError(t *testing.T) {
 func TestCloneBusyBlocksSecondRun(t *testing.T) {
 	var calls [][]string
 	r, _ := cloneRig(t, okRunner(&calls))
-	r.m.Env.Run = Runner{Go: func(f func()) { r.held = append(r.held, f) }}
+	r.m.Env.Run = view.Runner{Go: func(f func()) { r.held = append(r.held, f) }}
 	r.typeQuery("acme/widget")
 	r.tt.Key(0, ui.KeyEnter)
 	if !r.m.cloning {
@@ -315,7 +316,7 @@ func TestCloseModalCancelsCloneAndAddsNothing(t *testing.T) {
 	r, _ := cloneRig(t, func(ctx context.Context, _ string, _ ...string) (string, error) {
 		return "", ctx.Err()
 	})
-	r.m.Env.Run = Runner{Go: func(f func()) { r.held = append(r.held, f) }}
+	r.m.Env.Run = view.Runner{Go: func(f func()) { r.held = append(r.held, f) }}
 	r.typeQuery("acme/widget")
 	r.tt.Key(0, ui.KeyEnter)
 	if len(r.held) != 1 {
@@ -332,7 +333,7 @@ func TestCloneDefaultIsKeptAndNotCheckedInView(t *testing.T) {
 	r, fallback := cloneRig(t, nil)
 	dir := t.TempDir()
 	r.store.Touch("/w/a/.git", filepath.Join(dir, "a"), time.Unix(10, 0))
-	r.m.Env.Run = Runner{Go: func(f func()) { r.held = append(r.held, f) }}
+	r.m.Env.Run = view.Runner{Go: func(f func()) { r.held = append(r.held, f) }}
 	r.typeQuery("acme/widget")
 	// The file check waits on the goroutine: the view still uses the fallback.
 	if _, dest, _ := r.m.cloneDest(); dest != filepath.Join(fallback, "widget") {

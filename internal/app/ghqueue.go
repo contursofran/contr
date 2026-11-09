@@ -1,5 +1,9 @@
 package app
 
+import (
+	"github.com/contursofran/contr/internal/app/view"
+)
+
 // ghQueue limits the gh runs of the window: at most [maxGH] go at once, the others wait in
 // order. The frame makes one and gives it to [WorkerPRs] and [IssueTitles], so the limit holds
 // for both together (#568). Use it on the UI thread.
@@ -10,7 +14,7 @@ type ghQueue struct {
 
 // Do runs read off the UI thread through env when a place is free, or later in turn. The
 // function that read returns runs on the UI thread.
-func (q *ghQueue) Do(env Env, read func() func()) {
+func (q *ghQueue) Do(env view.Env, read func() func()) {
 	start := func() {
 		q.active++
 		env.Do(func() func() {

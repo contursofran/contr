@@ -25,6 +25,7 @@ import (
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/owner"
 )
 
@@ -135,7 +136,7 @@ type Outline struct {
 	// Now is the clock; nil means time.Now.
 	Now func() time.Time
 	// Env asks for a new frame.
-	Env Env
+	Env view.Env
 
 	start   time.Time
 	seen    map[string]*seenState // by hc terminal address
@@ -147,7 +148,7 @@ type Outline struct {
 
 // NewOutline returns an outline. Messages that were pinned before it began
 // are old: the owner counts only what comes while away.
-func NewOutline(snap func() agentstate.Snapshot, sel *state.Selection, env Env) *Outline {
+func NewOutline(snap func() agentstate.Snapshot, sel *state.Selection, env view.Env) *Outline {
 	o := &Outline{Snapshot: snap, Selection: sel, Env: env}
 	o.start = o.now()
 	return o

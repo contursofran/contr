@@ -1,7 +1,10 @@
-package app
+// Package view holds what each view of the window gets from the frame: Env,
+// Runner and Latest. The feature packages under internal/app import it
+// (issue #571).
+package view
 
 // Env is what a view gets from the window: a runner for work off the UI
-// thread, a redraw, a short message and a web address opener. Frame.Attach
+// thread, a redraw, a short message and a web address opener. app.Frame.Attach
 // makes one Env and gives it to each view; a view keeps it in a field named
 // Env and calls its methods, never the fields, so it needs no nil checks.
 //

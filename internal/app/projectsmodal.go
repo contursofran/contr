@@ -18,6 +18,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/spaces"
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/projects"
 )
@@ -60,7 +61,7 @@ type ProjectsModal struct {
 	// Save writes a copy of the store. It runs on a goroutine; nil saves nothing.
 	Save func(*projects.Store) error
 	// Env runs the reads and writes off the UI thread, redraws and shows errors.
-	Env Env
+	Env view.Env
 	// PickFolder asks the owner for a folder. It blocks, so it runs on a
 	// goroutine, and returns ErrPickCancelled for no choice. Nil hides
 	// `Open folder…` (D116).

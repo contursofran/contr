@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/github"
 )
 
@@ -47,7 +48,7 @@ func newPRRig(t *testing.T) *prRig {
 	r := &prRig{run: &prRunner{reply: func(string) ([]byte, error) { return []byte(prJSON), nil }}}
 	r.pane = &PRPane{
 		Client: func(dir string) github.Client { return github.Client{R: r.run, Dir: dir} },
-		Env: Env{Run: Runner{Go: func(f func()) { r.queue = append(r.queue, f) }},
+		Env: view.Env{Run: view.Runner{Go: func(f func()) { r.queue = append(r.queue, f) }},
 			OpenURL: func(u string) { r.opened = append(r.opened, u) }},
 		Now:     func() time.Time { return time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC) },
 		OnClose: func() { r.closed++ },

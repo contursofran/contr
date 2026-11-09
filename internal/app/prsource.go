@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/github"
 )
@@ -39,7 +40,7 @@ type prAnswer struct {
 // WorkerPRs maps a worker's worktree to the number of its pull request. Use it on the UI thread.
 type WorkerPRs struct {
 	// Env runs the reads off the UI thread and redraws after an answer.
-	Env Env
+	Env view.Env
 	// Client gives the GitHub client for a folder. Nil: [github.New].
 	Client func(dir string) github.Client
 	// Branch returns the checked-out branch of a folder, "" when unknown. It runs off the UI

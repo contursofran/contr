@@ -10,6 +10,7 @@ import (
 
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/review"
 )
@@ -55,12 +56,12 @@ type Review struct {
 
 	// Env runs the git reads off the UI thread and redraws. Tests set
 	// Env.Run.Go to a direct call.
-	Env Env
+	Env view.Env
 	// want is a file that the next branch read should open, if the branch
 	// changes it ([Review.OpenFile]).
 	want string
 	// reads drops the result of an older read and ends its context.
-	reads Latest
+	reads view.Latest
 	// git runs git; nil runs the `git` command. timeout is the time limit
 	// of one read; 0 is gitReadTimeout. Tests set both.
 	git     git.InputRunner
@@ -68,7 +69,7 @@ type Review struct {
 }
 
 // NewReview returns an empty view that reads and redraws through env.
-func NewReview(env Env) *Review {
+func NewReview(env view.Env) *Review {
 	return &Review{Env: env}
 }
 

@@ -7,6 +7,7 @@ import (
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/projects"
 	"github.com/contursofran/contr/internal/statedir"
@@ -46,15 +47,15 @@ func (f *Frame) Attach(w Window) (stop func()) {
 
 // attachState makes the selection and the toasts, and returns the window's Env for the views:
 // one value, not a field per view.
-func (f *Frame) attachState(w Window) Env {
+func (f *Frame) attachState(w Window) view.Env {
 	f.Selection = state.NewSelection(func() { f.syncOpen(); w.Invalidate(); f.syncReview(); f.syncTerminal() })
 	f.Toasts = state.NewToasts(w.Invalidate)
-	return Env{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate, Status: f.Toasts.Show, OpenURL: openURL}
+	return view.Env{Run: view.Runner{Post: w.Update}, Invalidate: w.Invalidate, Status: f.Toasts.Show, OpenURL: openURL}
 }
 
 // attachFiles gives the files, review and session views the Env, and makes the PR pane while the
 // viewers show. The stop closes the files, review and session views.
-func (f *Frame) attachFiles(env Env) (stop func()) {
+func (f *Frame) attachFiles(env view.Env) (stop func()) {
 	f.Review = NewReview(env)
 	f.Files.Env = env
 	f.Session.Env = env
@@ -74,7 +75,7 @@ func (f *Frame) attachFiles(env Env) (stop func()) {
 // attachAgents starts the agent state through Deps.StartAgents and makes the views that read it:
 // the questions card, the close-terminal flow, the worker panel and the outline. agentSnap and
 // src are nil without agents. The stop removes the outline, then stops the agent state.
-func (f *Frame) attachAgents(w Window, env Env) (agentSnap func() agentstate.Snapshot, src AgentSource, stop func()) {
+func (f *Frame) attachAgents(w Window, env view.Env) (agentSnap func() agentstate.Snapshot, src AgentSource, stop func()) {
 	if f.deps.AgentsNotice != "" {
 		f.Toasts.Show(f.deps.AgentsNotice)
 	}
@@ -120,7 +121,7 @@ func (f *Frame) attachAgents(w Window, env Env) (agentSnap func() agentstate.Sna
 // attachSidebar makes the sidebar list, the samplers that it shows (memory and plan usage) and
 // the new orchestrator and new terminal flows. The git scan runs on a goroutine and lands through
 // Window.Update. The stop closes the list, then the samplers.
-func (f *Frame) attachSidebar(w Window, env Env, agentSnap func() agentstate.Snapshot, src AgentSource) (stop func()) {
+func (f *Frame) attachSidebar(w Window, env view.Env, agentSnap func() agentstate.Snapshot, src AgentSource) (stop func()) {
 	if f.Host == nil {
 		f.Host = host.NewSystem(theme.MemBarWidth, w.Invalidate)
 	}
@@ -172,7 +173,7 @@ func (f *Frame) attachSidebar(w Window, env Env, agentSnap func() agentstate.Sna
 // attachProjects makes the projects modal. The modal and the sidebar list call each other, so
 // they connect here, in one place: the modal reads the list's groups and switches its project;
 // the list opens the modal, hides a project through it and tells it of a reorder or an adopt.
-func (f *Frame) attachProjects(env Env) {
+func (f *Frame) attachProjects(env view.Env) {
 	l := f.SpacesList
 	m := &ProjectsModal{
 		Groups: l.Groups,
@@ -199,7 +200,7 @@ func (f *Frame) attachProjects(env Env) {
 // attachSettings gives the appearance its window, shows a theme load error and makes the
 // settings panel with its update checks. The sidebar opens the panel and shows its update pill.
 // The stop ends the checks and the watch of the app activation.
-func (f *Frame) attachSettings(w Window, env Env) (stop func()) {
+func (f *Frame) attachSettings(w Window, env view.Env) (stop func()) {
 	f.lateWin.set(w)
 	if f.themeErr != nil {
 		f.Toasts.Show(f.themeErr.Error())
@@ -222,7 +223,7 @@ func (f *Frame) attachSettings(w Window, env Env) (stop func()) {
 
 // loadSaved scans the sidebar for the first time, after the projects modal and the settings
 // connect to it, and reads the saved projects and widths off the UI thread.
-func (f *Frame) loadSaved(env Env) {
+func (f *Frame) loadSaved(env view.Env) {
 	f.SpacesList.Sync()
 	f.loadProjects(env)
 	f.loadWidths(env)

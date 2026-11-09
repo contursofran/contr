@@ -82,6 +82,8 @@ that code, move it to the MyGo part in its own small PR.
 | `cmd/contr` | `main` and the command line |
 | `internal/app` | the window content: frame and views |
 | `internal/app/kit` | shared view parts: list row, +/− counts, switch, code view |
+| `internal/app/view` | what each view gets from the frame: `Env`, `Runner`, `Latest` |
+| `internal/app/apptest` | test helpers that the tests of more than one `internal/app` package use |
 | `internal/app/ghostty` | `Conn`: an hc terminal as the connection of MyGo's terminal plugin (D79) |
 | `internal/usage` | plan usage: Claude status line, `codex app-server`, Codex logs |
 | `internal/statedir` | the folder where contr keeps its own files, and the agent terminal variable |

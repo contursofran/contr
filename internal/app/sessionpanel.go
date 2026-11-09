@@ -19,6 +19,7 @@ import (
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/session"
 )
 
@@ -44,7 +45,7 @@ type SessionPanel struct {
 	Terminal func() string
 	// Env reads the session file off the UI thread, redraws and opens web
 	// addresses. The zero Env reads at once.
-	Env Env
+	Env view.Env
 	// Watch watches the file at path and calls notify on a change, from any
 	// goroutine. Nil uses mygo.WatchFiles on its folder.
 	Watch func(path string, notify func()) (stop func(), err error)
@@ -54,7 +55,7 @@ type SessionPanel struct {
 	id   string
 	sess *session.Session
 	// reads drops a read of the file of an older terminal.
-	reads     Latest
+	reads     view.Latest
 	stopWatch func()
 }
 

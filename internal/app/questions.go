@@ -16,6 +16,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/owner"
 	"github.com/contursofran/contr/internal/prompt"
 )
@@ -76,7 +77,7 @@ func resolvedID(snap agentstate.Snapshot, id string) bool { return slices.Contai
 type QuestionsCard struct {
 	Source AgentSource
 	// Env runs the hc calls off the UI thread, redraws and shows messages.
-	Env Env
+	Env view.Env
 	// Entry opens the pull request or issue of a blocked worker (D106).
 	Entry WorkerEntry
 	// Select selects the worker at an address (Focus worker); may be nil.

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/github"
 )
 
@@ -36,7 +37,7 @@ type titleAnswer struct {
 // IssueTitles maps the issue of a worker to its title. Use it on the UI thread.
 type IssueTitles struct {
 	// Env runs the reads off the UI thread and redraws after an answer.
-	Env Env
+	Env view.Env
 	// Client gives the GitHub client for a folder. Nil: [github.New].
 	Client func(dir string) github.Client
 	// Now is the clock. Nil: time.Now.

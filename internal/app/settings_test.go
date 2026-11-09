@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/view"
 )
 
 // fakeUpdates is an update service that the test controls.
@@ -55,7 +56,7 @@ func newSettingsRig(t *testing.T, u *fakeUpdates) *settingsRig {
 	t.Helper()
 	r := &settingsRig{t: t, u: u}
 	r.s = &Settings{Version: "1.2.3", Relaunch: func() { r.relaunch++ },
-		Env: Env{Invalidate: func() { r.redrawals++ }}}
+		Env: view.Env{Invalidate: func() { r.redrawals++ }}}
 	if u != nil {
 		r.s.Updates = u
 	}
@@ -217,7 +218,7 @@ func TestSettingsButtonsDoNothingWhileWorkRuns(t *testing.T) {
 	u := &fakeUpdates{enabled: true}
 	var held []func()
 	r := newSettingsRig(t, u)
-	r.s.Env.Run = Runner{Go: func(f func()) { held = append(held, f) }}
+	r.s.Env.Run = view.Runner{Go: func(f func()) { held = append(held, f) }}
 	r.s.enabled, r.s.enabledKnown = true, true
 	r.openUpdates()
 	r.tt.Click(SettingsCheck)
@@ -237,7 +238,7 @@ func scheduleRig(t *testing.T, u *fakeUpdates, every time.Duration, visible func
 	t.Helper()
 	redrawn = make(chan struct{}, 100)
 	s = &Settings{Updates: u, Version: "1.2.3", Every: every, Visible: visible,
-		Env: Env{Invalidate: func() { redrawn <- struct{}{} }}}
+		Env: view.Env{Invalidate: func() { redrawn <- struct{}{} }}}
 	stop = s.StartChecks()
 	t.Cleanup(stop)
 	return s, redrawn, stop

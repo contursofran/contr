@@ -18,6 +18,7 @@ import (
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/projects"
 	"github.com/contursofran/contr/internal/usage"
@@ -338,7 +339,7 @@ func TestTheBranchIsReadOffTheUIThread(t *testing.T) {
 	live := &spSnap{s: spTree(spPane("w1:p1", wt, nil))}
 	var started []func()
 	read := 0
-	l := NewSpacesList(live.get, nil, Env{})
+	l := NewSpacesList(live.get, nil, view.Env{})
 	l.Env.Run.Go = func(f func()) { started = append(started, f) }
 	scan := l.scanFn
 	l.scanFn = func(cwds []string) (s git.Scan) { read++; return scan(cwds) }
@@ -432,7 +433,7 @@ func TestAFailedWatchIsReported(t *testing.T) {
 	base := canonicalTmp(t)
 	wt, _ := oneWorktree(t, base)
 	live := &spSnap{s: spTree(spPane("w1:p1", wt, nil))}
-	l := NewSpacesList(live.get, nil, Env{})
+	l := NewSpacesList(live.get, nil, view.Env{})
 	l.Env.Run.Go = func(f func()) { f() }
 	l.WatchHead = func(context.Context, string, func()) error { return errors.New("watch limit") }
 	var got error

@@ -24,6 +24,7 @@ import (
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/state"
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/projects"
@@ -76,7 +77,7 @@ type SpacesList struct {
 	Source AgentActions
 	// Env runs the git scans, the HEAD watches and the agent actions off the
 	// UI thread, and shows the result of an action.
-	Env Env
+	Env view.Env
 	// Entry opens the pull request of an agent from its menu.
 	Entry WorkerEntry
 	// ModelOf names the model of an agent profile for line 2. Nil: none.
@@ -134,7 +135,7 @@ type SpacesList struct {
 	scanned []string
 	// reads drops a finished scan when a newer scan started or the scan was
 	// dropped, so only the newest result lands.
-	reads Latest
+	reads view.Latest
 	scans int
 	// list is the state of the project list.
 	list ui.ListState
@@ -161,7 +162,7 @@ type SpacesList struct {
 // NewSpacesList returns the list. snap (may be nil) gives the hc terminals,
 // selection the clicks. env runs the git reads off the UI thread. The list is empty until [SpacesList.Sync], which the
 // owner calls at the start and when the agents changed.
-func NewSpacesList(snap func() agentstate.Snapshot, selection *state.Selection, env Env) *SpacesList {
+func NewSpacesList(snap func() agentstate.Snapshot, selection *state.Selection, env view.Env) *SpacesList {
 	return &SpacesList{
 		snap: snap, selection: selection, Env: env, scanFn: git.ScanCwds,
 		folded: map[string]bool{}, heads: map[string]context.CancelFunc{},

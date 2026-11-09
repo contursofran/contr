@@ -10,7 +10,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/session"
 )
 
@@ -28,7 +30,7 @@ func newSessionTester(t *testing.T, s *session.Session) (*SessionPanel, *ui.Test
 	}
 	var opened []string
 	p := &SessionPanel{StateDir: dir, Terminal: func() string { return "t1" },
-		Env:   Env{OpenURL: func(u string) { opened = append(opened, u) }},
+		Env:   view.Env{OpenURL: func(u string) { opened = append(opened, u) }},
 		Watch: func(string, func()) (func(), error) { return func() {}, nil },
 		Now:   func() time.Time { return sessionNow }}
 	tt := ui.NewTester(func(c *ui.Context) {
@@ -215,28 +217,28 @@ func TestFilesPanelShowsSessionAboveTheTree(t *testing.T) {
 
 // A watch event of the terminal shown before starts no read.
 func TestSessionOldWatchEventReadsNothing(t *testing.T) {
-	var h heldEnv
+	var h apptest.HeldEnv
 	id := "t1"
 	var notify func()
-	p := &SessionPanel{StateDir: t.TempDir(), Terminal: func() string { return id }, Env: h.env(),
+	p := &SessionPanel{StateDir: t.TempDir(), Terminal: func() string { return id }, Env: h.Env(),
 		Watch: func(_ string, n func()) (func(), error) { notify = n; return func() {}, nil }}
 	p.sync()
-	h.runAll()
+	h.RunAll()
 	old := notify
 	id = "t2"
 	p.sync()
-	h.runAll()
+	h.RunAll()
 	old()
-	for _, f := range h.done {
+	for _, f := range h.Done {
 		f()
 	}
-	h.done = nil
-	if len(h.work) != 0 {
-		t.Fatalf("%d reads started by an old watch event", len(h.work))
+	h.Done = nil
+	if len(h.Work) != 0 {
+		t.Fatalf("%d reads started by an old watch event", len(h.Work))
 	}
 	notify()
-	h.done[0]()
-	if len(h.work) != 1 {
-		t.Fatalf("%d reads started by a watch event, want 1", len(h.work))
+	h.Done[0]()
+	if len(h.Work) != 1 {
+		t.Fatalf("%d reads started by a watch event, want 1", len(h.Work))
 	}
 }

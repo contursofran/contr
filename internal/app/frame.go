@@ -24,6 +24,7 @@ import (
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/github"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/prefs"
@@ -295,7 +296,7 @@ func (f *Frame) agentRowEntry() WorkerEntry {
 
 // openWeb runs open off the UI thread and shows its error in the status message.
 func (f *Frame) openWeb(open func(dir string, n int) error, dir string, n int) {
-	run := Runner{}
+	run := view.Runner{}
 	if f.WorkerPRs != nil {
 		run = f.WorkerPRs.Env.Run
 	}
@@ -862,7 +863,7 @@ func (f *Frame) syncAgents() {
 // loadProjects reads the projects store off the UI thread and gives it to the
 // sidebar (D109). A read error shows in the status message; the store is then
 // empty, so the sidebar keeps the tree order, and the file stays as it is (D63).
-func (f *Frame) loadProjects(env Env) {
+func (f *Frame) loadProjects(env view.Env) {
 	load := f.deps.Projects.Load
 	if load == nil {
 		return
@@ -887,7 +888,7 @@ func (f *Frame) loadProjects(env Env) {
 // loadWidths reads the saved widths off the UI thread (D111). A bad file shows
 // in the status message and the defaults stay. A width the owner already
 // dragged is not replaced.
-func (f *Frame) loadWidths(env Env) {
+func (f *Frame) loadWidths(env view.Env) {
 	load := f.deps.Widths.Load
 	if load == nil {
 		return

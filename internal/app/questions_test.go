@@ -10,6 +10,7 @@ import (
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/owner"
 )
 
@@ -415,7 +416,7 @@ func TestAnswerRunsOffTheUIThread(t *testing.T) {
 	src := askSource()
 	r := newQRig(t, src)
 	var queued []func()
-	r.card.Env.Run = Runner{Go: func(f func()) { queued = append(queued, f) }}
+	r.card.Env.Run = view.Runner{Go: func(f func()) { queued = append(queued, f) }}
 	r.open("D1")
 	if err := r.tt.Click("sqlite"); err != nil {
 		t.Fatal(err)

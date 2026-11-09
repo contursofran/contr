@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"github.com/contursofran/contr/internal/app/view"
 )
 
 type reviewRepo struct {
@@ -57,7 +59,7 @@ func (s *reviewRepo) branchWithTwoCommits() {
 // reads started.
 func newTestReview() (*Review, *int) {
 	reads := 0
-	r := NewReview(Env{})
+	r := NewReview(view.Env{})
 	r.Env.Run.Go = func(f func()) { reads++; f() }
 	return r, &reads
 }
