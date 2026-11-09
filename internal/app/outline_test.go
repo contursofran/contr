@@ -361,8 +361,16 @@ func TestOutlineViewDoesNoFileReads(t *testing.T) {
 	if _, ok := tt.Find("Ship the outline, new"); !ok {
 		t.Fatalf("the tick of the pin shows; texts %q", tt.Texts())
 	}
-	// The file is gone: a view that read it would lose the tick.
-	if err := os.Remove(store.Path); err != nil {
+	// The file is bad: a view that read it would lose the tick. On a bad file
+	// the model keeps its last good items, so the tick stays at each model
+	// read. Do not remove the file: a missing file reads as no pins, and the
+	// first read of the watch goroutine can clear the tick before the frame
+	// (#554).
+	good, err := os.ReadFile(store.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(store.Path, []byte("{not json"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -370,6 +378,9 @@ func TestOutlineViewDoesNoFileReads(t *testing.T) {
 		t.Error("the view read the file: the tick went with it")
 	}
 	// A new pin reaches the view through the watch and the model.
+	if err := os.WriteFile(store.Path, good, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	for len(updated) > 0 {
 		<-updated
 	}
