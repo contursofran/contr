@@ -106,7 +106,10 @@ type ProjectsModal struct {
 	// defParent is the kept default parent; "" means CloneParent.
 	defParent string
 	cloning   bool
-	cloneErr  string
+	// job is the running clone: its repo and the text of the field that
+	// started it.
+	job      cloneJob
+	cloneErr string
 	// cancelClone stops the running clone; the modal calls it when it closes.
 	cancelClone context.CancelFunc
 	list        ui.ListState
@@ -339,10 +342,13 @@ func (m *ProjectsModal) clone() {
 		return
 	}
 	url, dest, err := m.cloneDest()
-	if err != nil || url == "" { // the row shows only for a text that parses
+	if err != nil || url == "" {
+		// Not reachable from a row: classifyQuery uses the same parser.
 		return
 	}
+	_, owner, repo := classifyQuery(m.query)
 	m.cloning, m.cloneErr = true, ""
+	m.job = cloneJob{owner: owner, repo: repo, query: m.query, dest: dest}
 	m.redraw()
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancelClone = cancel
@@ -360,14 +366,28 @@ func (m *ProjectsModal) clone() {
 				return
 			}
 			if err != nil {
-				m.cloneErr = cloneMessage(err, dest)
+				if m.query == m.job.query {
+					m.cloneErr = cloneMessage(err, dest)
+				} else { // the field changed: the row of the repo is not on screen
+					m.status("clone " + m.job.owner + "/" + m.job.repo + ": " + cloneMessage(err, dest))
+				}
 				m.redraw()
 				return
 			}
-			m.query, m.parent, m.sel = "", "", 0
+			m.parent = ""
+			if m.query == m.job.query { // the field still holds the clone text
+				m.query, m.sel = "", 0
+			}
 			m.add(key, dest)
 		}
 	})
+}
+
+// cloneJob is the running clone.
+type cloneJob struct {
+	owner, repo string // the repo
+	query       string // the text of the field when the clone started
+	dest        string // the folder of the clone
 }
 
 // cloneMessage turns a clone error into the text of the modal.

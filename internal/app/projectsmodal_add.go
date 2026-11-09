@@ -56,6 +56,22 @@ func (m *ProjectsModal) openPath(path string) {
 	})
 }
 
+// progressTheme is the theme of the clone progress line: track `hairline`,
+// bar `ink-62`. MyGo draws a progress bar with the border and accent colours.
+func progressTheme(base *ui.Theme, p *theme.Palette) *ui.Theme {
+	t := *base
+	t.Border, t.Accent = p.Hairline, p.Ink62
+	return &t
+}
+
+// progressLine is the indeterminate line of a running clone: 2 px, radius 2.
+func (m *ProjectsModal) progressLine(c *ui.Context) {
+	ui.Themed(c, progressTheme(c.Theme(), theme.Current())).Background(ui.Transparent).FillWidth().
+		Margin(theme.Space6, 0, 0, 0).Children(func() {
+		ui.Progress(c, -1).Label(LabelCloneProgress).Height(theme.Space2).Radius(theme.Radius2)
+	})
+}
+
 // addRowView builds the inside of an Add row.
 func (m *ProjectsModal) addRowView(c *ui.Context, r paletteRow, active, selected bool) {
 	p := theme.Current()
@@ -63,9 +79,12 @@ func (m *ProjectsModal) addRowView(c *ui.Context, r paletteRow, active, selected
 	if r.kind == rowClone {
 		icon = "download"
 		_, dest, _ := m.cloneDest()
+		if r.busy {
+			dest = m.job.dest
+		}
 		meta = "into " + dest
 		switch {
-		case m.cloning:
+		case r.busy:
 			name = "Cloning " + r.name()
 		case m.cloneErr != "":
 			name = "Could not clone " + r.name()
@@ -84,8 +103,8 @@ func (m *ProjectsModal) addRowView(c *ui.Context, r paletteRow, active, selected
 		styled(ui.Text(c, name), theme.StyleBody).FontWeight(600).SingleLine().MinWidth(0).TextColor(p.Ink100)
 		m.metaText(c, meta, 0)
 		switch {
-		case r.kind == rowClone && m.cloning:
-			ui.Progress(c, -1).Label(LabelCloneProgress).Height(theme.Space2).Margin(theme.Space6, 0, 0, 0)
+		case r.busy:
+			m.progressLine(c)
 		case r.kind == rowClone && m.cloneErr != "":
 			styled(ui.Text(c, m.cloneErr), theme.StyleValue).Wrap().TextColor(p.Blocked)
 		case r.kind == rowPath && m.pathErr != "":
@@ -102,7 +121,7 @@ func (m *ProjectsModal) addRowView(c *ui.Context, r paletteRow, active, selected
 		b.Children(func() { styled(ui.Text(c, label), theme.StyleSmall).NoWrap().TextColor(colour) })
 	}
 	switch {
-	case r.kind == rowClone && m.cloning:
+	case r.busy:
 		action(ProjectsCancel, m.stopClone)
 	case r.kind == rowClone && m.cloneErr != "":
 		action(ProjectsTryAgain, m.clone)

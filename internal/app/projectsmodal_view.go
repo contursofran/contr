@@ -55,6 +55,7 @@ type paletteRow struct {
 	owner string           // rowClone
 	repo  string           // rowClone: the folder name
 	path  string           // rowPath: the text of the field
+	busy  bool             // rowClone: this is the running clone
 }
 
 func (r paletteRow) name() string {
@@ -83,6 +84,20 @@ func (r paletteRow) add() bool { return r.kind == rowClone || r.kind == rowPath 
 // rows are the selectable rows: the open groups that match the field, then
 // the recent projects that match it.
 func (m *ProjectsModal) rows() []paletteRow {
+	base := m.queryRows()
+	if !m.cloning {
+		return base
+	}
+	// A running clone stays on top, whatever the field says.
+	job := paletteRow{kind: rowClone, owner: m.job.owner, repo: m.job.repo, busy: true}
+	if len(base) == 1 && base[0].kind == rowClone && base[0].owner == job.owner && base[0].repo == job.repo {
+		return []paletteRow{job}
+	}
+	return append([]paletteRow{job}, base...)
+}
+
+// queryRows are the rows for the text of the field.
+func (m *ProjectsModal) queryRows() []paletteRow {
 	// A repo or a path replaces the list with one Add row. A repo needs a
 	// clone folder; without one the text filters like any other text.
 	switch k, owner, repo := classifyQuery(m.query); {
@@ -115,17 +130,17 @@ type line struct {
 func (m *ProjectsModal) lines(rows []paletteRow) []line {
 	var out []line
 	hint := ""
-	if m.text() == "" {
+	if m.text() == "" && !m.cloning {
 		hint = "drag to reorder the sidebar"
 	}
 	for i, r := range rows {
-		if i == 0 && r.add() {
+		if r.add() && (i == 0 || !rows[i-1].add()) {
 			out = append(out, line{head: "Add", row: -1})
 		}
-		if i == 0 && r.kind == rowOpen {
+		if r.kind == rowOpen && (i == 0 || rows[i-1].kind != rowOpen) {
 			out = append(out, line{head: "Open · " + strconv.Itoa(len(m.groupsAll())), hint: hint, row: -1})
 		}
-		if r.kind == rowRecent && (i == 0 || rows[i-1].kind == rowOpen) {
+		if r.kind == rowRecent && (i == 0 || rows[i-1].kind != rowRecent) {
 			out = append(out, line{head: "Recent", row: -1})
 		}
 		out = append(out, line{row: i})
@@ -288,6 +303,8 @@ func (m *ProjectsModal) listView(c *ui.Context, rows []paletteRow, lines []line)
 			return l.head
 		case rows[l.row].kind == rowOpen:
 			return rows[l.row].group.CommonDir
+		case rows[l.row].busy:
+			return "add-busy"
 		case rows[l.row].add():
 			return "add"
 		}
@@ -295,7 +312,7 @@ func (m *ProjectsModal) listView(c *ui.Context, rows []paletteRow, lines []line)
 	}
 	m.list.Header = func(i int) bool { return lines[i].row < 0 }
 	m.list.Reorder = nil
-	if m.text() == "" {
+	if m.text() == "" && !m.cloning { // the Add row shifts the open rows
 		m.list.Reorder = m.listReorder
 	}
 	home, _ := os.UserHomeDir()
