@@ -309,3 +309,17 @@ func TestAnInstallRecordsTheNoteForTheNextStart(t *testing.T) {
 		t.Errorf("no saver: %v", err)
 	}
 }
+
+// The update panel and What's new have an opaque fill, float-solid, so the rows behind them do
+// not cut through their text (#524, D212). float-solid is glass-float at full alpha.
+func TestTheUpdatePanelFillIsFloatSolid(t *testing.T) {
+	for name, p := range map[string]*theme.Palette{"dark": theme.Dark, "light": theme.Light} {
+		if floatCardFill(p) != p.FloatSolid {
+			t.Errorf("%s: the update panel fill is not float-solid", name)
+		}
+		s, g := p.FloatSolid, p.GlassFloat
+		if s.A != 255 || s.R != g.R || s.G != g.G || s.B != g.B {
+			t.Errorf("%s: float-solid %v is not glass-float %v at full alpha", name, s, g)
+		}
+	}
+}
