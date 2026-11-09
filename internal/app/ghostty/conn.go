@@ -298,7 +298,19 @@ func isSchemeReport(p []byte) bool {
 	return s == "\x1b[?997;1n" || s == "\x1b[?997;2n"
 }
 
-// hex returns col as "#rrggbb", or nil when col is not set.
+// sameColors tells if the colors (not the cell size) of a and of the attach
+// display b are equal. A nil b has no colors.
+func sameColors(a hc.Display, b *hc.Display) bool {
+	var x hc.Display
+	if b != nil {
+		x = *b
+	}
+	eq := func(p, q *string) bool { return (p == nil) == (q == nil) && (p == nil || *p == *q) }
+	return eq(a.FG, x.FG) && eq(a.BG, x.BG) && eq(a.Cursor, x.Cursor)
+}
+
+// hex returns col as "#rrggbb". A == 0 means "not set": a fully transparent
+// color sends nothing, and the result is nil.
 func hex(col ui.Color) *string {
 	if col.A == 0 {
 		return nil
@@ -617,7 +629,20 @@ func (c *Conn) run() {
 	c.stream, c.attaching, c.resumed, c.noRetry = s, false, true, false
 	fitting := c.fitting
 	cols, rows, focused := c.cols, c.rows, c.focused && !fitting
+	// UseTheme may have run during the attach, when it had no stream to tell.
+	var recolor *hc.Display
+	if !p.Observe && !sameColors(c.colors, p.Display) {
+		d := c.colors
+		if c.cell[0] > 0 && c.cell[1] > 0 {
+			cell := c.cell
+			d.Cell = &cell
+		}
+		recolor = &d
+	}
 	c.mu.Unlock()
+	if recolor != nil {
+		_ = s.SetDisplay(*recolor)
+	}
 	if !p.Observe {
 		if cols != p.Cols || rows != p.Rows { // the view's size changed during the attach
 			_ = s.Resize(cols, rows)

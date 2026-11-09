@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -49,7 +51,9 @@ func sourceColors(src mygo.ThemeSource, systemDark func() bool) *agents.Colors {
 // macDark tells if macOS is in dark mode: `defaults` has AppleInterfaceStyle
 // "Dark" then, and no value in light mode.
 func macDark() bool {
-	out, err := exec.Command("defaults", "read", "-g", "AppleInterfaceStyle").Output()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "defaults", "read", "-g", "AppleInterfaceStyle").Output()
 	return err == nil && strings.TrimSpace(string(out)) == "Dark"
 }
 

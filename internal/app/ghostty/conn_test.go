@@ -79,6 +79,7 @@ type fakeSource struct {
 	closed  int
 	gate    chan struct{} // attaches after the first wait for this to close, when set
 	gate0   chan struct{} // every attach waits for this to close, when set
+	entered chan struct{} // gets one value as an attach is called, when set
 }
 
 func newFakeSource(errs ...error) *fakeSource {
@@ -86,6 +87,9 @@ func newFakeSource(errs ...error) *fakeSource {
 }
 
 func (f *fakeSource) Attach(ctx context.Context, p hc.AttachParams) (Stream, error) {
+	if f.entered != nil {
+		f.entered <- struct{}{}
+	}
 	f.mu.Lock()
 	gate, n := f.gate, len(f.params)
 	if f.gate0 != nil {
@@ -1066,9 +1070,19 @@ func strOf(p *string) string {
 
 // A theme set before the first attach goes with the attach display, next to
 // the cell size (#521).
+func startSized(t *testing.T, src *fakeSource) (*Conn, *states) {
+	t.Helper()
+	fast(t)
+	firstWait = time.Hour // only the view's size starts the attach; fast restores it
+	st := &states{ch: make(chan State, 256)}
+	c := NewConn(src, Options{OnState: st.on})
+	t.Cleanup(func() { _ = c.Close() })
+	return c, st
+}
+
 func TestUseThemeSetsTheAttachDisplay(t *testing.T) {
 	src := newFakeSource()
-	c, st := start(t, src)
+	c, st := startSized(t, src)
 	if err := c.UseTheme(themeOf(darkFG, lightBG, darkFG)); err != nil {
 		t.Fatal(err)
 	}
@@ -1086,9 +1100,36 @@ func TestUseThemeSetsTheAttachDisplay(t *testing.T) {
 }
 
 // A theme with no cursor sends no cursor color; a nil theme does nothing.
+// A theme that comes while the attach is in progress reaches the new stream
+// with SetDisplay: the attach display had no colors.
+func TestUseThemeDuringTheAttachReachesTheNewStream(t *testing.T) {
+	src := newFakeSource()
+	src.gate0 = make(chan struct{})
+	src.entered = make(chan struct{}, 4)
+	c, st := startSized(t, src)
+	if err := c.ResizePixels(80, 24, 8, 16); err != nil { // starts the attach, which waits
+		t.Fatal(err)
+	}
+	<-src.entered // the attach has its params and waits at the gate
+	if err := c.UseTheme(themeOf(darkFG, lightBG, darkFG)); err != nil {
+		t.Fatal(err)
+	}
+	close(src.gate0)
+	st.wait(t, Live)
+	if d := src.param(0).Display; d == nil || d.BG != nil {
+		t.Fatalf("attach display %+v, want cell only", d)
+	}
+	s := src.stream(t, 0)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.display) != 1 || strOf(s.display[0].BG) != "#f5f5f3" || s.display[0].Cell == nil {
+		t.Errorf("SetDisplay calls %+v", s.display)
+	}
+}
+
 func TestUseThemeSkipsUnsetColors(t *testing.T) {
 	src := newFakeSource()
-	c, st := start(t, src)
+	c, st := startSized(t, src)
 	if err := c.UseTheme(nil); err != nil {
 		t.Fatal(err)
 	}
@@ -1107,7 +1148,7 @@ func TestUseThemeSkipsUnsetColors(t *testing.T) {
 // With input on the stream, a new theme reaches hc at once with SetDisplay.
 func TestUseThemeSendsDisplayWhileTheStreamHasInput(t *testing.T) {
 	src := newFakeSource()
-	c, st := start(t, src)
+	c, st := startSized(t, src)
 	if err := c.ResizePixels(80, 24, 8, 16); err != nil {
 		t.Fatal(err)
 	}
