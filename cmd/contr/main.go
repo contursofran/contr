@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log"
@@ -21,6 +22,7 @@ import (
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/prefs"
 	"github.com/contursofran/contr/internal/projects"
+	"github.com/contursofran/contr/internal/updated"
 	"github.com/contursofran/contr/internal/usage"
 	"github.com/contursofran/contr/internal/widths"
 	"github.com/egoist/mygo/plugins/terminal"
@@ -235,6 +237,20 @@ func openWindow(icons bool) int {
 		frame.PickFolder = pickFolder
 		frame.Updates = updateService()
 		frame.Relaunch = func() { mygo.App.Relaunch() }
+		// The note of the last install lives in contr's state folder (D209).
+		updatedPath := updated.Path(usage.StateDir())
+		frame.LoadUpdated = func() (updated.Note, error) {
+			if updatedPath == "" {
+				return updated.Note{}, nil
+			}
+			return updated.Load(updatedPath)
+		}
+		frame.SaveUpdated = func(n updated.Note) error {
+			if updatedPath == "" {
+				return errors.New("no state folder")
+			}
+			return updated.Save(updatedPath, n)
+		}
 		frame.AgentsConfig = configPath(os.Getenv)
 		frame.OpenFolder = openFolder
 		frame.ProjectKey = projectKey
