@@ -5,6 +5,8 @@ import (
 	"math"
 	"sync"
 	"time"
+
+	"github.com/contursofran/contr/internal/statedir"
 )
 
 // ReadEvery is how often each plan is read while the window is visible.
@@ -57,7 +59,7 @@ func ReadPlans(stateDir, codexHome string, codexApp func() *PlanUsage) Reading {
 // are found at each read.
 func FileReader() func() Reading {
 	app := &CodexApp{}
-	return func() Reading { return ReadPlans(StateDir(), CodexHome(), app.Read) }
+	return func() Reading { return ReadPlans(statedir.Dir(), CodexHome(), app.Read) }
 }
 
 // UnixNow is the Unix second now. Window reset times are Unix seconds, so
@@ -143,7 +145,7 @@ func NewSampler(read func() Reading, onChange func()) *Sampler {
 // NewFileSampler returns a sampler that reads the real sources.
 func NewFileSampler(onChange func()) *Sampler {
 	s := NewSampler(FileReader(), onChange)
-	s.readContexts = func() map[string]Context { return ReadContexts(StateDir()) }
+	s.readContexts = func() map[string]Context { return ReadContexts(statedir.Dir()) }
 	return s
 }
 

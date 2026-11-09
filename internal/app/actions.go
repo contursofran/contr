@@ -60,93 +60,45 @@ func (a action) item() *mygo.MenuItem {
 	return &mygo.MenuItem{Label: a.label, Role: a.role, Accelerator: a.key}
 }
 
-// newTerminalHandler is the open window's "new terminal" action. The menus
-// are built before any window exists, so the item calls through this. The
-// frame sets it in Attach and clears it when it stops.
-var newTerminalHandler atomic.Pointer[func()]
+// handlerID names a menu item whose Click runs a handler of the open window.
+type handlerID int
 
-func setNewTerminalHandler(fn func()) {
+const (
+	handlerNewTerminal handlerID = iota
+	handlerCloseTerminal
+	handlerSettings
+	handlerSidebar
+	handlerCount
+)
+
+// handlerActions is the menu action of each handler.
+var handlerActions = [handlerCount]action{
+	handlerNewTerminal:   actionNewTerminal,
+	handlerCloseTerminal: actionCloseTerminal,
+	handlerSettings:      actionSettings,
+	handlerSidebar:       actionSidebar,
+}
+
+// handlers holds the open window's handler of each item. The menus are built
+// before any window exists, so the items call through this. The frame sets
+// the handlers in Attach and clears them when it stops.
+var handlers [handlerCount]atomic.Pointer[func()]
+
+// setHandler sets the handler of id; nil clears it.
+func setHandler(id handlerID, fn func()) {
 	if fn == nil {
-		newTerminalHandler.Store(nil)
+		handlers[id].Store(nil)
 		return
 	}
-	newTerminalHandler.Store(&fn)
+	handlers[id].Store(&fn)
 }
 
-// newTerminalItem is the New Terminal item. Its Click runs on the main thread.
-func newTerminalItem() *mygo.MenuItem {
-	it := actionNewTerminal.item()
+// handlerItem is the menu item of id. Its Click runs on the main thread and
+// does nothing when no handler is set.
+func handlerItem(id handlerID) *mygo.MenuItem {
+	it := handlerActions[id].item()
 	it.Click = func(*mygo.MenuItem, *mygo.Window) {
-		if fn := newTerminalHandler.Load(); fn != nil {
-			(*fn)()
-		}
-	}
-	return it
-}
-
-// closeTerminalHandler is the open window's "close terminal" action, set and
-// cleared like newTerminalHandler.
-var closeTerminalHandler atomic.Pointer[func()]
-
-func setCloseTerminalHandler(fn func()) {
-	if fn == nil {
-		closeTerminalHandler.Store(nil)
-		return
-	}
-	closeTerminalHandler.Store(&fn)
-}
-
-// closeTerminalItem is the Close Terminal item. Its Click runs on the main thread.
-func closeTerminalItem() *mygo.MenuItem {
-	it := actionCloseTerminal.item()
-	it.Click = func(*mygo.MenuItem, *mygo.Window) {
-		if fn := closeTerminalHandler.Load(); fn != nil {
-			(*fn)()
-		}
-	}
-	return it
-}
-
-// settingsHandler opens the Settings modal of the open window, set and cleared like
-// newTerminalHandler.
-var settingsHandler atomic.Pointer[func()]
-
-func setSettingsHandler(fn func()) {
-	if fn == nil {
-		settingsHandler.Store(nil)
-		return
-	}
-	settingsHandler.Store(&fn)
-}
-
-// settingsItem is the Settings… item. Its Click runs on the main thread.
-func settingsItem() *mygo.MenuItem {
-	it := actionSettings.item()
-	it.Click = func(*mygo.MenuItem, *mygo.Window) {
-		if fn := settingsHandler.Load(); fn != nil {
-			(*fn)()
-		}
-	}
-	return it
-}
-
-// sidebarHandler shows or hides the sidebar of the open window, set and cleared like
-// newTerminalHandler.
-var sidebarHandler atomic.Pointer[func()]
-
-func setSidebarHandler(fn func()) {
-	if fn == nil {
-		sidebarHandler.Store(nil)
-		return
-	}
-	sidebarHandler.Store(&fn)
-}
-
-// sidebarItem is the Toggle Sidebar item. Its Click runs on the main thread.
-func sidebarItem() *mygo.MenuItem {
-	it := actionSidebar.item()
-	it.Click = func(*mygo.MenuItem, *mygo.Window) {
-		if fn := sidebarHandler.Load(); fn != nil {
+		if fn := handlers[id].Load(); fn != nil {
 			(*fn)()
 		}
 	}

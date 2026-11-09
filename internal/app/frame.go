@@ -29,6 +29,7 @@ import (
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/prefs"
 	"github.com/contursofran/contr/internal/projects"
+	"github.com/contursofran/contr/internal/statedir"
 	"github.com/contursofran/contr/internal/updated"
 	"github.com/contursofran/contr/internal/usage"
 	"github.com/contursofran/contr/internal/widths"
@@ -1078,7 +1079,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	}
 	f.Session.Post, f.Session.Invalidate, f.Session.OpenURL = w.Update, w.Invalidate, openURL
 	if f.Session.StateDir == "" {
-		f.Session.StateDir = usage.StateDir()
+		f.Session.StateDir = statedir.Dir()
 	}
 	f.PR = &PRPane{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate, OpenURL: openURL}
 	f.WorkerPRs = &WorkerPRs{Run: Runner{Post: w.Update}, Invalidate: w.Invalidate}
@@ -1102,7 +1103,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 				f.Selection.Select(state.Selected{Kind: kind, ID: address})
 			}}
 		f.CloseTerm = &CloseTerminal{Stop: src.Close, Run: run, Status: f.Toasts.Show, Closed: f.terminalClosed}
-		setCloseTerminalHandler(func() { w.Update(f.closeSelectedTerminal) })
+		setHandler(handlerCloseTerminal, func() { w.Update(f.closeSelectedTerminal) })
 		entry := WorkerEntry{PRs: f.WorkerPRs, OpenPR: f.paneOpener(), OpenIssue: f.OpenIssue}
 		f.Card.Entry = entry
 		f.Worker = &WorkerPanel{Entry: entry, Source: src, Selection: f.Selection, Run: run, Status: f.Toasts.Show, Invalidate: w.Invalidate}
@@ -1114,7 +1115,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		removeOutline = f.Overlay.Add(LabelOutline, f.Outline.View)
 	}
 	if f.Host == nil {
-		f.Host = host.NewSystem(w.Invalidate)
+		f.Host = host.NewSystem(theme.MemBarWidth, w.Invalidate)
 	}
 	// The git scan runs on a goroutine and lands through Window.Update.
 	if f.SpacesList == nil {
@@ -1146,7 +1147,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	if f.OpenTerminal != nil {
 		f.NewTerm = &NewTerminal{Open: f.OpenTerminal, Run: Runner{Post: w.Update}, Status: f.Toasts.Show,
 			Select: func(addr string) { f.Selection.Select(state.Selected{Kind: state.KindTerminal, ID: addr}) }}
-		setNewTerminalHandler(func() { w.Update(f.newTerminal) })
+		setHandler(handlerNewTerminal, func() { w.Update(f.newTerminal) })
 	}
 	f.ProjectsModal = &ProjectsModal{
 		Groups: f.SpacesList.Groups,
@@ -1177,8 +1178,8 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		AgentsConfig: f.AgentsConfig, Status: f.Toasts.Show, Appearance: f.Appearance, SetAppearance: f.SetAppearance,
 		Tint: f.Tint, SetTint: f.SetTint, ResetTint: f.ResetTint, RecordInstall: f.recordInstall}
 	f.loadUpdated(Runner{Post: w.Update}, w.Invalidate)
-	setSettingsHandler(func() { w.Update(f.Settings.Toggle) })
-	setSidebarHandler(func() { w.Update(f.ToggleSidebar) })
+	setHandler(handlerSettings, func() { w.Update(f.Settings.Toggle) })
+	setHandler(handlerSidebar, func() { w.Update(f.ToggleSidebar) })
 	f.SpacesList.OnSettings = func() { f.Settings.Toggle() }
 	f.SpacesList.UpdateReady = f.Settings.Ready
 	f.SpacesList.Plans = func() []kit.Meter { return planMeters(f.planUsage()) }
@@ -1240,10 +1241,10 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	unwatch := f.Visibility.Watch(w)
 	term := f.attachTerminal(w)
 	return func() {
-		setNewTerminalHandler(nil)
-		setSidebarHandler(nil)
-		setCloseTerminalHandler(nil)
-		setSettingsHandler(nil)
+		setHandler(handlerNewTerminal, nil)
+		setHandler(handlerSidebar, nil)
+		setHandler(handlerCloseTerminal, nil)
+		setHandler(handlerSettings, nil)
 		stopChecks()
 		offActive()
 		f.Files.Close()
