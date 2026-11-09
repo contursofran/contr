@@ -423,7 +423,7 @@ func (t terminal) runsClaude() bool {
 	if t.Status != nil || t.claudeInFront() {
 		return true
 	}
-	return len(t.Argv) > 0 && filepath.Base(t.Argv[0]) == "claude"
+	return isClaude(program(t.Argv))
 }
 
 // claudeInFront tells if Claude Code is the foreground program, by name or
@@ -436,20 +436,32 @@ func (t terminal) claudeInFront() bool {
 	return n == "claude" || versionName.MatchString(n)
 }
 
-// command is the foreground program's name, else the base of argv[0], or
-// of the agent's argv[0] after a setup wrapper.
+// command is the foreground program's name, else the base of the agent's
+// argv[0] after the setup and clean wrappers.
 func (t terminal) command() string {
 	if t.Foreground != nil && t.Foreground.Name != "" {
 		return t.Foreground.Name
 	}
-	argv := t.Argv
-	if len(argv) > 5 && argv[3] == setupName {
-		argv = argv[5:]
-	}
-	if len(argv) > 0 {
+	if argv := program(t.Argv); len(argv) > 0 {
 		return filepath.Base(argv[0])
 	}
 	return ""
+}
+
+// program returns argv less the setup wrapper (withSetup) and the clean
+// wrapper (hc.CleanArgv), in any nesting.
+func program(argv []string) []string {
+	for {
+		if len(argv) > 5 && argv[3] == setupName {
+			argv = argv[5:]
+			continue
+		}
+		inner, ok := hc.UncleanArgv(argv)
+		if !ok {
+			return argv
+		}
+		argv = inner
+	}
 }
 
 // Orchestrator tells if the worker is an orchestrator.

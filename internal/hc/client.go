@@ -146,6 +146,15 @@ func CleanArgv(argv []string) []string {
 	return append([]string{"/bin/sh", "-c", cleanScript, cleanName}, argv...)
 }
 
+// UncleanArgv returns the argv that CleanArgv wrapped, and true. When argv
+// does not start with the clean wrapper, it returns argv and false.
+func UncleanArgv(argv []string) ([]string, bool) {
+	if len(argv) > 4 && argv[3] == cleanName {
+		return argv[4:], true
+	}
+	return argv, false
+}
+
 // Command returns a Dialer that starts `<path> connect` with env added to the
 // environment of this process, less CLAUDECODE and CLAUDE_CODE_* (CleanEnv).
 // The env argument is kept as it is. An empty path means hc, found with Find when

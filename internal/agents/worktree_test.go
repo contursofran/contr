@@ -9,6 +9,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/contursofran/contr/internal/hc"
 )
 
 // gitEnv makes git in the test ignore the user's git config.
@@ -158,6 +160,28 @@ func TestCommandSkipsTheSetupWrapper(t *testing.T) {
 	tm := terminal{Argv: withSetup("x", []string{"/usr/bin/claude", "--agent", "a"})}
 	if got := tm.command(); got != "claude" {
 		t.Errorf("command = %q", got)
+	}
+}
+
+func TestDeadTerminalReadsTheProgramAfterTheWrappers(t *testing.T) {
+	claude := []string{"/usr/bin/claude", "--agent", "a"}
+	for _, c := range []struct {
+		name   string
+		argv   []string
+		cmd    string
+		claude bool
+	}{
+		{"clean", hc.CleanArgv(claude), "claude", true},
+		{"setup and clean", withSetup("x", hc.CleanArgv(claude)), "claude", true},
+		{"neither", []string{"/bin/zsh", "-l"}, "zsh", false},
+	} {
+		tm := terminal{Argv: c.argv}
+		if got := tm.command(); got != c.cmd {
+			t.Errorf("%s: command = %q, want %q", c.name, got, c.cmd)
+		}
+		if got := tm.runsClaude(); got != c.claude {
+			t.Errorf("%s: runsClaude = %v, want %v", c.name, got, c.claude)
+		}
 	}
 }
 

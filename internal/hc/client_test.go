@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -466,4 +467,14 @@ func TestCommandLooksUpHcOnlyWhenDialing(t *testing.T) {
 		t.Fatalf("dial after hc appeared: %v", err)
 	}
 	_ = p.Close()
+}
+
+func TestUncleanArgvReturnsTheWrappedArgv(t *testing.T) {
+	in := []string{"claude", "--agent", "a"}
+	if got, ok := UncleanArgv(CleanArgv(in)); !ok || !reflect.DeepEqual(got, in) {
+		t.Errorf("wrapped: %q %v", got, ok)
+	}
+	if got, ok := UncleanArgv(in); ok || !reflect.DeepEqual(got, in) {
+		t.Errorf("not wrapped: %q %v", got, ok)
+	}
 }
