@@ -14,6 +14,7 @@ import (
 
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/reviewview"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/git"
@@ -57,7 +58,7 @@ type FileTree struct {
 	// fileReadDebounce, and a negative value reads at once.
 	Debounce time.Duration
 	// Git runs git; nil runs the `git` command. Timeout is the time limit of
-	// one read; 0 is gitReadTimeout.
+	// one read; 0 is reviewview.GitReadTimeout.
 	Git     git.InputRunner
 	Timeout time.Duration
 
@@ -141,7 +142,7 @@ func (t *FileTree) setDir(dir string) {
 	t.mu.Unlock()
 	t.dir, t.session = dir, t.session+1
 	t.reads.Reset()
-	t.repo = review.Repo{Dir: dir, Base: reviewBase, Git: t.Git}
+	t.repo = review.Repo{Dir: dir, Base: reviewview.ReviewBase, Git: t.Git}
 	t.changes, t.byPath, t.err, t.changesOK = nil, nil, "", false
 	t.loaded, t.loading = map[string][]review.Entry{}, map[string]bool{}
 	t.opened, t.openFiltered = map[string]*bool{}, map[string]*bool{}
@@ -220,7 +221,7 @@ func (t *FileTree) limit() time.Duration {
 	if t.Timeout > 0 {
 		return t.Timeout
 	}
-	return gitReadTimeout
+	return reviewview.GitReadTimeout
 }
 
 func (t *FileTree) fail(err error) {

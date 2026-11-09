@@ -23,6 +23,7 @@ import (
 	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/app/ghsource"
 	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/reviewview"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
@@ -103,7 +104,7 @@ type Frame struct {
 	Diff *DiffSummary
 	// Review is the Review view. [Frame.Attach] makes it. While the Review toggle is on, it
 	// replaces the terminal area, and it follows the selected project.
-	Review *Review
+	Review *reviewview.Review
 	// SpacesList is the spaces column body. [Frame.Attach] makes it and puts
 	// its view in Slots.Spaces.
 	SpacesList *SpacesList
