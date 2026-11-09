@@ -419,9 +419,9 @@ func TestAttachStartsAndStopsTheAgentState(t *testing.T) {
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	var notify func()
 	stopped := 0
-	f.deps.StartAgents = func(n func()) (AgentSource, func()) {
+	f.deps.StartAgents = func(n func()) (agentstate.AgentSource, func()) {
 		notify = n
-		return &source{snap: agentstate.Snapshot{Workers: []agents.Worker{{Name: "b1", Address: "a", Live: true}}}}, func() { stopped++ }
+		return &source{Snap: agentstate.Snapshot{Workers: []agents.Worker{{Name: "b1", Address: "a", Live: true}}}}, func() { stopped++ }
 	}
 	stop := f.Attach(w)
 	if f.Card == nil {
@@ -447,13 +447,13 @@ func TestAttachTiesTheAgentSourceToTheWindow(t *testing.T) {
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	src := &source{}
-	f.deps.StartAgents = func(func()) (AgentSource, func()) { return src, func() {} }
+	f.deps.StartAgents = func(func()) (agentstate.AgentSource, func()) { return src, func() {} }
 	stop := f.Attach(w)
 	defer stop()
 	last := func() []bool {
-		src.mu.Lock()
-		defer src.mu.Unlock()
-		return slices.Clone(src.visible)
+		src.Mu.Lock()
+		defer src.Mu.Unlock()
+		return slices.Clone(src.Visible)
 	}
 	if v := last(); !slices.Equal(v, []bool{true}) {
 		t.Fatalf("visible = %v after Attach, want [true]", v)
@@ -470,10 +470,10 @@ func TestAttachTiesTheAgentSourceToTheWindow(t *testing.T) {
 		t.Fatal("the This Mac row has no retry")
 	}
 	f.SpacesList.OnRetry()
-	src.mu.Lock()
-	defer src.mu.Unlock()
-	if src.reconnects != 1 {
-		t.Fatalf("reconnects = %d, want 1", src.reconnects)
+	src.Mu.Lock()
+	defer src.Mu.Unlock()
+	if src.Reconnects != 1 {
+		t.Fatalf("reconnects = %d, want 1", src.Reconnects)
 	}
 }
 
@@ -483,13 +483,13 @@ func TestAttachTellsAHiddenWindowToTheAgentSource(t *testing.T) {
 	f.Host = host.New(func() (host.Stats, error) { return host.Stats{}, nil }, theme.MemBarWidth, nil)
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	src := &source{}
-	f.deps.StartAgents = func(func()) (AgentSource, func()) { return src, func() {} }
+	f.deps.StartAgents = func(func()) (agentstate.AgentSource, func()) { return src, func() {} }
 	stop := f.Attach(w)
 	defer stop()
-	src.mu.Lock()
-	defer src.mu.Unlock()
-	if len(src.visible) == 0 || src.visible[0] {
-		t.Fatalf("visible = %v, want the first value false", src.visible)
+	src.Mu.Lock()
+	defer src.Mu.Unlock()
+	if len(src.Visible) == 0 || src.Visible[0] {
+		t.Fatalf("visible = %v, want the first value false", src.Visible)
 	}
 }
 

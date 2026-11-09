@@ -21,7 +21,7 @@ func TestProjectMenuClosesAllItsAgents(t *testing.T) {
 	if err := h.tt.ChooseMenuItem(MenuCloseAll); err != nil {
 		t.Fatal(err)
 	}
-	stopped, closed := h.src.calls()
+	stopped, closed := h.src.Calls()
 	slices.Sort(closed)
 	if want := []string{"b-241", "b-242", "lead"}; !slices.Equal(closed, want) || len(stopped) != 0 {
 		t.Errorf("closed %v (stopped %v), want %v", closed, stopped, want)
@@ -44,7 +44,7 @@ func TestProjectMenuHidesTheProject(t *testing.T) {
 	if len(hidden) != 1 || hidden[0] != h.list.groups[0].CommonDir {
 		t.Errorf("hidden %v, want %q", hidden, h.list.groups[0].CommonDir)
 	}
-	if stopped, _ := h.src.calls(); len(stopped) != 0 {
+	if stopped, _ := h.src.Calls(); len(stopped) != 0 {
 		t.Errorf("Hide stopped %v", stopped)
 	}
 }
@@ -96,7 +96,7 @@ func TestStopAgentWithNoSourceDoesNothing(t *testing.T) {
 	h := newRows(t)
 	h.list.Source = nil
 	h.list.StopAgent("lead", "lead")
-	if stopped, _ := h.src.calls(); len(stopped) != 0 {
+	if stopped, _ := h.src.Calls(); len(stopped) != 0 {
 		t.Errorf("stopped %v", stopped)
 	}
 }
@@ -109,7 +109,7 @@ func TestAgentRowMenuClosesTheAgent(t *testing.T) {
 	if err := h.tt.ChooseMenuItem(MenuCloseAgent); err != nil {
 		t.Fatal(err)
 	}
-	if stopped, closed := h.src.calls(); len(stopped) != 0 || !slices.Equal(closed, []string{"lead"}) {
+	if stopped, closed := h.src.Calls(); len(stopped) != 0 || !slices.Equal(closed, []string{"lead"}) {
 		t.Errorf("stopped %v, closed %v, want closed lead", stopped, closed)
 	}
 	if !slices.Equal(told, []string{"lead closed"}) {

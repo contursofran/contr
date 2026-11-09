@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/icons"
+	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/theme"
 )
 
@@ -92,7 +93,7 @@ func (m *ProjectsModal) addRowView(c *ui.Context, r paletteRow, active, selected
 			name = "Clone " + r.name()
 		}
 	}
-	styled(ui.Text(c, ""), theme.StyleSmall).Width(theme.ModalGrip).Shrink(0)
+	kit.Styled(ui.Text(c, ""), theme.StyleSmall).Width(theme.ModalGrip).Shrink(0)
 	ui.Box(c).Width(theme.ModalTile).Height(theme.ModalTile).Shrink(0).Radius(theme.Radius8).
 		Background(p.Selected).Center().Children(func() {
 		if s := icons.Line(icon); s != nil {
@@ -100,15 +101,15 @@ func (m *ProjectsModal) addRowView(c *ui.Context, r paletteRow, active, selected
 		}
 	})
 	ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-		styled(ui.Text(c, name), theme.StyleBody).FontWeight(600).SingleLine().MinWidth(0).TextColor(p.Ink100)
+		kit.Styled(ui.Text(c, name), theme.StyleBody).FontWeight(600).SingleLine().MinWidth(0).TextColor(p.Ink100)
 		m.metaText(c, meta, 0)
 		switch {
 		case r.busy:
 			m.progressLine(c)
 		case r.kind == rowClone && m.cloneErr != "":
-			styled(ui.Text(c, m.cloneErr), theme.StyleValue).Wrap().TextColor(p.Blocked)
+			kit.Styled(ui.Text(c, m.cloneErr), theme.StyleValue).Wrap().TextColor(p.Blocked)
 		case r.kind == rowPath && m.pathErr != "":
-			styled(ui.Text(c, m.pathErr), theme.StyleValue).Wrap().TextColor(p.Blocked)
+			kit.Styled(ui.Text(c, m.pathErr), theme.StyleValue).Wrap().TextColor(p.Blocked)
 		}
 	})
 	action := func(label string, fn func()) {
@@ -118,7 +119,7 @@ func (m *ProjectsModal) addRowView(c *ui.Context, r paletteRow, active, selected
 		if b.Hovered() {
 			b, colour = b.Background(p.Hover), p.Ink100
 		}
-		b.Children(func() { styled(ui.Text(c, label), theme.StyleSmall).NoWrap().TextColor(colour) })
+		b.Children(func() { kit.Styled(ui.Text(c, label), theme.StyleSmall).NoWrap().TextColor(colour) })
 	}
 	switch {
 	case r.busy:
@@ -129,6 +130,6 @@ func (m *ProjectsModal) addRowView(c *ui.Context, r paletteRow, active, selected
 		action(ProjectsChangeDir, m.chooseParent)
 	}
 	if selected {
-		styled(ui.Text(c, "⏎ "+m.enterLabel([]paletteRow{r}, 0)), theme.StyleMeta).NoWrap().Shrink(0).TextColor(p.Ink38)
+		kit.Styled(ui.Text(c, "⏎ "+m.enterLabel([]paletteRow{r}, 0)), theme.StyleMeta).NoWrap().Shrink(0).TextColor(p.Ink38)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/ghsource"
 	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/questions"
 	"github.com/contursofran/contr/internal/app/reviewview"
 	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/app/state"
@@ -78,7 +79,7 @@ func (f *Frame) attachFiles(env view.Env) (stop func()) {
 // attachAgents starts the agent state through Deps.StartAgents and makes the views that read it:
 // the questions card, the close-terminal flow, the worker panel and the outline. agentSnap and
 // src are nil without agents. The stop removes the outline, then stops the agent state.
-func (f *Frame) attachAgents(w Window, env view.Env) (agentSnap func() agentstate.Snapshot, src AgentSource, stop func()) {
+func (f *Frame) attachAgents(w Window, env view.Env) (agentSnap func() agentstate.Snapshot, src agentstate.AgentSource, stop func()) {
 	if f.deps.AgentsNotice != "" {
 		f.Toasts.Show(f.deps.AgentsNotice)
 	}
@@ -94,7 +95,7 @@ func (f *Frame) attachAgents(w Window, env view.Env) (agentSnap func() agentstat
 		f.takeSnapshot()
 		agentSnap = f.snapshot
 		src = storedSource{AgentSource: src, snap: f.snapshot}
-		f.Card = &QuestionsCard{Source: src, Env: env,
+		f.Card = &questions.QuestionsCard{Source: src, Env: env,
 			Select: func(address string, orchestrator bool) {
 				kind := state.KindWorker
 				if orchestrator {
@@ -112,8 +113,8 @@ func (f *Frame) attachAgents(w Window, env view.Env) (agentSnap func() agentstat
 	}
 	removeOutline := func() {}
 	if agentSnap != nil {
-		f.Outline = NewOutline(agentSnap, f.Selection, env)
-		removeOutline = f.Overlay.Add(LabelOutline, f.Outline.View)
+		f.Outline = questions.NewOutline(agentSnap, f.Selection, env)
+		removeOutline = f.Overlay.Add(questions.LabelOutline, f.Outline.View)
 	}
 	return agentSnap, src, func() {
 		removeOutline()
@@ -124,7 +125,7 @@ func (f *Frame) attachAgents(w Window, env view.Env) (agentSnap func() agentstat
 // attachSidebar makes the sidebar list, the samplers that it shows (memory and plan usage) and
 // the new orchestrator and new terminal flows. The git scan runs on a goroutine and lands through
 // Window.Update. The stop closes the list, then the samplers.
-func (f *Frame) attachSidebar(w Window, env view.Env, agentSnap func() agentstate.Snapshot, src AgentSource) (stop func()) {
+func (f *Frame) attachSidebar(w Window, env view.Env, agentSnap func() agentstate.Snapshot, src agentstate.AgentSource) (stop func()) {
 	if f.Host == nil {
 		f.Host = host.NewSystem(theme.MemBarWidth, w.Invalidate)
 	}
@@ -234,15 +235,15 @@ func (f *Frame) loadSaved(env view.Env) {
 
 // attachQuestions puts the notch with the questions card above the terminal, starts the first
 // pull request and issue title reads and, while the viewers show, makes the board panel.
-func (f *Frame) attachQuestions(agentSnap func() agentstate.Snapshot, src AgentSource) {
-	f.Notch = &Notch{Snapshot: agentSnap, Project: func() string { return f.openProject }}
+func (f *Frame) attachQuestions(agentSnap func() agentstate.Snapshot, src agentstate.AgentSource) {
+	f.Notch = &questions.Notch{Snapshot: agentSnap, Project: func() string { return f.openProject }}
 	if src != nil {
 		f.Notch.Open = f.Card.Open
 		f.Notch.Close = f.Card.Close
 		f.Notch.Opened = f.Card.IsOpen
 		f.Notch.Panel = f.Card.View
 	}
-	f.Overlay.Add(LabelNotchLayer, f.Notch.View)
+	f.Overlay.Add(questions.LabelNotchLayer, f.Notch.View)
 	f.syncWorkerPRs()
 	f.syncIssueTitles()
 	if viewersEnabled {
@@ -252,7 +253,7 @@ func (f *Frame) attachQuestions(agentSnap func() agentstate.Snapshot, src AgentS
 
 // attachVisibility makes Visibility follow the window and tells the samplers, the agent source,
 // the terminal and the settings when it changes. The returned function ends the watch.
-func (f *Frame) attachVisibility(w Window, src AgentSource) (unwatch func()) {
+func (f *Frame) attachVisibility(w Window, src agentstate.AgentSource) (unwatch func()) {
 	f.Visibility = state.NewVisibility(func(visible bool) {
 		f.SpacesList.Ages.SetVisible(visible)
 		if src != nil {
@@ -283,7 +284,7 @@ func (f *Frame) attachVisibility(w Window, src AgentSource) (unwatch func()) {
 
 // attachMenu sets the menu handlers of the window: Settings and Sidebar always, New Terminal with
 // Deps.OpenTerminal and Close Terminal with an agent source. The stop clears all four.
-func (f *Frame) attachMenu(w Window, src AgentSource) (stop func()) {
+func (f *Frame) attachMenu(w Window, src agentstate.AgentSource) (stop func()) {
 	if src != nil {
 		setHandler(handlerCloseTerminal, func() { w.Update(f.closeSelectedTerminal) })
 	}

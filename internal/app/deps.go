@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 
+	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/app/settings"
 	"github.com/contursofran/contr/internal/app/theme"
@@ -63,7 +64,7 @@ type Deps struct {
 	// StartAgents follows the agents. [Frame.Attach] calls it once, with a notify function
 	// that is safe from any goroutine, and uses the source and the stop function it returns.
 	// Nil means no agents.
-	StartAgents func(notify func()) (src AgentSource, stop func())
+	StartAgents func(notify func()) (src agentstate.AgentSource, stop func())
 	// AgentsNotice is a note about agents.json that LoadConfig made at start (the old
 	// format, D206). [Frame.Attach] shows it once in the toasts.
 	AgentsNotice string

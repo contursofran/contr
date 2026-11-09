@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/theme"
 )
@@ -22,13 +23,13 @@ const (
 )
 
 // NeedKindLabel is the word on the right of a line.
-func NeedKindLabel(t NeedTab) string {
+func NeedKindLabel(t agentstate.NeedTab) string {
 	switch {
 	case t.Resolved:
 		return "done"
-	case t.Kind == NeedBlocked:
+	case t.Kind == agentstate.NeedBlocked:
 		return "blocked"
-	case t.Kind == NeedQuestion:
+	case t.Kind == agentstate.NeedQuestion:
 		return "decide"
 	case t.Icon == icons.Fyi:
 		return "fyi"
@@ -41,7 +42,7 @@ func NeedsCountLabel(n int) string { return "needs count " + strconv.Itoa(n) }
 
 // NeedsSection adds the section. It takes the rest of the panel's height and
 // its lines scroll inside it. onOpen gets the clicked tab.
-func NeedsSection(c *ui.Context, tabs []NeedTab, onOpen func(NeedTab)) {
+func NeedsSection(c *ui.Context, tabs []agentstate.NeedTab, onOpen func(agentstate.NeedTab)) {
 	open := 0
 	for _, t := range tabs {
 		if !t.Resolved {
@@ -66,7 +67,7 @@ func NeedsSection(c *ui.Context, tabs []NeedTab, onOpen func(NeedTab)) {
 	})
 }
 
-func needLine(c *ui.Context, t NeedTab, onOpen func(NeedTab)) {
+func needLine(c *ui.Context, t agentstate.NeedTab, onOpen func(agentstate.NeedTab)) {
 	text := uint32(theme.Text)
 	if t.Resolved {
 		text = theme.TextDim

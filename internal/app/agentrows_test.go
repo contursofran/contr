@@ -12,6 +12,7 @@ import (
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/ghsource"
+	"github.com/contursofran/contr/internal/app/ghsource/ghsourcetest"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/tabmodel"
@@ -279,14 +280,14 @@ func TestInterruptAndStopFromTheContextMenuCallTheSource(t *testing.T) {
 	if err := h.tt.ChooseMenuItem(MenuInterrupt); err != nil {
 		t.Fatal(err)
 	}
-	if len(h.src.signalled) != 1 || h.src.signalled[0] != "b-241" {
-		t.Errorf("interrupted %v", h.src.signalled)
+	if len(h.src.Signalled) != 1 || h.src.Signalled[0] != "b-241" {
+		t.Errorf("interrupted %v", h.src.Signalled)
 	}
 	h.tt.RightClick("lead, idle, opus")
 	if err := h.tt.ChooseMenuItem(tabmodel.MenuStop); err != nil {
 		t.Fatal(err)
 	}
-	if stopped, _ := h.src.calls(); len(stopped) != 1 || stopped[0] != "lead" {
+	if stopped, _ := h.src.Calls(); len(stopped) != 1 || stopped[0] != "lead" {
 		t.Errorf("stopped %v", stopped)
 	}
 	if len(told) != 2 || told[0] != "b-241 interrupted" || told[1] != "lead stopped" {
@@ -296,7 +297,7 @@ func TestInterruptAndStopFromTheContextMenuCallTheSource(t *testing.T) {
 
 func TestAFailedMenuActionShowsItsError(t *testing.T) {
 	h := newRows(t)
-	h.src.actionErr = errors.New("hc: gone")
+	h.src.ActionErr = errors.New("hc: gone")
 	var told []string
 	h.list.Env.Status = func(s string) { told = append(told, s) }
 	h.tt.RightClick("b-242, working, sonnet")
@@ -315,12 +316,12 @@ func TestOpenPRFromTheContextMenu(t *testing.T) {
 	if err := h.tt.ChooseMenuItem(MenuOpenPR); err == nil {
 		t.Error("Open PR chose with no pull request")
 	}
-	rig := newPRSourceRig(map[string]string{h.cwds[0]: `{"number":307}`})
-	rig.w.Sync(apptest.LiveWorker(h.cwds[0]))
+	rig := ghsourcetest.NewPRSourceRig(map[string]string{h.cwds[0]: `{"number":307}`})
+	rig.W.Sync(apptest.LiveWorker(h.cwds[0]))
 	rig.Flush()
 	var opened [][2]any
 	paneOpened := false
-	h.list.Entry = ghsource.WorkerEntry{PRs: rig.w,
+	h.list.Entry = ghsource.WorkerEntry{PRs: rig.W,
 		OpenPR:    func(string, int) { paneOpened = true },
 		OpenPRWeb: func(dir string, n int) { opened = append(opened, [2]any{dir, n}) }}
 	h.tt.Frame()

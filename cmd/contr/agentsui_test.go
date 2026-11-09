@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/contursofran/contr/internal/app"
+	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/hc"
 )
 
@@ -95,7 +95,7 @@ func liveCore(terms ...map[string]any) *cliCore {
 }
 
 // startScripted starts the agent state on d with a scratch config.
-func startScripted(t *testing.T, d *scriptDial) app.AgentSource {
+func startScripted(t *testing.T, d *scriptDial) agentstate.AgentSource {
 	t.Helper()
 	env := map[string]string{
 		"CONTR_AGENTS_CONFIG": filepath.Join(t.TempDir(), "agents.json"),

@@ -187,8 +187,8 @@ func TestAHiddenWindowDoesNotRetryAndShowingItDoes(t *testing.T) {
 	f.Usage = usage.NewSampler(usage.Unread, nil)
 	src := &scriptSource{err: &hc.Error{Kind: "unavailable", Message: "no core"}}
 	f.deps.TerminalSource = func(string) ghostty.Source { return src }
-	f.deps.StartAgents = func(func()) (AgentSource, func()) { // t2 is a known worker: the syncs keep it selected
-		return &source{snap: agentstate.Snapshot{Workers: []agents.Worker{{Name: "w2", Address: "t2", Live: true}}}}, func() {}
+	f.deps.StartAgents = func(func()) (agentstate.AgentSource, func()) { // t2 is a known worker: the syncs keep it selected
+		return &source{Snap: agentstate.Snapshot{Workers: []agents.Worker{{Name: "w2", Address: "t2", Live: true}}}}, func() {}
 	}
 	stop := f.Attach(w)
 	defer stop()

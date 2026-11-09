@@ -1,8 +1,10 @@
-package app
+package questions
 
 import (
 	"slices"
 	"testing"
+
+	"github.com/contursofran/contr/internal/app/agentstate"
 )
 
 func TestSplitCode(t *testing.T) {
@@ -40,7 +42,7 @@ func TestChipLabel(t *testing.T) {
 		{"empty title", "", "b-250"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := chipLabel(NeedTab{Key: "b-250", Title: tc.title}); got != tc.want {
+			if got := chipLabel(agentstate.NeedTab{Key: "b-250", Title: tc.title}); got != tc.want {
 				t.Errorf("chipLabel(%q) = %q, want %q", tc.title, got, tc.want)
 			}
 		})

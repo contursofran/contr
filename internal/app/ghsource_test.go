@@ -14,25 +14,13 @@ import (
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/ghsource"
+	"github.com/contursofran/contr/internal/app/ghsource/ghsourcetest"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/host"
 	"github.com/contursofran/contr/internal/usage"
 )
-
-type prSourceRig struct {
-	*apptest.GHRig
-	w      *ghsource.WorkerPRs
-	runner *apptest.BranchRunner
-}
-
-func newPRSourceRig(out map[string]string) *prSourceRig {
-	r := &prSourceRig{GHRig: &apptest.GHRig{Branch: "agent/1-x", Now: time.Unix(1000, 0)},
-		runner: &apptest.BranchRunner{Out: out}}
-	r.w = &ghsource.WorkerPRs{Env: r.Env(), Client: apptest.ClientOf(r.runner), Branch: r.BranchOf, Now: r.Clock}
-	return r
-}
 
 type titleRig struct {
 	*apptest.GHRig
@@ -63,11 +51,11 @@ func TestBoardWorkOpensRealPR(t *testing.T) {
 		{Name: "b-9", Address: "t1", Role: "builder", Issue: "151", Worktree: "/wt/a", Project: "a", Live: true, Status: "working"},
 		{Name: "b-8", Address: "t2", Role: "builder", Project: "a", Live: true},
 	}}
-	r := newPRSourceRig(map[string]string{"/wt/a": `{"number":307}`})
-	r.w.Sync(snap.Workers)
+	r := ghsourcetest.NewPRSourceRig(map[string]string{"/wt/a": `{"number":307}`})
+	r.W.Sync(snap.Workers)
 	r.Flush()
 	p, _ := newBoardPanel(snap, "a")
-	p.PRs = r.w
+	p.PRs = r.W
 	var dir string
 	var n int
 	var issueOpened bool
@@ -92,11 +80,11 @@ func TestBoardWorkWithoutPROpensTheIssue(t *testing.T) {
 	snap := agentstate.Snapshot{Workers: []agents.Worker{
 		{Name: "b-9", Address: "t1", Role: "builder", Issue: "151", Worktree: "/wt/a", Project: "a", Live: true, Status: "working"},
 	}}
-	r := newPRSourceRig(nil)
-	r.w.Sync(snap.Workers)
+	r := ghsourcetest.NewPRSourceRig(nil)
+	r.W.Sync(snap.Workers)
 	r.Flush()
 	p, _ := newBoardPanel(snap, "a")
-	p.PRs = r.w
+	p.PRs = r.W
 	var dir string
 	var n int
 	prOpened := false
@@ -162,31 +150,9 @@ func TestAgentRowOpenPRGoesToTheBrowserNotThePane(t *testing.T) {
 	}
 }
 
-type entryCalls struct{ prs, issues [][2]any }
-
-// entryRig makes a WorkerEntry with fake openers. The worktree /wt/a has the PR prN (0: none).
-func entryRig(prN int) (ghsource.WorkerEntry, *entryCalls) {
-	calls := &entryCalls{}
-	rig := newPRSourceRig(nil)
-	if prN > 0 {
-		rig = newPRSourceRig(map[string]string{"/wt/a": `{"number":` + itoa(prN) + `}`})
-	}
-	rig.w.Sync(apptest.LiveWorker("/wt/a"))
-	rig.Flush()
-	return ghsource.WorkerEntry{
-		PRs:       rig.w,
-		OpenPR:    func(dir string, n int) { calls.prs = append(calls.prs, [2]any{dir, n}) },
-		OpenIssue: func(dir string, n int) { calls.issues = append(calls.issues, [2]any{dir, n}) },
-	}, calls
-}
-
-func itoa(n int) string {
-	return string(rune('0'+n/100)) + string(rune('0'+n/10%10)) + string(rune('0'+n%10))
-}
-
 func TestWorkerPanelOpensPR(t *testing.T) {
-	entry, calls := entryRig(307)
-	src := &source{snap: agentstate.Snapshot{Workers: []agents.Worker{apptest.EntryWorker}}}
+	entry, calls := ghsourcetest.EntryRig(307)
+	src := &source{Snap: agentstate.Snapshot{Workers: []agents.Worker{apptest.EntryWorker}}}
 	sel := stateSelection()
 	sel.Select(state.Selected{Kind: state.KindWorker, ID: "t1"})
 	p := &WorkerPanel{Entry: entry, Source: src, Selection: sel}
@@ -195,14 +161,14 @@ func TestWorkerPanelOpensPR(t *testing.T) {
 	if err := tt.Click("Open PR #307"); err != nil {
 		t.Fatalf("%v; texts %q", err, tt.Texts())
 	}
-	if len(calls.prs) != 1 || calls.prs[0] != [2]any{"/wt/a", 307} || len(calls.issues) != 0 {
-		t.Errorf("calls %v %v", calls.prs, calls.issues)
+	if len(calls.PRs) != 1 || calls.PRs[0] != [2]any{"/wt/a", 307} || len(calls.Issues) != 0 {
+		t.Errorf("calls %v %v", calls.PRs, calls.Issues)
 	}
 }
 
 func TestWorkerPanelOpensIssueWithoutPR(t *testing.T) {
-	entry, calls := entryRig(0)
-	src := &source{snap: agentstate.Snapshot{Workers: []agents.Worker{apptest.EntryWorker}}}
+	entry, calls := ghsourcetest.EntryRig(0)
+	src := &source{Snap: agentstate.Snapshot{Workers: []agents.Worker{apptest.EntryWorker}}}
 	sel := stateSelection()
 	sel.Select(state.Selected{Kind: state.KindWorker, ID: "t1"})
 	p := &WorkerPanel{Entry: entry, Source: src, Selection: sel}
@@ -211,13 +177,13 @@ func TestWorkerPanelOpensIssueWithoutPR(t *testing.T) {
 	if err := tt.Click("Open issue #268"); err != nil {
 		t.Fatalf("%v; texts %q", err, tt.Texts())
 	}
-	if len(calls.issues) != 1 || calls.issues[0] != [2]any{"/wt/a", 268} || len(calls.prs) != 0 {
-		t.Errorf("calls %v %v", calls.prs, calls.issues)
+	if len(calls.Issues) != 1 || calls.Issues[0] != [2]any{"/wt/a", 268} || len(calls.PRs) != 0 {
+		t.Errorf("calls %v %v", calls.PRs, calls.Issues)
 	}
 }
 
 func TestWorkerPanelNoEntryWithoutIssueOrPR(t *testing.T) {
-	entry, _ := entryRig(0)
+	entry, _ := ghsourcetest.EntryRig(0)
 	w := apptest.EntryWorker
 	w.Issue = ""
 	if label, open := entry.For(w); label != "" || open != nil {

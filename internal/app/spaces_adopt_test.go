@@ -116,8 +116,8 @@ func adoptFrame(t *testing.T, load func() (*projects.Store, error), save func(*p
 	w := &fakeWindow{visible: true}
 	f := NewFrame(Deps{})
 	f.deps.Projects.Load, f.deps.Projects.Save = load, save
-	f.deps.StartAgents = func(func()) (AgentSource, func()) {
-		return &source{snap: agentstate.Snapshot{CoreVersion: "0.1.18",
+	f.deps.StartAgents = func(func()) (agentstate.AgentSource, func()) {
+		return &source{Snap: agentstate.Snapshot{CoreVersion: "0.1.18",
 			Orchestrators: []agents.Worker{foreignTerm("t1", agents.RoleOrchestrator, "scratch", repo)}}}, func() {}
 	}
 	return f, w, f.Attach(w)

@@ -69,8 +69,8 @@ func TestFrameShowsLoadErrorAndKeepsDefaultOrder(t *testing.T) {
 	w := &fakeWindow{visible: true}
 	f := NewFrame(Deps{})
 	f.deps.Projects.Load = func() (*projects.Store, error) { return projects.Load(path) }
-	f.deps.StartAgents = func(func()) (AgentSource, func()) {
-		return &source{snap: agentstate.Snapshot{}}, func() {}
+	f.deps.StartAgents = func(func()) (agentstate.AgentSource, func()) {
+		return &source{Snap: agentstate.Snapshot{}}, func() {}
 	}
 	stop := f.Attach(w)
 	defer stop()
