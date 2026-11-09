@@ -9,6 +9,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/owner"
@@ -665,11 +666,11 @@ func TestBlockedMenuRereadsOnANewTurnAndGoesWhenUnblocked(t *testing.T) {
 
 func TestBlockedMenuOpensTheWorkerPR(t *testing.T) {
 	entry, calls := entryRig(307)
-	src := &source{snap: agentstate.Snapshot{Workers: []agents.Worker{entryWorker}}}
+	src := &source{snap: agentstate.Snapshot{Workers: []agents.Worker{apptest.EntryWorker}}}
 	src.snap.Workers[0].Status = "blocked"
 	r := newQRig(t, src)
 	r.card.Entry = entry
-	r.open(entryWorker.Name)
+	r.open(apptest.EntryWorker.Name)
 	if err := r.tt.Click("Open PR #307"); err != nil {
 		t.Fatalf("%v; texts %q", err, r.tt.Texts())
 	}

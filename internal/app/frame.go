@@ -21,6 +21,7 @@ import (
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/ghostty"
+	"github.com/contursofran/contr/internal/app/ghsource"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/reviewview"
 	"github.com/contursofran/contr/internal/app/state"
@@ -112,9 +113,9 @@ type Frame struct {
 	// right of the terminal area, and the title bar tabs shrink to icon and id (D59).
 	PR *PRPane
 	// WorkerPRs finds the pull request of each worker's branch (D104). [Frame.Attach] makes it.
-	WorkerPRs *WorkerPRs
+	WorkerPRs *ghsource.WorkerPRs
 	// IssueTitles reads the issue title of each worker for line 1 of its row (D174). [Frame.Attach] makes it.
-	IssueTitles *IssueTitles
+	IssueTitles *ghsource.IssueTitles
 	// OpenIssueWeb opens issue n of the repository in dir in the browser. [Frame.Attach] sets it;
 	// tests replace it.
 	OpenIssueWeb func(dir string, n int) error
@@ -232,7 +233,7 @@ func (f *Frame) OpenPR(dir string, n int) {
 	if viewersEnabled && f.PR != nil {
 		f.PR.Open(dir, n)
 		if f.agentSnap != nil {
-			f.PR.Item = itemOf(f.snap.Workers, dir)
+			f.PR.Item = ghsource.ItemOf(f.snap.Workers, dir)
 		}
 	}
 }
@@ -291,8 +292,8 @@ func (f *Frame) OpenPRInBrowser(dir string, n int) {
 
 // agentRowEntry is the entry of the agent rows. Its Open PR opens the browser; it has no
 // OpenPR, so the rows cannot reach the PR pane (D127).
-func (f *Frame) agentRowEntry() WorkerEntry {
-	return WorkerEntry{PRs: f.WorkerPRs, OpenIssue: f.OpenIssue, OpenPRWeb: f.OpenPRInBrowser}
+func (f *Frame) agentRowEntry() ghsource.WorkerEntry {
+	return ghsource.WorkerEntry{PRs: f.WorkerPRs, OpenIssue: f.OpenIssue, OpenPRWeb: f.OpenPRInBrowser}
 }
 
 // openWeb runs open off the UI thread and shows its error in the status message.

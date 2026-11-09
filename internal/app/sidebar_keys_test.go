@@ -6,6 +6,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/apptest"
+	"github.com/contursofran/contr/internal/app/ghsource"
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/projects"
 )
@@ -90,9 +92,9 @@ func TestArrowKeysAndEnterWorkInTheIconColumn(t *testing.T) {
 func TestAnIdleWorkerWithPendingChecksShowsCIOnLineTwo(t *testing.T) {
 	h := newRows(t)
 	rig := newPRSourceRig(map[string]string{h.cwds[0]: `{"number":307,"state":"OPEN","statusCheckRollup":[{"status":"IN_PROGRESS"}]}`})
-	rig.w.Sync(liveWorker(h.cwds[0]))
-	rig.flush()
-	h.list.Entry = WorkerEntry{PRs: rig.w}
+	rig.w.Sync(apptest.LiveWorker(h.cwds[0]))
+	rig.Flush()
+	h.list.Entry = ghsource.WorkerEntry{PRs: rig.w}
 	snap := h.live.get()
 	snap.Workers[0].Status = "idle"
 	h.send(snap)
