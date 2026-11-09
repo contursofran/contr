@@ -1,6 +1,6 @@
 # ProjectsModal
 
-One palette dialog that shows, adds and hides the projects of the sidebar (#494, D202).
+One palette dialog that shows, adds and hides the projects of the sidebar (#494, D207).
 
 Opens from the "Open projects" item of the Projects head `+` menu (D171). The owner-approved mock-up of #494 is the picture; no spec image exists yet (the sheet part comes in slice 6).
 
@@ -12,7 +12,7 @@ Opens from the "Open projects" item of the Projects head `+` menu (D171). The ow
 ├─────────────────────────────────────────────────────────────────────┤
 │ Open · 2                              drag to reorder the sidebar   │  section + hint
 │ ⋮⋮ [C ] contr       ~/code/contr · main · orchestrator idle  Hide ⏎ switch │
-│ ⋮⋮ [CR] contr-rune  ~/code/contr-rune · main · 1 need you           │
+│ ⋮⋮ [CR] contr-rune  ~/code/contr-rune · main · 1 needs you          │
 │ Recent                                                              │
 │    [S ] site        ~/code/site · main                      10m ago │
 ├─────────────────────────────────────────────────────────────────────┤
@@ -68,13 +68,13 @@ Exact strings:
 - Hide: `Hide`; toast `<name> hidden from the sidebar` with `Undo`.
 - Empty: `No project matches "<text>". Paste a GitHub repo or a path to add one.`
 - Footer: `↑↓ move`, `⏎ <action>`, `⌘⌫ hide`, ghost `Open folder… ⌘O`.
-- A zero count never shows: no `0 worktrees`, no `0 need you`.
+- A zero count never shows: no `0 worktrees`, no `0 need you`. The count reads `1 needs you` or `N need you` (N > 1).
 
 ## Behavior
 
 - Every change saves at once (D63). There is no `Done`. Esc or a click outside closes the dialog.
 - The meta of an open row is `<path with ~> · <branch> · <live state>`. A part with no value is left out.
-- Live state (Q5): the `Hold` text of the top holder of the main worktree row, for example `orchestrator idle`. When worktree rows need the owner (`HoldYou`), `N need you` takes its place.
+- Live state (Q5): the `Hold` text of the top holder of the main worktree row, for example `orchestrator idle`. When worktree rows need the owner (`HoldYou`), `N need you` takes its place. A 6 px `claude` dot comes before the live state when an orchestrator holds the row.
 - Hide (D70) hides the project in contr only. It never closes an hc terminal or stops an agent. It also touches the project in `recent`, so it is the first row of Recent (Q8). The toast has `Undo`: it shows the project again and restores its old place in the order. Undo still works after the dialog closes (Q7).
 - Open row: Enter or a click switches the sidebar to the project and closes the dialog.
 - Recent row: Enter or a click shows the project again (D70) and adds it to the sidebar. A hidden project shows in Recent while it has a `recent` entry.
@@ -117,7 +117,7 @@ Exact strings:
 
 ## Tokens
 
-`scrim`, `glass-float`, `float-line`, `shadow-float`, `radius-14`, `radius-8`, `hairline`, `hover`, `selected`, `input-line`, `ink-100`, `ink-85`, `ink-62`, `ink-45`, `ink-38`, `ink-30`, `blocked`, `space-10`, `focus-ring`.
+`scrim`, `glass-float`, `float-line`, `shadow-float`, `radius-14`, `radius-8`, `hairline`, `hover`, `selected`, `input-line`, `ink-100`, `ink-85`, `ink-62`, `ink-45`, `ink-38`, `ink-30`, `blocked`, `claude`, `space-10`, `focus-ring`.
 
 ## Build in MyGo
 
@@ -127,7 +127,7 @@ Exact strings:
 - `ui.Toast` with an action for Hide (`toast.md`); the frame owns it.
 - Use `kit` parts where they fit. Do not draw rows by hand.
 
-## Decided questions (#494, D202)
+## Decided questions (#494, D207)
 
 - Q1: `N need you` may use `blocked` text in this one place. The `blocked` row of `tokens.md` says so.
 - Q2: the first Esc clears the field; Esc on an empty field closes.

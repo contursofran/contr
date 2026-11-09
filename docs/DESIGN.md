@@ -388,7 +388,7 @@ or a click outside closes it.
 
 ## Projects modal
 
-Opens from the "Open projects" item of the Projects head `+` menu (D171). It is one palette dialog: a search field that also takes a GitHub repo or a path, one list (`Add`, `Open · N`, `Recent`) and a footer with the keys. Layout, states, keys and copy are in `docs/spec/ProjectsModal.md` (D202). Hide keeps D70: it hides a project in contr only. The order, hidden and recent lists live in `projects.json` (D63).
+Opens from the "Open projects" item of the Projects head `+` menu (D171). It is one palette dialog: a search field that also takes a GitHub repo or a path, one list (`Add`, `Open · N`, `Recent`) and a footer with the keys. Layout, states, keys and copy are in `docs/spec/ProjectsModal.md` (D207). Hide keeps D70: it hides a project in contr only. The order, hidden and recent lists live in `projects.json` (D63).
 
 ## PR viewer (#151–#154) **(hidden until it is redesigned, D127, D147)**
 

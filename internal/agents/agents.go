@@ -10,13 +10,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -41,6 +44,12 @@ const (
 	// session that ran /contr:orchestrate, so its row shows that it
 	// orchestrates before it has workers (D191).
 	LabelOrchestrating = "contr.orchestrating"
+	// LabelContext and LabelContextLimit are set by the kit's Stop hook on a
+	// Claude Code session's own terminal: the context size in tokens and the
+	// window Claude Code compacts at (D189). The Context meter falls back to
+	// them when the session runs no status line (D205).
+	LabelContext      = "contr.context"
+	LabelContextLimit = "contr.context-limit"
 )
 
 // RoleOrchestrator is the role label of an orchestrator agent.
@@ -248,6 +257,12 @@ type Worker struct {
 	// Orchestrating is true when the kit's Stop hook saw /contr:orchestrate
 	// in the session (LabelOrchestrating, D191).
 	Orchestrating bool `json:"orchestrating,omitempty"`
+	// ContextTokens and ContextLimit are the context size and the compaction
+	// window that the kit's Stop hook put on the terminal (LabelContext,
+	// LabelContextLimit). Both are zero when a label is missing or not a
+	// positive integer (D205).
+	ContextTokens uint64 `json:"context_tokens,omitempty"`
+	ContextLimit  uint64 `json:"context_limit,omitempty"`
 	// Task is what a worker is doing, for line 1 of its row: the cleaned
 	// terminal title. Set by the agent model; empty when the title is not
 	// usable (D169).
@@ -317,6 +332,7 @@ func (t terminal) worker() Worker {
 
 		Orchestrating: t.Labels[LabelOrchestrating] != "",
 	}
+	w.ContextTokens, w.ContextLimit = contextLabels(t.Labels)
 	if t.Name != nil {
 		w.Name = *t.Name
 	}
@@ -419,6 +435,9 @@ type Manager struct {
 
 	getenv func(string) string // reads the environment; tests replace it
 	git    git                 // runs git; tests replace it
+
+	// exe is the contr binary that Claude's status line runs; empty for none.
+	exe string
 }
 
 // New returns a manager on core with the profiles of cfg. A relative kit
@@ -429,7 +448,28 @@ func New(core Core, cfg Config) *Manager {
 			cfg.Kit = abs
 		}
 	}
-	return &Manager{core: core, cfg: cfg, now: time.Now, getenv: os.Getenv, git: runGit}
+	return &Manager{core: core, cfg: cfg, now: time.Now, getenv: os.Getenv, git: runGit, exe: contrExe()}
+}
+
+// contrExe is the absolute path of the running contr binary, found once; ""
+// when it cannot be found.
+var contrExe = sync.OnceValue(func() string {
+	exe, err := os.Executable()
+	if err != nil {
+		slog.Warn("unable to find the contr binary; Claude sessions get no status line", "err", err)
+		return ""
+	}
+	if abs, err := filepath.Abs(exe); err == nil {
+		return abs
+	}
+	return exe
+})
+
+// WithExecutable sets the contr binary path that Claude's status line runs
+// (empty for none) and returns m. New sets it from os.Executable.
+func (m *Manager) WithExecutable(path string) *Manager {
+	m.exe = path
+	return m
 }
 
 // Spawn starts a worker and returns it.
@@ -539,16 +579,54 @@ func (m *Manager) OpenTerminal(ctx context.Context, s TerminalSpec) (Worker, err
 
 // agentArgv returns the profile's command. A claude command whose agent
 // (Profile.Agent, else the profile name) has a definition in the kit gets
-// `--plugin-dir <kit> --agent contr:<agent>` after the program name.
+// `--plugin-dir <kit> --agent contr:<agent>` after the program name. Every
+// claude command gets `--settings` with a status line that runs
+// `contr statusline`, unless it has `--settings` already (D203).
 func (m *Manager) agentArgv(agent string, argv []string) []string {
 	out := append([]string(nil), argv...)
-	if m.cfg.Kit == "" || len(out) == 0 || filepath.Base(out[0]) != "claude" {
+	if len(out) == 0 || filepath.Base(out[0]) != "claude" {
 		return out
 	}
-	if _, err := os.Stat(filepath.Join(m.cfg.Kit, "agents", agent+".md")); err != nil {
-		return out
+	head := []string{out[0]}
+	if m.cfg.Kit != "" {
+		if _, err := os.Stat(filepath.Join(m.cfg.Kit, "agents", agent+".md")); err == nil {
+			head = append(head, "--plugin-dir", m.cfg.Kit, "--agent", "contr:"+agent)
+		}
 	}
-	return append([]string{out[0], "--plugin-dir", m.cfg.Kit, "--agent", "contr:" + agent}, out[1:]...)
+	if m.exe != "" && !hasSettings(out[1:]) {
+		if js, err := statuslineSettings(m.exe); err != nil {
+			slog.Warn("unable to build the status line settings", "err", err)
+		} else {
+			head = append(head, "--settings", js)
+		}
+	}
+	return append(head, out[1:]...)
+}
+
+// hasSettings reports whether args set --settings.
+func hasSettings(args []string) bool {
+	for _, a := range args {
+		if a == "--settings" || strings.HasPrefix(a, "--settings=") {
+			return true
+		}
+	}
+	return false
+}
+
+// statuslineSettings is the --settings JSON that makes Claude Code run
+// `<exe> statusline` as its status line. exe is quoted for a POSIX shell.
+func statuslineSettings(exe string) (string, error) {
+	type statusLine struct {
+		Type    string `json:"type"`
+		Command string `json:"command"`
+	}
+	b, err := json.Marshal(map[string]statusLine{"statusLine": {Type: "command", Command: shellQuote(exe) + " statusline"}})
+	return string(b), err
+}
+
+// shellQuote quotes s as one word for a POSIX shell.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // List returns the workers, sorted by name. With all, finished ones too.
@@ -597,7 +675,7 @@ func (m *Manager) Send(ctx context.Context, name, text string) error {
 // A relative kit path is made absolute, as in New.
 func (m *Manager) WithConfig(cfg Config) *Manager {
 	c := New(m.core, cfg)
-	c.now, c.getenv = m.now, m.getenv
+	c.now, c.getenv, c.exe = m.now, m.getenv, m.exe
 	return c
 }
 
@@ -768,6 +846,17 @@ func sortWorkers(ws []Worker) {
 }
 
 // orText is s, else other when s is empty.
+// contextLabels reads LabelContext and LabelContextLimit. Both must be
+// positive integers; else it gives no data (0, 0).
+func contextLabels(labels map[string]string) (tokens, limit uint64) {
+	t, errT := strconv.ParseUint(labels[LabelContext], 10, 64)
+	l, errL := strconv.ParseUint(labels[LabelContextLimit], 10, 64)
+	if errT != nil || errL != nil || t == 0 || l == 0 {
+		return 0, 0
+	}
+	return t, l
+}
+
 func orText(s, other string) string {
 	if s != "" {
 		return s
