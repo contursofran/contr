@@ -83,7 +83,7 @@ that code, move it to the MyGo part in its own small PR.
 | `internal/app` | the window content: frame and views |
 | `internal/app/kit` | shared view parts: list row, +/− counts, switch, code view |
 | `internal/app/ghostty` | `Conn`: an hc terminal as the connection of MyGo's terminal plugin (D79) |
-| `internal/usage` | plan usage: Claude status line, Codex logs |
+| `internal/usage` | plan usage: Claude status line, `codex app-server`, Codex logs |
 | `internal/prompt` | reads a blocked worker's menu from terminal text: question and choices |
 | `internal/review` | git reads for the Review view: branches ahead of main, files, commits, texts |
 | `internal/github` | GitHub pull requests read through the `gh` command line: runner, client, PR |
