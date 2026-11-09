@@ -101,6 +101,10 @@ func TestOpenMeta(t *testing.T) {
 		t.Errorf("need you: %q %d", meta, n)
 	}
 
+	if got := needYouText(1); got != "1 needs you" {
+		t.Errorf("one need you: %q", got)
+	}
+
 	path, branch, live, _ := openMetaParts(g, "/home/me")
 	if path != "~/code/contr" || branch != "main" || live != "2 need you" {
 		t.Errorf("parts: %q %q %q", path, branch, live)
