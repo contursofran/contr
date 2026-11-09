@@ -378,6 +378,16 @@ func TestTitleBarCapture(t *testing.T) {
 		if !inBar(c, "$ contr") {
 			t.Errorf("%s: the plain terminals left the bar with the builder selected", theme)
 		}
+		// The order of D190: the Claude sessions, then the selected worker, then the plain terminals.
+		lead, _ := c.inBar(t, "lead")
+		builder, _ := c.inBar(t, "#342 · agent-342-titlebar")
+		plain, _ := c.inBar(t, "$ contr")
+		if lead.X >= builder.X {
+			t.Errorf("%s: the lead tab (x %.0f) is not left of the builder's tab (x %.0f) (D190)", theme, lead.X, builder.X)
+		}
+		if builder.X >= plain.X {
+			t.Errorf("%s: the builder's tab (x %.0f) is not left of the plain terminal (x %.0f) (D190)", theme, builder.X, plain.X)
+		}
 		time.Sleep(time.Second)
 
 		// The diff summary counts what the file tree lists: with the changed-only filter on, the
