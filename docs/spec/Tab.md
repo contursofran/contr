@@ -30,7 +30,7 @@ Design system page: component Tab. Shared rules: [README.md](README.md).
 - Click selects the tab: the terminal shows its hc terminal.
 - The close button shows on the selected tab only. On an agent's own
   terminal the close button is hidden (D85): stop an agent from its row's
-  menu.
+  menu or from the tab's menu (Stop, Close; D219).
 - The title is the terminal title (OSC), else the agent name, else
   `$ <folder>`.
 
@@ -42,8 +42,10 @@ Design system page: component Tab. Shared rules: [README.md](README.md).
 
 - `⌘W` closes a plain terminal tab. Arrows move between tabs (`TabsBase`).
 - Middle-click closes a plain terminal tab; an agent tab ignores it (D85, D142).
-- Context menu: Close (plain terminal only; off on an agent tab) and Close
-  others (every plain terminal except this tab; an agent never closes).
+- Context menu: Close and Close others (every plain terminal except this
+  tab; an agent never closes that way). An agent tab has Stop first, and
+  its Close stops the agent and removes the terminal, also an ended one;
+  neither asks for a second click (D219).
   There is no Rename: hc cannot store a name for a terminal (D142).
 - Drag a plain terminal tab onto another to take its place. The agent's own
   tab stays first and does not drag. The order lasts for the session (D142).
@@ -66,7 +68,7 @@ Design system page: component Tab. Shared rules: [README.md](README.md).
 - `TabsBase` with a custom tab view. The title is `Text(...).SingleLine()` (D175: `NoWrap().Ellipsis()` does not cut a title wider than its tab, it runs over the close button).
 - Close button: `ButtonBase` with the `close` icon, label "Close tab".
 - Middle-click (`HandleInput`, button 2) and ⌘W close the tab. Reorder with `Drag` and `Drop` on the tab.
-- Context menu (`.ContextMenu(...)`): Close, Close others. Rename waits for an hc name call (D142).
+- Context menu (`.ContextMenu(...)`): Stop (agent tab only, D219), Close, Close others. Rename waits for an hc name call (D142).
 
 ## Do and do not
 

@@ -22,6 +22,9 @@ const (
 	LabelProjectsNew  = "New orchestrator"
 	// LabelProjectsAdd names the `+` button of the Projects head; its menu has the two above.
 	LabelProjectsAdd = "Add"
+	// MenuCloseAll and MenuHideProject are the items of a project row's menu (D219).
+	MenuCloseAll    = "Close all agents"
+	MenuHideProject = "Hide project"
 	// LabelSettings names the Settings button at the bottom of the sidebar (D126, D147).
 	LabelSettingsOpen = "Settings"
 	// LabelSettingsUpdate names it while an update waits.
@@ -236,21 +239,37 @@ func (l *SpacesList) projectList(c *ui.Context) {
 		}
 		l.projectRow(c, l.groups[items[i].group], items[i].group)
 	}).Label(LabelProjectList).Focusable().FillWidth().Grow(1).MinHeight(0).ContextMenu(func(m *ui.Menu) {
-		// The menu key (or Shift+F10) with the list focused opens the menu of the empty
+		// The menu key (or Shift+F10) with the list focused opens the menu of the
 		// project under the key cursor, so no right-click is needed (#443). The rows
-		// have menus of their own for the pointer; other rows give no items here.
+		// have menus of their own for the pointer; agent rows give no items here.
 		if l.cursor >= 0 && l.cursor < len(items) && items[l.cursor].agent == nil {
-			if g := l.groups[items[l.cursor].group]; g.Path != "" {
-				l.emptyMenu(m, g)
-			}
+			l.projectMenu(m, l.groups[items[l.cursor].group])
 		}
 	})
 }
 
-// emptyMenu is the menu of an empty project (D116): a new orchestrator in its folder.
-func (l *SpacesList) emptyMenu(m *ui.Menu, g spaces.RepoGroup) {
-	if m.Item(LabelNewIn(g)).Chosen() && l.OnNewIn != nil {
-		l.OnNewIn(g.Path)
+// projectMenu is the menu of a project row (D219). An empty project (D116) has
+// a new orchestrator in its folder; a project with agents has Close all agents:
+// it stops each agent and removes its terminal, also one that already ended.
+// Both have Hide project. Close all agents asks for no second click, as Stop
+// of an agent row.
+func (l *SpacesList) projectMenu(m *ui.Menu, g spaces.RepoGroup) {
+	if g.Path != "" {
+		if m.Item(LabelNewIn(g)).Chosen() && l.OnNewIn != nil {
+			l.OnNewIn(g.Path)
+		}
+	} else {
+		lines := agentLines(g, l.snapshot())
+		off := l.Source == nil || len(lines) == 0
+		if m.Item(MenuCloseAll).Disabled(off).Chosen() && !off {
+			for _, a := range lines {
+				l.act(a.w, "closed", l.Source.Close)
+			}
+		}
+	}
+	m.Separator()
+	if m.Item(MenuHideProject).Disabled(l.OnHide == nil).Chosen() && l.OnHide != nil {
+		l.OnHide(g.CommonDir)
 	}
 }
 
@@ -280,8 +299,8 @@ func (l *SpacesList) projectRow(c *ui.Context, g spaces.RepoGroup, index int) {
 		// An empty project is dim: name and icon ink-42, no `+` (#436). The
 		// start of an orchestrator in its folder (D116) is in the row's menu.
 		o.NameInk, iconInk = p.Ink42, projectIconInk(p, false, true)
-		o.Menu = func(m *ui.Menu) { l.emptyMenu(m, g) }
 	}
+	o.Menu = func(m *ui.Menu) { l.projectMenu(m, g) }
 	o.Lead = func() { rowIcon(c, "folder", iconInk) }
 	if index == 0 {
 		kit.Row(c, o)

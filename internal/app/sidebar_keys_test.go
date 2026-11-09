@@ -167,7 +167,7 @@ func TestTheMenuKeyOnAnEmptyProjectOpensItsMenu(t *testing.T) {
 	}
 }
 
-func TestTheMenuKeyOnAProjectWithAgentsOpensNoMenu(t *testing.T) {
+func TestTheMenuKeyOnAProjectWithAgentsOpensItsMenu(t *testing.T) {
 	h, _ := emptyProjectRig(t)
 	for i := 0; i < 20 && !h.tt.Focused(LabelProjectList); i++ {
 		h.tt.Key(0, ui.KeyTab)
@@ -175,7 +175,10 @@ func TestTheMenuKeyOnAProjectWithAgentsOpensNoMenu(t *testing.T) {
 	h.tt.Key(0, ui.KeyDown) // the first row: a project with agents
 	h.tt.Key(0, ui.KeyContextMenu)
 	if err := h.tt.ChooseMenuItem(LabelNewIn(spaces.RepoGroup{Name: "gamma"})); err == nil {
-		t.Error("a menu opened for a row with agents")
+		t.Error("the menu of a row with agents has a new orchestrator")
+	}
+	if !slices.Contains(h.tt.Menu(), MenuHideProject) {
+		t.Errorf("menu %q, want Hide project (D219)", h.tt.Menu())
 	}
 }
 

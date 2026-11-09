@@ -54,6 +54,9 @@ type SpacesList struct {
 	// OnNewIn runs when `+ new` of an empty project is clicked, with the
 	// project's folder (D116). Nil: the button does nothing.
 	OnNewIn func(dir string)
+	// OnHide runs when "Hide project" of a project row's menu is chosen, with
+	// the project key (D219). Nil: the item is off.
+	OnHide func(dir string)
 	// OnReordered runs after a drag changed the order in the store, so the
 	// owner can save it. Nil: nothing more happens.
 	OnReordered func()
