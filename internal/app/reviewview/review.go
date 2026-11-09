@@ -1,4 +1,8 @@
-package app
+// Package reviewview is the Review view: the branches ahead of main, their
+// files or commits, and the selected file as a code view. Its name is not
+// review, so that it does not clash with internal/review, the git reads it
+// shows.
+package reviewview
 
 import (
 	"context"
@@ -17,11 +21,11 @@ import (
 
 const (
 	reviewListW = 260
-	// reviewBase is the branch that the others are compared with (D27).
-	reviewBase = "main"
-	// gitReadTimeout is the time that one read of the Review view or of the
+	// ReviewBase is the branch that the others are compared with (D27).
+	ReviewBase = "main"
+	// GitReadTimeout is the time that one read of the Review view or of the
 	// file tree may run. A git that hangs then ends with an error.
-	gitReadTimeout = 30 * time.Second
+	GitReadTimeout = 30 * time.Second
 )
 
 // The two modes of the switch, as option indexes.
@@ -63,7 +67,7 @@ type Review struct {
 	// reads drops the result of an older read and ends its context.
 	reads view.Latest
 	// git runs git; nil runs the `git` command. timeout is the time limit
-	// of one read; 0 is gitReadTimeout. Tests set both.
+	// of one read; 0 is GitReadTimeout. Tests set both.
 	git     git.InputRunner
 	timeout time.Duration
 }
@@ -83,6 +87,7 @@ func (r *Review) Commits() []review.Commit  { return r.commits }
 func (r *Review) Branches() []review.Branch { return r.branches }
 func (r *Review) Code() *editor.DiffState   { return r.code }
 func (r *Review) ByCommit() bool            { return r.mode == reviewByCommit }
+func (r *Review) Dir() string               { return r.repo.Dir }
 
 // run reads on a goroutine and applies the result on the UI thread, unless a
 // newer read started meanwhile. It ends the read in flight. read gets a
@@ -92,7 +97,7 @@ func (r *Review) run(read func(ctx context.Context) func()) {
 	r.drop()
 	limit := r.timeout
 	if limit <= 0 {
-		limit = gitReadTimeout
+		limit = GitReadTimeout
 	}
 	r.reads.Read(r.Env, limit, func(ctx context.Context) func() {
 		apply := read(ctx)
@@ -120,7 +125,7 @@ func (r *Review) OpenFile(dir, rel string) { r.setRepo(dir, rel) }
 
 func (r *Review) setRepo(dir, want string) {
 	r.want = want
-	r.repo = review.Repo{Dir: dir, Base: reviewBase, Git: r.git}
+	r.repo = review.Repo{Dir: dir, Base: ReviewBase, Git: r.git}
 	r.branches, r.branch, r.files, r.file = nil, "", nil, ""
 	r.commits, r.commit, r.code, r.binary, r.err = nil, "", nil, false, ""
 	r.branchesRead = false
@@ -287,7 +292,7 @@ func (r *Review) branchList(c *ui.Context) {
 			// Nothing is shown while the first read runs; an empty result
 			// is told once the read is done (err stays empty).
 			if r.loaded() {
-				r.note(c, "No branches ahead of "+reviewBase)
+				r.note(c, "No branches ahead of "+ReviewBase)
 			}
 		}
 		ui.Scroll(c.Key("branchlist")).Fill().Children(func() {

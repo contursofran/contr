@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/review"
@@ -96,26 +97,26 @@ func TestDiffSummaryHidesBeforeTheFirstReadWithNoFolderAndAfterAReadError(t *tes
 // committed change, an uncommitted change and an untracked file in the work tree, and a second
 // agent's branch with its own commit that must not count.
 func TestDiffSummaryAndFileTreeAgreeOnAWorkTreeWithASecondAgentsBranch(t *testing.T) {
-	s := reviewScratch(t)
-	write(t, s.dir, "mod.go", "1\n2\n3\n")
-	write(t, s.dir, "edit.go", "a\nb\n")
-	s.git("add", "-A")
-	s.git("commit", "-m", "files")
+	s := apptest.NewRepo(t)
+	write(t, s.Dir, "mod.go", "1\n2\n3\n")
+	write(t, s.Dir, "edit.go", "a\nb\n")
+	s.Git("add", "-A")
+	s.Git("commit", "-m", "files")
 	// The second agent: its own worktree and branch, one commit ahead of main.
 	other := filepath.Join(t.TempDir(), "other")
-	s.git("worktree", "add", "-b", "agent/other", other)
+	s.Git("worktree", "add", "-b", "agent/other", other)
 	write(t, other, "theirs.go", "x\ny\nz\nw\nv\n")
 	runGit(t, other, "add", "-A")
 	runGit(t, other, "commit", "-m", "theirs")
 	// The selected agent: a committed change, an uncommitted one and an untracked file.
-	s.git("checkout", "-b", "feature")
-	write(t, s.dir, "mod.go", "1\n2\n3\n4\n5\n6\n") // committed: +3
-	s.git("add", "-A")
-	s.git("commit", "-m", "mod")
-	write(t, s.dir, "edit.go", "a\n")           // uncommitted: −1
-	write(t, s.dir, "fresh.go", "a\nb\nc\nd\n") // untracked: +4
+	s.Git("checkout", "-b", "feature")
+	write(t, s.Dir, "mod.go", "1\n2\n3\n4\n5\n6\n") // committed: +3
+	s.Git("add", "-A")
+	s.Git("commit", "-m", "mod")
+	write(t, s.Dir, "edit.go", "a\n")           // uncommitted: −1
+	write(t, s.Dir, "fresh.go", "a\nb\nc\nd\n") // untracked: +4
 
-	r := newTreeRig(t, s.dir)
+	r := newTreeRig(t, s.Dir)
 	r.ft.onlyChanged = true
 	r.frame()
 	d := &DiffSummary{Tree: r.ft}
@@ -152,7 +153,7 @@ func TestDiffSummaryAndFileTreeAgreeOnAWorkTreeWithASecondAgentsBranch(t *testin
 		t.Errorf("title bar label wrong; texts %q", tt.Texts())
 	}
 	// A change in the work tree and a new read: both move together.
-	write(t, s.dir, "fresh.go", "a\n")
+	write(t, s.Dir, "fresh.go", "a\n")
 	r.notify()
 	r.frame()
 	if got, _ := d.Summary(); got != (review.Summary{Added: 4, Removed: 1, Files: 3}) {

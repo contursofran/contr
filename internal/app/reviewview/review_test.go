@@ -1,59 +1,15 @@
-package app
+package reviewview
 
 import (
-	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/view"
 )
-
-type reviewRepo struct {
-	t   *testing.T
-	dir string
-}
-
-// reviewScratch makes a repository with branch main in a temporary folder.
-func reviewScratch(t *testing.T) *reviewRepo {
-	t.Helper()
-	s := &reviewRepo{t: t, dir: t.TempDir()}
-	s.git("init", "-b", "main")
-	s.commit("base", map[string]string{"base.txt": "base\n"})
-	return s
-}
-
-func (s *reviewRepo) git(args ...string) string {
-	s.t.Helper()
-	cmd := exec.Command("git", append([]string{"-C", s.dir, "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"}, args...)...)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		s.t.Fatalf("git %v: %v: %s", args, err, out)
-	}
-	return strings.TrimSpace(string(out))
-}
-
-func (s *reviewRepo) commit(msg string, files map[string]string) {
-	s.t.Helper()
-	for p, text := range files {
-		if err := os.WriteFile(filepath.Join(s.dir, p), []byte(text), 0o644); err != nil {
-			s.t.Fatal(err)
-		}
-	}
-	s.git("add", "-A")
-	s.git("commit", "-m", msg)
-}
-
-// branchWithTwoCommits makes branch b: commit one adds a.txt, commit two adds
-// b.txt.
-func (s *reviewRepo) branchWithTwoCommits() {
-	s.git("checkout", "-b", "b")
-	s.commit("one", map[string]string{"a.txt": "a1\n"})
-	s.commit("two", map[string]string{"b.txt": "b1\nb2\n"})
-}
 
 // newTestReview returns a view that runs reads at once, and the number of
 // reads started.
@@ -69,10 +25,10 @@ func reviewTester(r *Review) *ui.Tester {
 }
 
 func TestReviewOpensFirstBranchAndFile(t *testing.T) {
-	s := reviewScratch(t)
-	s.branchWithTwoCommits()
+	s := apptest.NewRepo(t)
+	s.BranchWithTwoCommits()
 	r, _ := newTestReview()
-	r.SetRepo(s.dir)
+	r.SetRepo(s.Dir)
 	if r.Branch() != "b" || r.File() != "a.txt" {
 		t.Fatalf("branch %q, file %q", r.Branch(), r.File())
 	}
@@ -88,10 +44,10 @@ func TestReviewOpensFirstBranchAndFile(t *testing.T) {
 }
 
 func TestReviewClickFile(t *testing.T) {
-	s := reviewScratch(t)
-	s.branchWithTwoCommits()
+	s := apptest.NewRepo(t)
+	s.BranchWithTwoCommits()
 	r, _ := newTestReview()
-	r.SetRepo(s.dir)
+	r.SetRepo(s.Dir)
 	tt := reviewTester(r)
 	if err := tt.Click("file b.txt"); err != nil {
 		t.Fatal(err)
@@ -102,10 +58,10 @@ func TestReviewClickFile(t *testing.T) {
 }
 
 func TestReviewByCommit(t *testing.T) {
-	s := reviewScratch(t)
-	s.branchWithTwoCommits()
+	s := apptest.NewRepo(t)
+	s.BranchWithTwoCommits()
 	r, _ := newTestReview()
-	r.SetRepo(s.dir)
+	r.SetRepo(s.Dir)
 	tt := reviewTester(r)
 	if err := tt.Click("By commit"); err != nil {
 		t.Fatal(err)
@@ -135,10 +91,10 @@ func TestReviewByCommit(t *testing.T) {
 }
 
 func TestReviewBackToWhole(t *testing.T) {
-	s := reviewScratch(t)
-	s.branchWithTwoCommits()
+	s := apptest.NewRepo(t)
+	s.BranchWithTwoCommits()
 	r, _ := newTestReview()
-	r.SetRepo(s.dir)
+	r.SetRepo(s.Dir)
 	tt := reviewTester(r)
 	if err := tt.Click("By commit"); err != nil {
 		t.Fatal(err)
@@ -152,15 +108,15 @@ func TestReviewBackToWhole(t *testing.T) {
 }
 
 func TestReviewStaleReadDropped(t *testing.T) {
-	s := reviewScratch(t)
-	s.branchWithTwoCommits()
-	s.git("checkout", "main")
-	s.git("checkout", "-b", "c")
-	s.commit("three", map[string]string{"c.txt": "c\n"})
+	s := apptest.NewRepo(t)
+	s.BranchWithTwoCommits()
+	s.Git("checkout", "main")
+	s.Git("checkout", "-b", "c")
+	s.Commit("three", map[string]string{"c.txt": "c\n"})
 	r, _ := newTestReview()
 	var held []func()
 	r.Env.Run.Go = func(f func()) { held = append(held, f) }
-	r.SetRepo(s.dir)
+	r.SetRepo(s.Dir)
 	held[0]() // branches b, c arrive; the read of b's files (held[1]) is held
 	if len(held) != 2 || r.Branch() != "b" {
 		t.Fatalf("held %d reads, branch %q", len(held), r.Branch())
@@ -204,20 +160,20 @@ func TestReviewNoRepo(t *testing.T) {
 }
 
 func TestReviewNoBranches(t *testing.T) {
-	s := reviewScratch(t)
+	s := apptest.NewRepo(t)
 	r, _ := newTestReview()
-	r.SetRepo(s.dir)
+	r.SetRepo(s.Dir)
 	if tt := reviewTester(r); !tt.HasText("No branches ahead of main") {
 		t.Errorf("texts %q", tt.Texts())
 	}
 }
 
 func TestReviewBinary(t *testing.T) {
-	s := reviewScratch(t)
-	s.git("checkout", "-b", "bin")
-	s.commit("bin", map[string]string{"x.bin": "a\x00b\n"})
+	s := apptest.NewRepo(t)
+	s.Git("checkout", "-b", "bin")
+	s.Commit("bin", map[string]string{"x.bin": "a\x00b\n"})
 	r, _ := newTestReview()
-	r.SetRepo(s.dir)
+	r.SetRepo(s.Dir)
 	if r.File() != "x.bin" || r.Code() != nil {
 		t.Fatalf("file %q, code %v", r.File(), r.Code())
 	}
@@ -227,14 +183,14 @@ func TestReviewBinary(t *testing.T) {
 }
 
 func TestReviewSetRepoSwitches(t *testing.T) {
-	a, b := reviewScratch(t), reviewScratch(t)
-	a.git("checkout", "-b", "from-a")
-	a.commit("x", map[string]string{"x.txt": "x\n"})
-	b.git("checkout", "-b", "from-b")
-	b.commit("y", map[string]string{"y.txt": "y\n"})
+	a, b := apptest.NewRepo(t), apptest.NewRepo(t)
+	a.Git("checkout", "-b", "from-a")
+	a.Commit("x", map[string]string{"x.txt": "x\n"})
+	b.Git("checkout", "-b", "from-b")
+	b.Commit("y", map[string]string{"y.txt": "y\n"})
 	r, _ := newTestReview()
-	r.SetRepo(a.dir)
-	r.SetRepo(b.dir)
+	r.SetRepo(a.Dir)
+	r.SetRepo(b.Dir)
 	if bs := r.Branches(); len(bs) != 1 || bs[0].Name != "from-b" {
 		t.Errorf("branches %+v", bs)
 	}
@@ -244,10 +200,10 @@ func TestReviewSetRepoSwitches(t *testing.T) {
 }
 
 func TestReviewArrowKeysMoveFile(t *testing.T) {
-	s := reviewScratch(t)
-	s.branchWithTwoCommits()
+	s := apptest.NewRepo(t)
+	s.BranchWithTwoCommits()
 	r, _ := newTestReview()
-	r.SetRepo(s.dir)
+	r.SetRepo(s.Dir)
 	tt := reviewTester(r)
 	if err := tt.Click("file a.txt"); err != nil {
 		t.Fatal(err)

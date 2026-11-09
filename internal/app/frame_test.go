@@ -13,8 +13,10 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/reviewview"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
@@ -25,6 +27,15 @@ import (
 )
 
 // newTester builds a frame of 1440x900.
+// newTestReview returns a Review view that runs reads at once, and the number
+// of reads started.
+func newTestReview() (*reviewview.Review, *int) {
+	reads := 0
+	r := reviewview.NewReview(view.Env{})
+	r.Env.Run.Go = func(f func()) { reads++; f() }
+	return r, &reads
+}
+
 func newTester(t *testing.T) (*Frame, *ui.Tester) {
 	t.Helper()
 	f := NewFrame(Deps{})
@@ -363,33 +374,33 @@ func reviewFrame(t *testing.T) (*Frame, *int) {
 }
 
 func TestFrameReviewFollowsSelection(t *testing.T) {
-	a, b := reviewScratch(t), reviewScratch(t)
+	a, b := apptest.NewRepo(t), apptest.NewRepo(t)
 	f, _ := reviewFrame(t)
 	f.ToggleReview()
-	f.Selection.Select(state.Selected{Kind: state.KindWorktree, ID: a.dir})
-	if f.Review.repo.Dir != a.dir {
-		t.Fatalf("repo %q, want %q", f.Review.repo.Dir, a.dir)
+	f.Selection.Select(state.Selected{Kind: state.KindWorktree, ID: a.Dir})
+	if f.Review.Dir() != a.Dir {
+		t.Fatalf("repo %q, want %q", f.Review.Dir(), a.Dir)
 	}
-	f.Selection.Select(state.Selected{Kind: state.KindWorktree, ID: b.dir})
-	if f.Review.repo.Dir != b.dir {
-		t.Fatalf("repo %q, want %q", f.Review.repo.Dir, b.dir)
+	f.Selection.Select(state.Selected{Kind: state.KindWorktree, ID: b.Dir})
+	if f.Review.Dir() != b.Dir {
+		t.Fatalf("repo %q, want %q", f.Review.Dir(), b.Dir)
 	}
 	f.Selection.Clear()
-	if f.Review.repo.Dir != "" {
-		t.Fatalf("repo %q after clear, want none", f.Review.repo.Dir)
+	if f.Review.Dir() != "" {
+		t.Fatalf("repo %q after clear, want none", f.Review.Dir())
 	}
 }
 
 func TestFrameReviewHiddenNoReads(t *testing.T) {
-	a := reviewScratch(t)
+	a := apptest.NewRepo(t)
 	f, reads := reviewFrame(t)
-	f.Selection.Select(state.Selected{Kind: state.KindWorktree, ID: a.dir})
+	f.Selection.Select(state.Selected{Kind: state.KindWorktree, ID: a.Dir})
 	if *reads != 0 {
 		t.Fatalf("%d reads while the view is hidden", *reads)
 	}
 	f.ToggleReview()
-	if *reads == 0 || f.Review.repo.Dir != a.dir {
-		t.Fatalf("showing the view did not read; reads %d, repo %q", *reads, f.Review.repo.Dir)
+	if *reads == 0 || f.Review.Dir() != a.Dir {
+		t.Fatalf("showing the view did not read; reads %d, repo %q", *reads, f.Review.Dir())
 	}
 	f.ToggleReview()
 	n := *reads

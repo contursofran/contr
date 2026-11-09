@@ -13,6 +13,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
@@ -74,21 +75,21 @@ func write(t *testing.T, dir, rel, text string) {
 // changedRepo is a repo on branch "feature" with a modified, a new, a deleted
 // and an ignored file, and a folder with a file in it.
 func changedRepo(t *testing.T) string {
-	s := reviewScratch(t)
-	write(t, s.dir, ".gitignore", "*.log\nbuild/\n")
-	write(t, s.dir, "mod.go", "1\n2\n3\n")
-	write(t, s.dir, "gone.md", "a\nb\n")
-	write(t, s.dir, "src/deep/inner.go", "x\n")
-	write(t, s.dir, "same.txt", "same\n")
-	s.git("add", "-A")
-	s.git("commit", "-m", "files")
-	s.git("checkout", "-b", "feature")
-	write(t, s.dir, "mod.go", "1\n2\n3\n4\n5\n6\n") // +3
-	os.Remove(filepath.Join(s.dir, "gone.md"))
-	write(t, s.dir, "fresh.go", "a\nb\nc\nd\n")
-	write(t, s.dir, "noise.log", "ignored\n")
-	write(t, s.dir, "build/out.bin", "x")
-	return s.dir
+	s := apptest.NewRepo(t)
+	write(t, s.Dir, ".gitignore", "*.log\nbuild/\n")
+	write(t, s.Dir, "mod.go", "1\n2\n3\n")
+	write(t, s.Dir, "gone.md", "a\nb\n")
+	write(t, s.Dir, "src/deep/inner.go", "x\n")
+	write(t, s.Dir, "same.txt", "same\n")
+	s.Git("add", "-A")
+	s.Git("commit", "-m", "files")
+	s.Git("checkout", "-b", "feature")
+	write(t, s.Dir, "mod.go", "1\n2\n3\n4\n5\n6\n") // +3
+	os.Remove(filepath.Join(s.Dir, "gone.md"))
+	write(t, s.Dir, "fresh.go", "a\nb\nc\nd\n")
+	write(t, s.Dir, "noise.log", "ignored\n")
+	write(t, s.Dir, "build/out.bin", "x")
+	return s.Dir
 }
 
 func TestFileTreeShowsFilesWithCountsAndHidesIgnored(t *testing.T) {
@@ -435,14 +436,14 @@ func TestFramePanelShowsTheFileTreeNotTheBoard(t *testing.T) {
 
 // A click on a file opens it in Review at the current branch.
 func TestFileClickOpensTheFileInReview(t *testing.T) {
-	s := reviewScratch(t)
-	s.git("checkout", "-b", "other")
-	s.commit("o", map[string]string{"o.txt": "o\n"})
-	s.git("checkout", "-b", "work")
-	s.commit("w", map[string]string{"first.txt": "1\n", "wanted.txt": "w1\nw2\n"})
+	s := apptest.NewRepo(t)
+	s.Git("checkout", "-b", "other")
+	s.Commit("o", map[string]string{"o.txt": "o\n"})
+	s.Git("checkout", "-b", "work")
+	s.Commit("w", map[string]string{"first.txt": "1\n", "wanted.txt": "w1\nw2\n"})
 	f := NewFrame(Deps{})
 	f.Review, _ = newTestReview()
-	f.openFileInReview(s.dir, "wanted.txt")
+	f.openFileInReview(s.Dir, "wanted.txt")
 	if !f.ReviewOpen() {
 		t.Fatal("Review did not open")
 	}
@@ -450,7 +451,7 @@ func TestFileClickOpensTheFileInReview(t *testing.T) {
 		t.Errorf("review at %q file %q, want work wanted.txt", f.Review.Branch(), f.Review.File())
 	}
 	// A file the branch does not change opens the first file.
-	f.openFileInReview(s.dir, "base.txt")
+	f.openFileInReview(s.Dir, "base.txt")
 	if f.Review.File() != "first.txt" {
 		t.Errorf("unchanged file: review file %q, want the first", f.Review.File())
 	}
