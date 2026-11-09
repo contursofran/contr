@@ -21,7 +21,7 @@ Design system page: component ServerRow. Shared rules: [README.md](README.md).
 
 - **Selected:** the machine whose projects the sidebar shows: name and icon `ink-100`, no fill.
 - **Online, local:** as above.
-- **Offline:** the meta says "offline"; the row stays clickable to retry.
+- **Offline:** the meta says "offline"; the row stays clickable to retry. A click tries at once; contr also tries again by itself with backoff while the window shows (D220).
 
 ## Behavior
 
@@ -73,7 +73,7 @@ Design system page: component ServerRow. Shared rules: [README.md](README.md).
 
 ## Tests
 
-- View: local, offline states; the problem line shows when hc fails.
+- View: local, offline states; the problem line shows when hc fails; a click on the offline row tries to connect.
 
 ## Replaces
 
