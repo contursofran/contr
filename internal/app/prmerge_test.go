@@ -104,6 +104,7 @@ func TestFramePROrchestratorFollowsTheWorkersProject(t *testing.T) {
 			Workers:       []agents.Worker{{Address: "w1", Project: "b", Worktree: "/wt/b"}},
 		}
 	}
+	f.takeSnapshot()
 	f.openProject = "a"
 	if got := f.prOrchestrator("/wt/b"); got != "o-b" {
 		t.Errorf("worker folder gave %q", got)

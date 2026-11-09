@@ -39,6 +39,8 @@ func newFollowRig(t *testing.T) *followRig {
 	src := panelSource()
 	f := NewFrame()
 	f.Selection = stateSelection()
+	f.agentSnap = src.Snapshot
+	f.takeSnapshot()
 	f.Worker = &WorkerPanel{Source: src, Selection: f.Selection}
 	f.Slots.Panel = func(c *ui.Context) { ui.Text(c, "[board]") }
 	return &followRig{f: f, src: src, tt: ui.NewTester(panelBox(f), theme.PanelWidth, theme.WindowHeight)}
@@ -222,15 +224,15 @@ func TestWorkerPanelActionErrorShows(t *testing.T) {
 
 func TestFrameScopeFollowsTheSelectedOrchestrator(t *testing.T) {
 	r := newFollowRig(t)
-	if got := r.f.scope(r.src); got != "" {
+	if got := r.f.scope(); got != "" {
 		t.Errorf("no selection: scope %q", got)
 	}
 	r.f.Selection.Select(state.Selected{Kind: state.KindOrchestrator, ID: "o1"})
-	if got := r.f.scope(r.src); got != "a" {
+	if got := r.f.scope(); got != "a" {
 		t.Errorf("orchestrator selected: scope %q", got)
 	}
 	r.f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t1"})
-	if got := r.f.scope(r.src); got != "" {
+	if got := r.f.scope(); got != "" {
 		t.Errorf("worker selected: scope %q", got)
 	}
 }
