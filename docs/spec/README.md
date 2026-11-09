@@ -123,6 +123,10 @@ The owner's from-zero canvas (https://claude.ai/artifact/9bmbRdJc8qDMSRXm6obEb3)
 - Two hues only: `blocked` (red) for an agent that needs the owner, and
   `claude` for the Claude glyph. Diff counts are greys. Terminal output
   keeps its own colors. This replaces D76 for the parts these specs cover.
+- Modals are never transparent (D217). A modal or dialog (`DialogBase`,
+  `Modal`, `AlertDialog`) and a floating card with text to read have an
+  opaque fill: `float-solid` or `ground`. `glass-float` is only for the
+  closed questions notch, the outline card, the find bar and toasts.
 
 ## Icons
 

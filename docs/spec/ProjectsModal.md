@@ -7,7 +7,7 @@ Opens from the "Open projects" item of the Projects head `+` menu (D171). The ow
 ## Anatomy
 
 ```
-┌ dialog 560, glass-float ────────────────────────────────────────────┐
+┌ dialog 560, float-solid ────────────────────────────────────────────┐
 │ ⌕  Search projects, or paste a GitHub repo or a path            esc │  search
 ├─────────────────────────────────────────────────────────────────────┤
 │ Open · 2                              drag to reorder the sidebar   │  section + hint
@@ -23,7 +23,7 @@ Opens from the "Open projects" item of the Projects head `+` menu (D171). The ow
 
 | Part | Value |
 |---|---|
-| Dialog | Backdrop `scrim`. Fill `glass-float`, border `float-line`, shadow `shadow-float`, width 560, radius `radius-14`, 110 px from the top, centred. Enter motion: up 8 px and fade in, 0.22 s. |
+| Dialog | Backdrop `scrim`. Fill `float-solid` (opaque; modals are never transparent, D217), border `float-line`, shadow `shadow-float`, width 560, radius `radius-14`, 110 px from the top, centred. Enter motion: up 8 px and fade in, 0.22 s. |
 | Search | One `ui.SearchField`, padding 14×16, no border, `hairline` below. Text 15 px `ink-100`; placeholder `ink-30`; search icon `ink-38`; a `kbd` `esc` at the right. It has the focus when the dialog opens. |
 | List | One `ui.List`; padding 6; scrolls after 360 px. |
 | Section | Padding 10×10×4. Name 11 px, weight 500, `ink-45`. Hint 11 px `ink-30`, at the right. |
@@ -118,7 +118,7 @@ Exact strings:
 
 ## Tokens
 
-`scrim`, `glass-float`, `float-line`, `shadow-float`, `radius-14`, `radius-8`, `hairline`, `hover`, `selected`, `input-line`, `ink-100`, `ink-85`, `ink-62`, `ink-45`, `ink-38`, `ink-30`, `blocked`, `claude`, `space-10`, `focus-ring`.
+`scrim`, `float-solid`, `float-line`, `shadow-float`, `radius-14`, `radius-8`, `hairline`, `hover`, `selected`, `input-line`, `ink-100`, `ink-85`, `ink-62`, `ink-45`, `ink-38`, `ink-30`, `blocked`, `claude`, `space-10`, `focus-ring`.
 
 ## Build in MyGo
 
@@ -133,7 +133,7 @@ Exact strings:
 - Q1: `N need you` may use `blocked` text in this one place. The `blocked` row of `tokens.md` says so.
 - Q2: the first Esc clears the field; Esc on an empty field closes.
 - Q3: the clone line is indeterminate; no percent.
-- Q4: surface `glass-float`, width 560, radius `radius-14`, shadow `shadow-float`.
+- Q4: surface `float-solid` (was `glass-float`; replaced by D217), width 560, radius `radius-14`, shadow `shadow-float`.
 - Q5: live state is the `Hold` text of the main worktree row.
 - Q6: a path that is not a folder shows a red line under the row.
 - Q7: Undo works after the dialog closes.
