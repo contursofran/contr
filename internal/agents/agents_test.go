@@ -158,7 +158,7 @@ func TestSpawn(t *testing.T) {
 			return term("t7", p["name"].(string), "live", labels, map[string]any{"state": "blocked", "kind": "permission", "msg": "allow?"}), nil
 		},
 	}}
-	m := New(f, DefaultConfig())
+	m := New(f, DefaultConfig()).WithExecutable("")
 	wt := t.TempDir()
 	w, err := m.Spawn(context.Background(), Spec{Name: "b-158", Profile: "builder", Issue: "158", Worktree: wt, Task: "read TASK.md"})
 	if err != nil {
@@ -434,7 +434,7 @@ func TestSpawnStartsTheKitAgent(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Kit = kit
 	cfg.Profiles["shell"] = Profile{Argv: []string{"sh"}}
-	m := New(f, cfg)
+	m := New(f, cfg).WithExecutable("")
 	argvOf := func(profile string) []any {
 		t.Helper()
 		if _, err := m.Spawn(context.Background(), Spec{Name: "w", Profile: profile}); err != nil {
@@ -452,7 +452,7 @@ func TestSpawnStartsTheKitAgent(t *testing.T) {
 	if got := argvOf("shell"); !reflect.DeepEqual(got, []any{"sh"}) {
 		t.Errorf("a non-claude profile changed: %v", got)
 	}
-	if got := New(f, DefaultConfig()).agentArgv("builder", []string{"claude"}); !reflect.DeepEqual(got, []string{"claude"}) {
+	if got := New(f, DefaultConfig()).WithExecutable("").agentArgv("builder", []string{"claude"}); !reflect.DeepEqual(got, []string{"claude"}) {
 		t.Errorf("no kit: %v", got)
 	}
 }
@@ -479,7 +479,7 @@ func TestNewMakesARelativeKitAbsolute(t *testing.T) {
 	}
 	cfg := DefaultConfig()
 	cfg.Kit = "kit"
-	got := New(&fakeCore{}, cfg).agentArgv("builder", []string{"claude"})
+	got := New(&fakeCore{}, cfg).WithExecutable("").agentArgv("builder", []string{"claude"})
 	abs, _ := filepath.Abs("kit")
 	if len(got) < 3 || got[2] != abs || !filepath.IsAbs(got[2]) {
 		t.Errorf("argv = %v, want the kit as %s", got, abs)
@@ -770,7 +770,7 @@ func TestProfileAgentPicksTheKitAgent(t *testing.T) {
 	f := &fakeCore{handle: map[string]func(map[string]any) (any, error){
 		"terminal.run": func(map[string]any) (any, error) { return term("t1", "p", "live", nil, nil), nil },
 	}}
-	m := New(f, cfg)
+	m := New(f, cfg).WithExecutable("")
 	if _, err := m.Spawn(context.Background(), Spec{Name: "p", Profile: "planner-high"}); err != nil {
 		t.Fatal(err)
 	}
@@ -986,5 +986,83 @@ func TestSendReportsARefusedSend(t *testing.T) {
 		if err := New(f, DefaultConfig()).Send(context.Background(), "w1", "hi"); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("err = %v, want %q", err, want)
 		}
+	}
+}
+
+func TestClaudeArgvGetsTheStatusLine(t *testing.T) {
+	kit := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(kit, "agents"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(kit, "agents", "builder.md"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := DefaultConfig()
+	cfg.Kit = kit
+	exe := "/Applications/My Apps/contr's/contr"
+	m := New(&fakeCore{}, cfg).WithExecutable(exe)
+
+	settings := func(argv []string) string {
+		t.Helper()
+		for i, a := range argv {
+			if a == "--settings" {
+				return argv[i+1]
+			}
+		}
+		t.Fatalf("no --settings in %v", argv)
+		return ""
+	}
+	for _, agent := range []string{"builder", "orchestrator"} { // the second has no kit file
+		got := m.agentArgv(agent, []string{"claude", "--model", "opus"})
+		var s struct {
+			StatusLine struct{ Type, Command string }
+		}
+		if err := json.Unmarshal([]byte(settings(got)), &s); err != nil {
+			t.Fatalf("%s: settings are not JSON: %v", agent, err)
+		}
+		want := `'/Applications/My Apps/contr'\''s/contr' statusline`
+		if s.StatusLine.Type != "command" || s.StatusLine.Command != want {
+			t.Errorf("%s: statusLine = %+v, want command %s", agent, s.StatusLine, want)
+		}
+		if got[len(got)-2] != "--model" || got[len(got)-1] != "opus" {
+			t.Errorf("%s: profile flags moved: %v", agent, got)
+		}
+	}
+
+	own := []string{"claude", "--settings", `{"x":1}`, "--model", "opus"}
+	if got := m.agentArgv("orchestrator", own); !reflect.DeepEqual(got, own) {
+		t.Errorf("argv with --settings changed: %v", got)
+	}
+	eq := []string{"claude", "--settings=/p.json"}
+	if got := m.agentArgv("orchestrator", eq); !reflect.DeepEqual(got, eq) {
+		t.Errorf("argv with --settings= changed: %v", got)
+	}
+	codex := []string{"codex", "--model", "x"}
+	if got := m.agentArgv("builder", codex); !reflect.DeepEqual(got, codex) {
+		t.Errorf("codex argv changed: %v", got)
+	}
+	noKit := New(&fakeCore{}, DefaultConfig()).WithExecutable("/bin/contr")
+	if got := noKit.agentArgv("builder", []string{"claude"}); len(got) != 3 || got[1] != "--settings" {
+		t.Errorf("no kit: %v", got)
+	}
+	if got := m.WithExecutable("").agentArgv("orchestrator", []string{"claude"}); !reflect.DeepEqual(got, []string{"claude"}) {
+		t.Errorf("no binary: %v", got)
+	}
+}
+
+func TestSpawnPutsTheStatusLineInTheOrchestratorArgv(t *testing.T) {
+	f := &fakeCore{handle: map[string]func(map[string]any) (any, error){
+		"terminal.run": func(map[string]any) (any, error) { return term("t1", "o", "live", nil, nil), nil },
+	}}
+	cfg := DefaultConfig()
+	cfg.Kit = t.TempDir() // no agent files
+	cfg.Profiles["orchestrator"] = Profile{Argv: []string{"claude"}}
+	m := New(f, cfg).WithExecutable("/bin/contr")
+	if _, err := m.Spawn(context.Background(), Spec{Name: "o", Profile: "orchestrator"}); err != nil {
+		t.Fatal(err)
+	}
+	argv := f.last().Params["argv"].([]any)
+	if argv[0] != "claude" || argv[1] != "--settings" {
+		t.Errorf("argv = %v", argv)
 	}
 }

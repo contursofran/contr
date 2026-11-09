@@ -52,6 +52,14 @@ Plan meters, in the sidebar foot row (D196):
   context is up to one sampler period (60 s) old.
 - Plans: `internal/usage` on a goroutine; read again on a status line or log
   change. The view reads the sampler's last result and touches no file.
+- Claude plan (D203): Claude Code gives the plan limits (`rate_limits`) only
+  to its status line command. Each Claude session that contr starts (workers
+  and "New orchestrator") gets `--settings` with a `statusLine` that runs
+  `<contr> statusline`. That command saves the windows to `usage/claude.json`
+  and the context, and prints a short line ("opus · 90k of 200k"). A Claude
+  session that contr did not start gives plan data only when the owner's own
+  status line runs `contr statusline`.
+- Codex plan: the Codex session logs.
 
 ## Keys and focus
 

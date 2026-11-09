@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 )
@@ -192,8 +193,31 @@ func runWith(stdin io.Reader, stdout io.Writer, then []string, dir, terminal str
 		if _, err := stdout.Write(runCapped(then[0], then[1:], input, timeout)); err != nil {
 			return err
 		}
+		return nil
+	}
+	if line := shortLine(string(input), now); line != "" {
+		if _, err := io.WriteString(stdout, line+"\n"); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+// shortLine is the status line contr prints when nothing is chained: the
+// short model name and the context, as "opus · 90k of 200k". A part the input
+// lacks is left out; "" when both are absent.
+func shortLine(input string, now uint64) string {
+	var parts []string
+	var in contextLine
+	if json.Unmarshal([]byte(input), &in) == nil && in.Model != nil {
+		if m := ShortModel(in.Model.ID, in.Model.DisplayName); m != "" {
+			parts = append(parts, m)
+		}
+	}
+	if c := ParseContext(input, now); c != nil {
+		parts = append(parts, fmt.Sprintf("%s of %s", shortTokens(c.Tokens), shortTokens(c.Size)))
+	}
+	return strings.Join(parts, " · ")
 }
 
 // runCapped runs program args… with input on its stdin and returns its stdout,

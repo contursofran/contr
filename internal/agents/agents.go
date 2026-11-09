@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"os"
 	"path/filepath"
@@ -17,6 +18,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -419,6 +421,9 @@ type Manager struct {
 
 	getenv func(string) string // reads the environment; tests replace it
 	git    git                 // runs git; tests replace it
+
+	// exe is the contr binary that Claude's status line runs; empty for none.
+	exe string
 }
 
 // New returns a manager on core with the profiles of cfg. A relative kit
@@ -429,7 +434,28 @@ func New(core Core, cfg Config) *Manager {
 			cfg.Kit = abs
 		}
 	}
-	return &Manager{core: core, cfg: cfg, now: time.Now, getenv: os.Getenv, git: runGit}
+	return &Manager{core: core, cfg: cfg, now: time.Now, getenv: os.Getenv, git: runGit, exe: contrExe()}
+}
+
+// contrExe is the absolute path of the running contr binary, found once; ""
+// when it cannot be found.
+var contrExe = sync.OnceValue(func() string {
+	exe, err := os.Executable()
+	if err != nil {
+		slog.Warn("unable to find the contr binary; Claude sessions get no status line", "err", err)
+		return ""
+	}
+	if abs, err := filepath.Abs(exe); err == nil {
+		return abs
+	}
+	return exe
+})
+
+// WithExecutable sets the contr binary path that Claude's status line runs
+// (empty for none) and returns m. New sets it from os.Executable.
+func (m *Manager) WithExecutable(path string) *Manager {
+	m.exe = path
+	return m
 }
 
 // Spawn starts a worker and returns it.
@@ -539,16 +565,54 @@ func (m *Manager) OpenTerminal(ctx context.Context, s TerminalSpec) (Worker, err
 
 // agentArgv returns the profile's command. A claude command whose agent
 // (Profile.Agent, else the profile name) has a definition in the kit gets
-// `--plugin-dir <kit> --agent contr:<agent>` after the program name.
+// `--plugin-dir <kit> --agent contr:<agent>` after the program name. Every
+// claude command gets `--settings` with a status line that runs
+// `contr statusline`, unless it has `--settings` already (D203).
 func (m *Manager) agentArgv(agent string, argv []string) []string {
 	out := append([]string(nil), argv...)
-	if m.cfg.Kit == "" || len(out) == 0 || filepath.Base(out[0]) != "claude" {
+	if len(out) == 0 || filepath.Base(out[0]) != "claude" {
 		return out
 	}
-	if _, err := os.Stat(filepath.Join(m.cfg.Kit, "agents", agent+".md")); err != nil {
-		return out
+	head := []string{out[0]}
+	if m.cfg.Kit != "" {
+		if _, err := os.Stat(filepath.Join(m.cfg.Kit, "agents", agent+".md")); err == nil {
+			head = append(head, "--plugin-dir", m.cfg.Kit, "--agent", "contr:"+agent)
+		}
 	}
-	return append([]string{out[0], "--plugin-dir", m.cfg.Kit, "--agent", "contr:" + agent}, out[1:]...)
+	if m.exe != "" && !hasSettings(out[1:]) {
+		if js, err := statuslineSettings(m.exe); err != nil {
+			slog.Warn("unable to build the status line settings", "err", err)
+		} else {
+			head = append(head, "--settings", js)
+		}
+	}
+	return append(head, out[1:]...)
+}
+
+// hasSettings reports whether args set --settings.
+func hasSettings(args []string) bool {
+	for _, a := range args {
+		if a == "--settings" || strings.HasPrefix(a, "--settings=") {
+			return true
+		}
+	}
+	return false
+}
+
+// statuslineSettings is the --settings JSON that makes Claude Code run
+// `<exe> statusline` as its status line. exe is quoted for a POSIX shell.
+func statuslineSettings(exe string) (string, error) {
+	type statusLine struct {
+		Type    string `json:"type"`
+		Command string `json:"command"`
+	}
+	b, err := json.Marshal(map[string]statusLine{"statusLine": {Type: "command", Command: shellQuote(exe) + " statusline"}})
+	return string(b), err
+}
+
+// shellQuote quotes s as one word for a POSIX shell.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // List returns the workers, sorted by name. With all, finished ones too.
@@ -597,7 +661,7 @@ func (m *Manager) Send(ctx context.Context, name, text string) error {
 // A relative kit path is made absolute, as in New.
 func (m *Manager) WithConfig(cfg Config) *Manager {
 	c := New(m.core, cfg)
-	c.now, c.getenv = m.now, m.getenv
+	c.now, c.getenv, c.exe = m.now, m.getenv, m.exe
 	return c
 }
 
