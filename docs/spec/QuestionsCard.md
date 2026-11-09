@@ -10,7 +10,8 @@ Design system page: component QuestionsCard. Shared rules: [README.md](README.md
 
 ## Anatomy
 
-Width `notch-open-width` (600px), padding `space-12`, glass as the notch.
+Width `notch-open-width` (600px), padding `space-12`, fill `float-solid` (opaque, D212),
+`float-line` on the sides and the bottom, `shadow-notch` as the notch.
 
 1. **Head:** needs-you glyph; one chip per open question, then one chip per to-do and per blocked worker menu (D124) ("b-250 checks", `chip` 11.5px, padding `3px 9px`, radius `radius-6`); "via orchestrator" at the right (`ink-35`).
 2. **Question:** `question` style (14/20), `ink-100`, padding `2px 12px`.
@@ -69,7 +70,7 @@ Width `notch-open-width` (600px), padding `space-12`, glass as the notch.
 
 ## Tokens
 
-`notch-open-width`, `glass-float`, `float-line`, `shadow-notch`, `selected`, `shadow-selected`, `hover`, `input-line`, `hover-strong`, `radius-9`, `radius-8`, `radius-6`, `radius-4`, `question`, `body`, `small`, `chip`, `ink-100`, `ink-90`, `ink-45`, `ink-42`, `ink-35`, `ink-32`, `ink-30`, `meta`.
+`notch-open-width`, `float-solid`, `float-line`, `shadow-notch`, `selected`, `shadow-selected`, `hover`, `input-line`, `hover-strong`, `radius-9`, `radius-8`, `radius-6`, `radius-4`, `question`, `body`, `small`, `chip`, `ink-100`, `ink-90`, `ink-45`, `ink-42`, `ink-35`, `ink-32`, `ink-30`, `meta`.
 
 ## Build in MyGo
 
