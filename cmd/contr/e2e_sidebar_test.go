@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/app/sidebar"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
@@ -26,6 +27,26 @@ func gitIn(t *testing.T, dir string, args ...string) {
 		"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
 	if msg, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, msg)
+	}
+}
+
+// openAddMenu presses the Projects head + (D171) until its menu shows both
+// items, "New orchestrator" and "Open projects". A press does not always land,
+// so it presses again, at most 5 times.
+func (c *client) openAddMenu(t *testing.T) {
+	t.Helper()
+	open := func() bool {
+		l := c.labels(t)
+		return l[sidebar.LabelProjectsNew] && l[sidebar.LabelProjectsOpen]
+	}
+	for i := 0; !open(); i++ {
+		if i == 5 {
+			t.Fatalf("the + menu does not show its items; labels %v", keys(c.labels(t)))
+		}
+		c.press(t, sidebar.LabelProjectsAdd)
+		for end := time.Now().Add(3 * time.Second); !open() && time.Now().Before(end); {
+			time.Sleep(100 * time.Millisecond)
+		}
 	}
 }
 
@@ -55,7 +76,10 @@ func scratchRepo(t *testing.T, base, name, branch string) string {
 
 // TestSidebarServersAndProjects is #343: the Servers section with This Mac,
 // and the projects in the owner's order, one with an orchestrator and a
-// worker, one stored with nothing open. It opens the app in Dark and in
+// worker, one with a worker only, one stored with nothing open. The stored
+// project with nothing open shows after the others (D174). The Projects head
+// has one + with "New orchestrator" and "Open projects" in its menu (D171).
+// It opens the app in Dark and in
 // Light, captures both, and changes the branch of a project to see the
 // HEAD watch read it again. HOME and the core are scratch ones. PNGs go to
 // tmp/e2e/sidebar-dark.png and tmp/e2e/sidebar-light.png:
@@ -99,6 +123,7 @@ func TestSidebarServersAndProjects(t *testing.T) {
 	base := filepath.Join(dir, "work")
 	atlas := scratchRepo(t, base, "atlas", "feat/oauth-login")
 	harbor := scratchRepo(t, base, "harbor", "main")
+	cove := scratchRepo(t, base, "cove", "main")
 
 	cfg := agents.DefaultConfig()
 	cfg.Profiles["sleepy"] = agents.Profile{Argv: []string{"sh", "-c", "sleep 600"}}
@@ -106,20 +131,22 @@ func TestSidebarServersAndProjects(t *testing.T) {
 	for _, s := range []agents.Spec{
 		{Name: "atlas-lead", Profile: "sleepy", Role: agents.RoleOrchestrator, Project: "atlas", Worktree: atlas},
 		{Name: "b-218", Profile: "sleepy", Role: "builder", Project: "atlas", Issue: "218", Worktree: atlas},
+		{Name: "c-7", Profile: "sleepy", Role: "builder", Project: "cove", Issue: "7", Worktree: cove},
 	} {
 		if _, err := mgr.Spawn(r.ctx, s); err != nil {
 			t.Fatalf("spawn %s: %v", s.Name, err)
 		}
 	}
 
-	// The owner's files: harbor is stored with no terminal, in front of atlas.
+	// The owner's files: harbor is stored with no terminal, in front of cove,
+	// and cove is in front of atlas.
 	cfgDir := filepath.Join(home, "Library", "Application Support", "contr")
 	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	store, _ := json.Marshal(map[string]any{
 		"version": 1,
-		"order":   []string{filepath.Join(harbor, ".git"), filepath.Join(atlas, ".git")},
+		"order":   []string{filepath.Join(harbor, ".git"), filepath.Join(cove, ".git"), filepath.Join(atlas, ".git")},
 		"folders": map[string]string{filepath.Join(harbor, ".git"): harbor},
 	})
 	if err := os.WriteFile(filepath.Join(cfgDir, "projects.json"), store, 0o644); err != nil {
@@ -150,20 +177,27 @@ func TestSidebarServersAndProjects(t *testing.T) {
 		c.waitWindow(t)
 		c.waitLabel(t, "atlas, feat/oauth-login")
 		c.waitLabel(t, "harbor, nothing open")
+		c.waitLabel(t, "cove, main")
 		c.waitLabel(t, "This Mac, local")
 		c.call(t, "idle", map[string]any{"timeout": 10000})
 		time.Sleep(2500 * time.Millisecond) // the host sampler has its readings
 		c.capture(t, filepath.Join(r.out, "sidebar-"+name+".png"))
 		labels := c.labels(t)
-		for _, want := range []string{"Servers header", "Projects header", "Open projects", "New orchestrator"} {
+		for _, want := range []string{"Servers header", "Projects header", sidebar.LabelProjectsAdd} {
 			if !labels[want] {
 				t.Errorf("%s: no element %q; labels %v", name, want, keys(labels))
 			}
 		}
-		a, h := c.boundsOf(t, "atlas, feat/oauth-login"), c.boundsOf(t, "harbor, nothing open")
-		if h.Y >= a.Y {
-			t.Errorf("%s: harbor at %v, atlas at %v: want the stored order", name, h.Y, a.Y)
+		// Projects with terminals in the stored order, then the one with nothing open (D174).
+		co, a, h := c.boundsOf(t, "cove, main"), c.boundsOf(t, "atlas, feat/oauth-login"), c.boundsOf(t, "harbor, nothing open")
+		if co.Y >= a.Y {
+			t.Errorf("%s: cove at %v, atlas at %v: want the stored order", name, co.Y, a.Y)
 		}
+		if h.Y <= a.Y {
+			t.Errorf("%s: harbor at %v, atlas at %v: want the project with nothing open last (D174)", name, h.Y, a.Y)
+		}
+		c.openAddMenu(t)
+		c.key(t, "Escape")
 		if name == "dark" {
 			// A new branch is read again from HEAD, with no polling.
 			gitIn(t, atlas, "checkout", "-q", "-b", "fix/token-refresh")

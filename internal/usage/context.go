@@ -85,7 +85,7 @@ type contextLine struct {
 // or "Sonnet 5.5". An unknown model gives its display name in lower case,
 // else its id.
 func ShortModel(id, display string) string {
-	for _, fam := range []string{"opus", "sonnet", "haiku"} {
+	for _, fam := range []string{"opus", "sonnet", "haiku", "fable"} {
 		if strings.Contains(strings.ToLower(id+" "+display), fam) {
 			return fam
 		}

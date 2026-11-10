@@ -13,6 +13,7 @@ import (
 
 	"github.com/contursofran/contr/internal/app/projectsview"
 	"github.com/contursofran/contr/internal/app/settings"
+	"github.com/contursofran/contr/internal/app/sidebar"
 	"github.com/contursofran/contr/internal/app/titlebar"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
@@ -92,7 +93,8 @@ func TestProjectsModalColors(t *testing.T) {
 		wait(settings.LabelSettings)
 		click(name)
 		click(settings.SettingsDone)
-		click("Open projects")
+		c.openAddMenu(t)
+		c.press(t, sidebar.LabelProjectsOpen)
 		wait(projectsview.LabelProjects)
 		time.Sleep(500 * time.Millisecond)
 		c.capture(t, filepath.Join(out, "projects-modal-"+strings.ToLower(name)+".png"))

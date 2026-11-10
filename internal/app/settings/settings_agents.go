@@ -40,8 +40,9 @@ var Roles = []Role{
 	{"debugger", "Debugger", "after failed fixes"},
 }
 
-// RoleModels are the Claude Code models: the argv value and its name.
-var RoleModels = [][2]string{{"opus", "Opus 5.5"}, {"sonnet", "Sonnet 5.5"}, {"haiku", "Haiku 5.5"}}
+// RoleModels are the Claude Code models: the argv value and its name. Fable
+// has no short alias, so its value is the full model id (D238).
+var RoleModels = [][2]string{{"opus", "Opus 5.5"}, {"sonnet", "Sonnet 5.5"}, {"haiku", "Haiku 5.5"}, {"claude-fable-5-2", "Fable 5.2"}}
 
 // RoleEfforts are the effort values of Claude Code.
 var RoleEfforts = []string{"low", "medium", "high", "xhigh", "max"}
