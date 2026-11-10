@@ -224,6 +224,61 @@ func (s *Store) AddLive(dir, path string, at time.Time) bool {
 	return true
 }
 
+// Rekey moves the stored project from to the key to: a folder outside git
+// that became a git repository is keyed by its git common dir now (D236). to
+// takes the place of from in the order, its hidden state, its recent entry
+// and its folder. When the store knows to as well (added from a live
+// terminal), the two become one: from's place in the order, to's hidden
+// state, the newer recent entry, and to's folder when it has one. It reports
+// whether it changed the store; a missing from key changes nothing.
+func (s *Store) Rekey(from, to string) bool {
+	if from == to || !s.has(from) {
+		return false
+	}
+	merge := s.has(to)
+	if slices.Contains(s.order, from) {
+		s.order = slices.DeleteFunc(s.order, func(d string) bool { return d == to })
+		s.order[slices.Index(s.order, from)] = to
+	}
+	if s.Hidden(from) && !merge {
+		s.Hide(to)
+	}
+	s.Show(from)
+	kept := false // the newest entry of the two stays
+	s.recent = slices.DeleteFunc(s.recent, func(e Entry) bool {
+		if e.Dir != from && e.Dir != to {
+			return false
+		}
+		drop := kept
+		kept = true
+		return drop
+	})
+	for i := range s.recent {
+		if s.recent[i].Dir == from {
+			s.recent[i].Dir = to
+		}
+	}
+	if path, ok := s.folders[from]; ok {
+		if _, has := s.folders[to]; !has {
+			s.folders[to] = path
+		}
+		delete(s.folders, from)
+	}
+	return true
+}
+
+// has reports whether the store holds anything about dir: order, hidden,
+// recent or folder.
+func (s *Store) has(dir string) bool {
+	if s.Known(dir) {
+		return true
+	}
+	if _, ok := s.folders[dir]; ok {
+		return true
+	}
+	return slices.ContainsFunc(s.recent, func(e Entry) bool { return e.Dir == dir })
+}
+
 // Folders returns the stored projects that were added with a folder, in the
 // stored order and with the hidden ones left out, as project dirs. Path gives
 // the folder of one.
