@@ -97,3 +97,28 @@ func TestOnlyTheStageDrawsAFillAndALine(t *testing.T) {
 		}
 	}
 }
+
+// No hairline sits between the body and the footer: only space (D258).
+func TestPanelFooterHasNoHairline(t *testing.T) {
+	for _, tc := range apptest.ThemeCases {
+		themetest.Use(t, tc.Src)
+		p := theme.Current()
+		tt := ui.NewTester(func(c *ui.Context) {
+			ui.Row(c).Fill().AlignItems(ui.Stretch).Padding(10).Background(p.Ground).Children(func() {
+				Panel(c, PanelOpts{Name: "P", Title: "P",
+					Body:   func() { ui.Box(c).Label("body").Height(20) },
+					Footer: func() { ui.Box(c).Label("foot").Size(10, 10) }})
+			})
+		}, 200, 200)
+		tt.Frame()
+		img := tt.Image()
+		r := apptest.Box(t, tt, "P")
+		foot := apptest.Box(t, tt, "foot")
+		for y := r.Y + r.H/2; y < foot.Y; y++ {
+			if got := apptest.RGB(img, r.X+r.W/2, y); !apptest.Near(got, p.Ground, 1) {
+				t.Errorf("%s: %v at y %v over the footer, want the ground %v", tc.Name, got, y, p.Ground)
+				break
+			}
+		}
+	}
+}

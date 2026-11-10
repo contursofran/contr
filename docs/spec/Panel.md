@@ -14,7 +14,7 @@ Design system page: component Panel. Shared rules: [README.md](README.md).
 |---|---|
 | Box | the stage (terminal): fill `stage`, line `panel-line` (1px), radius `radius-12`, padding `12px 10px 10px` inside the line. A wing (sidebar, files): no fill and no line; padding 1px more on each side, so its content sits where it sits on the stage (D250) |
 | Head | row: name in `label` style (12px/500), `ink-45`, fills the row; icon buttons at the right; padding `2px 4px 4px 10px` |
-| Footer | line `hairline` on top; 24px icon buttons at the right |
+| Footer | no line on top (D258): `space-6` above the footer row; 24px icon buttons at the right |
 
 ## States
 
@@ -44,12 +44,12 @@ Design system page: component Panel. Shared rules: [README.md](README.md).
 
 ## Tokens
 
-`stage`, `panel-line`, `hairline`, `radius-12`, `space-12`, `space-10`, `label`, `ink-45`.
+`stage`, `panel-line`, `radius-12`, `space-12`, `space-10`, `label`, `ink-45`.
 
 ## Build in MyGo
 
 - A plain container view with `Background`, `Border` and `CornerRadius`; there is no MyGo widget to wrap. `kit.PanelOpts.Stage` picks the stage; without it the panel is a wing.
-- The panel head: a row with `Text(...).SingleLine()` (it cuts with an ellipsis; `NoWrap` keeps the line whole) and IconButtons. The footer line is a 1px `hairline` box above the footer row.
+- The panel head: a row with `Text(...).SingleLine()` (it cuts with an ellipsis; `NoWrap` keeps the line whole) and IconButtons.
 - Put the panels in `ui.Split` (see Window).
 
 ## Do and do not

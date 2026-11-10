@@ -122,16 +122,15 @@ func (p *Pill) View(c *ui.Context, compact bool) {
 	}
 }
 
-// box styles the pill as the update pill of the title bar: icon-button height, fully round,
-// float-line all round and no fill (D253). The space-8 after it keeps it from the next item.
+// box styles the pill as the icon buttons of the title bar: icon-button height, fully round,
+// no line and no fill at rest (D253, D258). The space-8 after it keeps it from the next item.
 func box(e ui.Element, compact bool) ui.Element {
-	pal := theme.Current()
 	pad := float32(theme.Space10)
 	if compact {
 		pad = theme.Space6
 	}
 	return e.Height(theme.SizeIconButton).Shrink(0).PaddingX(pad).Gap(theme.Space6).AlignItems(ui.Center).
-		Radius(theme.SizeIconButton/2).Border(1, pal.FloatLine).MarginEnd(theme.Space8)
+		Radius(theme.SizeIconButton / 2).MarginEnd(theme.Space8)
 }
 
 // withShadow gives e the layers of shadow s.

@@ -17,7 +17,7 @@ Design system page: component FileTree. Shared rules: [README.md](README.md).
 | Icon | `folder`, `folder-open`, `file-go`, `file-md`, `file` at 15px, `ink-38` |
 | Name | `row-small` (12.5px), `ink-50`; ellipsis |
 | Counts | mono 11px, `space-6` apart: added `ink-40`, removed `ink-24` |
-| Guides | each level indents `space-16` plus `space-4` (D228), with a 1px `hairline` on the left |
+| Indent | each level indents `space-16` plus `space-4` (D228); no guide lines (D258) |
 
 ## States
 
@@ -66,13 +66,12 @@ Design system page: component FileTree. Shared rules: [README.md](README.md).
 
 ## Tokens
 
-`file-row-height`, `radius-6`, `space-4`, `space-7`, `space-10`, `space-16`, `hover`, `hairline`, `ink-90`, `ink-50`, `ink-40`, `ink-38`, `ink-24`, `ink-22`, `row-small`.
+`file-row-height`, `radius-6`, `space-4`, `space-7`, `space-10`, `space-16`, `hover`, `ink-90`, `ink-50`, `ink-40`, `ink-38`, `ink-24`, `ink-22`, `row-small`.
 
 ## Build in MyGo
 
 - `ui.Tree` with `TreeItem`s (the row is a `TreeItem` with an empty label;
-  the icon, name and counts are added to it, and the guides are drawn over
-  it). The mock has no disclosure arrow: a folder shows `folder` or
+  the icon, name and counts are added to it). The mock has no disclosure arrow: a folder shows `folder` or
   `folder-open`. `TreeItem` always builds an arrow, so the tree sits in
   `ui.Themed` with `TextMuted` clear (the arrow is not seen) and
   `SurfaceHover` set to `hover`, and the row takes back the room of the

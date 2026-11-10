@@ -131,7 +131,6 @@ func (l *SpacesList) settingsFoot(c *ui.Context) {
 	if ready {
 		label = LabelSettingsUpdate
 	}
-	p := theme.Current()
 	plans := !l.Compact && l.Plans != nil
 	justify := ui.End
 	switch {
@@ -145,8 +144,9 @@ func (l *SpacesList) settingsFoot(c *ui.Context) {
 	// left inset equals the gear's right inset (#495). Build each element
 	// inside its parent's Children: a row made before the column is a sibling
 	// of it, so the column's padding never reached the row.
+	// No hairline over the foot (D258): the top padding and the row's own
+	// padding keep it apart from the list.
 	ui.Column(c).Label("sidebar foot").Shrink(0).Padding(theme.Space6, theme.Space10, 0, theme.Space10).Children(func() {
-		ui.Box(c).Label("sidebar foot divider").Height(1).Shrink(0).Background(p.Hairline)
 		ui.Row(c).Label("sidebar foot row").FillWidth().Shrink(0).AlignItems(ui.Center).Justify(justify).
 			Padding(theme.Space6, 0, theme.Space6, 0).Children(func() {
 			if plans {

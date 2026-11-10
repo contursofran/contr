@@ -287,13 +287,13 @@ func TestLastAnswerClosesTheCardAndTheNotch(t *testing.T) {
 	}
 	r.tt.Frame()
 	r.tt.Frame()
-	if r.card.IsOpen() || r.tt.HasText("Ship now?") || r.tt.HasText("1 question") {
+	if r.card.IsOpen() || r.tt.HasText("Ship now?") || r.tt.HasText("1 needs you") {
 		t.Errorf("open=%v texts %q, want a closed card and no notch", r.card.IsOpen(), r.tt.Texts())
 	}
 	// A new question does not open the card by itself.
 	src.Snap.Questions = append(src.Snap.Questions, owner.Question{ID: "D3", Project: "a", Title: "More?", Question: "More?"})
 	r.tt.Frame()
-	if r.card.IsOpen() || !r.tt.HasText("1 question") || r.tt.HasText("Or type an answer") {
+	if r.card.IsOpen() || !r.tt.HasText("1 needs you") || r.tt.HasText("Or type an answer") {
 		t.Errorf("the card opened by itself: open=%v texts %q", r.card.IsOpen(), r.tt.Texts())
 	}
 }

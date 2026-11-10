@@ -11,6 +11,7 @@ package questions
 // file watch event (agentstate), so the notch reads no file on the UI thread.
 
 import (
+	"cmp"
 	"slices"
 	"strconv"
 
@@ -28,28 +29,34 @@ const LabelNotchLayer = "questions notch"
 // LabelNotch is the part of the screen-reader label after the count.
 const LabelNotch = "Open"
 
-// NotchLabel is the text of the notch for items: "1 question", "2 questions",
-// and "3 items" once a to-do or a blocked menu is among them (D124; "1 item"
-// for a single one). It is
+// NotchLabel is the text of the notch for items: "1 needs you", "2 need
+// you" (D258). Questions, to-dos and blocked menus count the same. It is
 // empty for no items.
 func NotchLabel(items []agentstate.NeedTab) string {
-	n := len(items)
-	if n == 0 {
+	switch n := len(items); n {
+	case 0:
+		return ""
+	case 1:
+		return "1 needs you"
+	default:
+		return strconv.Itoa(n) + " need you"
+	}
+}
+
+// NotchNewest is the text of the newest item, which the notch shows after the
+// label (D258): its title, else its key. The newest has the latest Since;
+// on a tie, or with no times, the last in items. Empty for no items.
+func NotchNewest(items []agentstate.NeedTab) string {
+	if len(items) == 0 {
 		return ""
 	}
-	allQuestions := true
-	for _, t := range items {
-		allQuestions = allQuestions && t.Kind == agentstate.NeedQuestion
+	newest := items[0]
+	for _, t := range items[1:] {
+		if !t.Since.Before(newest.Since) {
+			newest = t
+		}
 	}
-	switch {
-	case !allQuestions && n == 1:
-		return "1 item"
-	case !allQuestions:
-		return strconv.Itoa(n) + " items"
-	case n == 1:
-		return "1 question"
-	}
-	return strconv.Itoa(n) + " questions"
+	return cmp.Or(newest.Title, newest.Key)
 }
 
 // NotchAccessible is the screen-reader label: the text, a period and "Open".
@@ -168,7 +175,7 @@ func (n *Notch) View(c *ui.Context) {
 	}
 	p := theme.Current()
 	ui.Row(c).Absolute().Top(0).Left(0).Right(0).Justify(ui.Center).PassThrough().Children(func() {
-		b := ui.ButtonBase(c).Label(NotchAccessible(items)).Height(theme.SizeNotchHeight).Shrink(0).
+		b := ui.ButtonBase(c).Label(NotchAccessible(items)).Height(theme.SizeNotchHeight).Shrink(1).MinWidth(0).
 			Radius(0, 0, theme.Radius12, theme.Radius12).Cursor(ui.CursorPointer).
 			FocusRing(false).OnClick(n.Toggle)
 		b = notchShadow(b, p)
@@ -200,13 +207,19 @@ func (n *Notch) View(c *ui.Context) {
 			var dot ui.Element
 			// glass-float over the blur, with float-line on the sides and the
 			// bottom (no top border).
-			kit.GlassFloat(ui.Row(c).Height(theme.SizeNotchHeight).AlignItems(ui.Center).Gap(theme.Space9).
+			// The newest item gives way first in a narrow terminal: it
+			// shrinks to an ellipsis, the dot and the label keep their width.
+			kit.GlassFloat(ui.Row(c).Height(theme.SizeNotchHeight).MinWidth(0).AlignItems(ui.Center).Gap(theme.Space9).
 				Padding(0, theme.Space16, 0, theme.Space12).
 				Radius(0, 0, theme.Radius12, theme.Radius12), p).
 				BorderWidth(0, 1, 1, 1).BorderColor(p.FloatLine).Children(func() {
 				dot = notchDot(c, p, look.Pulse)
-				ui.Text(c, NotchLabel(items)).NoWrap().TextColor(p.Ink100).
+				ui.Text(c, NotchLabel(items)).NoWrap().Shrink(0).TextColor(p.Ink100).
 					FontSize(theme.StyleLabel.Size).FontWeight(theme.StyleLabel.Weight)
+				if s := NotchNewest(items); s != "" {
+					ui.Text(c, s).SingleLine().MinWidth(0).MaxWidth(notchNewestMax).
+						TextColor(p.Ink62).FontSize(theme.StyleLabel.Size)
+				}
 			})
 			if look.Glow > 0 {
 				notchGlow(c, p, look.Glow)
@@ -222,6 +235,10 @@ const (
 	notchDotSize   = 8
 	notchDotMargin = 3
 )
+
+// notchNewestMax is the widest the newest item gets, so a long title does not
+// stretch the notch across the terminal.
+const notchNewestMax = 320
 
 // LabelNotchDot names the dot of the notch.
 const LabelNotchDot = "needs you"

@@ -6,6 +6,7 @@ package agentstate_test
 import (
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
@@ -75,5 +76,24 @@ func TestNeedItemsMarkResolvedItems(t *testing.T) {
 		if tab.Resolved != (tab.Key == "D1") {
 			t.Errorf("%s resolved = %v", tab.Key, tab.Resolved)
 		}
+	}
+}
+
+// Each item carries when it came: Asked, Pinned or the worker's last output (D258).
+func TestNeedItemsCarryTheirTime(t *testing.T) {
+	asked, pinned, out := time.Unix(100, 0), time.Unix(200, 0), time.Unix(300, 0)
+	w := apptest.BlockedWorker("b-2", "a", "Allow rm?")
+	w.LastOutput = out
+	snap := agentstate.Snapshot{
+		Workers:   []agents.Worker{w},
+		Questions: []owner.Question{{ID: "D1", Project: "a", Title: "Which db?", Asked: asked}},
+		Todos:     []owner.Todo{{ID: "T1", Project: "a", Kind: "do", Text: "Test", Pinned: pinned}},
+	}
+	got := map[string]time.Time{}
+	for _, tab := range agentstate.NeedItemsOf(snap, "a") {
+		got[tab.Key] = tab.Since
+	}
+	if !got["b-2"].Equal(out) || !got["D1"].Equal(asked) || !got["T1"].Equal(pinned) {
+		t.Errorf("times %v, want b-2 %v, D1 %v, T1 %v", got, out, asked, pinned)
 	}
 }
