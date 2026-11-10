@@ -3,6 +3,7 @@ package kit
 import (
 	"bytes"
 	"image"
+	"image/color"
 	"testing"
 	"time"
 
@@ -322,15 +323,96 @@ func TestWorkingGlyphPaintsNewFrames(t *testing.T) {
 	}
 }
 
-func TestBrailleGlyphHasInk(t *testing.T) {
-	// The font stack shapes the braille glyph: the image is not blank.
-	tt := ui.NewTester(glyphView(GlyphOpts{State: GlyphIdle}, false), 100, 100)
-	blank := ui.NewTester(func(c *ui.Context) { ui.Column(c).Fill().Background(ui.RGB(0, 0, 0)) }, 100, 100)
-	if bytes.Equal(tt.Image().Pix, blank.Image().Pix) {
-		t.Error("the idle glyph draws nothing")
+func TestDotsFollowTheBraillePatterns(t *testing.T) {
+	// Bits 0 to 2 are the left column from the top, 3 to 5 the right one.
+	cases := []struct {
+		s    GlyphState
+		d    time.Duration
+		want uint8
+		name string
+	}{
+		{GlyphWorking, 0, 0b001011, "working ⠋"},
+		{GlyphWorking, WorkingStep, 0b011001, "working ⠙"},
+		{GlyphWorking, 9 * WorkingStep, 0b001111, "working ⠏"},
+		{GlyphWorkingSlow, WorkingSlowStep, 0b011001, "slow ⠙"},
+		{GlyphWaiting, 0, 0b111111, "waiting ⠿"},
+		{GlyphIdle, 0, 0b110110, "idle ⠶"},
+		{GlyphNeedsYou, 0, 0b001011, "needs you ⠋"},
 	}
-	if w, h := brailleLayout(17, "⠶").Size(); w <= 0 || h <= 0 {
-		t.Errorf("the glyph layout is %vx%v", w, h)
+	for _, c := range cases {
+		if got := Dots(c.s, at(c.d), false); got != c.want {
+			t.Errorf("%s: dots %06b, want %06b", c.name, got, c.want)
+		}
+	}
+	for _, f := range BrailleFrames {
+		if r := []rune(f)[0] - 0x2800; r > 0b111111 {
+			t.Errorf("frame %q uses a dot outside the 2×3 grid", f)
+		}
+	}
+}
+
+func TestDotGridInTheBox(t *testing.T) {
+	// 16px: dots of 3px at centres x 5.5 and 10.5, y 3, 8 and 13.
+	box := ui.Rect{X: 10, Y: 20, W: 16, H: 16}
+	want := [6][2]float32{{5.5, 3}, {5.5, 8}, {5.5, 13}, {10.5, 3}, {10.5, 8}, {10.5, 13}}
+	for i, w := range want {
+		r := dotRect(box, i)
+		if r.W != 3 || r.H != 3 || r.X+r.W/2 != box.X+w[0] || r.Y+r.H/2 != box.Y+w[1] {
+			t.Errorf("dot %d is %v, want 3x3 at centre %v", i, r, w)
+		}
+	}
+	// 14px scales the same grid.
+	small := dotRect(ui.Rect{W: 14, H: 14}, 3)
+	if near := func(a, b float32) bool { return a > b-0.001 && a < b+0.001 }; !near(small.W, 2.625) || !near(small.X+small.W/2, 10.5*14/16) || !near(small.Y+small.H/2, 3.0*14/16) {
+		t.Errorf("small dot 3 is %v, want 2.625px at centre (9.1875, 2.625)", small)
+	}
+}
+
+// dotInk returns the color at the centre of dot i of a glyph drawn at scale 2
+// at the top left of a black view.
+func dotInk(o GlyphOpts, i int) color.RGBA {
+	tt := ui.NewTester(glyphView(o, false), 100, 100)
+	tt.SetScale(2)
+	tt.Frame()
+	g, _ := tt.Find(o.State.Label())
+	r := dotRect(g, i)
+	return tt.Image().RGBAAt(int(2*(r.X+r.W/2)), int(2*(r.Y+r.H/2)))
+}
+
+func TestLitDotsTakeTheInkAndDimDotsInk30(t *testing.T) {
+	p := theme.Current()
+	flat := func(c ui.Color) color.RGBA { // over black
+		a := float32(c.A) / 255
+		return color.RGBA{uint8(float32(c.R)*a + 0.5), uint8(float32(c.G)*a + 0.5), uint8(float32(c.B)*a + 0.5), 255}
+	}
+	near := func(a, b color.RGBA) bool {
+		d := func(x, y uint8) bool { return x+3 >= y && y+3 >= x }
+		return d(a.R, b.R) && d(a.G, b.G) && d(a.B, b.B)
+	}
+	cases := []struct {
+		o    GlyphOpts
+		dot  int
+		want ui.Color
+		name string
+	}{
+		{GlyphOpts{State: GlyphNeedsYou}, 0, p.Blocked, "needs you, lit dot 1"},
+		{GlyphOpts{State: GlyphNeedsYou}, 2, p.Ink30, "needs you, dim dot 3"},
+		{GlyphOpts{State: GlyphIdle}, 1, p.Ink30, "idle, lit dot 2"},
+		{GlyphOpts{State: GlyphIdle}, 0, p.Ink30, "idle, dim dot 1"},
+		{GlyphOpts{State: GlyphNeedsYou, Color: p.Ink60}, 0, p.Ink60, "the Color ink, lit dot 1"},
+		{GlyphOpts{State: GlyphNeedsYou, Color: p.Ink60}, 5, p.Ink30, "the Color ink, dim dot 6"},
+	}
+	for _, c := range cases {
+		if got, want := dotInk(c.o, c.dot), flat(c.want); !near(got, want) {
+			t.Errorf("%s is %v, want %v", c.name, got, want)
+		}
+	}
+	// Between the dots the box is empty.
+	tt := ui.NewTester(glyphView(GlyphOpts{State: GlyphWaiting}, false), 100, 100)
+	tt.SetScale(2)
+	tt.Frame()
+	if c := tt.Image().RGBAAt(2*8, 2*5); c.R != 0 || c.G != 0 || c.B != 0 {
+		t.Errorf("the gap between the dots is %v, want black", c)
 	}
 }
 

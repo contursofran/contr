@@ -21,7 +21,7 @@ what the redesign does not settle.
 | [Tab.md](Tab.md) | one hc terminal of the selected agent |
 | [IconButton.md](IconButton.md) | square button with one line icon |
 | [DiffSummary.md](DiffSummary.md) | changed lines and files of the project |
-| [StatusGlyph.md](StatusGlyph.md) | braille spinner and Claude glyph |
+| [StatusGlyph.md](StatusGlyph.md) | six-dot spinner and Claude glyph |
 | [ServerRow.md](ServerRow.md) | one machine that runs hc |
 | [ProjectRow.md](ProjectRow.md) | one project in the sidebar |
 | [ProjectsModal.md](ProjectsModal.md) | the palette dialog that shows, adds and hides projects |
