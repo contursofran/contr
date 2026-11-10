@@ -51,7 +51,6 @@ var (
 	StyleLabel      = TextStyle{Size: 12, Line: 18, Weight: 500}
 	StyleChip       = TextStyle{Size: 11.5, Line: 16, Weight: 400}
 	StyleTerminal   = TextStyle{Mono: true, Size: 13, Line: 20, Weight: 400}
-	StyleGlyph      = TextStyle{Mono: true, Size: 17, Line: 18, Weight: 400}
 	StyleValue      = TextStyle{Mono: true, Size: 11.5, Line: 16, Weight: 400}
 	StyleMeta       = TextStyle{Mono: true, Size: 11, Line: 16, Weight: 400}
 	StyleKbd        = TextStyle{Mono: true, Size: 10.5, Line: 14, Weight: 500}
@@ -71,7 +70,6 @@ var Styles = map[string]TextStyle{
 	"label":       StyleLabel,
 	"chip":        StyleChip,
 	"terminal":    StyleTerminal,
-	"glyph":       StyleGlyph,
 	"value":       StyleValue,
 	"meta":        StyleMeta,
 	"count":       StyleCount,
