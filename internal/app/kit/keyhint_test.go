@@ -28,14 +28,19 @@ func TestTheKeyChipSitsOnTheButtonCornerAndMovesNothing(t *testing.T) {
 	if chip.H != SizeKeyHint || chip.W < SizeKeyHint {
 		t.Errorf("chip %vx%v", chip.W, chip.H)
 	}
-	// The chip takes no click: the button under it gets it.
+	// The chip takes no click: over the button the button gets it, and past the button's corner
+	// the click goes to what is under the chip, not to the button.
 	clicks := 0
 	o.OnClick = func() { clicks++ }
 	tt = ui.NewTester(buttonView(o), 120, 80)
 	chip, _ = tt.Find(LabelKeyHint)
 	tt.ClickAt(chip.X+chip.W/4, chip.Y+chip.H/4)
 	if clicks != 1 {
-		t.Errorf("a click on the chip over the button: %d clicks", clicks)
+		t.Errorf("a click on the chip over the button: %d clicks, want 1", clicks)
+	}
+	tt.ClickAt(chip.X+chip.W*3/4, chip.Y+chip.H*3/4)
+	if clicks != 1 {
+		t.Errorf("a click on the chip past the button: %d clicks, want still 1", clicks)
 	}
 }
 

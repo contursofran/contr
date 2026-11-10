@@ -68,7 +68,7 @@ func TestCmdShiftBracketsStepTheTabsAroundTheEnds(t *testing.T) {
 		want string
 	}{
 		// From b1 of lead, b1, $ repo; the orchestrator's tabs are lead and $ repo.
-		{shortcut.NextTab, "t1"}, {shortcut.NextTab, "o"}, {shortcut.PrevTab, "t1"}, {shortcut.PrevTab, "o"},
+		{shortcut.PrevTab, "o"}, {shortcut.NextTab, "t1"}, {shortcut.NextTab, "o"}, {shortcut.PrevTab, "t1"},
 	} {
 		press(tt, c.key)
 		if got := selected(f); got != c.want {

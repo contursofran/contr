@@ -18,8 +18,9 @@ func (f *Frame) windowKeys(c *ui.Context, win float32) {
 	if shortcut.Of(shortcut.Files).Pressed(c) && !narrowWindow(win) {
 		f.TogglePanel()
 	}
-	// While the projects modal shows, ⌘O is its own: it opens the folder dialog.
-	if f.ProjectsModal != nil && !f.ProjectsModal.Opened() && shortcut.Of(shortcut.OpenProject).Pressed(c) {
+	// While the projects modal shows, ⌘O is its own (it opens the folder dialog): a window
+	// shortcut built behind a modal waits.
+	if f.ProjectsModal != nil && shortcut.Of(shortcut.OpenProject).Pressed(c) {
 		f.ProjectsModal.Toggle()
 	}
 	if f.NewOrch != nil && shortcut.Of(shortcut.NewOrchestrator).Pressed(c) {

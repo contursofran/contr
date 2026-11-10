@@ -24,6 +24,10 @@ func TestStepAgentSkipsProjectRowsAndStopsAtTheEnds(t *testing.T) {
 			t.Fatalf("⌘⌥↓: %q, want %q", got, want)
 		}
 	}
+	h.list.StepAgent(1) // the project row of beta below is not an agent row
+	if sel, _ := h.sel.Current(); sel.Kind == state.KindWorktree {
+		t.Fatalf("⌘⌥↓ from b-242 selected the project row %+v", sel)
+	}
 	h.sel.Clear()
 	h.list.StepAgent(-1) // no selection: the last agent row
 	h.tt.Frame()
