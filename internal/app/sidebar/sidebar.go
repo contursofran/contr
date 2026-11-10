@@ -117,16 +117,18 @@ func (l *SpacesList) View(c *ui.Context) {
 	})
 }
 
-// noProjects is the empty project list (D255): "No projects yet" and the button that opens the
-// projects modal, as ⌘O does. It takes the free height of the list, so the foot stays at the
+// noProjects is the empty project list (D255): "No projects yet" and the plain button that
+// opens the projects modal, as ⌘O does. The one filled button is the terminal's. It takes the free height of the list, so the foot stays at the
 // bottom. The icon column keeps its folder button and shows nothing here.
 func (l *SpacesList) noProjects(c *ui.Context) {
 	p := theme.Current()
 	ui.Column(c).Label(LabelNoProjects).FillWidth().Grow(1).MinHeight(0).Gap(theme.Space10).
 		Padding(theme.Space20, kit.RowInsetX, 0, kit.RowInsetX+theme.Space10).Children(func() {
 		kit.Styled(ui.Text(c, LabelNoProjects), theme.StyleLabel).SingleLine().MinWidth(0).TextColor(p.Ink62)
-		ui.Row(c).MinWidth(0).MaxWidthPercent(100).Children(func() {
-			kit.KeyButton(c, LabelOpenProject, shortcut.Of(shortcut.OpenProject).Glyphs(), true, l.OnProjects).Shrink(1)
+		// The button's text lines up with the line above; its hover fill reaches past it, as a
+		// row's does.
+		ui.Row(c).MinWidth(0).MaxWidthPercent(100).Margin(0, 0, 0, -theme.KeyButtonPadL).Children(func() {
+			kit.KeyButton(c, LabelOpenProject, shortcut.Of(shortcut.OpenProject).Glyphs(), kit.KeyRow, l.OnProjects).Shrink(1)
 		})
 	})
 }

@@ -15,12 +15,13 @@ func TestKeyButtonFillsOnlyTheMainAction(t *testing.T) {
 	clicks := 0
 	tt := ui.NewTester(func(c *ui.Context) {
 		ui.Column(c).Fill().Background(p.Ground).Gap(theme.Space8).Children(func() {
-			KeyButton(c, "Main", "⌘O", true, func() { clicks++ })
-			KeyButton(c, "Other", "⌘T", false, nil)
+			KeyButton(c, "Main", "⌘O", KeyMain, func() { clicks++ })
+			KeyButton(c, "Other", "⌘T", KeyPlain, nil)
+			KeyButton(c, "Row", "⌘O", KeyRow, nil)
 		})
-	}, 200, 80)
+	}, 200, 120)
 	tt.Frame()
-	for _, s := range []string{"Main", "⌘O", "Other", "⌘T"} {
+	for _, s := range []string{"Main", "⌘O", "Other", "⌘T", "Row"} {
 		if !tt.HasText(s) {
 			t.Errorf("no text %q in %q", s, tt.Texts())
 		}
@@ -32,6 +33,9 @@ func TestKeyButtonFillsOnlyTheMainAction(t *testing.T) {
 	}
 	if got, want := at(theme.KeyButtonHeight+theme.Space8+theme.KeyButtonHeight/2), [3]uint8{p.Ground.R, p.Ground.G, p.Ground.B}; got != want {
 		t.Errorf("other button edge %v, want the ground %v (no fill, no border)", got, want)
+	}
+	if got, want := at(2*(theme.KeyButtonHeight+theme.Space8)+theme.KeyButtonHeight/2), [3]uint8{p.Ground.R, p.Ground.G, p.Ground.B}; got != want {
+		t.Errorf("row button edge %v, want the ground %v (no fill, no border)", got, want)
 	}
 	if err := tt.Click("Main"); err != nil {
 		t.Fatal(err)

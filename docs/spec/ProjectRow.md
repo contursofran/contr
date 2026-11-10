@@ -62,8 +62,10 @@ Design system page: component ProjectRow. Shared rules: [README.md](README.md).
 ## Edge cases
 
 - No projects (D255): in place of the rows, 20 below the Projects head, "No projects yet"
-  (`label`, `ink-62`) and, 10 below, the button "Open a project ⌘O": fill `ink-100`, text
-  `ground` (`small`, weight 500), the key in `kbd` at 60% of `ground`, 28 high, radius 8. It
+  (`label`, `ink-62`) and, 10 below, the plain button "Open a project ⌘O": text `ink-85`
+  (`small`), the key in `kbd` `ink-42`, no fill and no border, 28 high, radius 8; on hover the
+  fill `hover` of a plain row. Its text lines up with "No projects yet" (the button sits its
+  12 of padding to the left). The one filled button of an empty window is the terminal's. It
   opens the projects modal, as ⌘O does. It shows only when the stored projects are read and
   no git scan runs. The icon column (D128) shows nothing here: its folder button is the way
   in. A narrow sidebar cuts the label with an ellipsis; the key stays.

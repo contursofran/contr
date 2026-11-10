@@ -567,6 +567,12 @@ func TestEmptyProjectListNamesTheFirstStep(t *testing.T) {
 	if !h.tt.HasText(LabelNoProjects) || !h.tt.HasText("⌘O") {
 		t.Errorf("texts %q, want %q and ⌘O", h.tt.Texts(), LabelNoProjects)
 	}
+	// Plain: no fill or border; the one filled button is the terminal's (D255).
+	b := apptest.Box(t, h.tt, LabelOpenProject)
+	img := h.tt.Image()
+	if in, out := apptest.PixelAt(img, b.X+2, b.Y+b.H/2), apptest.PixelAt(img, b.X-4, b.Y+b.H/2); in != out {
+		t.Errorf("button edge %v, want the sidebar ground %v (no fill)", in, out)
+	}
 	if err := h.tt.Click(LabelOpenProject); err != nil {
 		t.Fatal(err)
 	}

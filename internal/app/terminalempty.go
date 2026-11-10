@@ -125,8 +125,8 @@ func (f *Frame) firstRun(c *ui.Context) {
 		if f.NewTerm != nil {
 			term = f.newTerminal
 		}
-		kit.KeyButton(c, sidebar.LabelOpenProject, shortcut.Of(shortcut.OpenProject).Glyphs(), true, open).Shrink(1)
-		kit.KeyButton(c, TerminalNewLine, shortcut.Of(shortcut.NewTab).Glyphs(), false, term).Shrink(1)
+		kit.KeyButton(c, sidebar.LabelOpenProject, shortcut.Of(shortcut.OpenProject).Glyphs(), kit.KeyMain, open).Shrink(1)
+		kit.KeyButton(c, TerminalNewLine, shortcut.Of(shortcut.NewTab).Glyphs(), kit.KeyPlain, term).Shrink(1)
 	})
 }
 
