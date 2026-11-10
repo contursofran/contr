@@ -238,6 +238,57 @@ func TestANeedsYouAgentSaysSoInItsLabel(t *testing.T) {
 	}
 }
 
+// A worker blocked on a menu says why on line 2: "needs you · <kind>" in
+// place of its name and model (D249). With no known kind, "needs you" alone.
+func TestANeedsYouWorkerSaysWhyOnLineTwo(t *testing.T) {
+	for _, tc := range []struct {
+		status, kind, label, reason string
+	}{
+		{"blocked", "permission", "b-241, needs you, 241, sonnet, permission", "permission"},
+		{"blocked", "question", "b-241, needs you, 241, sonnet, question", "question"},
+		{"blocked", "auth", "b-241, needs you, 241, sonnet, auth", "auth"},
+		{"blocked", "", "b-241, needs you, 241, sonnet", ""},
+		{"blocked", "other", "b-241, needs you, 241, sonnet", ""},
+		{"error", "permission", "b-241, needs you, 241, sonnet", ""},
+	} {
+		h := newRows(t)
+		snap := h.live.get()
+		snap.Workers[0].Status, snap.Workers[0].Kind = tc.status, tc.kind
+		h.send(snap)
+		if !h.has(tc.label) {
+			t.Errorf("%s %q: no label %q in %q", tc.status, tc.kind, tc.label, h.tt.Texts())
+		}
+		// Line 2 of b-241 sits between its title and the next row: the reason
+		// and the age; its name is gone.
+		texts := h.tt.Texts()
+		i := slices.Index(texts, tc.label+" title")
+		if i < 0 {
+			t.Fatalf("%s %q: no title in %q", tc.status, tc.kind, texts)
+		}
+		want := []string{kit.NeedsYouText, "6m"}
+		if tc.reason != "" {
+			want = []string{kit.NeedsYouText + " ·", tc.reason, "6m"}
+		}
+		if got := texts[i+1 : min(i+1+len(want), len(texts))]; !slices.Equal(got, want) {
+			t.Errorf("%s %q: line 2 is %q, want %q", tc.status, tc.kind, got, want)
+		}
+	}
+}
+
+// An orchestrator that is blocked keeps its own look: its badge counts the
+// menu (D240), and line 2 keeps its role.
+func TestABlockedOrchestratorDoesNotSayNeedsYouOnLineTwo(t *testing.T) {
+	h := newRows(t)
+	snap := h.live.get()
+	snap.Orchestrators[0].Status, snap.Orchestrators[0].Kind = "blocked", "permission"
+	h.send(snap)
+	texts := h.tt.Texts()
+	i := slices.Index(texts, "lead, needs you, opus title")
+	if i < 0 || i+2 >= len(texts) || texts[i+1] != "2 workers" || texts[i+2] != "opus" {
+		t.Errorf("line 2 of the orchestrator is not its role and model: %q", texts)
+	}
+}
+
 func TestAClickOnAnAgentRowSelectsItAndTheTabsFollow(t *testing.T) {
 	h := newRows(t)
 	if err := h.tt.Click("b-241, working, 241, sonnet"); err != nil {

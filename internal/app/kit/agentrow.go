@@ -63,6 +63,25 @@ type AgentRowOpts struct {
 	// column (D240). Arrival is its last arrival, for the spring and glow.
 	Items   int
 	Arrival Arrival
+	// NeedsYou draws a worker that needs the owner (D249): `blocked-fill` with
+	// a `blocked-line` ring, the title in ink-100, and line 2 says why:
+	// "needs you · <Reason>", the first words in `blocked`, then the age.
+	// Reason is the block kind (permission, question, auth); empty: "needs
+	// you" alone.
+	NeedsYou bool
+	Reason   string
+}
+
+// NeedsYouText is the start of line 2 of a row that needs the owner.
+const NeedsYouText = "needs you"
+
+// needLine is the text of line 2 of a needs-you row in blocked: "needs you ·"
+// before a reason, "needs you" with none.
+func needLine(reason string) string {
+	if reason == "" {
+		return NeedsYouText
+	}
+	return NeedsYouText + " ·"
 }
 
 // Sizes of the item badge (D240).
@@ -129,6 +148,9 @@ func agentRowButton(c *ui.Context, o AgentRowOpts, marginEnd, marginStart float3
 	if o.Selected {
 		titleInk, metaInk = p.Ink100, p.Ink62
 	}
+	if o.NeedsYou {
+		titleInk = p.Ink100
+	}
 	padY := float32(WorkerPadY)
 	if o.Orchestrator {
 		padY = OrchestratorPadY
@@ -137,10 +159,17 @@ func agentRowButton(c *ui.Context, o AgentRowOpts, marginEnd, marginStart float3
 		Gap(theme.Space10).Padding(padY, theme.Space10).MarginStart(marginStart).MarginEnd(marginEnd).Radius(theme.Radius8).
 		TextColor(titleInk).Cursor(ui.CursorPointer).Selected(o.Selected)
 	// ButtonBase paints a selected button in the accent color; the explicit
-	// background keeps it flat: only the ink shows the selection.
-	if row.Hovered() {
+	// background sets the look of the spec (D249): a row that needs the owner
+	// keeps its `blocked` fill, also when selected; a selected row has the
+	// `selected` fill and ring of the selected tab.
+	switch {
+	case o.NeedsYou:
+		row = row.Background(p.BlockedFill).InsetShadow(0, 0, 0, 1, p.BlockedLine)
+	case o.Selected:
+		row = InsetRing(row.Background(p.Selected), p.ShadowSelected)
+	case row.Hovered():
 		row = row.Background(p.Hover)
-	} else {
+	default:
 		row = row.Background(ui.Transparent)
 	}
 	if o.OnClick != nil {
@@ -166,9 +195,21 @@ func agentRowButton(c *ui.Context, o AgentRowOpts, marginEnd, marginStart float3
 				title()
 			}
 			ui.Row(c).FillWidth().Gap(theme.Space10).MinWidth(0).Children(func() {
-				meta := func(s string) {
-					ui.Text(c, s).SingleLine().
+				meta := func(s string) ui.Element {
+					return ui.Text(c, s).SingleLine().
 						Font(theme.StyleMeta.Family()).FontSize(theme.StyleMeta.Size).FixedLineHeight(theme.StyleMeta.Line).TextColor(metaInk)
+				}
+				if o.NeedsYou {
+					// The reason takes the place of the name, model and CI.
+					meta(needLine(o.Reason)).TextColor(p.Blocked)
+					if o.Reason != "" {
+						meta(o.Reason)
+					}
+					ui.Spacer(c)
+					if o.Age != "" {
+						meta(o.Age)
+					}
+					return
 				}
 				if o.Name != "" {
 					meta(o.Name)
@@ -190,15 +231,29 @@ func agentRowButton(c *ui.Context, o AgentRowOpts, marginEnd, marginStart float3
 	})
 }
 
+// InsetRing draws the inset layers of a token shadow, as MyGo's inset shadow:
+// the ring of `shadow-selected`.
+func InsetRing(el ui.Element, sh theme.Shadow) ui.Element {
+	for _, l := range sh {
+		if l.Inset {
+			el = el.InsetShadow(l.X, l.Y, l.Blur, l.Wide, l.Color)
+		}
+	}
+	return el
+}
+
 // compactAgentButton is an agent in an icon column: the status glyph alone.
-// Only the fill shows the selection, as the glyph keeps the color of its state.
+// Only the fill shows the selection, as the glyph keeps the color of its state;
+// a worker that needs the owner has the `blocked` fill and ring (D249).
 func compactAgentButton(c *ui.Context, o AgentRowOpts) {
 	p := theme.Current()
 	row := ui.ButtonBase(c).Label(o.Label).Height(theme.SizeRowHeight).Shrink(0).Center().
 		MarginX(theme.Space6).Radius(theme.Radius8).Cursor(ui.CursorPointer).Selected(o.Selected)
 	switch {
+	case o.NeedsYou:
+		row = row.Background(p.BlockedFill).InsetShadow(0, 0, 0, 1, p.BlockedLine)
 	case o.Selected:
-		row = row.Background(p.Selected)
+		row = InsetRing(row.Background(p.Selected), p.ShadowSelected)
 	case row.Hovered():
 		row = row.Background(p.Hover)
 	default:

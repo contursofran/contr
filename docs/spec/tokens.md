@@ -23,8 +23,8 @@ Generated from the design system `tokens.json`. Views use the names; `internal/a
 | `hover` | `rgba(255,255,255,0.045)` | `rgba(0,0,0,0.04)` | Hover fill of rows, tabs, file rows and answer options; the fill of the picked option. |
 | `hover-strong` | `rgba(255,255,255,0.06)` | `rgba(0,0,0,0.055)` | Hover fill of icon buttons. |
 | `press` | `rgba(255,255,255,0.08)` | `rgba(0,0,0,0.08)` | Hover fill of the small close button on a tab. |
-| `selected` | `rgba(255,255,255,0.085)` | `rgba(0,0,0,0.065)` | The pill behind the active tab and the chosen question chip. Rows in the sidebar never get it: they turn ink-100 instead. |
-| `selected-line` | `rgba(255,255,255,0.06)` | `rgba(0,0,0,0.06)` | The 1px inner ring of the selected pill (shadow-selected). |
+| `selected` | `rgba(255,255,255,0.085)` | `rgba(0,0,0,0.065)` | The pill behind the active tab and the chosen question chip, and the fill of the selected agent row with the `shadow-selected` ring (D249). |
+| `selected-line` | `rgba(255,255,255,0.06)` | `rgba(0,0,0,0.06)` | The 1px inner ring of the selected pill and the selected agent row (shadow-selected). |
 | `input-line` | `rgba(255,255,255,0.1)` | `rgba(0,0,0,0.13)` | 1px border of the text field in the open notch. |
 | `meter-track` | `rgba(255,255,255,0.07)` | `rgba(0,0,0,0.08)` | Track of the context and plan-usage meters. |
 | `meter-fill` | `rgba(255,255,255,0.55)` | `rgba(0,0,0,0.5)` | Filled part of the context and plan-usage meters. |
@@ -47,7 +47,9 @@ Generated from the design system `tokens.json`. Views use the names; `internal/a
 | `ink-24` | `rgba(255,255,255,0.24)` | `rgba(0,0,0,0.313)` | Deleted file names (struck through) and removed-line counts in the file tree. 2.2:1: dim on purpose, kept from the canvas. |
 | `ink-22` | `rgba(255,255,255,0.22)` | `rgba(0,0,0,0.287)` | Icon and counts of a deleted file. 2:1: dim on purpose, kept from the canvas. |
 | `terminal-text` | `rgba(255,255,255,0.82)` | `rgba(0,0,0,0.815)` | Default terminal text before the agent CLI paints its own colors. 12.4:1 on panel. |
-| `blocked` | `#f07178` | `#c73947` | The one hue in the chrome: red for an agent that is blocked or asks the owner. Loader glyphs and the Claude glyph only, never fills or text runs, except the `N need you` meta of the projects modal (D207). 6.4:1 on panel, 5.8:1 on glass-float. Light: #c73947, 4.9:1 on panel. |
+| `blocked` | `#f07178` | `#c73947` | The one hue in the chrome: red for an agent that is blocked or asks the owner. Loader glyphs, the Claude glyph, the item badge and the notch dot; as text only the `N need you` meta of the projects modal (D207) and the "needs you" words of a worker row (D249). 6.4:1 on panel, 5.8:1 on glass-float. Light: #c73947, 4.9:1 on panel. |
+| `blocked-fill` | `rgba(240,113,120,0.1)` | `rgba(199,57,71,0.06)` | The fill of a worker row that needs the owner (D249). The one row fill in a hue. `blocked` text on it over panel: 5.6:1; Light 4.55:1 (8% would be 4.4:1). |
+| `blocked-line` | `rgba(240,113,120,0.24)` | `rgba(199,57,71,0.22)` | The 1px inner ring of a worker row that needs the owner (D249). |
 | `claude` | `#d97757` | `#c15f3c` | Stroke of the Claude agent glyph (orchestrators) while it works or idles. 5.85:1 on panel. Light: #c15f3c, 4.1:1 on panel (#d97757 is only 2.9:1 on light). |
 | `focus-ring` | `rgba(255,255,255,0.5)` | `rgba(0,0,0,0.45)` | The 1px keyboard focus ring of every button, 2px outside it. |
 | `lights` | `rgba(255,255,255,0.14)` | `rgba(0,0,0,0.14)` | Previews only: the traffic-light stand-ins. macOS draws the real ones. |
@@ -160,6 +162,6 @@ The 16 colors a program in the terminal asks for (SGR 30-37, 90-97, palette 0-15
 | Token | Dark | Light | Use |
 |---|---|---|---|
 | `shadow-window-top` | `inset 0 1px 0 rgba(255,255,255,0.05)` | `inset 0 1px 0 rgba(255,255,255,0.7)` | Top highlight inside the window border. |
-| `shadow-selected` | `inset 0 0 0 1px rgba(255,255,255,0.06)` | `inset 0 0 0 1px rgba(0,0,0,0.06)` | Ring of the selected pill. |
+| `shadow-selected` | `inset 0 0 0 1px rgba(255,255,255,0.06)` | `inset 0 0 0 1px rgba(0,0,0,0.06)` | Ring of the selected pill and the selected agent row. |
 | `shadow-float` | `0 12px 32px rgba(0,0,0,0.28)` | `0 12px 32px rgba(0,0,0,0.12)` | Outline card. |
 | `shadow-notch` | `inset 0 -1px 0 rgba(255,255,255,0.03), 0 12px 32px rgba(0,0,0,0.28)` | `inset 0 -1px 0 rgba(255,255,255,0.6), 0 12px 32px rgba(0,0,0,0.12)` | Questions notch, closed and open. |

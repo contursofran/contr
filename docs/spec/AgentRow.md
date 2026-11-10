@@ -24,8 +24,8 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
 
 - **Default.**
 - **Hover:** fill `hover`.
-- **Selected:** no fill. Title turns `ink-100`, line 2 `ink-62`. The tabs and the right panel follow the selected row.
-- **Needs you:** the glyph turns `blocked`. The row is not otherwise colored.
+- **Selected (D249):** fill `selected` and the 1px `shadow-selected` ring, as the selected tab. Title turns `ink-100`, line 2 `ink-62`. The tabs and the right panel follow the selected row.
+- **Needs you (D249):** a worker blocked on a menu, or in error. The glyph turns `blocked`; the row has fill `blocked-fill` and a 1px inner ring `blocked-line`, also when it is selected; the title is `ink-100`. Line 2 says why in place of the name, model and CI: "needs you ·" in `blocked`, then the block kind (`permission`, `question` or `auth`) in the line 2 ink, then the age at the right. When the kind is not known (an error, or another kind), line 2 is "needs you" alone and the age. An orchestrator keeps its look: its item badge counts the menu (D240).
 - **Items for you (D240):** an orchestrator whose project has open items
   that belong to it or its workers shows the item badge with their number.
   On an arrival (the number goes up) the badge springs (1.25 at 120 ms, 0.94
@@ -75,7 +75,9 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
   So the badges of a project add up to the notch count. While the questions
   file is broken (D146) no badge shows.
 - Icon column (D128): an orchestrator with open items shows a still 6px
-  `blocked` dot at the top right of its glyph; the badge does not fit.
+  `blocked` dot at the top right of its glyph; the badge does not fit. A
+  selected agent has the `selected` fill and ring; a worker that needs the
+  owner has `blocked-fill` and the `blocked-line` ring (D249).
 - A selected agent that is gone leaves the selection.
 - The project row shows the selection for the project itself, and while the
   project is folded; an open project shows it on the agent row.
@@ -99,13 +101,14 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
 
 ## Accessibility
 
-- Label: "<title>, <state>, <issue>, <model>". An orchestrator with open
+- Label: "<title>, <state>, <issue>, <model>". A worker that needs the
+  owner adds its block kind when known (", permission"). An orchestrator with open
   items adds ", 2 items for you" ("1 item for you"). The badge is "items
   for you"; the dot of the icon column "items for you dot".
 
 ## Tokens
 
-`hover`, `rail`, `ink-100`, `ink-62`, `ink-60`, `ink-42`, `space-8`, `space-10`, `radius-8`, `body`, `meta`, `badge`, `blocked`, `ground`.
+`hover`, `selected`, `shadow-selected`, `blocked-fill`, `blocked-line`, `rail`, `ink-100`, `ink-62`, `ink-60`, `ink-42`, `space-8`, `space-10`, `radius-8`, `body`, `meta`, `badge`, `blocked`, `ground`.
 
 ## Build in MyGo
 
@@ -134,6 +137,9 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
 ## Tests
 
 - View: orchestrator and worker rows, selected, needs you, waiting on CI.
+- View: the fill and ring of a selected row and of a needs-you row, in rows
+  and in the icon column; line 2 of a needs-you worker for each block kind
+  and for none; a blocked orchestrator keeps its line 2 (D249).
 - View: click selects the agent and the tabs change.
 - View: badge count per orchestrator (its own items and its workers'),
   gone at 0, none on worker rows, a dot in the icon column; the badge moves

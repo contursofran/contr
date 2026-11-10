@@ -54,6 +54,8 @@ type Palette struct {
 
 	TerminalText ui.Color `token:"terminal-text"`
 	Blocked      ui.Color `token:"blocked"`
+	BlockedFill  ui.Color `token:"blocked-fill"`
+	BlockedLine  ui.Color `token:"blocked-line"`
 	Claude       ui.Color `token:"claude"`
 	FocusRing    ui.Color `token:"focus-ring"`
 	Lights       ui.Color `token:"lights"`
@@ -147,6 +149,8 @@ var Dark = &Palette{
 
 	TerminalText: white(0.82),
 	Blocked:      ui.Hex("#f07178"),
+	BlockedFill:  ui.RGBA(240, 113, 120, 0.10),
+	BlockedLine:  ui.RGBA(240, 113, 120, 0.24),
 	Claude:       ui.Hex("#d97757"),
 	FocusRing:    white(0.5),
 	Lights:       white(0.14),
@@ -214,6 +218,8 @@ var Light = &Palette{
 
 	TerminalText: black(0.815),
 	Blocked:      ui.Hex("#c73947"),
+	BlockedFill:  ui.RGBA(199, 57, 71, 0.06),
+	BlockedLine:  ui.RGBA(199, 57, 71, 0.22),
 	Claude:       ui.Hex("#c15f3c"),
 	FocusRing:    black(0.45),
 	Lights:       black(0.14),

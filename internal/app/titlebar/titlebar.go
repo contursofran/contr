@@ -186,7 +186,7 @@ func (b *TitleBar) tab(c *ui.Context, tab ui.Element, t tabmodel.Tab, hint strin
 	switch {
 	case t.Selected:
 		el = el.Background(p.Panel)
-		el = insetRing(el, p.ShadowSelected)
+		el = kit.InsetRing(el, p.ShadowSelected)
 		ink = p.Ink100
 	default:
 		el = el.Cursor(ui.CursorPointer)
@@ -298,14 +298,4 @@ func closeButton(c *ui.Context, onClick func()) {
 			ui.Icon(c, s).Size(10, 10)
 		}
 	})
-}
-
-// insetRing draws the layers of a token shadow that are inset, as MyGo's inset shadow.
-func insetRing(el ui.Element, sh theme.Shadow) ui.Element {
-	for _, l := range sh {
-		if l.Inset {
-			el = el.InsetShadow(l.X, l.Y, l.Blur, l.Wide, l.Color)
-		}
-	}
-	return el
 }
