@@ -35,7 +35,10 @@ func flatRow(c *ui.Context, o RowOpts) {
 	}
 	row := ui.ButtonBase(c).Label(label).Height(theme.SizeRowHeight).Shrink(0).AlignItems(ui.Center).
 		Gap(theme.Space10).PaddingX(theme.Space10).MarginX(RowInsetX).Radius(theme.Radius8).
-		TextColor(nameInk).Cursor(ui.CursorPointer).Selected(o.Selected)
+		Cursor(ui.CursorPointer).Selected(o.Selected).Transition(FadeTransition(theme.MotionSelect))
+	// The ink fades in theme.MotionSelect (D256); the selection itself is at once.
+	nameInk = FadeInk(row, "name-ink", nameInk, theme.MotionSelect)
+	row = row.TextColor(nameInk)
 	if o.Expanded != nil {
 		row = row.Expanded(*o.Expanded)
 	}

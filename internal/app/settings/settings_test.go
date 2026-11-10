@@ -47,7 +47,8 @@ func newSettingsRig(t *testing.T, u *fakeUpdates) *settingsRig {
 	return r
 }
 
-func (r *settingsRig) open() { r.s.Toggle(); r.tt.Frame() }
+// open opens the modal and lets its way in end (D256).
+func (r *settingsRig) open() { r.s.Toggle(); r.tt.Frame(); r.tt.Advance(theme.MotionPopIn) }
 
 // openUpdates opens the modal on the Updates tab with a click on the tab.
 func (r *settingsRig) openUpdates() {

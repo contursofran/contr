@@ -139,7 +139,13 @@ func agentRowButton(c *ui.Context, o AgentRowOpts, marginEnd, marginStart float3
 	}
 	row := ui.ButtonBase(c).Label(o.Label).Shrink(0).AlignItems(ui.Center).Grow(1).MinWidth(0).
 		Gap(theme.Space10).Padding(padY, theme.Space10).MarginStart(marginStart).MarginEnd(marginEnd).Radius(theme.Radius8).
-		TextColor(titleInk).Cursor(ui.CursorPointer).Selected(o.Selected)
+		Cursor(ui.CursorPointer).Selected(o.Selected)
+	// The fill and the inks fade (D256): a selection in theme.MotionSelect, a
+	// turn to needs you in theme.MotionState. The selected state itself
+	// changes at once.
+	d := RowMotion(row, o.State == GlyphNeedsYou)
+	titleInk, metaInk = FadeInk(row, "title-ink", titleInk, d), FadeInk(row, "meta-ink", metaInk, d)
+	row = row.TextColor(titleInk).Transition(FadeTransition(d))
 	// ButtonBase paints a selected button in the accent color; the explicit
 	// background keeps it flat: only the ink shows the selection.
 	if row.Hovered() {
@@ -203,6 +209,7 @@ func compactAgentButton(c *ui.Context, o AgentRowOpts) ui.Element {
 	p := theme.Current()
 	row := ui.ButtonBase(c).Label(o.Label).Height(theme.SizeRowHeight).Shrink(0).Center().
 		MarginX(theme.Space6).Radius(theme.Radius8).Cursor(ui.CursorPointer).Selected(o.Selected)
+	row = row.Transition(FadeTransition(RowMotion(row, o.State == GlyphNeedsYou)))
 	switch {
 	case o.Selected:
 		row = row.Background(p.Selected)

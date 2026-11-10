@@ -164,3 +164,16 @@ The 16 colors a program in the terminal asks for (SGR 30-37, 90-97, palette 0-15
 | `shadow-selected` | `inset 0 0 0 1px rgba(255,255,255,0.06)` | `inset 0 0 0 1px rgba(0,0,0,0.06)` | Ring of the selected pill. |
 | `shadow-float` | `0 12px 32px rgba(0,0,0,0.28)` | `0 12px 32px rgba(0,0,0,0.12)` | Outline card. |
 | `shadow-notch` | `inset 0 -1px 0 rgba(255,255,255,0.03), 0 12px 32px rgba(0,0,0,0.28)` | `inset 0 -1px 0 rgba(255,255,255,0.6), 0 12px 32px rgba(0,0,0,0.12)` | Questions notch, closed and open. |
+
+## Motion
+
+Short transitions (D256, [Motion.md](Motion.md)). Each one eases out and ends; after its end no frame is drawn (D55).
+
+| Token | Value | Use |
+|---|---|---|
+| `motion-select` | `120ms` | The fill, ring and inks of a row, tab or switch segment that is selected. |
+| `motion-pop-in` | `140ms` | A popover or a modal comes in: scale 0.96 to 1 and a fade. |
+| `motion-pop-out` | `100ms` | A popover or a modal goes. |
+| `motion-state` | `300ms` | The inks of a worker row that turns to needs you. |
+| `motion-number` | `200ms` | The digits of a value roll. |
+| `motion-meter` | `300ms` | The fill of a meter moves to its new width. |

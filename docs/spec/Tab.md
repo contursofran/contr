@@ -90,6 +90,10 @@ Design system page: component Tab. Shared rules: [README.md](README.md).
 - View: close on a plain terminal tab; no close on an agent tab.
 - View: middle-click, menu and drag never close or move an agent tab.
 
+## Motion (D256)
+
+A tab that is selected fades its fill, ring and ink in `motion-select`; it does not slide. See [Motion.md](Motion.md).
+
 ## Replaces
 
 - The tab parts of `titlebar.go` and `agenttabs.go`.

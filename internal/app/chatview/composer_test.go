@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/app/theme"
 )
 
 const menuScreen = `╭──────────────────────────╮
@@ -258,6 +259,7 @@ func TestIdleHasNoLineAndNoRedraw(t *testing.T) {
 	if s.has(LabelLive) {
 		t.Errorf("a live line while idle: %v", s.tt.Texts())
 	}
+	s.tt.Advance(2 * theme.MotionSelect) // past the end of the fade of the Chat | Terminal switch (D256)
 	if s.ch.ticks || s.tt.FramePending() {
 		t.Error("a redraw is asked while idle")
 	}

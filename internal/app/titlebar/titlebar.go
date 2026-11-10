@@ -203,7 +203,9 @@ func (b *TitleBar) tab(c *ui.Context, tab ui.Element, t tabmodel.Tab, hint strin
 			el = el.Background(p.Hover)
 		}
 	}
-	el = el.TextColor(ink)
+	// The fill, the ring and the ink fade in theme.MotionSelect (D256); the
+	// tab is selected at once. Only colors: the tab does not slide.
+	el = el.TextColor(kit.FadeInk(el, "ink", ink, theme.MotionSelect)).Transition(kit.FadeTransition(theme.MotionSelect))
 	el.Children(func() {
 		glyph := b.glyph(c, t)
 		s := theme.StyleRowSmall
