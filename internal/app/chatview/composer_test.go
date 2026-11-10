@@ -252,12 +252,12 @@ func TestIdleHasNoLineAndNoRedraw(t *testing.T) {
 func TestNeedsYouHasNoLineAndEnterWaits(t *testing.T) {
 	for _, status := range []string{"blocked", "error"} {
 		s := newSession(t, status)
-		if s.has(LabelLive) || s.tt.HasText("Do you want to proceed?") || s.tt.HasText("Switch to Terminal") {
+		if s.tt.HasText(LabelLive) || s.tt.HasText("Do you want to proceed?") || s.tt.HasText("Switch to Terminal") {
 			t.Errorf("%s: a needs-you line in the dock: %v", status, s.tt.Texts())
 		}
 		s.typeIn("1")
 		s.key(0, ui.KeyEnter)
-		if len(s.sent) != 0 || s.draft() != "1" || !s.tt.HasText(TextAnswerFirst) {
+		if len(s.sent) != 0 || s.draft() != "1" || !s.tt.HasText("Answer in the notch first (⌘J), or switch to Terminal.") {
 			t.Errorf("%s: Enter on a menu: sent %q, draft %q, texts %v", status, s.sent, s.draft(), s.tt.Texts())
 		}
 	}
