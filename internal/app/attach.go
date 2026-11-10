@@ -248,7 +248,7 @@ func (f *Frame) attachQuestions(env view.Env, agentSnap func() agentstate.Snapsh
 		f.Notch.Opened = f.Card.IsOpen
 		f.Notch.Panel = f.Card.View
 		f.Pill = &orchestrate.Pill{Snapshot: agentSnap, Selected: f.selectedTerminal, NotchShown: f.Notch.Shown,
-			Send: src.Send, Env: env}
+			OutlineTop: f.Outline.Top, Send: src.Send, Env: env}
 		f.Overlay.Add(orchestrate.LabelLayer, f.Pill.View)
 	}
 	f.Overlay.Add(questions.LabelNotchLayer, f.Notch.View)

@@ -249,3 +249,94 @@ func TestAddLive(t *testing.T) {
 		t.Errorf("folders %v", f)
 	}
 }
+
+// rekeyed is a store with the folder /w/notes outside git between two git
+// projects, and its recent entry between two others.
+func rekeyed(t *testing.T) *Store {
+	t.Helper()
+	s := &Store{}
+	at := time.Date(2026, 11, 10, 9, 0, 0, 0, time.UTC)
+	s.AddFolder("/w/a/.git", "/w/a")
+	s.AddFolder("/w/notes", "/w/notes")
+	s.AddFolder("/w/b/.git", "/w/b")
+	s.Touch("/w/a/.git", "/w/a", at)
+	s.Touch("/w/notes", "/w/notes", at.Add(time.Minute))
+	s.Touch("/w/b/.git", "/w/b", at.Add(2*time.Minute))
+	return s
+}
+
+func recentDirs(s *Store) []string {
+	var out []string
+	for _, e := range s.Recent() {
+		out = append(out, e.Dir)
+	}
+	return out
+}
+
+func TestRekeyKeepsOrderHiddenRecentAndFolder(t *testing.T) {
+	s := rekeyed(t)
+	s.Hide("/w/notes")
+	if !s.Rekey("/w/notes", "/w/notes/.git") {
+		t.Fatal("Rekey = false, want true")
+	}
+	want := []string{"/w/a/.git", "/w/notes/.git", "/w/b/.git"}
+	if got := s.Order(want); !slices.Equal(s.order, want) || !slices.Equal(got, want) {
+		t.Errorf("order %v, want %v", s.order, want)
+	}
+	if !s.Hidden("/w/notes/.git") || s.Hidden("/w/notes") {
+		t.Errorf("hidden %v, want the new key only", s.hidden)
+	}
+	if got := recentDirs(s); !slices.Equal(got, []string{"/w/b/.git", "/w/notes/.git", "/w/a/.git"}) {
+		t.Errorf("recent %v", got)
+	}
+	if s.Path("/w/notes/.git") != "/w/notes" || s.Path("/w/notes") != "" {
+		t.Errorf("folders %v", s.folders)
+	}
+}
+
+func TestRekeyTwiceDoesNothing(t *testing.T) {
+	s := rekeyed(t)
+	s.Rekey("/w/notes", "/w/notes/.git")
+	before := s.Clone()
+	if s.Rekey("/w/notes", "/w/notes/.git") {
+		t.Error("second Rekey = true, want false")
+	}
+	if !slices.Equal(s.order, before.order) || !slices.Equal(s.Recent(), before.Recent()) || len(s.folders) != len(before.folders) {
+		t.Errorf("second Rekey changed the store: %v %v", s.order, s.Recent())
+	}
+}
+
+func TestRekeyMissingKeyDoesNothing(t *testing.T) {
+	s := rekeyed(t)
+	before := s.Clone()
+	if s.Rekey("/w/gone", "/w/gone/.git") || s.Rekey("/w/notes", "/w/notes") {
+		t.Error("Rekey = true, want false")
+	}
+	if !slices.Equal(s.order, before.order) || !slices.Equal(s.Recent(), before.Recent()) || len(s.folders) != len(before.folders) || s.Known("/w/gone/.git") {
+		t.Errorf("Rekey changed the store: %v %v %v", s.order, s.Recent(), s.folders)
+	}
+}
+
+// A live terminal added the new key before the rekey ran: the two entries
+// become one, at the old key's place.
+func TestRekeyMergesALiveEntry(t *testing.T) {
+	s := rekeyed(t)
+	at := time.Date(2026, 11, 10, 10, 0, 0, 0, time.UTC)
+	s.AddLive("/w/notes/.git", "/w/notes", at)
+	s.Hide("/w/notes") // the owner hid the empty duplicate: the real one stays
+	if !s.Rekey("/w/notes", "/w/notes/.git") {
+		t.Fatal("Rekey = false, want true")
+	}
+	if want := []string{"/w/a/.git", "/w/notes/.git", "/w/b/.git"}; !slices.Equal(s.order, want) {
+		t.Errorf("order %v, want %v", s.order, want)
+	}
+	if got := recentDirs(s); !slices.Equal(got, []string{"/w/notes/.git", "/w/b/.git", "/w/a/.git"}) || !s.Recent()[0].At.Equal(at) {
+		t.Errorf("recent %v", s.Recent())
+	}
+	if s.Hidden("/w/notes/.git") || s.Hidden("/w/notes") {
+		t.Errorf("hidden %v, want none", s.hidden)
+	}
+	if s.Path("/w/notes/.git") != "/w/notes" || len(s.folders) != 3 {
+		t.Errorf("folders %v", s.folders)
+	}
+}

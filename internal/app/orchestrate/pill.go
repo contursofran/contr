@@ -41,21 +41,36 @@ const (
 // Sizes of the spec that tokens.md leaves to the spec text.
 const (
 	pillHeight = 26
-	// pillRight keeps the pill clear of the outline column: inset 10px, 20px wide, and 10px more.
-	pillRight = 40
+	// pillRight is the space between the pill and the right side: the outline inset.
+	pillRight = 10
+	// pillRightClear keeps the pill clear of the outline column when the column reaches the pill's
+	// rows: inset 10px, 20px wide, and 10px more.
+	pillRightClear = 40
 	// notchReserve is the width kept free at the center while the notch shows, and notchClear the
 	// space on each side of it.
 	notchReserve = 240
 	notchClear   = theme.Space8
 	// wrapGap is the gap of the wrapping row: the second line, under the notch, is at
 	// notch-height + space-8 from the top.
-	wrapGap = theme.SizeNotchHeight
-	// spacerMargin makes the spacer, half of the row (the row is pillRight narrower than the
-	// terminal), plus the gap, end at the right of the notch reserve and its clear space.
-	spacerMargin = notchReserve/2 + notchClear + pillRight/2 - wrapGap
+	wrapGap      = theme.SizeNotchHeight
 	popoverWidth = 320
 	popoverGap   = theme.Space6
 )
+
+// spacerMargin makes the spacer, half of the row (the row is right narrower than the terminal),
+// plus the gap, end at the right of the notch reserve and its clear space.
+func spacerMargin(right float32) float32 {
+	return notchReserve/2 + notchClear + right/2 - wrapGap
+}
+
+// pillBottom is the bottom of the pill's rows: the first row, or the row under the notch while the
+// notch shows.
+func pillBottom(notch bool) float32 {
+	if notch {
+		return wrapGap + theme.Space8 + pillHeight
+	}
+	return theme.Space8 + pillHeight
+}
 
 // PillText is the text of the pill of an orchestrating session with n live workers:
 // "Orchestrating", "Orchestrating · 1 worker", "Orchestrating · 3 workers".
@@ -87,6 +102,9 @@ type Pill struct {
 	Selected func() string
 	// NotchShown tells whether the questions notch shows; may be nil.
 	NotchShown func() bool
+	// OutlineTop returns the top of the outline column in the terminal, and false while no column
+	// shows; may be nil.
+	OutlineTop func() (float32, bool)
 	// Send types text and Enter into the terminal at an address. It blocks: it runs off the UI
 	// thread. Nil makes the button do nothing.
 	Send func(addr, text string) error
@@ -132,12 +150,13 @@ func (p *Pill) View(c *ui.Context) {
 		return
 	}
 	notch := p.NotchShown != nil && p.NotchShown()
-	ui.Row(c).Absolute().Top(theme.Space8).Left(0).Right(pillRight).Wrap().Justify(ui.End).Gap(wrapGap).
+	right := p.right(notch)
+	ui.Row(c).Absolute().Top(theme.Space8).Left(0).Right(right).Wrap().Justify(ui.End).Gap(wrapGap).
 		PassThrough().Children(func() {
 		if notch {
 			// The spacer ends at the right of the notch reserve: a pill that does not fit after
 			// it wraps to the second line, under the notch.
-			ui.Box(c).Height(0).WidthPercent(50).Shrink(0).Margin(0, spacerMargin, 0, 0)
+			ui.Box(c).Height(0).WidthPercent(50).Shrink(0).Margin(0, spacerMargin(right), 0, 0)
 		}
 		if orchestrating {
 			p.stateView(c, PillText(snap.LiveWorkersOf(w.Address)))
@@ -145,6 +164,18 @@ func (p *Pill) View(c *ui.Context) {
 		}
 		p.buttonView(c, w.Address)
 	})
+}
+
+// right is the space between the pill and the right side: the outline inset, or clear of the
+// outline column when the column's top is above the bottom of the pill's rows.
+func (p *Pill) right(notch bool) float32 {
+	if p.OutlineTop == nil {
+		return pillRight
+	}
+	if top, ok := p.OutlineTop(); ok && top < pillBottom(notch) {
+		return pillRightClear
+	}
+	return pillRight
 }
 
 // glass styles the inside of the pill: glass-float with float-line all round.

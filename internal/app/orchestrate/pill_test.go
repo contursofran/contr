@@ -239,27 +239,52 @@ func overlaps(a, b ui.Rect) bool {
 	return a.X < b.X+b.W && b.X < a.X+a.W && a.Y < b.Y+b.H && b.Y < a.Y+a.H
 }
 
-func TestPillKeepsClearOfTheOutlineAndTheNotch(t *testing.T) {
-	// The outline column: inset 10px from the right side, 20px wide, full height.
+// outlineAt makes the rig's outline column start at top; ok false is no column.
+func (r *rig) outlineAt(top float32, ok bool) {
+	r.p.OutlineTop = func() (float32, bool) { return top, ok }
+}
+
+func TestPillPlaceFollowsTheOutlineColumnAndKeepsClearOfTheNotch(t *testing.T) {
+	// The pill's rows end at 34px (top 8, height 26), or at 64px under the notch (top 38). The
+	// outline column is inset 10px from the right side and 20px wide.
 	for _, tc := range []struct {
-		name  string
-		width float32
-		notch bool
-		down  bool // the pill moves under the notch
+		name    string
+		width   float32
+		notch   bool
+		top     float32 // the outline column's top
+		column  bool    // the outline column shows
+		right   float32 // the pill's space to the right side
+		down    bool    // the pill moves under the notch
+		noField bool    // OutlineTop is nil
 	}{
-		{"wide, no notch", 900, false, false},
-		{"wide, notch", 900, true, false},
-		{"narrow, no notch", 420, false, false},
-		{"narrow, notch", 420, true, true},
+		{"no outline source", 900, false, 0, false, 10, false, true},
+		{"no column", 900, false, 0, false, 10, false, false},
+		{"short column", 900, false, 180, true, 10, false, false},
+		{"column at the pill's bottom", 900, false, 34, true, 10, false, false},
+		{"column reaches the pill", 900, false, 33, true, 40, false, false},
+		{"tall column", 900, false, -20, true, 40, false, false},
+		{"wide, notch, short column", 900, true, 180, true, 10, false, false},
+		{"wide, notch, tall column", 900, true, 50, true, 40, false, false},
+		{"narrow, no notch, short column", 420, false, 50, true, 10, false, false},
+		{"narrow, notch, column reaches the second row", 420, true, 50, true, 40, true, false},
+		{"narrow, notch, short column", 420, true, 180, true, 10, true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := newRig(t, snapWith(false, 0, 0), orch, tc.width)
+			if !tc.noField {
+				r.outlineAt(tc.top, tc.column)
+			}
 			r.notch = tc.notch
 			r.tt.Frame()
 			pill := apptest.Box(t, r.tt, LabelButton)
-			outline := ui.Rect{X: tc.width - 10 - 20, Y: 0, W: 20, H: 400}
-			if overlaps(pill, outline) || pill.X+pill.W > outline.X-10+0.5 {
-				t.Errorf("pill %+v reaches the outline column %+v", pill, outline)
+			if got := tc.width - (pill.X + pill.W); got != tc.right {
+				t.Errorf("pill %+v is %vpx from the right side, want %vpx", pill, got, tc.right)
+			}
+			if tc.column {
+				outline := ui.Rect{X: tc.width - 10 - 20, Y: tc.top, W: 20, H: 400}
+				if overlaps(pill, outline) {
+					t.Errorf("pill %+v overlaps the outline column %+v", pill, outline)
+				}
 			}
 			if tc.notch {
 				notch := apptest.Box(t, r.tt, "notch")
@@ -275,5 +300,25 @@ func TestPillKeepsClearOfTheOutlineAndTheNotch(t *testing.T) {
 				t.Errorf("pill top %v, want %v", pill.Y, wantY)
 			}
 		})
+	}
+}
+
+// The popover's right edge is on the pill's right edge, at 10px and at 40px.
+func TestPopoverRightEdgeIsOnThePillsRightEdge(t *testing.T) {
+	for _, tc := range []struct{ top, right float32 }{{200, 10}, {0, 40}} {
+		top := tc.top
+		r := newRig(t, snapWith(false, 0, 0), orch, 900)
+		r.outlineAt(top, true)
+		r.open(t)
+		pill, pop := apptest.Box(t, r.tt, LabelButton), apptest.Box(t, r.tt, LabelPopover)
+		if got := 900 - (pill.X + pill.W); got != tc.right {
+			t.Errorf("column top %v: pill %vpx from the right side, want %vpx", top, got, tc.right)
+		}
+		if pill.X+pill.W != pop.X+pop.W {
+			t.Errorf("column top %v: popover %+v, pill %+v: right edges differ", top, pop, pill)
+		}
+		if pop.Y != pill.Y+pill.H+popoverGap {
+			t.Errorf("column top %v: popover top %v, want %v", top, pop.Y, pill.Y+pill.H+popoverGap)
+		}
 	}
 }
