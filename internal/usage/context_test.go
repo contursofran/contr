@@ -186,6 +186,8 @@ func TestParseContextKeepsTheShortModel(t *testing.T) {
 	for _, tc := range []struct{ model, want string }{
 		{`{"id":"claude-sonnet-5-5","display_name":"Sonnet 5.5"}`, "sonnet"},
 		{`{"id":"claude-opus-5-5"}`, "opus"},
+		{`{"id":"claude-fable-5-2"}`, "fable"},
+		{`{"id":"claude-fable-5-2","display_name":"Fable 5.2"}`, "fable"},
 		{`{"id":"x-1","display_name":"Mystery 2"}`, "mystery 2"},
 		{`{"id":"x-1"}`, "x-1"},
 	} {
@@ -225,5 +227,11 @@ func TestParseContextKeepsTheEffort(t *testing.T) {
 	}
 	if c := ParseContext(ctxLine, 1); c == nil || c.Effort != "" {
 		t.Errorf("input with no effort: %+v", c)
+	}
+}
+
+func TestShortModelKnowsFable(t *testing.T) {
+	if got := ShortModel("claude-fable-5-2", ""); got != "fable" {
+		t.Errorf("ShortModel(claude-fable-5-2) = %q, want fable", got)
 	}
 }

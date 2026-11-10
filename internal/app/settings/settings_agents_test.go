@@ -103,6 +103,29 @@ func TestSettingsModelDropdownWritesArgvAndKeepsOtherFlags(t *testing.T) {
 	}
 }
 
+func TestSettingsModelListsFableAndSavesItsFullID(t *testing.T) {
+	if !slices.Contains(RoleModels, [2]string{"claude-fable-5-2", "Fable 5.2"}) {
+		t.Fatalf("no Fable 5.2 in %q", RoleModels)
+	}
+	path := writeAgents(t, "")
+	r := newSettingsRig(t, nil)
+	r.openAgents(path)
+	r.pick("Builder model", "Fable 5.2")
+	want := []string{"claude", "--model", "claude-fable-5-2", "--effort", "medium", "--permission-mode", "auto"}
+	if got := argvOf(t, path, "builder"); !slices.Equal(got, want) {
+		t.Fatalf("argv %q", got)
+	}
+	// Open again from agents.json: the dropdown shows Fable 5.2, not Custom.
+	r2 := newSettingsRig(t, nil)
+	r2.openAgents(path)
+	if !r2.hasText("Fable 5.2") || !r2.hasText("claude --model claude-fable-5-2 --effort medium --permission-mode auto") {
+		t.Fatalf("texts %q", r2.texts())
+	}
+	if _, model, _ := roleValues(want); model != "claude-fable-5-2" {
+		t.Fatalf("roleValues model %q", model)
+	}
+}
+
 func TestSettingsEffortDropdownWritesArgv(t *testing.T) {
 	path := writeAgents(t, "")
 	r := newSettingsRig(t, nil)

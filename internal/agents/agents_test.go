@@ -453,6 +453,29 @@ func TestWatchDropsATerminalThatIsNoLongerAWorker(t *testing.T) {
 	}
 }
 
+func TestSpawnPassesTheFableModelID(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agents.json")
+	body := `{"profiles":{"builder":{"argv":["claude","--model","claude-fable-5-2","--effort","medium","--permission-mode","auto"]}}}`
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &fakeCore{handle: map[string]func(map[string]any) (any, error){
+		"terminal.run": func(p map[string]any) (any, error) { return term("t7", p["name"].(string), "live", nil, nil), nil },
+	}}
+	m := New(f, cfg).WithExecutable("")
+	if _, err := m.Spawn(context.Background(), Spec{Name: "b-624", Profile: "builder", Task: "go"}); err != nil {
+		t.Fatal(err)
+	}
+	want := []any{"claude", "--model", "claude-fable-5-2", "--effort", "medium", "--permission-mode", "auto", "go"}
+	if got := unclean(t, f.last().Params["argv"]); !reflect.DeepEqual(got, want) {
+		t.Errorf("argv = %v", got)
+	}
+}
+
 func TestSpawnStartsTheKitAgent(t *testing.T) {
 	kit := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(kit, "agents"), 0o700); err != nil {
