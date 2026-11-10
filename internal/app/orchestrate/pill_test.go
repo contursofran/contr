@@ -322,3 +322,29 @@ func TestPopoverRightEdgeIsOnThePillsRightEdge(t *testing.T) {
 		}
 	}
 }
+
+// The lead (the Chat | Terminal switch, D246) shows left of the pill, space-8 apart, and alone
+// for a terminal without a pill.
+func TestLeadShowsLeftOfThePill(t *testing.T) {
+	lead := func() func(c *ui.Context) {
+		return func(c *ui.Context) { ui.Box(c).Label("lead").Size(80, pillHeight) }
+	}
+	r := newRig(t, snapWith(false, 0, 0), orch, 900)
+	r.p.Lead = lead
+	r.tt.Frame()
+	l, b := apptest.Box(t, r.tt, "lead"), apptest.Box(t, r.tt, LabelButton)
+	if l.X+l.W+8 != b.X || l.Y != b.Y {
+		t.Errorf("lead %+v, button %+v: want the lead 8 left of the button", l, b)
+	}
+	r = newRig(t, snapWith(false, 0, 0), worker, 900)
+	r.p.Lead = lead
+	r.tt.Frame()
+	if apptest.Absent(r.tt, "lead") || !apptest.Absent(r.tt, LabelButton) {
+		t.Error("a terminal without a pill does not show the lead alone")
+	}
+	r.p.Lead = func() func(c *ui.Context) { return nil }
+	r.tt.Frame()
+	if !apptest.Absent(r.tt, "lead") {
+		t.Error("a nil lead shows")
+	}
+}

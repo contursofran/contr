@@ -166,6 +166,9 @@ func TestHidden(t *testing.T) {
 		{lPlaybook, HidePlaybook, "contr: you are the coordinator of this project; …\nThe playbook:\n\n…"},
 		{lPlaybookU, HidePlaybook, "contr: the conversation was compacted. You are the coordinator"},
 		{lInterrupt, HideInterrupt, "[Request interrupted by user]"},
+		{`{"type":"user","message":{"content":"<user-prompt-submit-hook>check the board</user-prompt-submit-hook>"}}`, HideHook, "<user-prompt-submit-hook>check the board</user-prompt-submit-hook>"},
+		{`{"type":"user","message":{"content":"<session-start-hook>ok</session-start-hook>"}}`, HideHook, "<session-start-hook>ok</session-start-hook>"},
+		{`{"type":"user","message":{"content":"<bash-stdout>hi</bash-stdout><bash-stderr></bash-stderr>"}}`, HideLocalCommand, "<bash-stdout>hi</bash-stdout><bash-stderr></bash-stderr>"},
 	}
 	for _, c := range cases {
 		e := one(t, c.line)
@@ -203,6 +206,30 @@ func TestOffsetAndHalfLine(t *testing.T) {
 	b, err = r.Read(strings.NewReader(""))
 	if err != nil || len(b.Entries) != 0 || b.Next != int64(len(first)+len(lCall)+1) {
 		t.Errorf("empty read = %+v, %v", b, err)
+	}
+}
+
+func TestHookTagNeedsTheShape(t *testing.T) {
+	for _, s := range []string{"<b>bold</b> is not a hook", "<not a-hook>x", "<x/a-hook>", "a <user-prompt-submit-hook>"} {
+		if e := one(t, `{"type":"user","message":{"content":"`+s+`"}}`); e.Kind != Prompt {
+			t.Errorf("%q = %+v; want a prompt", s, e)
+		}
+	}
+}
+
+func TestResultTime(t *testing.T) {
+	call := `{"type":"assistant","timestamp":"2026-11-10T10:00:00Z","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{}}]}}`
+	res := `{"type":"user","timestamp":"2026-11-10T10:00:02.5Z","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}`
+	if c := read(t, call, res).Entries[0].Tool; c.End != "2026-11-10T10:00:02.5Z" {
+		t.Errorf("end in the same read = %q", c.End)
+	}
+	var r Reader
+	if _, err := r.Read(strings.NewReader(call + "\n")); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := r.Read(strings.NewReader(res + "\n"))
+	if len(b.Results) != 1 || b.Results[0].Time != "2026-11-10T10:00:02.5Z" {
+		t.Errorf("result of a later read = %+v", b.Results)
 	}
 }
 

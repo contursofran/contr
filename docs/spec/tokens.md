@@ -86,6 +86,7 @@ The 16 colors a program in the terminal asks for (SGR 30-37, 90-97, palette 0-15
 | Style | Family | Size | Line | Weight | Use |
 |---|---|---|---|---|---|
 | `question` | sans | 14px | 20px | 400 | The question in the open notch; the headline on the outline card. |
+| `prose` | sans | 13.5px | 21px | 400 | The chat view: the owner's prompts and Claude's Markdown (docs/spec/ChatView.md). |
 | `body` | sans | 13px | 18px | 400 | Sidebar rows, answer option labels. The window default. |
 | `body-strong` | sans | 13px | 18px | 500 | Project names in the sidebar. |
 | `row-small` | sans | 12.5px | 18px | 400 | Tabs, file rows, the outline card detail, the notch text field. |
