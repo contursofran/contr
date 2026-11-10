@@ -101,6 +101,15 @@ func (n *Notch) Items() []agentstate.NeedTab {
 	return open
 }
 
+// Shown tells whether the notch shows: an open item waits, or the questions file cannot be read
+// (problemView). The orchestrate pill keeps clear of it (D234).
+func (n *Notch) Shown() bool {
+	if len(n.Items()) > 0 {
+		return true
+	}
+	return n.Snapshot != nil && n.Snapshot().OwnerProblem != ""
+}
+
 // cardRank orders the chips of the questions card: questions, to-dos, blocked menus.
 func cardRank(k agentstate.NeedKind) int {
 	switch k {

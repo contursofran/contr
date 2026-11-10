@@ -24,6 +24,7 @@ import (
 	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/app/ghsource"
 	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/orchestrate"
 	"github.com/contursofran/contr/internal/app/projectsview"
 	"github.com/contursofran/contr/internal/app/questions"
 	"github.com/contursofran/contr/internal/app/reviewview"
@@ -92,6 +93,9 @@ type Frame struct {
 	Card *questions.QuestionsCard
 	// Notch is the questions notch in the terminal overlay ([Frame.Attach] makes it).
 	Notch *questions.Notch
+	// Pill is the orchestrate pill in the terminal overlay; [Frame.Attach] makes it with the
+	// agent state (D234).
+	Pill *orchestrate.Pill
 	// ProjectsModal is the projects modal (D110), made in Attach.
 	ProjectsModal *projectsview.ProjectsModal
 	// Settings is the Settings modal, made in Attach.
@@ -1162,12 +1166,12 @@ func (f *Frame) terminalLine() (line string, colour ui.Color, ok bool) {
 // buildTerminal is the frame's terminal slot: the plugin's view of the
 // selected agent's terminal, dimmed and with a line while the connection is
 // down, and the overlay layer above them. The grid sits inside the spec's
-// padding: 18 above, 26 at the sides, 10 below.
+// padding: 14 above, 20 at the sides, 12 below (D228).
 func (f *Frame) buildTerminal(c *ui.Context) {
 	line, colour, showLine := f.terminalLine()
 	ui.Box(c).Fill().Center().Children(func() {
 		if f.term != nil {
-			ui.Box(c).Absolute().Fill().Padding(theme.Space18, theme.Space26, theme.Space10).Children(func() {
+			ui.Box(c).Absolute().Fill().Padding(theme.Space14, theme.Space20, theme.Space12).Children(func() {
 				grid := gterm.View(c, f.term).Label(LabelTerminalGrid).Fill()
 				if f.autoFocus {
 					f.autoFocus = false

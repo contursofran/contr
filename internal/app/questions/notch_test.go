@@ -305,3 +305,27 @@ func TestNotchProblemClosesAnOpenCard(t *testing.T) {
 	}
 	apptest.Box(t, r.tt, LabelOwnerProblem)
 }
+
+// Shown follows what the notch draws: an open item or the broken file (D234, for the pill).
+func TestNotchShownFollowsItemsAndTheFileProblem(t *testing.T) {
+	src := &source{}
+	n := &Notch{Snapshot: src.Snapshot, Project: func() string { return "a" }}
+	if n.Shown() {
+		t.Error("Shown with nothing waiting")
+	}
+	src.Snap.Questions = apptest.Questions("b", 1)
+	if n.Shown() {
+		t.Error("Shown for a question of another project")
+	}
+	src.Snap.Questions = apptest.Questions("a", 1)
+	if !n.Shown() {
+		t.Error("not Shown with a question")
+	}
+	src.Snap.Questions, src.Snap.OwnerProblem = nil, "owner: owner.json: locked"
+	if !n.Shown() {
+		t.Error("not Shown with the file problem")
+	}
+	if (&Notch{}).Shown() {
+		t.Error("a notch without data is Shown")
+	}
+}

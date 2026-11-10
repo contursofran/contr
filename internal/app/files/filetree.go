@@ -31,8 +31,8 @@ const (
 	LabelFileFilter = "Changed files only"
 )
 
-// fileIndent is the indent of one level: space-14 plus space-4.
-const fileIndent = theme.Space14 + theme.Space4
+// fileIndent is the indent of one level: space-16 plus space-4.
+const fileIndent = theme.Space16 + theme.Space4
 
 // fileReadDebounce waits for a burst of file events to end before the tree is
 // read again.
@@ -525,11 +525,11 @@ func (t *FileTree) item(c *ui.Context, rel string, e review.Entry, depth int) {
 	label := FileLabel(e.Name, f, changed && !e.Dir)
 	row := ui.TreeItem(c.Key(full), "", open, kids).Label(label).Height(theme.SizeFileRowHeight).
 		Gap(0).Radius(theme.Radius6).Cursor(ui.CursorPointer).
-		PaddingStart(theme.Space8 + float32(depth*fileIndent)).PaddingEnd(theme.Space8)
+		PaddingStart(theme.Space10 + float32(depth*fileIndent)).PaddingEnd(theme.Space10)
 	row = row.DrawOver(func(pt *ui.Painter, r ui.Rect) {
 		// One hairline on the left of each level above this row.
 		for l := 0; l < depth; l++ {
-			x := r.X + theme.Space8 + float32(l*fileIndent) + theme.Space8
+			x := r.X + theme.Space10 + float32(l*fileIndent) + theme.Space8
 			pt.Fill(ui.Rect{X: x, Y: r.Y, W: 1, H: r.H}, theme.Current().Hairline, 0)
 		}
 	})

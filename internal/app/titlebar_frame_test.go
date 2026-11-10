@@ -1,6 +1,7 @@
 package app
 
 import (
+	"math"
 	"slices"
 	"testing"
 
@@ -29,6 +30,14 @@ func TestThePanelToggleFollowsTheFrameAndKeepsItsPlace(t *testing.T) {
 	}
 	if got := apptest.Box(t, tt, titlebar.LabelFilesToggle).X + theme.SizeIconButton; got != theme.WindowWidth-theme.TitleBarPadEnd {
 		t.Errorf("toggle right edge %v, want %d", got, theme.WindowWidth-theme.TitleBarPadEnd)
+	}
+	if err := tt.Click(titlebar.LabelFilesToggle); err != nil {
+		t.Fatal(err)
+	}
+	// The last icon button ends at the files panel edge (D228).
+	toggle, files := apptest.Box(t, tt, titlebar.LabelFilesToggle), apptest.Box(t, tt, LabelPanelFiles)
+	if got, want := toggle.X+toggle.W, files.X+files.W; math.Abs(float64(got-want)) > 0.01 {
+		t.Errorf("toggle right edge %v, files panel right edge %v", got, want)
 	}
 }
 

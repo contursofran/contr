@@ -130,8 +130,8 @@ const MemBarWidth = 60
 
 // Title bar tabs and buttons (planner defaults; docs/DESIGN.md has no sizes for these)
 
-const TitleButtonSize = 28     // "+", split, panel toggle: square hit areas
-const TitleBarPadEnd = Space14 // title bar: room right of the files toggle
+const TitleButtonSize = 28    // "+", split, panel toggle: square hit areas
+const TitleBarPadEnd = Space8 // title bar: room right of the files toggle (D228)
 
 // Board panel (planner defaults; docs/DESIGN.md has no sizes for these). The "you" chip reuses
 // BADGE_PAD_X and BADGE_RADIUS.

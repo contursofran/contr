@@ -2,6 +2,7 @@ package titlebar
 
 import (
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"testing"
@@ -239,7 +240,8 @@ func TestManyTabsShrinkThenClip(t *testing.T) {
 		t.Errorf("the last tab %+v sticks out of the row %+v", last, row)
 	}
 	toggle := b.rect(t, LabelFilesToggle)
-	if toggle.X+toggle.W != 1160-theme.TitleBarPadEnd || toggle.W != theme.SizeIconButton {
+	// The layout sums floats, so allow a rounding error.
+	if math.Abs(float64(toggle.X+toggle.W-(1160-theme.TitleBarPadEnd))) > 0.01 || toggle.W != theme.SizeIconButton {
 		t.Errorf("toggle %+v, want %d wide at %d px from the right edge", toggle, theme.SizeIconButton, theme.TitleBarPadEnd)
 	}
 }

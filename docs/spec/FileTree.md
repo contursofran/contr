@@ -13,11 +13,11 @@ Design system page: component FileTree. Shared rules: [README.md](README.md).
 | Part | Value |
 |---|---|
 | Head | "Files", under the agent's todos and artifacts ([SessionPanel.md](SessionPanel.md), D197); the filter button at the right uses the `filter` icon: three lines, long to short |
-| Row | height `file-row-height` (26px), padding `0 8px`, gap `space-7`, radius `radius-6` |
+| Row | height `file-row-height` (26px), padding `0 10px` (D228), gap `space-7`, radius `radius-6` |
 | Icon | `folder`, `folder-open`, `file-go`, `file-md`, `file` at 15px, `ink-38` |
 | Name | `row-small` (12.5px), `ink-50`; ellipsis |
 | Counts | mono 11px, `space-6` apart: added `ink-40`, removed `ink-24` |
-| Guides | each level indents `space-14` plus `space-4`, with a 1px `hairline` on the left |
+| Guides | each level indents `space-16` plus `space-4` (D228), with a 1px `hairline` on the left |
 
 ## States
 
@@ -66,7 +66,7 @@ Design system page: component FileTree. Shared rules: [README.md](README.md).
 
 ## Tokens
 
-`file-row-height`, `radius-6`, `space-7`, `hover`, `hairline`, `ink-90`, `ink-50`, `ink-40`, `ink-38`, `ink-24`, `ink-22`, `row-small`.
+`file-row-height`, `radius-6`, `space-4`, `space-7`, `space-10`, `space-16`, `hover`, `hairline`, `ink-90`, `ink-50`, `ink-40`, `ink-38`, `ink-24`, `ink-22`, `row-small`.
 
 ## Build in MyGo
 
