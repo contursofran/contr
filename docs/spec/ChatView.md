@@ -104,6 +104,7 @@ chat shows and the turn has a time (D55). Idle, nothing is asked.
 - The view reads the transcript only while it shows: a read runs off the
   UI thread and its entries are applied on it. A change of the file
   (chatsource, D243) reads what was added; a moved path or a shorter file
-  reads again from 0. Nothing polls, and no timer runs (D55).
+  reads again from 0. Nothing polls, and no timer runs (D55). While the
+  chat does not show, a change of the file asks for no frame (D257).
 - A click on a group row opens or closes it; the list holds its place for
   that frame.

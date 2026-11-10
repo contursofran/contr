@@ -110,4 +110,8 @@ type Deps struct {
 	Relaunch func()
 	// ThemePlatform is MyGo's theme (mygo.Theme). Nil leaves the palette as it is.
 	ThemePlatform theme.Platform
+	// RunOnMain runs fn on the UI thread with no redraw and waits for it (mygo.RunOnMain). The
+	// views post through it the signals that change nothing on screen by themselves (Env.Quiet,
+	// #660). Nil uses Window.Update, which redraws.
+	RunOnMain func(fn func())
 }

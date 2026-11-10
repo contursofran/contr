@@ -318,3 +318,94 @@ func TestSourceMissingFileThenMade(t *testing.T) {
 	}
 	r.waitChange(t, 2, func() { appendLine(t, tr) })
 }
+
+// A change of the transcript reaches the UI thread through Env.PostQuiet and asks for no redraw:
+// the chat redraws once it applied a batch (#660, D257).
+func TestSourceTranscriptChangeAsksForNoRedraw(t *testing.T) {
+	s, f, n := newFakeSource(t)
+	var quiet, posts, redraws int
+	s.Env = view.Env{
+		Run:        view.Runner{Go: func(fn func()) { fn() }, Post: func(fn func()) { posts++; fn() }},
+		Quiet:      func(fn func()) { quiet++; fn() },
+		Invalidate: func() { redraws++ },
+	}
+	setPath(t, s.StateDir, "t1", "/x/a.jsonl")
+	s.Sync("t1")
+	if *n != 1 || redraws != 0 {
+		t.Fatalf("Sync: %d changes, %d redraws; want 1 change and no redraw of its own", *n, redraws)
+	}
+	posts = 0
+	for range 5 {
+		f.notify["/x/a.jsonl"]()
+	}
+	if *n != 6 || quiet != 5 || posts != 0 || redraws != 0 {
+		t.Errorf("5 writes: %d changes, %d quiet posts, %d posts (Window.Update), %d redraws; want 6, 5, 0, 0",
+			*n, quiet, posts, redraws)
+	}
+}
+
+// queueEnv is an Env whose work and posts wait in one queue until run: the test is the UI thread.
+type queueEnv struct{ q []func() }
+
+func (e *queueEnv) env() view.Env {
+	add := func(fn func()) { e.q = append(e.q, fn) }
+	return view.Env{Run: view.Runner{Go: add, Post: add}}
+}
+
+// run runs the queue, and what it adds, until it is empty or done.
+func (e *queueEnv) run(done func() bool) {
+	for len(e.q) > 0 && !done() {
+		fn := e.q[0]
+		e.q = e.q[1:]
+		fn()
+	}
+}
+
+// A watch start lists the folder of the file, which takes milliseconds for a folder of many
+// sessions: the watches start off the UI thread (#660). A watch that starts after its terminal
+// or its path went is stopped.
+func TestSourceStartsTheWatchesOffTheUIThread(t *testing.T) {
+	s, f, n := newFakeSource(t)
+	q := &queueEnv{}
+	s.Env = q.env()
+	setPath(t, s.StateDir, "t1", "/x/a.jsonl")
+	setPath(t, s.StateDir, "t2", "/x/c.jsonl")
+	s.Sync("t1")
+	if len(f.notify) != 0 {
+		t.Fatalf("Sync started a watch on the UI thread: %v", f.notify)
+	}
+	q.run(func() bool { return false })
+	if f.notify[session.Path(s.StateDir, "t1")] == nil || f.notify["/x/a.jsonl"] == nil || s.Path() != "/x/a.jsonl" || *n != 1 {
+		t.Fatalf("after the work: watches %v, path %q, %d changes", f.notify, s.Path(), *n)
+	}
+
+	// /clear: the path moves once the new watch started, with the reset, so that no read takes
+	// the new file at the old offset.
+	setPath(t, s.StateDir, "t1", "/x/b.jsonl")
+	f.notify[session.Path(s.StateDir, "t1")]()
+	q.run(func() bool { return f.notify["/x/b.jsonl"] != nil })
+	if s.Path() != "/x/a.jsonl" || *n != 1 {
+		t.Fatalf("while the watch starts: path %q, %d changes; want the old path, no change", s.Path(), *n)
+	}
+	q.run(func() bool { return false })
+	if s.Path() != "/x/b.jsonl" || *n != 2 || !lastReset {
+		t.Fatalf("after the start: path %q, %d changes, reset %v", s.Path(), *n, lastReset)
+	}
+
+	// The terminal goes before its session watch started.
+	s.Sync("t2")
+	s.Sync("")
+	q.run(func() bool { return false })
+	if !slices.Contains(f.stopped, session.Path(s.StateDir, "t2")) || s.Path() != "" || *n != 2 {
+		t.Fatalf("a late session watch: stopped %v, path %q, %d changes", f.stopped, s.Path(), *n)
+	}
+
+	// The terminal goes before its transcript watch started.
+	s.Sync("t2")
+	q.run(func() bool { return f.notify["/x/c.jsonl"] != nil })
+	s.Sync("")
+	q.run(func() bool { return false })
+	if !slices.Contains(f.stopped, "/x/c.jsonl") || s.Path() != "" || *n != 2 {
+		t.Fatalf("a late transcript watch: stopped %v, path %q, %d changes", f.stopped, s.Path(), *n)
+	}
+}

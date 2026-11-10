@@ -67,7 +67,8 @@ func (f *Frame) attachState(w Window) view.Env {
 		f.syncChat()
 	})
 	f.Toasts = state.NewToasts(w.Invalidate)
-	return view.Env{Run: view.Runner{Post: w.Update}, Invalidate: w.Invalidate, Status: f.Toasts.Show, OpenURL: openURL}
+	return view.Env{Run: view.Runner{Post: w.Update}, Invalidate: w.Invalidate, Quiet: f.deps.RunOnMain,
+		Status: f.Toasts.Show, OpenURL: openURL}
 }
 
 // attachFiles gives the files, review and session views the Env, and makes the PR pane while the

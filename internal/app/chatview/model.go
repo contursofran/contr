@@ -82,6 +82,21 @@ func (m *Model) matchPending(text string) {
 	}
 }
 
+// takePending gives m, a model made from a first read off the UI thread (#660), the pending
+// prompts of old, the model it replaces, with their ids. A pending prompt whose prompt entry the
+// read brought is dropped, as Apply drops it.
+func (m *Model) takePending(old *Model) {
+	m.pending, m.seq = old.pending, old.seq
+	for _, r := range m.rows {
+		if len(m.pending) == 0 {
+			return
+		}
+		if r.Kind == RowPrompt {
+			m.matchPending(m.entries[r.Entry].Text)
+		}
+	}
+}
+
 // Reset clears the model, for a read again from offset 0.
 func (m *Model) Reset() { *m = Model{} }
 
