@@ -33,6 +33,8 @@ const (
 	LabelOwnerNote = "note for the owner"
 	LabelNote      = "worker note"
 	LabelCall      = "tool call"
+	// LabelFade names the gradient over the bottom of the transcript, above the dock.
+	LabelFade = "transcript fade"
 	// TextTask names a background task's line, before its status and summary.
 	TextTask = "Background task"
 	// TextError marks a call whose result is an error.
@@ -88,24 +90,43 @@ func (ch *Chat) View(c *ui.Context, toTerminal func()) {
 	st := ch.state(id)
 	ui.Column(c).Label(LabelChat).Fill().Bind(&ch.panel).Children(func() {
 		rows, pending := ch.model.Rows(), ch.model.Pendings()
-		ui.List(c, &ch.list, len(rows)+len(pending), func(i int) {
-			if i < len(rows) {
-				ch.row(c, rows[i], i+1 < len(rows) && rows[i+1].Kind == RowSaid)
-				return
-			}
-			p := pending[i-len(rows)]
-			column(c.Key(p.ID), func() { ch.prompt(c, p.Text, true) })
-		}).
-			Grow(1).MinHeight(0).Gap(rowGap).Padding(topSpace, theme.Space20, theme.Space12).Justify(ui.End).
-			Children(func() {
-				if len(rows)+len(pending) == 0 {
-					ui.Box(c).Fill().Center().Children(func() {
-						kit.Styled(ui.Text(c, TextEmpty), theme.StyleBody).TextColor(pal.Ink42)
-					})
+		// The list has room under its last entry as tall as the fade over its bottom edge, so the
+		// fade covers no entry and the dock cuts none (D259).
+		ui.Column(c).FillWidth().Grow(1).MinHeight(0).Children(func() {
+			ui.List(c, &ch.list, len(rows)+len(pending), func(i int) {
+				if i < len(rows) {
+					ch.row(c, rows[i], i+1 < len(rows) && rows[i+1].Kind == RowSaid)
+					return
 				}
-			})
+				p := pending[i-len(rows)]
+				column(c.Key(p.ID), func() { ch.prompt(c, p.Text, true) })
+			}).
+				Grow(1).MinHeight(0).Gap(rowGap).Padding(topSpace, theme.Space20, fadeHeight).Justify(ui.End).
+				Children(func() {
+					if len(rows)+len(pending) == 0 {
+						ui.Box(c).Fill().Center().Children(func() {
+							kit.Styled(ui.Text(c, TextEmpty), theme.StyleBody).TextColor(pal.Ink42)
+						})
+					}
+				})
+			// The fade ends on the stage as it shows (StageBase, D250): the translucent stage
+			// itself, drawn again over the panel, would show as a band.
+			stage := pal.StageBase()
+			ui.Box(c).Label(LabelFade).Absolute().Left(0).Right(0).Bottom(0).Height(fadeHeight).PassThrough().
+				LinearGradient(ui.LinearGradient{Angle: 180, Stops: []ui.GradientStop{{Color: stage.Alpha(0), At: 0}, {Color: stage, At: 1}}})
+		})
 		ui.Column(c).FillWidth().Shrink(0).Gap(theme.Space12).Padding(0, theme.Space20, theme.Space14).Children(func() {
-			ch.live(c, st, toTerminal)
+			// The session's own menu (needs you) comes first; the team row keeps its place on the
+			// composer, so the dock does not change height when work starts and stops.
+			if ch.Team != nil {
+				if t, ok := ch.Team(id); ok {
+					ch.live(c, st, true, toTerminal)
+					ch.team(c, t, st)
+					ch.composer(c, id, st)
+					return
+				}
+			}
+			ch.live(c, st, false, toTerminal)
 			ch.composer(c, id, st)
 		})
 	})
@@ -252,8 +273,8 @@ func (ch *Chat) groupRow(c *ui.Context, p ui.CollapsibleParts, r Row, open *bool
 	})
 }
 
-// dot is the state of the worker at addr: blocked in the blocked hue, working in ink-85, else
-// ink-40.
+// dot is the state of the worker at addr: blocked in ink-100, working in ink-85, else ink-40. A
+// blocked worker gets no red: the team row's "N needs you" is the chat's one red for it (D259).
 func (ch *Chat) dot(c *ui.Context, addr string) {
 	pal := theme.Current()
 	color, state := pal.Ink40, "idle"
@@ -262,7 +283,7 @@ func (ch *Chat) dot(c *ui.Context, addr string) {
 			state = w.Status
 			switch w.Status {
 			case "blocked":
-				color = pal.Blocked
+				color = pal.Ink100
 			case "working":
 				color = pal.Ink85
 			}
@@ -277,9 +298,9 @@ func (ch *Chat) dotBox(c *ui.Context, label string, color ui.Color) {
 	ui.Box(c).Label(label).Size(dotSize, dotSize).Shrink(0).Radius(dotSize / 2).Background(color)
 }
 
-// noteLine is one kit note: the sender's dot and name, and its text on one line. A note that
-// needs the owner (own) has its name in ink-100 and its text in ink-85. A background task shows
-// "Background task", its status (blocked when not completed) and its summary.
+// noteLine is one kit note: the sender's dot and name, and its text on one line. A background
+// task shows "Background task", its status and its summary. A failed task outside the fold (own)
+// has no dot, its name and status in ink-100 and its text in ink-85: no red (D259).
 func (ch *Chat) noteLine(c *ui.Context, e transcript.Entry, own bool) {
 	pal := theme.Current()
 	name, addr, status, text := "owner", "", "", e.Text
@@ -293,30 +314,20 @@ func (ch *Chat) noteLine(c *ui.Context, e transcript.Entry, own bool) {
 			name = "session"
 		}
 	}
-	label, nameInk, textInk := LabelNote, pal.Ink85, pal.Ink42
+	label, nameInk, statusInk, textInk := LabelNote, pal.Ink85, pal.Ink42, pal.Ink42
 	if own {
-		label, nameInk, textInk = LabelOwnerNote, pal.Ink100, pal.Ink85
+		label, nameInk, statusInk, textInk = LabelOwnerNote, pal.Ink100, pal.Ink100, pal.Ink85
 	}
 	ui.Row(c).Label(label + " " + name).FillWidth().Height(lineHeight).AlignItems(ui.Center).Gap(theme.Space8).Children(func() {
-		if own {
-			ch.dotBox(c, name+" needs you", pal.Blocked)
-		} else if addr != "" {
+		if addr != "" {
 			ch.dot(c, addr)
 		}
 		kit.Styled(ui.Text(c, name), theme.StyleMeta).FontWeight(500).NoWrap().Shrink(0).TextColor(nameInk)
 		if status != "" {
-			kit.Styled(ui.Text(c, status), theme.StyleMeta).NoWrap().Shrink(0).TextColor(statusInk(pal, status, textInk))
+			kit.Styled(ui.Text(c, status), theme.StyleMeta).NoWrap().Shrink(0).TextColor(statusInk)
 		}
 		kit.Styled(ui.Text(c, text), theme.StyleMeta).SingleLine().Grow(1).MinWidth(0).TextColor(textInk)
 	})
-}
-
-// statusInk is the ink of a background task's status: base when it completed, else blocked.
-func statusInk(pal *theme.Palette, status string, base ui.Color) ui.Color {
-	if status == "completed" {
-		return base
-	}
-	return pal.Blocked
 }
 
 // callLine is one tool call: the working glyph while it runs, its name, its summary, an error

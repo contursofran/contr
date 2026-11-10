@@ -39,6 +39,11 @@ type Chat struct {
 	// Meta is the model and the context of the terminal at addr, "opus high · 212k", for the
 	// right of the composer. May be nil.
 	Meta func(addr string) string
+	// Team is the team of the session at addr while it orchestrates, for the team row (D259);
+	// ok is false when it does not orchestrate. May be nil: no team row.
+	Team func(addr string) (Team, bool)
+	// OpenNeeds opens the notch's card, as ⌘J does: the click on "N needs you". May be nil.
+	OpenNeeds func()
 
 	src    *chatsource.Source
 	model  Model

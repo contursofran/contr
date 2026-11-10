@@ -1,6 +1,7 @@
 package chatview
 
 import (
+	"image"
 	"image/color"
 	"os"
 	"path/filepath"
@@ -14,7 +15,6 @@ import (
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/kit"
-	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/session"
 )
@@ -157,8 +157,7 @@ func TestChatShowsTheSession(t *testing.T) {
 	r.selectTerm(term)
 	r.chat()
 	r.write(lPrompt, lHook, lMeta, lThink, lSaid, lCall1, lNote1, lCall2, lRes1, lNote2, lSaid2, lSide)
-	for _, want := range []string{"start builders for 609", "#633", "open", "1 worker note · 2 tool calls", "b-632",
-		"ended its turn without a report. Last words: waiting", "b-631 is done."} {
+	for _, want := range []string{"start builders for 609", "#633", "open", "2 worker notes · 2 tool calls", "b-631 is done."} {
 		if !r.tt.HasText(want) {
 			t.Errorf("no %q in %v", want, r.tt.Texts())
 		}
@@ -168,8 +167,12 @@ func TestChatShowsTheSession(t *testing.T) {
 			t.Errorf("hidden text %q shows", hidden)
 		}
 	}
-	if apptest.Absent(r.tt, LabelPrompt) || apptest.Absent(r.tt, LabelOwnerNote+" b-632") {
-		t.Error("no prompt bubble or owner note")
+	if apptest.Absent(r.tt, LabelPrompt) {
+		t.Error("no prompt bubble")
+	}
+	// A worker that ended its turn without a report folds: no line outside, no red (D259).
+	if !apptest.Absent(r.tt, LabelOwnerNote+" b-632") || r.tt.HasText("ended its turn without a report. Last words: waiting") {
+		t.Error("a worker note shows outside the fold")
 	}
 	if !apptest.Absent(r.tt, LabelCall+" Bash") {
 		t.Error("a folded group shows its lines")
@@ -383,14 +386,53 @@ func TestTasksAndAgentMessagesShowAsLines(t *testing.T) {
 	}
 }
 
-func TestTaskStatusInk(t *testing.T) {
-	pal := theme.Current()
-	if statusInk(pal, "completed", pal.Ink42) != pal.Ink42 {
-		t.Error("a completed task's status is not dim")
+// A failed task stays outside the fold, with no dot and no red (D259).
+func TestFailedTaskHasNoRed(t *testing.T) {
+	r := newRig(t)
+	r.savePath(term)
+	r.selectTerm(term)
+	r.chat()
+	r.write(lPrompt, lCall1, lRes1, lTaskBad, lSaid2)
+	if !slices.Contains(r.tt.Texts(), "failed") || !r.tt.HasText(`· "go vet" failed with exit code 1`) {
+		t.Fatalf("no failed task outside the fold: %v", r.tt.Texts())
 	}
-	for _, s := range []string{"failed", "killed", "running"} {
-		if statusInk(pal, s, pal.Ink42) != pal.Blocked {
-			t.Errorf("status %q is not in blocked", s)
+	if !apptest.Absent(r.tt, TextTask+" needs you") {
+		t.Error("a failed task has a dot")
+	}
+	if n := reddish(r.tt.Image(), apptest.Box(t, r.tt, LabelOwnerNote+" "+TextTask)); n > 0 {
+		t.Errorf("the failed task's line has %d red pixels", n)
+	}
+}
+
+// reddish counts the pixels of box whose red stands well above green and blue: the blocked hues,
+// not the greys of the inks.
+func reddish(img *image.RGBA, box ui.Rect) int {
+	n := 0
+	for y := int(box.Y); y < int(box.Y+box.H); y++ {
+		for x := int(box.X); x < int(box.X+box.W); x++ {
+			p := img.RGBAAt(x, y)
+			if int(p.R)-int(max(p.G, p.B)) > 40 {
+				n++
+			}
 		}
+	}
+	return n
+}
+
+// A blocked worker's dot in a fold row is ink-100, not red: "N needs you" is the one red (D259).
+func TestBlockedSenderDotHasNoRed(t *testing.T) {
+	r := newRig(t)
+	r.ch.Worker = func(addr string) (agents.Worker, bool) {
+		return agents.Worker{Name: "b-631", Address: addr, Status: "blocked"}, addr == "w2:t1"
+	}
+	r.savePath(term)
+	r.selectTerm(term)
+	r.chat()
+	r.write(lPrompt, lNote1, lSaid2)
+	if apptest.Absent(r.tt, "b-631 blocked") {
+		t.Fatalf("no dot of the blocked sender: %v", r.tt.Texts())
+	}
+	if n := reddish(r.tt.Image(), apptest.Box(t, r.tt, "b-631 blocked")); n > 0 {
+		t.Errorf("the blocked sender's dot has %d red pixels", n)
 	}
 }
