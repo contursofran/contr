@@ -19,7 +19,7 @@ From left to right:
 5. DiffSummary of the selected project.
 6. Icon buttons: Search, Hide files (pressed while files show).
 
-Height `titlebar-height` (46px: a 30px tab, 8px above and below, D177; the panels start right under it), gap `space-8`, right padding `space-14`. Items center on the vertical axis.
+Height `titlebar-height` (46px: a 30px tab, 8px above and below, D177; the panels start right under it), gap `space-8`, right padding `space-8` (D228: the last icon button ends at the files panel edge). Items center on the vertical axis.
 
 ## States
 
@@ -71,7 +71,7 @@ Height `titlebar-height` (46px: a 30px tab, 8px above and below, D177; the panel
 
 ## Tokens
 
-`titlebar-height`, `space-8`, `space-14`, `ink-*` through its children.
+`titlebar-height`, `space-8`, `ink-*` through its children.
 
 ## Build in MyGo
 

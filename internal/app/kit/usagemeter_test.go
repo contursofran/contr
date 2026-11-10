@@ -102,3 +102,23 @@ func TestAMeterOutOfRangeIsFullOrEmpty(t *testing.T) {
 		t.Error("a negative meter is not empty")
 	}
 }
+
+// The block has space-10 at the sides, so in the panel its text sits 20px in
+// (D228), and each meter after the first has space-6 more above it than the
+// space-7 gap.
+func TestUsageMeterInsetsAndSpaceBetweenMeters(t *testing.T) {
+	tt := meterTester([]Meter{{Label: "Context"}, {Label: "Claude"}, {Label: "Codex"}})
+	tt.Frame()
+	block, ctx, claude, codex := find(t, tt, "usage"), find(t, tt, "Context line"), find(t, tt, "Claude line"), find(t, tt, "Codex line")
+	if got := ctx.X - block.X; got != theme.Space10 {
+		t.Errorf("line at %v from the block side, want %d", got, theme.Space10)
+	}
+	if got := block.X + block.W - (ctx.X + ctx.W); got != theme.Space10 {
+		t.Errorf("line ends %v from the block side, want %d", got, theme.Space10)
+	}
+	for _, p := range [][2]ui.Rect{{ctx, claude}, {claude, codex}} {
+		if got := p[1].Y - (p[0].Y + p[0].H); got != theme.Space7+theme.Space6 {
+			t.Errorf("space between meters %v, want %d", got, theme.Space7+theme.Space6)
+		}
+	}
+}

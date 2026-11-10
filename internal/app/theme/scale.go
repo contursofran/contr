@@ -93,7 +93,7 @@ const (
 	Space14 = 14
 	Space16 = 16
 	Space18 = 18
-	Space26 = 26
+	Space20 = 20
 )
 
 // Radius

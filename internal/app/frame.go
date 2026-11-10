@@ -1163,12 +1163,12 @@ func (f *Frame) terminalLine() (line string, colour ui.Color, ok bool) {
 // buildTerminal is the frame's terminal slot: the plugin's view of the
 // selected agent's terminal, dimmed and with a line while the connection is
 // down, and the overlay layer above them. The grid sits inside the spec's
-// padding: 18 above, 26 at the sides, 10 below.
+// padding: 14 above, 20 at the sides, 12 below (D228).
 func (f *Frame) buildTerminal(c *ui.Context) {
 	line, colour, showLine := f.terminalLine()
 	ui.Box(c).Fill().Center().Children(func() {
 		if f.term != nil {
-			ui.Box(c).Absolute().Fill().Padding(theme.Space18, theme.Space26, theme.Space10).Children(func() {
+			ui.Box(c).Absolute().Fill().Padding(theme.Space14, theme.Space20, theme.Space12).Children(func() {
 				grid := gterm.View(c, f.term).Label(LabelTerminalGrid).Fill()
 				if f.autoFocus {
 					f.autoFocus = false
