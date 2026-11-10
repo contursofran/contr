@@ -93,7 +93,7 @@ func Row(c *ui.Context, o RowOpts) {
 	row := ui.ButtonBase(c).Label(label).Height(height).Shrink(0).
 		AlignItems(ui.Center).Gap(theme.SpacesGap).PaddingX(theme.SidebarPadX-theme.CardInsetX-1).
 		MarginX(theme.CardInsetX).Radius(theme.CardRadius).Border(1, border).
-		Cursor(ui.CursorPointer).Selected(o.Selected)
+		Cursor(ui.CursorPointer).Selected(o.Selected).Transition(FadeTransition(theme.MotionSelect))
 	if o.OnClick != nil {
 		row = row.OnClick(o.OnClick)
 	}
@@ -195,10 +195,12 @@ func Switch(c *ui.Context, label string, choice *int, options ...string) ui.Elem
 		Background(p.Hover).Children(func() {
 		for i, o := range options {
 			s := seg.Segment(i).Label(o).PaddingY(3).PaddingX(10).Radius(theme.SegmentRadius - theme.SegmentPad).
-				Cursor(ui.CursorPointer).TextColor(p.Ink62)
+				Cursor(ui.CursorPointer).Transition(FadeTransition(theme.MotionSelect))
+			ink := p.Ink62
 			if choice != nil && i == *choice {
-				s = s.Background(p.Selected).TextColor(p.Ink100)
+				s, ink = s.Background(p.Selected), p.Ink100
 			}
+			s = s.TextColor(FadeInk(s, "ink", ink, theme.MotionSelect))
 			s.Children(func() { ui.Text(c, o).NoWrap() })
 		}
 	})

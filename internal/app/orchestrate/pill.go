@@ -211,6 +211,7 @@ func (p *Pill) popover(c *ui.Context, anchor, panel ui.Element) {
 	panel = panel.AttachTo(anchor, ui.AnchorBottomRight, ui.AnchorTopRight).Margin(popoverGap, 0, 0, 0).
 		Role(ui.RoleDialog).Label(LabelPopover).Column().Width(popoverWidth).Padding(theme.Space12).Gap(theme.Space8).
 		Radius(theme.Radius12).Background(pal.FloatSolid).Border(1, pal.FloatLine)
+	panel = kit.PopIn(panel)
 	withShadow(panel, pal.ShadowFloat).Children(func() {
 		in := ui.TextInputBase(c.Key("orchestrate-goal"), &p.goal).Label(LabelGoal).Placeholder(LabelGoal).
 			PlaceholderColor(pal.Ink30).TextColor(pal.Ink90).Height(30).FillWidth().Shrink(0).PaddingX(theme.Space12).

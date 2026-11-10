@@ -202,6 +202,7 @@ func (m *ProjectsModal) View(c *ui.Context) {
 				panel.Shadow(l.X, l.Y, l.Blur, l.Wide, l.Color)
 			}
 		}
+		kit.PopDialog(c, backdrop, panel)
 		panel.Children(func() { m.body(c) })
 	})
 	if d.Dismissed() || !open {

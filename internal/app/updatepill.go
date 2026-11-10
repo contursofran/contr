@@ -155,7 +155,7 @@ func (f *Frame) updatePill(c *ui.Context) {
 	pill := f.pillButton(c, LabelUpdatePill, f.upd.open, func() { f.upd.open = !f.upd.open })
 	ui.PopoverBase(c, pill, &f.upd.open, func(panel ui.Element) {
 		panel.Label(LabelUpdatePanel).AttachTo(pill, ui.AnchorBottomEnd, ui.AnchorTopEnd).Margin(theme.Space8, 0, 0, 0)
-		floatCard(panel)
+		floatCard(kit.PopIn(panel))
 		if panel.OverlayShortcut(0, ui.KeyEnter) {
 			f.Settings.RestartNow()
 		}
@@ -174,7 +174,7 @@ func (f *Frame) updatedPill(c *ui.Context) {
 	pill := f.pillButton(c, UpdatedPrefix+n.Version, true, f.updatedShown)
 	panel := ui.PopoverBase(c, pill, &f.upd.afterOpen, func(panel ui.Element) {
 		panel.Label(LabelUpdatePanel).AttachTo(pill, ui.AnchorBottomEnd, ui.AnchorTopEnd).Margin(theme.Space8, 0, 0, 0)
-		floatCard(panel)
+		floatCard(kit.PopIn(panel))
 		if panel.OverlayShortcut(0, ui.KeyEnter) {
 			f.updatedShown()
 		}

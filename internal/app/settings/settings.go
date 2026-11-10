@@ -572,6 +572,7 @@ func (s *Settings) View(c *ui.Context) {
 				panel.Shadow(l.X, l.Y, l.Blur, l.Wide, l.Color)
 			}
 		}
+		kit.PopDialog(c, backdrop, panel)
 		panel.Children(func() { s.body(c) })
 	})
 	if d.Dismissed() || !open {

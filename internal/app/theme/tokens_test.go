@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -381,5 +382,24 @@ func TestApplySetsUITheme(t *testing.T) {
 		if seen.Text != p.Ink95 || seen.Dark != p.Dark {
 			t.Errorf("dark=%v: ui theme Text = %v, Dark = %v", p.Dark, seen.Text, seen.Dark)
 		}
+	}
+}
+
+func TestMotionTokens(t *testing.T) {
+	names := map[string]time.Duration{"motion-select": MotionSelect, "motion-pop-in": MotionPopIn,
+		"motion-pop-out": MotionPopOut, "motion-state": MotionState, "motion-number": MotionNumber,
+		"motion-meter": MotionMeter}
+	rows := specRows(t, "Motion")
+	for _, r := range rows {
+		want, err := time.ParseDuration(r[1])
+		if err != nil {
+			t.Fatalf("%s: bad value %q", r[0], r[1])
+		}
+		if got, ok := names[r[0]]; !ok || got != want {
+			t.Errorf("%s = %v, want %v (listed: %v)", r[0], got, want, ok)
+		}
+	}
+	if len(names) != len(rows) {
+		t.Errorf("%d motion tokens in code, %d in tokens.md", len(names), len(rows))
 	}
 }

@@ -58,8 +58,8 @@ func meterLine(c *ui.Context, m Meter, top float32) {
 		ui.Row(c).AlignItems(ui.Center).Gap(theme.Space4).Children(func() {
 			ui.Text(c, m.Label).SingleLine().Grow(1).MinWidth(0).
 				Font(theme.StyleSmall.Family()).FontSize(theme.StyleSmall.Size).FixedLineHeight(theme.StyleSmall.Line).TextColor(p.Ink42)
-			ui.Text(c, value).SingleLine().Shrink(0).
-				Font(theme.StyleValue.Family()).FontSize(theme.StyleValue.Size).FixedLineHeight(theme.StyleValue.Line).TextColor(ink)
+			meterValue(ui.Text(c, value).SingleLine().Shrink(0).
+				Font(theme.StyleValue.Family()).FontSize(theme.StyleValue.Size).FixedLineHeight(theme.StyleValue.Line).TextColor(ink), m)
 		})
 		meterBar(c, m)
 	})
@@ -75,13 +75,25 @@ func meterBar(c *ui.Context, m Meter) ui.Element {
 		pct = math.Min(math.Max(m.Percent, 0), 100)
 	}
 	fill := p.MeterFill
-	return ui.Meter(c, pct, 0, 100, nil).Label(m.Label + " meter").
-		Height(theme.SizeMeterHeight).MinWidth(0).Radius(theme.Radius2).Background(p.MeterTrack).
-		Draw(func(pt *ui.Painter, r ui.Rect) {
-			if pct > 0 {
-				pt.Fill(ui.Rect{X: r.X, Y: r.Y, W: r.W * float32(pct/100), H: r.H}, fill, theme.Radius2)
-			}
-		})
+	bar := ui.Meter(c, pct, 0, 100, nil).Label(m.Label + " meter").
+		Height(theme.SizeMeterHeight).MinWidth(0).Radius(theme.Radius2).Background(p.MeterTrack)
+	// The fill moves to its width in theme.MotionMeter (D256); the value
+	// for assistive technology is the new one at once.
+	shown := MeterFill(bar, pct)
+	return bar.Draw(func(pt *ui.Painter, r ui.Rect) {
+		if shown > 0 {
+			pt.Fill(ui.Rect{X: r.X, Y: r.Y, W: r.W * float32(shown/100), H: r.H}, fill, theme.Radius2)
+		}
+	})
+}
+
+// meterValue rolls the digits of the value text e of m as they change
+// (D256). A meter without data shows NoValue (D255): it changes at once.
+func meterValue(e ui.Element, m Meter) ui.Element {
+	if !m.Has || m.Value == "" {
+		return e
+	}
+	return RollNumber(e, m.Percent)
 }
 
 // PlanUsageWidth is the width of a bar of [PlanUsage].
@@ -109,8 +121,8 @@ func PlanUsage(c *ui.Context, meters []Meter) ui.Element {
 				if has {
 					meterBar(c, m).Width(PlanUsageWidth).Shrink(0)
 				}
-				ui.Text(c, value).SingleLine().Shrink(0).
-					Font(theme.StyleValue.Family()).FontSize(theme.StyleValue.Size).TextColor(ink)
+				meterValue(ui.Text(c, value).SingleLine().Shrink(0).
+					Font(theme.StyleValue.Family()).FontSize(theme.StyleValue.Size).TextColor(ink), m)
 			})
 		}
 	})

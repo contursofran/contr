@@ -86,7 +86,8 @@ func (r *modalRig) has(label string) bool { _, ok := r.tt.Find(label); return ok
 func (r *modalRig) open() {
 	r.m.Toggle()
 	r.tt.Frame()
-	r.tt.Frame() // the list measures its rows in the first frame and the footer moves
+	r.tt.Frame()                    // the list measures its rows in the first frame and the footer moves
+	r.tt.Advance(theme.MotionPopIn) // the way in ends (D256)
 }
 
 func TestProjectsModalOpensAndListsProjects(t *testing.T) {
