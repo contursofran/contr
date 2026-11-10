@@ -110,6 +110,9 @@ type Pill struct {
 	Send func(addr, text string) error
 	// Env runs the send and shows its error.
 	Env view.Env
+	// Lead returns what shows left of the pill in its row, as the Chat | Terminal switch (D246),
+	// or nil for nothing. It shows for a terminal that has no pill too. May be nil.
+	Lead func() func(c *ui.Context)
 
 	open   bool
 	goal   string
@@ -146,7 +149,11 @@ func (p *Pill) View(c *ui.Context) {
 	if !ok || orchestrating || (p.open && p.target != w.Address) {
 		p.open = false // the popover goes with the button, or when the selection moves
 	}
-	if !ok {
+	var lead func(c *ui.Context)
+	if p.Lead != nil {
+		lead = p.Lead()
+	}
+	if !ok && lead == nil {
 		return
 	}
 	notch := p.NotchShown != nil && p.NotchShown()
@@ -158,11 +165,19 @@ func (p *Pill) View(c *ui.Context) {
 			// it wraps to the second line, under the notch.
 			ui.Box(c).Height(0).WidthPercent(50).Shrink(0).Margin(0, spacerMargin(right), 0, 0)
 		}
-		if orchestrating {
-			p.stateView(c, PillText(snap.LiveWorkersOf(w.Address)))
-			return
-		}
-		p.buttonView(c, w.Address)
+		// The lead and the pill wrap as one, space-8 apart.
+		ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(theme.Space8).Children(func() {
+			if lead != nil {
+				lead(c)
+			}
+			switch {
+			case !ok:
+			case orchestrating:
+				p.stateView(c, PillText(snap.LiveWorkersOf(w.Address)))
+			default:
+				p.buttonView(c, w.Address)
+			}
+		})
 	})
 }
 

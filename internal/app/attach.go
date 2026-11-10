@@ -39,6 +39,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	stopSettings := f.attachSettings(w, env)
 	f.loadSaved(env)
 	f.attachQuestions(env, agentSnap, src)
+	stopChat := f.attachChat(env)
 	unwatch := f.attachVisibility(w, src)
 	term := f.attachTerminal(w)
 	offMenu := f.attachMenu(w, src)
@@ -46,6 +47,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 		offMenu()
 		stopSettings()
 		stopFiles()
+		stopChat()
 		unwatch()
 		term()
 		stopAgents()
@@ -56,7 +58,13 @@ func (f *Frame) Attach(w Window) (stop func()) {
 // attachState makes the selection and the toasts, and returns the window's Env for the views:
 // one value, not a field per view.
 func (f *Frame) attachState(w Window) view.Env {
-	f.Selection = state.NewSelection(func() { f.syncOpen(); w.Invalidate(); f.syncReview(); f.syncTerminal() })
+	f.Selection = state.NewSelection(func() {
+		f.syncOpen()
+		w.Invalidate()
+		f.syncReview()
+		f.syncTerminal()
+		f.syncChat()
+	})
 	f.Toasts = state.NewToasts(w.Invalidate)
 	return view.Env{Run: view.Runner{Post: w.Update}, Invalidate: w.Invalidate, Status: f.Toasts.Show, OpenURL: openURL}
 }
@@ -248,7 +256,7 @@ func (f *Frame) attachQuestions(env view.Env, agentSnap func() agentstate.Snapsh
 		f.Notch.Opened = f.Card.IsOpen
 		f.Notch.Panel = f.Card.View
 		f.Pill = &orchestrate.Pill{Snapshot: agentSnap, Selected: f.selectedTerminal, NotchShown: f.Notch.Shown,
-			OutlineTop: f.Outline.Top, Send: src.Send, Env: env}
+			OutlineTop: f.Outline.Top, Send: src.Send, Env: env, Lead: f.chatLead}
 		f.Overlay.Add(orchestrate.LabelLayer, f.Pill.View)
 	}
 	f.Overlay.Add(questions.LabelNotchLayer, f.Notch.View)

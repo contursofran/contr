@@ -110,6 +110,9 @@ type Call struct {
 	// Excerpt is the start of the result text, at most excerptMax runes
 	// (200).
 	Excerpt string
+	// End is the timestamp of the result line ("" while not done or when
+	// the line has none).
+	End string
 }
 
 // KitNote is a text that hc or the contr kit typed into the session.
@@ -129,6 +132,8 @@ type Result struct {
 	ID      string
 	Error   bool
 	Excerpt string
+	// Time is the timestamp of the result line.
+	Time string
 }
 
 // Batch is what one read gives.
@@ -289,7 +294,7 @@ func (r *Reader) user(base Entry, meta, compact bool, content json.RawMessage, b
 		case "image":
 			images++
 		case "tool_result":
-			r.result(bl, b, idx)
+			r.result(bl, base.Time, b, idx)
 		}
 	}
 	if len(texts) == 0 && images == 0 {
@@ -314,8 +319,8 @@ func (r *Reader) user(base Entry, meta, compact bool, content json.RawMessage, b
 // result joins a tool result to its call: in this batch when the call is
 // in it, else as a Result for an earlier read. A result of an unknown call
 // is dropped.
-func (r *Reader) result(bl block, b *Batch, idx map[string]int) {
-	at, ok := r.pending[bl.ToolUseID]
+func (r *Reader) result(bl block, at string, b *Batch, idx map[string]int) {
+	n, ok := r.pending[bl.ToolUseID]
 	if !ok {
 		return
 	}
@@ -323,11 +328,11 @@ func (r *Reader) result(bl block, b *Batch, idx map[string]int) {
 	excerpt := clip(text(bl.Content), excerptMax)
 	if i, ok := idx[bl.ToolUseID]; ok {
 		c := *b.Entries[i].Tool
-		c.Done, c.Error, c.Excerpt = true, bl.IsError, excerpt
+		c.Done, c.Error, c.Excerpt, c.End = true, bl.IsError, excerpt, at
 		b.Entries[i].Tool = &c
 		return
 	}
-	b.Results = append(b.Results, Result{Index: at, ID: bl.ToolUseID, Error: bl.IsError, Excerpt: excerpt})
+	b.Results = append(b.Results, Result{Index: n, ID: bl.ToolUseID, Error: bl.IsError, Excerpt: excerpt, Time: at})
 }
 
 func assistant(base Entry, content json.RawMessage) []Entry {
@@ -391,8 +396,10 @@ func classify(e *Entry) {
 		e.Kind, e.Note, e.Text = Note, ownerNote(s), s
 	case strings.HasPrefix(s, "<system-reminder>"):
 		e.Kind, e.Hidden = Hidden, HideReminder
-	case strings.HasPrefix(s, "<local-command-"):
+	case strings.HasPrefix(s, "<local-command-"), strings.HasPrefix(s, "<bash-stdout>"), strings.HasPrefix(s, "<bash-stderr>"):
 		e.Kind, e.Hidden = Hidden, HideLocalCommand
+	case isHookTag(s):
+		e.Kind, e.Hidden = Hidden, HideHook
 	case strings.HasPrefix(s, "[Request interrupted"):
 		e.Kind, e.Hidden = Hidden, HideInterrupt
 	case isPlaybook(s):
@@ -433,6 +440,17 @@ func ownerNote(s string) *KitNote {
 		n.ID = id
 	}
 	return n
+}
+
+// isHookTag tells a text that Claude Code wraps in a hook's tag, as
+// <user-prompt-submit-hook>…</user-prompt-submit-hook>: hook output that came
+// as a user line, not as an attachment.
+func isHookTag(s string) bool {
+	if !strings.HasPrefix(s, "<") {
+		return false
+	}
+	tag, _, ok := strings.Cut(s[1:], ">")
+	return ok && strings.HasSuffix(tag, "-hook") && !strings.ContainsAny(tag, " /")
 }
 
 // isPlaybook tells a text of the kit's SessionStart hook (cmd/contr/hook.go:

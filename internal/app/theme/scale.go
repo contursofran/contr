@@ -43,6 +43,7 @@ func (s TextStyle) Stack() string {
 // Type styles. Use the style, not a size.
 var (
 	StyleQuestion   = TextStyle{Size: 14, Line: 20, Weight: 400}
+	StyleProse      = TextStyle{Size: 13.5, Line: 21, Weight: 400}
 	StyleBody       = TextStyle{Size: 13, Line: 18, Weight: 400}
 	StyleBodyStrong = TextStyle{Size: 13, Line: 18, Weight: 500}
 	StyleRowSmall   = TextStyle{Size: 12.5, Line: 18, Weight: 400}
@@ -62,6 +63,7 @@ var (
 // Styles maps each style name of tokens.md to its style.
 var Styles = map[string]TextStyle{
 	"question":    StyleQuestion,
+	"prose":       StyleProse,
 	"body":        StyleBody,
 	"body-strong": StyleBodyStrong,
 	"row-small":   StyleRowSmall,
