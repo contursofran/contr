@@ -124,6 +124,36 @@ alone. No hover fill, no chips, nothing opens (D259).
 The row redraws when the agent state changes; it has no timer of its own.
 Only the live text's time ticks, as the live line's does (D55, D257).
 
+## Chips
+
+Names in Claude's text that contr knows show live (D262): a 6px dot in the
+color of the state, then the name as a link (`ink-95`). Only text counts:
+code, code blocks, links, images and HTML are not touched. A name contr
+does not know stays plain text.
+
+| Chip | Recognized | Known when | Dot | Click |
+|---|---|---|---|---|
+| PR | "#667" | gh says it is a pull request of the session's repository (read by number), or it is the PR of a worker's branch (D104, D145) | open `content-info`, checks running `content-running`, passed `content-done`, failed `content-failed`, merged `content-done`, closed `content-info`. A failed check wins over a pending one, a pending one over a passed one. | opens the PR as the agent rows do: in the browser (the PR pane is hidden, D147) |
+| Issue | "#649" | gh says it is an issue | none | opens the issue in the browser |
+| Worker | a word that is the name of a worker contr lists ("b-649"); a live one wins | always | needs you `content-failed`, working `content-running`, done (ended) `content-done`, waiting (idle) `content-waiting` | selects the worker in the sidebar |
+| File | a word with a slash or an extension, with an optional ":42" | it is a file in the session's folder | none: the `file` line icon, 0.9 of the text size, `ink-45` | opens the file in the Review view, as the files panel does (the line is not used) |
+
+- The dot is 6px, round, `space-4` before the text, its center near the
+  middle of the lowercase letters. The tip of a chip says what it is:
+  "PR #667 · checks passed", "Worker b-649 · needs you", "Open
+  internal/app/x.go".
+- A number is read only while its text is on screen and only once: the
+  answer holds for 5 minutes, 1 minute for a PR with checks running, and
+  is read again only when the text shows after that. At most 2 gh reads
+  run at once, with the other gh reads of the window. A failed read leaves
+  plain text. A path is checked once, off the UI thread.
+- A chip shows the state of now: it follows the agent state and the
+  answers of the reads. Nothing polls and no timer runs (D55); a text at
+  rest asks for no frame.
+- Not yet: the quiet fill behind a chip, the mono text, the PR and issue
+  icons and the "merged" word of the mockup (K2, KC1). The chip is a link
+  of the markdown view, which styles all its links alike.
+
 ## Behavior
 
 - The view reads the transcript only while it shows: a read runs off the

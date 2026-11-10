@@ -24,6 +24,7 @@ func (f *Frame) attachChat(env view.Env, src agentstate.AgentSource) (stop func(
 	f.Chat.Meta = f.chatMeta
 	f.Chat.Team = f.chatTeam
 	f.Chat.OpenNeeds = f.openNeeds
+	f.Chat.Chips = newChatChips(f, env)
 	if src != nil {
 		f.Chat.Send, f.Chat.Interrupt, f.Chat.Read, f.Chat.SendKeys = src.Send, src.Interrupt, src.Read, src.SendKeys
 	}

@@ -4,7 +4,8 @@ package chatview
 // prompt, an answer with a table, open work groups with a background task and a message of another
 // session, a failed task outside the fold, the live line of a working agent and the composer
 // (D252). ChatViewNeedsYou shows the needs-you line with a menu, ChatViewWide a wide panel with a
-// table wider than the column, and ChatViewTeam the team row of an orchestrating session (D259).
+// table wider than the column, ChatViewTeam the team row of an orchestrating session (D259), and
+// ChatViewChips the chips of each kind and state in Claude's text (D262).
 
 import (
 	"strconv"
@@ -30,13 +31,32 @@ func TestSpecSheet(t *testing.T) {
 	teamOf(team, Team{Agents: 4, NeedsYou: 1, Working: 2, Done: 1})
 	wide := sheetChat(t, "idle", lPrompt, `{"type":"assistant","uuid":"w1","message":{"content":[{"type":"text","text":`+
 		strconv.Quote("Prose stays in the column.\n\n"+wideTable)+`}]}}`)
+	chips := sheetChat(t, "idle", lPrompt, said("k1", chipsText))
+	chips.s.ch.Chips = sheetChips
 	apptest.SpecSheet(t, []apptest.SheetPart{
 		{Name: "ChatView", W: sheetW, H: sheetH, View: working.view},
 		{Name: "ChatViewNeedsYou", W: sheetW, H: 360, View: blocked.view},
 		{Name: "ChatViewWide", W: 1500, H: 420, View: wide.view},
 		{Name: "ChatViewTeam", W: sheetW, H: 420, View: team.view},
-	}, []string{"ChatView", "ChatViewNeedsYou", "ChatViewWide", "ChatViewTeam"})
+		{Name: "ChatViewChips", W: sheetW, H: 420, View: chips.view},
+	}, []string{"ChatView", "ChatViewNeedsYou", "ChatViewWide", "ChatViewTeam", "ChatViewChips"})
 }
+
+// chipsText has each kind of chip in each state (D262), and names that stay text: an unknown
+// number, a name in code and a path that does not exist.
+const chipsText = "PRs: #668 open, #656 checks running, #667 passed, #664 failed, #663 merged, #660 closed. " +
+	"Issue #649. Workers: b-649 needs you, b-665 works, b-658 is done, b-659 waits. " +
+	"The conflict is in internal/app/kit/agentrow.go:42.\n\n" +
+	"Stays text: #3, `b-649` and nope/missing.go."
+
+// sheetChips knows the names of chipsText.
+var sheetChips = &fakeChips{known: map[string]Chip{
+	"668": {ChipPR, StateOpen}, "656": {ChipPR, StateRunning}, "667": {ChipPR, StatePassed},
+	"664": {ChipPR, StateFailed}, "663": {ChipPR, StateMerged}, "660": {ChipPR, StateClosed},
+	"649": {Kind: ChipIssue}, "b-649": {ChipWorker, StateNeedsYou}, "b-665": {ChipWorker, StateWorking},
+	"b-658": {ChipWorker, StateDone}, "b-659": {ChipWorker, StateWaiting},
+	"internal/app/kit/agentrow.go": {Kind: ChipFile},
+}}
 
 var wideTable = "| one | two | three | four |\n|---|---|---|---|\n| " + strings.Repeat(strings.Repeat("a long cell text ", 6)+" | ", 4)
 

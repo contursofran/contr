@@ -55,6 +55,11 @@ Contrast numbers are for Dark unless they say Light. "On glass" is on `glass-win
 | `claude` | `#d97757` | `#c15f3c` | Stroke of the Claude agent glyph (orchestrators) while it works or idles. 6.0:1 on glass. Light: #c15f3c, 3.7:1 on glass (#d97757 is only 2.9:1 on light). |
 | `focus-ring` | `rgba(255,255,255,0.5)` | `rgba(0,0,0,0.45)` | The 1px keyboard focus ring of every button, 2px outside it. |
 | `lights` | `rgba(255,255,255,0.14)` | `rgba(0,0,0,0.14)` | Previews only: the traffic-light stand-ins. macOS draws the real ones. |
+| `content-done` | `#7fb88a` | `#1f7a3d` | Content palette (D262), for the chat's content only and only as a 6px dot: a PR whose checks passed or that merged, a worker that is done. Dark 8.6:1 on stage; Light 5.3:1. |
+| `content-running` | `#7aa7e6` | `#1f5fbf` | Content palette: a PR whose checks run, a worker that works. Dark 7.9:1 on stage; Light 5.9:1. |
+| `content-waiting` | `#d9b36a` | `#8a5a00` | Content palette: a worker that waits (idle). Dark 9.8:1 on stage; Light 5.7:1. |
+| `content-failed` | `#f07178` | `#c73947` | Content palette: a PR whose checks failed, a worker that needs the owner. The value of `blocked`. Dark 6.6:1 on stage; Light 4.9:1. |
+| `content-info` | `rgba(255,255,255,0.64)` | `rgba(0,0,0,0.7)` | Content palette, no hue: an open PR with no checks, a closed PR. |
 
 ## ANSI
 
