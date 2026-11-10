@@ -247,13 +247,23 @@ func seeChat(t *testing.T, h *harness) {
 	if err != nil {
 		t.Fatalf("spawn lead: %v", err)
 	}
-	h.spawn(t, agents.Spec{Name: "b-631", Profile: "claude-idle", Role: "builder", Issue: "611", Project: "demo", Worktree: repo, Parent: w.Address},
-		agents.Spec{Name: "b-632", Profile: "claude-working", Role: "builder", Issue: "613", Project: "demo", Worktree: repo, Parent: w.Address})
+	from := map[string]string{}
+	for _, sp := range []agents.Spec{
+		{Name: "b-630", Profile: "claude-working", Role: "builder", Issue: "609", Project: "demo", Worktree: repo, Parent: w.Address},
+		{Name: "b-631", Profile: "claude-idle", Role: "builder", Issue: "611", Project: "demo", Worktree: repo, Parent: w.Address},
+		{Name: "b-632", Profile: "claude-working", Role: "builder", Issue: "613", Project: "demo", Worktree: repo, Parent: w.Address},
+	} {
+		b, err := h.mgr.Spawn(h.ctx, sp)
+		if err != nil {
+			t.Fatalf("spawn %s: %v", sp.Name, err)
+		}
+		from[sp.Name] = b.Address + " " + sp.Name
+	}
 	path := filepath.Join(h.home, ".claude", "projects", "demo", "chat.jsonl")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte(seeTranscript(w.Address)), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(seeTranscript(from)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	s := &session.Session{UpdatedAt: uint64(time.Now().Unix())}
@@ -265,7 +275,8 @@ func seeChat(t *testing.T, h *harness) {
 
 // seeTranscript is an orchestrator session as Claude Code writes it: hidden lines (meta, the
 // playbook, hook output), prompts, texts, tool calls and their results, and hc notes of workers.
-func seeTranscript(addr string) string {
+// from gives the hc sender ("ADDR NAME") of each worker.
+func seeTranscript(from map[string]string) string {
 	n := 0
 	at := func(sec int) string { return time.Date(2026, 11, 10, 10, 0, sec, 0, time.UTC).Format(time.RFC3339Nano) }
 	line := func(typ string, sec int, extra map[string]any) string {
@@ -307,15 +318,15 @@ func seeTranscript(addr string) string {
 		user(40, "how is it going?"),
 		call(41, "t4", "mcp__plugin_contr_contr__list", map[string]any{}),
 		result(42, "t4", "b-630 working\nb-631 done\nb-632 working", false),
-		note(50, addr+" b-631", "b-631: done, PR #633, check ok; RESULT.md in /tmp/demo"),
+		note(50, from["b-631"], "b-631: done, PR #633, check ok; RESULT.md in /tmp/demo"),
 		call(51, "t5", "Bash", map[string]any{"command": "gh pr view 633 --json statusCheckRollup"}),
 		result(53, "t5", "SUCCESS", false),
 		call(54, "t6", "Read", map[string]any{"file_path": "/tmp/demo/docs/DECISIONS.md"}),
 		result(54, "t6", "| D246 | …", false),
 		call(55, "t7", "Bash", map[string]any{"command": "git log --oneline -3"}),
 		result(56, "t7", "fatal: not a git repository", true),
-		note(57, addr+" b-630", "b-630: working, the model passes its tests"),
-		note(58, addr+" b-632", "ended its turn without a report. Last words: Waiting for the full-suite run to finish."),
+		note(57, from["b-630"], "b-630: working, the model passes its tests"),
+		note(58, from["b-632"], "ended its turn without a report. Last words: Waiting for the full-suite run to finish."),
 		said(59, "b-631 is done: PR `#633` is open and its check passed. b-632 stopped without a report; I asked it to report when the run ends.\n\nNext I review **#633** on its head:\n\n```sh\ngh pr diff 633\n```"),
 		call(60, "t8", "Bash", map[string]any{"command": "gh pr diff 633"}),
 	} {
