@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -173,12 +174,45 @@ func TestTabExtrasCapture(t *testing.T) {
 		t.Fatalf("hc has %d plain terminals, want %d", plains(), want)
 	}
 
+	// newTab clicks New tab until hc has want plain terminals (#626). Under the load of a full
+	// e2e run a click sometimes does not land, so it clicks again, at most 5 times. Each try
+	// waits for an idle window and reads the bounds again, in case the bar moved. The app drops
+	// a click while an open runs, so a slow open does not make two terminals.
+	newTab := func(want int) {
+		t.Helper()
+		for i := 0; ; i++ {
+			if got := plains(); got == want {
+				return
+			} else if got > want || i == 5 {
+				t.Fatalf("hc has %d plain terminals after %d New tab clicks, want %d", got, i, want)
+			}
+			for end := time.Now().Add(20 * time.Second); !c.labels(t)[titlebar.LabelNewTab] && time.Now().Before(end); {
+				wake()
+				time.Sleep(200 * time.Millisecond)
+			}
+			c.settle(t)
+			b := c.boundsOf(t, titlebar.LabelNewTab)
+			if i > 0 {
+				// An open that fails shows a "Terminal: …" toast: name it, so a retry hides no error.
+				var toasts []string
+				for l := range c.labels(t) {
+					if strings.HasPrefix(l, "Terminal: ") {
+						toasts = append(toasts, l)
+					}
+				}
+				t.Logf("New tab click %d did not land (toasts %q); click again at %+v", i, toasts, b)
+			}
+			x, y := center(b)
+			input(map[string]any{"type": "click", "x": x, "y": y})
+			for end := time.Now().Add(5 * time.Second); plains() < want && time.Now().Before(end); {
+				time.Sleep(200 * time.Millisecond)
+			}
+		}
+	}
+
 	waitTabs("the orchestrator's tab", func(tabs []barTab) bool { return len(tabs) == 1 && tabs[0].Label == "lead" })
 	for n := 1; n <= 3; n++ {
-		b := c.boundsOf(t, titlebar.LabelNewTab)
-		x, y := center(b)
-		input(map[string]any{"type": "click", "x": x, "y": y})
-		waitPlains(n)
+		newTab(n)
 	}
 	tabs := waitTabs("lead and three plain tabs", func(tabs []barTab) bool { return len(tabs) == 4 })
 	if tabs[0].Label != "lead" {
