@@ -11,7 +11,7 @@ Shared rules: [README.md](README.md).
 
 | Part | Value |
 |---|---|
-| Place | in the terminal overlay, top `space-8`, right 40px: clear of the outline column (inset 10px, 20px wide, [Outline.md](Outline.md)) by 10px |
+| Place | in the terminal overlay, top `space-8`, right 10px (the outline inset); right 40px only while the outline column reaches the pill's rows (below, D237) |
 | Box | height 26px, padding `0 12px 0 10px`, gap `space-8`, radius `radius-14` (fully round) |
 | Glass | `glass-float`, blur `glass-blur`, line `float-line` (1px all round), shadow `shadow-notch` |
 | Glyph | StatusGlyph, Claude mascot, 14px, still: `claude` while it orchestrates, `ink-45` on the button (D191) |
@@ -65,7 +65,19 @@ Popover (button state only), below the pill, its right edge on the pill's right 
 - The notch hangs at the top center. While it shows, the pill keeps
   a reserve of 240px at the center, plus 8px on each side, free.
 - When the pill does not fit at the right of that reserve, it moves down,
-  under the notch: top `notch-height` + `space-8` (38px). It stays at right 40px.
+  under the notch: top `notch-height` + `space-8` (38px). It keeps its right
+  space (10px or 40px, below).
+
+## Placement next to the outline
+
+- The outline column ([Outline.md](Outline.md)) is inset 10px and 20px wide,
+  centered on the terminal's height. The pill sits at right 10px.
+- When the column's top (its count, or its first tick's hit area) is above
+  the bottom of the pill's rows, the pill moves to right 40px: clear of the
+  column by 10px. The rows end at 34px (top 8, height 26), or at 64px while
+  the notch shows, because the pill can wrap under it.
+- The top is the column's real top, from the outline's last drawn layout
+  (`Outline.Top`), not a guess from the tick count (D237).
 - The open questions card is a popover and draws over the pill.
 
 ## Data
@@ -112,6 +124,8 @@ Popover (button state only), below the pill, its right edge on the pill's right 
 - The move under the notch is a wrapping row: a spacer that ends at the
   right of the notch reserve, then the pill, which wraps to a second line
   when it does not fit. No layout read of an earlier frame.
+- The right space reads `Outline.Top` (D237): the outline keeps its column's
+  top from a `Draw` callback and asks for one more frame when it changes.
 
 ## Do and do not
 
@@ -133,8 +147,11 @@ Popover (button state only), below the pill, its right edge on the pill's right 
 - View: ⏎ sends `/contr:orchestrate <goal>` to the selected address; an empty
   goal sends `/contr:orchestrate`; Cancel and Esc close and send nothing; a
   send error shows a toast.
-- View: the pill is left of the outline column and does not overlap the
-  notch, in a wide and a narrow terminal.
+- View: the pill sits at right 10px with no column or a short one, and at
+  right 40px when the column reaches its rows; it does not overlap the
+  column or the notch, in a wide and a narrow terminal.
+- View: the popover's right edge is on the pill's right edge, at 10px and 40px.
+- View: `Outline.Top` is the column's top; the outline asks for a frame when it moves.
 - Sheet: `scripts/sheet.sh OrchestratePill`. See: fixtures `orchestrate` and
   `orchestrating`.
 

@@ -4,6 +4,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
@@ -130,13 +131,19 @@ var seeFixtures = map[string]seeFixture{
 		ready: "lead, ",
 	},
 	"orchestrate": {
-		about: "the workers fixture: lead does not orchestrate, so its terminal has the Orchestrate pill (D234); press Orchestrate. Open",
-		setup: seeWorkers,
+		about: "the workers fixture with three pins: lead does not orchestrate, so its terminal has the Orchestrate pill 10px from the right side, over a short outline column (D234, D237); press Orchestrate. Open",
+		setup: func(t *testing.T, h *harness) {
+			seeWorkers(t, h)
+			h.owner(t, seePins(3))
+		},
 		ready: "lead, ",
 	},
 	"orchestrating": {
-		about: "project demo: lead orchestrates (the Stop hook's label) with two live builders, so its pill says Orchestrating · 2 workers (D234)",
-		setup: seeOrchestrating,
+		about: "project demo: lead orchestrates (the Stop hook's label) with two live builders, so its pill says Orchestrating · 2 workers (D234); 40 pins make a full outline column, which the pill leaves at 10px while the column's top is under the pill (D237)",
+		setup: func(t *testing.T, h *harness) {
+			seeOrchestrating(t, h)
+			h.owner(t, seePins(40))
+		},
 		ready: "lead, ",
 	},
 	"session": {
@@ -260,6 +267,16 @@ func seeNonGit(t *testing.T, h *harness) string {
 	}
 	t.Setenv("CONTR_E2E_PICK_FOLDER", dir)
 	return dir
+}
+
+// seePins is the owner file with n to-dos of project demo pinned for the owner: the ticks of
+// lead's outline column.
+func seePins(n int) string {
+	var todos []string
+	for i := 1; i <= n; i++ {
+		todos = append(todos, fmt.Sprintf(`{"id":"T%d","project":"demo","kind":"do","text":"Pinned message %d","pinned":"2026-11-03T10:%02d:00Z"}`, i, i, i%60))
+	}
+	return fmt.Sprintf(`{"questions":[],"todos":[%s],"next_question":1,"next_todo":%d}`, strings.Join(todos, ","), n+1)
 }
 
 // seeOrchestrating spawns lead with the orchestrating label and two builders whose parent is lead.
