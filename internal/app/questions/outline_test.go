@@ -156,6 +156,19 @@ func TestOutlineShowsOneTickPerPinInTheOrchestratorTerminalOnly(t *testing.T) {
 	}
 }
 
+// The ticks are 2px high and 9px apart: one tick to the next is 11px
+// (Outline.md, Anatomy).
+func TestOutlineTickPitchIs11px(t *testing.T) {
+	f := newOutline(t, threePins()...)
+	labels := []string{"Decide the release name", "Review the sidebar PR", "CI is green on the notch branch, new"}
+	for i := 1; i < len(labels); i++ {
+		a, b := f.rect(t, labels[i-1]), f.rect(t, labels[i])
+		if pitch := b.Y - a.Y; pitch != 11 {
+			t.Errorf("%q to %q: pitch %vpx, want 11px", labels[i-1], labels[i], pitch)
+		}
+	}
+}
+
 func TestOutlineHasNoColumnWithoutPins(t *testing.T) {
 	f := newOutline(t)
 	if _, ok := f.tt.Find(LabelOutline); ok {
