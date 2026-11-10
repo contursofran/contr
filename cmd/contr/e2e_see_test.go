@@ -124,6 +124,16 @@ var seeFixtures = map[string]seeFixture{
 		},
 		ready: "lead, ",
 	},
+	"orchestrate": {
+		about: "the workers fixture: lead does not orchestrate, so its terminal has the Orchestrate pill (D234); press Orchestrate. Open",
+		setup: seeWorkers,
+		ready: "lead, ",
+	},
+	"orchestrating": {
+		about: "project demo: lead orchestrates (the Stop hook's label) with two live builders, so its pill says Orchestrating · 2 workers (D234)",
+		setup: seeOrchestrating,
+		ready: "lead, ",
+	},
 	"session": {
 		about: "the orchestrator lead with the todos and artifacts of canvas board 11 (D197)",
 		setup: seeSession,
@@ -229,6 +239,20 @@ func (h *harness) recentProject(t *testing.T, name string) {
 }
 
 func seeWorkers(t *testing.T, h *harness) { seeWorkersRepo(t, h) }
+
+// seeOrchestrating spawns lead with the orchestrating label and two builders whose parent is lead.
+func seeOrchestrating(t *testing.T, h *harness) {
+	repo := h.repo(t, "demo", "main")
+	lead, err := h.mgr.Spawn(h.ctx, agents.Spec{Name: "lead", Profile: "claude-idle", Role: agents.RoleOrchestrator, Project: "demo", Worktree: repo})
+	if err != nil {
+		t.Fatalf("spawn lead: %v", err)
+	}
+	h.labelTerminal(t, "lead", map[string]string{agents.LabelOrchestrating: "1"})
+	h.spawn(t,
+		agents.Spec{Name: "b201-s1-notch", Profile: "claude-working", Role: "builder", Issue: "201", Project: "demo", Worktree: repo, Parent: lead.Address},
+		agents.Spec{Name: "b202-s1-outline", Profile: "claude-idle", Role: "builder", Issue: "202", Project: "demo", Worktree: repo, Parent: lead.Address},
+	)
+}
 
 // seeWorkersRepo spawns the workers fixture and returns its repository.
 func seeWorkersRepo(t *testing.T, h *harness) string {
