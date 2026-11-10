@@ -22,8 +22,10 @@ import (
 
 // TestWindowGaps opens the built app in Dark and in Light and measures, in the capture, the
 // gaps around and between the panels: left edge to the sidebar, sidebar to terminal, terminal
-// to files, files to the right edge, the panels to the bottom edge and the title bar to the
-// panels (D167). All must be theme.PanelGap points. PNGs go to tmp/e2e/gaps-dark.png and
+// to files, files to the right edge and the panels to the bottom edge (D167). All must be
+// theme.PanelGap points. The panels start where the title bar ends (D177), so under the title
+// bar a column has only the bottom gap; the space from the tab to the panel top is in the
+// title bar and must equal the space from the window top to the tab. PNGs go to tmp/e2e/gaps-dark.png and
 // gaps-light.png. HOME is a scratch folder and the core is a scratch core:
 //
 //	go test -tags e2e -run TestWindowGaps ./cmd/contr
@@ -156,7 +158,8 @@ func measureGaps(t *testing.T, c *client, path string) {
 		cols = append(cols, float64(run)/scale)
 	}
 	t.Logf("pixel column gaps under the title bar (points, top to bottom): %.1f", cols)
-	wantGaps(t, "column", cols, 2)
+	// D177: no gap between the title bar and the panels; only the bottom gap is left.
+	wantGaps(t, "column", cols, 1)
 	// The tab row (D168): down a column through the first tab, in points: the glass above the tab
 	// (window rim to the tab), the tab, and the glass below it to the terminal panel's border.
 	tabs := c.boundsOf(t, titlebar.LabelTabs)
@@ -181,6 +184,9 @@ func measureGaps(t *testing.T, c *client, path string) {
 	}
 	if h := seg[1]; math.Abs(h-theme.SizeRowHeight) > 0.5 {
 		t.Errorf("tab %.1f points high, want %d", h, theme.SizeRowHeight)
+	}
+	if below := seg[2]; math.Abs(below-(bar.Height-theme.SizeRowHeight)/2) > 0.5 {
+		t.Errorf("tab to panel %.1f points, want %.1f (D177)", below, (bar.Height-theme.SizeRowHeight)/2)
 	}
 }
 

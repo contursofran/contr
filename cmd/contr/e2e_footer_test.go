@@ -23,7 +23,7 @@ import (
 // TestNoFooter runs the built app against a scratch hc core with an orchestrator of the project
 // "demo", a scratch owner file that does not parse, and a scratch projects file that does not
 // parse. It checks that the window has no footer and no needs row, that the Settings button at the bottom
-// left of the sidebar (D147) opens Settings with the contr and hc versions, that the owner file problem shows
+// right of the sidebar (D147, D201) opens Settings with the contr and hc versions, that the owner file problem shows
 // in the notch place, and that the projects file error shows as a toast. PNGs go to
 // tmp/e2e/footer-*.png:
 //
@@ -179,8 +179,10 @@ func TestNoFooter(t *testing.T) {
 				t.Errorf("%s: the hidden viewer %q shows (D147)", theme, hidden)
 			}
 		}
-		if b, side := c.boundsOf(t, sidebar.LabelSettingsOpen), c.boundsOf(t, sidebar.LabelProjectList); b.Y < side.Y+side.Height-1 || b.X > 40 {
-			t.Errorf("%s: Settings at %v, not at the bottom left of the sidebar (list %v)", theme, b, side)
+		// D201: the foot row is meters, spacer, gear, so Settings sits at the bottom right of the sidebar.
+		if b, side := c.boundsOf(t, sidebar.LabelSettingsOpen), c.boundsOf(t, sidebar.LabelProjectList); b.Y < side.Y+side.Height-1 ||
+			b.X+b.Width > side.X+side.Width || b.X+b.Width < side.X+side.Width-40 {
+			t.Errorf("%s: Settings at %v, not at the bottom right of the sidebar (list %v)", theme, b, side)
 		}
 		c.capture(t, filepath.Join(out, "footer-"+theme+"-window.png"))
 		openSettings()
