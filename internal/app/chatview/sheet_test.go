@@ -63,6 +63,7 @@ const contentAnswer = "Four builders work with the M1 rules: red never fills or 
 	"> [!FOO]\n> An unknown tag stays a quote.\n\n" +
 	"```go\n// Sync follows a terminal.\nfunc (s *Source) Sync(id string) error {\n\tif id == \"\" {\n\t\treturn errors.New(\"no terminal\")\n\t}\n\ts.limit = 920\n\treturn nil\n}\n```\n\n" +
 	"```diff\n--- a/kit/agentrow.go\n+++ b/kit/agentrow.go\n@@ -10,3 +10,3 @@\n if row.Selected {\n-\tb.Background(t.Selected)\n+\tb.Background(t.SelectedQuiet)\n }\n```\n"
+
 // chipsText has each kind of chip in each state (D262), and names that stay text: an unknown
 // number, a name in code and a path that does not exist.
 const chipsText = "PRs: #668 open, #656 checks running, #667 passed, #664 failed, #663 merged, #660 closed. " +
