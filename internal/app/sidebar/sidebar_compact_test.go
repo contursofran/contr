@@ -38,6 +38,10 @@ func TestIconColumnRowsShowNoText(t *testing.T) {
 		if r.W > theme.SidebarIconWidth {
 			t.Errorf("%q is %v wide, wider than the column", label, r.W)
 		}
+		// The icon column keeps its 6px margins; the 10px of D231 is for rows with text.
+		if r.X < theme.Space6-0.5 || r.X > theme.Space6+0.5 {
+			t.Errorf("%q fill at x %v, want %v", label, r.X, theme.Space6)
+		}
 	}
 }
 

@@ -8,6 +8,8 @@ import (
 
 // flatRow is the token look of a sidebar row (docs/spec/ProjectRow.md,
 // docs/spec/ServerRow.md): row-height, radius-8, a hover fill and no card.
+// Its side margin is RowInsetX, so with its padding the content sits 20px
+// from the panel side (D231).
 // Selected turns the name and the icon ink-100 instead of drawing a fill.
 // The name takes NameInk (ink-60 by default) and NameStyle (body); Meta
 // sits at the right in MetaInk (ink-38) and the small style.
@@ -32,7 +34,7 @@ func flatRow(c *ui.Context, o RowOpts) {
 		style = theme.StyleBody
 	}
 	row := ui.ButtonBase(c).Label(label).Height(theme.SizeRowHeight).Shrink(0).AlignItems(ui.Center).
-		Gap(theme.Space10).PaddingX(theme.Space10).MarginX(theme.Space6).Radius(theme.Radius8).
+		Gap(theme.Space10).PaddingX(theme.Space10).MarginX(RowInsetX).Radius(theme.Radius8).
 		TextColor(nameInk).Cursor(ui.CursorPointer).Selected(o.Selected)
 	if o.Expanded != nil {
 		row = row.Expanded(*o.Expanded)
@@ -52,7 +54,8 @@ func flatRow(c *ui.Context, o RowOpts) {
 	}
 	if o.Compact {
 		// An icon column: the icon alone, centered, named by the tooltip and the label.
-		row = row.PaddingX(0).Center()
+		// The icon column keeps its 6px margins (D128).
+		row = row.PaddingX(0).MarginX(theme.Space6).Center()
 		if o.Tip != "" {
 			row = row.Tooltip(o.Tip)
 		}
