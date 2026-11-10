@@ -1,7 +1,7 @@
 package sidebar
 
 // The agent rows of the sidebar (docs/spec/AgentRow.md): under each project,
-// its orchestrator first, then its workers on the rail. They sit in the same
+// its orchestrator first, then its workers, indented. They sit in the same
 // ui.List as the project rows. The ages move through the AgeClock (D137).
 
 import (

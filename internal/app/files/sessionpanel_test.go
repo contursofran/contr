@@ -2,6 +2,7 @@ package files
 
 import (
 	"errors"
+	"image/color"
 	"os"
 	"path/filepath"
 	"slices"
@@ -222,5 +223,48 @@ func TestSessionOldWatchEventReadsNothing(t *testing.T) {
 	h.Done[0]()
 	if len(h.Work) != 1 {
 		t.Fatalf("%d reads started by a watch event, want 1", len(h.Work))
+	}
+}
+
+// plainColumn reports the first pixel of column x, from y0 to y1, that is not
+// the color at y0: a line drawn across the column.
+func plainColumn(img interface {
+	RGBAAt(x, y int) color.RGBA
+}, x, y0, y1 int) (int, bool) {
+	first := img.RGBAAt(x, y0)
+	for y := y0; y < y1; y++ {
+		if img.RGBAAt(x, y) != first {
+			return y, false
+		}
+	}
+	return 0, true
+}
+
+// No hairline sits under a section: only space parts it from the next (D258).
+func TestSessionSectionsHaveNoHairline(t *testing.T) {
+	_, tt, _ := newSessionTester(t, &session.Session{Todos: []session.Todo{{Text: "Merge #460", Status: session.Pending}}})
+	sec, row := apptest.Box(t, tt, LabelTodos), apptest.Box(t, tt, "Merge #460, pending")
+	if gap := sec.Y + sec.H - (row.Y + row.H); gap != theme.Space20 {
+		t.Errorf("space under the rows = %v, want space-20", gap)
+	}
+	img := tt.Image()
+	if y, ok := plainColumn(img, int(sec.X+sec.W/2), int(row.Y+row.H)+1, int(sec.Y+sec.H)); !ok {
+		t.Errorf("a line at y %d under the Todos rows", y)
+	}
+}
+
+// The "you" tag is plain text: no ring around it (D258).
+func TestSessionYouTagHasNoRing(t *testing.T) {
+	_, tt, _ := newSessionTester(t, &session.Session{Todos: []session.Todo{{Text: "Merge #460", Status: session.Pending, You: true}}})
+	tag, row := apptest.Box(t, tt, LabelYouTag), apptest.Box(t, tt, "Merge #460, pending")
+	img := tt.Image()
+	// The tag's top edge is the row's background, as left of the tag. (The
+	// descender of "y" reaches the bottom edge of the plain text.)
+	y := int(tag.Y + 0.5)
+	want := img.RGBAAt(int(tag.X)-3, y)
+	for x := int(tag.X) + 2; x < int(tag.X+tag.W)-2; x++ {
+		if got := img.RGBAAt(x, y); got != want {
+			t.Fatalf("%v at (%d, %d) on the edge of the you tag %+v in row %+v, want %v", got, x, y, tag, row, want)
+		}
 	}
 }

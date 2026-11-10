@@ -71,7 +71,7 @@ func (h *rowsHarness) y(label string) float32 {
 	return apptest.Box(h.t, h.tt, label).Y
 }
 
-func TestTheOrchestratorComesFirstThenItsWorkersOnTheRail(t *testing.T) {
+func TestTheOrchestratorComesFirstThenItsWorkersIndented(t *testing.T) {
 	h := newRows(t)
 	proj, lead := h.y("alpha, main"), h.y("lead, idle, opus")
 	b1, b2 := h.y("b-241, working, 241, sonnet"), h.y("b-242, working, sonnet")
@@ -79,10 +79,10 @@ func TestTheOrchestratorComesFirstThenItsWorkersOnTheRail(t *testing.T) {
 	if !(proj < lead && lead < b1 && b1 < b2 && b2 < other) {
 		t.Errorf("order: project %v, lead %v, b-241 %v, b-242 %v, beta %v", proj, lead, b1, b2, other)
 	}
-	// The workers sit on the rail: indented from the orchestrator row.
+	// The workers sit WorkerIndent in from the orchestrator row (D258).
 	w, o := apptest.Box(t, h.tt, "b-241, working, 241, sonnet title"), apptest.Box(t, h.tt, "lead, idle, opus title")
-	if w.X < o.X+kit.RailIndent {
-		t.Errorf("the worker title %+v is not on the rail of the orchestrator %+v", w, o)
+	if w.X-o.X != kit.WorkerIndent {
+		t.Errorf("the worker title %+v is not %v in from the orchestrator %+v", w, kit.WorkerIndent, o)
 	}
 }
 
@@ -178,8 +178,8 @@ func TestAnOrchestratorIsIndentedUnderItsProject(t *testing.T) {
 		t.Errorf("orchestrator title %+v is not indented from the project name %+v", lead, proj)
 	}
 	w := apptest.Box(t, h.tt, "b-241, working, 241, sonnet title")
-	if w.X < lead.X+kit.RailIndent {
-		t.Errorf("the worker title %+v is not on the rail inside the orchestrator %+v", w, lead)
+	if w.X < lead.X+kit.WorkerIndent {
+		t.Errorf("the worker title %+v is not indented inside the orchestrator %+v", w, lead)
 	}
 }
 
