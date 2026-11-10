@@ -179,11 +179,10 @@ func NeedsOwner(e transcript.Entry) bool {
 	if e.Kind != transcript.Note || e.Note == nil {
 		return false
 	}
-	switch e.Note.Kind {
-	case transcript.NoteTask:
+	if e.Note.Kind == transcript.NoteTask {
 		return TaskFailed(e.Note.Status)
-	case transcript.NoteMessage:
-	default:
+	}
+	if e.Note.Kind != transcript.NoteMessage {
 		return false
 	}
 	s := strings.ToLower(strings.TrimSpace(e.Text))
