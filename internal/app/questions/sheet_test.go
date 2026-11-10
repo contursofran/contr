@@ -26,7 +26,7 @@ const sheetW = 1000 - 2*apptest.SheetPad
 // sheetTerminal draws a panel that stands for the terminal, with the layers of view over it.
 func sheetTerminal(c *ui.Context, h float32, layers func()) {
 	p := theme.Current()
-	ui.Box(c).Width(sheetW).Height(h).Background(p.Panel).Border(1, p.PanelLine).
+	ui.Box(c).Width(sheetW).Height(h).Background(p.Stage).Border(1, p.PanelLine).
 		Radius(theme.Radius12).Children(layers)
 }
 

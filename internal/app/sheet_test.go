@@ -117,7 +117,8 @@ func sheetKeyHints(c *ui.Context) {
 func TestSpecSheet(t *testing.T) {
 	parts := append(slices.Clip(sheetParts), apptest.SheetPart{Name: "KeyHints", W: 640, H: 300, View: sheetKeyHints},
 		apptest.SheetPart{Name: "TerminalEmpty", W: 960, H: 620, View: sheetTerminalEmpty},
-		apptest.SheetPart{Name: "TerminalEmptyNarrow", W: 480, H: 620, View: sheetTerminalEmpty})
+		apptest.SheetPart{Name: "TerminalEmptyNarrow", W: 480, H: 620, View: sheetTerminalEmpty},
+		apptest.SheetPart{Name: "Panel", W: 560, H: 220, View: sheetPanel})
 	// The sheet draws one frame: the drawing must be decoded before it.
 	for deadline := time.Now().Add(5 * time.Second); handsBitmap(nil) == nil && time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
 	}
@@ -127,7 +128,22 @@ func TestSpecSheet(t *testing.T) {
 // sheetTerminalEmpty is the terminal panel while no terminal is open (docs/spec/Terminal.md).
 func sheetTerminalEmpty(c *ui.Context) {
 	f := &Frame{}
-	kit.Panel(c, kit.PanelOpts{Name: LabelPanelTerminal, Bare: true, Body: func() {
+	kit.Panel(c, kit.PanelOpts{Name: LabelPanelTerminal, Bare: true, Stage: true, Body: func() {
 		ui.Box(c).Fill().Center().Children(func() { f.emptyTerminal(c) })
 	}})
+}
+
+// sheetPanel is a wing next to the stage, on the window glass (docs/spec/Panel.md, D250).
+func sheetPanel(c *ui.Context) {
+	p := theme.Current()
+	ui.Row(c).Fill().AlignItems(ui.Stretch).Gap(theme.PanelGap).Padding(theme.PanelGap).Background(p.GlassWindow).Children(func() {
+		ui.Column(c).Width(220).Children(func() {
+			kit.Panel(c, kit.PanelOpts{Name: "contr", Body: func() {
+				ui.Text(c, "wing: no fill, no line").TextColor(p.Ink50)
+			}})
+		})
+		kit.Panel(c, kit.PanelOpts{Name: "stage", Stage: true, Body: func() {
+			ui.Text(c, "stage: fill and line").TextColor(p.Ink95)
+		}})
+	})
 }

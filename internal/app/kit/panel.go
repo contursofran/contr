@@ -28,6 +28,10 @@ type PanelOpts struct {
 	// fills the box and clips to its corners. For a body that has its own
 	// scroll, such as the terminal or a list.
 	Bare bool
+	// Stage draws the box with the `stage` fill and the `panel-line` border:
+	// the terminal panel. Without it the panel is a wing: no fill and no
+	// border, on the window glass (D250).
+	Stage bool
 }
 
 // Panel builds a rounded area inside the window glass: a head, the content in
@@ -35,15 +39,13 @@ type PanelOpts struct {
 func Panel(c *ui.Context, o PanelOpts) ui.Element {
 	p := theme.Current()
 	if o.Bare {
-		return ui.Column(c).Label(o.Name).Grow(1).MinWidth(0).MinHeight(0).Clip().
-			Background(p.Panel).Border(1, p.PanelLine).Radius(theme.Radius12).Children(func() {
+		return box(ui.Column(c).Label(o.Name).Grow(1).MinWidth(0).MinHeight(0).Clip(), o.Stage, 0, 0, 0).Children(func() {
 			if o.Body != nil {
 				o.Body()
 			}
 		})
 	}
-	return ui.Column(c).Label(o.Name).Grow(1).MinWidth(0).MinHeight(0).Padding(theme.Space12, theme.Space10, theme.Space10).
-		Background(p.Panel).Border(1, p.PanelLine).Radius(theme.Radius12).Children(func() {
+	return box(ui.Column(c).Label(o.Name).Grow(1).MinWidth(0).MinHeight(0), o.Stage, theme.Space12, theme.Space10, theme.Space10).Children(func() {
 		if o.Top != nil {
 			o.Top()
 		}
@@ -70,4 +72,17 @@ func Panel(c *ui.Context, o PanelOpts) ui.Element {
 			})
 		}
 	})
+}
+
+// box gives el the panel padding (top, sides, bottom) and the rounded shape.
+// The stage also gets its fill and its 1px border. A wing gets 1px more
+// padding in place of the border, so its content stays where it is on the
+// stage (D250).
+func box(el ui.Element, stage bool, top, sides, bottom float32) ui.Element {
+	el = el.Radius(theme.Radius12)
+	if stage {
+		p := theme.Current()
+		return el.Padding(top, sides, bottom).Background(p.Stage).Border(1, p.PanelLine)
+	}
+	return el.Padding(top+1, sides+1, bottom+1)
 }

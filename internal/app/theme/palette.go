@@ -18,7 +18,7 @@ type Palette struct {
 	GlassFloat   ui.Color `token:"glass-float"`
 	FloatSolid   ui.Color `token:"float-solid"`
 	Scrim        ui.Color `token:"scrim"`
-	Panel        ui.Color `token:"panel"`
+	Stage        ui.Color `token:"stage"` // the terminal panel only (D250)
 	PanelLine    ui.Color `token:"panel-line"`
 	WindowLine   ui.Color `token:"window-line"`
 	FloatLine    ui.Color `token:"float-line"`
@@ -113,8 +113,8 @@ var Dark = &Palette{
 	GlassFloat:   ui.RGBA(34, 35, 40, 0.72),
 	FloatSolid:   ui.Hex("#222328"),
 	Scrim:        ui.RGBA(8, 8, 8, 0.72),
-	Panel:        ui.RGBA(20, 21, 24, 0.85),
-	PanelLine:    white(0.065),
+	Stage:        ui.RGBA(12, 13, 15, 0.9),
+	PanelLine:    white(0.08),
 	WindowLine:   white(0.09),
 	FloatLine:    white(0.075),
 	Hairline:     white(0.06),
@@ -182,7 +182,7 @@ var Light = &Palette{
 	GlassFloat:   ui.RGBA(252, 252, 253, 0.8),
 	FloatSolid:   ui.Hex("#fcfcfd"),
 	Scrim:        ui.RGBA(20, 20, 20, 0.18),
-	Panel:        white(0.7),
+	Stage:        white(0.86),
 	PanelLine:    black(0.06),
 	WindowLine:   black(0.1),
 	FloatLine:    black(0.08),

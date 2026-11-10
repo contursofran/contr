@@ -26,7 +26,7 @@ type Prefs struct {
 }
 
 // Tint is the alpha, 0 to 1, of the window ground (`glass-window`) and of the
-// panels (`panel`) for one theme. A nil value is the token default.
+// terminal panel (`stage`, D250) for one theme. A nil value is the token default.
 type Tint struct {
 	Window *float64 `json:"window,omitempty"`
 	Panel  *float64 `json:"panel,omitempty"`
