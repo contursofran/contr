@@ -40,7 +40,8 @@ Shared rules: [README.md](README.md). Design: board 10 of the from-zero canvas.
 ## Values
 
 - CLI: `Claude Code` (`claude`). Codex and OpenCode come later.
-- Model: `Opus 5.5` (`opus`), `Sonnet 5.5` (`sonnet`), `Haiku 5.5` (`haiku`).
+- Model: `Opus 5.5` (`opus`), `Sonnet 5.5` (`sonnet`), `Haiku 5.5` (`haiku`),
+  `Fable 5.2` (`claude-fable-5-2`: the full id, as Fable has no short alias, D238).
 - Effort: `low`, `medium`, `high`, `xhigh`, `max`.
 
 ## States
