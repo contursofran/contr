@@ -16,16 +16,18 @@ const (
 	LabelChat = "chat"
 	// LabelSwitch names the Chat | Terminal switch.
 	LabelSwitch = "View of this session"
+	// LabelSwitchBack names the solid box under the switch.
+	LabelSwitchBack = "View switch"
 	TextChat    = "Chat"
 	TextTerm    = "Terminal"
 	// TextEmpty shows while the session has no transcript, or no entry in it yet.
 	TextEmpty = "No transcript yet"
-	// TextDock is the dock's line: the composer comes later (#634).
-	TextDock = "Type in the terminal"
-	// TextToTerminal is the dock's button: it switches to Terminal.
+	// TextToTerminal is the button of the needs-you line without a menu: it switches to Terminal.
 	TextToTerminal = "Switch to Terminal"
 	// LabelPrompt, LabelGroup, LabelOwnerNote, LabelNote and LabelCall name the rows and lines.
 	LabelPrompt    = "owner prompt"
+	// LabelPending names a prompt sent from the composer that the transcript has not brought yet.
+	LabelPending   = "pending prompt"
 	LabelGroup     = "work group"
 	LabelOwnerNote = "note for the owner"
 	LabelNote      = "worker note"
@@ -44,7 +46,8 @@ const (
 	dotSize    = 6
 	topSpace   = 44 // room for the switch row above the first row
 	rowGap     = theme.Space18
-	dockHeight = 44
+	// pendingOpacity dims a pending prompt.
+	pendingOpacity = 0.55
 )
 
 // Switch builds the Chat | Terminal switch of terminal id, with its key chip (⌘E).
@@ -53,7 +56,10 @@ func (ch *Chat) Switch(c *ui.Context, id string) {
 	if ch.On(id) {
 		choice = 0
 	}
-	box := ui.Box(c).Shrink(0)
+	// Solid: the float-solid fill and the float-line border keep the terminal text under it from
+	// showing through; the chosen segment keeps its selected fill.
+	pal := theme.Current()
+	box := ui.Box(c).Label(LabelSwitchBack).Shrink(0).Radius(theme.SegmentRadius).Background(pal.FloatSolid).Border(1, pal.FloatLine)
 	box.Children(func() {
 		kit.Switch(c, LabelSwitch, &choice, TextChat, TextTerm).Tooltip(LabelSwitch + " " + shortcut.Of(shortcut.Chat).Glyphs())
 		// The switch has no icon: the chip is centered on it, inside it (KeyHint, D248).
@@ -65,23 +71,37 @@ func (ch *Chat) Switch(c *ui.Context, id string) {
 }
 
 // View builds the chat of the terminal that Sync follows: the transcript in a list that follows
-// its end, and the dock. toTerminal switches the terminal to Terminal mode.
+// its end, with the pending prompts at its end, the live line and the composer. toTerminal
+// switches the terminal to Terminal mode.
 func (ch *Chat) View(c *ui.Context, toTerminal func()) {
 	ch.show()
+	ch.toTerm = toTerminal
 	pal := theme.Current()
 	ch.mdTheme(pal)
+	id := ch.src.Terminal()
+	st := ch.state(id)
 	ui.Column(c).Label(LabelChat).Fill().Children(func() {
-		rows := ch.model.Rows()
-		ui.List(c, &ch.list, len(rows), func(i int) { ch.row(c, rows[i]) }).
-			Grow(1).MinHeight(0).Gap(rowGap).Padding(topSpace, theme.Space20, theme.Space20).Justify(ui.End).
+		rows, pending := ch.model.Rows(), ch.model.Pendings()
+		ui.List(c, &ch.list, len(rows)+len(pending), func(i int) {
+			if i < len(rows) {
+				ch.row(c, rows[i])
+				return
+			}
+			p := pending[i-len(rows)]
+			column(c.Key(p.ID), func() { ch.prompt(c, p.Text, true) })
+		}).
+			Grow(1).MinHeight(0).Gap(rowGap).Padding(topSpace, theme.Space20, theme.Space12).Justify(ui.End).
 			Children(func() {
-				if len(rows) == 0 {
+				if len(rows)+len(pending) == 0 {
 					ui.Box(c).Fill().Center().Children(func() {
 						kit.Styled(ui.Text(c, TextEmpty), theme.StyleBody).TextColor(pal.Ink42)
 					})
 				}
 			})
-		ch.dock(c, pal, toTerminal)
+		ui.Column(c).FillWidth().Shrink(0).Gap(theme.Space12).Padding(0, theme.Space20, theme.Space14).Children(func() {
+			ch.live(c, st, toTerminal)
+			ch.composer(c, id, st)
+		})
 	})
 }
 
@@ -97,7 +117,7 @@ func (ch *Chat) row(c *ui.Context, r Row) {
 	column(c, func() {
 		switch r.Kind {
 		case RowPrompt:
-			ch.prompt(c, ch.model.Entry(r.Entry))
+			ch.prompt(c, ch.model.Entry(r.Entry).Text, false)
 		case RowSaid:
 			markdown.View(c, ch.model.Entry(r.Entry).Text, &ch.md)
 		case RowGroup:
@@ -108,13 +128,18 @@ func (ch *Chat) row(c *ui.Context, r Row) {
 	})
 }
 
-// prompt is the owner's text, at the right, on a hover fill, in ink-100.
-func (ch *Chat) prompt(c *ui.Context, e transcript.Entry) {
+// prompt is the owner's text, at the right, on a hover fill, in ink-100. A pending prompt is
+// dimmed.
+func (ch *Chat) prompt(c *ui.Context, text string, pending bool) {
 	pal := theme.Current()
+	label, opacity := LabelPrompt, float32(1)
+	if pending {
+		label, opacity = LabelPending, pendingOpacity
+	}
 	ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
-		ui.Box(c).Label(LabelPrompt).MaxWidth(promptMax).Padding(theme.Space8, 13).Radius(theme.Radius12).
-			Background(pal.Hover).Children(func() {
-			kit.Styled(ui.Text(c, e.Text), theme.StyleProse).TextColor(pal.Ink100).Selectable()
+		ui.Box(c).Label(label).MaxWidth(promptMax).Padding(theme.Space8, 13).Radius(theme.Radius12).
+			Background(pal.Hover).Opacity(opacity).Children(func() {
+			kit.Styled(ui.Text(c, text), theme.StyleProse).TextColor(pal.Ink100).Selectable()
 		})
 	})
 }
@@ -234,15 +259,6 @@ func (ch *Chat) callLine(c *ui.Context, e transcript.Entry) {
 		if d, ok := Duration(e); ok {
 			kit.Styled(ui.Text(c, DurationText(d)), theme.StyleMeta).NoWrap().Shrink(0).TextColor(pal.Ink38)
 		}
-	})
-}
-
-// dock is the line under the transcript: the composer comes in a later slice.
-func (ch *Chat) dock(c *ui.Context, pal *theme.Palette, toTerminal func()) {
-	ui.Row(c).FillWidth().Height(dockHeight).Shrink(0).Justify(ui.Center).AlignItems(ui.Center).Gap(theme.Space12).
-		Padding(0, theme.Space20, theme.Space14).Children(func() {
-		kit.Styled(ui.Text(c, TextDock), theme.StyleBody).NoWrap().TextColor(pal.Ink42)
-		kit.CardButton(c, TextToTerminal, kit.ButtonOutlined, pal.Ink85, toTerminal)
 	})
 }
 

@@ -53,38 +53,34 @@ func TestFrameChatSwitchShowsForAClaudeSession(t *testing.T) {
 	waitUntil(t, func() bool { r.w.flush(); r.tt.Frame(); return r.tt.HasText(chatview.TextChat) })
 }
 
-// ⌘E switches the selected session to Chat, where the chat takes the grid's place, and back. The
-// dock's button switches back too.
-func TestFrameChatShortcutAndDock(t *testing.T) {
+// ⌘E switches the selected session to Chat, where the chat takes the grid's place and its
+// composer takes the focus, and back.
+func TestFrameChatShortcutAndComposer(t *testing.T) {
 	r := attachCounting(t)
 	r.pick(t, state.KindOrchestrator, "oa")
 	r.tt.Key(ui.Cmd, ui.KeyE)
 	r.w.flush()
 	r.tt.Frame()
-	if !r.f.Chat.On("oa") || !r.tt.HasText(chatview.TextEmpty) || !r.tt.HasText(chatview.TextDock) {
+	composer := func() bool { _, ok := r.tt.Find(chatview.LabelComposer); return ok }
+	if !r.f.Chat.On("oa") || !r.tt.HasText(chatview.TextEmpty) || !composer() {
 		t.Fatalf("⌘E: on %v, texts %v", r.f.Chat.On("oa"), r.tt.Texts())
 	}
+	if !r.tt.Focused(chatview.LabelComposer) {
+		t.Error("the composer does not take the focus on ⌘E")
+	}
 	r.pick(t, state.KindOrchestrator, "ob")
-	if r.tt.HasText(chatview.TextDock) {
+	if composer() {
 		t.Error("Chat mode moved to another session")
 	}
 	r.pick(t, state.KindOrchestrator, "oa")
-	if !r.tt.HasText(chatview.TextDock) {
+	if !composer() {
 		t.Error("Chat mode of a session is not kept")
 	}
-	if err := r.tt.Click(chatview.TextToTerminal); err != nil {
-		t.Fatal(err)
-	}
-	r.tt.Frame()
-	if r.f.Chat.On("oa") || r.tt.HasText(chatview.TextDock) {
-		t.Error("the dock's button does not switch back")
-	}
+	// ⌘E works with the focus in the composer.
 	r.tt.Key(ui.Cmd, ui.KeyE)
 	r.tt.Frame()
-	r.tt.Key(ui.Cmd, ui.KeyE)
-	r.tt.Frame()
-	if r.f.Chat.On("oa") {
-		t.Error("a second ⌘E does not switch back")
+	if r.f.Chat.On("oa") || composer() {
+		t.Error("⌘E in the composer does not switch back")
 	}
 	// ⌘E does nothing for a terminal that is not a Claude session.
 	r.pick(t, state.KindWorker, "wa")
@@ -109,13 +105,13 @@ func TestFrameChatAndTheEmptyTerminalExcludeEachOther(t *testing.T) {
 	r.pick(t, state.KindOrchestrator, "oa")
 	r.f.Chat.SetOn("oa", true)
 	r.tt.Frame()
-	if !r.tt.HasText(chatview.TextDock) || !apptest.Absent(r.tt, LabelTerminalArt) {
-		t.Errorf("chat mode: dock %v, art absent %v", r.tt.HasText(chatview.TextDock), apptest.Absent(r.tt, LabelTerminalArt))
+	if !!apptest.Absent(r.tt, chatview.LabelComposer) || !apptest.Absent(r.tt, LabelTerminalArt) {
+		t.Errorf("chat mode: dock %v, art absent %v", !apptest.Absent(r.tt, chatview.LabelComposer), apptest.Absent(r.tt, LabelTerminalArt))
 	}
 	r.f.Selection.Clear()
 	r.w.flush()
 	r.tt.Frame()
-	if r.tt.HasText(chatview.TextDock) || r.tt.HasText(chatview.TextChat) || apptest.Absent(r.tt, LabelTerminalArt) {
+	if !apptest.Absent(r.tt, chatview.LabelComposer) || r.tt.HasText(chatview.TextChat) || apptest.Absent(r.tt, LabelTerminalArt) {
 		t.Errorf("empty terminal: texts %v", r.tt.Texts())
 	}
 }

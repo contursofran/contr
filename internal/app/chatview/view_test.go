@@ -1,6 +1,7 @@
 package chatview
 
 import (
+	"image/color"
 	"os"
 	"path/filepath"
 	"strings"
@@ -78,6 +79,12 @@ func (r *rig) write(lines ...string) {
 	r.tt.Frame()
 }
 
+// has tells that an element with label s shows.
+func (r *rig) has(s string) bool {
+	_, ok := r.tt.Find(s)
+	return ok
+}
+
 // select points the chat at terminal id, as the frame does on a new selection.
 func (r *rig) selectTerm(id string) {
 	r.id = id
@@ -123,20 +130,13 @@ func TestSwitchKeepsTheModeOfEachTerminal(t *testing.T) {
 	if !r.ch.On(term) {
 		t.Error("Toggle does not switch")
 	}
-	if err := r.tt.Click(TextToTerminal); err != nil {
-		t.Fatal(err)
-	}
-	r.tt.Frame()
-	if r.ch.On(term) {
-		t.Error("the dock's button does not switch to Terminal")
-	}
 }
 
 func TestNoTranscriptYet(t *testing.T) {
 	r := newRig(t)
 	r.selectTerm(term)
 	r.chat()
-	if !r.tt.HasText(TextEmpty) || !r.tt.HasText(TextDock) || r.ch.HasPath(term) {
+	if !r.tt.HasText(TextEmpty) || !r.has(LabelComposer) || r.ch.HasPath(term) {
 		t.Fatalf("no path: texts %v", r.tt.Texts())
 	}
 	// A path whose file does not exist yet.
@@ -259,4 +259,23 @@ func TestTheSwitchChipIsCenteredOnTheSwitch(t *testing.T) {
 	r.tt.Frame()
 	chip := apptest.ChipOn(t, r.tt, kit.KeyHintLabel("E"), LabelSwitch, 1000, 900)
 	apptest.Centered(t, "chip", chip, "the switch", apptest.Box(t, r.tt, LabelSwitch))
+}
+
+// The switch is solid: what is under it does not show through (#652).
+func TestTheSwitchIsSolid(t *testing.T) {
+	pixel := func(under ui.Color) color.RGBA {
+		ch := New(view.Env{}, t.TempDir(), nil)
+		tt := ui.NewTester(func(c *ui.Context) {
+			ui.Box(c).Fill().Background(under).Padding(20).Children(func() { ch.Switch(c, term) })
+		}, 300, 100)
+		r, ok := tt.Find(LabelSwitchBack)
+		if !ok {
+			t.Fatal("no switch box")
+		}
+		// Inside the box, in the track's padding: no segment and no text there.
+		return tt.Image().RGBAAt(int(r.X+r.W/2), int(r.Y+1.5))
+	}
+	if a, b := pixel(ui.RGBA(255, 0, 0, 255)), pixel(ui.RGBA(0, 0, 255, 255)); a != b {
+		t.Errorf("the background shows through the switch: %v over red, %v over blue", a, b)
+	}
 }

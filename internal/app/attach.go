@@ -39,7 +39,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	stopSettings := f.attachSettings(w, env)
 	f.loadSaved(env)
 	f.attachQuestions(env, agentSnap, src)
-	stopChat := f.attachChat(env)
+	stopChat := f.attachChat(env, src)
 	unwatch := f.attachVisibility(w, src)
 	term := f.attachTerminal(w)
 	offMenu := f.attachMenu(w, src)
