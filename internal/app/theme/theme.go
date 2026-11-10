@@ -168,3 +168,8 @@ const ModalListMax = 360
 const ModalKbdRadius = 5
 const ModalSearchSize = 15
 const ModalEmptyPadY = 22
+
+// First-run actions (D255): the key buttons of the empty terminal and the empty sidebar.
+const KeyButtonHeight = 28
+const KeyButtonPadL = Space12
+const KeyButtonPadR = Space10

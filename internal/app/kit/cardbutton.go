@@ -70,3 +70,34 @@ func CardButton(c *ui.Context, label string, style ButtonStyle, colour ui.Color,
 		}
 	})
 }
+
+// KeyButton is a first-run action with its key at the right (D255), such as "Open a project ⌘O".
+// The main action (main true) is ink-100 with ground text: the one fill of an empty screen. The
+// other is plain text and its key, with no border or fill (D255). The accessible name is the
+// label alone, so a click by label finds it. The label shortens with an ellipsis when the
+// button is narrow; the key stays.
+func KeyButton(c *ui.Context, label, key string, main bool, click ClickFn) ui.Element {
+	p := theme.Current()
+	text, keyInk := p.Ink62, p.Ink42
+	el := ui.ButtonBase(c).Label(label).Height(theme.KeyButtonHeight).MinWidth(0).
+		Padding(0, theme.KeyButtonPadR, 0, theme.KeyButtonPadL).AlignItems(ui.Center).Gap(theme.Space8).
+		Radius(theme.Radius8)
+	if main {
+		el = el.Background(p.Ink100)
+		text, keyInk = p.Ground, p.Ground.Alpha(0.6)
+	}
+	if click != nil {
+		el = el.Cursor(ui.CursorPointer).OnClick(click)
+	}
+	return el.TextColor(text).Children(func() {
+		t := Styled(ui.Text(c, label), theme.StyleSmall).SingleLine().MinWidth(0).Shrink(1).TextColor(text)
+		if main {
+			t.FontWeight(theme.StyleLabel.Weight)
+		} else if el.Hovered() {
+			t.Underline()
+		}
+		if key != "" {
+			Styled(ui.Text(c, key), theme.StyleKbd).NoWrap().Shrink(0).TextColor(keyInk)
+		}
+	})
+}

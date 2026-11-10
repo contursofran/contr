@@ -33,7 +33,9 @@ Plan meters, in the sidebar foot row (D196):
 
 - **Default.**
 - **Above 80%:** not in the design. Keep `meter-fill`; the number says it.
-- **No data:** the value shows "—"; the meter is empty.
+- **No data:** the value shows "no data yet" in `ink-42` (D255; a dash before). Under the
+  file tree the meter is empty; in the sidebar foot the plan has no meter, only its label and
+  "no data yet".
 
 ## Behavior
 
@@ -56,8 +58,8 @@ Plan meters, in the sidebar foot row (D196):
   window, so the percent is of the compaction window: "90k of 160k  56%".
   A label that is missing or not a positive integer is no data. The labels
   are as old as the last turn.
-- No file and no labels, no selection or a worktree row: "—" and an empty
-  meter.
+- No file and no labels, no selection or a worktree row: "no data yet" and an
+  empty meter (D255).
 - Plans: `internal/usage` on a goroutine; read again on a status line or log
   change. The view reads the sampler's last result and touches no file.
 - Claude plan (D203): Claude Code gives the plan limits (`rate_limits`) only
@@ -86,7 +88,10 @@ Plan meters, in the sidebar foot row (D196):
 
 ## Edge cases
 
-- No data: "—" and an empty meter.
+- No data: "no data yet" (D255). The Context line keeps an empty meter; a plan in the
+  sidebar foot drops its meter.
+- Narrow sidebar: a plan that does not fit whole hides (it wraps to a clipped second line);
+  the Settings button stays (D255).
 
 ## Accessibility
 

@@ -225,7 +225,7 @@ func TestFileTreeFollowsTheSelectedFolder(t *testing.T) {
 	}
 	r.dir = ""
 	r.frame()
-	if r.has("beta.txt") || !r.tt.HasText("No folder") {
+	if r.has("beta.txt") || !r.tt.HasText("Files of the open project show here") {
 		t.Errorf("no folder shows %q", r.tt.Texts())
 	}
 }

@@ -96,8 +96,9 @@ func waitLine(t *testing.T, w *fakeWindow, tt *ui.Tester, text string) {
 func TestTerminalSlotSaysSelectAnAgentWithoutOne(t *testing.T) {
 	_, _, tt, _ := terminalFrame(t, nil)
 	tt.Frame()
-	if !strings.Contains(strings.Join(tt.Texts(), "\n"), TerminalOffLine) {
-		t.Errorf("texts %q, want %q", tt.Texts(), TerminalOffLine)
+	// No project is open in this frame either: the first run (D255).
+	if !strings.Contains(strings.Join(tt.Texts(), "\n"), TerminalNoProjectLine) {
+		t.Errorf("texts %q, want %q", tt.Texts(), TerminalNoProjectLine)
 	}
 	if !apptest.Absent(tt, LabelTerminalGrid) {
 		t.Error("a grid shows with no agent selected")

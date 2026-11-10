@@ -54,12 +54,12 @@ func TestServerRowShowsCPUAndMemory(t *testing.T) {
 func TestSettingsButtonIsAtTheBottomRight(t *testing.T) {
 	h := newSpaces(t, apptest.SpTree())
 	h.tt.Frame()
-	b, side := apptest.Box(t, h.tt, LabelSettingsOpen), apptest.Box(t, h.tt, LabelProjectList)
+	b, side := apptest.Box(t, h.tt, LabelSettingsOpen), apptest.Box(t, h.tt, LabelNoProjects)
 	if win := apptest.Box(t, h.tt, LabelServersHead+" header"); b.X+b.W < win.X+win.W-24 {
 		t.Errorf("Settings ends at x %v, not at the right edge %v", b.X+b.W, win.X+win.W)
 	}
 	if b.Y < side.Y+side.H-1 {
-		t.Errorf("Settings at y %v, above the end of the project list %v", b.Y, side.Y+side.H)
+		t.Errorf("Settings at y %v, above the end of the empty project list %v", b.Y, side.Y+side.H)
 	}
 	head := apptest.Box(t, h.tt, LabelServersHead+" header")
 	if b.Y < head.Y+head.H {
@@ -130,7 +130,7 @@ func TestServerRowIsOfflineWithTheProblemLine(t *testing.T) {
 		t.Errorf("no problem line in %q", h.tt.Texts())
 	}
 	// The problem line sits 20px from the panel side, as the row content (D231).
-	line, side := apptest.Box(t, h.tt, "hc: connection refused"), apptest.Box(t, h.tt, LabelProjectList)
+	line, side := apptest.Box(t, h.tt, "hc: connection refused"), apptest.Box(t, h.tt, LabelNoProjects)
 	if line.X < side.X+19.5 || line.X > side.X+20.5 {
 		t.Errorf("problem line at x %v, want %v", line.X, side.X+20)
 	}
@@ -555,5 +555,53 @@ func TestServerRowWithoutOnRetryIsSafe(t *testing.T) {
 	h.tt.Frame()
 	if !h.has("This Mac, offline") {
 		t.Errorf("texts %q", h.tt.Texts())
+	}
+}
+
+// With no project the list says so, with the button that opens the projects modal (D255).
+func TestEmptyProjectListNamesTheFirstStep(t *testing.T) {
+	h := newSpaces(t, apptest.SpTree())
+	opened := 0
+	h.list.OnProjects = func() { opened++ }
+	h.tt.Frame()
+	if !h.tt.HasText(LabelNoProjects) || !h.tt.HasText("⌘O") {
+		t.Errorf("texts %q, want %q and ⌘O", h.tt.Texts(), LabelNoProjects)
+	}
+	if err := h.tt.Click(LabelOpenProject); err != nil {
+		t.Fatal(err)
+	}
+	if opened != 1 {
+		t.Errorf("Open a project ran OnProjects %d times, want 1", opened)
+	}
+	// The icon column has its folder button: no text.
+	h.list.Compact = true
+	h.tt.Frame()
+	if h.tt.HasText(LabelNoProjects) {
+		t.Error("the icon column shows the empty text")
+	}
+}
+
+// While the stored projects load or a scan runs, an empty list is not "No projects yet".
+func TestEmptyProjectListWaitsForTheProjectsAndTheScan(t *testing.T) {
+	h := newSpaces(t, apptest.SpTree())
+	h.list.HoldLaunch = true
+	h.tt.Frame()
+	if h.tt.HasText(LabelNoProjects) {
+		t.Error("the empty text shows while the stored projects load")
+	}
+	h.list.HoldLaunch = false
+	var land func()
+	h.list.Env.Run.Go = func(f func()) { land = f }
+	h.list.scanFn = func([]string) git.Scan { return git.Scan{} }
+	h.send(apptest.SpTree(apptest.ForeignTerm("t1", "shell", "", t.TempDir())))
+	if land == nil {
+		t.Fatal("no scan started")
+	}
+	if h.tt.HasText(LabelNoProjects) {
+		t.Error("the empty text shows while a scan runs")
+	}
+	land()
+	if !h.list.settled() {
+		t.Error("the scan landed but the list still waits")
 	}
 }
