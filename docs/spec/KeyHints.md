@@ -28,6 +28,7 @@ leave it. No chip is clipped. The icon column (D128) follows the same rule.
 | Agent rows above and below the selected row | `⌥↑`, `⌥↓` | the status glyph (also of a worker row and in the icon column) |
 | Project rows before and after the open project | `⌥←`, `⌥→`; with two projects the other row shows `⌥→` | the folder icon |
 | Questions notch | `J` | the dot |
+| Chat \| Terminal switch | `E` | the switch (it has no icon) |
 
 A disabled button shows no chip. With one project no project row shows a chip.
 
