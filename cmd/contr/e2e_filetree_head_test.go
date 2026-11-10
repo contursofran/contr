@@ -17,7 +17,7 @@ import (
 )
 
 // TestFileTreeHeadCapture runs the built app against a scratch hc core, a scratch HOME and a scratch git
-// repository named contr. It checks the files panel head (the project name), opens a folder and
+// repository named contr. It checks the files panel head ("Files", D197), opens a folder and
 // captures the window in Dark and Light: tmp/e2e/filetree-head-<theme>.png. It never touches the
 // owner's core:
 //
@@ -133,8 +133,9 @@ func TestFileTreeHeadCapture(t *testing.T) {
 			if !labels["panel.go"] && !labels["internal"] {
 				t.Fatalf("%s: the tree never showed; labels %v", theme, keys(labels))
 			}
-			if !labels["contr name"] || labels["Files name"] {
-				t.Errorf("%s: the head does not show the project name; labels %v", theme, keys(labels))
+			// D197: the head is "Files"; it was the project name.
+			if !labels["Files name"] || labels["contr name"] {
+				t.Errorf("%s: the head does not show \"Files\"; labels %v", theme, keys(labels))
 			}
 			// Open internal, then app.
 			for _, folder := range []string{"internal", "app"} {
