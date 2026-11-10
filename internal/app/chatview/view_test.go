@@ -10,6 +10,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/apptest"
+	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/session"
 )
@@ -248,4 +249,14 @@ func TestBadFileIsLoggedNotShown(t *testing.T) {
 	if !r.tt.HasText(TextEmpty) {
 		t.Errorf("texts %v", r.tt.Texts())
 	}
+}
+
+// TestTheSwitchChipIsCenteredOnTheSwitch is D248: the switch has no icon, so its ⌘E chip is
+// centered on it, inside it and the window.
+func TestTheSwitchChipIsCenteredOnTheSwitch(t *testing.T) {
+	r := newRig(t)
+	r.ch.Hints = true
+	r.tt.Frame()
+	chip := apptest.ChipOn(t, r.tt, kit.KeyHintLabel("E"), LabelSwitch, 1000, 900)
+	apptest.Centered(t, "chip", chip, "the switch", apptest.Box(t, r.tt, LabelSwitch))
 }

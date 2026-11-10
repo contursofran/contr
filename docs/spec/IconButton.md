@@ -33,7 +33,7 @@ Design system page: component IconButton. Shared rules: [README.md](README.md).
 
 ## Keys and focus
 
-- Space and ⏎ press it when focused. Its window shortcut, if any, is in the tooltip, and in a key chip on its bottom right corner while ⌘ is held (KeyHints.md).
+- Space and ⏎ press it when focused. Its window shortcut, if any, is in the tooltip, and in a key chip on its icon while ⌘ is held (KeyHints.md).
 
 ## Edge cases
 

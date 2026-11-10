@@ -53,9 +53,11 @@ func (ch *Chat) Switch(c *ui.Context, id string) {
 	if ch.On(id) {
 		choice = 0
 	}
-	ui.Box(c).Shrink(0).Children(func() {
+	box := ui.Box(c).Shrink(0)
+	box.Children(func() {
 		kit.Switch(c, LabelSwitch, &choice, TextChat, TextTerm).Tooltip(LabelSwitch + " " + shortcut.Of(shortcut.Chat).Glyphs())
-		kit.KeyHint(c, shortcut.Of(shortcut.Chat).HintIf(ch.Hints), ui.AnchorBottom, ui.AnchorCenter)
+		// The switch has no icon: the chip is centered on it, inside it (KeyHint, D248).
+		kit.KeyHint(c, shortcut.Of(shortcut.Chat).HintIf(ch.Hints), box, ui.Element{})
 	})
 	if on := choice == 0; on != ch.On(id) {
 		ch.SetOn(id, on)

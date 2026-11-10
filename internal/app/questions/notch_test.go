@@ -336,12 +336,15 @@ func TestNotchShowsTheCmdJChipWhileCmdIsHeld(t *testing.T) {
 	src := &source{Snap: agentstate.Snapshot{Questions: apptest.Questions("a", 1)}}
 	r := newNotchRig(t, src, "a")
 	r.tt.Frame()
-	if _, ok := r.tt.Find(kit.LabelKeyHint); ok {
+	if _, ok := r.tt.Find(kit.KeyHintLabel("J")); ok {
 		t.Fatal("a chip without Hints")
 	}
 	r.n.Hints = true
 	r.tt.Frame()
-	if _, ok := r.tt.Find(kit.LabelKeyHint); !ok || !slices.Contains(r.tt.Texts(), "J") {
+	if _, ok := r.tt.Find(kit.KeyHintLabel("J")); !ok || !slices.Contains(r.tt.Texts(), "J") {
 		t.Errorf("no J chip: %q", r.tt.Texts())
 	}
+	// On the dot, inside the notch and the window (#645).
+	chip := apptest.ChipOn(t, r.tt, kit.KeyHintLabel("J"), NotchAccessible(r.n.Items()), 900, 400)
+	apptest.Centered(t, "chip", chip, "the dot", apptest.Box(t, r.tt, LabelNotchDot))
 }
