@@ -187,7 +187,12 @@ func main() {
 		time.Sleep(600 * time.Millisecond)
 	}
 	row := ""
-	waitFor("the orchestrator row", func() bool { row = c.labelWithPrefix(t, "lead, "); return row != "" })
+	// The row label ends with the open items (D240): wait for all four, so the label does not
+	// change before the click.
+	waitFor("the orchestrator row", func() bool {
+		row = c.labelWithPrefix(t, "lead, ")
+		return strings.HasSuffix(row, ", 4 items for you")
+	})
 	click(row)
 	time.Sleep(1500 * time.Millisecond) // the terminal attaches
 	capture := func(name string) {

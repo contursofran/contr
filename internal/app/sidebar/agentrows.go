@@ -45,6 +45,8 @@ type agentLine struct {
 	// worker count ("2 workers"). Empty for a Claude session that does not
 	// orchestrate, which shows a grey glyph (D191).
 	role string
+	// items is the number of open items of an orchestrator (D240).
+	items int
 }
 
 // roleText is the role of an orchestrator row on line 2 (D191).
@@ -132,7 +134,58 @@ func agentLines(g spaces.RepoGroup, s agentstate.Snapshot) []agentLine {
 			out = append(out, agentLine{w: w})
 		}
 	}
+	countItems(out, g.Name, s)
 	return out
+}
+
+// countItems sets the number of open items of each orchestrator line: the
+// questions, to-dos and blocked menus of the project that belong to it or to
+// its workers (D240). An item belongs to the terminal that asked (the blocked
+// worker, the question's coordinator) and so to the orchestrator that row sits
+// under. An item of no known terminal of the project goes to the first
+// orchestrator, as a worker of no orchestrator does. The counts add up to the
+// number of the questions notch.
+func countItems(lines []agentLine, project string, s agentstate.Snapshot) {
+	if project == "" || s.OwnerProblem != "" {
+		return
+	}
+	at := map[string]int{} // terminal address → index of its orchestrator line
+	first, cur := -1, -1
+	for i, a := range lines {
+		if a.orchestrator {
+			cur = i
+			if first < 0 {
+				first = i
+			}
+		}
+		if cur >= 0 {
+			at[a.w.Address] = cur
+		}
+	}
+	if first < 0 {
+		return
+	}
+	parent := map[string]string{}
+	for _, w := range s.Workers {
+		parent[w.Address] = w.Parent
+	}
+	for _, t := range agentstate.NeedItemsOf(s, project) {
+		if t.Resolved {
+			continue
+		}
+		addr := t.Coordinator
+		if t.Kind == agentstate.NeedBlocked {
+			addr = t.Address
+		}
+		i, ok := at[addr]
+		if !ok {
+			i, ok = at[parent[addr]] // an ended worker of an orchestrator
+		}
+		if !ok {
+			i = first
+		}
+		lines[i].items++
+	}
 }
 
 // items are the rows of the list: each project, then its agents unless the
@@ -259,6 +312,9 @@ func (l *SpacesList) agentRow(c *ui.Context, a agentLine) {
 	if ci {
 		label += ", waiting on CI"
 	}
+	if a.items > 0 {
+		label += ", " + kit.ItemsText(a.items)
+	}
 	o := kit.AgentRowOpts{
 		CI: ci, Label: label, Title: titleOf(a, it), Name: nameOf(a, it), Model: model,
 		Age: agentAge(a.w, l.clock()), State: tabmodel.TabState(a.w), Orchestrator: a.orchestrator,
@@ -266,6 +322,10 @@ func (l *SpacesList) agentRow(c *ui.Context, a agentLine) {
 		OnClick: func() { l.SelectAgent(a) },
 		Menu:    func(m *ui.Menu) { l.agentMenu(m, a) },
 		Compact: l.Compact, Tip: tabmodel.RowTip(a.w),
+	}
+	if a.orchestrator {
+		o.Items = a.items
+		o.Arrival = l.arrivals.Observe(a.w.Address, a.items, c.Now(), true)
 	}
 	if l.selection != nil {
 		if sel, ok := l.selection.Current(); ok {

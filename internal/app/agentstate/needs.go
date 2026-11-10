@@ -57,6 +57,9 @@ type NeedTab struct {
 	// Address and Orchestrator name the worker of a blocked tab.
 	Address      string
 	Orchestrator bool
+	// Coordinator is the hc terminal that asked a question or pinned a to-do;
+	// empty when not known.
+	Coordinator string
 	// Command and BlockKind (permission, question or auth) tell the card how
 	// to read the worker's prompt.
 	Command   string
@@ -104,7 +107,8 @@ func NeedItemsOf(snap Snapshot, project string) []NeedTab {
 			if title == "" {
 				title = q.Question
 			}
-			tabs = append(tabs, NeedTab{Kind: NeedQuestion, Key: q.ID, Title: oneLine(title), Icon: icons.Decide, Project: q.Project, Resolved: done[q.ID]})
+			tabs = append(tabs, NeedTab{Kind: NeedQuestion, Key: q.ID, Title: oneLine(title), Icon: icons.Decide, Project: q.Project, Resolved: done[q.ID],
+				Coordinator: q.Coordinator})
 		}
 	}
 	for _, t := range snap.Todos {
@@ -113,7 +117,8 @@ func NeedItemsOf(snap Snapshot, project string) []NeedTab {
 			if t.Kind == "know" {
 				icon = icons.Fyi
 			}
-			tabs = append(tabs, NeedTab{Kind: NeedTodo, Key: t.ID, Title: oneLine(t.Text), Icon: icon, Project: t.Project, Resolved: done[t.ID]})
+			tabs = append(tabs, NeedTab{Kind: NeedTodo, Key: t.ID, Title: oneLine(t.Text), Icon: icon, Project: t.Project, Resolved: done[t.ID],
+				Coordinator: t.Coordinator})
 		}
 	}
 	return tabs

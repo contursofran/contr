@@ -56,6 +56,7 @@ var (
 	StyleKbd        = TextStyle{Mono: true, Size: 10.5, Line: 14, Weight: 500}
 	StyleTile       = TextStyle{Size: 11, Line: 14, Weight: 600}
 	StyleCount      = TextStyle{Mono: true, Size: 11, Line: 14, Weight: 500}
+	StyleBadge      = TextStyle{Mono: true, Size: 10.5, Line: 16, Weight: 700}
 )
 
 // Styles maps each style name of tokens.md to its style.
@@ -72,6 +73,7 @@ var Styles = map[string]TextStyle{
 	"value":       StyleValue,
 	"meta":        StyleMeta,
 	"count":       StyleCount,
+	"badge":       StyleBadge,
 }
 
 // Style returns the style with a token name, and false when there is none.

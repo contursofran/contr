@@ -1,6 +1,8 @@
 package kit
 
 import (
+	"strconv"
+
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/theme"
@@ -53,6 +55,39 @@ type AgentRowOpts struct {
 	// icon column (D128). The label, click and menu stay.
 	Compact bool
 	Tip     string
+	// Items is the number of open items of an orchestrator: questions, to-dos
+	// and blocked menus of it and its workers. Above 0 a `blocked` badge with
+	// the number shows at the right of line 1, or a dot on the glyph in an icon
+	// column (D240). Arrival is its last arrival, for the spring and glow.
+	Items   int
+	Arrival Arrival
+}
+
+// Sizes of the item badge (D240).
+const (
+	badgeHeight = 16
+	badgePadX   = 5
+	// compactDot is the dot on the glyph of an orchestrator with items in an
+	// icon column.
+	compactDot = 6
+)
+
+// LabelBadge names the item badge; LabelBadgeDot the dot of an icon column.
+const (
+	LabelBadge    = "items for you"
+	LabelBadgeDot = "items for you dot"
+)
+
+// ItemsText is the part of the row label for open items: "1 item for you",
+// "2 items for you"; empty for none.
+func ItemsText(n int) string {
+	switch {
+	case n <= 0:
+		return ""
+	case n == 1:
+		return "1 item for you"
+	}
+	return strconv.Itoa(n) + " items for you"
 }
 
 // AgentRowHeight is the height of an AgentRow: two lines and the padding.
@@ -114,9 +149,19 @@ func agentRowButton(c *ui.Context, o AgentRowOpts, marginEnd, marginStart float3
 	row.Children(func() {
 		StatusGlyph(c, GlyphOpts{State: o.State, Claude: o.Orchestrator, Grey: o.Grey})
 		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-			ui.Text(c, o.Title).Label(o.Label + " title").SingleLine().MinWidth(0).
-				Font(theme.StyleBody.Family()).FontSize(theme.StyleBody.Size).FixedLineHeight(theme.StyleBody.Line).
-				FontWeight(theme.StyleBody.Weight).TextColor(titleInk)
+			title := func() ui.Element {
+				return ui.Text(c, o.Title).Label(o.Label + " title").SingleLine().MinWidth(0).
+					Font(theme.StyleBody.Family()).FontSize(theme.StyleBody.Size).FixedLineHeight(theme.StyleBody.Line).
+					FontWeight(theme.StyleBody.Weight).TextColor(titleInk)
+			}
+			if o.Items > 0 {
+				ui.Row(c).FillWidth().Gap(theme.Space8).AlignItems(ui.Center).MinWidth(0).Children(func() {
+					title().Grow(1)
+					itemBadge(c, o.Items, o.Arrival)
+				})
+			} else {
+				title()
+			}
 			ui.Row(c).FillWidth().Gap(theme.Space10).MinWidth(0).Children(func() {
 				meta := func(s string) {
 					ui.Text(c, s).SingleLine().
@@ -165,5 +210,33 @@ func compactAgentButton(c *ui.Context, o AgentRowOpts) {
 	if o.Tip != "" {
 		row = row.Tooltip(o.Tip)
 	}
-	row.Children(func() { StatusGlyph(c, GlyphOpts{State: o.State, Claude: o.Orchestrator, Grey: o.Grey}) })
+	row.Children(func() {
+		g := StatusGlyph(c, GlyphOpts{State: o.State, Claude: o.Orchestrator, Grey: o.Grey})
+		if o.Items > 0 {
+			// The badge has no room here: a still `blocked` dot on the glyph.
+			g.Children(func() {
+				ui.Box(c).Label(LabelBadgeDot).Absolute().Top(-2).Right(-2).Size(compactDot, compactDot).
+					Radius(compactDot / 2).Background(theme.Current().Blocked)
+			})
+		}
+	})
+}
+
+// itemBadge is the `blocked` badge with the number of open items (D240). On
+// an arrival it springs to about 1.25 and glows for 2 s; then it is still.
+func itemBadge(c *ui.Context, n int, a Arrival) {
+	p := theme.Current()
+	b := ui.Row(c).Label(LabelBadge).Height(badgeHeight).MinWidth(badgeHeight).Padding(0, badgePadX).Shrink(0).
+		Radius(badgeHeight / 2).Background(p.Blocked).Justify(ui.Center).AlignItems(ui.Center)
+	look := BadgeAttention(c, b, a)
+	if look.Scale != 1 {
+		b = b.Scale(look.Scale, look.Scale).TransformOrigin(0.5, 0.5)
+	}
+	if look.Glow > 0 {
+		b = b.Shadow(0, 0, 12, 3, p.Blocked.Alpha(0.55*look.Glow))
+	}
+	b.Children(func() {
+		ui.Text(c, strconv.Itoa(n)).NoWrap().Font(theme.StyleBadge.Family()).FontSize(theme.StyleBadge.Size).
+			FixedLineHeight(theme.StyleBadge.Line).FontWeight(theme.StyleBadge.Weight).TextColor(p.Ground)
+	})
 }
