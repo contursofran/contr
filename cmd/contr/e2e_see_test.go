@@ -149,7 +149,7 @@ var seeFixtures = map[string]seeFixture{
 		ready: "lead, ",
 	},
 	"chat": {
-		about: "the orchestrator lead in Chat mode (D246): two prompts, an answer with a table, work groups with tool calls and worker notes, a note that needs the owner and a call that runs",
+		about: "the orchestrator lead in Chat mode (D246, D252): two prompts, an answer with a table, work groups with tool calls and worker notes, a note that needs the owner, a call that runs in the live line, and the composer",
 		setup: seeChat,
 		ready: "lead, ",
 		press: []string{"Chat"},
@@ -212,7 +212,7 @@ func (h *harness) labelTerminal(t *testing.T, name string, labels map[string]str
 // kit's hooks do (D195).
 func seeSession(t *testing.T, h *harness) {
 	repo := h.repo(t, "demo", "main")
-	w, err := h.mgr.Spawn(h.ctx, agents.Spec{Name: "lead", Profile: "claude-idle", Role: agents.RoleOrchestrator, Project: "demo", Worktree: repo})
+	w, err := h.mgr.Spawn(h.ctx, agents.Spec{Name: "lead", Profile: "claude-working", Role: agents.RoleOrchestrator, Project: "demo", Worktree: repo})
 	if err != nil {
 		t.Fatalf("spawn lead: %v", err)
 	}
@@ -243,7 +243,7 @@ func seeSession(t *testing.T, h *harness) {
 // its path in the session file of lead's terminal, as the kit's hooks do (D243).
 func seeChat(t *testing.T, h *harness) {
 	repo := h.repo(t, "demo", "main")
-	w, err := h.mgr.Spawn(h.ctx, agents.Spec{Name: "lead", Profile: "claude-idle", Role: agents.RoleOrchestrator, Project: "demo", Worktree: repo})
+	w, err := h.mgr.Spawn(h.ctx, agents.Spec{Name: "lead", Profile: "claude-working", Role: agents.RoleOrchestrator, Project: "demo", Worktree: repo})
 	if err != nil {
 		t.Fatalf("spawn lead: %v", err)
 	}
@@ -275,10 +275,12 @@ func seeChat(t *testing.T, h *harness) {
 
 // seeTranscript is an orchestrator session as Claude Code writes it: hidden lines (meta, the
 // playbook, hook output), prompts, texts, tool calls and their results, and hc notes of workers.
-// from gives the hc sender ("ADDR NAME") of each worker.
+// from gives the hc sender ("ADDR NAME") of each worker. The session ends a little before now,
+// so the live line shows a short time.
 func seeTranscript(from map[string]string) string {
 	n := 0
-	at := func(sec int) string { return time.Date(2026, 11, 10, 10, 0, sec, 0, time.UTC).Format(time.RFC3339Nano) }
+	start := time.Now().Add(-75 * time.Second)
+	at := func(sec int) string { return start.Add(time.Duration(sec) * time.Second).UTC().Format(time.RFC3339Nano) }
 	line := func(typ string, sec int, extra map[string]any) string {
 		n++
 		m := map[string]any{"type": typ, "uuid": fmt.Sprintf("u%d", n), "timestamp": at(sec), "sessionId": "chat"}
