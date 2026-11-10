@@ -24,7 +24,7 @@ import (
 
 // fakeClaude is a program that looks like Claude Code in a terminal: the welcome box, the
 // conversation, a status line and the prompt box. It tells hc its state with the OSC the hook
-// sends (last argument: working, idle or blocked:kind=...:msg=..., which also prints a permission menu).
+// sends (last argument: working, idle, error or blocked:kind=...:msg=..., which also prints a permission menu).
 const fakeClaude = `package main
 
 import (

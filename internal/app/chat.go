@@ -15,8 +15,8 @@ import (
 )
 
 // attachChat makes the chat view, which reads the session files under the state dir of the
-// session panel. Its composer and live line send through the agent source, as the orchestrate
-// pill and the questions card do (D252); without a source they send nothing. The stop ends its
+// session panel. Its composer sends and interrupts through the agent source, as the orchestrate
+// pill and the questions card do (D252); without a source it sends nothing. The stop ends its
 // watches.
 func (f *Frame) attachChat(env view.Env, src agentstate.AgentSource) (stop func()) {
 	f.Chat = chatview.New(env, f.Session.StateDir, nil)
@@ -25,7 +25,7 @@ func (f *Frame) attachChat(env view.Env, src agentstate.AgentSource) (stop func(
 	f.Chat.Team = f.chatTeam
 	f.Chat.OpenNeeds = f.openNeeds
 	if src != nil {
-		f.Chat.Send, f.Chat.Interrupt, f.Chat.Read, f.Chat.SendKeys = src.Send, src.Interrupt, src.Read, src.SendKeys
+		f.Chat.Send, f.Chat.Interrupt = src.Send, src.Interrupt
 	}
 	f.syncChat()
 	return f.Chat.Close
@@ -48,9 +48,11 @@ func (f *Frame) chatMeta(addr string) string {
 }
 
 // chatTeam is the team of the orchestrator at addr for the chat's team row (D259), from the agent
-// state: ok only while it runs and orchestrates (D191, the pill's rule). Its agents are the workers
-// it started that hc still lists: an ended one is done, a working one working, a blocked one only
-// in NeedsYou (its menu is an item), any other idle. NeedsYou is the badge of its sidebar row (D240).
+// state: ok only while it runs and orchestrates (D191, the pill's rule). Its agents are its live
+// workers, the pill's number (LiveWorkersOf): a working one is working, one in error error, a
+// blocked one only in NeedsYou (its menu is an item), any other idle; an ended one is not in the
+// team (D260). NeedsYou is the badge of its sidebar row (D240): its own menu and those of its
+// workers, its questions and to-dos.
 func (f *Frame) chatTeam(addr string) (chatview.Team, bool) {
 	snap := f.snapshot()
 	var o agents.Worker
@@ -66,16 +68,16 @@ func (f *Frame) chatTeam(addr string) (chatview.Team, bool) {
 	}
 	var t chatview.Team
 	for _, w := range snap.Workers {
-		if w.Parent != addr {
+		if w.Parent != addr || !w.Live {
 			continue
 		}
 		t.Agents++
-		switch {
-		case !w.Live:
-			t.Done++
-		case w.Status == "working":
+		switch w.Status {
+		case "working":
 			t.Working++
-		case w.Status == "blocked":
+		case "error":
+			t.Error++
+		case "blocked":
 		default:
 			t.Idle++
 		}
@@ -142,12 +144,6 @@ func (f *Frame) toggleChat() {
 	f.focusTerm = !f.Chat.On(addr)
 }
 
-// toTerminal is the dock's Terminal button.
-func (f *Frame) toTerminal() {
-	f.Chat.SetOn(f.selectedTerminal(), false)
-	f.focusTerm = true
-}
-
 // chatView builds the chat in the place of the grid, or tells the chat that it does not show.
 // ok is false when the terminal panel shows the grid.
 func (f *Frame) chatView(c *ui.Context) (ok bool) {
@@ -158,6 +154,6 @@ func (f *Frame) chatView(c *ui.Context) (ok bool) {
 		f.Chat.Hide()
 		return false
 	}
-	ui.Box(c).Absolute().Fill().Children(func() { f.Chat.View(c, f.toTerminal) })
+	ui.Box(c).Absolute().Fill().Children(func() { f.Chat.View(c) })
 	return true
 }

@@ -149,7 +149,7 @@ func TestLiveLineAsksForNoFrameInTerminalMode(t *testing.T) {
 	tt := ui.NewTester(func(c *ui.Context) {
 		builds++
 		if r.ch.On(term) {
-			r.ch.View(c, func() {})
+			r.ch.View(c)
 		} else {
 			r.ch.Hide()
 		}
