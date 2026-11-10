@@ -238,8 +238,9 @@ func TestANeedsYouAgentSaysSoInItsLabel(t *testing.T) {
 	}
 }
 
-// A worker blocked on a menu says why on line 2: "needs you · <kind>" in
-// place of its name and model (D249). With no known kind, "needs you" alone.
+// A worker blocked on a menu says why on line 2: "needs you", then
+// " · <kind> · <name>" in place of its model (D249). With no known kind,
+// "needs you · <name>".
 func TestANeedsYouWorkerSaysWhyOnLineTwo(t *testing.T) {
 	for _, tc := range []struct {
 		status, kind, label, reason string
@@ -254,20 +255,21 @@ func TestANeedsYouWorkerSaysWhyOnLineTwo(t *testing.T) {
 		h := newRows(t)
 		snap := h.live.get()
 		snap.Workers[0].Status, snap.Workers[0].Kind = tc.status, tc.kind
+		snap.Workers[0].Task = "Agent rows on ui.List" // line 1 is the task, so the name is on line 2
 		h.send(snap)
 		if !h.has(tc.label) {
 			t.Errorf("%s %q: no label %q in %q", tc.status, tc.kind, tc.label, h.tt.Texts())
 		}
-		// Line 2 of b-241 sits between its title and the next row: the reason
-		// and the age; its name is gone.
+		// Line 2 of b-241 sits between its title and the next row: the reason,
+		// the name and the age; the model is gone.
 		texts := h.tt.Texts()
 		i := slices.Index(texts, tc.label+" title")
 		if i < 0 {
 			t.Fatalf("%s %q: no title in %q", tc.status, tc.kind, texts)
 		}
-		want := []string{kit.NeedsYouText, "6m"}
+		want := []string{kit.NeedsYouText, " · b-241", "6m"}
 		if tc.reason != "" {
-			want = []string{kit.NeedsYouText + " ·", tc.reason, "6m"}
+			want = []string{kit.NeedsYouText, " · " + tc.reason + " · b-241", "6m"}
 		}
 		if got := texts[i+1 : min(i+1+len(want), len(texts))]; !slices.Equal(got, want) {
 			t.Errorf("%s %q: line 2 is %q, want %q", tc.status, tc.kind, got, want)
