@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/contursofran/contr/internal/hc/hctest"
 	"os"
 	"os/exec"
@@ -200,6 +201,48 @@ func main() {
 }
 `
 
+// checkKitArgv fails t unless args has the flags that a kit worker needs:
+// `--plugin-dir <kit>`, `--agent <agent>` and `--settings` with a status
+// line that runs `contr statusline` (D203). It does not check the order or
+// other flags, so a new flag does not break it (#613).
+func checkKitArgv(t *testing.T, args []string, kit, agent string) {
+	t.Helper()
+	flags := map[string]string{}
+	for i := 0; i < len(args); i++ {
+		if name, val, ok := strings.Cut(args[i], "="); ok && strings.HasPrefix(name, "--") {
+			flags[name] = val
+		} else if strings.HasPrefix(args[i], "--") && i+1 < len(args) {
+			flags[args[i]] = args[i+1]
+			i++
+		}
+	}
+	if got := flags["--plugin-dir"]; got != kit {
+		t.Errorf("worker argv %q: --plugin-dir %q, want %q", args, got, kit)
+	}
+	if got := flags["--agent"]; got != agent {
+		t.Errorf("worker argv %q: --agent %q, want %q", args, got, agent)
+	}
+	var settings struct {
+		StatusLine struct {
+			Type    string `json:"type"`
+			Command string `json:"command"`
+		} `json:"statusLine"`
+	}
+	js, ok := flags["--settings"]
+	if !ok {
+		t.Fatalf("worker argv %q: no --settings", args)
+	}
+	if err := json.Unmarshal([]byte(js), &settings); err != nil {
+		t.Fatalf("worker argv %q: --settings %q: %v", args, js, err)
+	}
+	if sl := settings.StatusLine; sl.Type != "command" || !strings.HasSuffix(sl.Command, " statusline") {
+		t.Errorf("worker argv %q: --settings status line %+v, want a command that runs statusline", args, sl)
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+}
+
 // TestFakeClaudeWorker is #212: a worker that starts like a kit worker
 // (`--agent contr:builder`) and titles its terminal like Claude Code. The
 // sidebar and the tabs must show the name, role and state from
@@ -254,9 +297,7 @@ func TestFakeClaudeWorker(t *testing.T) {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	if want := "--plugin-dir\n" + cfg.Kit + "\n--agent\ncontr:builder"; string(argv) != want {
-		t.Fatalf("worker argv %q, want %q", argv, want)
-	}
+	checkKitArgv(t, strings.Split(string(argv), "\n"), cfg.Kit, "contr:builder")
 
 	c := r.launch(t)
 	row := c.waitLabel(t, "b212, ")
