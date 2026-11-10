@@ -216,7 +216,8 @@ then Settings.
   nothing between them: the strip and the card do not move the prompt.
   #150 later draws them between the output and the prompt (D67).
 - The selected orchestrator or worker shows its hc terminal (D80); any other
-  selection shows `select an agent to see its terminal`. contr only watches
+  selection shows the empty terminal: the drawing of the two hands, "No
+  terminal open" and "New terminal ⌘T" (D247, docs/spec/Terminal.md). contr only watches
   until the owner types in it: the screen shows the terminal at hc's size, so
   another viewer keeps its size. The first key makes contr's view size the
   terminal (D91).

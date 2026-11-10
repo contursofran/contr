@@ -18,6 +18,17 @@ Design system page: component Terminal. Shared rules: [README.md](README.md).
 
 ## States
 
+- **Empty:** no terminal is open (D247). A dot drawing of two hands that almost touch
+  (`assets/art/hands.png`) covers the panel, clipped to its rounded corners. The scale covers
+  the panel and puts the gap between the fingertips at the panel's horizontal center; the gap
+  sits at 45% of the height when the drawing is tall enough, else the drawing's bottom edge
+  meets the panel's. The dots are `ink-50` in both themes (Dark: white 50%). The bottom 30% of
+  the panel fades from clear to `panel` (solid at 65% of the band); in the middle of the band,
+  "No terminal open" (`label`, `ink-62`) and, 6 below, "New terminal" (`small`, `ink-50`) with
+  the New tab key "⌘T" (`kbd`, `ink-50`, 4 to its right). The drawing is still: no animation.
+  It decodes once, off the UI thread. A live terminal, a terminal that cannot show
+  ("terminal unavailable: …") and the Review view show no drawing.
+
 - **Focused:** the cursor blinks; keys go to the terminal.
 - **Not focused:** the cursor is a hollow box.
 - **Process ended:** a last line in `ink-38`; the tab closes on stop.
@@ -70,9 +81,12 @@ Design system page: component Terminal. Shared rules: [README.md](README.md).
 
 ## Edge cases
 
-- No selection: "select an agent to see its terminal" in `ink-42`. At launch the app selects
-  the first live orchestrator in sidebar order, else the first live worker, so this line shows
-  only when nothing is live, or after the owner clears the selection (D173).
+- No selection: the Empty state (D247; before it, "select an agent to see its terminal" in
+  `ink-42`). At launch the app selects the first live orchestrator in sidebar order, else the
+  first live worker, so it shows only when nothing is live, or after the owner clears the
+  selection (D173).
+- Narrow panel (480, the least width): the drawing covers the height, the hands' outer parts
+  are cut off at the sides, and the gap stays at the center.
 - The process ends: a last line in `ink-38`.
 - Theme change: the palette changes without a reconnect.
 - The text sits at the bottom: the first key sizes the terminal to the panel
@@ -85,7 +99,7 @@ Design system page: component Terminal. Shared rules: [README.md](README.md).
 
 ## Tokens
 
-`terminal`, `terminal-text`, `ink-42`, `ink-38`, `ink-95` (cursor, selected search match), `press` (search matches), `ansi-*`, `space-14`, `space-20`, `space-12`, `panel`.
+`terminal`, `terminal-text`, `ink-62`, `ink-50`, `label`, `small`, `kbd`, `space-6`, `space-4`, `ink-42`, `ink-38`, `ink-95` (cursor, selected search match), `press` (search matches), `ansi-*`, `space-14`, `space-20`, `space-12`, `panel`.
 
 ## Build in MyGo
 
@@ -106,6 +120,9 @@ Design system page: component Terminal. Shared rules: [README.md](README.md).
 ## Tests
 
 - View: palette per theme; overlays do not take keys.
+- View: the Empty state shows the drawing and both texts; a live or unavailable terminal does
+  not; the cover keeps the gap at the center at any panel size. Sheet parts `TerminalEmpty` and
+  `TerminalEmptyNarrow`.
 - View: `⌘F` and the Search button show the `FindBar` over the terminal; typing
   finds the matches of a fake terminal text; Enter and Shift+Enter go to the
   next and previous match; Esc closes the bar and the terminal gets the

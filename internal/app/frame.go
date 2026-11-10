@@ -987,8 +987,8 @@ func (f *Frame) syncWorkerPRs() {
 	}
 }
 
-// TerminalOffLine is shown while no agent is selected.
-const TerminalOffLine = "select an agent to see its terminal"
+// TerminalOffLine heads the empty terminal while no terminal is open (emptyTerminal).
+const TerminalOffLine = "No terminal open"
 
 // attachTerminal puts the terminal view in its slot and follows the window
 // focus. The returned function stops both. The connection runs while the
@@ -1141,16 +1141,16 @@ func (f *Frame) coreVersion() (string, bool) {
 const staleOpacity = 0.5
 
 // terminalLine is the line shown instead of, or over, the grid, with its
-// colour. ok is false when the grid speaks for itself. The empty text and the
-// reasons the terminal cannot show are ink-42; the line of an ended process
-// is ink-38 (docs/spec/Terminal.md).
+// colour. ok is false when the grid speaks for itself, and while no terminal is
+// open: emptyTerminal draws that state. The reasons the terminal cannot show
+// are ink-42; the line of an ended process is ink-38 (docs/spec/Terminal.md).
 func (f *Frame) terminalLine() (line string, colour ui.Color, ok bool) {
 	p := theme.Current()
 	if f.term == nil {
 		if f.termErr != "" {
 			return f.termErr, p.Ink42, true
 		}
-		return TerminalOffLine, p.Ink42, true
+		return "", ui.Color{}, false
 	}
 	switch f.termState.Kind {
 	case ghostty.NotRunning:
@@ -1189,7 +1189,9 @@ func (f *Frame) buildTerminal(c *ui.Context) {
 				}
 			})
 		}
-		if showLine {
+		if f.term == nil && f.termErr == "" {
+			f.emptyTerminal(c)
+		} else if showLine {
 			ui.Text(c, line).TextColor(colour)
 		}
 		f.Overlay.View(c)
