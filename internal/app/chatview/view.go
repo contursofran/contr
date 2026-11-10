@@ -24,8 +24,6 @@ const (
 	TextTerm        = "Terminal"
 	// TextEmpty shows while the session has no transcript, or no entry in it yet.
 	TextEmpty = "No transcript yet"
-	// TextToTerminal is the button of the needs-you line without a menu: it switches to Terminal.
-	TextToTerminal = "Switch to Terminal"
 	// LabelPrompt, LabelGroup, LabelOwnerNote, LabelNote and LabelCall name the rows and lines.
 	LabelPrompt = "owner prompt"
 	// LabelPending names a prompt sent from the composer that the transcript has not brought yet.
@@ -79,11 +77,9 @@ func (ch *Chat) Switch(c *ui.Context, id string) {
 }
 
 // View builds the chat of the terminal that Sync follows: the transcript in a list that follows
-// its end, with the pending prompts at its end, the live line and the composer. toTerminal
-// switches the terminal to Terminal mode.
-func (ch *Chat) View(c *ui.Context, toTerminal func()) {
+// its end, with the pending prompts at its end, the live line or the team row, and the composer.
+func (ch *Chat) View(c *ui.Context) {
 	ch.show()
-	ch.toTerm = toTerminal
 	ch.ticks = false
 	pal := theme.Current()
 	ch.mdTheme(pal)
@@ -117,17 +113,13 @@ func (ch *Chat) View(c *ui.Context, toTerminal func()) {
 				LinearGradient(ui.LinearGradient{Angle: 180, Stops: []ui.GradientStop{{Color: stage.Alpha(0), At: 0}, {Color: stage, At: 1}}})
 		})
 		ui.Column(c).FillWidth().Shrink(0).Gap(theme.Space12).Padding(0, theme.Space20, theme.Space14).Children(func() {
-			// The session's own menu (needs you) comes first; the team row keeps its place on the
-			// composer, so the dock does not change height when work starts and stops.
-			if ch.Team != nil {
-				if t, ok := ch.Team(id); ok {
-					ch.live(c, st, true, toTerminal)
-					ch.team(c, t, st)
-					ch.composer(c, id, st)
-					return
-				}
+			// While the session orchestrates, the team row takes the live line's place and carries
+			// its text, so the dock does not change height when work starts and stops.
+			if t, ok := ch.teamOf(id); ok {
+				ch.team(c, t, st)
+			} else {
+				ch.live(c, st)
 			}
-			ch.live(c, st, false, toTerminal)
 			ch.composer(c, id, st)
 		})
 	})

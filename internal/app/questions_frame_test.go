@@ -125,7 +125,8 @@ func TestFrameTellsTheOutlineWhichTerminalHasTheFocus(t *testing.T) {
 	}
 }
 
-// The chat's team row (D259): the team of a running orchestrator by the state of its workers,
+// The chat's team row (D259, D260): the team of a running orchestrator by the state of its live
+// workers (an ended one is out, as in the pill),
 // with the badge of its sidebar row; a click on "N needs you" opens the card as ⌘J and leaves an
 // open card open.
 func TestFrameChatTeam(t *testing.T) {
@@ -144,9 +145,12 @@ func TestFrameChatTeam(t *testing.T) {
 	got, ok := f.chatTeam("oa")
 	// NeedsYou is the badge of the sidebar row (TestTheOrchestratorRowCountsItsItemsAndThoseOfItsWorkers
 	// checks ItemsOf); this frame scans no repository, so no row lists oa and the badge is 0.
-	want := chatview.Team{Agents: 5, Working: 1, Idle: 2, Done: 1, NeedsYou: f.SpacesList.ItemsOf("oa")}
+	want := chatview.Team{Agents: 4, Working: 1, Error: 1, Idle: 1, NeedsYou: f.SpacesList.ItemsOf("oa")}
 	if !ok || got != want {
 		t.Errorf("chatTeam(oa) = %+v, %v; want %+v", got, ok, want)
+	}
+	if pill := f.snapshot().LiveWorkersOf("oa"); got.Agents != pill {
+		t.Errorf("the row counts %d agents, the pill %d", got.Agents, pill)
 	}
 	for _, addr := range []string{"", "wa", "w1", "nobody"} {
 		if _, ok := f.chatTeam(addr); ok {

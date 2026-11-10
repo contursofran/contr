@@ -10,17 +10,19 @@ import (
 	"github.com/contursofran/contr/internal/app/theme"
 )
 
-// mixed is a team of 4 agents: one blocked (it needs you), one working, one idle, one done.
-var mixed = Team{Agents: 4, NeedsYou: 1, Working: 1, Idle: 1, Done: 1}
+// mixed is a team of 4 live agents: one blocked (it needs you), one in error, one working, one
+// idle.
+var mixed = Team{Agents: 4, NeedsYou: 1, Error: 1, Working: 1, Idle: 1}
 
 func TestTeamText(t *testing.T) {
 	for _, tc := range []struct {
 		t    Team
 		want string
 	}{
-		{mixed, "Orchestrating · 4 agents · 1 needs you · 1 working · 1 idle · 1 done"},
-		{Team{Agents: 4, Working: 2, Idle: 1, Done: 1}, "Orchestrating · 4 agents · 2 working · 1 idle · 1 done"},
-		{Team{Agents: 9, NeedsYou: 3, Working: 3, Done: 3}, "Orchestrating · 9 agents · 3 need you · 3 working · 3 done"},
+		{mixed, "Orchestrating · 4 agents · 1 needs you · 1 error · 1 working · 1 idle"},
+		{Team{Agents: 3, Working: 2, Idle: 1}, "Orchestrating · 3 agents · 2 working · 1 idle"},
+		{Team{Agents: 9, NeedsYou: 3, Error: 2, Working: 3, Idle: 1}, "Orchestrating · 9 agents · 3 need you · 2 error · 3 working · 1 idle"},
+		{Team{Agents: 2, Error: 1, Idle: 1}, "Orchestrating · 2 agents · 1 error · 1 idle"},
 		{Team{Agents: 1, Working: 1}, "Orchestrating · 1 agent · 1 working"},
 		{Team{Agents: 1, NeedsYou: 1}, "Orchestrating · 1 agent · 1 needs you"},
 		{Team{}, "Orchestrating"},
@@ -61,7 +63,7 @@ func TestTeamRowShowsWhileTheSessionOrchestrates(t *testing.T) {
 		t     Team
 		texts []string
 	}{
-		{mixed, []string{"Orchestrating · 4 agents", "1 needs you", "1 working", "1 idle", "1 done"}},
+		{mixed, []string{"Orchestrating · 4 agents", "1 needs you", "1 error", "1 working", "1 idle"}},
 		{Team{Agents: 1, Working: 1}, []string{"Orchestrating · 1 agent", "1 working"}},
 		{Team{}, []string{"Orchestrating"}},
 	} {
@@ -79,7 +81,7 @@ func TestTeamRowShowsWhileTheSessionOrchestrates(t *testing.T) {
 			t.Errorf("%+v: a needs-you part with no item", tc.t)
 		}
 	}
-	if shows(s, "0 working") || shows(s, "0 idle") || shows(s, "0 done") {
+	if shows(s, "0 error") || shows(s, "0 working") || shows(s, "0 idle") || shows(s, "done") {
 		t.Error("a part with no agent shows")
 	}
 	ok = false
@@ -117,6 +119,29 @@ func TestTeamRowNeedsYouOpensTheNotch(t *testing.T) {
 	s.tt.Frame()
 	if err := s.tt.Click("1 needs you"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// "N error" is in ink-100: not red, and no button (D260).
+func TestTeamRowErrorIsNotRed(t *testing.T) {
+	team, ok := Team{Agents: 2, Error: 2}, true
+	s := teamSession(t, "idle", &team, &ok)
+	opened := 0
+	s.ch.OpenNeeds = func() { opened++ }
+	s.tt.Frame()
+	if !shows(s, "2 error") {
+		t.Fatalf("no error part: %v", s.tt.Texts())
+	}
+	red := reddish(s.tt.Image(), apptest.Box(t, s.tt, LabelTeam))
+	_ = s.tt.Click("2 error")
+	// The same row with two idle agents: only the mascot is red in both.
+	team = Team{Agents: 2, Idle: 2}
+	s.tt.Frame()
+	if mascot := reddish(s.tt.Image(), apptest.Box(t, s.tt, LabelTeam)); red != mascot {
+		t.Errorf("the row with errors has %d red pixels, %d with none: error is red", red, mascot)
+	}
+	if opened != 0 {
+		t.Error("a click on error opened the card")
 	}
 }
 
@@ -179,7 +204,7 @@ func TestTeamRowClipsFromTheRight(t *testing.T) {
 	if !shows(s, "Orchestrating · 4 agents") || !shows(s, "1 needs you") {
 		t.Fatalf("narrow: the head or the first part went: %v", s.tt.Texts())
 	}
-	if shows(s, "1 done") {
+	if shows(s, "1 idle") {
 		t.Errorf("narrow: the last part stays: %v", s.tt.Texts())
 	}
 	s.tt.SetSize(340, 900)
