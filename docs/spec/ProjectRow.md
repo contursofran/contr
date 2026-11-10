@@ -57,6 +57,7 @@ Design system page: component ProjectRow. Shared rules: [README.md](README.md).
 ## Keys and focus
 
 - ↑ ↓ move; ⏎ focuses the terminal (D145). A key never folds a project. ← fold and → open are not built yet.
+- `⌘⌥←` and `⌘⌥→` select the project before or after the open one from anywhere in the window, around the ends, as a click on its row does (D248). Hidden projects are skipped; with one project they do nothing. While ⌘ is held, the row before shows `⌥←` and the row after `⌥→` on its folder icon; with two projects the other row shows `⌥→` (KeyHints.md).
 
 ## Edge cases
 

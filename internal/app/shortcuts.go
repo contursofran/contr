@@ -33,6 +33,12 @@ func (f *Frame) windowKeys(c *ui.Context, win float32) {
 		if shortcut.Of(shortcut.NextAgent).Pressed(c) {
 			f.SpacesList.StepAgent(1)
 		}
+		if shortcut.Of(shortcut.PrevProject).Pressed(c) {
+			f.SpacesList.StepProject(-1)
+		}
+		if shortcut.Of(shortcut.NextProject).Pressed(c) {
+			f.SpacesList.StepProject(1)
+		}
 	}
 	if shortcut.Of(shortcut.PrevTab).Pressed(c) {
 		f.stepTab(-1)

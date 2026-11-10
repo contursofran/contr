@@ -46,6 +46,10 @@ const (
 	// PrevAgent and NextAgent select the agent row above or below in the sidebar.
 	PrevAgent ID = "prev-agent"
 	NextAgent ID = "next-agent"
+	// PrevProject and NextProject select the project before or after the open one in the sidebar,
+	// around the ends.
+	PrevProject ID = "prev-project"
+	NextProject ID = "next-project"
 	// Tab1 to Tab8 select that tab of the title bar; LastTab selects the last tab.
 	Tab1    ID = "tab-1"
 	Tab2    ID = "tab-2"
@@ -91,6 +95,8 @@ var list = []Shortcut{
 	{NextTab, ui.Cmd | ui.Shift, ui.KeyBracketRight, "]"},
 	{PrevAgent, ui.Cmd | ui.Alt, ui.KeyUp, "↑"},
 	{NextAgent, ui.Cmd | ui.Alt, ui.KeyDown, "↓"},
+	{PrevProject, ui.Cmd | ui.Alt, ui.KeyLeft, "←"},
+	{NextProject, ui.Cmd | ui.Alt, ui.KeyRight, "→"},
 	{Tab1, ui.Cmd, ui.Key1, "1"},
 	{Tab2, ui.Cmd, ui.Key2, "2"},
 	{Tab3, ui.Cmd, ui.Key3, "3"},
@@ -169,7 +175,7 @@ func (s Shortcut) HintIf(on bool) string {
 }
 
 // accelNames are the menu names of the caps that are not a character (mygo menus: Accelerators).
-var accelNames = map[string]string{"↑": "Up", "↓": "Down", "+": "Plus"}
+var accelNames = map[string]string{"↑": "Up", "↓": "Down", "←": "Left", "→": "Right", "+": "Plus"}
 
 // Accelerator is the key as a menu item takes it, modifiers in the macOS order: "Cmd+T",
 // "Alt+Cmd+H". Empty for the zero Shortcut.

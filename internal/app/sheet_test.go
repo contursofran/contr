@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/apptest"
+	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/tabmodel"
 	"github.com/contursofran/contr/internal/app/theme"
@@ -88,16 +89,31 @@ func sheetKeyHints(c *ui.Context) {
 		ui.Row(c).Width(640).Height(theme.TitleBarHeight).AlignItems(ui.Center).Children(func() {
 			bar.Build(c, true, false, func() {})
 		})
-		ui.Column(c).Width(300).Children(func() {
-			kit.AgentRow(c, kit.AgentRowOpts{Title: "lead", Name: "2 workers", Model: "opus", Age: "14m", State: kit.GlyphWorking, Orchestrator: true, Hint: "⌥↑"})
-			kit.AgentRow(c, kit.AgentRowOpts{Title: "Agent rows on ui.List", Name: "b-241", Model: "sonnet", Age: "6m", State: kit.GlyphWorking, Selected: true})
-			kit.AgentRow(c, kit.AgentRowOpts{Title: "Checks on hc event", Name: "b-250", Model: "sonnet", Age: "2m", State: kit.GlyphIdle, Hint: "⌥↓"})
+		ui.Row(c).Gap(theme.Space12).Children(func() {
+			ui.Column(c).Width(300).Children(func() {
+				folder := func() ui.Element { return ui.Icon(c, icons.Line("folder")).Size(15, 15).Shrink(0) }
+				kit.Row(c, kit.RowOpts{Flat: true, Text: "alpha", Meta: "main", Lead: folder, Hint: "⌥←"})
+				kit.AgentRow(c, kit.AgentRowOpts{Title: "lead", Name: "2 workers", Model: "opus", Age: "14m", State: kit.GlyphWorking, Orchestrator: true, Hint: "⌥↑"})
+				kit.AgentRow(c, kit.AgentRowOpts{Title: "Agent rows on ui.List", Name: "b-241", Model: "sonnet", Age: "6m", State: kit.GlyphWorking, Selected: true})
+				kit.AgentRow(c, kit.AgentRowOpts{Title: "Checks on hc event", Name: "b-250", Model: "sonnet", Age: "2m", State: kit.GlyphIdle, Hint: "⌥↓"})
+				kit.Row(c, kit.RowOpts{Flat: true, Text: "gamma", Meta: "main", Lead: folder, Hint: "⌥→"})
+			})
+			// The icon column (D128): the same chips on the same icons.
+			ui.Column(c).Width(theme.SidebarIconWidth).AlignItems(ui.Center).Children(func() {
+				kit.IconButton(c, kit.IconButtonOpts{Icon: "folder", Label: "Open projects", Small: true, Hint: "O"})
+				kit.IconButton(c, kit.IconButtonOpts{Icon: "plus", Label: "New orchestrator", Small: true, Hint: "N"})
+				folder := func() ui.Element { return ui.Icon(c, icons.Line("folder")).Size(15, 15).Shrink(0) }
+				kit.Row(c, kit.RowOpts{Flat: true, Text: "alpha", Lead: folder, Compact: true, Hint: "⌥←"})
+				kit.AgentRow(c, kit.AgentRowOpts{Title: "lead", State: kit.GlyphWorking, Orchestrator: true, Compact: true, Hint: "⌥↑"})
+				kit.AgentRow(c, kit.AgentRowOpts{Title: "b-241", State: kit.GlyphWorking, Compact: true, Selected: true})
+				kit.AgentRow(c, kit.AgentRowOpts{Title: "b-250", State: kit.GlyphIdle, Compact: true, Hint: "⌥↓"})
+			})
 		})
 	})
 }
 
 // TestSpecSheet draws the parts of package app (see apptest.SpecSheet).
 func TestSpecSheet(t *testing.T) {
-	parts := append(slices.Clip(sheetParts), apptest.SheetPart{Name: "KeyHints", W: 640, H: 230, View: sheetKeyHints})
+	parts := append(slices.Clip(sheetParts), apptest.SheetPart{Name: "KeyHints", W: 640, H: 300, View: sheetKeyHints})
 	apptest.SpecSheet(t, parts, []string{"KeyHints"})
 }

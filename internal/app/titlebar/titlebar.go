@@ -156,7 +156,7 @@ func (b *TitleBar) tabHint(i int) string {
 
 // tab draws one tab: the glyph, the title (SingleLine: NoWrap().Ellipsis() does not cut a title that
 // is wider than the tab, D175), on the selected plain terminal the close button, and the key chip
-// hint over the left end while ⌘ is held.
+// hint on the glyph while ⌘ is held.
 func (b *TitleBar) tab(c *ui.Context, tab ui.Element, t tabmodel.Tab, hint string) {
 	p := theme.Current()
 	el := tab.Label(t.Title).Height(theme.SizeRowHeight).MaxWidth(theme.SizeTabMaxWidth).MinWidth(0).Shrink(1).
@@ -194,15 +194,16 @@ func (b *TitleBar) tab(c *ui.Context, tab ui.Element, t tabmodel.Tab, hint strin
 			el = el.Background(p.Hover)
 		}
 	}
-	el.TextColor(ink).Children(func() {
-		b.glyph(c, t)
+	el = el.TextColor(ink)
+	el.Children(func() {
+		glyph := b.glyph(c, t)
 		s := theme.StyleRowSmall
 		ui.Text(c, t.Title).Font(s.Stack()).FontSize(s.Size).FixedLineHeight(s.Line).FontWeight(s.Weight).
 			SingleLine().MinWidth(0).Shrink(1)
 		if t.Selected && t.Closable() && b.CloseTab != nil {
 			closeButton(c, func() { b.CloseTab(t) })
 		}
-		kit.KeyHint(c, hint, ui.AnchorLeft, ui.AnchorLeft)
+		kit.KeyHint(c, hint, el, glyph)
 	})
 }
 
@@ -273,14 +274,14 @@ func (b *TitleBar) hasOtherPlain(t tabmodel.Tab) bool {
 
 // glyph is the leading part of a tab: the Claude mark for an orchestrator, the status glyph for
 // a worker, the terminal icon for a plain terminal.
-func (b *TitleBar) glyph(c *ui.Context, t tabmodel.Tab) {
+func (b *TitleBar) glyph(c *ui.Context, t tabmodel.Tab) ui.Element {
 	if t.Plain {
 		if s := icons.Line("terminal"); s != nil {
-			ui.Icon(c, s).Size(14, 14).Shrink(0)
+			return ui.Icon(c, s).Size(14, 14).Shrink(0)
 		}
-		return
+		return ui.Element{}
 	}
-	kit.StatusGlyph(c, kit.GlyphOpts{State: t.State, Claude: t.Orchestrator, Grey: t.Grey, Small: true})
+	return kit.StatusGlyph(c, kit.GlyphOpts{State: t.State, Claude: t.Orchestrator, Grey: t.Grey, Small: true})
 }
 
 // closeButton is the 16px close button of the selected tab.

@@ -22,7 +22,7 @@ type IconButtonOpts struct {
 	Label string
 	// Key is the window shortcut, shown after the label in the tooltip.
 	Key string
-	// Hint is the key chip that shows over the bottom right corner while ⌘ is held (KeyHint).
+	// Hint is the key chip that shows on the icon while ⌘ is held (KeyHint).
 	// Empty or Disabled: no chip.
 	Hint string
 	// Small makes a 24px box, for panel footers; the default is 28px.
@@ -117,11 +117,12 @@ func IconButton(c *ui.Context, o IconButtonOpts) ui.Element {
 		}
 	})
 	return b.Children(func() {
+		var icon ui.Element
 		if s := icons.Line(o.Icon); s != nil {
-			ui.Icon(c, s).Size(iconDraw, iconDraw)
+			icon = ui.Icon(c, s).Size(iconDraw, iconDraw)
 		}
 		if !o.Disabled {
-			KeyHint(c, o.Hint, ui.AnchorBottomRight, ui.AnchorCenter)
+			KeyHint(c, o.Hint, b, icon)
 		}
 	})
 }

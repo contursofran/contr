@@ -13,6 +13,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/apptest"
+	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/tabmodel"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/theme/themetest"
@@ -635,5 +636,25 @@ func TestTabRowHasEqualSpaceAboveAndBelow(t *testing.T) {
 	}
 	if tab.Y != theme.PanelGap || theme.TitleBarHeight-(tab.Y+tab.H) != theme.PanelGap || tab.H != theme.SizeRowHeight {
 		t.Errorf("tab %+v in a %v bar, want %v above and below", tab, theme.TitleBarHeight, theme.PanelGap)
+	}
+}
+
+// TestEachChipSitsOnItsIconInsideItsElement is #645: a tab's chip on its glyph, each button's
+// chip on its icon, all inside their element and the window, also Hide files at the right edge.
+func TestEachChipSitsOnItsIconInsideItsElement(t *testing.T) {
+	b := newBar(t, tabsOf(), true)
+	b.bar.Hints = true
+	b.tt.Frame()
+	for _, c := range []struct{ chip, in string }{
+		{"1", "lead"}, {"2", "go test ./..."}, {"3", "$ repo"},
+		{"T", LabelNewTab}, {"F", LabelSearch}, {"⇧E", LabelFilesToggle},
+	} {
+		chip := apptest.ChipOn(t, b.tt, kit.KeyHintLabel(c.chip), c.in, 1160, 40)
+		if c.chip == "1" {
+			apptest.Centered(t, "chip 1", chip, "the glyph", b.rect(t, "idle"))
+		}
+		if c.chip != "1" && c.chip != "2" && c.chip != "3" {
+			apptest.Centered(t, "chip "+c.chip, chip, c.in, b.rect(t, c.in))
+		}
 	}
 }
