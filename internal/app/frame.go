@@ -536,8 +536,11 @@ func (f *Frame) selectedTerminal() string {
 // contextLabels is the context that the Stop hook put on the labels of the
 // selected terminal (D205), for the Context meter when that terminal has no
 // status line file. Zero when there is none.
-func (f *Frame) contextLabels() usage.Context {
-	w, _ := f.agentAt(f.selectedTerminal())
+func (f *Frame) contextLabels() usage.Context { return f.contextLabelsOf(f.selectedTerminal()) }
+
+// contextLabelsOf is the context that the Stop hook put on the labels of the terminal at addr.
+func (f *Frame) contextLabelsOf(addr string) usage.Context {
+	w, _ := f.agentAt(addr)
 	return usage.Context{Tokens: w.ContextTokens, Size: w.ContextLimit}
 }
 

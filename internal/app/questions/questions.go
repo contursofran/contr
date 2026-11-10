@@ -297,14 +297,14 @@ func (q *QuestionsCard) watchBlocked(snap agentstate.Snapshot, t agentstate.Need
 	})
 }
 
+// menuOf is the menu of the worker of t, read and answered through the source.
+func (q *QuestionsCard) menuOf(t agentstate.NeedTab) Menu {
+	return Menu{Address: t.Address, Command: t.Command, Kind: t.BlockKind, Read: q.Source.Read, SendKeys: q.Source.SendKeys}
+}
+
 // readMenu reads the screen of the worker of t and parses its menu.
 func (q *QuestionsCard) readMenu(t agentstate.NeedTab) (prompt.Prompt, bool, error) {
-	screen, err := q.Source.Read(t.Address, promptLines)
-	if err != nil {
-		return prompt.Prompt{}, false, err
-	}
-	p, ok := prompt.Parse(t.Command, t.BlockKind, screen)
-	return p, ok, nil
+	return q.menuOf(t).ReadMenu()
 }
 
 // choose sends choice i of the menu of t. A choice that asks for typed text
@@ -322,11 +322,7 @@ func (q *QuestionsCard) choose(t agentstate.NeedTab, i int) {
 	}
 	q.busy = true
 	q.Env.Do(func() func() {
-		now, ok, err := q.readMenu(t)
-		changed := err == nil && !(ok && now.Equal(seen))
-		if err == nil && !changed {
-			err = q.Source.SendKeys(t.Address, ch.Keys)
-		}
+		now, ok, changed, err := q.menuOf(t).Choose(seen, i)
 		return func() {
 			q.busy = false
 			if q.key != t.Key {

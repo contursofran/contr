@@ -32,20 +32,24 @@ type planPercent interface {
 // neither, the line shows no data.
 func contextMeter(src planPercent, terminal string, labels usage.Context) kit.Meter {
 	m := kit.Meter{Label: LabelContext}
-	if terminal == "" {
-		return m
-	}
-	c, ok := usage.Context{}, false
-	if src != nil {
-		c, ok = src.Context(terminal)
-	}
-	if !ok && labels.Size > 0 {
-		c, ok = labels, true
-	}
-	if ok {
+	if c, ok := contextOf(src, terminal, labels); ok {
 		m.Percent, m.Has, m.Value = c.Percent(), true, c.Label()
 	}
 	return m
+}
+
+// contextOf is the context of the agent in terminal, as the Context line reads it: from its
+// status line, else from labels. ok is false when neither has it.
+func contextOf(src planPercent, terminal string, labels usage.Context) (usage.Context, bool) {
+	if terminal == "" {
+		return usage.Context{}, false
+	}
+	if src != nil {
+		if c, ok := src.Context(terminal); ok {
+			return c, true
+		}
+	}
+	return labels, labels.Size > 0
 }
 
 // planMeters is one meter per plan with its percent used, for the sidebar
