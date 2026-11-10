@@ -2,6 +2,7 @@ package sidebar
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/contursofran/contr/internal/app/kit"
@@ -42,7 +43,7 @@ func TestTheRowsAboveAndBelowShowTheirChipsWhileCmdIsHeld(t *testing.T) {
 	h := newRows(t)
 	h.sel.Select(state.Selected{Kind: state.KindWorker, ID: "b-241"})
 	h.tt.Frame()
-	if slices.Contains(h.tt.Texts(), kit.LabelKeyHint) {
+	if slices.ContainsFunc(h.tt.Texts(), func(s string) bool { return strings.HasPrefix(s, kit.LabelKeyHint) }) {
 		t.Fatal("chips without Hints")
 	}
 	h.list.Hints = true

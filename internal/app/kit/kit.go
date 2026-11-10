@@ -31,8 +31,9 @@ type RowOpts struct {
 	Added, Removed int
 	Selected       bool
 	OnClick        func()
-	// Lead draws a leading part, such as a status icon, before Mark.
-	Lead func()
+	// Lead draws a leading part, such as a status icon, before Mark, and returns it: a flat
+	// row puts its key chip on it (Hint).
+	Lead func() ui.Element
 
 	// Flat gives the row the token look of the sidebar (flatrow.go). It uses
 	// Label, Text, Meta, Selected, OnClick, Lead, Trail and the fields below;
@@ -55,6 +56,9 @@ type RowOpts struct {
 	Tip     string
 	// Menu fills the context menu of a flat row. Nil: no menu.
 	Menu func(m *ui.Menu)
+	// Hint is the key chip of a flat row while ⌘ is held, on the element of Lead (KeyHint).
+	// Empty: none.
+	Hint string
 }
 
 // HeightOf is the height Row gives to a row with these options.

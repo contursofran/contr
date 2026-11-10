@@ -87,7 +87,7 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
 ## Keys and focus
 
 - ↑ ↓ move the selection over project and agent rows; ⏎ focuses the terminal (D145). They work in the icon column too.
-- `⌘⌥↑` and `⌘⌥↓` select the agent row above or below from anywhere in the window; project rows are skipped and the terminal takes the focus. While ⌘ is held, those two rows show `⌥↑` and `⌥↓` key chips at their right end (KeyHints.md).
+- `⌘⌥↑` and `⌘⌥↓` select the agent row above or below from anywhere in the window; project rows are skipped and the terminal takes the focus. While ⌘ is held, those two rows show `⌥↑` and `⌥↓` key chips on their status glyph (KeyHints.md).
 
 ## Edge cases
 

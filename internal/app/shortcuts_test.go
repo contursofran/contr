@@ -1,7 +1,9 @@
 package app
 
 import (
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +18,8 @@ import (
 	"github.com/contursofran/contr/internal/app/sidebar"
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/state"
+	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/titlebar"
 	"github.com/contursofran/contr/internal/app/view"
 )
 
@@ -153,11 +157,45 @@ func TestCmdAltArrowsStepTheAgentRowsOfTheSidebar(t *testing.T) {
 	}
 }
 
+func TestCmdAltLeftRightStepTheProjectsOfTheSidebar(t *testing.T) {
+	snap := tabSnap()
+	f, tt := agentFrame(t, &snap)
+	base := apptest.CanonicalTmp(t)
+	var orchs []agents.Worker
+	var panes []agents.Worker
+	for i, name := range []string{"a", "b"} {
+		dir := filepath.Join(base, name)
+		apptest.MainRepo(t, dir, "ref: refs/heads/main\n")
+		o := apptest.OrchW("o"+name, "lead-"+name, "p")
+		o.Worktree = dir
+		orchs = append(orchs, o)
+		panes = append(panes, apptest.SpPane("w1:p"+string(rune('1'+i)), dir, nil))
+	}
+	live := apptest.SpTree(panes...)
+	live.Orchestrators = orchs
+	f.SpacesList = sidebar.NewSpacesList(func() agentstate.Snapshot { return live }, f.Selection, view.Env{})
+	f.SpacesList.Env.Run.Go = func(fn func()) { fn() }
+	f.SpacesList.Sync()
+	f.Selection.Select(state.Selected{Kind: state.KindOrchestrator, ID: "oa"})
+	tt.Frame()
+	for _, c := range []struct {
+		key  shortcut.ID
+		want string
+	}{
+		{shortcut.NextProject, "ob"}, {shortcut.NextProject, "oa"}, {shortcut.PrevProject, "ob"}, {shortcut.PrevProject, "oa"},
+	} {
+		press(tt, c.key)
+		if got := selected(f); got != c.want {
+			t.Fatalf("after %s: %q, want %q", c.key, got, c.want)
+		}
+	}
+}
+
 // chips counts the key chips of the last frame.
 func chips(tt *ui.Tester) int {
 	n := 0
 	for _, s := range tt.Texts() {
-		if s == kit.LabelKeyHint {
+		if strings.HasPrefix(s, kit.LabelKeyHint+" ") {
 			n++
 		}
 	}
@@ -193,6 +231,16 @@ func TestHoldingCmdShowsTheChipsAfterTheDelayAndNotBefore(t *testing.T) {
 	}
 	if tt.FramePending() {
 		t.Error("a frame waits while the chips show and nothing changes")
+	}
+}
+
+func TestEachChipOfTheWindowLiesInItsElement(t *testing.T) {
+	_, tt := tabKeysFrame(t)
+	holdCmd(t, tt)
+	for _, c := range []struct{ key, in string }{
+		{"1", "lead"}, {"2", "b1"}, {"3", "$ repo"}, {"F", titlebar.LabelSearch}, {"⇧E", titlebar.LabelFilesToggle},
+	} {
+		apptest.ChipOn(t, tt, kit.KeyHintLabel(c.key), c.in, theme.WindowWidth, theme.WindowHeight)
 	}
 }
 

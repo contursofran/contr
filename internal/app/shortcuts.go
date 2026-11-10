@@ -36,6 +36,12 @@ func (f *Frame) windowKeys(c *ui.Context, win float32) {
 		if shortcut.Of(shortcut.NextAgent).Pressed(c) {
 			f.SpacesList.StepAgent(1)
 		}
+		if shortcut.Of(shortcut.PrevProject).Pressed(c) {
+			f.SpacesList.StepProject(-1)
+		}
+		if shortcut.Of(shortcut.NextProject).Pressed(c) {
+			f.SpacesList.StepProject(1)
+		}
 	}
 	if shortcut.Of(shortcut.PrevTab).Pressed(c) {
 		f.stepTab(-1)
@@ -83,10 +89,14 @@ func (f *Frame) stepTab(d int) {
 	f.selectTab(tabs[next])
 }
 
+// ForceKeyHints shows the key chips at all times. Only e2e builds set it (CONTR_E2E_HINTS), so
+// scripts/see.sh can capture the chips: the automation plugin cannot hold ⌘ alone.
+var ForceKeyHints bool
+
 // keyHints reads the state of ⌘ for this frame and gives the parts that show key chips whether
 // they show (docs/spec/KeyHints.md, D245).
 func (f *Frame) keyHints(c *ui.Context) {
-	on := f.hints.Frame(c)
+	on := f.hints.Frame(c) || ForceKeyHints
 	f.bar.Hints = on
 	if f.SpacesList != nil {
 		f.SpacesList.Hints = on

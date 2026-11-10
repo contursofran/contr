@@ -74,7 +74,7 @@ type Notch struct {
 	Opened func() bool
 	// Panel builds the card anchored to the notch while it is open; may be nil.
 	Panel func(c *ui.Context, anchor ui.Element, items []agentstate.NeedTab)
-	// Hints shows the key chip of ⌘J at the notch's right end: ⌘ is held
+	// Hints shows the key chip of ⌘J on the notch's dot: ⌘ is held
 	// (docs/spec/KeyHints.md). The frame sets it on each frame.
 	Hints bool
 
@@ -197,20 +197,21 @@ func (n *Notch) View(c *ui.Context) {
 			return
 		}
 		b.Children(func() {
+			var dot ui.Element
 			// glass-float over the blur, with float-line on the sides and the
 			// bottom (no top border).
 			kit.GlassFloat(ui.Row(c).Height(theme.SizeNotchHeight).AlignItems(ui.Center).Gap(theme.Space9).
 				Padding(0, theme.Space16, 0, theme.Space12).
 				Radius(0, 0, theme.Radius12, theme.Radius12), p).
 				BorderWidth(0, 1, 1, 1).BorderColor(p.FloatLine).Children(func() {
-				notchDot(c, p, look.Pulse)
+				dot = notchDot(c, p, look.Pulse)
 				ui.Text(c, NotchLabel(items)).NoWrap().TextColor(p.Ink100).
 					FontSize(theme.StyleLabel.Size).FontWeight(theme.StyleLabel.Weight)
 			})
 			if look.Glow > 0 {
 				notchGlow(c, p, look.Glow)
 			}
-			kit.KeyHint(c, shortcut.Of(shortcut.Questions).HintIf(n.Hints), ui.AnchorBottomRight, ui.AnchorCenter)
+			kit.KeyHint(c, shortcut.Of(shortcut.Questions).HintIf(n.Hints), b, dot)
 		})
 	})
 }
@@ -227,13 +228,14 @@ const LabelNotchDot = "needs you"
 
 // notchDot is the solid `blocked` dot of the notch. pulse (0 to 1) dims it to
 // opacity 0.3 and shrinks it to 0.8 during the pulse after an arrival (D240).
-func notchDot(c *ui.Context, p *theme.Palette, pulse float32) {
+func notchDot(c *ui.Context, p *theme.Palette, pulse float32) ui.Element {
 	d := ui.Box(c).Label(LabelNotchDot).Size(notchDotSize, notchDotSize).Shrink(0).MarginX(notchDotMargin).
 		Radius(notchDotSize / 2).Background(p.Blocked)
 	if pulse > 0 {
 		s := 1 - 0.2*pulse
-		d.Opacity(1-0.7*pulse).Scale(s, s).TransformOrigin(0.5, 0.5)
+		d = d.Opacity(1-0.7*pulse).Scale(s, s).TransformOrigin(0.5, 0.5)
 	}
+	return d
 }
 
 // notchGlow is the `blocked` glow around the notch after an arrival: a 1px

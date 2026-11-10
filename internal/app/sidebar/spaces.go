@@ -641,6 +641,51 @@ func (l *SpacesList) Switch(dir string) {
 	}
 }
 
+// openGroup is the index of the project that holds the selection; -1: none.
+func (l *SpacesList) openGroup() int {
+	if l.selection == nil {
+		return -1
+	}
+	sel, ok := l.selection.Current()
+	if !ok {
+		return -1
+	}
+	for i, g := range l.groups {
+		if l.holds(g, sel) {
+			return i
+		}
+	}
+	return -1
+}
+
+// projectStep is the index of the project that ⌘⌥← (d -1) or ⌘⌥→ (d 1) selects: the project
+// shown before or after the open one, around the ends. Hidden projects are not shown, so they
+// are not stepped to. With no open project ⌘⌥→ takes the first and ⌘⌥← the last. -1: none,
+// with fewer than two projects.
+func (l *SpacesList) projectStep(d int) int {
+	n := len(l.groups)
+	if n < 2 {
+		return -1
+	}
+	at := l.openGroup()
+	if at < 0 {
+		if d < 0 {
+			return n - 1
+		}
+		return 0
+	}
+	return (at + d + n) % n
+}
+
+// StepProject selects the project before (d -1) or after (d 1) the open one (⌘⌥←, ⌘⌥→), as a
+// click on its row does: its orchestrator, else its main checkout. It is a window key, so the
+// new terminal takes the focus as after a click. With one project it does nothing. UI thread.
+func (l *SpacesList) StepProject(d int) {
+	if i := l.projectStep(d); i >= 0 && l.selection != nil {
+		l.selectProject(l.groups[i])
+	}
+}
+
 // Orchestrated tells whether an orchestrator holds a terminal in project g.
 func (l *SpacesList) Orchestrated(g spaces.RepoGroup) bool {
 	for _, o := range l.Snapshot().Orchestrators {

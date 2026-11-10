@@ -16,7 +16,7 @@ Shared rules: [README.md](README.md).
 | Control | `kit.Switch` (`SegmentedBase`): "Chat", "Terminal"; label "View of this session" |
 | Shows for | a Claude Code session: an orchestrator (with a plain terminal that runs Claude Code, D190), or a terminal whose transcript path a kit hook saved (a worker, D243). A plain terminal has no switch. |
 | Mode | kept for each terminal for the run of the app; Terminal is the default |
-| Key | `⌘E` toggles the selected session; key chip `E` under the switch while ⌘ is held ([KeyHints.md](KeyHints.md)). Back in Terminal, the grid takes the focus. |
+| Key | `⌘E` toggles the selected session; key chip `E` centered on the switch while ⌘ is held ([KeyHints.md](KeyHints.md)). Back in Terminal, the grid takes the focus. |
 
 ## Regions
 
