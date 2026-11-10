@@ -12,11 +12,12 @@ import (
 
 // sheetParts are the spec'd components of package app that the spec sheet draws (#458, D179).
 var sheetParts = []apptest.SheetPart{
-	{Name: "AgentRow", W: 320, H: 230, View: func(c *ui.Context) {
+	{Name: "AgentRow", W: 320, H: 280, View: func(c *ui.Context) {
 		kit.AgentRow(c, kit.AgentRowOpts{Title: "Agent board polish", Model: "opus", Age: "14m", State: kit.GlyphWorking, Orchestrator: true, Selected: true})
 		kit.AgentRow(c, kit.AgentRowOpts{Title: "Agent rows on ui.List", Name: "b-241", Model: "sonnet", Age: "6m", State: kit.GlyphWorking})
 		kit.AgentRow(c, kit.AgentRowOpts{Title: "Checks on hc event", Name: "b-250", Model: "sonnet", Age: "2m", State: kit.GlyphNeedsYou})
-		kit.AgentRow(c, kit.AgentRowOpts{Title: "Sprite atlas rebuild", Name: "b-88", Model: "deepseek", Age: "25m", CI: true, State: kit.GlyphIdle}) // waiting on CI: the idle glyph
+		kit.AgentRow(c, kit.AgentRowOpts{Title: "Sprite atlas rebuild", Name: "b-88", Model: "deepseek", Age: "25m", CI: true, State: kit.GlyphIdle})         // waiting on CI: the idle glyph
+		kit.AgentRow(c, kit.AgentRowOpts{Title: "lead", Name: "2 workers", Model: "opus", Age: "14m", State: kit.GlyphWorking, Orchestrator: true, Items: 2}) // two open items: the badge (D240)
 	}},
 	{Name: "StatusGlyph", W: 700, H: 60, View: func(c *ui.Context) {
 		glyphs := []struct {

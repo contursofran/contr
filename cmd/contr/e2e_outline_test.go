@@ -116,6 +116,8 @@ func TestOutlineCapture(t *testing.T) {
 		t.Fatal(err)
 	}
 	time.Sleep(time.Second)
+	// The row label ends with the open items (D240), so it changed with the new to-do.
+	row = c.labelWithPrefix(t, "lead, ")
 	b := c.boundsOf(t, row)
 	c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "click", "x": b.X + b.Width/2, "y": b.Y + b.Height/2}}})
 

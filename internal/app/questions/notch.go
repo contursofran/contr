@@ -73,6 +73,9 @@ type Notch struct {
 	Opened func() bool
 	// Panel builds the card anchored to the notch while it is open; may be nil.
 	Panel func(c *ui.Context, anchor ui.Element, items []agentstate.NeedTab)
+
+	// arrivals tells when the count of the open project goes up (D240).
+	arrivals kit.Arrivals
 }
 
 // Items returns the open items of the project: questions, then to-dos, then
@@ -144,6 +147,12 @@ func (n *Notch) Toggle() {
 func (n *Notch) View(c *ui.Context) {
 	items := n.Items()
 	open := n.Opened != nil && n.Opened()
+	// A new item starts the attention effect (D240). While the card shows, the
+	// owner already sees the items: a new one starts nothing.
+	var arrival kit.Arrival
+	if n.Project != nil {
+		arrival = n.arrivals.Observe(n.Project(), len(items), c.Now(), !open)
+	}
 	if len(items) == 0 {
 		// Nothing waits any more: the card closes with the notch, and does not
 		// open again by itself when something new comes.
@@ -159,6 +168,14 @@ func (n *Notch) View(c *ui.Context) {
 			Radius(0, 0, theme.Radius12, theme.Radius12).Cursor(ui.CursorPointer).
 			FocusRing(false).OnClick(n.Toggle)
 		b = notchShadow(b, p)
+		// The effect plays on the button, which stays while the card shows.
+		look := kit.NotchAttention(c, b, arrival)
+		if open {
+			look = kit.Still
+		}
+		if look.Scale != 1 {
+			b = b.Scale(look.Scale, look.Scale).TransformOrigin(0.5, 0)
+		}
 		focus := b.FocusVisible()
 		b = b.DrawOver(func(pt *ui.Painter, r ui.Rect) {
 			if focus {
@@ -182,12 +199,44 @@ func (n *Notch) View(c *ui.Context) {
 				Padding(0, theme.Space16, 0, theme.Space12).
 				Radius(0, 0, theme.Radius12, theme.Radius12), p).
 				BorderWidth(0, 1, 1, 1).BorderColor(p.FloatLine).Children(func() {
-				kit.StatusGlyph(c, kit.GlyphOpts{State: kit.GlyphNeedsYou, Small: true})
+				notchDot(c, p, look.Pulse)
 				ui.Text(c, NotchLabel(items)).NoWrap().TextColor(p.Ink100).
 					FontSize(theme.StyleLabel.Size).FontWeight(theme.StyleLabel.Weight)
 			})
+			if look.Glow > 0 {
+				notchGlow(c, p, look.Glow)
+			}
 		})
 	})
+}
+
+// Sizes of the notch dot (D240): 8px, with 3px at each side, so it takes the
+// 14px of the small glyph.
+const (
+	notchDotSize   = 8
+	notchDotMargin = 3
+)
+
+// LabelNotchDot names the dot of the notch.
+const LabelNotchDot = "needs you"
+
+// notchDot is the solid `blocked` dot of the notch. pulse (0 to 1) dims it to
+// opacity 0.3 and shrinks it to 0.8 during the pulse after an arrival (D240).
+func notchDot(c *ui.Context, p *theme.Palette, pulse float32) {
+	d := ui.Box(c).Label(LabelNotchDot).Size(notchDotSize, notchDotSize).Shrink(0).MarginX(notchDotMargin).
+		Radius(notchDotSize / 2).Background(p.Blocked)
+	if pulse > 0 {
+		s := 1 - 0.2*pulse
+		d.Opacity(1-0.7*pulse).Scale(s, s).TransformOrigin(0.5, 0.5)
+	}
+}
+
+// notchGlow is the `blocked` glow around the notch after an arrival: a 1px
+// ring and a soft shadow, at strength g (D240). It takes no pointer.
+func notchGlow(c *ui.Context, p *theme.Palette, g float32) {
+	r := float32(theme.Radius12 + 1)
+	ui.Box(c).Absolute().Top(-1).Left(-1).Right(-1).Bottom(-1).PassThrough().
+		Radius(0, 0, r, r).Border(1, p.Blocked.Alpha(0.6*g)).Shadow(0, 0, 18, 3, p.Blocked.Alpha(0.42*g))
 }
 
 // notchShadow gives b the shadow-notch token.

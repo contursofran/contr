@@ -97,6 +97,7 @@ The 16 colors a program in the terminal asks for (SGR 30-37, 90-97, palette 0-15
 | `value` | mono | 11.5px | 16px | 400 | Title-bar change summary; values in the info block. |
 | `meta` | mono | 11px | 16px | 400 | Agent meta line, file diff counts, key hints, option numbers, card time. |
 | `count` | mono | 11px | 14px | 500 | Count of new orchestrator messages above the outline ticks. |
+| `badge` | mono | 10.5px | 16px | 700 | Number of open items in the badge of an orchestrator row (D240). |
 
 ## Spacing
 

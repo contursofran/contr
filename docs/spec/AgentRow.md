@@ -17,6 +17,7 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
 | Line 1 | title in `body`, `ink-60`; one line, ellipsis. A worker shows its issue title, else its task (the terminal title); an orchestrator its name |
 | Line 2 | mono `meta` (11px), `ink-42`, items `space-10` apart: worker name, model and effort, then the age at the right ("b-241  sonnet medium  6m"). An orchestrator shows its role in place of the name: "2 workers", or "orchestrator" with no workers yet; a Claude session that does not orchestrate shows none (D191) |
 | Indent | the orchestrator row sits 16px in from its project row (D169) |
+| Item badge | orchestrator rows with open items (D240): at the right of line 1, `space-8` from the title; height 16px, min width 16px, padding `0 5px`, radius 8px, fill `blocked`; the number in `badge` (mono 10.5px, 700), `ground` |
 | Kids rail | workers indent a further 17px with 9px padding; a 1px `rail` line on the left |
 
 ## States
@@ -25,6 +26,12 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
 - **Hover:** fill `hover`.
 - **Selected:** no fill. Title turns `ink-100`, line 2 `ink-62`. The tabs and the right panel follow the selected row.
 - **Needs you:** the glyph turns `blocked`. The row is not otherwise colored.
+- **Items for you (D240):** an orchestrator whose project has open items
+  that belong to it or its workers shows the item badge with their number.
+  On an arrival (the number goes up) the badge springs (1.25 at 120 ms, 0.94
+  at 260 ms, 1 at 400 ms) and a `blocked` glow (`0 0 12px 3px` at 0.55)
+  fades out by 2.08 s; then it is still. It goes at 0. With Reduce Motion
+  the number changes at once.
 - **Waiting on CI:** idle glyph; line 2 adds "CI" after the model (D145). The data is the checks of the worker's pull request: a live worker that is not working, whose PR has unfinished checks.
 
 ## Behavior
@@ -59,6 +66,16 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
   browser (`gh pr view --web`), never in the PR pane (D127), and is off while
   the agent has no pull request. A failure shows in the status message. Stop asks for no second click: the menu choice is the
   confirmation.
+- Item badge (D240): it counts the open questions, to-dos and blocked menus
+  of the project that the notch counts. An item belongs to the terminal
+  that asked (the blocked worker, or the `coordinator` of the question or
+  to-do), and so to the orchestrator that terminal sits under; an ended
+  worker counts for its parent. An item of no known terminal goes to the
+  first orchestrator of the project, as a worker of no orchestrator does.
+  So the badges of a project add up to the notch count. While the questions
+  file is broken (D146) no badge shows.
+- Icon column (D128): an orchestrator with open items shows a still 6px
+  `blocked` dot at the top right of its glyph; the badge does not fit.
 - A selected agent that is gone leaves the selection.
 - The project row shows the selection for the project itself, and while the
   project is folded; an open project shows it on the agent row.
@@ -81,11 +98,13 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
 
 ## Accessibility
 
-- Label: "<title>, <state>, <issue>, <model>".
+- Label: "<title>, <state>, <issue>, <model>". An orchestrator with open
+  items adds ", 2 items for you" ("1 item for you"). The badge is "items
+  for you"; the dot of the icon column "items for you dot".
 
 ## Tokens
 
-`hover`, `rail`, `ink-100`, `ink-62`, `ink-60`, `ink-42`, `space-10`, `radius-8`, `body`, `meta`.
+`hover`, `rail`, `ink-100`, `ink-62`, `ink-60`, `ink-42`, `space-8`, `space-10`, `radius-8`, `body`, `meta`, `badge`, `blocked`, `ground`.
 
 ## Build in MyGo
 
@@ -95,6 +114,9 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
   (an age shows) and the window visibility.
 - Keys: ↑ ↓ move the selection, ⏎ focuses the terminal.
 - `.ContextMenu(...)`: Interrupt, Stop, Close, Open PR.
+- Item badge: `kit.Arrivals` per orchestrator address, `kit.BadgeAttention`
+  with MyGo `Keyframes` on the badge, asked only while the effect plays
+  (D240).
 
 ## Do and do not
 
@@ -112,6 +134,9 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
 
 - View: orchestrator and worker rows, selected, needs you, waiting on CI.
 - View: click selects the agent and the tabs change.
+- View: badge count per orchestrator (its own items and its workers'),
+  gone at 0, none on worker rows, a dot in the icon column; the badge moves
+  on an arrival and asks for no frame after it (D240).
 
 ## Replaces
 

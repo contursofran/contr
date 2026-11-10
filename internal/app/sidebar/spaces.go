@@ -112,6 +112,8 @@ type SpacesList struct {
 	scanFn func([]string) git.Scan
 
 	groups []spaces.RepoGroup
+	// arrivals tells when the open items of an orchestrator go up (D240).
+	arrivals kit.Arrivals
 	// projects is the owner's order and hidden groups (D109). Nil keeps the
 	// tree order and hides nothing. UI thread only.
 	projects *projects.Store
