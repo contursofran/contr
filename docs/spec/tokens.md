@@ -94,7 +94,6 @@ The 16 colors a program in the terminal asks for (SGR 30-37, 90-97, palette 0-15
 | `label` | sans | 12px | 18px | 500 | Panel headings: Projects, Servers, the files root. |
 | `chip` | sans | 11.5px | 16px | 400 | Question chips in the open notch; "via orchestrator". |
 | `terminal` | mono | 13px | 20px | 400 | Terminal grid. The terminal plugin sets it, not the view. |
-| `glyph` | mono | 17px | 18px | 400 | Braille status glyph in sidebar rows; 14px in tabs and the notch. |
 | `value` | mono | 11.5px | 16px | 400 | Title-bar change summary; values in the info block. |
 | `meta` | mono | 11px | 16px | 400 | Agent meta line, file diff counts, key hints, option numbers, card time. |
 | `count` | mono | 11px | 14px | 500 | Count of new orchestrator messages above the outline ticks. |
