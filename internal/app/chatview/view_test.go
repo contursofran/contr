@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -277,5 +278,59 @@ func TestTheSwitchIsSolid(t *testing.T) {
 	}
 	if a, b := pixel(ui.RGBA(255, 0, 0, 255)), pixel(ui.RGBA(0, 0, 255, 255)); a != b {
 		t.Errorf("the background shows through the switch: %v over red, %v over blue", a, b)
+	}
+}
+
+func TestTimeText(t *testing.T) {
+	zone := time.FixedZone("UTC-3", -3*3600)
+	now := time.Date(2026, 11, 10, 20, 0, 0, 0, zone)
+	for at, want := range map[string]string{
+		"2026-11-10T17:32:00Z": "14:32",           // today, in the zone
+		"2026-11-10T02:59:00Z": "Yesterday 23:59", // the 9th in the zone
+		"2026-11-09T03:00:00Z": "Yesterday 00:00",
+		"2026-11-09T02:00:00Z": "8 Nov 23:00",
+		"2025-12-31T12:05:00Z": "31 Dec 09:05",
+	} {
+		tm, err := time.Parse(time.RFC3339, at)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := TimeText(tm, now); got != want {
+			t.Errorf("TimeText(%s) = %q, want %q", at, got, want)
+		}
+	}
+}
+
+// The time of a prompt shows under it at the right; the time of an answer once, under its last
+// text, at the left. A pending prompt and an entry with no time show none.
+func TestSentTimes(t *testing.T) {
+	r := newRig(t)
+	r.savePath(term)
+	r.selectTerm(term)
+	r.chat()
+	now := r.tt.Now()
+	at := func(d time.Duration) string { return now.Add(-d).UTC().Format(time.RFC3339Nano) }
+	text := func(uuid, s string, ago time.Duration) string {
+		return `{"type":"assistant","uuid":"` + uuid + `","timestamp":"` + at(ago) + `","message":{"content":[{"type":"text","text":"` + s + `"}]}}`
+	}
+	r.write(`{"type":"user","uuid":"p1","timestamp":"`+at(5*time.Minute)+`","message":{"content":"first"}}`,
+		text("s1", "one", 4*time.Minute), text("s2", "two", 3*time.Minute),
+		`{"type":"user","uuid":"p2","message":{"content":"no time"}}`)
+	want := []string{TimeText(now.Add(-5*time.Minute), now), TimeText(now.Add(-3*time.Minute), now)}
+	prompt, _ := r.tt.Find("first")
+	two, _ := r.tt.Find("two")
+	p, ok1 := r.tt.Find(want[0])
+	s, ok2 := r.tt.Find(want[1])
+	if !ok1 || !ok2 {
+		t.Fatalf("times %q not in %v", want, r.tt.Texts())
+	}
+	if r.tt.HasText(TimeText(now.Add(-4*time.Minute), now)) {
+		t.Error("the time of a text that is not the last of its answer shows")
+	}
+	if p.X+p.W < prompt.X+prompt.W-14 || p.Y < prompt.Y {
+		t.Errorf("prompt time %+v is not under the bubble at the right %+v", p, prompt)
+	}
+	if s.X > two.X+1 || s.Y < two.Y {
+		t.Errorf("answer time %+v is not under the text at the left %+v", s, two)
 	}
 }

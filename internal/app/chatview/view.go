@@ -1,6 +1,8 @@
 package chatview
 
 import (
+	"time"
+
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
 
@@ -84,7 +86,7 @@ func (ch *Chat) View(c *ui.Context, toTerminal func()) {
 		rows, pending := ch.model.Rows(), ch.model.Pendings()
 		ui.List(c, &ch.list, len(rows)+len(pending), func(i int) {
 			if i < len(rows) {
-				ch.row(c, rows[i])
+				ch.row(c, rows[i], i+1 < len(rows) && rows[i+1].Kind == RowSaid)
 				return
 			}
 			p := pending[i-len(rows)]
@@ -112,18 +114,54 @@ func column(c *ui.Context, fn func()) {
 	})
 }
 
-func (ch *Chat) row(c *ui.Context, r Row) {
+// row builds row r. moreSaid tells that a text of Claude comes next: the time of an answer shows
+// once, under its last text.
+func (ch *Chat) row(c *ui.Context, r Row, moreSaid bool) {
 	c = c.Key(r.ID)
 	switch r.Kind {
 	case RowPrompt:
-		column(c, func() { ch.prompt(c, ch.model.Entry(r.Entry).Text, false) })
+		e := ch.model.Entry(r.Entry)
+		column(c, func() {
+			ch.prompt(c, e.Text, false)
+			sentAt(c, e.Time, ui.End)
+		})
 	case RowSaid:
-		ch.said(c, r.ID, ch.model.Entry(r.Entry).Text)
+		e := ch.model.Entry(r.Entry)
+		ch.said(c, r.ID, e.Text)
+		if !moreSaid {
+			column(c, func() { sentAt(c, e.Time, ui.Start) })
+		}
 	case RowGroup:
 		ch.group(c, r)
 	case RowOwnerNote:
 		column(c, func() { ch.noteLine(c, ch.model.Entry(r.Entry), true) })
 	}
+}
+
+// sentAt is the line with the time an entry was sent, at the start or the end of the column. A
+// time that is missing or does not parse shows nothing. It is a fixed text: nothing ticks (D55).
+func sentAt(c *ui.Context, at string, align ui.Align) {
+	t, err := time.Parse(time.RFC3339Nano, at)
+	if at == "" || err != nil {
+		return
+	}
+	kit.Styled(ui.Text(c, TimeText(t, c.Now())), theme.StyleMeta).NoWrap().AlignSelf(align).
+		Margin(theme.Space4, 0, 0, 0).TextColor(theme.Current().Ink45)
+}
+
+// TimeText is when an entry was sent, in the time zone of now: "14:32" today, "Yesterday 14:32",
+// else "9 Nov 14:32".
+func TimeText(t, now time.Time) string {
+	t = t.In(now.Location())
+	y, m, d := now.Date()
+	today := time.Date(y, m, d, 0, 0, 0, 0, now.Location())
+	switch {
+	case !t.Before(today) && t.Before(today.AddDate(0, 0, 1)):
+		return t.Format("15:04")
+	case !t.Before(today.AddDate(0, 0, -1)) && t.Before(today):
+		return "Yesterday " + t.Format("15:04")
+	}
+	return t.Format("2 Jan 15:04")
 }
 
 // prompt is the owner's text, at the right, on a hover fill, in ink-100. A pending prompt is

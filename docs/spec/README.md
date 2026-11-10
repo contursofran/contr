@@ -29,7 +29,7 @@ what the redesign does not settle.
 | [Terminal.md](Terminal.md) | the hc terminal of the selected tab |
 | [QuestionsNotch.md](QuestionsNotch.md) | glass tab at the top of each terminal of the project |
 | [QuestionsCard.md](QuestionsCard.md) | the open notch: one question, its choices, a free answer |
-| [ChatView.md](ChatView.md) | the Chat mode of a Claude session's terminal: the transcript, the work groups, the dock |
+| [ChatView.md](ChatView.md) | the Chat mode of a Claude session's terminal: the transcript, the work groups, the live line, the composer |
 | [OrchestratePill.md](OrchestratePill.md) | glass pill at the top right of a Claude session's terminal: Orchestrating, or the Orchestrate button |
 | [Outline.md](Outline.md) | message ticks on the right edge of the orchestrator terminal |
 | [OutlineCard.md](OutlineCard.md) | the card of a hovered tick |
