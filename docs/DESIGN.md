@@ -143,7 +143,8 @@ From the top: window buttons and `contr`, Spaces, then Agents at the bottom,
 then Settings.
 
 - **Spaces** header with a `projects` pill and `+ new` (D57: folder picker,
-  then an orchestrator in that folder). The pill opens the projects modal
+  then an orchestrator in that folder; a folder outside git asks first to
+  make it a git repository, and the new orchestrator gets selected, D233). The pill opens the projects modal
   (D113).
 - **Device group:** a header row `This computer` (11 px, dim, with a monitor
   icon). Only the local Mac shows (D68); `+ Add machine` and other device

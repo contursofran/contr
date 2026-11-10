@@ -18,6 +18,10 @@ import (
 // orchestratorProfile is the profile that `+ new` starts (D57).
 const orchestratorProfile = "orchestrator"
 
+// folderPicker is the picker of `+ new`. E2e builds can replace it
+// (CONTR_E2E_PICK_FOLDER), as the system dialog cannot be driven.
+var folderPicker = pickFolder
+
 // pickFolder asks the owner for a project folder with the system dialog. It
 // blocks, so the frame calls it off the UI thread.
 func pickFolder() (string, error) {

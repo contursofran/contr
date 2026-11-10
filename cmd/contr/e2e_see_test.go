@@ -124,6 +124,11 @@ var seeFixtures = map[string]seeFixture{
 		},
 		ready: "lead, ",
 	},
+	"nongit": {
+		about: "the workers fixture; `+ new` picks the folder notes, which is outside git: press New orchestrator (D233)",
+		setup: func(t *testing.T, h *harness) { seeNonGit(t, h) },
+		ready: "lead, ",
+	},
 	"session": {
 		about: "the orchestrator lead with the todos and artifacts of canvas board 11 (D197)",
 		setup: seeSession,
@@ -229,6 +234,23 @@ func (h *harness) recentProject(t *testing.T, name string) {
 }
 
 func seeWorkers(t *testing.T, h *harness) { seeWorkersRepo(t, h) }
+
+// seeNonGit is the workers fixture with `+ new` set to pick a folder outside
+// git, and a fake orchestrator profile, so no real tool starts. It returns
+// the folder.
+func seeNonGit(t *testing.T, h *harness) string {
+	seeWorkers(t, h)
+	dir := filepath.Join(h.home, "code", "notes")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := `{"profiles":{"orchestrator":{"argv":["sh","-c","echo lead; sleep 600"]}}}`
+	if err := os.WriteFile(filepath.Join(h.dir, "agents.json"), []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CONTR_E2E_PICK_FOLDER", dir)
+	return dir
+}
 
 // seeWorkersRepo spawns the workers fixture and returns its repository.
 func seeWorkersRepo(t *testing.T, h *harness) string {
