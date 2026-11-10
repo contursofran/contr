@@ -60,6 +60,18 @@ type Palette struct {
 	FocusRing    ui.Color `token:"focus-ring"`
 	Lights       ui.Color `token:"lights"`
 
+	// The content palette (D261): colors of what Claude writes in the chat, never of the chrome.
+	ContentDone    ui.Color `token:"content-done"`
+	ContentRunning ui.Color `token:"content-running"`
+	ContentWaiting ui.Color `token:"content-waiting"`
+	ContentFailed  ui.Color `token:"content-failed"`
+	ContentInfo    ui.Color `token:"content-info"`
+	CodeKeyword    ui.Color `token:"code-keyword"`
+	CodeFunction   ui.Color `token:"code-function"`
+	CodeString     ui.Color `token:"code-string"`
+	CodeNumber     ui.Color `token:"code-number"`
+	CodeComment    ui.Color `token:"code-comment"`
+
 	// ANSI is the 16-color palette of programs in the terminal, in ANSIName
 	// order (docs/spec/tokens.md, ANSI). A program draws these colors itself,
 	// so they are not chrome tokens.
@@ -155,6 +167,17 @@ var Dark = &Palette{
 	FocusRing:    white(0.5),
 	Lights:       white(0.14),
 
+	ContentDone:    ui.Hex("#7fb88a"),
+	ContentRunning: ui.Hex("#7aa7e6"),
+	ContentWaiting: ui.Hex("#d9b36a"),
+	ContentFailed:  ui.Hex("#f07178"),
+	ContentInfo:    white(0.64),
+	CodeKeyword:    ui.Hex("#b79ce6"),
+	CodeFunction:   ui.Hex("#86b4ee"),
+	CodeString:     ui.Hex("#9cc58f"),
+	CodeNumber:     ui.Hex("#e0b36a"),
+	CodeComment:    white(0.48),
+
 	// The palette the v0.2 terminal had (TerminalPalette).
 	ANSI: ansi([16]uint32{
 		0x1E1E1E, 0xE06C6C, 0x8CC07A, 0xE0C070, 0x6CA8E8, 0xC080D8, 0x5CC0C8, 0xD0D0D0,
@@ -223,6 +246,17 @@ var Light = &Palette{
 	Claude:       ui.Hex("#c15f3c"),
 	FocusRing:    black(0.45),
 	Lights:       black(0.14),
+
+	ContentDone:    ui.Hex("#1e763b"),
+	ContentRunning: ui.Hex("#1f5fbf"),
+	ContentWaiting: ui.Hex("#8a5a00"),
+	ContentFailed:  ui.Hex("#b1333f"),
+	ContentInfo:    black(0.7),
+	CodeKeyword:    ui.Hex("#8250df"),
+	CodeFunction:   ui.Hex("#1f5fbf"),
+	CodeString:     ui.Hex("#1e763b"),
+	CodeNumber:     ui.Hex("#8a5a00"),
+	CodeComment:    black(0.586),
 
 	// Ghostty's GitHub Light Default, tuned for the Light panel (D129): the
 	// dim yellow and the white colors are darker, so each of the 16 colors

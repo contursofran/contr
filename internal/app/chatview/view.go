@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
-	"github.com/egoist/mygo/ui/markdown"
 
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/shortcut"
@@ -339,25 +338,4 @@ func (ch *Chat) callLine(c *ui.Context, e transcript.Entry) {
 			kit.Styled(ui.Text(c, DurationText(d)), theme.StyleMeta).NoWrap().Shrink(0).TextColor(pal.Ink38)
 		}
 	})
-}
-
-// mdTheme styles Claude's Markdown with the tokens of the current theme: prose in ink-85, strong
-// text and links in ink-95, code in mono.
-func (ch *Chat) mdTheme(pal *theme.Palette) {
-	if ch.md.Theme != nil && ch.md.Theme.Text == pal.Ink85 {
-		return
-	}
-	th := &markdown.Theme{
-		FontSize: theme.StyleProse.Size, Font: theme.FontFamilySans, CodeFont: theme.FontFamily,
-		LineHeight: theme.StyleProse.Line / theme.StyleProse.Size,
-		Text:       pal.Ink85, Muted: pal.Ink45, Link: pal.Ink95, Strong: pal.Ink95,
-		Code: pal.Ink90, CodeBackground: pal.Hover,
-		QuoteBar: pal.Hairline, QuoteText: pal.Ink62, Rule: pal.Hairline,
-		CodeBlockBackground: pal.Hover, CodeBlockBorder: pal.Hairline,
-		TableBorder: pal.Hairline, TableHeader: pal.Hover, Mark: pal.Selected, Checkbox: pal.Ink45,
-	}
-	for i := range th.Headings {
-		th.Headings[i] = markdown.HeadingStyle{Size: 1.15 - 0.03*float32(i), Weight: 500, Color: pal.Ink95, Top: 1, Bottom: 0.4}
-	}
-	ch.md.Theme = th
 }

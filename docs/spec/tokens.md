@@ -56,6 +56,23 @@ Contrast numbers are for Dark unless they say Light. "On glass" is on `glass-win
 | `focus-ring` | `rgba(255,255,255,0.5)` | `rgba(0,0,0,0.45)` | The 1px keyboard focus ring of every button, 2px outside it. |
 | `lights` | `rgba(255,255,255,0.14)` | `rgba(0,0,0,0.14)` | Previews only: the traffic-light stand-ins. macOS draws the real ones. |
 
+### Content
+
+The content palette (D261) colors what Claude writes in the chat, never the chrome. A content color shows only as a dot, a word, a 2px bar or a 1px line: never a fill and never a row. Diff lines are the one exception: a line added or removed in a diff block has a tint of its color (`DiffTint`, the color at 9% alpha). Each color has 4.5:1 as text on the stage; the code colors on a code block (`hover` over the stage); `content-done` and `content-failed` also on their diff tint. The Light values of the canvas board were estimates: `content-done` is #1e763b, not #1f7a3d (4.3:1 on its tint), and `content-failed` is `blocked-text`, not `blocked` (4.1:1 on its tint).
+
+| Token | Dark | Light | Use |
+|---|---|---|---|
+| `content-done` | `#7fb88a` | `#1e763b` | Done, merged, passed: the Done remark, added diff lines. Dark 8.4:1 on stage, 6.7:1 on its tint; Light 5.6:1 and 4.5:1. |
+| `content-running` | `#7aa7e6` | `#1f5fbf` | Work in progress. Dark 7.9:1, Light 6.0:1 on stage. |
+| `content-waiting` | `#d9b36a` | `#8a5a00` | Waits, at risk: the Warning remark. Dark 9.8:1, Light 5.8:1 on stage. |
+| `content-failed` | `#f07178` | `#b1333f` | Failed, needs the owner: the Decision needed remark, removed diff lines. The chrome's red text (`blocked-text`). Dark 6.8:1 on stage, 5.6:1 on its tint; Light 6.0:1 and 4.9:1. |
+| `content-info` | `rgba(255,255,255,0.64)` | `rgba(0,0,0,0.7)` | Neutral remarks: Note, Not verified; hunk lines of a diff. Dark 8.2:1, Light 8.6:1 on stage. |
+| `code-keyword` | `#b79ce6` | `#8250df` | Keywords in code blocks. Dark 7.6:1, Light 4.5:1 on a code block. |
+| `code-function` | `#86b4ee` | `#1f5fbf` | Functions, types, tags. Dark 8.3:1, Light 5.5:1 on a code block. |
+| `code-string` | `#9cc58f` | `#1e763b` | Strings, escapes, regular expressions. Dark 9.2:1, Light 5.1:1 on a code block. |
+| `code-number` | `#e0b36a` | `#8a5a00` | Numbers and constants. Dark 9.2:1, Light 5.3:1 on a code block. |
+| `code-comment` | `rgba(255,255,255,0.48)` | `rgba(0,0,0,0.586)` | Comments, in italic. Dark 4.9:1, Light 5.3:1 on a code block. |
+
 ## ANSI
 
 The 16 colors a program in the terminal asks for (SGR 30-37, 90-97, palette 0-15). The terminal plugin takes the palette of the theme (docs/spec/Terminal.md); a theme change swaps it with no reconnect. Dark is the v0.2 `TerminalPalette`. Light is Ghostty's GitHub Light Default tuned for contrast on the light stage (D129): the dim yellow is a dark ochre, and white and bright white are mid and dark greys, because a light grey would not show on a light stage. Each Light color has at least 4.5:1 on the flattened stage (`stage` over `glass-window` over `ground`: #fdfdfd in Light, #0c0d10 in Dark, D250); black has 14.4:1. Dark black and bright black are below 4.5:1 on purpose: programs use them as fills and dim text, as in the v0.2 palette.
