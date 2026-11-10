@@ -155,8 +155,8 @@ type Outline struct {
 
 // Top returns the top of the column's content, the count or the first tick's
 // hit area, in the overlay, from the last frame drawn. ok is false while
-// no column shows. The orchestrate pill reads it to keep clear of the column
-// (D237). A nil outline has no column.
+// no column shows. The Chat | Terminal switch reads it to keep clear of the
+// column (D237, D253). A nil outline has no column.
 func (o *Outline) Top() (top float32, ok bool) {
 	if o == nil {
 		return 0, false

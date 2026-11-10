@@ -95,8 +95,8 @@ type Frame struct {
 	Card *questions.QuestionsCard
 	// Notch is the questions notch in the terminal overlay ([Frame.Attach] makes it).
 	Notch *questions.Notch
-	// Pill is the orchestrate pill in the terminal overlay; [Frame.Attach] makes it with the
-	// agent state (D234).
+	// Pill is the orchestrate pill in the title bar; [Frame.Attach] makes it with the agent state
+	// (D234, D253).
 	Pill *orchestrate.Pill
 	// ProjectsModal is the projects modal (D110), made in Attach.
 	ProjectsModal *projectsview.ProjectsModal
@@ -687,6 +687,10 @@ func (f *Frame) titleBar(c *ui.Context, sidebarW float32, narrow bool) {
 		f.bar.Diff, f.bar.OpenReview = f.Diff, f.openReviewView
 		f.bar.Search = f.openFind
 		f.bar.Update = f.updatePill
+		f.bar.Orchestrate, f.bar.Narrow = nil, narrow
+		if f.Pill != nil {
+			f.bar.Orchestrate = f.Pill.View
+		}
 		f.bar.Build(c, f.panelOpen && !narrow, narrow, f.TogglePanel)
 	})
 }
