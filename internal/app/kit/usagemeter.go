@@ -32,21 +32,28 @@ type Meter struct {
 func UsageMeter(c *ui.Context, meters []Meter) ui.Element {
 	return ui.Column(c).Label("usage").Grow(1).MinWidth(0).Gap(theme.Space7).
 		// The Panel footer already has 6px above its content.
-		Padding(theme.Space12-theme.Space6, theme.Space8, theme.Space2).Children(func() {
-		for _, m := range meters {
-			meterLine(c, m)
+		// The sides are 10px, so the text sits 20px from the panel side (D228).
+		Padding(theme.Space12-theme.Space6, theme.Space10, theme.Space2).Children(func() {
+		for i, m := range meters {
+			// Each meter after the first has space-6 more above it.
+			var top float32
+			if i > 0 {
+				top = theme.Space6
+			}
+			meterLine(c, m, top)
 		}
 	})
 }
 
-// meterLine is the row of label and value, with the bar under it.
-func meterLine(c *ui.Context, m Meter) {
+// meterLine is the row of label and value, with the bar under it, and top
+// more space above it.
+func meterLine(c *ui.Context, m Meter, top float32) {
 	p := theme.Current()
 	value := m.Value
 	if !m.Has || value == "" {
 		value = NoValue
 	}
-	ui.Column(c).Label(m.Label + " line").Gap(theme.Space4).Children(func() {
+	ui.Column(c).Label(m.Label+" line").Gap(theme.Space4).Margin(top, 0, 0).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(theme.Space4).Children(func() {
 			ui.Text(c, m.Label).SingleLine().Grow(1).MinWidth(0).
 				Font(theme.StyleSmall.Family()).FontSize(theme.StyleSmall.Size).FixedLineHeight(theme.StyleSmall.Line).TextColor(p.Ink42)

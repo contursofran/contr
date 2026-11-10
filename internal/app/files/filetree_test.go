@@ -446,3 +446,24 @@ func TestFileIconByKind(t *testing.T) {
 		}
 	}
 }
+
+// The content of a row sits 20px inside the panel line: panel padding 10 plus
+// row padding 10, then the 15px icon and space-7 before the name. Each level
+// indents space-16 plus space-4 more (D228).
+func TestFileTreeRowsSit20pxFromThePanelSide(t *testing.T) {
+	dir := changedRepo(t)
+	apptest.Write(t, dir, "src/deep/inner.go", "x\ny\n")
+	r := newTreeRig(t, dir)
+	r.ft.onlyChanged = true
+	r.frame()
+	panel := apptest.Box(t, r.tt, "Files")
+	// A changed row is labeled with its counts, so these find the name texts.
+	top, nested := apptest.Box(t, r.tt, "mod.go"), apptest.Box(t, r.tt, "inner.go")
+	const line = 1 // the panel line
+	if got, want := top.X-panel.X, float32(line+theme.Space10+theme.Space10+15+theme.Space7); got != want {
+		t.Errorf("top-level name at %v from the panel side, want %v", got, want)
+	}
+	if got, want := nested.X-top.X, float32(2*(theme.Space16+theme.Space4)); got != want {
+		t.Errorf("a name two levels down indents %v, want %v", got, want)
+	}
+}

@@ -13,7 +13,7 @@ Design system page: component Terminal. Shared rules: [README.md](README.md).
 | Part | Value |
 |---|---|
 | Panel | Panel with padding 0 |
-| Text | mono `terminal` (13/20), `terminal-text`; dim lines `ink-42`; padding `18px 26px 10px`; text sits at the bottom |
+| Text | mono `terminal` (13/20), `terminal-text`; dim lines `ink-42`; padding `14px 20px 12px` (D228); text sits at the bottom |
 | Overlays | QuestionsNotch at the top center, Outline at the right edge (orchestrator only) |
 
 ## States
@@ -85,7 +85,7 @@ Design system page: component Terminal. Shared rules: [README.md](README.md).
 
 ## Tokens
 
-`terminal`, `terminal-text`, `ink-42`, `ink-38`, `ink-95` (cursor, selected search match), `press` (search matches), `ansi-*`, `space-18`, `space-26`, `space-10`, `panel`.
+`terminal`, `terminal-text`, `ink-42`, `ink-38`, `ink-95` (cursor, selected search match), `press` (search matches), `ansi-*`, `space-14`, `space-20`, `space-12`, `panel`.
 
 ## Build in MyGo
 
