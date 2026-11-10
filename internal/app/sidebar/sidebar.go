@@ -178,10 +178,11 @@ func (l *SpacesList) head(c *ui.Context, name string, buttons func()) {
 // rowIcon is a 15px line icon in the given ink. The color is set here: a
 // selected ButtonBase gives its content the accent's text color, which is
 // almost invisible on a flat row (the This Mac icon, #436).
-func rowIcon(c *ui.Context, name string, ink ui.Color) {
+func rowIcon(c *ui.Context, name string, ink ui.Color) ui.Element {
 	if s := icons.Line(name); s != nil {
-		ui.Icon(c, s).Size(15, 15).Shrink(0).TextColor(ink)
+		return ui.Icon(c, s).Size(15, 15).Shrink(0).TextColor(ink)
 	}
+	return ui.Element{}
 }
 
 // serverIconInk is the ink of the This Mac icon: its row is always the selected look.
@@ -209,7 +210,7 @@ func (l *SpacesList) serverRow(c *ui.Context) {
 	}
 	kit.Row(c, kit.RowOpts{
 		Flat: true, Label: ServerLabel(l.online), Text: "This Mac", Meta: l.ServerMeta(), Selected: true,
-		Lead: func() { rowIcon(c, "computer", serverIconInk(theme.Current())) }, Compact: l.Compact, Tip: "This Mac",
+		Lead: func() ui.Element { return rowIcon(c, "computer", serverIconInk(theme.Current())) }, Compact: l.Compact, Tip: "This Mac",
 		OnClick: click,
 	})
 }
@@ -326,7 +327,15 @@ func (l *SpacesList) projectRow(c *ui.Context, g spaces.RepoGroup, index int) {
 		o.NameInk, iconInk = p.Ink42, projectIconInk(p, false, true)
 	}
 	o.Menu = func(m *ui.Menu) { l.projectMenu(m, g) }
-	o.Lead = func() { rowIcon(c, "folder", iconInk) }
+	o.Lead = func() ui.Element { return rowIcon(c, "folder", iconInk) }
+	// The rows before and after the open project show the keys that select them (⌘⌥←, ⌘⌥→). With
+	// two projects the other one is both: it shows ⌥→.
+	switch index {
+	case l.projectStep(1):
+		o.Hint = shortcut.Of(shortcut.NextProject).HintIf(l.Hints)
+	case l.projectStep(-1):
+		o.Hint = shortcut.Of(shortcut.PrevProject).HintIf(l.Hints)
+	}
 	if index == 0 {
 		kit.Row(c, o)
 		return

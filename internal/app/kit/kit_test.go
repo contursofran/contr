@@ -149,7 +149,7 @@ func TestCodeViewFollowsLightAndDark(t *testing.T) {
 
 func TestRowDrawsItsLeadAndHeightOfMatches(t *testing.T) {
 	led := 0
-	o := RowOpts{Label: "r", Text: "r", Sub: "s", Lead: func() { led++ }}
+	o := RowOpts{Label: "r", Text: "r", Sub: "s", Lead: func() ui.Element { led++; return ui.Element{} }}
 	tt := ui.NewTester(func(c *ui.Context) {
 		ui.Column(c).Width(240).Children(func() { Row(c, o) })
 	}, 400, 200)

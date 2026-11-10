@@ -55,7 +55,7 @@ type AgentRowOpts struct {
 	// icon column (D128). The label, click and menu stay.
 	Compact bool
 	Tip     string
-	// Hint is the key chip at the right end of the row while ⌘ is held (KeyHint). Empty: none.
+	// Hint is the key chip on the status glyph while ⌘ is held (KeyHint). Empty: none.
 	Hint string
 	// Items is the number of open items of an orchestrator: questions, to-dos
 	// and blocked menus of it and its workers. Above 0 a `blocked` badge with
@@ -125,24 +125,28 @@ func AgentRowHeight(orchestrator bool) float32 {
 func AgentRow(c *ui.Context, o AgentRowOpts) {
 	// The column takes the width; the margins sit inside it, so they count in
 	// the row's width (D40) and the age at the right is not cut off.
-	ui.Column(c).FillWidth().Shrink(0).Children(func() {
-		defer KeyHint(c, o.Hint, ui.AnchorRight, ui.AnchorRight)
+	// The key chip sits on the status glyph (KeyHint), inside the column.
+	col := ui.Column(c).FillWidth().Shrink(0)
+	col.Children(func() {
+		var glyph ui.Element
+		defer func() { KeyHint(c, o.Hint, col, glyph) }()
 		if o.Compact {
-			compactAgentButton(c, o)
+			glyph = compactAgentButton(c, o)
 			return
 		}
 		if o.Orchestrator {
-			agentRowButton(c, o, RowInsetX, RowInsetX+OrchestratorIndent)
+			glyph = agentRowButton(c, o, RowInsetX, RowInsetX+OrchestratorIndent)
 			return
 		}
 		ui.Row(c).Shrink(0).MarginStart(RowInsetX+OrchestratorIndent+RailIndent).MarginEnd(RowInsetX).
 			PaddingStart(RailPad).BorderWidth(0, 0, 0, 1).BorderColor(theme.Current().Rail).Children(func() {
-			agentRowButton(c, o, 0, 0)
+			glyph = agentRowButton(c, o, 0, 0)
 		})
 	})
 }
 
-func agentRowButton(c *ui.Context, o AgentRowOpts, marginEnd, marginStart float32) {
+// agentRowButton builds the button of a two-line row and returns its status glyph.
+func agentRowButton(c *ui.Context, o AgentRowOpts, marginEnd, marginStart float32) ui.Element {
 	p := theme.Current()
 	titleInk, metaInk := p.Ink60, p.Ink42
 	if o.Selected {
@@ -178,8 +182,9 @@ func agentRowButton(c *ui.Context, o AgentRowOpts, marginEnd, marginStart float3
 	if o.Menu != nil {
 		row = row.ContextMenu(o.Menu)
 	}
+	var glyph ui.Element
 	row.Children(func() {
-		StatusGlyph(c, GlyphOpts{State: o.State, Claude: o.Orchestrator, Grey: o.Grey})
+		glyph = StatusGlyph(c, GlyphOpts{State: o.State, Claude: o.Orchestrator, Grey: o.Grey})
 		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 			title := func() ui.Element {
 				return ui.Text(c, o.Title).Label(o.Label + " title").SingleLine().MinWidth(0).
@@ -229,6 +234,7 @@ func agentRowButton(c *ui.Context, o AgentRowOpts, marginEnd, marginStart float3
 			})
 		})
 	})
+	return glyph
 }
 
 // InsetRing draws the inset layers of a token shadow, as MyGo's inset shadow:
@@ -245,7 +251,8 @@ func InsetRing(el ui.Element, sh theme.Shadow) ui.Element {
 // compactAgentButton is an agent in an icon column: the status glyph alone.
 // Only the fill shows the selection, as the glyph keeps the color of its state;
 // a worker that needs the owner has the `blocked` fill and ring (D249).
-func compactAgentButton(c *ui.Context, o AgentRowOpts) {
+// It returns the glyph.
+func compactAgentButton(c *ui.Context, o AgentRowOpts) ui.Element {
 	p := theme.Current()
 	row := ui.ButtonBase(c).Label(o.Label).Height(theme.SizeRowHeight).Shrink(0).Center().
 		MarginX(theme.Space6).Radius(theme.Radius8).Cursor(ui.CursorPointer).Selected(o.Selected)
@@ -268,8 +275,9 @@ func compactAgentButton(c *ui.Context, o AgentRowOpts) {
 	if o.Tip != "" {
 		row = row.Tooltip(o.Tip)
 	}
+	var g ui.Element
 	row.Children(func() {
-		g := StatusGlyph(c, GlyphOpts{State: o.State, Claude: o.Orchestrator, Grey: o.Grey})
+		g = StatusGlyph(c, GlyphOpts{State: o.State, Claude: o.Orchestrator, Grey: o.Grey})
 		if o.Items > 0 {
 			// The badge has no room here: a still `blocked` dot on the glyph.
 			g.Children(func() {
@@ -278,6 +286,7 @@ func compactAgentButton(c *ui.Context, o AgentRowOpts) {
 			})
 		}
 	})
+	return g
 }
 
 // itemBadge is the `blocked` badge with the number of open items (D240). On

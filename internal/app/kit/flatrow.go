@@ -60,15 +60,18 @@ func flatRow(c *ui.Context, o RowOpts) {
 			row = row.Tooltip(o.Tip)
 		}
 		row.Children(func() {
+			var lead ui.Element
 			if o.Lead != nil {
-				o.Lead()
+				lead = o.Lead()
 			}
+			KeyHint(c, o.Hint, row, lead)
 		})
 		return
 	}
 	row.Children(func() {
+		var lead ui.Element
 		if o.Lead != nil {
-			o.Lead()
+			lead = o.Lead()
 		}
 		ui.Text(c, o.Text).Label(label + " text").Grow(1).MinWidth(0).SingleLine().
 			Font(style.Family()).FontSize(style.Size).FontWeight(style.Weight).TextColor(nameInk)
@@ -79,5 +82,6 @@ func flatRow(c *ui.Context, o RowOpts) {
 		if o.Trail != nil {
 			o.Trail()
 		}
+		KeyHint(c, o.Hint, row, lead)
 	})
 }
