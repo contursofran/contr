@@ -29,6 +29,7 @@ func hookRun(t *testing.T, env map[string]string, input string, lines ...string)
 	if input == "" {
 		input = `{"transcript_path":"` + tr + `","cwd":"` + dir + `"}`
 	}
+	env = withStateDir(env, dir)
 	core := &cliCore{}
 	dial := func(context.Context, func(string) string) (agentsCore, error) { return core, nil }
 	var stderr bytes.Buffer
@@ -37,6 +38,16 @@ func hookRun(t *testing.T, env map[string]string, input string, lines ...string)
 }
 
 var workerEnv = map[string]string{"CONTR_COORDINATOR": "t1", "HC_TERMINAL_ID": "t7"}
+
+// withStateDir is a copy of env with CONTR_STATE_DIR under dir, so the hook
+// saves its session file there and not in the real state dir.
+func withStateDir(env map[string]string, dir string) map[string]string {
+	out := map[string]string{"CONTR_STATE_DIR": filepath.Join(dir, "state")}
+	for k, v := range env {
+		out[k] = v
+	}
+	return out
+}
 
 func TestHookReportsATurnWithoutReport(t *testing.T) {
 	code, stderr, core, dir := hookRun(t, workerEnv, "", hookPrompt, hookWords)
@@ -118,7 +129,8 @@ func TestHookErrors(t *testing.T) {
 		core := &cliCore{errs: map[string]error{"terminal.send": errors.New("not_found")}}
 		dial := func(context.Context, func(string) string) (agentsCore, error) { return core, nil }
 		var e bytes.Buffer
-		c := runHook([]string{"stop"}, strings.NewReader(`{"transcript_path":"`+tr+`"}`), io.Discard, &e, dial, func(k string) string { return workerEnv[k] })
+		env := withStateDir(workerEnv, dir)
+		c := runHook([]string{"stop"}, strings.NewReader(`{"transcript_path":"`+tr+`"}`), io.Discard, &e, dial, func(k string) string { return env[k] })
 		return c, e.String(), core, dir
 	}()
 	if code != 1 || !strings.Contains(stderr, "report to t1: not_found") || len(core.calls) != 1 {

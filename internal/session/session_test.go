@@ -146,3 +146,19 @@ func TestUpdateNoWrite(t *testing.T) {
 		t.Fatal("no error for a bad id")
 	}
 }
+
+func TestSetTranscript(t *testing.T) {
+	var s Session
+	if !s.SetTranscript("s1", "/x/a.jsonl") || s.TranscriptPath != "/x/a.jsonl" || s.SessionID != "s1" {
+		t.Fatalf("first set: %+v", s)
+	}
+	if s.SetTranscript("s1", "/x/a.jsonl") {
+		t.Error("the same values changed it")
+	}
+	if !s.SetTranscript("s2", "/x/a.jsonl") || s.SessionID != "s2" {
+		t.Errorf("a new id: %+v", s)
+	}
+	if s.SetTranscript("s3", "") || s.TranscriptPath != "/x/a.jsonl" || s.SessionID != "s2" {
+		t.Errorf("an empty path changed it: %+v", s)
+	}
+}

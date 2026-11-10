@@ -19,7 +19,7 @@ import (
 
 const hookUsage = `Usage:
   contr hook stop            the kit's Stop hook
-  contr hook session-start   the kit's SessionStart hook (startup, compact)
+  contr hook session-start   the kit's SessionStart hook (startup, resume, clear, compact)
   contr hook post-tool       the kit's PostToolUse hook (todos, artifacts)
   contr hook prompt          the kit's UserPromptSubmit hook
 
@@ -44,6 +44,12 @@ transcript yet, so only the role counts), and after a compaction in a
 coordinator: prints the playbook, the state file to read (at startup, only
 when it exists), the live workers it started, its open owner items and the
 flow (contr agents flow), which Claude Code adds to the new context.
+After resume and clear it prints nothing.
+
+stop, session-start and prompt, in an hc terminal (HC_TERMINAL_ID), save
+the transcript_path and session_id of the hook input in the terminal's
+session file, for contr's chat view. An error there is logged and does not
+fail the hook.
 
 post-tool and prompt run only in an hc terminal (HC_TERMINAL_ID). post-tool
 saves the todo list (TodoWrite, TaskCreate, TaskUpdate) and the artifacts
@@ -120,6 +126,8 @@ func runHook(args []string, stdin io.Reader, stdout, stderr io.Writer, dial func
 		fmt.Fprintf(stderr, "contr hook: bad hook input: %v\n", err)
 		return 1
 	}
+	// Before the hook's own work, which can fail: the path is saved anyway.
+	saveTranscript(stderr, args[0], sessionStateDir(getenv), getenv("HC_TERMINAL_ID"), h.in.SessionID, h.in.TranscriptPath)
 	var err error
 	switch {
 	case args[0] == "session-start":
