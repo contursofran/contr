@@ -55,7 +55,7 @@ Design system page: component QuestionsNotch. Shared rules: [README.md](README.m
 
 ## Keys and focus
 
-- `⌘J` opens and closes the card. Space and ⏎ when focused.
+- `⌘J` opens and closes the card. Space and ⏎ when focused. While ⌘ is held, a `J` key chip shows on the bottom right corner (KeyHints.md).
 
 ## Edge cases
 

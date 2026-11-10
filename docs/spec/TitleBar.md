@@ -58,7 +58,8 @@ Height `titlebar-height` (46px: a 30px tab, 8px above and below, D177; the panel
 - `⌘T` new tab, `⌘W` close tab (plain terminals only, D85), `⌘F` search, `⌘⇧E` files, `⌘B` show or hide the sidebar (D172).
   `⌘T` and `⌘W` are the File menu items, which hold the key (D131); `⌘B` is the
   View menu item "Toggle Sidebar"; `⌘⇧E` is `c.Shortcut`.
-- The tooltips show each key.
+- `⌘1`–`⌘8` select that tab, `⌘9` the last tab; `⌘⇧[` and `⌘⇧]` the previous and next tab.
+- The tooltips show each key. While ⌘ is held, each tab and button shows its key chip (KeyHints.md).
 
 ## Edge cases
 
@@ -78,7 +79,7 @@ Height `titlebar-height` (46px: a 30px tab, 8px above and below, D177; the panel
 - Draw the bar in the view; mark the empty parts as the window drag area so the window moves and a double-click zooms.
 - Tabs: `TabsBase` (keeps arrow keys, focus and the automation hooks).
 - Buttons: IconButton (`ButtonBase`).
-- Shortcuts: new tab (⌘T) and close tab (⌘W) are File menu items; search (⌘F) and files (⌘⇧E) are `c.Shortcut(...)`. Show them in the tooltips.
+- Shortcuts: new tab (⌘T) and close tab (⌘W) are File menu items; search (⌘F), files (⌘⇧E) and the tab keys are `c.Shortcut(...)`. All come from `internal/app/shortcut`. Show them in the tooltips.
 
 ## Do and do not
 
