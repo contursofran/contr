@@ -12,7 +12,7 @@ import (
 func meterTester(meters []Meter) *ui.Tester {
 	return ui.NewTester(func(c *ui.Context) {
 		theme.Apply(c)
-		ui.Column(c).Fill().Width(240).Background(theme.Current().Panel).Children(func() {
+		ui.Column(c).Fill().Width(240).Background(theme.Current().GlassWindow).Children(func() {
 			UsageMeter(c, meters)
 		})
 	}, 240, 140)
