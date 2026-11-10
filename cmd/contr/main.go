@@ -185,6 +185,7 @@ func frameDeps() app.Deps {
 		ModelOf:        cfg.ModelOf,
 		EffortOf:       cfg.EffortOf,
 		WatchHead:      files.WatchFile,
+		RunOnMain:      mygo.RunOnMain,
 		TerminalSource: terminalSource(os.Getenv),
 		OpenTerminal: func(project, dir string) (string, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)

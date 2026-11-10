@@ -50,6 +50,9 @@ func (c Context) Label() string {
 	return fmt.Sprintf("%s of %s  %d%%", shortTokens(c.Tokens), shortTokens(c.Size), int(c.Percent()))
 }
 
+// Used is the size of the context now, short: "212k".
+func (c Context) Used() string { return shortTokens(c.Tokens) }
+
 // shortTokens writes n in thousands ("90k"), or in millions ("1M") when n is a
 // whole number of millions.
 func shortTokens(n uint64) string {

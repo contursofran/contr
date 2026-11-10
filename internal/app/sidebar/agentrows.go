@@ -222,12 +222,12 @@ func (l *SpacesList) modelOf(w agents.Worker) string {
 	return l.ModelOf(w.Profile)
 }
 
-// modelFor is the model of line 2 with its effort ("opus high", D189). The
+// ModelFor is the model of line 2 with its effort ("opus high", D189). The
 // model is the worker's (the hook's label, which follows /model, else the
 // --model of the program's own command line, D244), else the profile's, else
 // the status line's. The effort comes from the same places, in the same
 // order; "" when not known.
-func (l *SpacesList) modelFor(w agents.Worker) string {
+func (l *SpacesList) ModelFor(w agents.Worker) string {
 	model := w.Model
 	if model == "" {
 		model = l.modelOf(w)
@@ -316,7 +316,7 @@ func needReason(w agents.Worker) string {
 
 // agentRow is one AgentRow.
 func (l *SpacesList) agentRow(c *ui.Context, a agentLine, hint string) {
-	issue, model, it := issueText(a), l.modelFor(a.w), l.issueTitle(a)
+	issue, model, it := issueText(a), l.ModelFor(a.w), l.issueTitle(a)
 	ci := !a.orchestrator && a.w.Live && a.w.Status != "working" && l.Entry.PRs.Waiting(a.w.Worktree)
 	label := AgentLabel(a.w, issue, model)
 	if ci {

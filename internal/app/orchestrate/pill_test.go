@@ -3,6 +3,7 @@ package orchestrate
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -23,13 +24,15 @@ const (
 // sent is one call of Pill.Send.
 type sent struct{ addr, text string }
 
-// rig is a pill in a terminal-sized window, with a fake send and toasts.
+// rig is a pill in a title bar row of a window w wide, left of a Search box at the right edge,
+// with a fake send and toasts.
 type rig struct {
 	p        *Pill
 	tt       *ui.Tester
 	snap     agentstate.Snapshot
 	selected string
-	notch    bool
+	compact  bool
+	tail     float32 // the width of the item right of the pill; 28 (Search) when 0
 	sends    []sent
 	sendErr  error
 	toasts   []string
@@ -59,9 +62,8 @@ func newRig(t *testing.T, snap agentstate.Snapshot, selected string, w float32) 
 	t.Helper()
 	r := &rig{snap: snap, selected: selected}
 	r.p = &Pill{
-		Snapshot:   func() agentstate.Snapshot { return r.snap },
-		Selected:   func() string { return r.selected },
-		NotchShown: func() bool { return r.notch },
+		Snapshot: func() agentstate.Snapshot { return r.snap },
+		Selected: func() string { return r.selected },
 		Send: func(addr, text string) error {
 			r.sends = append(r.sends, sent{addr, text})
 			return r.sendErr
@@ -69,14 +71,16 @@ func newRig(t *testing.T, snap agentstate.Snapshot, selected string, w float32) 
 		Env: view.Env{Status: func(s string) { r.toasts = append(r.toasts, s) }},
 	}
 	r.tt = ui.NewTester(func(c *ui.Context) {
-		ui.Box(c).Fill().Children(func() {
-			// A notch of the reserve's width at the top center, as the questions notch.
-			if r.notch {
-				ui.Row(c).Absolute().Top(0).Left(0).Right(0).Justify(ui.Center).PassThrough().Children(func() {
-					ui.Box(c).Label("notch").Size(notchReserve, 30)
-				})
-			}
-			r.p.View(c)
+		ui.Column(c).Fill().Children(func() {
+			ui.Row(c).FillWidth().Height(46).AlignItems(ui.Center).PaddingEnd(8).Children(func() {
+				ui.Box(c).Grow(1).FillHeight()
+				r.p.View(c, r.compact)
+				tail := r.tail
+				if tail == 0 {
+					tail = 28
+				}
+				ui.Box(c).Label("search").Size(tail, 28).Shrink(0)
+			})
 		})
 	}, int(w), 400)
 	return r
@@ -234,117 +238,104 @@ func TestSelectionChangeClosesThePopover(t *testing.T) {
 	}
 }
 
-// overlaps tells whether two boxes share an area.
-func overlaps(a, b ui.Rect) bool {
-	return a.X < b.X+b.W && b.X < a.X+a.W && a.Y < b.Y+b.H && b.Y < a.Y+a.H
+// The pill ends space-8 left of the next item of the title bar, 28px high and centered in the bar.
+func TestPillSitsLeftOfTheNextTitleBarItem(t *testing.T) {
+	for _, s := range []agentstate.Snapshot{snapWith(false, 0, 0), snapWith(true, 2, 0)} {
+		for _, compact := range []bool{false, true} {
+			r := newRig(t, s, orch, 900)
+			r.compact = compact
+			r.tt.Frame()
+			label := LabelButton
+			if s.Orchestrating(s.Orchestrators[0]) {
+				label = PillText(2)
+			}
+			pill, next := apptest.Box(t, r.tt, label), apptest.Box(t, r.tt, "search")
+			if pill.X+pill.W+8 != next.X || pill.H != 28 || pill.Y != 9 {
+				t.Errorf("%q compact %v: pill %+v, search %+v: want 28px high, top 9, 8 left of search",
+					label, compact, pill, next)
+			}
+		}
+	}
 }
 
-// outlineAt makes the rig's outline column start at top; ok false is no column.
-func (r *rig) outlineAt(top float32, ok bool) {
-	r.p.OutlineTop = func() (float32, bool) { return top, ok }
-}
-
-func TestPillPlaceFollowsTheOutlineColumnAndKeepsClearOfTheNotch(t *testing.T) {
-	// The pill's rows end at 34px (top 8, height 26), or at 64px under the notch (top 38). The
-	// outline column is inset 10px from the right side and 20px wide.
+// Compact (a narrow window, D253): the mascot with the worker count, the full text as the
+// tooltip; the button keeps the mascot alone.
+func TestCompactPillShowsTheMascotAndTheCount(t *testing.T) {
 	for _, tc := range []struct {
-		name    string
-		width   float32
-		notch   bool
-		top     float32 // the outline column's top
-		column  bool    // the outline column shows
-		right   float32 // the pill's space to the right side
-		down    bool    // the pill moves under the notch
-		noField bool    // OutlineTop is nil
+		name  string
+		snap  agentstate.Snapshot
+		label string // the element's label: the full text
+		count string // the text that shows, "" for none
 	}{
-		{"no outline source", 900, false, 0, false, 10, false, true},
-		{"no column", 900, false, 0, false, 10, false, false},
-		{"short column", 900, false, 180, true, 10, false, false},
-		{"column at the pill's bottom", 900, false, 34, true, 10, false, false},
-		{"column reaches the pill", 900, false, 33, true, 40, false, false},
-		{"tall column", 900, false, -20, true, 40, false, false},
-		{"wide, notch, short column", 900, true, 180, true, 10, false, false},
-		{"wide, notch, tall column", 900, true, 50, true, 40, false, false},
-		{"narrow, no notch, short column", 420, false, 50, true, 10, false, false},
-		{"narrow, notch, column reaches the second row", 420, true, 50, true, 40, true, false},
-		{"narrow, notch, short column", 420, true, 180, true, 10, true, false},
+		{"three workers", snapWith(false, 3, 1), PillText(3), "3"},
+		{"no worker yet", snapWith(true, 0, 0), PillText(0), ""},
+		{"button", snapWith(false, 0, 0), LabelButton, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			r := newRig(t, snapWith(false, 0, 0), orch, tc.width)
-			if !tc.noField {
-				r.outlineAt(tc.top, tc.column)
+			text := tc.label // the text of the full pill
+			if text == LabelButton {
+				text = TextOrchestrate
 			}
-			r.notch = tc.notch
+			r := newRig(t, tc.snap, orch, 900)
+			wide, full := apptest.Box(t, r.tt, tc.label), count(r.tt, text)
+			r.compact = true
 			r.tt.Frame()
-			pill := apptest.Box(t, r.tt, LabelButton)
-			if got := tc.width - (pill.X + pill.W); got != tc.right {
-				t.Errorf("pill %+v is %vpx from the right side, want %vpx", pill, got, tc.right)
+			box := apptest.Box(t, r.tt, tc.label)
+			if box.W >= wide.W {
+				t.Errorf("compact pill %vpx wide, full %vpx: want it narrower", box.W, wide.W)
 			}
-			if tc.column {
-				outline := ui.Rect{X: tc.width - 10 - 20, Y: tc.top, W: 20, H: 400}
-				if overlaps(pill, outline) {
-					t.Errorf("pill %+v overlaps the outline column %+v", pill, outline)
-				}
+			if got := count(r.tt, text); got != full-1 {
+				t.Errorf("compact pill: %q %d times, want %d (the label only)", text, got, full-1)
 			}
-			if tc.notch {
-				notch := apptest.Box(t, r.tt, "notch")
-				if overlaps(pill, notch) {
-					t.Errorf("pill %+v overlaps the notch %+v", pill, notch)
-				}
+			if tc.count != "" && count(r.tt, tc.count) != 1 {
+				t.Errorf("texts %v, want the count %q", r.tt.Texts(), tc.count)
 			}
-			wantY := float32(8)
-			if tc.down {
-				wantY = 30 + 8
-			}
-			if pill.Y != wantY {
-				t.Errorf("pill top %v, want %v", pill.Y, wantY)
+			r.tt.Move(box.X+box.W/2, box.Y+box.H/2)
+			r.tt.Advance(time.Second)
+			if got := count(r.tt, text); got != full {
+				t.Errorf("no tooltip %q; texts %v", text, r.tt.Texts())
 			}
 		})
 	}
 }
 
-// The popover's right edge is on the pill's right edge, at 10px and at 40px.
-func TestPopoverRightEdgeIsOnThePillsRightEdge(t *testing.T) {
-	for _, tc := range []struct{ top, right float32 }{{200, 10}, {0, 40}} {
-		top := tc.top
-		r := newRig(t, snapWith(false, 0, 0), orch, 900)
-		r.outlineAt(top, true)
-		r.open(t)
-		pill, pop := apptest.Box(t, r.tt, LabelButton), apptest.Box(t, r.tt, LabelPopover)
-		if got := 900 - (pill.X + pill.W); got != tc.right {
-			t.Errorf("column top %v: pill %vpx from the right side, want %vpx", top, got, tc.right)
+// count is the number of texts and labels of the last frame that are s.
+func count(tt *ui.Tester, s string) int {
+	n := 0
+	for _, t := range tt.Texts() {
+		if t == s {
+			n++
 		}
-		if pill.X+pill.W != pop.X+pop.W {
-			t.Errorf("column top %v: popover %+v, pill %+v: right edges differ", top, pop, pill)
-		}
-		if pop.Y != pill.Y+pill.H+popoverGap {
-			t.Errorf("column top %v: popover top %v, want %v", top, pop.Y, pill.Y+pill.H+popoverGap)
-		}
+	}
+	return n
+}
+
+// The full pill has no tooltip: its text is all there.
+func TestFullPillHasNoTooltip(t *testing.T) {
+	r := newRig(t, snapWith(false, 3, 0), orch, 900)
+	box, full := apptest.Box(t, r.tt, PillText(3)), count(r.tt, PillText(3))
+	r.tt.Move(box.X+box.W/2, box.Y+box.H/2)
+	r.tt.Advance(time.Second)
+	if got := count(r.tt, PillText(3)); got != full {
+		t.Errorf("the text shows %d times after a rest, %d before: want no tooltip", got, full)
 	}
 }
 
-// The lead (the Chat | Terminal switch, D246) shows left of the pill, space-8 apart, and alone
-// for a terminal without a pill.
-func TestLeadShowsLeftOfThePill(t *testing.T) {
-	lead := func() func(c *ui.Context) {
-		return func(c *ui.Context) { ui.Box(c).Label("lead").Size(80, pillHeight) }
-	}
-	r := newRig(t, snapWith(false, 0, 0), orch, 900)
-	r.p.Lead = lead
-	r.tt.Frame()
-	l, b := apptest.Box(t, r.tt, "lead"), apptest.Box(t, r.tt, LabelButton)
-	if l.X+l.W+8 != b.X || l.Y != b.Y {
-		t.Errorf("lead %+v, button %+v: want the lead 8 left of the button", l, b)
-	}
-	r = newRig(t, snapWith(false, 0, 0), worker, 900)
-	r.p.Lead = lead
-	r.tt.Frame()
-	if apptest.Absent(r.tt, "lead") || !apptest.Absent(r.tt, LabelButton) {
-		t.Error("a terminal without a pill does not show the lead alone")
-	}
-	r.p.Lead = func() func(c *ui.Context) { return nil }
-	r.tt.Frame()
-	if !apptest.Absent(r.tt, "lead") {
-		t.Error("a nil lead shows")
+// The popover opens under the pill, space-6 apart, its right edge on the pill's right edge; the
+// compact button opens it too. A wide item right of the pill leaves room for a left-aligned
+// popover, so the test sees the anchor and not a flip at the window's edge.
+func TestPopoverRightEdgeIsOnThePillsRightEdge(t *testing.T) {
+	for _, compact := range []bool{false, true} {
+		r := newRig(t, snapWith(false, 0, 0), orch, 900)
+		r.compact, r.tail = compact, 420
+		r.tt.Frame()
+		r.open(t)
+		pill, pop := apptest.Box(t, r.tt, LabelButton), apptest.Box(t, r.tt, LabelPopover)
+		if pill.X+pill.W != pop.X+pop.W {
+			t.Errorf("compact %v: popover %+v, pill %+v: right edges differ", compact, pop, pill)
+		}
+		if pop.Y != pill.Y+pill.H+popoverGap {
+			t.Errorf("compact %v: popover top %v, want %v", compact, pop.Y, pill.Y+pill.H+popoverGap)
+		}
 	}
 }

@@ -26,6 +26,19 @@ type Chat struct {
 	Worker func(addr string) (agents.Worker, bool)
 	// Hints shows the key chip of the switch while ⌘ is held (D245).
 	Hints bool
+	// Send types text into the terminal at addr and presses Enter. It blocks: it runs off the UI
+	// thread. Nil: the composer sends nothing.
+	Send func(addr, text string) error
+	// Interrupt presses the stop key of the terminal at addr, as Esc does in the terminal. It
+	// blocks. Nil: Esc and Stop do nothing.
+	Interrupt func(addr string) error
+	// Read and SendKeys read and answer the menu of a session that needs the owner
+	// (questions.Menu). They block. Nil Read: the needs-you line shows no choices.
+	Read     func(addr string, lines int) (string, error)
+	SendKeys func(addr string, keys []byte) error
+	// Meta is the model and the context of the terminal at addr, "opus high · 212k", for the
+	// right of the composer. May be nil.
+	Meta func(addr string) string
 
 	src    *chatsource.Source
 	model  Model
@@ -42,15 +55,40 @@ type Chat struct {
 	md   markdown.Options
 	// folds holds the open work groups by row id.
 	folds map[string]*bool
+
+	// The composer: the text being typed and the last failure, for each terminal.
+	drafts map[string]*string
+	errs   map[string]string
+	// sending is set while a send or an interrupt runs.
+	sending bool
+	// panel is the chat's box, for the width of wide blocks (wide.go).
+	panel ui.Handle
+	// parts holds the parts of each text of Claude by row id, and partsOf the text they came from.
+	parts   map[string][]Part
+	partsOf map[string]string
+	// field is the composer's field, which takes the focus back after a click on a button.
+	field ui.Handle
+	// ticks is set while the last View asked for a redraw in a second: the live line's time.
+	ticks bool
+	// toTerm is the toTerminal of the last View.
+	toTerm func()
+	// menu is the menu of the session that needs the owner (live.go).
+	menu menuState
 }
 
 // New returns a chat view that reads the session files under stateDir (package session).
 // watch replaces the file watch in tests; nil uses the real one.
 func New(env view.Env, stateDir string, watch func(path string, notify func()) (func(), error)) *Chat {
-	ch := &Chat{Env: env, reader: transcript.NewReader(0), chat: map[string]bool{}, folds: map[string]*bool{}}
+	ch := &Chat{Env: env, reader: transcript.NewReader(0), chat: map[string]bool{}, folds: map[string]*bool{},
+		drafts: map[string]*string{}, errs: map[string]string{}, parts: map[string][]Part{}, partsOf: map[string]string{}}
 	ch.src = &chatsource.Source{StateDir: stateDir, Env: env, Watch: watch, Changed: ch.changed}
 	ch.list.FollowEnd = true
-	ch.list.Key = func(i int) any { return ch.model.rows[i].ID }
+	ch.list.Key = func(i int) any {
+		if i < len(ch.model.rows) {
+			return ch.model.rows[i].ID
+		}
+		return ch.model.pending[i-len(ch.model.rows)].ID
+	}
 	return ch
 }
 
@@ -58,6 +96,7 @@ func New(env view.Env, stateDir string, watch func(path string, notify func()) (
 func (ch *Chat) Sync(id string) {
 	if id != ch.src.Terminal() {
 		ch.shown = false
+		ch.menu = menuState{}
 	}
 	ch.src.Sync(id)
 }
@@ -94,7 +133,10 @@ func (ch *Chat) Toggle(id string) { ch.SetOn(id, !ch.On(id)) }
 // Hide tells that the chat does not show: changes of the file wait until it shows again.
 func (ch *Chat) Hide() { ch.shown = false }
 
-// changed is the source's signal: the path moved or the file changed.
+// changed is the source's signal: the path moved or the file changed. The source asks for no
+// redraw (#660, D257): a change redraws only after its batch is applied, so a transcript that
+// grows while the chat does not show asks for no frame. A reset redraws: the switch may show or
+// go (HasPath), and the chat is empty again.
 func (ch *Chat) changed(reset bool) {
 	if reset {
 		ch.gen++
@@ -102,6 +144,8 @@ func (ch *Chat) changed(reset bool) {
 		ch.reader = transcript.NewReader(0)
 		ch.model.Reset()
 		ch.folds = map[string]*bool{}
+		ch.parts, ch.partsOf = map[string][]Part{}, map[string]string{}
+		ch.Env.Redraw()
 	}
 	ch.stale = true
 	ch.pull()
@@ -123,9 +167,18 @@ func (ch *Chat) pull() {
 		return
 	}
 	ch.stale, ch.reading = false, true
-	r, gen := ch.reader, ch.gen
+	r, gen, first := ch.reader, ch.gen, ch.model.Len() == 0
 	ch.Env.Do(func() func() {
 		b, err := r.ReadFile(path)
+		// The first read gives the whole file: its model is made here, off the UI thread (#660).
+		// Only this read adds entries until it lands, and a reset drops it (gen). The composer may
+		// add pending prompts meanwhile: they move into the new model as it takes the old one's
+		// place (takePending).
+		var m *Model
+		if first {
+			m = &Model{}
+			m.Apply(b)
+		}
 		return func() {
 			if gen != ch.gen {
 				return
@@ -134,7 +187,12 @@ func (ch *Chat) pull() {
 			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				log.Printf("chat: read transcript: %v", err)
 			}
-			ch.model.Apply(b)
+			if m != nil {
+				m.takePending(&ch.model)
+				ch.model = *m
+			} else {
+				ch.model.Apply(b)
+			}
 			ch.Env.Redraw()
 			ch.pull()
 		}

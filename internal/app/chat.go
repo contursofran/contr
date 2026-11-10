@@ -4,20 +4,45 @@ package app
 // chatview.
 
 import (
+	"strings"
+
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/chatview"
 	"github.com/contursofran/contr/internal/app/view"
 )
 
 // attachChat makes the chat view, which reads the session files under the state dir of the
-// session panel. The stop ends its watches.
-func (f *Frame) attachChat(env view.Env) (stop func()) {
+// session panel. Its composer and live line send through the agent source, as the orchestrate
+// pill and the questions card do (D252); without a source they send nothing. The stop ends its
+// watches.
+func (f *Frame) attachChat(env view.Env, src agentstate.AgentSource) (stop func()) {
 	f.Chat = chatview.New(env, f.Session.StateDir, nil)
 	f.Chat.Worker = f.agentAt
+	f.Chat.Meta = f.chatMeta
+	if src != nil {
+		f.Chat.Send, f.Chat.Interrupt, f.Chat.Read, f.Chat.SendKeys = src.Send, src.Interrupt, src.Read, src.SendKeys
+	}
 	f.syncChat()
 	return f.Chat.Close
+}
+
+// chatMeta is the model and the context of the terminal at addr for the right of the composer:
+// the model of line 2 of its row and the size of its context, "opus high · 212k". A part that is
+// not known is left out.
+func (f *Frame) chatMeta(addr string) string {
+	var parts []string
+	if w, ok := f.agentAt(addr); ok && f.SpacesList != nil {
+		if m := f.SpacesList.ModelFor(w); m != "" {
+			parts = append(parts, m)
+		}
+	}
+	if c, ok := contextOf(f.planUsage(), addr, f.contextLabelsOf(addr)); ok {
+		parts = append(parts, c.Used())
+	}
+	return strings.Join(parts, " · ")
 }
 
 // syncChat points the chat view at the selected terminal.
@@ -46,9 +71,9 @@ func (f *Frame) chatShown() bool {
 	return f.chatAvailable(addr) && f.Chat.On(addr)
 }
 
-// chatLead is the Chat | Terminal switch left of the orchestrate pill, or nil when the selected
-// terminal is not a Claude Code session.
-func (f *Frame) chatLead() func(c *ui.Context) {
+// chatSwitch is the Chat | Terminal switch at the top right of the terminal panel, or nil when
+// the selected terminal is not a Claude Code session.
+func (f *Frame) chatSwitch() func(c *ui.Context) {
 	addr := f.selectedTerminal()
 	if !f.chatAvailable(addr) {
 		return nil

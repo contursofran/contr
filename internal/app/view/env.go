@@ -16,6 +16,9 @@ type Env struct {
 	Run Runner
 	// Invalidate asks the window for a redraw (Window.Invalidate).
 	Invalidate func()
+	// Quiet runs fn on the UI thread with no redraw (mygo.RunOnMain). It may
+	// wait for fn, so call it from a goroutine only. Nil uses Run.Post.
+	Quiet func(func())
 	// Status shows a short message as a toast (D126).
 	Status func(string)
 	// OpenURL opens a web address in the default browser.
@@ -41,6 +44,18 @@ func (e Env) Post(fn func()) {
 		return
 	}
 	e.Run.Post(fn)
+}
+
+// PostQuiet runs fn on the UI thread through Quiet, with no redraw: for a
+// signal that changes nothing on screen by itself (#660). fn calls Redraw
+// when it changed what shows. Call it from a goroutine only. Without Quiet
+// it is Post.
+func (e Env) PostQuiet(fn func()) {
+	if e.Quiet == nil {
+		e.Post(fn)
+		return
+	}
+	e.Quiet(fn)
 }
 
 // Redraw asks for a new frame.

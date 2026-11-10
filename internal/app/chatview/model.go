@@ -3,6 +3,7 @@
 package chatview
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -19,14 +20,17 @@ const (
 	RowPrompt RowKind = iota
 	// RowSaid is a text of Claude, in Markdown.
 	RowSaid
-	// RowGroup is the work between two texts: tool calls and kit notes, folded into one row.
+	// RowGroup is the work between two texts: tool calls, kit notes and background tasks, folded
+	// into one row.
 	RowGroup
-	// RowOwnerNote is a kit note that needs the owner (NeedsOwner). It shows outside the fold.
+	// RowOwnerNote is a kit note or a background task that needs the owner (NeedsOwner). It shows
+	// outside the fold.
 	RowOwnerNote
 )
 
 // Row is one row of the chat. Entry is the index of the entry of a prompt, a text or an owner
-// note; Notes and Calls are the indexes of the entries of a work group, in order.
+// note; Notes (kit notes and background tasks) and Calls are the indexes of the entries of a work
+// group, in order.
 type Row struct {
 	Kind  RowKind
 	ID    string
@@ -43,6 +47,54 @@ type Model struct {
 	rows    []Row
 	// open tells that the last row is a work group that takes the next tool calls and notes.
 	open bool
+	// pending holds the texts the owner sent that the transcript has not brought yet.
+	pending []Pending
+	seq     int
+}
+
+// Pending is a text the owner sent from the composer, shown dimmed at the end until the
+// transcript brings its prompt entry.
+type Pending struct {
+	ID, Text string
+}
+
+// AddPending shows text as a pending prompt and returns its id.
+func (m *Model) AddPending(text string) string {
+	m.seq++
+	id := "pending:" + strconv.Itoa(m.seq)
+	m.pending = append(m.pending, Pending{ID: id, Text: text})
+	return id
+}
+
+// DropPending removes the pending prompt id: its send failed.
+func (m *Model) DropPending(id string) {
+	m.pending = slices.DeleteFunc(m.pending, func(p Pending) bool { return p.ID == id })
+}
+
+// Pendings are the pending prompts, in the order they were sent. The caller must not change them.
+func (m *Model) Pendings() []Pending { return m.pending }
+
+// matchPending drops the first pending prompt with the text of a prompt entry.
+func (m *Model) matchPending(text string) {
+	text = strings.TrimSpace(text)
+	if i := slices.IndexFunc(m.pending, func(p Pending) bool { return strings.TrimSpace(p.Text) == text }); i >= 0 {
+		m.pending = slices.Delete(m.pending, i, i+1)
+	}
+}
+
+// takePending gives m, a model made from a first read off the UI thread (#660), the pending
+// prompts of old, the model it replaces, with their ids. A pending prompt whose prompt entry the
+// read brought is dropped, as Apply drops it.
+func (m *Model) takePending(old *Model) {
+	m.pending, m.seq = old.pending, old.seq
+	for _, r := range m.rows {
+		if len(m.pending) == 0 {
+			return
+		}
+		if r.Kind == RowPrompt {
+			m.matchPending(m.entries[r.Entry].Text)
+		}
+	}
 }
 
 // Reset clears the model, for a read again from offset 0.
@@ -112,6 +164,7 @@ func (m *Model) add(e transcript.Entry) {
 	}
 	switch e.Kind {
 	case transcript.Prompt:
+		m.matchPending(e.Text)
 		m.rows, m.open = append(m.rows, Row{Kind: RowPrompt, ID: id, Entry: i}), false
 	case transcript.Said:
 		m.rows, m.open = append(m.rows, Row{Kind: RowSaid, ID: id, Entry: i}), false
@@ -134,6 +187,54 @@ func (m *Model) group(id string) *Row {
 		m.rows, m.open = append(m.rows, Row{Kind: RowGroup, ID: "group:" + id}), true
 	}
 	return &m.rows[len(m.rows)-1]
+}
+
+// TextThinking and TextWorking are what the live line says the agent does when no tool call runs.
+const (
+	TextThinking = "Thinking"
+	TextWorking  = "Working"
+)
+
+// Activity is what the agent does now, from the end of the transcript: the running tool call
+// ("Bash · go test ./..."), "Thinking" when a thinking mark is the last entry, else "Working".
+// start is the time of the last owner prompt; ok is false when it has no time. Hidden entries
+// and the lines of subagents do not count.
+func (m *Model) Activity() (what string, start time.Time, ok bool) {
+	what = TextWorking
+	last := true
+	for i := len(m.entries) - 1; i >= 0; i-- {
+		e := m.entries[i]
+		if e.Sidechain || e.Kind == transcript.Hidden {
+			continue
+		}
+		if e.Kind == transcript.Prompt {
+			t, err := time.Parse(time.RFC3339Nano, e.Time)
+			return what, t, err == nil
+		}
+		if last && e.Kind == transcript.Thinking {
+			what = TextThinking
+		}
+		last = false
+		if what == TextWorking && e.Kind == transcript.Tool && e.Tool != nil && !e.Tool.Done {
+			what = ToolName(e.Tool.Name)
+			if e.Tool.Summary != "" {
+				what += " · " + e.Tool.Summary
+			}
+		}
+	}
+	return what, time.Time{}, false
+}
+
+// ElapsedText is the time of a turn as the live line shows it: "8s", "2m 5s", "1h 4m".
+func ElapsedText(d time.Duration) string {
+	s := int(d / time.Second)
+	switch {
+	case s < 60:
+		return strconv.Itoa(max(s, 0)) + "s"
+	case s < 3600:
+		return strconv.Itoa(s/60) + "m " + strconv.Itoa(s%60) + "s"
+	}
+	return strconv.Itoa(s/3600) + "h " + strconv.Itoa(s%3600/60) + "m"
 }
 
 // Running tells that a call of the group has no result yet: work goes on.
@@ -171,9 +272,15 @@ func containsString(ss []string, s string) bool {
 
 // NeedsOwner tells that a kit note needs the owner: an hc message of a worker that ended its turn
 // without a report, or that says the worker is blocked ("NAME: blocked, …", the kit's report
-// line, or a text that starts with "blocked").
+// line, or a text that starts with "blocked"), or a background task that failed or was killed.
 func NeedsOwner(e transcript.Entry) bool {
-	if e.Kind != transcript.Note || e.Note == nil || e.Note.Kind != transcript.NoteMessage {
+	if e.Kind != transcript.Note || e.Note == nil {
+		return false
+	}
+	if e.Note.Kind == transcript.NoteTask {
+		return TaskFailed(e.Note.Status)
+	}
+	if e.Note.Kind != transcript.NoteMessage {
 		return false
 	}
 	s := strings.ToLower(strings.TrimSpace(e.Text))
@@ -184,18 +291,48 @@ func NeedsOwner(e transcript.Entry) bool {
 	return ok && !strings.Contains(who, " ") && firstWord(rest) == "blocked"
 }
 
+// TaskFailed tells a background task's status that needs the owner: "failed" or "killed".
+func TaskFailed(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "failed", "killed":
+		return true
+	}
+	return false
+}
+
+// TaskSummary is the summary of a background task as its line shows it: without the leading
+// "Background command " of the harness, as the line starts with "Background task".
+func TaskSummary(s string) string {
+	return strings.TrimPrefix(s, "Background command ")
+}
+
+// Counts are the notes of the group that are messages, and those that are background tasks.
+func (m *Model) Counts(g Row) (notes, tasks int) {
+	for _, i := range g.Notes {
+		if n := m.entries[i].Note; n != nil && n.Kind == transcript.NoteTask {
+			tasks++
+		} else {
+			notes++
+		}
+	}
+	return notes, tasks
+}
+
 // firstWord is the first word of s without the marks after it.
 func firstWord(s string) string {
 	w, _, _ := strings.Cut(strings.TrimSpace(s), " ")
 	return strings.TrimRight(w, ",.;:")
 }
 
-// GroupText is the text of a folded work group: "3 worker notes · 6 tool calls". A part with
-// no item is left out.
-func GroupText(notes, calls int) string {
+// GroupText is the text of a folded work group: "3 worker notes · 1 background task · 6 tool
+// calls". A part with no item is left out.
+func GroupText(notes, tasks, calls int) string {
 	var parts []string
 	if notes > 0 {
 		parts = append(parts, count(notes, "worker note"))
+	}
+	if tasks > 0 {
+		parts = append(parts, count(tasks, "background task"))
 	}
 	if calls > 0 {
 		parts = append(parts, count(calls, "tool call"))

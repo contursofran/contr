@@ -1,16 +1,20 @@
 package chatview
 
 import (
+	"image/color"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/session"
 )
@@ -78,6 +82,12 @@ func (r *rig) write(lines ...string) {
 	r.tt.Frame()
 }
 
+// has tells that an element with label s shows.
+func (r *rig) has(s string) bool {
+	_, ok := r.tt.Find(s)
+	return ok
+}
+
 // select points the chat at terminal id, as the frame does on a new selection.
 func (r *rig) selectTerm(id string) {
 	r.id = id
@@ -123,20 +133,13 @@ func TestSwitchKeepsTheModeOfEachTerminal(t *testing.T) {
 	if !r.ch.On(term) {
 		t.Error("Toggle does not switch")
 	}
-	if err := r.tt.Click(TextToTerminal); err != nil {
-		t.Fatal(err)
-	}
-	r.tt.Frame()
-	if r.ch.On(term) {
-		t.Error("the dock's button does not switch to Terminal")
-	}
 }
 
 func TestNoTranscriptYet(t *testing.T) {
 	r := newRig(t)
 	r.selectTerm(term)
 	r.chat()
-	if !r.tt.HasText(TextEmpty) || !r.tt.HasText(TextDock) || r.ch.HasPath(term) {
+	if !r.tt.HasText(TextEmpty) || !r.has(LabelComposer) || r.ch.HasPath(term) {
 		t.Fatalf("no path: texts %v", r.tt.Texts())
 	}
 	// A path whose file does not exist yet.
@@ -259,4 +262,135 @@ func TestTheSwitchChipIsCenteredOnTheSwitch(t *testing.T) {
 	r.tt.Frame()
 	chip := apptest.ChipOn(t, r.tt, kit.KeyHintLabel("E"), LabelSwitch, 1000, 900)
 	apptest.Centered(t, "chip", chip, "the switch", apptest.Box(t, r.tt, LabelSwitch))
+}
+
+// The switch is solid: what is under it does not show through (#652).
+func TestTheSwitchIsSolid(t *testing.T) {
+	pixel := func(under ui.Color) color.RGBA {
+		ch := New(view.Env{}, t.TempDir(), nil)
+		tt := ui.NewTester(func(c *ui.Context) {
+			ui.Box(c).Fill().Background(under).Padding(20).Children(func() { ch.Switch(c, term) })
+		}, 300, 100)
+		r, ok := tt.Find(LabelSwitchBack)
+		if !ok {
+			t.Fatal("no switch box")
+		}
+		// Inside the box, in the track's padding: no segment and no text there.
+		return tt.Image().RGBAAt(int(r.X+r.W/2), int(r.Y+1.5))
+	}
+	if a, b := pixel(ui.RGBA(255, 0, 0, 255)), pixel(ui.RGBA(0, 0, 255, 255)); a != b {
+		t.Errorf("the background shows through the switch: %v over red, %v over blue", a, b)
+	}
+}
+
+func TestTimeText(t *testing.T) {
+	zone := time.FixedZone("UTC-3", -3*3600)
+	now := time.Date(2026, 11, 10, 20, 0, 0, 0, zone)
+	for at, want := range map[string]string{
+		"2026-11-10T17:32:00Z": "14:32",           // today, in the zone
+		"2026-11-10T02:59:00Z": "Yesterday 23:59", // the 9th in the zone
+		"2026-11-09T03:00:00Z": "Yesterday 00:00",
+		"2026-11-09T02:00:00Z": "8 Nov 23:00",
+		"2025-12-31T12:05:00Z": "31 Dec 09:05",
+	} {
+		tm, err := time.Parse(time.RFC3339, at)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := TimeText(tm, now); got != want {
+			t.Errorf("TimeText(%s) = %q, want %q", at, got, want)
+		}
+	}
+}
+
+// The time of a prompt shows under it at the right; the time of an answer once, under its last
+// text, at the left. A pending prompt and an entry with no time show none.
+func TestSentTimes(t *testing.T) {
+	r := newRig(t)
+	r.savePath(term)
+	r.selectTerm(term)
+	r.chat()
+	now := r.tt.Now()
+	at := func(d time.Duration) string { return now.Add(-d).UTC().Format(time.RFC3339Nano) }
+	text := func(uuid, s string, ago time.Duration) string {
+		return `{"type":"assistant","uuid":"` + uuid + `","timestamp":"` + at(ago) + `","message":{"content":[{"type":"text","text":"` + s + `"}]}}`
+	}
+	r.write(`{"type":"user","uuid":"p1","timestamp":"`+at(5*time.Minute)+`","message":{"content":"first"}}`,
+		text("s1", "one", 4*time.Minute), text("s2", "two", 3*time.Minute),
+		`{"type":"user","uuid":"p2","message":{"content":"no time"}}`)
+	want := []string{TimeText(now.Add(-5*time.Minute), now), TimeText(now.Add(-3*time.Minute), now)}
+	prompt, _ := r.tt.Find("first")
+	two, _ := r.tt.Find("two")
+	p, ok1 := r.tt.Find(want[0])
+	s, ok2 := r.tt.Find(want[1])
+	if !ok1 || !ok2 {
+		t.Fatalf("times %q not in %v", want, r.tt.Texts())
+	}
+	if r.tt.HasText(TimeText(now.Add(-4*time.Minute), now)) {
+		t.Error("the time of a text that is not the last of its answer shows")
+	}
+	if p.X+p.W < prompt.X+prompt.W-14 || p.Y < prompt.Y {
+		t.Errorf("prompt time %+v is not under the bubble at the right %+v", p, prompt)
+	}
+	if s.X > two.X+1 || s.Y < two.Y {
+		t.Errorf("answer time %+v is not under the text at the left %+v", s, two)
+	}
+}
+
+func TestTasksAndAgentMessagesShowAsLines(t *testing.T) {
+	r := newRig(t)
+	r.savePath(term)
+	r.selectTerm(term)
+	r.chat()
+	anon := `{"type":"user","uuid":"u12","message":{"content":"Another Claude session sent a message:\nrebase please"}}`
+	r.write(lPrompt, lCall1, lRes1, lTaskOK, lAgent, anon, lNudge, lTaskBad, lSaid2)
+	text := "2 worker notes · 1 background task · 1 tool call"
+	if !r.tt.HasText(text) {
+		t.Fatalf("no group %q in %v", text, r.tt.Texts())
+	}
+	// The failed task needs the owner: outside the fold.
+	if apptest.Absent(r.tt, LabelOwnerNote+" "+TextTask) || !slices.Contains(r.tt.Texts(), "failed") || !r.tt.HasText(`· "go vet" failed with exit code 1`) {
+		t.Errorf("no failed task outside the fold: %v", r.tt.Texts())
+	}
+	prompts := 0
+	for _, row := range r.ch.model.Rows() {
+		if row.Kind == RowPrompt {
+			prompts++
+		}
+	}
+	if prompts != 1 {
+		t.Errorf("%d prompt bubbles, want 1: a harness text shows as a prompt", prompts)
+	}
+	if err := r.tt.Click(LabelGroup + " " + text); err != nil {
+		t.Fatal(err)
+	}
+	r.tt.Frame()
+	if !slices.Contains(r.tt.Texts(), "completed") {
+		t.Errorf("no status word of the completed task: %v", r.tt.Texts())
+	}
+	for _, want := range []string{TextTask, `· "go test ./..." completed (exit code 0)`, "planner-12", "The plan is ready.", "session", "rebase please"} {
+		if !r.tt.HasText(want) {
+			t.Errorf("open group: no %q in %v", want, r.tt.Texts())
+		}
+	}
+	if apptest.Absent(r.tt, LabelNote+" "+TextTask) || apptest.Absent(r.tt, LabelNote+" planner-12") || apptest.Absent(r.tt, LabelNote+" session") {
+		t.Error("no task or agent line in the group")
+	}
+	for _, s := range r.tt.Texts() {
+		if strings.Contains(s, "<") || strings.Contains(s, "hasn't heard") {
+			t.Errorf("raw harness text shows: %q", s)
+		}
+	}
+}
+
+func TestTaskStatusInk(t *testing.T) {
+	pal := theme.Current()
+	if statusInk(pal, "completed", pal.Ink42) != pal.Ink42 {
+		t.Error("a completed task's status is not dim")
+	}
+	for _, s := range []string{"failed", "killed", "running"} {
+		if statusInk(pal, s, pal.Ink42) != pal.Blocked {
+			t.Errorf("status %q is not in blocked", s)
+		}
+	}
 }

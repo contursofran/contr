@@ -95,8 +95,8 @@ type Frame struct {
 	Card *questions.QuestionsCard
 	// Notch is the questions notch in the terminal overlay ([Frame.Attach] makes it).
 	Notch *questions.Notch
-	// Pill is the orchestrate pill in the terminal overlay; [Frame.Attach] makes it with the
-	// agent state (D234).
+	// Pill is the orchestrate pill in the title bar; [Frame.Attach] makes it with the agent state
+	// (D234, D253).
 	Pill *orchestrate.Pill
 	// ProjectsModal is the projects modal (D110), made in Attach.
 	ProjectsModal *projectsview.ProjectsModal
@@ -536,8 +536,11 @@ func (f *Frame) selectedTerminal() string {
 // contextLabels is the context that the Stop hook put on the labels of the
 // selected terminal (D205), for the Context meter when that terminal has no
 // status line file. Zero when there is none.
-func (f *Frame) contextLabels() usage.Context {
-	w, _ := f.agentAt(f.selectedTerminal())
+func (f *Frame) contextLabels() usage.Context { return f.contextLabelsOf(f.selectedTerminal()) }
+
+// contextLabelsOf is the context that the Stop hook put on the labels of the terminal at addr.
+func (f *Frame) contextLabelsOf(addr string) usage.Context {
+	w, _ := f.agentAt(addr)
 	return usage.Context{Tokens: w.ContextTokens, Size: w.ContextLimit}
 }
 
@@ -687,6 +690,10 @@ func (f *Frame) titleBar(c *ui.Context, sidebarW float32, narrow bool) {
 		f.bar.Diff, f.bar.OpenReview = f.Diff, f.openReviewView
 		f.bar.Search = f.openFind
 		f.bar.Update = f.updatePill
+		f.bar.Orchestrate, f.bar.Narrow = nil, narrow
+		if f.Pill != nil {
+			f.bar.Orchestrate = f.Pill.View
+		}
 		f.bar.Build(c, f.panelOpen && !narrow, narrow, f.TogglePanel)
 	})
 }

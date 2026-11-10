@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/files"
 	"github.com/contursofran/contr/internal/app/kit"
@@ -284,5 +285,20 @@ func TestTheSidebarFootKeepsSettingsInAtTheNarrowestWidth(t *testing.T) {
 	}
 	if group.X+group.W > gear.X {
 		t.Errorf("plan meters end at %v, over Settings at %v", group.X+group.W, gear.X)
+	}
+}
+
+// The composer's meta is the model of line 2 and the context size, each left out when unknown
+// (D252).
+func TestChatMeta(t *testing.T) {
+	f := &Frame{SpacesList: &sidebar.SpacesList{}, byAddr: map[string]agents.Worker{
+		"t1": {Address: "t1", Model: "opus", Effort: "high", ContextTokens: 212000, ContextLimit: 1000000},
+		"t2": {Address: "t2", Model: "sonnet"},
+		"t3": {Address: "t3", ContextTokens: 9000, ContextLimit: 200000},
+	}}
+	for addr, want := range map[string]string{"t1": "opus high · 212k", "t2": "sonnet", "t3": "9k", "t4": ""} {
+		if got := f.chatMeta(addr); got != want {
+			t.Errorf("chatMeta(%s) = %q, want %q", addr, got, want)
+		}
 	}
 }

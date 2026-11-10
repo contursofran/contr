@@ -1,7 +1,9 @@
 package transcript
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -318,4 +320,131 @@ func FuzzRead(f *testing.F) {
 			t.Errorf("Next = %d, want %d", b.Next, want)
 		}
 	})
+}
+
+// userLine is a user line whose content is the text blocks texts and, when
+// images > 0, that many image blocks.
+func userLine(t *testing.T, images int, texts ...string) string {
+	t.Helper()
+	var content []map[string]any
+	for _, s := range texts {
+		content = append(content, map[string]any{"type": "text", "text": s})
+	}
+	for range images {
+		content = append(content, map[string]any{"type": "image", "source": map[string]any{"type": "base64", "data": "AAAA"}})
+	}
+	b, err := json.Marshal(map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": content}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func TestTaskNotification(t *testing.T) {
+	const task = "<task-notification>\n<task-id>bx1</task-id>\n<tool-use-id>toolu_1</tool-use-id>\n<output-file>/tmp/x.output</output-file>\n<status>%s</status>\n<summary>Background command \"go test ./...\" %s (exit code 0)</summary>\n</task-notification>"
+	cases := []struct {
+		text, status, summary string
+	}{
+		{fmt.Sprintf(task, "completed", "completed"), "completed", `Background command "go test ./..." completed (exit code 0)`},
+		{fmt.Sprintf(task, "failed", "failed"), "failed", `Background command "go test ./..." failed (exit code 0)`},
+		// After the harness's preamble, inside a reminder.
+		{"<system-reminder>\n[SYSTEM NOTIFICATION - NOT USER INPUT]\n" + fmt.Sprintf(task, "killed", "was stopped") + "\n</system-reminder>", "killed", `Background command "go test ./..." was stopped (exit code 0)`},
+		{"[SYSTEM NOTIFICATION - NOT USER INPUT]\n<task-notification><status>completed</status><summary>Agent \"review\" completed</summary><result>long\ntext</result><usage>1</usage></task-notification>", "completed", `Agent "review" completed`},
+	}
+	for _, c := range cases {
+		e := one(t, userLine(t, 0, c.text))
+		if e.Kind != Note || e.Note == nil || e.Note.Kind != NoteTask || e.Note.Status != c.status || e.Text != c.summary {
+			t.Errorf("%q = %+v %+v; want task %q %q", c.text, e, e.Note, c.status, c.summary)
+		}
+	}
+	if e := one(t, userLine(t, 0, fmt.Sprintf(task, "completed", "completed"))); e.Note.ID != "bx1" {
+		t.Errorf("task id = %q", e.Note.ID)
+	}
+	// The owner wrote about the tag: a prompt.
+	if e := one(t, userLine(t, 0, "why is <task-notification> shown?")); e.Kind != Prompt {
+		t.Errorf("prompt that names the tag = %+v", e)
+	}
+}
+
+func TestAgentMessage(t *testing.T) {
+	cases := []struct {
+		text, name, body string
+	}{
+		{"Another Claude session sent a message:\n<agent-message from=\"planner-12\">The plan is ready.\nRead it at plan.md</agent-message>", "planner-12", "The plan is ready. …"},
+		{`<cross-session-message from="w2">rebase on main</cross-session-message>`, "w2", "rebase on main"},
+		{`<teammate-message teammate_id="tester" color="blue">tests pass</teammate-message>`, "tester", "tests pass"},
+		{"<system-reminder>a note</system-reminder>\n<agent-message from=\"x\">hi</agent-message>", "x", "hi"},
+		{"Another Claude session sent a message:\nhello there", "", "hello there"},
+		{"[Subagent hand-back] the files are read; three call sites", "subagent", "reported"},
+	}
+	for _, c := range cases {
+		e := one(t, userLine(t, 0, c.text))
+		if e.Kind != Note || e.Note == nil || e.Note.Kind != NoteAgent || e.Note.Name != c.name || e.Text != c.body {
+			t.Errorf("%q = %+v %+v; want agent %q %q", c.text, e, e.Note, c.name, c.body)
+		}
+	}
+	// Not the shape: a tag in the middle of a prompt, or a tag of another name.
+	for _, s := range []string{"see <agent-message from=\"x\">", "<agent-messages from=\"x\">a</agent-messages> please"} {
+		if e := one(t, userLine(t, 0, s)); e.Kind != Prompt {
+			t.Errorf("%q = %+v; want a prompt", s, e)
+		}
+	}
+}
+
+func TestHarnessTextsHide(t *testing.T) {
+	cases := []struct {
+		text string
+		want Hide
+	}{
+		{"<system-reminder>\nThe task tools haven't been used recently.\n</system-reminder>", HideReminder},
+		{"<system-reminder>a</system-reminder>\n<system-reminder>b</system-reminder>", HideReminder},
+		{"<local-command-caveat>Caveat: the messages below…</local-command-caveat>", HideLocalCommand},
+		{"<local-command-stdout>Set model to opus</local-command-stdout>", HideLocalCommand},
+		{"<command-message>contr:orchestrate is running…</command-message>", HideHarness},
+		{"<user-prompt-submit-hook>3 workers live</user-prompt-submit-hook>", HideHook},
+		{"Stop hook feedback:\n[contr hook stop]: report first", HideHook},
+		{"[Image: source: /tmp/shot.png]", HideHarness},
+		{"The user hasn't heard from you in a while — say in a few words what you're doing, then continue.", HideHarness},
+		// The fallback: one tag pair of lowercase letters and dashes.
+		{"<new-harness-thing kind=\"x\">\nsome text\n</new-harness-thing>", HideHarness},
+		{"<bash-input>ls</bash-input>", HideHarness},
+	}
+	for _, c := range cases {
+		e := one(t, userLine(t, 0, c.text))
+		if e.Kind != Hidden || e.Hidden != c.want || e.Text != c.text {
+			t.Errorf("%q = %+v; want hidden %d", c.text, e, c.want)
+		}
+	}
+	// Not one tag pair: prompts.
+	for _, s := range []string{"<b>bold</b> and more", "<Upper>x</Upper>", "<a-b>x</a-b> then <a-b>y</a-b>", "<x>y</z>"} {
+		if e := one(t, userLine(t, 0, s)); e.Kind != Prompt {
+			t.Errorf("%q = %+v; want a prompt", s, e)
+		}
+	}
+	// A slash command keeps its prompt.
+	if e := one(t, userLine(t, 0, "<command-name>/clear</command-name>")); e.Kind != Prompt || e.Text != "/clear" {
+		t.Errorf("slash command = %+v", e)
+	}
+}
+
+func TestPromptWithHarnessParts(t *testing.T) {
+	cases := []struct {
+		texts  []string
+		images int
+		want   string
+	}{
+		{[]string{"fix the bug\n\n<system-reminder>\nbe brief\n</system-reminder>"}, 0, "fix the bug"},
+		{[]string{"fix the bug", "<system-reminder>be brief</system-reminder>"}, 0, "fix the bug"},
+		{[]string{"<system-reminder>be brief</system-reminder>\nfix the bug"}, 0, "fix the bug"},
+		{[]string{"fix the bug\n<user-prompt-submit-hook>3 workers live</user-prompt-submit-hook>"}, 0, "fix the bug"},
+		{[]string{"fix the bug <system-reminder>never closed"}, 0, "fix the bug"},
+		{[]string{"[Image: source: /tmp/a.png]", "look at this\n<system-reminder>x</system-reminder>"}, 1, "look at this"},
+		{[]string{"[Image: source: /tmp/a.png]"}, 1, ""},
+	}
+	for _, c := range cases {
+		e := one(t, userLine(t, c.images, c.texts...))
+		if e.Kind != Prompt || e.Text != c.want || e.Images != c.images {
+			t.Errorf("%q = %+v; want prompt %q with %d images", c.texts, e, c.want, c.images)
+		}
+	}
 }
