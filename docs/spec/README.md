@@ -124,7 +124,10 @@ The owner's from-zero canvas (https://claude.ai/artifact/9bmbRdJc8qDMSRXm6obEb3)
   in both themes.
 - `ink-100` marks what is selected or what needs the owner.
 - Two hues only: `blocked` (red) for an agent that needs the owner, and
-  `claude` for the Claude glyph. Diff counts are greys. Terminal output
+  `claude` for the Claude glyph. `blocked` never fills or rings
+  anything: it colors glyph dots, the notch dot, and in `blocked-text` the
+  words "needs you" and the item count (D249). No rings on selected rows or
+  tabs. Diff counts are greys. Terminal output
   keeps its own colors. This replaces D76 for the parts these specs cover.
 - Modals are never transparent (D217). A modal or dialog (`DialogBase`,
   `Modal`, `AlertDialog`) and a floating card with text to read have an

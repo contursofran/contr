@@ -301,6 +301,19 @@ func issueText(a agentLine) string {
 	return a.w.Issue
 }
 
+// needReason is the reason on line 2 of a worker that needs the owner: its
+// block kind (permission, question, auth). Empty when the kind is not known,
+// as for a worker in error (D249).
+func needReason(w agents.Worker) string {
+	switch w.Kind {
+	case "permission", "question", "auth":
+		if w.Status == "blocked" {
+			return w.Kind
+		}
+	}
+	return ""
+}
+
 // agentRow is one AgentRow.
 func (l *SpacesList) agentRow(c *ui.Context, a agentLine, hint string) {
 	issue, model, it := issueText(a), l.ModelFor(a.w), l.issueTitle(a)
@@ -323,6 +336,12 @@ func (l *SpacesList) agentRow(c *ui.Context, a agentLine, hint string) {
 	if a.orchestrator {
 		o.Items = a.items
 		o.Arrival = l.arrivals.Observe(a.w.Address, a.items, c.Now(), true)
+	} else if o.State == kit.GlyphNeedsYou {
+		// A worker that needs the owner says why (D249).
+		o.NeedsYou, o.Reason = true, needReason(a.w)
+		if o.Reason != "" {
+			o.Label += ", " + o.Reason
+		}
 	}
 	if l.selection != nil {
 		if sel, ok := l.selection.Current(); ok {

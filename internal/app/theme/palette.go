@@ -14,25 +14,26 @@ type Palette struct {
 	GlowUmber    ui.Color `token:"glow-umber"`    // canvas only: never paint it in the app
 	GlowGraphite ui.Color `token:"glow-graphite"` // canvas only: never paint it in the app
 
-	GlassWindow  ui.Color `token:"glass-window"`
-	GlassFloat   ui.Color `token:"glass-float"`
-	FloatSolid   ui.Color `token:"float-solid"`
-	Scrim        ui.Color `token:"scrim"`
-	Stage        ui.Color `token:"stage"` // the terminal panel only (D250)
-	PanelLine    ui.Color `token:"panel-line"`
-	WindowLine   ui.Color `token:"window-line"`
-	FloatLine    ui.Color `token:"float-line"`
-	Hairline     ui.Color `token:"hairline"`
-	Rail         ui.Color `token:"rail"`
-	Hover        ui.Color `token:"hover"`
-	HoverStrong  ui.Color `token:"hover-strong"`
-	Press        ui.Color `token:"press"`
-	Selected     ui.Color `token:"selected"`
-	SelectedLine ui.Color `token:"selected-line"`
-	InputLine    ui.Color `token:"input-line"`
-	MeterTrack   ui.Color `token:"meter-track"`
-	MeterFill    ui.Color `token:"meter-fill"`
-	Tick         ui.Color `token:"tick"`
+	GlassWindow   ui.Color `token:"glass-window"`
+	GlassFloat    ui.Color `token:"glass-float"`
+	FloatSolid    ui.Color `token:"float-solid"`
+	Scrim         ui.Color `token:"scrim"`
+	Stage         ui.Color `token:"stage"` // the terminal panel only (D250)
+	PanelLine     ui.Color `token:"panel-line"`
+	WindowLine    ui.Color `token:"window-line"`
+	FloatLine     ui.Color `token:"float-line"`
+	Hairline      ui.Color `token:"hairline"`
+	Rail          ui.Color `token:"rail"`
+	Hover         ui.Color `token:"hover"`
+	HoverStrong   ui.Color `token:"hover-strong"`
+	Press         ui.Color `token:"press"`
+	Selected      ui.Color `token:"selected"`
+	SelectedQuiet ui.Color `token:"selected-quiet"`
+	SelectedLine  ui.Color `token:"selected-line"`
+	InputLine     ui.Color `token:"input-line"`
+	MeterTrack    ui.Color `token:"meter-track"`
+	MeterFill     ui.Color `token:"meter-fill"`
+	Tick          ui.Color `token:"tick"`
 
 	Ink100 ui.Color `token:"ink-100"`
 	Ink95  ui.Color `token:"ink-95"`
@@ -54,6 +55,7 @@ type Palette struct {
 
 	TerminalText ui.Color `token:"terminal-text"`
 	Blocked      ui.Color `token:"blocked"`
+	BlockedText  ui.Color `token:"blocked-text"`
 	Claude       ui.Color `token:"claude"`
 	FocusRing    ui.Color `token:"focus-ring"`
 	Lights       ui.Color `token:"lights"`
@@ -107,25 +109,26 @@ var Dark = &Palette{
 	GlowUmber:    ui.Hex("#6b4a2a"),
 	GlowGraphite: ui.Hex("#2c3240"),
 
-	GlassWindow:  ui.RGBA(20, 21, 24, 0.7),
-	GlassFloat:   ui.RGBA(34, 35, 40, 0.72),
-	FloatSolid:   ui.Hex("#222328"),
-	Scrim:        ui.RGBA(8, 8, 8, 0.72),
-	Stage:        ui.RGBA(12, 13, 15, 0.9),
-	PanelLine:    white(0.08),
-	WindowLine:   white(0.09),
-	FloatLine:    white(0.075),
-	Hairline:     white(0.06),
-	Rail:         white(0.07),
-	Hover:        white(0.045),
-	HoverStrong:  white(0.06),
-	Press:        white(0.08),
-	Selected:     white(0.085),
-	SelectedLine: white(0.06),
-	InputLine:    white(0.1),
-	MeterTrack:   white(0.07),
-	MeterFill:    white(0.55),
-	Tick:         white(0.14),
+	GlassWindow:   ui.RGBA(20, 21, 24, 0.7),
+	GlassFloat:    ui.RGBA(34, 35, 40, 0.72),
+	FloatSolid:    ui.Hex("#222328"),
+	Scrim:         ui.RGBA(8, 8, 8, 0.72),
+	Stage:         ui.RGBA(12, 13, 15, 0.9),
+	PanelLine:     white(0.08),
+	WindowLine:    white(0.09),
+	FloatLine:     white(0.075),
+	Hairline:      white(0.06),
+	Rail:          white(0.07),
+	Hover:         white(0.045),
+	HoverStrong:   white(0.06),
+	Press:         white(0.08),
+	Selected:      white(0.085),
+	SelectedQuiet: white(0.07),
+	SelectedLine:  white(0.06),
+	InputLine:     white(0.1),
+	MeterTrack:    white(0.07),
+	MeterFill:     white(0.55),
+	Tick:          white(0.14),
 
 	Ink100: ui.Hex("#f4f4f5"),
 	Ink95:  ui.Hex("#e9e9ea"),
@@ -147,6 +150,7 @@ var Dark = &Palette{
 
 	TerminalText: white(0.82),
 	Blocked:      ui.Hex("#f07178"),
+	BlockedText:  ui.Hex("#f07178"),
 	Claude:       ui.Hex("#d97757"),
 	FocusRing:    white(0.5),
 	Lights:       white(0.14),
@@ -174,25 +178,26 @@ var Light = &Palette{
 	GlowUmber:    ui.Hex("#ebcfa9"),
 	GlowGraphite: ui.Hex("#cdd2db"),
 
-	GlassWindow:  ui.RGBA(246, 246, 248, 0.6),
-	GlassFloat:   ui.RGBA(252, 252, 253, 0.8),
-	FloatSolid:   ui.Hex("#fcfcfd"),
-	Scrim:        ui.RGBA(20, 20, 20, 0.18),
-	Stage:        white(0.86),
-	PanelLine:    black(0.06),
-	WindowLine:   black(0.1),
-	FloatLine:    black(0.08),
-	Hairline:     black(0.07),
-	Rail:         black(0.08),
-	Hover:        black(0.04),
-	HoverStrong:  black(0.055),
-	Press:        black(0.08),
-	Selected:     black(0.065),
-	SelectedLine: black(0.06),
-	InputLine:    black(0.13),
-	MeterTrack:   black(0.08),
-	MeterFill:    black(0.5),
-	Tick:         black(0.16),
+	GlassWindow:   ui.RGBA(246, 246, 248, 0.6),
+	GlassFloat:    ui.RGBA(252, 252, 253, 0.8),
+	FloatSolid:    ui.Hex("#fcfcfd"),
+	Scrim:         ui.RGBA(20, 20, 20, 0.18),
+	Stage:         white(0.86),
+	PanelLine:     black(0.06),
+	WindowLine:    black(0.1),
+	FloatLine:     black(0.08),
+	Hairline:      black(0.07),
+	Rail:          black(0.08),
+	Hover:         black(0.04),
+	HoverStrong:   black(0.055),
+	Press:         black(0.08),
+	Selected:      black(0.065),
+	SelectedQuiet: black(0.08),
+	SelectedLine:  black(0.06),
+	InputLine:     black(0.13),
+	MeterTrack:    black(0.08),
+	MeterFill:     black(0.5),
+	Tick:          black(0.16),
 
 	Ink100: ui.Hex("#141414"),
 	Ink95:  ui.Hex("#1e1e1e"),
@@ -214,6 +219,7 @@ var Light = &Palette{
 
 	TerminalText: black(0.815),
 	Blocked:      ui.Hex("#c73947"),
+	BlockedText:  ui.Hex("#b1333f"),
 	Claude:       ui.Hex("#c15f3c"),
 	FocusRing:    black(0.45),
 	Lights:       black(0.14),

@@ -21,7 +21,7 @@ Design system page: component Tab. Shared rules: [README.md](README.md).
 
 - **Default:** no fill, title `ink-50`.
 - **Hover:** fill `hover`.
-- **Selected:** a pill: fill `stage` (the same fill as the terminal panel below it, with the owner's Settings tint, D175, D250), ring `shadow-selected`, title `ink-100`, close button shows (plain terminal only, D85).
+- **Selected:** a pill: fill `stage` (the same fill as the terminal panel below it, with the owner's Settings tint, D175, D250), no ring (D249), title `ink-100`, close button shows (plain terminal only, D85).
 - **Close hover:** fill `press`, icon `ink-100`.
 - **Blocked agent:** the glyph turns `blocked`; the tab is not otherwise colored.
 
@@ -64,7 +64,7 @@ Design system page: component Tab. Shared rules: [README.md](README.md).
 
 ## Tokens
 
-`stage`, `shadow-selected`, `hover`, `press`, `ink-100`, `ink-50`, `ink-45`, `row-height`, `radius-8`, `radius-4`, `space-8`, `space-2`, `tab-max-width`.
+`stage`, `hover`, `press`, `ink-100`, `ink-50`, `ink-45`, `row-height`, `radius-8`, `radius-4`, `space-8`, `space-2`, `tab-max-width`.
 
 ## Build in MyGo
 
