@@ -658,3 +658,26 @@ func TestEachChipSitsOnItsIconInsideItsElement(t *testing.T) {
 		}
 	}
 }
+
+// The orchestrate pill sits right of the update pill and left of Search, after the drag stretch;
+// it gets Narrow as compact (D253).
+func TestOrchestratePillSitsLeftOfSearchAndGetsNarrow(t *testing.T) {
+	b := newBar(t, tabsOf(), true)
+	var compact []bool
+	b.bar.Update = func(c *ui.Context) { ui.Box(c).Label("update").Size(40, 28).Shrink(0) }
+	b.bar.Orchestrate = func(c *ui.Context, narrow bool) {
+		compact = append(compact, narrow)
+		ui.Box(c).Label("pill").Size(60, 28).Shrink(0).MarginEnd(theme.Space8)
+	}
+	b.tt.Frame()
+	drag, upd, pill, search := b.rect(t, LabelTitleDrag), b.rect(t, "update"), b.rect(t, "pill"), b.rect(t, LabelSearch)
+	if drag.X+drag.W > upd.X || upd.X+upd.W > pill.X || pill.X+pill.W+theme.Space8 != search.X {
+		t.Errorf("drag %+v, update %+v, pill %+v, Search %+v: want them in this order, the pill space-8 before Search",
+			drag, upd, pill, search)
+	}
+	b.bar.Narrow = true
+	b.tt.Frame()
+	if len(compact) < 2 || compact[0] || !compact[len(compact)-1] {
+		t.Errorf("compact %v: want false, then true after Narrow", compact)
+	}
+}

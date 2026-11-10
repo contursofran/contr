@@ -46,9 +46,9 @@ func (f *Frame) chatShown() bool {
 	return f.chatAvailable(addr) && f.Chat.On(addr)
 }
 
-// chatLead is the Chat | Terminal switch left of the orchestrate pill, or nil when the selected
-// terminal is not a Claude Code session.
-func (f *Frame) chatLead() func(c *ui.Context) {
+// chatSwitch is the Chat | Terminal switch at the top right of the terminal panel, or nil when
+// the selected terminal is not a Claude Code session.
+func (f *Frame) chatSwitch() func(c *ui.Context) {
 	addr := f.selectedTerminal()
 	if !f.chatAvailable(addr) {
 		return nil

@@ -1,10 +1,10 @@
 // Package titlebar is the title bar: the tabs of the selected agent, the New
-// tab button, the Search button, the diff summary and the Hide files button.
+// tab button, the orchestrate pill, the diff summary, the Search button and the Hide files button.
 package titlebar
 
 // The title bar (docs/spec/TitleBar.md): the tabs of the selected agent, the New tab button, the
-// diff summary and the Hide files button. The sidebar toggle and the room for the window buttons
-// are drawn by the frame. The methods run on the UI thread.
+// orchestrate pill, the diff summary and the Hide files button. The sidebar toggle and the room for
+// the window buttons are drawn by the frame. The methods run on the UI thread.
 
 import (
 	"slices"
@@ -71,8 +71,14 @@ type TitleBar struct {
 	// Diff is the diff summary and OpenReview its click. Nil Diff: none.
 	Diff       *files.DiffSummary
 	OpenReview func()
-	// Update builds the update pill left of the diff summary (D176). Nil: none.
+	// Update builds the update pill left of the orchestrate pill (D176). Nil: none.
 	Update func(c *ui.Context)
+	// Orchestrate builds the orchestrate pill left of the diff summary (D253); compact is true in
+	// a narrow window. Nil: none.
+	Orchestrate func(c *ui.Context, compact bool)
+	// Narrow tells that the window is narrower than theme.FilesHideBelow: the orchestrate pill is
+	// compact, so the tabs keep their room.
+	Narrow bool
 	// Hints shows the key chips: ⌘ is held (docs/spec/KeyHints.md).
 	Hints bool
 	// choice is the index the tab list edits; model is the selected tab's index at the last build.
@@ -104,9 +110,9 @@ func (b *TitleBar) syncChoice() {
 	b.choice = b.model
 }
 
-// Build adds the bar's parts to the title bar row: the tabs, "+", the drag stretch, the diff
-// summary, Search and the files toggle at the right edge. The toggle is pressed while the files show; it
-// is disabled while the window is too narrow for them.
+// Build adds the bar's parts to the title bar row: the tabs, "+", the drag stretch, the update
+// pill, the orchestrate pill, the diff summary, Search and the files toggle at the right edge. The
+// toggle is pressed while the files show; it is disabled while the window is too narrow for them.
 func (b *TitleBar) Build(c *ui.Context, filesOn, filesDisabled bool, toggleFiles func()) {
 	b.tabRow(c)
 	if b.NewTab != nil {
@@ -118,6 +124,9 @@ func (b *TitleBar) Build(c *ui.Context, filesOn, filesDisabled bool, toggleFiles
 	ui.Box(c).Label(LabelTitleDrag).Grow(1).MinWidth(0).FillHeight().DragWindow()
 	if b.Update != nil {
 		b.Update(c)
+	}
+	if b.Orchestrate != nil {
+		b.Orchestrate(c, b.Narrow)
 	}
 	if b.Diff != nil {
 		ui.Row(c).Shrink(0).MarginEnd(theme.Space8).Children(func() { b.Diff.View(c, b.OpenReview) })

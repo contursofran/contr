@@ -109,7 +109,7 @@ func (n *Notch) Items() []agentstate.NeedTab {
 }
 
 // Shown tells whether the notch shows: an open item waits, or the questions file cannot be read
-// (problemView). The orchestrate pill keeps clear of it (D234).
+// (problemView).
 func (n *Notch) Shown() bool {
 	if len(n.Items()) > 0 {
 		return true

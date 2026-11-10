@@ -1,21 +1,23 @@
 # OrchestratePill
 
-A small glass pill at the top right of the terminal of a Claude session. It
-says that the session orchestrates and how many live workers it has, or it
-is a button that starts orchestration (D234).
+A small pill in the title bar, for the selected Claude session. It says that
+the session orchestrates and how many live workers it has, or it is a button
+that starts orchestration (D234, D253).
 
-Design system page: none yet; the look copies [QuestionsNotch.md](QuestionsNotch.md).
+Design system page: none yet; the look copies the [UpdatePill](UpdatePill.md)
+and the title bar's icon buttons: no fill (D253).
 Shared rules: [README.md](README.md).
 
 ## Anatomy
 
 | Part | Value |
 |---|---|
-| Place | in the terminal overlay, top `space-8`, right 10px (the outline inset); right 40px only while the outline column reaches the pill's rows (below, D237) |
-| Box | height 26px, padding `0 12px 0 10px`, gap `space-8`, radius `radius-14` (fully round) |
-| Glass | `glass-float`, blur `glass-blur`, line `float-line` (1px all round), shadow `shadow-notch` |
+| Place | in the [TitleBar](TitleBar.md), after the flexible space and the UpdatePill, `space-8` left of the DiffSummary (or of Search when no diff shows); centered on the bar's height (D253) |
+| Box | height `icon-button` (28px), padding `0 10px` (`0 6px` compact), gap `space-6`, radius 14px (fully round) |
+| Look | no fill; line `float-line` (1px all round); no shadow. Button hover, and while the popover is open: fill `hover` |
 | Glyph | StatusGlyph, Claude mascot, 14px, still: `claude` while it orchestrates, `ink-45` on the button (D191) |
 | Label | `label` (12/18/500), `ink-85`: "Orchestrating", "Orchestrating · 1 worker", "Orchestrating · 3 workers", or "Orchestrate" |
+| Compact | in a window under `FilesHideBelow` (1100px, the title bar's narrow rule): the mascot and the worker count (`count`, `ink-85`; none while it is 0), or the mascot alone on the button. The full text is the tooltip. |
 
 Popover (button state only), below the pill, its right edge on the pill's right edge, 6px apart:
 
@@ -38,7 +40,7 @@ Popover (button state only), below the pill, its right edge on the pill's right 
 - **Button:** the selected terminal is a Claude session that does not
   orchestrate: an orchestrator-role session before `/contr:orchestrate`, a
   Claude session in a plain terminal (D190) or one contr did not start. The
-  pill is a button "Orchestrate". Hover, and while the popover is open: label `ink-100`.
+  pill is a button "Orchestrate". Hover, and while the popover is open: fill `hover`, label `ink-100`.
 - **Open:** the button with its popover.
 - **Sending:** after Orchestrate, until the send returns: the buttons take
   no click. An error shows as a toast, and the popover stays open with the goal.
@@ -60,35 +62,25 @@ Popover (button state only), below the pill, its right edge on the pill's right 
   session's first turn (the kit's Stop hook label) or its first worker.
   The pill does not guess it from the send.
 
-## Placement next to the notch
+## Placement in the title bar
 
-- The notch hangs at the top center. While it shows, the pill keeps
-  a reserve of 240px at the center, plus 8px on each side, free.
-- When the pill does not fit at the right of that reserve, it moves down,
-  under the notch: top `notch-height` + `space-8` (38px). It keeps its right
-  space (10px or 40px, below).
-
-## Placement next to the outline
-
-- The outline column ([Outline.md](Outline.md)) is inset 10px and 20px wide,
-  centered on the terminal's height. The pill sits at right 10px.
-- When the column's top (its count, or its first tick's hit area) is above
-  the bottom of the pill's rows, the pill moves to right 40px: clear of the
-  column by 10px. The rows end at 34px (top 8, height 26), or at 64px while
-  the notch shows, because the pill can wrap under it.
-- The top is the column's real top, from the outline's last drawn layout
-  (`Outline.Top`), not a guess from the tick count (D237).
-- The open questions card is a popover and draws over the pill.
+- The pill is a button or a text, not a drag area: the bar's flexible space
+  still drags the window and a double-click on it zooms (D253).
+- In a narrow window the pill is compact, so the tabs keep their room.
+- The popover is a popover of the window: it draws over the terminal and the
+  notch.
 
 ## Data
 
 - `agentstate.Snapshot` (Orchestrators, Workers, `Orchestrating`,
   `LiveWorkersOf`), read only; the selected terminal from the selection.
 - No timer; the pill changes on an agent state event or a click.
+- The title bar gives `compact` from the window width; the pill reads no layout.
 
 ## Keys and focus
 
-- ⇥ reaches the button; Space and ⏎ open the popover.
+- ⇥ reaches the button; Space and ⏎ open the popover. Focus ring: 1px
+  `focus-ring`, 2px outside the box.
 - In the popover: ⏎ sends, Esc closes. Esc closes only the popover; it does
   not reach the terminal (D72).
 - After the popover closes, the focus goes back to where it was.
@@ -103,29 +95,24 @@ Popover (button state only), below the pill, its right edge on the pill's right 
 
 ## Accessibility
 
-- Orchestrating: a text element labeled with the pill text.
+- Orchestrating: a text element labeled with the pill text, also when compact.
 - Button: label "Orchestrate", role button, has popup.
 - Popover: the field label is "Goal (optional)".
 
 ## Tokens
 
-`glass-float`, `float-line`, `float-solid`, `shadow-notch`, `shadow-float`,
-`radius-14`, `radius-12`, `radius-8`, `input-line`, `ink-100`, `ink-95`,
-`ink-90`, `ink-85`, `ink-45`, `ink-42`, `ink-30`, `claude`, `label`, `meta`,
-`notch-height`.
+`icon-button`, `float-line`, `hover`, `float-solid`, `shadow-float`,
+`radius-12`, `radius-8`, `input-line`, `focus-ring`, `ink-100`, `ink-95`,
+`ink-90`, `ink-85`, `ink-45`, `ink-42`, `ink-30`, `claude`, `label`, `count`,
+`meta`.
 
 ## Build in MyGo
 
-- Package `internal/app/orchestrate`, a layer of the terminal overlay, added
-  before the notch so the notch draws over it.
+- Package `internal/app/orchestrate`; `TitleBar.Orchestrate` builds it with
+  `compact` from `TitleBar.Narrow`.
 - `ButtonBase` for the button, `PopoverBase` for the panel, `TextInputBase`
-  for the field, `kit.CardButton` for Cancel and Orchestrate, `kit.GlassFloat`
-  for the glass, `kit.StatusGlyph` for the mascot.
-- The move under the notch is a wrapping row: a spacer that ends at the
-  right of the notch reserve, then the pill, which wraps to a second line
-  when it does not fit. No layout read of an earlier frame.
-- The right space reads `Outline.Top` (D237): the outline keeps its column's
-  top from a `Draw` callback and asks for one more frame when it changes.
+  for the field, `kit.CardButton` for Cancel and Orchestrate,
+  `kit.StatusGlyph` for the mascot, `.Tooltip(...)` for the compact text.
 
 ## Do and do not
 
@@ -136,7 +123,7 @@ Popover (button state only), below the pill, its right edge on the pill's right 
 **Don't**
 
 - Do not show the pill on worker or plain shell terminals.
-- Do not cover the outline ticks or the notch.
+- Do not give the pill a fill or a shadow at rest: the title bar stays plain.
 - Do not send to any terminal but the selected session's.
 
 ## Tests
@@ -147,15 +134,18 @@ Popover (button state only), below the pill, its right edge on the pill's right 
 - View: ⏎ sends `/contr:orchestrate <goal>` to the selected address; an empty
   goal sends `/contr:orchestrate`; Cancel and Esc close and send nothing; a
   send error shows a toast.
-- View: the pill sits at right 10px with no column or a short one, and at
-  right 40px when the column reaches its rows; it does not overlap the
-  column or the notch, in a wide and a narrow terminal.
-- View: the popover's right edge is on the pill's right edge, at 10px and 40px.
-- View: `Outline.Top` is the column's top; the outline asks for a frame when it moves.
+- View: the pill sits `space-8` left of the next item of the title bar, 28px
+  high, centered; the frame puts it left of Search, in the bar.
+- View: compact shows the mascot and the count, with the full text as the
+  tooltip; the button shows the mascot alone; a narrow window makes it compact.
+- View: the popover's right edge is on the pill's right edge, 6px under it,
+  full and compact.
 - Sheet: `scripts/sheet.sh OrchestratePill`. See: fixtures `orchestrate` and
   `orchestrating`.
 
 ## Replaces
 
-- Nothing: before, only the tab color showed orchestration (D191), and
+- The pill over the terminal's top right (D234, D237), with its 240px notch
+  reserve: replaced by the title bar place (D253).
+- Before that, nothing: before, only the tab color showed orchestration (D191), and
   nothing in the window started it.

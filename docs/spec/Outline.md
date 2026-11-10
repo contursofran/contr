@@ -62,7 +62,7 @@ Design system page: component Outline. Shared rules: [README.md](README.md).
 - A small custom widget: a column of `ButtonBase` ticks (each label: the headline). Hit area 20×10px for each tick, even if the tick is 2px high.
 - Hover card: `TooltipBase` with placement left (see OutlineCard).
 - Data: the orchestrator's pinned messages (`pin_for_owner`); "since you left" = after the last time the terminal had focus.
-- `Outline.Top` gives the top of the column from the last drawn layout, for the orchestrate pill (D237). A change of the top asks for one more frame.
+- `Outline.Top` gives the top of the column from the last drawn layout, for the Chat | Terminal switch (D237, D253). A change of the top asks for one more frame.
 - Only the orchestrator terminal shows the outline.
 
 ## Do and do not
