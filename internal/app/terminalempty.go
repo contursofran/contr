@@ -25,7 +25,6 @@ const TerminalNewLine = "New terminal"
 // TerminalNoProjectLine heads the empty terminal while no project is open (D255).
 const TerminalNoProjectLine = "No project open"
 
-
 // handsGapTop is where the fingertip gap sits from the panel's top, as a fraction of its
 // height: a little above the middle (#644).
 const handsGapTop = 0.45

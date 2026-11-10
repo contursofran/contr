@@ -102,7 +102,7 @@ func PlanUsage(c *ui.Context, meters []Meter) ui.Element {
 			if !has {
 				value, ink = NoValue, p.Ink42
 			}
-			ui.Row(c).Label(m.Label+" plan").AlignItems(ui.Center).Gap(theme.Space7).Shrink(0).Height(theme.StyleValue.Line).Children(func() {
+			ui.Row(c).Label(m.Label + " plan").AlignItems(ui.Center).Gap(theme.Space7).Shrink(0).Height(theme.StyleValue.Line).Children(func() {
 				ui.Text(c, m.Label).SingleLine().Shrink(0).
 					Font(theme.StyleSmall.Family()).FontSize(theme.StyleSmall.Size).TextColor(p.Ink42)
 				if has {
