@@ -288,13 +288,14 @@ type Worker struct {
 	Turn     uint64 `json:"turn"`
 	Title    string `json:"title,omitempty"`
 	ExitCode *int   `json:"exit_code,omitempty"`
-	// Model is the --model of the program's own command line, when it has
-	// one, else the model that the kit's Stop hook put on the terminal. A
-	// terminal contr did not start has no profile, so this is how its row
-	// knows the model (D169, D189).
+	// Model is the model that the kit's Stop hook put on the terminal, when
+	// it did, else the --model of the program's own command line. The label
+	// follows /model; argv keeps the start model (D244). A terminal contr
+	// did not start has no profile, so this is how its row knows the model
+	// (D169, D189).
 	Model string `json:"model,omitempty"`
-	// Effort is the --effort of the program's own command line, else the
-	// effort that the kit's Stop hook put on the terminal (D189).
+	// Effort is the effort that the kit's Stop hook put on the terminal,
+	// else the --effort of the program's own command line (D189, D244).
 	Effort string `json:"effort,omitempty"`
 	// Orchestrating is true when the kit's Stop hook saw /contr:orchestrate
 	// in the session (LabelOrchestrating, D191).
@@ -369,8 +370,10 @@ func (t terminal) worker() Worker {
 		Turn:     t.Turn,
 		Title:    t.Title,
 		ExitCode: t.ExitCode,
-		Model:    orText(flagValue(t.Argv, "--model"), t.Labels[LabelModel]),
-		Effort:   orText(flagValue(t.Argv, "--effort"), t.Labels[LabelEffort]),
+		// The hook's labels come from the session itself, so they follow
+		// /model and /effort; argv keeps the start values (D244).
+		Model:  orText(t.Labels[LabelModel], flagValue(t.Argv, "--model")),
+		Effort: orText(t.Labels[LabelEffort], flagValue(t.Argv, "--effort")),
 
 		Orchestrating: t.Labels[LabelOrchestrating] != "",
 	}

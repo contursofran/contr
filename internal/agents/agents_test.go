@@ -1014,7 +1014,7 @@ func TestConfigEffortOf(t *testing.T) {
 	}
 }
 
-func TestWorkerModelAndEffortFromArgvElseLabels(t *testing.T) {
+func TestWorkerModelAndEffortFromLabelsElseArgv(t *testing.T) {
 	tm := term("t1", "a", "live", map[string]string{LabelModel: "opus", LabelEffort: "high"}, nil)
 	w, err := decodeWorker(raw(tm))
 	if err != nil {
@@ -1024,8 +1024,8 @@ func TestWorkerModelAndEffortFromArgvElseLabels(t *testing.T) {
 		t.Errorf("from labels: model %q effort %q", w.Model, w.Effort)
 	}
 	tm["argv"] = []string{"claude", "--model", "sonnet", "--effort", "low"}
-	if w, _ = decodeWorker(raw(tm)); w.Model != "sonnet" || w.Effort != "low" {
-		t.Errorf("argv wins: model %q effort %q", w.Model, w.Effort)
+	if w, _ = decodeWorker(raw(tm)); w.Model != "opus" || w.Effort != "high" {
+		t.Errorf("the labels win over argv (D244): model %q effort %q", w.Model, w.Effort)
 	}
 }
 

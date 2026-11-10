@@ -105,3 +105,13 @@ func TestContextAndModelGivesTheLastRealModel(t *testing.T) {
 		t.Errorf("no model field: %q", m)
 	}
 }
+
+// After /model the next assistant message has the new model, so the next
+// Stop labels the terminal with it (D244).
+func TestContextAndModelFollowsAModelChange(t *testing.T) {
+	opus := `{"type":"assistant","message":{"model":"claude-opus-5-5","content":[]}}`
+	fable := `{"type":"assistant","message":{"model":"claude-fable-5-2","content":[]}}`
+	if _, m, err := ContextAndModel(writeTranscript(t, prompt, opus, prompt, fable)); err != nil || m != "claude-fable-5-2" {
+		t.Errorf("model %q, %v; want claude-fable-5-2", m, err)
+	}
+}
