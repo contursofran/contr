@@ -36,6 +36,7 @@ what the redesign does not settle.
 | [FileTree.md](FileTree.md) | the files panel tree with +/− counts |
 | [UsageMeter.md](UsageMeter.md) | context and plan usage under the file tree |
 | [SettingsAgents.md](SettingsAgents.md) | Settings tab bar and the Roles of the Agents tab |
+| [KeyHints.md](KeyHints.md) | key chips while ⌘ is held |
 
 Each component spec has these sections: purpose, anatomy, states,
 behavior, data, keys and focus, edge cases, accessibility, build in MyGo,
@@ -157,6 +158,13 @@ The owner's from-zero canvas (https://claude.ai/artifact/9bmbRdJc8qDMSRXm6obEb3)
 | `⌘⇧E` | show or hide the files panel | window |
 | `⌘B` | show or hide the sidebar (View menu, D172) | window |
 | `⌘J` | open or close the questions card | window, while a question is open |
+| `⌘,` | open or close Settings (app menu) | window |
+| `⌘O` | open the projects modal; inside it, the folder dialog | window |
+| `⌘N` | new orchestrator: the folder dialog, then the spawn | window |
+| `⌘1`–`⌘8` | select that tab of the title bar, in its order (D190) | window |
+| `⌘9` | select the last tab | window |
+| `⌘⇧[` `⌘⇧]` | select the previous or next tab, around the ends | window |
+| `⌘⌥↑` `⌘⌥↓` | select the agent row above or below in the sidebar | window |
 | `1`–`9` | pick that choice | questions card, with the focus |
 | `⏎` | send the typed answer, else the picked choice; go to the next question | questions card |
 | `⇥` | next question chip | questions card |
@@ -166,6 +174,9 @@ The owner's from-zero canvas (https://claude.ai/artifact/9bmbRdJc8qDMSRXm6obEb3)
 | Esc | close the card, menu or tooltip | only the part with the focus (D72) |
 
 Esc is never a window shortcut: it interrupts Claude Code in the terminal.
+The ⌘ keys are in one list, `internal/app/shortcut` (D245): the handlers, the menus, the
+tooltips and the key chips ([KeyHints.md](KeyHints.md)) read it. No window key takes ⌘C, ⌘V,
+⌘A, ⌘K, ⌘=, ⌘- or ⌘0: the terminal needs them.
 
 ## Focus
 

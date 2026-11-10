@@ -302,7 +302,7 @@ func issueText(a agentLine) string {
 }
 
 // agentRow is one AgentRow.
-func (l *SpacesList) agentRow(c *ui.Context, a agentLine) {
+func (l *SpacesList) agentRow(c *ui.Context, a agentLine, hint string) {
 	issue, model, it := issueText(a), l.modelFor(a.w), l.issueTitle(a)
 	ci := !a.orchestrator && a.w.Live && a.w.Status != "working" && l.Entry.PRs.Waiting(a.w.Worktree)
 	label := AgentLabel(a.w, issue, model)
@@ -318,7 +318,7 @@ func (l *SpacesList) agentRow(c *ui.Context, a agentLine) {
 		Grey:    a.orchestrator && a.role == "",
 		OnClick: func() { l.SelectAgent(a) },
 		Menu:    func(m *ui.Menu) { l.agentMenu(m, a) },
-		Compact: l.Compact, Tip: tabmodel.RowTip(a.w),
+		Compact: l.Compact, Tip: tabmodel.RowTip(a.w), Hint: hint,
 	}
 	if a.orchestrator {
 		o.Items = a.items
@@ -543,6 +543,36 @@ func (l *SpacesList) move(items []sideItem, d int) {
 	}
 	l.cursor = next
 	l.choose(items[next])
+}
+
+// agentStep is the index of the agent row that ⌘⌥↑ (d -1) or ⌘⌥↓ (d 1) selects: the next agent
+// row from the selected row in that way, project rows skipped. With no selection ⌘⌥↓ takes the
+// first agent row and ⌘⌥↑ the last. -1: none.
+func (l *SpacesList) agentStep(items []sideItem, d int) int {
+	from := l.selectedIndex(items)
+	if from < 0 {
+		from = -1
+		if d < 0 {
+			from = len(items)
+		}
+	}
+	for i := from + d; i >= 0 && i < len(items); i += d {
+		if items[i].agent != nil {
+			return i
+		}
+	}
+	return -1
+}
+
+// StepAgent selects the agent row above (d -1) or below (d 1) the selected row (⌘⌥↑, ⌘⌥↓).
+// It is a window key, not a list key, so the new terminal takes the focus as after a click.
+// It does nothing at the first or last agent row. UI thread.
+func (l *SpacesList) StepAgent(d int) {
+	items := l.items()
+	if i := l.agentStep(items, d); i >= 0 && l.selection != nil {
+		l.cursor = i
+		l.selection.Select(l.target(items[i]))
+	}
 }
 
 // open is Enter in the list: the row under the cursor becomes the selection

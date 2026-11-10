@@ -29,6 +29,7 @@ import (
 	"github.com/contursofran/contr/internal/app/questions"
 	"github.com/contursofran/contr/internal/app/reviewview"
 	"github.com/contursofran/contr/internal/app/settings"
+	"github.com/contursofran/contr/internal/app/shortcut"
 	"github.com/contursofran/contr/internal/app/sidebar"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/tabmodel"
@@ -197,6 +198,8 @@ type Frame struct {
 	termErr   string
 	// find is the find bar over the terminal (termfind.go).
 	find termFind
+	// hints tells when the key chips show: ⌘ held alone (docs/spec/KeyHints.md).
+	hints shortcut.Hints
 	// post and invalidate are the window's; nil before attachTerminal.
 	post       func(fn func())
 	invalidate func()
@@ -438,14 +441,9 @@ const (
 func (f *Frame) View(c *ui.Context) {
 	theme.Apply(c)
 	p := theme.Current()
-	// ⌘J opens or closes the questions card from the notch (D125, D147).
-	if f.Notch != nil && c.Shortcut(ui.Cmd, ui.KeyJ) {
-		f.Notch.Toggle()
-	}
 	win, _ := c.Size()
-	if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyE) && !narrowWindow(win) {
-		f.TogglePanel()
-	}
+	f.windowKeys(c, win)
+	f.keyHints(c)
 	// The system draws the blur behind the view where the view paints nothing.
 	// Without it the sheet stands on the ground.
 	if c.Vibrancy() {

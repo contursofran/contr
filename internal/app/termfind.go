@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/shortcut"
 	"github.com/contursofran/contr/internal/app/theme"
 )
 
@@ -87,7 +88,7 @@ func (f *Frame) onSearch(s gterm.SearchStatus) {
 // findView is the layer of the terminal overlay that holds ⌘F and the find bar. It builds
 // nothing while the bar is closed, so it takes no key from the terminal.
 func (f *Frame) findView(c *ui.Context) {
-	if c.Shortcut(ui.Cmd, ui.KeyF) {
+	if shortcut.Of(shortcut.Find).Pressed(c) {
 		f.openFind()
 	}
 	fd := &f.find

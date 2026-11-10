@@ -12,6 +12,7 @@ import (
 
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/shortcut"
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/theme"
 )
@@ -86,8 +87,11 @@ func (l *SpacesList) View(c *ui.Context) {
 			// project buttons stay, one above the other. Same order (D154).
 			ui.Column(c).FillWidth().Shrink(0).AlignItems(ui.Center).Gap(theme.Space2).
 				Padding(theme.Space6, 0, theme.Space6, 0).Children(func() {
-				kit.IconButton(c, kit.IconButtonOpts{Icon: "folder", Label: LabelProjectsOpen, Small: true, OnClick: l.OnProjects})
-				kit.IconButton(c, kit.IconButtonOpts{Icon: "plus", Label: LabelProjectsNew, Small: true, OnClick: l.OnNew})
+				open, add := shortcut.Of(shortcut.OpenProject), shortcut.Of(shortcut.NewOrchestrator)
+				kit.IconButton(c, kit.IconButtonOpts{Icon: "folder", Label: LabelProjectsOpen, Small: true, OnClick: l.OnProjects,
+					Key: open.Glyphs(), Hint: open.HintIf(l.Hints)})
+				kit.IconButton(c, kit.IconButtonOpts{Icon: "plus", Label: LabelProjectsNew, Small: true, OnClick: l.OnNew,
+					Key: add.Glyphs(), Hint: add.HintIf(l.Hints)})
 			})
 			l.projectList(c)
 			l.serverRow(c)
@@ -149,8 +153,9 @@ func (l *SpacesList) settingsFoot(c *ui.Context) {
 				kit.PlanUsage(c, l.Plans())
 				ui.Box(c).Grow(1)
 			}
+			s := shortcut.Of(shortcut.Settings)
 			kit.IconButton(c, kit.IconButtonOpts{Icon: "settings", Label: label, Small: true, Dot: ready,
-				Key: "⌘,", OnClick: l.OnSettings})
+				Key: s.Glyphs(), Hint: s.HintIf(l.Hints), OnClick: l.OnSettings})
 		})
 	})
 }
@@ -244,9 +249,17 @@ func (l *SpacesList) projectList(c *ui.Context) {
 	l.list.Handle.OnShortcut(c, 0, ui.KeyUp, func() { l.move(items, -1) })
 	l.list.Handle.OnShortcut(c, 0, ui.KeyDown, func() { l.move(items, 1) })
 	l.list.Handle.OnShortcut(c, 0, ui.KeyEnter, func() { l.open(items) })
+	prev, next := l.agentStep(items, -1), l.agentStep(items, 1)
 	ui.List(c.Key("projects"), &l.list, len(items), func(i int) {
 		if a := items[i].agent; a != nil {
-			l.agentRow(c, *a)
+			hint := ""
+			switch i {
+			case prev:
+				hint = shortcut.Of(shortcut.PrevAgent).HintIf(l.Hints)
+			case next:
+				hint = shortcut.Of(shortcut.NextAgent).HintIf(l.Hints)
+			}
+			l.agentRow(c, *a, hint)
 			return
 		}
 		l.projectRow(c, l.groups[items[i].group], items[i].group)

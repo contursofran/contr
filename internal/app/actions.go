@@ -8,22 +8,24 @@ import (
 	"sync/atomic"
 
 	"github.com/egoist/mygo"
+
+	"github.com/contursofran/contr/internal/app/shortcut"
 )
 
-// The shortcut of each menu item. The menus show these labels, so a menu and its key cannot
-// drift apart.
-const (
-	keyQuit          = "Cmd+Q"
-	keyHide          = "Cmd+H"
-	keyHideOthers    = "Alt+Cmd+H"
-	keyMinimize      = "Cmd+M"
-	keyCopy          = "Cmd+C"
-	keyPaste         = "Cmd+V"
-	keySelectAll     = "Cmd+A"
-	keyNewTerminal   = "Cmd+T"
-	keyCloseTerminal = "Cmd+W"
-	keySettings      = "Cmd+,"
-	keySidebar       = "Cmd+B"
+// The shortcut of each menu item, from the one list of shortcuts (#640, D245). The menus show
+// these labels, so a menu, its key, the tooltips and the key hints cannot drift apart.
+var (
+	keyQuit          = shortcut.Of(shortcut.Quit).Accelerator()
+	keyHide          = shortcut.Of(shortcut.Hide).Accelerator()
+	keyHideOthers    = shortcut.Of(shortcut.HideOthers).Accelerator()
+	keyMinimize      = shortcut.Of(shortcut.Minimize).Accelerator()
+	keyCopy          = shortcut.Of(shortcut.Copy).Accelerator()
+	keyPaste         = shortcut.Of(shortcut.Paste).Accelerator()
+	keySelectAll     = shortcut.Of(shortcut.SelectAll).Accelerator()
+	keyNewTerminal   = shortcut.Of(shortcut.NewTab).Accelerator()
+	keyCloseTerminal = shortcut.Of(shortcut.CloseTab).Accelerator()
+	keySettings      = shortcut.Of(shortcut.Settings).Accelerator()
+	keySidebar       = shortcut.Of(shortcut.Sidebar).Accelerator()
 )
 
 // action is one item of the app menus: the MyGo role that does the work, and its shortcut.

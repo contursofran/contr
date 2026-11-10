@@ -1,13 +1,16 @@
 package app
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/tabmodel"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/app/titlebar"
 )
 
 // sheetParts are the spec'd components of package app that the spec sheet draws (#458, D179).
@@ -74,7 +77,27 @@ var sheetParts = []apptest.SheetPart{
 	}},
 }
 
+// sheetKeyHints is the KeyHints part: the title bar and agent rows as they show while ⌘ is held.
+func sheetKeyHints(c *ui.Context) {
+	bar := titlebar.TitleBar{Hints: true, NewTab: func() {}, Search: func() {}, Tabs: []tabmodel.Tab{
+		{Address: "o", Title: "lead", Orchestrator: true, State: kit.GlyphWorking},
+		{Address: "w1", Title: "b-241", State: kit.GlyphWorking, Selected: true},
+		{Address: "t1", Title: "$ repo", Plain: true},
+	}}
+	ui.Column(c).Gap(theme.Space12).Children(func() {
+		ui.Row(c).Width(640).Height(theme.TitleBarHeight).AlignItems(ui.Center).Children(func() {
+			bar.Build(c, true, false, func() {})
+		})
+		ui.Column(c).Width(300).Children(func() {
+			kit.AgentRow(c, kit.AgentRowOpts{Title: "lead", Name: "2 workers", Model: "opus", Age: "14m", State: kit.GlyphWorking, Orchestrator: true, Hint: "⌥↑"})
+			kit.AgentRow(c, kit.AgentRowOpts{Title: "Agent rows on ui.List", Name: "b-241", Model: "sonnet", Age: "6m", State: kit.GlyphWorking, Selected: true})
+			kit.AgentRow(c, kit.AgentRowOpts{Title: "Checks on hc event", Name: "b-250", Model: "sonnet", Age: "2m", State: kit.GlyphIdle, Hint: "⌥↓"})
+		})
+	})
+}
+
 // TestSpecSheet draws the parts of package app (see apptest.SpecSheet).
 func TestSpecSheet(t *testing.T) {
-	apptest.SpecSheet(t, sheetParts, nil)
+	parts := append(slices.Clip(sheetParts), apptest.SheetPart{Name: "KeyHints", W: 640, H: 230, View: sheetKeyHints})
+	apptest.SpecSheet(t, parts, []string{"KeyHints"})
 }

@@ -104,6 +104,9 @@ type SpacesList struct {
 	// Compact makes the rows icons only (D128). The frame sets it on each
 	// frame from the window width.
 	Compact bool
+	// Hints shows the key chips: ⌘ is held (docs/spec/KeyHints.md). The frame sets it on each
+	// frame.
+	Hints bool
 
 	snap      func() agentstate.Snapshot
 	selection *state.Selection

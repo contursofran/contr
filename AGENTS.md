@@ -93,6 +93,7 @@ that code, move it to the MyGo part in its own small PR.
 | `internal/app/apptest` | test helpers that the tests of more than one `internal/app` package use |
 | `internal/app/reviewview` | the Review view: branches ahead of main, their files or commits, the file as a code view |
 | `internal/app/files` | the files panel: file tree, diff summary, the agent's todos and artifacts |
+| `internal/app/shortcut` | the one list of ⌘ shortcuts (id, keys, key cap) and the state of the key hints while ⌘ is held |
 | `internal/app/tabmodel` | the title bar tabs of a snapshot, and the agent look that tabs and sidebar rows share |
 | `internal/app/titlebar` | the title bar: tabs, New tab, Search, diff summary, Hide files |
 | `internal/app/sidebar` | the sidebar: projects and their agent rows, servers, the foot |
