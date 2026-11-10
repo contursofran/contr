@@ -1,6 +1,6 @@
 # AgentRow
 
-A two-line sidebar row for one agent: the orchestrator sits at the top of its project, and its workers list under it on a thin rail.
+A two-line sidebar row for one agent: the orchestrator sits at the top of its project, and its workers list under it, indented.
 
 Design system page: component AgentRow. Shared rules: [README.md](README.md).
 
@@ -18,7 +18,7 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
 | Line 2 | mono `meta` (11px), `ink-42`, items `space-10` apart: worker name, model and effort, then the age at the right ("b-241  sonnet medium  6m"). An orchestrator shows its role in place of the name: "2 workers", or "orchestrator" with no workers yet; a Claude session that does not orchestrate shows none (D191) |
 | Indent | the orchestrator row sits 16px in from its project row (D169) |
 | Item badge | orchestrator rows with open items (D240): at the right of line 1, `space-8` from the title; height 16px, min width 16px, padding `0 5px`, radius 8px, fill `blocked`; the number in `badge` (mono 10.5px, 700), `ground` |
-| Kids rail | workers indent a further 17px with 9px padding; a 1px `rail` line on the left |
+| Kids indent | workers sit 26px further in than the orchestrator row; no rail line, the indent alone groups them (D258) |
 
 ## States
 
@@ -37,7 +37,7 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
 ## Behavior
 
 - The orchestrator row is first under its project. Its workers list under
-  it on the rail.
+  it, indented.
 - Click selects the agent: the title bar shows its tabs, the terminal
   shows its main terminal, the files panel shows its worktree. The terminal
   takes the keyboard focus, also on a click on the row that is already
@@ -105,7 +105,7 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
 
 ## Tokens
 
-`hover`, `rail`, `ink-100`, `ink-62`, `ink-60`, `ink-42`, `space-8`, `space-10`, `radius-8`, `body`, `meta`, `badge`, `blocked`, `ground`.
+`hover`, `ink-100`, `ink-62`, `ink-60`, `ink-42`, `space-8`, `space-10`, `radius-8`, `body`, `meta`, `badge`, `blocked`, `ground`.
 
 ## Build in MyGo
 
