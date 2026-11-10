@@ -205,6 +205,10 @@ Add packages under `internal/` when a change needs them.
 - On the owner's Mac, run one heavy job at a time: an app run with a scratch core,
   an e2e run or a release build. `go build` and `go test` are light and can
   run in parallel.
+- The e2e tests and `scripts/see.sh` need an unlocked screen with the
+  display on (D230). While no window shows, the app draws no frames, so the
+  automation tree keeps the first frame ("This Mac, offline", no workers).
+  A test stops at once when the screen is locked.
 - CI does not run the e2e tests or the `hccore` tests (D227). It only
   compiles them (`go vet -tags 'e2e bench hccore' ./...` in
   `scripts/check.sh`). A change that breaks one of them shows only when
