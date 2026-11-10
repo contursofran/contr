@@ -202,8 +202,8 @@ func main() {
 	}
 	openCard := func() {
 		t.Helper()
-		waitFor("the notch", func() bool { return has("4 items. Open") })
-		click("4 items. Open")
+		waitFor("the notch", func() bool { return has("4 need you. Open") })
+		click("4 need you. Open")
 		waitFor("the card", func() bool { return has(questions.LabelQuestionsChips) })
 	}
 

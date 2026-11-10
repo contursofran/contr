@@ -10,6 +10,7 @@ import (
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/apptest"
+	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
 )
 
@@ -336,6 +337,37 @@ func TestPopoverRightEdgeIsOnThePillsRightEdge(t *testing.T) {
 		}
 		if pop.Y != pill.Y+pill.H+popoverGap {
 			t.Errorf("compact %v: popover top %v, want %v", compact, pop.Y, pill.Y+pill.H+popoverGap)
+		}
+	}
+}
+
+// The pill has no ring at rest, in both states: its edge is the ground under it (D258).
+func TestPillHasNoRingAtRest(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		snap  agentstate.Snapshot
+		label string
+	}{
+		{"orchestrating", snapWith(false, 1, 0), PillText(1)},
+		{"button", snapWith(false, 0, 1), LabelButton},
+	} {
+		pill := &Pill{Snapshot: func() agentstate.Snapshot { return tc.snap }, Selected: func() string { return orch }}
+		tt := ui.NewTester(func(c *ui.Context) {
+			ui.Row(c).Fill().AlignItems(ui.Center).Justify(ui.Center).Background(theme.Current().Ground).Children(func() {
+				pill.View(c, false)
+			})
+		}, 400, 60)
+		tt.Frame()
+		b := apptest.Box(t, tt, tc.label)
+		img := tt.Image()
+		ground := theme.Current().Ground
+		// The top edge, away from the round ends.
+		y := b.Y + 0.5
+		for x := b.X + b.H/2; x < b.X+b.W-b.H/2; x++ {
+			if got := apptest.RGB(img, x, y); !apptest.Near(got, ground, 1) {
+				t.Errorf("%s: %v at (%v, %v) on the top edge of %+v, want the ground %v", tc.name, got, x, y, b, ground)
+				break
+			}
 		}
 	}
 }

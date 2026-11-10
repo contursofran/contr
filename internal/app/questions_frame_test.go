@@ -28,7 +28,7 @@ func TestNotchLayerLeavesKeysToTheTerminal(t *testing.T) {
 	}
 	f.Overlay.Add(questions.LabelNotchLayer, notch.View)
 	tt.Frame()
-	if !tt.HasText("2 questions") {
+	if !tt.HasText("2 need you") {
 		t.Fatalf("the notch did not show in the terminal overlay: %q", tt.Texts())
 	}
 	tt.Type("a")
@@ -68,9 +68,9 @@ func TestFrameShowsTheNotchInEveryTerminalOfTheProject(t *testing.T) {
 		id   string
 		want string
 	}{
-		{state.KindOrchestrator, "oa", "2 questions"},
-		{state.KindWorker, "wa", "2 questions"},
-		{state.KindOrchestrator, "ob", "1 question"},
+		{state.KindOrchestrator, "oa", "2 need you"},
+		{state.KindWorker, "wa", "2 need you"},
+		{state.KindOrchestrator, "ob", "1 needs you"},
 	} {
 		f.Selection.Select(state.Selected{Kind: tc.kind, ID: tc.id})
 		tt.Frame()
@@ -92,7 +92,7 @@ func TestFrameCmdJOpensTheQuestionsCard(t *testing.T) {
 	if f.Card.IsOpen() {
 		t.Error("the second ⌘J left the card open")
 	}
-	if err := tt.Click("2 questions. Open"); err != nil {
+	if err := tt.Click("2 need you. Open"); err != nil {
 		t.Fatal(err)
 	}
 	if !f.Card.IsOpen() {
