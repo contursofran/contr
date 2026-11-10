@@ -135,12 +135,12 @@ func TestTheFilesPanelShowsOnlyTheContextUnderTheTree(t *testing.T) {
 	}
 }
 
-func TestTheFilesPanelShowsADashWithoutASampler(t *testing.T) {
+func TestTheFilesPanelSaysNoDataYetWithoutASampler(t *testing.T) {
 	f, tt := newTester(t)
 	f.Usage = nil
 	tt.Frame()
-	if n := countText(tt.Texts(), kit.NoValue); n != 1 {
-		t.Errorf("%d dashes, want 1; texts %q", n, tt.Texts())
+	if n := countText(tt.Texts(), kit.NoValue); n != 1 || kit.NoValue != "no data yet" {
+		t.Errorf("%d %q, want 1 \"no data yet\" (D255); texts %q", n, kit.NoValue, tt.Texts())
 	}
 }
 
@@ -155,12 +155,16 @@ func TestTheSidebarFootShowsThePlansLeftOfSettings(t *testing.T) {
 		}
 	}
 	gear := apptest.Box(t, h.tt, sidebar.LabelSettingsOpen)
-	claude, codex := apptest.Box(t, h.tt, "Claude meter"), apptest.Box(t, h.tt, "Codex meter")
-	if claude.W != kit.PlanUsageWidth || codex.W != kit.PlanUsageWidth {
-		t.Errorf("bar widths %v and %v, want %v", claude.W, codex.W, kit.PlanUsageWidth)
+	claude, codex := apptest.Box(t, h.tt, "Claude meter"), apptest.Box(t, h.tt, kit.NoValue)
+	if claude.W != kit.PlanUsageWidth {
+		t.Errorf("bar width %v, want %v", claude.W, kit.PlanUsageWidth)
+	}
+	// A plan with no data has no bar, only "no data yet" (D255), and it fits left of the gear.
+	if !apptest.Absent(h.tt, "Codex meter") {
+		t.Error("the Codex plan has no data but shows a bar")
 	}
 	if !(claude.X < codex.X && codex.X+codex.W < gear.X) {
-		t.Errorf("order: Claude %+v, Codex %+v, gear %+v", claude, codex, gear)
+		t.Errorf("order: Claude %+v, Codex no data %+v, gear %+v", claude, codex, gear)
 	}
 	midGear, midBar := gear.Y+gear.H/2, claude.Y+claude.H/2
 	if d := midGear - midBar; d > 2 || d < -2 {

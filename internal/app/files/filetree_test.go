@@ -225,7 +225,7 @@ func TestFileTreeFollowsTheSelectedFolder(t *testing.T) {
 	}
 	r.dir = ""
 	r.frame()
-	if r.has("beta.txt") || !r.tt.HasText("No folder") {
+	if r.has("beta.txt") || !r.tt.HasText("Files of the open project show here") {
 		t.Errorf("no folder shows %q", r.tt.Texts())
 	}
 }
@@ -465,5 +465,26 @@ func TestFileTreeRowsSit20pxFromThePanelSide(t *testing.T) {
 	}
 	if got, want := nested.X-top.X, float32(2*(theme.Space16+theme.Space4)); got != want {
 		t.Errorf("a name two levels down indents %v, want %v", got, want)
+	}
+}
+
+// The indent of a nested row is plain: no guide line per level (D258).
+func TestFileTreeHasNoGuides(t *testing.T) {
+	dir := changedRepo(t)
+	apptest.Write(t, dir, "src/deep/inner.go", "x\ny\n")
+	r := newTreeRig(t, dir)
+	r.ft.onlyChanged = true
+	r.frame()
+	panel, name := apptest.Box(t, r.tt, "Files"), apptest.Box(t, r.tt, "inner.go")
+	img := r.tt.Image()
+	y := int(name.Y + name.H/2)
+	// From the row's start (inside the panel line and padding) to its icon:
+	// the indent of two levels.
+	x0 := int(panel.X) + 1 + theme.Space10 + 2
+	want := img.RGBAAt(x0, y)
+	for x := x0; x < int(name.X)-15-theme.Space7-2; x++ {
+		if got := img.RGBAAt(x, y); got != want {
+			t.Fatalf("%v at x %d in the indent of inner.go %+v, want %v", got, x, name, want)
+		}
 	}
 }

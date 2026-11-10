@@ -14,6 +14,7 @@ import (
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/owner"
 )
@@ -57,15 +58,69 @@ func TestNotchLabelCountsInWords(t *testing.T) {
 		want  string
 	}{
 		{nil, ""},
-		{[]agentstate.NeedTab{q}, "1 question"},
-		{[]agentstate.NeedTab{q, q}, "2 questions"},
-		{[]agentstate.NeedTab{q, q, todo}, "3 items"},
-		{[]agentstate.NeedTab{todo}, "1 item"},
-		{[]agentstate.NeedTab{q, blocked}, "2 items"},
+		{[]agentstate.NeedTab{q}, "1 needs you"},
+		{[]agentstate.NeedTab{q, q}, "2 need you"},
+		{[]agentstate.NeedTab{q, q, todo}, "3 need you"},
+		{[]agentstate.NeedTab{todo}, "1 needs you"},
+		{[]agentstate.NeedTab{q, blocked}, "2 need you"},
 	} {
 		if got := NotchLabel(tc.items); got != tc.want {
 			t.Errorf("NotchLabel(%d items) = %q, want %q", len(tc.items), got, tc.want)
 		}
+	}
+}
+
+func TestNotchNewestIsTheLatestItem(t *testing.T) {
+	at := func(s int64) time.Time { return time.Unix(s, 0) }
+	for _, tc := range []struct {
+		name  string
+		items []agentstate.NeedTab
+		want  string
+	}{
+		{"none", nil, ""},
+		{"latest time", []agentstate.NeedTab{{Key: "D1", Title: "new", Since: at(300)}, {Key: "T1", Title: "old", Since: at(100)}}, "new"},
+		{"tie: the last", []agentstate.NeedTab{{Key: "D1", Title: "first", Since: at(5)}, {Key: "D2", Title: "second", Since: at(5)}}, "second"},
+		{"no times: the last", []agentstate.NeedTab{{Key: "D1", Title: "first"}, {Key: "D2", Title: "second"}}, "second"},
+		{"no title: the key", []agentstate.NeedTab{{Key: "b-250", Since: at(1)}}, "b-250"},
+	} {
+		if got := NotchNewest(tc.items); got != tc.want {
+			t.Errorf("%s: NotchNewest = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+// The notch shows the count, then the newest item; in a narrow terminal the
+// item clips first and the label stays whole (D258).
+func TestNotchShowsTheNewestItemAndClipsItFirst(t *testing.T) {
+	long := "b-250 asks to run go test -tags hccore ./internal/hc/... and then some more words"
+	src := &source{Snap: agentstate.Snapshot{Questions: []owner.Question{
+		{ID: "D1", Project: "a", Title: "older", Asked: time.Unix(100, 0)},
+		{ID: "D2", Project: "a", Title: long, Asked: time.Unix(200, 0)},
+	}}}
+	r := newNotchRig(t, src, "a")
+	if !r.tt.HasText(long) || r.tt.HasText("older") {
+		t.Fatalf("texts %q, want the newest item only", r.tt.Texts())
+	}
+	label, item := apptest.Box(t, r.tt, "2 need you"), apptest.Box(t, r.tt, long)
+	if item.X <= label.X+label.W {
+		t.Errorf("the item %+v is not after the label %+v", item, label)
+	}
+	if item.W > notchNewestMax {
+		t.Errorf("item width %v, want at most %v", item.W, notchNewestMax)
+	}
+	wide := label.W
+	r.tt.SetSize(260, 400)
+	r.tt.Frame()
+	notch := apptest.Box(t, r.tt, "2 need you. Open")
+	label, item = apptest.Box(t, r.tt, "2 need you"), apptest.Box(t, r.tt, long)
+	if label.W < wide-0.01 {
+		t.Errorf("label width %v in a narrow terminal, want %v", label.W, wide)
+	}
+	if notch.X < 0 || notch.X+notch.W > 260 {
+		t.Errorf("notch %+v does not fit the 260px terminal", notch)
+	}
+	if item.X+item.W > notch.X+notch.W-theme.Space16 {
+		t.Errorf("item %+v runs into the end padding of the notch %+v", item, notch)
 	}
 }
 
@@ -77,16 +132,16 @@ func TestNotchShowsAndHidesWithTheData(t *testing.T) {
 	}
 	src.Snap.Questions = apptest.Questions("a", 1)
 	r.tt.Frame()
-	if !r.tt.HasText("1 question") {
-		t.Fatalf("texts %q, want 1 question", r.tt.Texts())
+	if !r.tt.HasText("1 needs you") {
+		t.Fatalf("texts %q, want 1 needs you", r.tt.Texts())
 	}
-	if _, ok := r.tt.Find("1 question. Open"); !ok {
-		t.Error("no element labelled \"1 question. Open\"")
+	if _, ok := r.tt.Find("1 needs you. Open"); !ok {
+		t.Error("no element labelled \"1 needs you. Open\"")
 	}
 	src.Snap.Questions = apptest.Questions("a", 2)
 	r.tt.Frame()
-	if _, ok := r.tt.Find("2 questions. Open"); !ok || !r.tt.HasText("2 questions") {
-		t.Errorf("texts %q, want 2 questions", r.tt.Texts())
+	if _, ok := r.tt.Find("2 need you. Open"); !ok || !r.tt.HasText("2 need you") {
+		t.Errorf("texts %q, want 2 need you", r.tt.Texts())
 	}
 	src.Snap.Questions = nil
 	r.tt.Frame()
@@ -102,13 +157,13 @@ func TestNotchCountsOnlyItsProject(t *testing.T) {
 		Workers:   []agents.Worker{apptest.BlockedWorker("b-9", "b", "Allow rm?")},
 	}}
 	r := newNotchRig(t, src, "a")
-	if !r.tt.HasText("1 question") {
-		t.Errorf("project a: texts %q, want 1 question", r.tt.Texts())
+	if !r.tt.HasText("1 needs you") {
+		t.Errorf("project a: texts %q, want 1 needs you", r.tt.Texts())
 	}
 	r.project = "b"
 	r.tt.Frame()
-	if !r.tt.HasText("4 items") {
-		t.Errorf("project b: texts %q, want 4 items", r.tt.Texts())
+	if !r.tt.HasText("4 need you") {
+		t.Errorf("project b: texts %q, want 4 need you", r.tt.Texts())
 	}
 	r.project = "c"
 	r.tt.Frame()
@@ -128,16 +183,16 @@ func TestNotchMixOfQuestionsTodosAndBlockedMenus(t *testing.T) {
 		Todos:     []owner.Todo{{ID: "T1", Project: "a", Kind: "know", Text: "CI is slow"}},
 	}}
 	r := newNotchRig(t, src, "a")
-	if !r.tt.HasText("3 items") {
-		t.Fatalf("texts %q, want 3 items", r.tt.Texts())
+	if !r.tt.HasText("3 need you") {
+		t.Fatalf("texts %q, want 3 need you", r.tt.Texts())
 	}
-	if _, ok := r.tt.Find("3 items. Open"); !ok {
-		t.Error("no element labelled \"3 items. Open\"")
+	if _, ok := r.tt.Find("3 need you. Open"); !ok {
+		t.Error("no element labelled \"3 need you. Open\"")
 	}
 	src.Snap.Todos = nil
 	src.Snap.Workers = []agents.Worker{apptest.BlockedWorker("b-250", "a", "Allow rm?")}
 	r.tt.Frame()
-	if !r.tt.HasText("3 items") {
+	if !r.tt.HasText("3 need you") {
 		t.Errorf("a blocked menu does not count: texts %q", r.tt.Texts())
 	}
 }
@@ -145,18 +200,18 @@ func TestNotchMixOfQuestionsTodosAndBlockedMenus(t *testing.T) {
 func TestNotchIgnoresResolvedItemsAndABrokenFile(t *testing.T) {
 	src := &source{Snap: agentstate.Snapshot{Questions: apptest.Questions("a", 2), Resolved: []string{"D1"}}}
 	r := newNotchRig(t, src, "a")
-	if !r.tt.HasText("1 question") {
+	if !r.tt.HasText("1 needs you") {
 		t.Errorf("a resolved question counts: texts %q", r.tt.Texts())
 	}
 	src.Snap.OwnerProblem = "owner: owner.json: invalid character"
 	r.tt.Frame()
-	if r.tt.HasText("1 question") {
+	if r.tt.HasText("1 needs you") {
 		t.Errorf("notch counts with a broken questions file: %q", r.tt.Texts())
 	}
 	// A problem of hc alone leaves the notch.
 	src.Snap.OwnerProblem, src.Snap.Problem = "", "hc: gone"
 	r.tt.Frame()
-	if !r.tt.HasText("1 question") {
+	if !r.tt.HasText("1 needs you") {
 		t.Errorf("hc problem hides the notch: %q", r.tt.Texts())
 	}
 }
@@ -167,14 +222,14 @@ func TestNotchClickOpensTheCardForTheFirstItem(t *testing.T) {
 		Workers:   []agents.Worker{apptest.BlockedWorker("b-250", "a", "Allow rm?")},
 	}}
 	r := newNotchRig(t, src, "a")
-	if err := r.tt.Click("2 items. Open"); err != nil {
+	if err := r.tt.Click("2 need you. Open"); err != nil {
 		t.Fatal(err)
 	}
 	if len(r.opened) != 1 || r.opened[0].Key != "D1" {
 		t.Fatalf("opened %+v, want the question D1 first, before the blocked worker b-250", r.opened)
 	}
 	// A second click closes the card.
-	if err := r.tt.Click("2 items. Open"); err != nil {
+	if err := r.tt.Click("2 need you. Open"); err != nil {
 		t.Fatal(err)
 	}
 	if r.closes != 1 || len(r.opened) != 1 {
@@ -213,7 +268,7 @@ func TestNotchKeysOpenItOnlyWhileFocused(t *testing.T) {
 		t.Fatalf("an unfocused notch took a key: opened %+v", r.opened)
 	}
 	// A click gives it the focus; then Enter presses it.
-	if err := r.tt.Click("1 question. Open"); err != nil {
+	if err := r.tt.Click("1 needs you. Open"); err != nil {
 		t.Fatal(err)
 	}
 	r.isOpen, r.opened = false, nil
@@ -264,8 +319,8 @@ func TestNotchFollowsTheFileThroughTheModel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.Start(ctx)
 	defer func() { cancel(); m.Wait() }()
-	if got := NotchLabel(n.Items()); got != "2 questions" {
-		t.Errorf("label after the read = %q, want 2 questions", got)
+	if got := NotchLabel(n.Items()); got != "2 need you" {
+		t.Errorf("label after the read = %q, want 2 need you", got)
 	}
 }
 

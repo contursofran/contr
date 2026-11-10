@@ -13,10 +13,10 @@ the file tree, the Context meter. A section with no items is not shown.
 | Part | Value |
 |---|---|
 | Section head | padding `2px 4px 4px 10px`, gap `space-8`; name `label` (12px, 500) `ink-45`; count mono 11px `ink-38` at the right, `space-6` from the edge |
-| Section end | `space-12`, a 1px `hairline`, `space-10` |
+| Section end | `space-20` of space; no hairline (D258) |
 | Row | height `file-row-height` (26px), padding `0 10px`, gap `space-8`, radius `radius-6`; text `row-small` (12.5px), one line with an ellipsis |
 | Todo icon | 14px: `todo` (empty circle) `ink-35`; `todo-done` (check circle) `ink-30`; in progress the 14px dot spinner (StatusGlyph) with its lit dots in the row ink |
-| `you` tag | mono 10.5px `ink-50`, padding `0 5px`, radius `radius-4`, 1px `input-line` border |
+| `you` tag | plain text, mono 10.5px `ink-50`; no ring (D258) |
 | Artifact row | `artifact` icon 14px `ink-38`, title `ink-60`, age mono 11px `ink-38` at the right |
 
 ## States

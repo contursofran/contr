@@ -54,22 +54,19 @@ func TestRowIconInksAreTokens(t *testing.T) {
 	}
 }
 
-func TestADividerSitsAboveTheSettingsButton(t *testing.T) {
+// No hairline sits over the sidebar foot (D258): the pixel rows between the
+// list and the Settings button are all the same.
+func TestNoDividerSitsAboveTheSettingsButton(t *testing.T) {
 	h := newSpaces(t, apptest.SpTree())
 	tt := h.tt
 	tt.Frame()
 	b := apptest.Box(t, tt, LabelSettingsOpen)
 	img := tt.Image()
-	// The hairline is a faint fill: a pixel row between the Servers row and the
-	// button that differs from the one above it.
-	found := false
 	for y := b.Y - 14; y < b.Y; y++ {
 		if apptest.PixelAt(img, 100, y) != apptest.PixelAt(img, 100, b.Y-15) {
-			found = true
+			t.Errorf("a line at y %v above the Settings button %+v", y, b)
+			break
 		}
-	}
-	if !found {
-		t.Error("no hairline above the Settings button")
 	}
 }
 

@@ -10,12 +10,11 @@ import (
 
 // Sizes of the AgentRow from docs/spec/AgentRow.md.
 const (
-	// RailIndent is how far the kids rail sits from the row of the orchestrator.
-	RailIndent = 17
-	// RailPad is the space between the rail line and a worker row.
-	RailPad = 9
+	// WorkerIndent is how far a worker row sits in from the row of its
+	// orchestrator. Only the indent groups them: no rail line (D258).
+	WorkerIndent = 26
 	// OrchestratorIndent is how far an orchestrator row sits in from its
-	// project row; its workers sit RailIndent further in.
+	// project row; its workers sit WorkerIndent further in.
 	OrchestratorIndent = 16
 	// OrchestratorPadY and WorkerPadY are the vertical padding of the rows.
 	OrchestratorPadY = 7
@@ -42,7 +41,7 @@ type AgentRowOpts struct {
 	CI    bool
 	State GlyphState
 	// Orchestrator draws the Claude glyph and the larger padding; a worker
-	// draws a braille glyph and sits on the rail.
+	// draws the dot glyph and sits WorkerIndent further in.
 	Orchestrator bool
 	// Grey draws the Claude glyph in grey: a Claude session that does not
 	// orchestrate (D191).
@@ -135,7 +134,8 @@ func AgentRowHeight(orchestrator bool) float32 {
 }
 
 // AgentRow is the two-line sidebar row of one agent
-// (docs/spec/AgentRow.md). A worker row sits on the thin rail.
+// (docs/spec/AgentRow.md). A worker row sits WorkerIndent in from its
+// orchestrator.
 func AgentRow(c *ui.Context, o AgentRowOpts) {
 	// The column takes the width; the margins sit inside it, so they count in
 	// the row's width (D40) and the age at the right is not cut off.
@@ -152,10 +152,7 @@ func AgentRow(c *ui.Context, o AgentRowOpts) {
 			glyph = agentRowButton(c, o, RowInsetX, RowInsetX+OrchestratorIndent)
 			return
 		}
-		ui.Row(c).Shrink(0).MarginStart(RowInsetX+OrchestratorIndent+RailIndent).MarginEnd(RowInsetX).
-			PaddingStart(RailPad).BorderWidth(0, 0, 0, 1).BorderColor(theme.Current().Rail).Children(func() {
-			glyph = agentRowButton(c, o, 0, 0)
-		})
+		glyph = agentRowButton(c, o, RowInsetX, RowInsetX+OrchestratorIndent+WorkerIndent)
 	})
 }
 

@@ -163,25 +163,25 @@ func TestQuestionsNotch(t *testing.T) {
 
 	pick("Dark")
 	selectAgent("lead, ")
-	waitNotch("3 items. Open") // two questions and one to-do of demo; the question of "other" does not count
+	waitNotch("3 need you. Open") // two questions and one to-do of demo; the question of "other" does not count
 	c.capture(t, filepath.Join(out, "notch-dark-orchestrator.png"))
 	selectAgent("b-250-checks, ")
-	waitNotch("3 items. Open")
+	waitNotch("3 need you. Open")
 	c.capture(t, filepath.Join(out, "notch-dark-worker.png"))
 
 	write(false)
-	waitNotch("2 questions. Open")
+	waitNotch("2 need you. Open")
 	c.capture(t, filepath.Join(out, "notch-dark-2questions.png"))
 
 	pick("Light")
-	waitNotch("2 questions. Open")
+	waitNotch("2 need you. Open")
 	c.capture(t, filepath.Join(out, "notch-light-2questions.png"))
 	selectAgent("lead, ")
 	write(true)
-	waitNotch("3 items. Open")
+	waitNotch("3 need you. Open")
 	c.capture(t, filepath.Join(out, "notch-light-orchestrator.png"))
 
-	click("3 items. Open")
+	click("3 need you. Open")
 	waitFor("questions card", func() bool { return has(questions.LabelQuestionsField) })
 	c.capture(t, filepath.Join(out, "notch-light-card.png"))
 }

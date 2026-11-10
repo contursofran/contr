@@ -33,7 +33,7 @@ func TestQuestionsCardFromTheRow(t *testing.T) {
 	c.press(t, c.waitLabel(t, "lead, "))
 	time.Sleep(1500 * time.Millisecond) // the terminal attaches
 	// One question and one to-do of "demo".
-	const notch = "2 items. Open"
+	const notch = "2 need you. Open"
 	c.waitLabel(t, notch)
 	c.press(t, notch)
 	if !c.labels(t)[questions.LabelQuestionsField] {

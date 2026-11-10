@@ -144,6 +144,8 @@ type SpacesList struct {
 	// dropped, so only the newest result lands.
 	reads view.Latest
 	scans int
+	// scanning is true from the start of a scan until its result lands or it is dropped.
+	scanning bool
 	// list is the state of the project list.
 	list ui.ListState
 	// cursor is the row the arrow keys are on: -1, or the selected row.
@@ -370,20 +372,27 @@ func spaceTerms(s agentstate.Snapshot) []spaces.Term {
 	return out
 }
 
+// settled tells whether the groups are final: the stored projects are read and no scan
+// runs. Until then an empty list is not "No projects yet" (D255).
+func (l *SpacesList) settled() bool {
+	return !l.HoldLaunch && !l.scanning
+}
+
 func (l *SpacesList) forgetScan() {
 	l.reads.Reset()
-	l.scan, l.scanned = git.Scan{}, nil
+	l.scan, l.scanned, l.scanning = git.Scan{}, nil, false
 }
 
 func (l *SpacesList) startScan(cwds []string) {
 	l.reads.Reset()
 	l.scanned = slices.Clone(cwds)
 	l.scans++
+	l.scanning = true
 	scanFn := l.scanFn
 	l.reads.Do(l.Env, func() func() {
 		scan := scanFn(cwds)
 		return func() {
-			l.scan = scan
+			l.scan, l.scanning = scan, false
 			l.rebuild()
 		}
 	})
