@@ -134,7 +134,7 @@ func (ch *Chat) team(c *ui.Context, t Team, st liveState) {
 				ch.teamCount(c, pal, parts[:shown], t.NeedsYou > 0)
 			}
 			if working {
-				ui.Row(c).Label(LabelLive+" "+what).Grow(1).MinWidth(0).Justify(ui.End).AlignItems(ui.Center).Gap(theme.Space8).Children(func() {
+				ui.Row(c).Label(LabelLive + " " + what).Grow(1).MinWidth(0).Justify(ui.End).AlignItems(ui.Center).Gap(theme.Space8).Children(func() {
 					ch.working(c, pal, what, elapsed)
 				})
 			}
