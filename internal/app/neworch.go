@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -115,7 +116,8 @@ func (n *NewOrchestrator) View(c *ui.Context) {
 		return
 	}
 	open := true
-	choice := ui.AlertDialog(c, &open, n.ask+" is not a git repository.",
+	// The folder name only: a full path wraps over two lines (#622).
+	choice := ui.AlertDialog(c, &open, filepath.Base(n.ask)+" is not a git repository.",
 		"Workers need one. Make it a git repository?", LabelMakeRepoCancel, LabelMakeRepo)
 	switch {
 	case choice == 1:
