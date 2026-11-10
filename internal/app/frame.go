@@ -24,6 +24,7 @@ import (
 	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/app/ghsource"
 	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/orchestrate"
 	"github.com/contursofran/contr/internal/app/projectsview"
 	"github.com/contursofran/contr/internal/app/questions"
 	"github.com/contursofran/contr/internal/app/reviewview"
@@ -92,6 +93,9 @@ type Frame struct {
 	Card *questions.QuestionsCard
 	// Notch is the questions notch in the terminal overlay ([Frame.Attach] makes it).
 	Notch *questions.Notch
+	// Pill is the orchestrate pill in the terminal overlay; [Frame.Attach] makes it with the
+	// agent state (D234).
+	Pill *orchestrate.Pill
 	// ProjectsModal is the projects modal (D110), made in Attach.
 	ProjectsModal *projectsview.ProjectsModal
 	// Settings is the Settings modal, made in Attach.

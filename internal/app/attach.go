@@ -6,6 +6,7 @@ import (
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/ghsource"
 	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/orchestrate"
 	"github.com/contursofran/contr/internal/app/projectsview"
 	"github.com/contursofran/contr/internal/app/questions"
 	"github.com/contursofran/contr/internal/app/reviewview"
@@ -37,7 +38,7 @@ func (f *Frame) Attach(w Window) (stop func()) {
 	f.attachProjects(env)
 	stopSettings := f.attachSettings(w, env)
 	f.loadSaved(env)
-	f.attachQuestions(agentSnap, src)
+	f.attachQuestions(env, agentSnap, src)
 	unwatch := f.attachVisibility(w, src)
 	term := f.attachTerminal(w)
 	offMenu := f.attachMenu(w, src)
@@ -236,15 +237,19 @@ func (f *Frame) loadSaved(env view.Env) {
 	f.loadWidths(env)
 }
 
-// attachQuestions puts the notch with the questions card above the terminal, starts the first
-// pull request and issue title reads and, while the viewers show, makes the board panel.
-func (f *Frame) attachQuestions(agentSnap func() agentstate.Snapshot, src agentstate.AgentSource) {
+// attachQuestions puts the orchestrate pill and the notch with the questions card above the
+// terminal, starts the first pull request and issue title reads and, while the viewers show, makes
+// the board panel. The pill layer comes first, so the notch draws over it.
+func (f *Frame) attachQuestions(env view.Env, agentSnap func() agentstate.Snapshot, src agentstate.AgentSource) {
 	f.Notch = &questions.Notch{Snapshot: agentSnap, Project: func() string { return f.openProject }}
 	if src != nil {
 		f.Notch.Open = f.Card.Open
 		f.Notch.Close = f.Card.Close
 		f.Notch.Opened = f.Card.IsOpen
 		f.Notch.Panel = f.Card.View
+		f.Pill = &orchestrate.Pill{Snapshot: agentSnap, Selected: f.selectedTerminal, NotchShown: f.Notch.Shown,
+			Send: src.Send, Env: env}
+		f.Overlay.Add(orchestrate.LabelLayer, f.Pill.View)
 	}
 	f.Overlay.Add(questions.LabelNotchLayer, f.Notch.View)
 	f.syncWorkerPRs()
