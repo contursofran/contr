@@ -49,7 +49,7 @@ func sheetChat(t *testing.T, status string, lines ...string) func(c *ui.Context)
 	}
 	return func(c *ui.Context) {
 		pal := theme.Current()
-		ui.Box(c).Fill().Background(pal.Panel).Border(1, pal.PanelLine).
+		ui.Box(c).Fill().Background(pal.Stage).Border(1, pal.PanelLine).
 			Radius(theme.Radius12).Children(func() {
 			ui.Row(c).Absolute().Top(theme.Space8).Right(10).Children(func() { s.ch.Switch(c, term) })
 			s.ch.View(c, func() {})

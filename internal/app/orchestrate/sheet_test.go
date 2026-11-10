@@ -24,7 +24,7 @@ const (
 // sheetPanel draws a panel that stands for the terminal, with the pill of p over it.
 func sheetPanel(c *ui.Context, h float32, p *Pill) {
 	pal := theme.Current()
-	ui.Box(c).Width(sheetW).Height(h).Background(pal.Panel).Border(1, pal.PanelLine).
+	ui.Box(c).Width(sheetW).Height(h).Background(pal.Stage).Border(1, pal.PanelLine).
 		Radius(theme.Radius12).Children(func() { p.View(c) })
 }
 

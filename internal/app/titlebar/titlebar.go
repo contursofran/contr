@@ -185,7 +185,7 @@ func (b *TitleBar) tab(c *ui.Context, tab ui.Element, t tabmodel.Tab, hint strin
 	ink := p.Ink50
 	switch {
 	case t.Selected:
-		el = el.Background(p.Panel)
+		el = el.Background(p.Stage)
 		el = insetRing(el, p.ShadowSelected)
 		ink = p.Ink100
 	default:

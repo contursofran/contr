@@ -23,13 +23,13 @@ func TestTerminalThemeHasThePaletteOfEachTheme(t *testing.T) {
 		if got.Palette != p.ANSI {
 			t.Errorf("%s: palette %v, want the theme's ANSI colors %v", name, got.Palette, p.ANSI)
 		}
-		if got.Foreground != p.TerminalForeground() || got.Background != p.PanelBase() || got.Cursor != p.Ink95 {
+		if got.Foreground != p.TerminalForeground() || got.Background != p.StageBase() || got.Cursor != p.Ink95 {
 			t.Errorf("%s: foreground %v, background %v, cursor %v", name, got.Foreground, got.Background, got.Cursor)
 		}
 	}
 	for name, p := range map[string]*theme.Palette{"dark": theme.Dark, "light": theme.Light} {
 		got := terminalTheme(p)
-		if got.Search == (ui.Color{}) || got.SearchSelected != p.Ink95 || got.SearchSelectedText != p.PanelBase() ||
+		if got.Search == (ui.Color{}) || got.SearchSelected != p.Ink95 || got.SearchSelectedText != p.StageBase() ||
 			got.SearchText != p.TerminalForeground() {
 			t.Errorf("%s: search colors %v %v %v %v are not the grey tokens", name, got.Search, got.SearchText,
 				got.SearchSelected, got.SearchSelectedText)

@@ -1,6 +1,6 @@
 # Window
 
-The contr window is one glass sheet over a dark ground: a title bar on top, then three panels in a row (sidebar, terminal, files).
+The contr window is one glass sheet over a dark ground: a title bar on top, then three panels in a row (sidebar, terminal, files). Only the terminal is drawn as a panel, the stage; the sidebar and the files panel are wings with no fill and no border, on the glass (D250).
 
 Design system page: component Window. Shared rules: [README.md](README.md).
 
@@ -16,7 +16,7 @@ Design system page: component Window. Shared rules: [README.md](README.md).
 | Glass sheet | `glass-window`, blur `glass-blur`, saturate `glass-saturate`, radius `radius-14`, border `window-line`, inner top line `shadow-window-top` |
 | Title bar | `titlebar-height` (46px: 8px, the 30px tab row, 8px; D177), see TitleBar |
 | Body | row of panels, gap `space-8`, padding `8px` to the left, right and bottom edge and between the panels; no top padding: the title bar keeps `space-8` under the tab row, so the window top → tab and tab → panel spaces are both `space-8` (D177) |
-| Panels | sidebar `sidebar-width` (312px), terminal (fills), files `files-width` (280px) |
+| Panels | sidebar `sidebar-width` (312px), terminal (fills), files `files-width` (280px). The terminal is the stage: fill `stage`, line `panel-line`. The sidebar and the files panel are wings: no fill and no border; their content keeps the inset it has on the stage (see Panel) (D250) |
 
 ## States
 
@@ -64,7 +64,7 @@ Design system page: component Window. Shared rules: [README.md](README.md).
 
 ## Tokens
 
-`ground`, `glow-*`, `glass-window`, `window-line`, `shadow-window-top`, `radius-14`, `space-8`, `titlebar-height`, `sidebar-width`, `files-width`.
+`ground`, `glow-*`, `glass-window`, `stage`, `panel-line`, `window-line`, `shadow-window-top`, `radius-14`, `space-8`, `titlebar-height`, `sidebar-width`, `files-width`.
 
 ## Build in MyGo
 

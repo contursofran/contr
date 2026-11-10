@@ -503,7 +503,7 @@ func (f *Frame) sidebarPanel(c *ui.Context) {
 }
 
 func (f *Frame) terminalPanel(c *ui.Context) {
-	kit.Panel(c, kit.PanelOpts{Name: LabelPanelTerminal, Bare: true, Body: func() { f.content(c) }})
+	kit.Panel(c, kit.PanelOpts{Name: LabelPanelTerminal, Bare: true, Stage: true, Body: func() { f.content(c) }})
 }
 
 // filesPanel is the files slot: the agent's todos and artifacts (D197), the file tree under the

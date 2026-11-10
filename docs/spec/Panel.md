@@ -1,6 +1,6 @@
 # Panel
 
-A panel is a rounded area inside the window glass: the sidebar, the terminal and the files panel are panels.
+A panel is a rounded area inside the window glass: the sidebar, the terminal and the files panel are panels. Only the terminal is drawn as a box, the stage; the sidebar and the files panel are wings on the glass (D250).
 
 Design system page: component Panel. Shared rules: [README.md](README.md).
 
@@ -12,7 +12,7 @@ Design system page: component Panel. Shared rules: [README.md](README.md).
 
 | Part | Value |
 |---|---|
-| Box | fill `panel`, line `panel-line`, radius `radius-12`, padding `12px 10px 10px` |
+| Box | the stage (terminal): fill `stage`, line `panel-line` (1px), radius `radius-12`, padding `12px 10px 10px` inside the line. A wing (sidebar, files): no fill and no line; padding 1px more on each side, so its content sits where it sits on the stage (D250) |
 | Head | row: name in `label` style (12px/500), `ink-45`, fills the row; icon buttons at the right; padding `2px 4px 4px 10px` |
 | Footer | line `hairline` on top; 24px icon buttons at the right |
 
@@ -44,11 +44,11 @@ Design system page: component Panel. Shared rules: [README.md](README.md).
 
 ## Tokens
 
-`panel`, `panel-line`, `hairline`, `radius-12`, `space-12`, `space-10`, `label`, `ink-45`.
+`stage`, `panel-line`, `hairline`, `radius-12`, `space-12`, `space-10`, `label`, `ink-45`.
 
 ## Build in MyGo
 
-- A plain container view with `Background`, `Border` and `CornerRadius`; there is no MyGo widget to wrap.
+- A plain container view with `Background`, `Border` and `CornerRadius`; there is no MyGo widget to wrap. `kit.PanelOpts.Stage` picks the stage; without it the panel is a wing.
 - The panel head: a row with `Text(...).SingleLine()` (it cuts with an ellipsis; `NoWrap` keeps the line whole) and IconButtons. The footer line is a 1px `hairline` box above the footer row.
 - Put the panels in `ui.Split` (see Window).
 
@@ -66,7 +66,7 @@ Design system page: component Panel. Shared rules: [README.md](README.md).
 
 ## Tests
 
-- View: head text and icon buttons render; a long name clips.
+- View: head text and icon buttons render; a long name clips; the stage draws its fill and line, a wing draws neither and keeps the content inset.
 
 ## Replaces
 

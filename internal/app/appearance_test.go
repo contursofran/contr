@@ -168,8 +168,8 @@ func pf(v float64) *float64 { return &v }
 func TestStartThemeAppliesTheStoredTint(t *testing.T) {
 	f, _ := tintFrame(t, prefs.Prefs{Appearance: mygo.ThemeDark,
 		Tint: prefs.Tints{Dark: prefs.Tint{Window: pf(0.8)}, Light: prefs.Tint{Panel: pf(0.1)}}})
-	if w, p := f.Tint(); w != 80 || p != 85 {
-		t.Errorf("Tint = %v %v, want 80 85", w, p)
+	if w, p := f.Tint(); w != 80 || p != 90 {
+		t.Errorf("Tint = %v %v, want 80 90", w, p)
 	}
 	if theme.Current().GlassWindow.A != 204 {
 		t.Error("the palette does not have the stored window alpha")
@@ -181,8 +181,8 @@ func TestSetTintAppliesAtOnceAndStoresOnceAfterTheDrag(t *testing.T) {
 	for _, v := range []float64{10, 20, 30, 40} {
 		f.SetTint(v, 60)
 	}
-	if theme.Current().GlassWindow.A != 102 || theme.Current().Panel.A != 153 {
-		t.Errorf("window %d panel %d, want 102 and 153 at once", theme.Current().GlassWindow.A, theme.Current().Panel.A)
+	if theme.Current().GlassWindow.A != 102 || theme.Current().Stage.A != 153 {
+		t.Errorf("window %d stage %d, want 102 and 153 at once", theme.Current().GlassWindow.A, theme.Current().Stage.A)
 	}
 	select {
 	case v := <-saved:
@@ -203,8 +203,8 @@ func TestResetTintPutsBackTheDefaultsOfTheCurrentTheme(t *testing.T) {
 	f, saved := tintFrame(t, prefs.Prefs{Appearance: mygo.ThemeDark,
 		Tint: prefs.Tints{Dark: prefs.Tint{Window: pf(0.9), Panel: pf(0.9)}, Light: prefs.Tint{Window: pf(0.2)}}})
 	f.ResetTint()
-	if w, p := f.Tint(); w != 70 || p != 85 {
-		t.Errorf("Tint = %v %v, want the Dark defaults 70 85", w, p)
+	if w, p := f.Tint(); w != 70 || p != 90 {
+		t.Errorf("Tint = %v %v, want the Dark defaults 70 90", w, p)
 	}
 	v := <-saved
 	if v.Tint.Dark != (prefs.Tint{}) || v.Tint.Light.Window == nil {
