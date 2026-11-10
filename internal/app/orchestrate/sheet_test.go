@@ -1,8 +1,7 @@
 package orchestrate
 
 // The OrchestratePill part of the spec sheet (D179, D234): two terminal-sized panels. The first
-// has the pill of an orchestrating session with three workers, under the outline ticks' column;
-// the second has the Orchestrate button with its popover open and a goal typed.
+// has the pill of an orchestrating session with three workers, 10px from the right side; the second has the Orchestrate button with its popover open and a goal typed.
 
 import (
 	"testing"

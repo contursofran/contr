@@ -147,6 +147,31 @@ type Outline struct {
 	// open is the tick whose card a click opened. The tooltip hides after a
 	// click, so the outline keeps the card until the pointer leaves.
 	open string
+	// top is the top of the column's content in the overlay, from the last
+	// frame drawn; hasTop is false while no column shows (see Top).
+	top    float32
+	hasTop bool
+}
+
+// Top returns the top of the column's content, the count or the first tick's
+// hit area, in the overlay, from the last frame drawn. ok is false while
+// no column shows. The orchestrate pill reads it to keep clear of the column
+// (D237). A nil outline has no column.
+func (o *Outline) Top() (top float32, ok bool) {
+	if o == nil {
+		return 0, false
+	}
+	return o.top, o.hasTop
+}
+
+// setTop keeps the top of the column and asks for one more frame when it
+// changed, so that a layer that reads Top in its build follows the column.
+func (o *Outline) setTop(top float32, ok bool) {
+	if top == o.top && ok == o.hasTop {
+		return
+	}
+	o.top, o.hasTop = top, ok
+	o.Env.Redraw()
 }
 
 // NewOutline returns an outline. Messages that were pinned before it began
@@ -274,21 +299,28 @@ func outlineClock(t time.Time) string { return t.Local().Format("15:04") }
 func (o *Outline) View(c *ui.Context) {
 	addr, v, ok := o.view()
 	if !ok {
+		o.setTop(0, false)
 		return
 	}
 	p := theme.Current()
+	// The draw callbacks get this frame's layout: they keep the column's top
+	// for Top, after the layout and before the next build.
+	var colY float32
 	ui.Box(c).Label(LabelOutline).Absolute().Top(0).Bottom(0).Right(outlineInset).Width(outlineHitWidth).
 		Column().Justify(ui.Center).AlignItems(ui.End).PassThrough().
-		FocusGroup(ui.Vertical).Children(func() {
-		if v.Count > 0 {
-			count := theme.StyleCount
-			ui.Text(c, strconv.Itoa(v.Count)).Label(LabelOutlineCount).SingleLine().TextColor(p.Ink100).
-				Font(count.Stack()).FontSize(count.Size).FontWeight(count.Weight).
-				Margin(0, 0, outlineCountGap, 0)
-		}
-		for i, t := range v.Ticks {
-			o.tickView(c, addr, t, v.New[i])
-		}
+		FocusGroup(ui.Vertical).Draw(func(_ *ui.Painter, r ui.Rect) { colY = r.Y }).Children(func() {
+		ui.Column(c).AlignItems(ui.End).PassThrough().Shrink(0).
+			Draw(func(_ *ui.Painter, r ui.Rect) { o.setTop(r.Y-colY, true) }).Children(func() {
+			if v.Count > 0 {
+				count := theme.StyleCount
+				ui.Text(c, strconv.Itoa(v.Count)).Label(LabelOutlineCount).SingleLine().TextColor(p.Ink100).
+					Font(count.Stack()).FontSize(count.Size).FontWeight(count.Weight).
+					Margin(0, 0, outlineCountGap, 0)
+			}
+			for i, t := range v.Ticks {
+				o.tickView(c, addr, t, v.New[i])
+			}
+		})
 	})
 }
 

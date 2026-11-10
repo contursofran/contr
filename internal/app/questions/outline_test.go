@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -433,5 +434,87 @@ func TestOutlineFocusedIsTheLastFocus(t *testing.T) {
 	var none *Outline
 	if got := none.Focused(); got != "" {
 		t.Errorf("nil outline focused %q", got)
+	}
+}
+
+// Top is the top of the column's content in the overlay, from the last
+// frame: the count when there is one, else the first tick's hit area.
+func TestOutlineTopIsTheColumnsTop(t *testing.T) {
+	t.Run("count", func(t *testing.T) {
+		f := newOutline(t, threePins()...)
+		f.tt.Frame()
+		top, ok := f.o.Top()
+		if want := f.rect(t, LabelOutlineCount).Y; !ok || top != want {
+			t.Errorf("Top() = %v, %v; want %v, true", top, ok, want)
+		}
+	})
+	t.Run("no count", func(t *testing.T) {
+		pins := threePins()[:2]
+		f := newOutline(t, pins...)
+		f.tt.Frame()
+		top, ok := f.o.Top()
+		if want := f.rect(t, "Decide the release name").Y; !ok || top != want {
+			t.Errorf("Top() = %v, %v; want %v, true", top, ok, want)
+		}
+	})
+	t.Run("more ticks than fit", func(t *testing.T) {
+		var pins []owner.Todo
+		for i := range 60 {
+			pins = append(pins, pin("P"+strconv.Itoa(i), outlineClockStart.Add(-time.Duration(60-i)*time.Minute), "Pin "+strconv.Itoa(i)))
+		}
+		f := newOutline(t, pins...)
+		f.tt.Frame()
+		top, ok := f.o.Top()
+		// The newest 40 ticks show: the first is pin 20.
+		if want := f.rect(t, "Pin 20").Y; !ok || top != want {
+			t.Errorf("Top() = %v, %v; want %v, true", top, ok, want)
+		}
+	})
+}
+
+func TestOutlineTopIsFalseWithoutAColumn(t *testing.T) {
+	var none *Outline
+	if _, ok := none.Top(); ok {
+		t.Error("a nil outline has a top")
+	}
+	f := newOutline(t, threePins()...)
+	f.tt.Frame()
+	if _, ok := f.o.Top(); !ok {
+		t.Fatal("no top with a column")
+	}
+	f.todo = nil
+	f.tt.Frame()
+	if _, ok := f.o.Top(); ok {
+		t.Error("a top with no column")
+	}
+}
+
+// The outline asks for one more frame in the frame that moves its top, so the
+// pill, built before the column's layout, follows it; and for none while the
+// top stays.
+func TestOutlineAsksForAFrameWhenItsTopMoves(t *testing.T) {
+	f := newOutline(t, threePins()[:2]...)
+	redraws := 0
+	f.o.Env.Invalidate = func() { redraws++ }
+	f.tt.Frame()
+	redraws = 0
+	f.tt.Frame()
+	if redraws != 0 {
+		t.Errorf("%d redraws while the column stays", redraws)
+	}
+	before, _ := f.o.Top()
+	f.todo = threePins() // a new pin: the count shows and the column grows
+	f.tt.Frame()
+	if redraws != 1 {
+		t.Errorf("%d redraws in the frame the column grew, want 1", redraws)
+	}
+	after, ok := f.o.Top()
+	if want := f.rect(t, LabelOutlineCount).Y; !ok || after != want || after == before {
+		t.Errorf("Top() = %v, %v after the column grew (was %v), want the count's top %v", after, ok, before, want)
+	}
+	f.todo = nil
+	f.tt.Frame()
+	if redraws != 2 {
+		t.Errorf("%d redraws after the column went, want 2", redraws)
 	}
 }
