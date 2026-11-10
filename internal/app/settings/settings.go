@@ -753,7 +753,7 @@ func SettingsButton(c *ui.Context, label string, style kit.ButtonStyle, click ki
 }
 
 // tintRows are the Background and Panels sliders, with a Reset button (D162). Each slider sets
-// the alpha, in percent, of glass-window or of panel for the current theme and applies it at
+// the alpha, in percent, of glass-window or of stage (D250) for the current theme and applies it at
 // once; the value shows beside it.
 func (s *Settings) tintRows(c *ui.Context) {
 	if s.Tint == nil {

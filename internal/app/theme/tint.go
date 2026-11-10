@@ -6,16 +6,17 @@ import (
 )
 
 // Tint overrides (D162): the owner tunes the alpha of `glass-window` and of
-// `panel` for each theme in Settings. A nil value keeps the token default.
-// Current returns the palette with the overrides applied, so every view
-// follows. The contrast numbers of docs/spec/tokens.md hold for the defaults
-// only.
+// `stage` (the terminal panel, D250) for each theme in Settings; the slider
+// keeps the name "Panels" and the field `panel`. A nil value keeps the token
+// default. Current returns the palette with the overrides applied, so every
+// view follows. The contrast numbers of docs/spec/tokens.md hold for the
+// defaults only.
 
-// tintDefaults are the token alphas of Dark and Light (D163, D164), as fractions.
+// tintDefaults are the token alphas of Dark and Light (D163, D164, D250), as fractions.
 // A test keeps them equal to the palettes.
 var tintDefaults = [2]struct{ window, panel float64 }{
-	{window: 0.60, panel: 0.70}, // Light
-	{window: 0.70, panel: 0.85}, // Dark
+	{window: 0.60, panel: 0.86}, // Light
+	{window: 0.70, panel: 0.90}, // Dark
 }
 
 var tintState struct {
@@ -56,7 +57,7 @@ func publish(dark bool) {
 		q.GlassWindow.A = uint8(math.Round(clamp01(*w) * 255))
 	}
 	if p != nil {
-		q.Panel.A = uint8(math.Round(clamp01(*p) * 255))
+		q.Stage.A = uint8(math.Round(clamp01(*p) * 255))
 	}
 	current.Store(&q)
 }
@@ -83,7 +84,7 @@ func ClearTints() {
 	publish(cur)
 }
 
-// TintValues returns the alpha of glass-window and of panel, 0 to 1, that
+// TintValues returns the alpha of glass-window and of stage, 0 to 1, that
 // the current theme uses: the override, or the token default.
 func TintValues() (window, panel float64) {
 	tintState.mu.Lock()
