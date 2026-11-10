@@ -61,6 +61,11 @@ type Chat struct {
 	errs   map[string]string
 	// sending is set while a send or an interrupt runs.
 	sending bool
+	// panel is the chat's box, for the width of wide blocks (wide.go).
+	panel ui.Handle
+	// parts holds the parts of each text of Claude by row id, and partsOf the text they came from.
+	parts   map[string][]Part
+	partsOf map[string]string
 	// field is the composer's field, which takes the focus back after a click on a button.
 	field ui.Handle
 	// toTerm is the toTerminal of the last View.
@@ -73,7 +78,7 @@ type Chat struct {
 // watch replaces the file watch in tests; nil uses the real one.
 func New(env view.Env, stateDir string, watch func(path string, notify func()) (func(), error)) *Chat {
 	ch := &Chat{Env: env, reader: transcript.NewReader(0), chat: map[string]bool{}, folds: map[string]*bool{},
-		drafts: map[string]*string{}, errs: map[string]string{}}
+		drafts: map[string]*string{}, errs: map[string]string{}, parts: map[string][]Part{}, partsOf: map[string]string{}}
 	ch.src = &chatsource.Source{StateDir: stateDir, Env: env, Watch: watch, Changed: ch.changed}
 	ch.list.FollowEnd = true
 	ch.list.Key = func(i int) any {
@@ -134,6 +139,7 @@ func (ch *Chat) changed(reset bool) {
 		ch.reader = transcript.NewReader(0)
 		ch.model.Reset()
 		ch.folds = map[string]*bool{}
+		ch.parts, ch.partsOf = map[string][]Part{}, map[string]string{}
 	}
 	ch.stale = true
 	ch.pull()

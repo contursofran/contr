@@ -18,14 +18,14 @@ const (
 	LabelSwitch = "View of this session"
 	// LabelSwitchBack names the solid box under the switch.
 	LabelSwitchBack = "View switch"
-	TextChat    = "Chat"
-	TextTerm    = "Terminal"
+	TextChat        = "Chat"
+	TextTerm        = "Terminal"
 	// TextEmpty shows while the session has no transcript, or no entry in it yet.
 	TextEmpty = "No transcript yet"
 	// TextToTerminal is the button of the needs-you line without a menu: it switches to Terminal.
 	TextToTerminal = "Switch to Terminal"
 	// LabelPrompt, LabelGroup, LabelOwnerNote, LabelNote and LabelCall name the rows and lines.
-	LabelPrompt    = "owner prompt"
+	LabelPrompt = "owner prompt"
 	// LabelPending names a prompt sent from the composer that the transcript has not brought yet.
 	LabelPending   = "pending prompt"
 	LabelGroup     = "work group"
@@ -38,7 +38,7 @@ const (
 
 // Sizes of docs/spec/ChatView.md.
 const (
-	columnMax  = 760 // the content column, centered
+	columnMax  = 920 // the column of prose, centered
 	promptMax  = 560
 	groupMax   = 584
 	lineHeight = 20 // a line of an open group, and the group row
@@ -80,7 +80,7 @@ func (ch *Chat) View(c *ui.Context, toTerminal func()) {
 	ch.mdTheme(pal)
 	id := ch.src.Terminal()
 	st := ch.state(id)
-	ui.Column(c).Label(LabelChat).Fill().Children(func() {
+	ui.Column(c).Label(LabelChat).Fill().Bind(&ch.panel).Children(func() {
 		rows, pending := ch.model.Rows(), ch.model.Pendings()
 		ui.List(c, &ch.list, len(rows)+len(pending), func(i int) {
 			if i < len(rows) {
@@ -114,18 +114,16 @@ func column(c *ui.Context, fn func()) {
 
 func (ch *Chat) row(c *ui.Context, r Row) {
 	c = c.Key(r.ID)
-	column(c, func() {
-		switch r.Kind {
-		case RowPrompt:
-			ch.prompt(c, ch.model.Entry(r.Entry).Text, false)
-		case RowSaid:
-			markdown.View(c, ch.model.Entry(r.Entry).Text, &ch.md)
-		case RowGroup:
-			ch.group(c, r)
-		case RowOwnerNote:
-			ch.noteLine(c, ch.model.Entry(r.Entry), true)
-		}
-	})
+	switch r.Kind {
+	case RowPrompt:
+		column(c, func() { ch.prompt(c, ch.model.Entry(r.Entry).Text, false) })
+	case RowSaid:
+		ch.said(c, r.ID, ch.model.Entry(r.Entry).Text)
+	case RowGroup:
+		ch.group(c, r)
+	case RowOwnerNote:
+		column(c, func() { ch.noteLine(c, ch.model.Entry(r.Entry), true) })
+	}
 }
 
 // prompt is the owner's text, at the right, on a hover fill, in ink-100. A pending prompt is
@@ -147,19 +145,54 @@ func (ch *Chat) prompt(c *ui.Context, text string, pending bool) {
 // group is a work group: a fold row with the counts, the dots of the senders and, while a call
 // runs, the working glyph. Open, a card lists the notes, then the calls.
 func (ch *Chat) group(c *ui.Context, r Row) {
-	pal := theme.Current()
 	open := ch.folds[r.ID]
 	if open == nil {
 		open = new(bool)
 		ch.folds[r.ID] = open
 	}
 	text := GroupText(len(r.Notes), len(r.Calls))
+	ui.Column(c).FillWidth().Children(func() { ch.groupBody(c, r, open, text) })
+}
+
+// groupBody is the fold row in the column and, open, the card in a wide box.
+func (ch *Chat) groupBody(c *ui.Context, r Row, open *bool, text string) {
+	pal := theme.Current()
 	p := ui.CollapsibleBase(c, open)
 	ink := pal.Ink42
 	if p.Trigger.Hovered() {
 		ink = pal.Ink62
 	}
-	p.Trigger.Label(LabelGroup + " " + text).Row().AlignSelf(ui.Start).Height(lineHeight).AlignItems(ui.Center).
+	// The trigger is placed where CollapsibleBase makes it: a margin puts it on the column's left.
+	ch.groupRow(c, p, r, open, text, ink)
+	if p.Trigger.Clicked() {
+		ch.list.HoldPlace()
+	}
+	p.Panel(func() {
+		ch.wide(c, func() {
+			card := ui.Column(c).AlignSelf(ui.Start).MinWidth(min(groupMax, ch.contentWidth(c))).
+				Margin(theme.Space6, 0, 0, 0).Padding(theme.Space8, theme.Space12).
+				Radius(theme.Radius9).Border(1, pal.Hairline)
+			if w := ch.contentWidth(c); w > 0 {
+				card.MaxWidth(w)
+			}
+			card.Children(func() {
+				for _, i := range r.Notes {
+					ch.noteLine(c, ch.model.Entry(i), false)
+				}
+				if len(r.Notes) > 0 && len(r.Calls) > 0 {
+					ui.Box(c).FillWidth().Height(1).Margin(theme.Space6, 0).Background(pal.Hairline)
+				}
+				for _, i := range r.Calls {
+					ch.callLine(c, ch.model.Entry(i))
+				}
+			})
+		})
+	})
+}
+
+// groupRow is the fold row of a work group.
+func (ch *Chat) groupRow(c *ui.Context, p ui.CollapsibleParts, r Row, open *bool, text string, ink ui.Color) {
+	p.Trigger.Label(LabelGroup+" "+text).Row().AlignSelf(ui.Start).Margin(0, 0, 0, ch.columnLeft(c)).Height(lineHeight).AlignItems(ui.Center).
 		Gap(theme.Space8).Cursor(ui.CursorPointer).Children(func() {
 		if ch.model.Running(r) {
 			kit.StatusGlyph(c, kit.GlyphOpts{State: kit.GlyphWorking, Small: true})
@@ -173,23 +206,6 @@ func (ch *Chat) group(c *ui.Context, r Row) {
 			chev = "⌄"
 		}
 		kit.Styled(ui.Text(c, chev), theme.StyleValue).TextColor(ink).AccessHidden(true)
-	})
-	if p.Trigger.Clicked() {
-		ch.list.HoldPlace()
-	}
-	p.Panel(func() {
-		ui.Column(c).MaxWidth(groupMax).Margin(theme.Space6, 0, 0, 0).Padding(theme.Space8, theme.Space12).
-			Radius(theme.Radius9).Border(1, pal.Hairline).Children(func() {
-			for _, i := range r.Notes {
-				ch.noteLine(c, ch.model.Entry(i), false)
-			}
-			if len(r.Notes) > 0 && len(r.Calls) > 0 {
-				ui.Box(c).FillWidth().Height(1).Margin(theme.Space6, 0).Background(pal.Hairline)
-			}
-			for _, i := range r.Calls {
-				ch.callLine(c, ch.model.Entry(i))
-			}
-		})
 	})
 }
 

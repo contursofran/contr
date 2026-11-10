@@ -165,7 +165,7 @@ func (ch *Chat) live(c *ui.Context, st liveState, toTerminal func()) {
 	case liveWorking:
 		what, start, ok := ch.model.Activity()
 		column(c, func() {
-			ui.Row(c).Label(LabelLive+" "+what).FillWidth().Height(lineHeight).AlignItems(ui.Center).Gap(theme.Space8).Children(func() {
+			ui.Row(c).Label(LabelLive + " " + what).FillWidth().Height(lineHeight).AlignItems(ui.Center).Gap(theme.Space8).Children(func() {
 				kit.StatusGlyph(c, kit.GlyphOpts{State: kit.GlyphWorking, Small: true})
 				kit.Styled(ui.Text(c, what), theme.StyleValue).SingleLine().MinWidth(0).TextColor(pal.Ink62)
 				if ok {
@@ -191,7 +191,7 @@ func (ch *Chat) needsYou(c *ui.Context, pal *theme.Palette, st liveState, toTerm
 	if mn != nil {
 		question = mn.Question
 	}
-	ui.Column(c).Label(LabelLive+" "+question).FillWidth().Gap(theme.Space8).Children(func() {
+	ui.Column(c).Label(LabelLive + " " + question).FillWidth().Gap(theme.Space8).Children(func() {
 		ui.Row(c).FillWidth().MinHeight(lineHeight).AlignItems(ui.Center).Gap(theme.Space8).Children(func() {
 			ch.dotBox(c, st.w.DisplayName()+" needs you", pal.Blocked)
 			kit.Styled(ui.Text(c, question), theme.StyleBody).Wrap().Grow(1).MinWidth(0).TextColor(pal.Ink100)
