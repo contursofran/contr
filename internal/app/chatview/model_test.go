@@ -23,6 +23,10 @@ const (
 	lNote2   = `{"type":"user","uuid":"u7","message":{"content":"<hc from=\"w2:t2 b-632\">ended its turn without a report. Last words: waiting</hc>"}}`
 	lSaid2   = `{"type":"assistant","uuid":"a4","message":{"content":[{"type":"text","text":"b-631 is done."}]}}`
 	lSide    = `{"type":"assistant","uuid":"s1","isSidechain":true,"message":{"content":[{"type":"text","text":"subagent text"}]}}`
+	lTaskOK  = `{"type":"user","uuid":"u8","message":{"content":"<task-notification>\n<task-id>bx1</task-id>\n<status>completed</status>\n<summary>Background command \"go test ./...\" completed (exit code 0)</summary>\n</task-notification>"}}`
+	lTaskBad = `{"type":"user","uuid":"u9","message":{"content":"<task-notification>\n<task-id>bx2</task-id>\n<status>failed</status>\n<summary>Background command \"go vet\" failed with exit code 1</summary>\n</task-notification>"}}`
+	lAgent   = `{"type":"user","uuid":"u10","message":{"content":"Another Claude session sent a message:\n<agent-message from=\"planner-12\">The plan is ready.</agent-message>"}}`
+	lNudge   = `{"type":"user","uuid":"u11","message":{"content":"<system-reminder>\nThe user hasn't heard from you in a while.\n</system-reminder>"}}`
 )
 
 // apply reads lines with r and applies the batch to m.
@@ -63,7 +67,7 @@ func TestGrouping(t *testing.T) {
 		t.Fatalf("rows = %v, want %v", got, want)
 	}
 	g := m.Rows()[2]
-	if len(g.Calls) != 2 || len(g.Notes) != 1 || GroupText(len(g.Notes), len(g.Calls)) != "1 worker note · 2 tool calls" {
+	if len(g.Calls) != 2 || len(g.Notes) != 1 || GroupText(len(g.Notes), 0, len(g.Calls)) != "1 worker note · 2 tool calls" {
 		t.Errorf("group = %+v", g)
 	}
 	if s := m.Senders(g); len(s) != 1 || s[0] != "w2:t1" {
@@ -74,6 +78,25 @@ func TestGrouping(t *testing.T) {
 	}
 	if e := m.Entry(m.Rows()[3].Entry); e.Note == nil || e.Note.Name != "b-632" {
 		t.Errorf("owner note = %+v", e)
+	}
+}
+
+func TestTasksAndAgentMessages(t *testing.T) {
+	var m Model
+	apply(t, &m, &transcript.Reader{}, lPrompt, lCall1, lTaskOK, lAgent, lNudge, lTaskBad, lSaid2)
+	want := []RowKind{RowPrompt, RowGroup, RowOwnerNote, RowSaid}
+	if got := kinds(&m); !sameKinds(got, want) {
+		t.Fatalf("rows = %v, want %v", got, want)
+	}
+	g := m.Rows()[1]
+	if notes, tasks := m.Counts(g); notes != 1 || tasks != 1 || len(g.Calls) != 1 {
+		t.Errorf("group: %d notes, %d tasks, %+v", notes, tasks, g)
+	}
+	if s := m.Senders(g); len(s) != 0 {
+		t.Errorf("an agent message has no hc address, yet senders = %v", s)
+	}
+	if e := m.Entry(m.Rows()[2].Entry); e.Note == nil || e.Note.Status != "failed" {
+		t.Errorf("owner row = %+v", e)
 	}
 }
 
@@ -175,6 +198,17 @@ func TestNeedsOwner(t *testing.T) {
 	if NeedsOwner(note(transcript.NoteAnswered, "blocked")) {
 		t.Error("an owner answer never needs the owner")
 	}
+	task := func(status string) transcript.Entry {
+		return transcript.Entry{Kind: transcript.Note, Text: "blocked", Note: &transcript.KitNote{Kind: transcript.NoteTask, Status: status}}
+	}
+	for status, want := range map[string]bool{"completed": false, "failed": true, "killed": true, "Failed": true, "running": false, "": false} {
+		if got := NeedsOwner(task(status)); got != want {
+			t.Errorf("NeedsOwner(task %q) = %v, want %v", status, got, want)
+		}
+	}
+	if NeedsOwner(transcript.Entry{Kind: transcript.Note, Text: "blocked", Note: &transcript.KitNote{Kind: transcript.NoteAgent, Name: "x"}}) {
+		t.Error("a message of another session never needs the owner")
+	}
 	if NeedsOwner(transcript.Entry{Kind: transcript.Said, Text: "blocked"}) {
 		t.Error("a text of Claude is no note")
 	}
@@ -182,11 +216,14 @@ func TestNeedsOwner(t *testing.T) {
 
 func TestTexts(t *testing.T) {
 	for _, c := range []struct {
-		notes, calls int
-		want         string
-	}{{3, 6, "3 worker notes · 6 tool calls"}, {1, 0, "1 worker note"}, {0, 1, "1 tool call"}, {0, 0, ""}} {
-		if got := GroupText(c.notes, c.calls); got != c.want {
-			t.Errorf("GroupText(%d, %d) = %q", c.notes, c.calls, got)
+		notes, tasks, calls int
+		want                string
+	}{
+		{3, 0, 6, "3 worker notes · 6 tool calls"}, {1, 0, 0, "1 worker note"}, {0, 0, 1, "1 tool call"}, {0, 0, 0, ""},
+		{2, 1, 4, "2 worker notes · 1 background task · 4 tool calls"}, {0, 2, 0, "2 background tasks"},
+	} {
+		if got := GroupText(c.notes, c.tasks, c.calls); got != c.want {
+			t.Errorf("GroupText(%d, %d, %d) = %q", c.notes, c.tasks, c.calls, got)
 		}
 	}
 	for d, want := range map[time.Duration]string{400 * time.Millisecond: "0.4s", 12 * time.Second: "12s", 125 * time.Second: "2m 5s"} {
