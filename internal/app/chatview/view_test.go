@@ -52,7 +52,7 @@ func newRig(t *testing.T) *rig {
 			r.ch.Switch(c, r.id)
 			if r.ch.On(r.id) {
 				ui.Box(c).Grow(1).MinHeight(0).Children(func() {
-					r.ch.View(c, func() { r.ch.SetOn(r.id, false) })
+					r.ch.View(c)
 				})
 			} else {
 				r.ch.Hide()

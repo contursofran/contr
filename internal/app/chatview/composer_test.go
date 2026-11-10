@@ -13,14 +13,6 @@ import (
 	"github.com/contursofran/contr/internal/app/theme"
 )
 
-const menuScreen = `╭──────────────────────────╮
-│ Bash command             │
-│   npm test               │
-│ Do you want to proceed?  │
-│ ❯ 1. Yes                 │
-│   2. No                  │
-╰──────────────────────────╯`
-
 // sess is a rig whose terminal runs a Claude Code session in state status, with fake sends.
 type sess struct {
 	*rig
@@ -28,15 +20,12 @@ type sess struct {
 	sent      []string
 	sendErr   error
 	stops     int
-	keys      []string
-	screen    string
-	reads     int
 	interrupt error
 }
 
 func newSession(t *testing.T, status string) *sess {
 	t.Helper()
-	s := &sess{rig: newRig(t), status: status, screen: menuScreen}
+	s := &sess{rig: newRig(t), status: status}
 	s.ch.Worker = func(addr string) (agents.Worker, bool) {
 		return agents.Worker{Name: "lead", Address: addr, Live: true, Status: s.status, Kind: "permission",
 			Command: "claude", Turn: 3}, addr == term
@@ -54,14 +43,6 @@ func newSession(t *testing.T, status string) *sess {
 		}
 		s.stops++
 		return s.interrupt
-	}
-	s.ch.Read = func(addr string, lines int) (string, error) {
-		s.reads++
-		return s.screen, nil
-	}
-	s.ch.SendKeys = func(addr string, keys []byte) error {
-		s.keys = append(s.keys, string(keys))
-		return nil
 	}
 	s.ch.Meta = func(addr string) string { return "opus high · 212k" }
 	s.savePath(term)
@@ -265,72 +246,19 @@ func TestIdleHasNoLineAndNoRedraw(t *testing.T) {
 	}
 }
 
-func TestNeedsYouWithChoices(t *testing.T) {
-	s := newSession(t, "blocked")
-	if !s.has(LabelLive+" Do you want to proceed?") || !s.tt.HasText(ChoiceText(0, "Yes")) || !s.tt.HasText(ChoiceText(1, "No")) {
-		t.Fatalf("no menu: %v", s.tt.Texts())
-	}
-	reads := s.reads
-	s.tt.Frame()
-	if s.reads != reads {
-		t.Error("the menu is read again with no change of the worker")
-	}
-	// Enter with text does not reach a menu (D51).
-	s.typeIn("hi")
-	s.key(0, ui.KeyEnter)
-	if len(s.sent) != 0 || !s.tt.HasText(TextAnswerFirst) || s.draft() != "hi" {
-		t.Errorf("Enter on a menu: sent %q, texts %v", s.sent, s.tt.Texts())
-	}
-	if err := s.tt.Click(ChoiceText(1, "No")); err != nil {
-		t.Fatal(err)
-	}
-	s.tt.Frame()
-	if len(s.keys) != 1 || s.keys[0] != "2" {
-		t.Fatalf("keys %q", s.keys)
-	}
-	// A digit in the empty field sends its choice at once, with no Enter.
-	*s.ch.draft(term) = ""
-	s.tt.Frame()
-	s.typeIn("1")
-	if len(s.keys) != 2 || s.keys[1] != "1" || s.draft() != "" {
-		t.Errorf("digit: keys %q, draft %q", s.keys, s.draft())
-	}
-	// A menu that changed sends nothing.
-	s.screen = strings.Replace(menuScreen, "2. No ", "2. Nah", 1)
-	if err := s.tt.Click(ChoiceText(0, "Yes")); err != nil {
-		t.Fatal(err)
-	}
-	s.tt.Frame()
-	if len(s.keys) != 2 || !s.tt.HasText("The prompt changed; look again.") {
-		t.Errorf("changed menu: keys %q, texts %v", s.keys, s.tt.Texts())
-	}
-}
-
-func TestNeedsYouFallback(t *testing.T) {
-	s := newSession(t, "blocked")
-	s.screen = "no menu here"
-	s.ch.menu = menuState{}
-	s.tt.Frame()
-	if !s.has(LabelLive+" "+TextNeedsYou) || s.tt.HasText(ChoiceText(0, "Yes")) {
-		t.Fatalf("no fallback: %v", s.tt.Texts())
-	}
-	// An error state has no menu to read.
-	s.status = "error"
-	s.screen = menuScreen
-	s.ch.menu = menuState{}
-	reads := s.reads
-	s.tt.Frame()
-	if s.reads != reads || s.tt.HasText(ChoiceText(0, "Yes")) {
-		t.Error("the menu of an error state is read")
-	}
-	if !s.has(LabelLive + " " + TextNeedsYou) {
-		t.Fatalf("no fallback for an error: %v", s.tt.Texts())
-	}
-	if err := s.tt.Click(TextToTerminal); err != nil {
-		t.Fatal(err)
-	}
-	s.tt.Frame()
-	if s.ch.On(term) {
-		t.Error("Switch to Terminal does not switch")
+// A session that waits on a menu has no line in the dock: the notch answers it (D260). Enter
+// sends nothing and keeps the text; a digit is text, not a choice (D51). An error state is the
+// same.
+func TestNeedsYouHasNoLineAndEnterWaits(t *testing.T) {
+	for _, status := range []string{"blocked", "error"} {
+		s := newSession(t, status)
+		if s.tt.HasText(LabelLive) || s.tt.HasText("Do you want to proceed?") || s.tt.HasText("Switch to Terminal") {
+			t.Errorf("%s: a needs-you line in the dock: %v", status, s.tt.Texts())
+		}
+		s.typeIn("1")
+		s.key(0, ui.KeyEnter)
+		if len(s.sent) != 0 || s.draft() != "1" || !s.tt.HasText("Answer in the notch first (⌘J), or switch to Terminal.") {
+			t.Errorf("%s: Enter on a menu: sent %q, draft %q, texts %v", status, s.sent, s.draft(), s.tt.Texts())
+		}
 	}
 }

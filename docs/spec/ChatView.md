@@ -93,7 +93,7 @@ Content colors show only as a dot, a word, a 2px bar or a 1px line: never a fill
 
 - The field takes the focus as it appears: when the chat shows (the switch,
   ⌘E). It keeps the focus after a send, and takes it back after a click on
-  Stop or a choice.
+  Stop.
 - Enter sends; ⇧Enter breaks the line. A blank field sends nothing. Send
   types the text into the selected session's own terminal and presses Enter
   through the agent source's `Send`, as the orchestrate pill does. The field
@@ -102,9 +102,10 @@ Content colors show only as a dot, a word, a 2px bar or a 1px line: never a fill
   brings a prompt with the same text; a reset drops it. A failed send drops
   the pending prompt, puts the text back in an empty field and shows the
   error. One send runs at a time.
-- Text can be sent while the agent works. While it waits on a menu, Enter
-  sends nothing and keeps the text: "Pick a choice above first, or switch to
-  Terminal." A stray Enter never picks a choice (D51).
+- Text can be sent while the agent works. While it waits on a menu (blocked
+  or in error), Enter sends nothing and keeps the text: "Answer in the notch
+  first (⌘J), or switch to Terminal." A stray Enter never picks a choice
+  (D51); a digit is text like any other (D260).
 - Esc in the field interrupts the agent while it works (the agent source's
   `Interrupt`, the stop key that Esc is in the terminal); so does Stop. With
   nothing running, Esc does nothing: it closes and switches nothing.
@@ -116,15 +117,14 @@ Content colors show only as a dot, a word, a 2px bar or a 1px line: never a fill
 | State | Value |
 |---|---|
 | Working | a row 20px high, gap `space-8`, mono `value`: the working StatusGlyph (14px), what the agent does now in `ink-62` on one line, and the time since the turn started in `ink-38`: "8s", "2m 5s", "1h 4m". What it does: the last tool call with no result, "Bash · go test ./..." (the name as a call line has it); else "Thinking" when a thinking mark is the last entry; else "Working". The turn starts at the time of the last owner prompt; with no time there, no time shows. Hidden entries and the lines of subagents do not count. |
-| Needs you | the agent is blocked or in error: a 6px `blocked` dot and the question of its menu (`body`, `ink-100`), and under it the choices as outlined card buttons "1 Yes", "2 No" (the first nine). The menu is read from the screen as the questions card reads it (`questions.Menu`, D51): again on each change of the agent's turn or message, with no timer. A choice reads the screen again and sends its keys only when the menu is the one shown; else "The prompt changed; look again." A choice that asks for typed text switches to Terminal. While a menu shows, a digit typed into the empty field sends that choice at once and clears the field; the menu takes no Enter (D140). With no menu read: "The terminal needs you" and the outlined button "Switch to Terminal". |
+| Needs you | the agent is blocked or in error: no line. The notch shows its menu and answers it; while the session orchestrates, the team row counts it in "N needs you" (D260). |
 | Idle | no line |
 
 The time asks for a redraw each second only while the agent works, the
 chat shows and the turn has a time (D55). Idle, nothing is asked.
 
 While the session orchestrates, the working line shows at the right end of
-the team row and not as a line of its own; the needs-you line stays, above
-the team row.
+the team row and not as a line of its own.
 
 ## Team row
 
@@ -136,8 +136,8 @@ alone. No hover fill, no chips, nothing opens (D259).
 | Part | Value |
 |---|---|
 | Mascot | the still Claude glyph (14px) in its orchestrating color, as the [OrchestratePill](OrchestratePill.md) has it |
-| Head | `space-8` after the mascot: "Orchestrating · 4 agents", "Orchestrating · 1 agent", "Orchestrating" with no agent; `label`, `ink-85`. The agents are the workers the session started that hc still lists, ended ones too. |
-| Count | `space-14` after the head, mono `value`, `ink-45`, the parts `space-6` apart with a "·" between: "1 needs you · 2 working · 1 idle · 1 done". In this order; a part with no agent is left out. "N needs you" ("1 needs you", "2 need you", as the notch) is the number of the orchestrator row's badge (D240): the questions, to-dos and blocked menus of the session and its workers. It is in `blocked-text`, the one red of the row, and a click on it opens the notch's card as ⌘J does; the rest of the row takes no click. A blocked worker counts only there; "working" is a live worker that works, "idle" any other live worker, "done" an ended one. |
+| Head | `space-8` after the mascot: "Orchestrating · 4 agents", "Orchestrating · 1 agent", "Orchestrating" with no agent; `label`, `ink-85`. The agents are the session's live workers: the number of the orchestrate pill (`LiveWorkersOf`). An ended worker is not in the row (D260). |
+| Count | `space-14` after the head, mono `value`, `ink-45`, the parts `space-6` apart with a "·" between: "1 needs you · 1 error · 2 working · 1 idle". In this order; a part with no agent is left out. "N needs you" ("1 needs you", "2 need you", as the notch) is the number of the orchestrator row's badge (D240): the questions, to-dos and blocked menus of the session itself and its workers. It is in `blocked-text`, the one red of the row, and a click on it opens the notch's card as ⌘J does, which answers a menu. "N error" is a worker in error, in `ink-100`: not red, as it is no item of the notch, and it takes no click. The rest of the row takes no click. A blocked worker counts only in "needs you"; "working" is a worker that works, "idle" any other live worker (D260). |
 | Live text | at the right end, `space-14` after the count, while the session works: the working line's glyph, what it does and its time ([Live line](#live-line)) |
 | Narrow | the row clips from the right: first the live text's words shorten (`…`), then the count drops its last parts; the mascot, the head and the live text's glyph and time stay |
 
