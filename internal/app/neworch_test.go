@@ -168,8 +168,9 @@ func TestStartInShowsSpawnError(t *testing.T) {
 	}
 }
 
-// askMessage is the title of the dialog for /work/proj.
-const askMessage = "/work/proj is not a git repository."
+// askMessage is the title of the dialog for /work/proj: the folder name only
+// (#622).
+const askMessage = "proj is not a git repository."
 
 func TestPlusNewOutsideGitAsksAndMakesARepository(t *testing.T) {
 	n := newOrch(t)
@@ -180,6 +181,9 @@ func TestPlusNewOutsideGitAsksAndMakesARepository(t *testing.T) {
 	n.h.tt.Frame()
 	if len(n.spawn) != 0 || !n.h.tt.HasText(askMessage) || !n.h.tt.HasText("Workers need one. Make it a git repository?") {
 		t.Fatalf("spawn %q; the dialog must ask first", n.spawn)
+	}
+	if n.h.tt.HasText("/work/" + askMessage) {
+		t.Error("the title shows the full path; want the folder name only")
 	}
 	if err := n.h.tt.Click(LabelMakeRepo); err != nil {
 		t.Fatal(err)
