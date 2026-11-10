@@ -280,7 +280,9 @@ func seeChat(t *testing.T, h *harness) {
 func seeTranscript(from map[string]string) string {
 	n := 0
 	start := time.Now().Add(-75 * time.Second)
-	at := func(sec int) string { return start.Add(time.Duration(sec) * time.Second).UTC().Format(time.RFC3339Nano) }
+	at := func(sec int) string {
+		return start.Add(time.Duration(sec) * time.Second).UTC().Format(time.RFC3339Nano)
+	}
 	line := func(typ string, sec int, extra map[string]any) string {
 		n++
 		m := map[string]any{"type": typ, "uuid": fmt.Sprintf("u%d", n), "timestamp": at(sec), "sessionId": "chat"}
