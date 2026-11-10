@@ -97,6 +97,7 @@ that code, move it to the MyGo part in its own small PR.
 | `internal/app/sidebar` | the sidebar: projects and their agent rows, servers, the foot |
 | `internal/app/ghostty` | `Conn`: an hc terminal as the connection of MyGo's terminal plugin (D79) |
 | `internal/usage` | plan usage: Claude status line, `codex app-server`, Codex logs |
+| `internal/transcript` | reads a Claude Code transcript from an offset as chat entries: prompts, texts, tool calls, kit notes, hidden texts |
 | `internal/statedir` | the folder where contr keeps its own files, and the agent terminal variable |
 | `internal/prompt` | reads a blocked worker's menu from terminal text: question and choices |
 | `internal/review` | git reads for the Review view: branches ahead of main, files, commits, texts |
