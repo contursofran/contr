@@ -23,7 +23,7 @@ func TestWorkerStates(t *testing.T) {
 	c.waitLabel(t, "lead, ")
 	for label, want := range map[string]string{
 		"b201-s1-notch, ":   "b201-s1-notch, working, 201",
-		"b252-s1-cleanup, ": "b252-s1-cleanup, needs you, 252",
+		"b252-s1-cleanup, ": "b252-s1-cleanup, needs you, 252, permission", // the block kind (D249)
 		"b202-s1-outline, ": "b202-s1-outline, idle, 202",
 	} {
 		if got := c.waitLabel(t, label); got != want {

@@ -21,8 +21,8 @@ number.
 
 | Change | Motion | Token | Where |
 |---|---|---|---|
-| A row or tab is selected | its fill, border, ring and inks fade (`kit.FadeTransition`, `kit.FadeInk`) | `motion-select` | agent rows and the icon column, flat rows (projects, servers), card rows (Review and PR files), title bar tabs, the Chat \| Terminal switch (`kit.Switch`) |
-| A worker row turns to needs you | its inks fade; the badge and the notch already spring (D240) | `motion-state` | agent rows (`kit.RowMotion` picks `motion-state` in the frame the need changes) |
+| A row or tab is selected | its fill, border and inks fade (`kit.FadeTransition`, `kit.FadeInk`) | `motion-select` | agent rows and the icon column, flat rows (projects, servers), card rows (Review and PR files), title bar tabs, the Chat \| Terminal switch (`kit.Switch`) |
+| A worker row turns to needs you | its title fades to `ink-100` and the "needs you" words fade in; no fill changes (D249); the badge and the notch already spring (D240) | `motion-state` | agent rows (`kit.RowMotion` picks `motion-state` in the frame the need changes) |
 | A popover opens or closes | scale 0.96 to 1 from its anchor, with a fade (`kit.PopIn`) | `motion-pop-in`, `motion-pop-out` | orchestrate popover, update panel, What's new |
 | A modal opens or closes | the backdrop fades, the card scales 0.96 to 1 as it comes in; it goes with the fade only (`kit.PopDialog`) | `motion-pop-in`, `motion-pop-out` | Settings, the projects modal |
 | A number changes | the digits that change roll, up or down as the value goes (`kit.RollNumber`) | `motion-number` | the values of the Context meter and the plan meters |

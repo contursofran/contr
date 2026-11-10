@@ -194,8 +194,7 @@ func (b *TitleBar) tab(c *ui.Context, tab ui.Element, t tabmodel.Tab, hint strin
 	ink := p.Ink50
 	switch {
 	case t.Selected:
-		el = el.Background(p.Stage)
-		el = insetRing(el, p.ShadowSelected)
+		el = el.Background(p.Stage) // no ring: the fill alone (D249)
 		ink = p.Ink100
 	default:
 		el = el.Cursor(ui.CursorPointer)
@@ -203,7 +202,7 @@ func (b *TitleBar) tab(c *ui.Context, tab ui.Element, t tabmodel.Tab, hint strin
 			el = el.Background(p.Hover)
 		}
 	}
-	// The fill, the ring and the ink fade in theme.MotionSelect (D256); the
+	// The fill and the ink fade in theme.MotionSelect (D256); the
 	// tab is selected at once. Only colors: the tab does not slide.
 	el = el.TextColor(kit.FadeInk(el, "ink", ink, theme.MotionSelect)).Transition(kit.FadeTransition(theme.MotionSelect))
 	el.Children(func() {
@@ -310,14 +309,4 @@ func closeButton(c *ui.Context, onClick func()) {
 			ui.Icon(c, s).Size(10, 10)
 		}
 	})
-}
-
-// insetRing draws the layers of a token shadow that are inset, as MyGo's inset shadow.
-func insetRing(el ui.Element, sh theme.Shadow) ui.Element {
-	for _, l := range sh {
-		if l.Inset {
-			el = el.InsetShadow(l.X, l.Y, l.Blur, l.Wide, l.Color)
-		}
-	}
-	return el
 }

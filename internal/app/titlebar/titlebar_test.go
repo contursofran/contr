@@ -620,6 +620,21 @@ func TestTheSelectedTabIsAPillInBothThemes(t *testing.T) {
 	}
 }
 
+// The selected tab has no ring (D249): its edge has the same color as its fill.
+func TestTheSelectedTabHasNoRing(t *testing.T) {
+	for _, tc := range apptest.ThemeCases {
+		themetest.Use(t, tc.Src)
+		b := newBar(t, tabsOf(), true)
+		b.tt.Frame()
+		img := b.tt.Image()
+		sel := b.rect(t, "lead")
+		fill := apptest.RGB(img, sel.X+sel.W-3, sel.Y+sel.H/2)
+		if edge := apptest.RGB(img, sel.X+sel.W/2, sel.Y); !apptest.Near(edge, fill, 2) {
+			t.Errorf("%s: selected tab edge %v, fill %v: want no ring", tc.Name, edge, fill)
+		}
+	}
+}
+
 // The tab row has 8pt above and 8pt below it in the title bar (D177): the panels start
 // where the title bar ends.
 func TestTabRowHasEqualSpaceAboveAndBelow(t *testing.T) {
@@ -682,7 +697,7 @@ func TestOrchestratePillSitsLeftOfSearchAndGetsNarrow(t *testing.T) {
 	}
 }
 
-// A tab that is selected fades its fill, ring and ink in MotionSelect, then asks for no frame (D256).
+// A tab that is selected fades its fill and ink in MotionSelect, then asks for no frame (D256).
 func TestSelectingATabFadesThenRests(t *testing.T) {
 	b := newBar(t, tabsOf(), true)
 	b.tt.Frame()

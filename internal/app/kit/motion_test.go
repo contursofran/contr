@@ -119,14 +119,20 @@ func TestNeedsYouFadesInMotionState(t *testing.T) {
 	plays(t, tt, func() { sel = true }, theme.MotionSelect, "selection")
 }
 
-// The rows themselves use the state duration when they turn to needs you.
+// An agent row that turns to needs you fades its title to ink-100 in
+// MotionState. A selected row, whose title is already ink-100, fades in the
+// "needs you" words in MotionState. No fill changes (D249).
 func TestAgentRowTurnsToNeedsYouInMotionState(t *testing.T) {
-	for _, compact := range []bool{false, true} {
-		state := GlyphWorking
+	for _, selected := range []bool{false, true} {
+		needs := false
 		tt := motionTester(func(c *ui.Context) {
-			AgentRow(c, AgentRowOpts{Label: "row", Title: "Agent", State: state, Selected: state == GlyphNeedsYou, Compact: compact})
+			AgentRow(c, AgentRowOpts{Label: "row", Title: "Agent", Name: "b-250", Age: "2m", State: GlyphWorking,
+				NeedsYou: needs, Reason: "permission", Selected: selected})
 		}, false)
-		plays(t, tt, func() { state = GlyphNeedsYou }, theme.MotionState, "agent row turns to needs you")
+		plays(t, tt, func() { needs = true }, theme.MotionState, "agent row turns to needs you")
+		if !tt.HasText(NeedsYouText) {
+			t.Errorf("selected %v: no %q at rest: %v", selected, NeedsYouText, tt.Texts())
+		}
 	}
 }
 

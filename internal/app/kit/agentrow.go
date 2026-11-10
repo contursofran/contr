@@ -58,17 +58,50 @@ type AgentRowOpts struct {
 	// Hint is the key chip on the status glyph while ⌘ is held (KeyHint). Empty: none.
 	Hint string
 	// Items is the number of open items of an orchestrator: questions, to-dos
-	// and blocked menus of it and its workers. Above 0 a `blocked` badge with
-	// the number shows at the right of line 1, or a dot on the glyph in an icon
-	// column (D240). Arrival is its last arrival, for the spring and glow.
+	// and blocked menus of it and its workers. Above 0 the number in
+	// `blocked-text` shows at the right of line 1, or a dot on the glyph in an icon
+	// column (D240). Arrival is its last arrival, for the spring.
 	Items   int
 	Arrival Arrival
+	// NeedsYou draws a worker that needs the owner (D249): no fill, the title
+	// in ink-100, and line 2 says why: "needs you" in `blocked-text`, then
+	// " · <Reason> · <Name>" in the meta ink, clipped, and the age at the
+	// right. Reason is the block kind (permission, question, auth); empty when
+	// not known.
+	NeedsYou bool
+	Reason   string
+}
+
+// NeedsYouText is the start of line 2 of a row that needs the owner.
+const NeedsYouText = "needs you"
+
+// needRest is the grey rest of line 2 after "needs you": " · <reason> · <name>",
+// with each empty item left out; empty when both are.
+func needRest(reason, name string) string {
+	var rest string
+	for _, s := range []string{reason, name} {
+		if s != "" {
+			rest += " · " + s
+		}
+	}
+	return rest
+}
+
+// rowFill is the fill of an agent row (D249): `selected-quiet` when selected,
+// `hover` under the pointer, else none. Red never fills a row, and no ring.
+func rowFill(p *theme.Palette, selected, hovered bool) ui.Color {
+	switch {
+	case selected:
+		return p.SelectedQuiet
+	case hovered:
+		return p.Hover
+	}
+	return ui.Transparent
 }
 
 // Sizes of the item badge (D240).
 const (
 	badgeHeight = 16
-	badgePadX   = 5
 	// compactDot is the dot on the glyph of an orchestrator with items in an
 	// icon column.
 	compactDot = 6
@@ -133,6 +166,9 @@ func agentRowButton(c *ui.Context, o AgentRowOpts, marginEnd, marginStart float3
 	if o.Selected {
 		titleInk, metaInk = p.Ink100, p.Ink62
 	}
+	if o.NeedsYou {
+		titleInk = p.Ink100
+	}
 	padY := float32(WorkerPadY)
 	if o.Orchestrator {
 		padY = OrchestratorPadY
@@ -141,18 +177,14 @@ func agentRowButton(c *ui.Context, o AgentRowOpts, marginEnd, marginStart float3
 		Gap(theme.Space10).Padding(padY, theme.Space10).MarginStart(marginStart).MarginEnd(marginEnd).Radius(theme.Radius8).
 		Cursor(ui.CursorPointer).Selected(o.Selected)
 	// The fill and the inks fade (D256): a selection in theme.MotionSelect, a
-	// turn to needs you in theme.MotionState. The selected state itself
-	// changes at once.
-	d := RowMotion(row, o.State == GlyphNeedsYou)
+	// turn to needs you (inks only, no fill) in theme.MotionState. The
+	// selected state itself changes at once.
+	d := RowMotion(row, o.NeedsYou)
 	titleInk, metaInk = FadeInk(row, "title-ink", titleInk, d), FadeInk(row, "meta-ink", metaInk, d)
 	row = row.TextColor(titleInk).Transition(FadeTransition(d))
 	// ButtonBase paints a selected button in the accent color; the explicit
-	// background keeps it flat: only the ink shows the selection.
-	if row.Hovered() {
-		row = row.Background(p.Hover)
-	} else {
-		row = row.Background(ui.Transparent)
-	}
+	// background sets the fill of the spec (D249).
+	row = row.Background(rowFill(p, o.Selected, row.Hovered()))
 	if o.OnClick != nil {
 		row = row.OnClick(o.OnClick)
 	}
@@ -177,9 +209,26 @@ func agentRowButton(c *ui.Context, o AgentRowOpts, marginEnd, marginStart float3
 				title()
 			}
 			ui.Row(c).FillWidth().Gap(theme.Space10).MinWidth(0).Children(func() {
-				meta := func(s string) {
-					ui.Text(c, s).SingleLine().
+				meta := func(s string) ui.Element {
+					return ui.Text(c, s).SingleLine().
 						Font(theme.StyleMeta.Family()).FontSize(theme.StyleMeta.Size).FixedLineHeight(theme.StyleMeta.Line).TextColor(metaInk)
+				}
+				if o.NeedsYou {
+					// The reason and the name take the place of the model and
+					// CI; the name is clipped first.
+					// This part takes the room left of the age; the age keeps its width.
+					// The words fade in with the turn to needs you (D256).
+					ui.Row(c).Grow(1).MinWidth(0).Transition(needsYouEnter).Children(func() {
+						meta(NeedsYouText).Shrink(0).TextColor(p.BlockedText)
+						if rest := needRest(o.Reason, o.Name); rest != "" {
+							ui.Text(c, rest).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).
+								Font(theme.StyleMeta.Family()).FontSize(theme.StyleMeta.Size).FixedLineHeight(theme.StyleMeta.Line).TextColor(metaInk)
+						}
+					})
+					if o.Age != "" {
+						meta(o.Age).Shrink(0)
+					}
+					return
 				}
 				if o.Name != "" {
 					meta(o.Name)
@@ -202,22 +251,22 @@ func agentRowButton(c *ui.Context, o AgentRowOpts, marginEnd, marginStart float3
 	return glyph
 }
 
+// needsYouEnter fades in the "needs you" part of line 2 in theme.MotionState
+// as a row turns to needs you (D256). It is a fade, so Reduce Motion keeps it.
+var needsYouEnter = ui.ElementTransition{Duration: theme.MotionState, Ease: theme.MotionEase,
+	Colors: true, Enter: &ui.Motion{}}
+
 // compactAgentButton is an agent in an icon column: the status glyph alone.
-// Only the fill shows the selection, as the glyph keeps the color of its state.
+// Only the fill shows the selection, as the glyph keeps the color of its state;
+// the red glyph alone shows a worker that needs the owner (D249).
 // It returns the glyph.
 func compactAgentButton(c *ui.Context, o AgentRowOpts) ui.Element {
 	p := theme.Current()
 	row := ui.ButtonBase(c).Label(o.Label).Height(theme.SizeRowHeight).Shrink(0).Center().
 		MarginX(theme.Space6).Radius(theme.Radius8).Cursor(ui.CursorPointer).Selected(o.Selected)
-	row = row.Transition(FadeTransition(RowMotion(row, o.State == GlyphNeedsYou)))
-	switch {
-	case o.Selected:
-		row = row.Background(p.Selected)
-	case row.Hovered():
-		row = row.Background(p.Hover)
-	default:
-		row = row.Background(ui.Transparent)
-	}
+	// Only the selection changes the fill here; it fades in theme.MotionSelect (D256).
+	row = row.Transition(FadeTransition(theme.MotionSelect))
+	row = row.Background(rowFill(p, o.Selected, row.Hovered()))
 	if o.OnClick != nil {
 		row = row.OnClick(o.OnClick)
 	}
@@ -241,21 +290,17 @@ func compactAgentButton(c *ui.Context, o AgentRowOpts) ui.Element {
 	return g
 }
 
-// itemBadge is the `blocked` badge with the number of open items (D240). On
-// an arrival it springs to about 1.25 and glows for 2 s; then it is still.
+// itemBadge is the number of open items in `blocked-text` (D240, D249): no
+// pill, no glow. On an arrival it springs to about 1.25; then it is still.
 func itemBadge(c *ui.Context, n int, a Arrival) {
 	p := theme.Current()
-	b := ui.Row(c).Label(LabelBadge).Height(badgeHeight).MinWidth(badgeHeight).Padding(0, badgePadX).Shrink(0).
-		Radius(badgeHeight / 2).Background(p.Blocked).Justify(ui.Center).AlignItems(ui.Center)
+	b := ui.Row(c).Label(LabelBadge).Height(badgeHeight).Shrink(0).Justify(ui.Center).AlignItems(ui.Center)
 	look := BadgeAttention(c, b, a)
 	if look.Scale != 1 {
 		b = b.Scale(look.Scale, look.Scale).TransformOrigin(0.5, 0.5)
 	}
-	if look.Glow > 0 {
-		b = b.Shadow(0, 0, 12, 3, p.Blocked.Alpha(0.55*look.Glow))
-	}
 	b.Children(func() {
 		ui.Text(c, strconv.Itoa(n)).NoWrap().Font(theme.StyleBadge.Family()).FontSize(theme.StyleBadge.Size).
-			FixedLineHeight(theme.StyleBadge.Line).FontWeight(theme.StyleBadge.Weight).TextColor(p.Ground)
+			FixedLineHeight(theme.StyleBadge.Line).FontWeight(theme.StyleBadge.Weight).TextColor(p.BlockedText)
 	})
 }
