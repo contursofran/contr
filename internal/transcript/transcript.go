@@ -60,6 +60,10 @@ const (
 	// HideSystem is a system line of Claude Code (subtype in Text when there
 	// is no content).
 	HideSystem
+	// HideHarness is another text that Claude Code adds to the session: a
+	// stop hook's feedback, an image's source line, a nudge, or a text in
+	// one tag of its own (D254).
+	HideHarness
 )
 
 // NoteKind is the kind of a kit note.
@@ -73,6 +77,14 @@ const (
 	NoteAnswered
 	// NoteDid is "Owner did <ID>: <text>".
 	NoteDid
+	// NoteTask is a background task's end: <task-notification>. Status
+	// holds its status, ID its task id, and the entry's Text its summary
+	// (D254).
+	NoteTask
+	// NoteAgent is a message of another Claude session, a teammate or a
+	// subagent. Name holds the sender and the entry's Text the first line
+	// (D254).
+	NoteAgent
 )
 
 // Entry is one item of the session.
@@ -121,8 +133,11 @@ type KitNote struct {
 	// Addr and Name are the sender of an hc message ("" when none).
 	Addr string
 	Name string
-	// ID is the owner item of NoteAnswered and NoteDid.
+	// ID is the owner item of NoteAnswered and NoteDid, and the task id of
+	// NoteTask.
 	ID string
+	// Status is the status of a NoteTask: "completed", "failed", "killed".
+	Status string
 }
 
 // Result is a tool result for a call that an earlier read returned. Index
@@ -308,10 +323,7 @@ func (r *Reader) user(base Entry, meta, compact bool, content json.RawMessage, b
 	case meta:
 		e.Kind, e.Hidden = Hidden, HideMeta
 	default:
-		classify(&e)
-		if e.Kind == Prompt {
-			e.Images = images
-		}
+		classify(&e, images)
 	}
 	add(e)
 }
@@ -385,28 +397,201 @@ func attachment(base Entry, raw json.RawMessage) (Entry, bool) {
 	return e, true
 }
 
-// classify sets the kind of a user text that is not marked meta.
-func classify(e *Entry) {
+// classify sets the kind of a user text that is not marked meta. images
+// is the count of image blocks of the line.
+func classify(e *Entry, images int) {
 	s := strings.TrimSpace(e.Text)
 	e.Kind = Prompt
 	switch {
 	case strings.HasPrefix(s, `<hc from="`):
 		hcNote(e, s)
+		return
 	case strings.HasPrefix(s, "Owner answered "), strings.HasPrefix(s, "Owner did "):
 		e.Kind, e.Note, e.Text = Note, ownerNote(s), s
-	case strings.HasPrefix(s, "<system-reminder>"):
-		e.Kind, e.Hidden = Hidden, HideReminder
-	case strings.HasPrefix(s, "<local-command-"), strings.HasPrefix(s, "<bash-stdout>"), strings.HasPrefix(s, "<bash-stderr>"):
-		e.Kind, e.Hidden = Hidden, HideLocalCommand
-	case isHookTag(s):
-		e.Kind, e.Hidden = Hidden, HideHook
-	case strings.HasPrefix(s, "[Request interrupted"):
-		e.Kind, e.Hidden = Hidden, HideInterrupt
-	case isPlaybook(s):
-		e.Kind, e.Hidden = Hidden, HidePlaybook
-	case strings.Contains(s, "<command-name>"):
-		e.Text = command(s)
+		return
+	case taskNote(e, s), agentNote(e, s):
+		return
 	}
+	// A prompt can carry a reminder or a hook's context: the prompt is what
+	// is left without them.
+	body, why := stripHarness(s)
+	if body == "" {
+		e.Kind, e.Hidden = Hidden, why
+		return
+	}
+	why = 0
+	switch {
+	case strings.HasPrefix(body, "<local-command-"), strings.HasPrefix(body, "<bash-stdout>"), strings.HasPrefix(body, "<bash-stderr>"):
+		why = HideLocalCommand
+	case strings.HasPrefix(body, "[Request interrupted"):
+		why = HideInterrupt
+	case isPlaybook(body):
+		why = HidePlaybook
+	case strings.HasPrefix(body, "Stop hook feedback:"):
+		why = HideHook
+	case strings.HasPrefix(body, "The user hasn't heard from you"), strings.HasPrefix(body, "The user hasn’t heard from you"):
+		why = HideHarness
+	case strings.Contains(body, "<command-name>"):
+		e.Text = command(body)
+	case oneTag(body):
+		why = HideHarness
+	default:
+		e.Text = dropImageSources(body)
+		if e.Text == "" && images == 0 {
+			why = HideHarness
+		}
+	}
+	if why != 0 {
+		e.Kind, e.Hidden, e.Text = Hidden, why, s
+		return
+	}
+	e.Images = images
+}
+
+// stripHarness removes the <system-reminder> blocks and hook tags of s, and
+// gives what is left, trimmed, and why the first removed part is hidden.
+// An open tag without its close tag runs to the end.
+func stripHarness(s string) (string, Hide) {
+	var why Hide
+	for {
+		i, tag, w := -1, "", Hide(0)
+		if j := strings.Index(s, "<system-reminder>"); j >= 0 {
+			i, tag, w = j, "system-reminder", HideReminder
+		}
+		if j, t := hookTagAt(s); j >= 0 && (i < 0 || j < i) {
+			i, tag, w = j, t, HideHook
+		}
+		if i < 0 {
+			return strings.TrimSpace(s), why
+		}
+		if why == 0 {
+			why = w
+		}
+		end := len(s)
+		if k := strings.Index(s[i:], "</"+tag+">"); k >= 0 {
+			end = i + k + len("</"+tag+">")
+		}
+		s = s[:i] + s[end:]
+	}
+}
+
+// hookTagAt finds the first hook tag in s, as <user-prompt-submit-hook>,
+// and gives its place and name, or -1.
+func hookTagAt(s string) (int, string) {
+	off := 0
+	for {
+		i := strings.IndexByte(s[off:], '<')
+		if i < 0 {
+			return -1, ""
+		}
+		i += off
+		if isHookTag(s[i:]) {
+			tag, _, _ := strings.Cut(s[i+1:], ">")
+			return i, tag
+		}
+		off = i + 1
+	}
+}
+
+// oneTag tells a text that is all inside one <tag …>…</tag> pair, where the
+// tag name is lowercase letters and dashes: a harness text, not a prompt.
+func oneTag(s string) bool {
+	if !strings.HasPrefix(s, "<") {
+		return false
+	}
+	n := 1
+	for n < len(s) && (s[n] >= 'a' && s[n] <= 'z' || s[n] == '-') {
+		n++
+	}
+	if n == 1 || n == len(s) || (s[n] != '>' && s[n] != ' ') {
+		return false
+	}
+	tag := s[1:n]
+	return strings.HasSuffix(s, "</"+tag+">") && strings.Count(s, "<"+tag) == 1
+}
+
+// dropImageSources removes Claude Code's "[Image: source: …]" lines of a
+// pasted image: the image counts in Images.
+func dropImageSources(s string) string {
+	if !strings.Contains(s, "[Image: source:") {
+		return s
+	}
+	var keep []string
+	for _, l := range strings.Split(s, "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(l), "[Image: source:") {
+			keep = append(keep, l)
+		}
+	}
+	return strings.TrimSpace(strings.Join(keep, "\n"))
+}
+
+// harnessLead tells that the text before a tag is only the harness's lead:
+// nothing, a <system-reminder>, a "[SYSTEM NOTIFICATION …]" mark or the
+// line of a message of another session.
+func harnessLead(lead string) bool {
+	lead = strings.TrimSpace(lead)
+	return lead == "" || strings.HasPrefix(lead, "<system-reminder>") ||
+		strings.HasPrefix(lead, "[SYSTEM NOTIFICATION") ||
+		strings.HasPrefix(lead, "Another Claude session sent a message:")
+}
+
+// taskNote reads <task-notification>: the end of a background task, with
+// its task-id, status and summary. It tells whether s has that shape.
+func taskNote(e *Entry, s string) bool {
+	i := strings.Index(s, "<task-notification>")
+	if i < 0 || !harnessLead(s[:i]) {
+		return false
+	}
+	in := s[i:]
+	n := &KitNote{Kind: NoteTask, ID: between(in, "<task-id>", "</task-id>"), Status: between(in, "<status>", "</status>")}
+	e.Kind, e.Note, e.Text = Note, n, cut(between(in, "<summary>", "</summary>"), summaryMax)
+	return true
+}
+
+// agentTags are the tags of a message of another session or a teammate.
+var agentTags = []string{"agent-message", "cross-session-message", "teammate-message"}
+
+// agentNote reads a message of another Claude session or a teammate
+// (<agent-message from="…">, <cross-session-message from="…">,
+// <teammate-message …>), and a subagent's "[Subagent hand-back] …". It
+// tells whether s has one of these shapes.
+func agentNote(e *Entry, s string) bool {
+	if strings.HasPrefix(s, "[Subagent hand-back]") {
+		e.Kind, e.Note, e.Text = Note, &KitNote{Kind: NoteAgent, Name: "subagent"}, "reported"
+		return true
+	}
+	for _, tag := range agentTags {
+		i := strings.Index(s, "<"+tag)
+		if i < 0 || !harnessLead(s[:i]) {
+			continue
+		}
+		open, rest, ok := strings.Cut(s[i+1+len(tag):], ">")
+		if !ok || (open != "" && open[0] != ' ') {
+			continue
+		}
+		body, _, _ := strings.Cut(rest, "</"+tag+">")
+		name := attr(open, "from")
+		if name == "" {
+			name = attr(open, "teammate_id")
+		}
+		e.Kind, e.Note, e.Text = Note, &KitNote{Kind: NoteAgent, Name: name}, cut(body, summaryMax)
+		return true
+	}
+	if rest, ok := strings.CutPrefix(s, "Another Claude session sent a message:"); ok {
+		e.Kind, e.Note, e.Text = Note, &KitNote{Kind: NoteAgent}, cut(rest, summaryMax)
+		return true
+	}
+	return false
+}
+
+// attr gives the value of the attribute name="…" in the open tag's text.
+func attr(open, name string) string {
+	_, rest, ok := strings.Cut(" "+open, " "+name+`="`)
+	if !ok {
+		return ""
+	}
+	v, _, _ := strings.Cut(rest, `"`)
+	return v
 }
 
 // hcNote reads <hc from="ADDR NAME">TEXT</hc>. A body that is an owner

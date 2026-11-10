@@ -30,6 +30,8 @@ const (
 	LabelOwnerNote = "note for the owner"
 	LabelNote      = "worker note"
 	LabelCall      = "tool call"
+	// TextTask names a background task's line, before its status and summary.
+	TextTask = "Background task"
 	// TextError marks a call whose result is an error.
 	TextError = "error"
 )
@@ -128,7 +130,8 @@ func (ch *Chat) group(c *ui.Context, r Row) {
 		open = new(bool)
 		ch.folds[r.ID] = open
 	}
-	text := GroupText(len(r.Notes), len(r.Calls))
+	notes, tasks := ch.model.Counts(r)
+	text := GroupText(notes, tasks, len(r.Calls))
 	p := ui.CollapsibleBase(c, open)
 	ink := pal.Ink42
 	if p.Trigger.Hovered() {
@@ -194,12 +197,20 @@ func (ch *Chat) dotBox(c *ui.Context, label string, color ui.Color) {
 }
 
 // noteLine is one kit note: the sender's dot and name, and its text on one line. A note that
-// needs the owner (own) has its name in ink-100 and its text in ink-85.
+// needs the owner (own) has its name in ink-100 and its text in ink-85. A background task shows
+// "Background task", its status (blocked when not completed) and its summary.
 func (ch *Chat) noteLine(c *ui.Context, e transcript.Entry, own bool) {
 	pal := theme.Current()
-	name, addr := "owner", ""
-	if e.Note != nil && e.Note.Name != "" {
-		name, addr = e.Note.Name, e.Note.Addr
+	name, addr, status, text := "owner", "", "", e.Text
+	if n := e.Note; n != nil {
+		switch {
+		case n.Kind == transcript.NoteTask:
+			name, status, text = TextTask, n.Status, "· "+TaskSummary(e.Text)
+		case n.Name != "":
+			name, addr = n.Name, n.Addr
+		case n.Kind == transcript.NoteAgent:
+			name = "session"
+		}
 	}
 	label, nameInk, textInk := LabelNote, pal.Ink85, pal.Ink42
 	if own {
@@ -212,8 +223,19 @@ func (ch *Chat) noteLine(c *ui.Context, e transcript.Entry, own bool) {
 			ch.dot(c, addr)
 		}
 		kit.Styled(ui.Text(c, name), theme.StyleMeta).FontWeight(500).NoWrap().Shrink(0).TextColor(nameInk)
-		kit.Styled(ui.Text(c, e.Text), theme.StyleMeta).SingleLine().Grow(1).MinWidth(0).TextColor(textInk)
+		if status != "" {
+			kit.Styled(ui.Text(c, status), theme.StyleMeta).NoWrap().Shrink(0).TextColor(statusInk(pal, status, textInk))
+		}
+		kit.Styled(ui.Text(c, text), theme.StyleMeta).SingleLine().Grow(1).MinWidth(0).TextColor(textInk)
 	})
+}
+
+// statusInk is the ink of a background task's status: base when it completed, else blocked.
+func statusInk(pal *theme.Palette, status string, base ui.Color) ui.Color {
+	if status == "completed" {
+		return base
+	}
+	return pal.Blocked
 }
 
 // callLine is one tool call: the working glyph while it runs, its name, its summary, an error

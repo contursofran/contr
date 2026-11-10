@@ -19,14 +19,17 @@ const (
 	RowPrompt RowKind = iota
 	// RowSaid is a text of Claude, in Markdown.
 	RowSaid
-	// RowGroup is the work between two texts: tool calls and kit notes, folded into one row.
+	// RowGroup is the work between two texts: tool calls, kit notes and background tasks, folded
+	// into one row.
 	RowGroup
-	// RowOwnerNote is a kit note that needs the owner (NeedsOwner). It shows outside the fold.
+	// RowOwnerNote is a kit note or a background task that needs the owner (NeedsOwner). It shows
+	// outside the fold.
 	RowOwnerNote
 )
 
 // Row is one row of the chat. Entry is the index of the entry of a prompt, a text or an owner
-// note; Notes and Calls are the indexes of the entries of a work group, in order.
+// note; Notes (kit notes and background tasks) and Calls are the indexes of the entries of a work
+// group, in order.
 type Row struct {
 	Kind  RowKind
 	ID    string
@@ -171,9 +174,15 @@ func containsString(ss []string, s string) bool {
 
 // NeedsOwner tells that a kit note needs the owner: an hc message of a worker that ended its turn
 // without a report, or that says the worker is blocked ("NAME: blocked, …", the kit's report
-// line, or a text that starts with "blocked").
+// line, or a text that starts with "blocked"), or a background task that failed or was killed.
 func NeedsOwner(e transcript.Entry) bool {
-	if e.Kind != transcript.Note || e.Note == nil || e.Note.Kind != transcript.NoteMessage {
+	if e.Kind != transcript.Note || e.Note == nil {
+		return false
+	}
+	if e.Note.Kind == transcript.NoteTask {
+		return TaskFailed(e.Note.Status)
+	}
+	if e.Note.Kind != transcript.NoteMessage {
 		return false
 	}
 	s := strings.ToLower(strings.TrimSpace(e.Text))
@@ -184,18 +193,48 @@ func NeedsOwner(e transcript.Entry) bool {
 	return ok && !strings.Contains(who, " ") && firstWord(rest) == "blocked"
 }
 
+// TaskFailed tells a background task's status that needs the owner: "failed" or "killed".
+func TaskFailed(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "failed", "killed":
+		return true
+	}
+	return false
+}
+
+// TaskSummary is the summary of a background task as its line shows it: without the leading
+// "Background command " of the harness, as the line starts with "Background task".
+func TaskSummary(s string) string {
+	return strings.TrimPrefix(s, "Background command ")
+}
+
+// Counts are the notes of the group that are messages, and those that are background tasks.
+func (m *Model) Counts(g Row) (notes, tasks int) {
+	for _, i := range g.Notes {
+		if n := m.entries[i].Note; n != nil && n.Kind == transcript.NoteTask {
+			tasks++
+		} else {
+			notes++
+		}
+	}
+	return notes, tasks
+}
+
 // firstWord is the first word of s without the marks after it.
 func firstWord(s string) string {
 	w, _, _ := strings.Cut(strings.TrimSpace(s), " ")
 	return strings.TrimRight(w, ",.;:")
 }
 
-// GroupText is the text of a folded work group: "3 worker notes · 6 tool calls". A part with
-// no item is left out.
-func GroupText(notes, calls int) string {
+// GroupText is the text of a folded work group: "3 worker notes · 1 background task · 6 tool
+// calls". A part with no item is left out.
+func GroupText(notes, tasks, calls int) string {
 	var parts []string
 	if notes > 0 {
 		parts = append(parts, count(notes, "worker note"))
+	}
+	if tasks > 0 {
+		parts = append(parts, count(tasks, "background task"))
 	}
 	if calls > 0 {
 		parts = append(parts, count(calls, "tool call"))

@@ -1,7 +1,7 @@
 package chatview
 
 // The ChatView part of the spec sheet (D179, D246): a terminal-sized panel in Chat mode with a
-// prompt, an answer with a table, a folded work group, an open one, a note that needs the owner
+// prompt, an answer with a table, open work groups with a background task and a message of another session, notes that need the owner
 // and the dock.
 
 import (
@@ -24,8 +24,8 @@ func TestSpecSheet(t *testing.T) {
 	r.savePath(term)
 	r.selectTerm(term)
 	r.ch.SetOn(term, true)
-	r.write(lPrompt, lHook, lSaid, lCall1, lNote1, lCall2, lRes1, lNote2, lSaid2, lCall1, lRes1, lCall2)
-	// Open the second work group.
+	r.write(lPrompt, lHook, lSaid, lCall1, lNote1, lCall2, lRes1, lNote2, lSaid2, lCall1, lRes1, lTaskOK, lAgent, lNudge, lCall2, lTaskBad)
+	// Open the work groups.
 	for _, row := range r.ch.model.Rows() {
 		if row.Kind == RowGroup {
 			open := true
