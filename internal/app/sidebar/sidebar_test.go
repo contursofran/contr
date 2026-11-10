@@ -129,6 +129,11 @@ func TestServerRowIsOfflineWithTheProblemLine(t *testing.T) {
 	if !h.tt.HasText("hc: connection refused") {
 		t.Errorf("no problem line in %q", h.tt.Texts())
 	}
+	// The problem line sits 20px from the panel side, as the row content (D231).
+	line, side := apptest.Box(t, h.tt, "hc: connection refused"), apptest.Box(t, h.tt, LabelProjectList)
+	if line.X < side.X+19.5 || line.X > side.X+20.5 {
+		t.Errorf("problem line at x %v, want %v", line.X, side.X+20)
+	}
 	for _, text := range h.tt.Texts() {
 		if strings.Contains(text, "CPU") {
 			t.Errorf("an offline row shows %q", text)

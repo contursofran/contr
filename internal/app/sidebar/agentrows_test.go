@@ -128,8 +128,8 @@ func TestLineTwoIsNameModelAndAge(t *testing.T) {
 	// the rail do not push it out. "2m" is the orchestrator's, "6m" a worker's.
 	for _, age := range []string{"2m", "6m", "1m"} {
 		end := apptest.Box(t, h.tt, age)
-		if right := end.X + end.W; right > theme.SidebarWidth-theme.Space6-theme.Space10+1 || right < theme.SidebarWidth-theme.Space6-theme.Space10-8 {
-			t.Errorf("age %q ends at %v, want the right padding of the row at %v", age, right, theme.SidebarWidth-theme.Space6-theme.Space10)
+		if right := end.X + end.W; right > theme.SidebarWidth-kit.RowInsetX-theme.Space10+1 || right < theme.SidebarWidth-kit.RowInsetX-theme.Space10-8 {
+			t.Errorf("age %q ends at %v, want the right padding of the row at %v", age, right, theme.SidebarWidth-kit.RowInsetX-theme.Space10)
 		}
 	}
 	if apptest.Box(t, h.tt, "b-241").X > apptest.Box(t, h.tt, "sonnet").X {
@@ -203,7 +203,7 @@ func TestAnOrchestratorOfOtherMakeShowsItsOwnModelAndKeepsTheAgeRight(t *testing
 	}
 	for _, age := range []string{"5m", "7m"} {
 		end := apptest.Box(t, h.tt, age)
-		if right := end.X + end.W; right > theme.SidebarWidth-theme.Space6-theme.Space10+1 || right < theme.SidebarWidth-theme.Space6-theme.Space10-8 {
+		if right := end.X + end.W; right > theme.SidebarWidth-kit.RowInsetX-theme.Space10+1 || right < theme.SidebarWidth-kit.RowInsetX-theme.Space10-8 {
 			t.Errorf("age %q ends at %v, not at the right edge", age, right)
 		}
 	}
@@ -714,4 +714,37 @@ func newTitleRig() *titleRig {
 		runner: &apptest.TitleRunner{Out: map[string]string{"241": `{"title":"Agent rows on ui.List"}`}}}
 	r.t = &ghsource.IssueTitles{Env: r.Env(), Client: apptest.ClientOf(r.runner), Now: r.Clock}
 	return r
+}
+
+// TestSidebarContentSits20pxFromThePanelSide checks the insets of D231: the
+// row fills sit 10px in (the panel padding of Panel.md), so the row content,
+// with its 10px padding, sits 20px from the panel side; the head names too.
+func TestSidebarContentSits20pxFromThePanelSide(t *testing.T) {
+	h := newRows(t)
+	side := apptest.Box(t, h.tt, LabelProjectList)
+	left, right := side.X, side.X+side.W
+	near := func(what string, got, want float32) {
+		t.Helper()
+		if got < want-0.5 || got > want+0.5 {
+			t.Errorf("%s at %v, want %v", what, got, want)
+		}
+	}
+	for _, label := range []string{"alpha, main", "This Mac, local"} {
+		r := apptest.Box(t, h.tt, label)
+		near(label+" fill left", r.X, left+10)
+		near(label+" fill right", r.X+r.W, right-10)
+	}
+	// Content: the 15px icon sits 20px in, so the name follows after the gap.
+	near("project name", apptest.Box(t, h.tt, "alpha, main text").X, left+20+15+theme.Space10)
+	near("server name", apptest.Box(t, h.tt, "This Mac, local text").X, left+20+15+theme.Space10)
+	lead := apptest.Box(t, h.tt, "lead, idle, opus")
+	near("orchestrator fill left", lead.X, left+10+kit.OrchestratorIndent)
+	near("orchestrator fill right", lead.X+lead.W, right-10)
+	w := apptest.Box(t, h.tt, "b-241, working, 241, sonnet")
+	near("worker fill right", w.X+w.W, right-10)
+	for _, name := range []string{LabelProjectsHead, LabelServersHead} {
+		near(name+" head name", apptest.Box(t, h.tt, name).X, left+20)
+	}
+	add := apptest.Box(t, h.tt, LabelProjectsAdd)
+	near("Projects head button right", add.X+add.W, right-14)
 }
