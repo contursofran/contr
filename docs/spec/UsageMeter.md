@@ -121,6 +121,10 @@ Plan meters, in the sidebar foot row (D196):
 - View: values, no data, 100%; the file wins over the labels; labels without a file.
 - The files panel has only Context; the sidebar foot has Claude, then Codex, then the gear, in one row; the icon column has no plan meters.
 
+## Motion (D256)
+
+A value rolls its changed digits in `motion-number`; a fill moves to its width in `motion-meter`. With Reduce Motion the value cross-fades and the fill is at once. See [Motion.md](Motion.md).
+
 ## Replaces
 
 - The plan bars of the v0.2 footer (`statusbar.go`).

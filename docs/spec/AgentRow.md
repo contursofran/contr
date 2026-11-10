@@ -146,6 +146,10 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
   gone at 0, none on worker rows, a dot in the icon column; the badge moves
   on an arrival and asks for no frame after it (D240).
 
+## Motion (D256)
+
+A selection fades the fill and the inks in `motion-select`; a worker that turns to needs you fades its inks in `motion-state`. The selected state itself is at once. See [Motion.md](Motion.md).
+
 ## Replaces
 
 - The Agents section of `agents.go` (D54 line 2, state groups).

@@ -172,7 +172,13 @@ func agentRowButton(c *ui.Context, o AgentRowOpts, marginEnd, marginStart float3
 	}
 	row := ui.ButtonBase(c).Label(o.Label).Shrink(0).AlignItems(ui.Center).Grow(1).MinWidth(0).
 		Gap(theme.Space10).Padding(padY, theme.Space10).MarginStart(marginStart).MarginEnd(marginEnd).Radius(theme.Radius8).
-		TextColor(titleInk).Cursor(ui.CursorPointer).Selected(o.Selected)
+		Cursor(ui.CursorPointer).Selected(o.Selected)
+	// The fill and the inks fade (D256): a selection in theme.MotionSelect, a
+	// turn to needs you (inks only, no fill) in theme.MotionState. The
+	// selected state itself changes at once.
+	d := RowMotion(row, o.NeedsYou)
+	titleInk, metaInk = FadeInk(row, "title-ink", titleInk, d), FadeInk(row, "meta-ink", metaInk, d)
+	row = row.TextColor(titleInk).Transition(FadeTransition(d))
 	// ButtonBase paints a selected button in the accent color; the explicit
 	// background sets the fill of the spec (D249).
 	row = row.Background(rowFill(p, o.Selected, row.Hovered()))
@@ -208,7 +214,8 @@ func agentRowButton(c *ui.Context, o AgentRowOpts, marginEnd, marginStart float3
 					// The reason and the name take the place of the model and
 					// CI; the name is clipped first.
 					// This part takes the room left of the age; the age keeps its width.
-					ui.Row(c).Grow(1).MinWidth(0).Children(func() {
+					// The words fade in with the turn to needs you (D256).
+					ui.Row(c).Grow(1).MinWidth(0).Transition(needsYouEnter).Children(func() {
 						meta(NeedsYouText).Shrink(0).TextColor(p.BlockedText)
 						if rest := needRest(o.Reason, o.Name); rest != "" {
 							ui.Text(c, rest).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).
@@ -241,6 +248,11 @@ func agentRowButton(c *ui.Context, o AgentRowOpts, marginEnd, marginStart float3
 	return glyph
 }
 
+// needsYouEnter fades in the "needs you" part of line 2 in theme.MotionState
+// as a row turns to needs you (D256). It is a fade, so Reduce Motion keeps it.
+var needsYouEnter = ui.ElementTransition{Duration: theme.MotionState, Ease: theme.MotionEase,
+	Colors: true, Enter: &ui.Motion{}}
+
 // compactAgentButton is an agent in an icon column: the status glyph alone.
 // Only the fill shows the selection, as the glyph keeps the color of its state;
 // the red glyph alone shows a worker that needs the owner (D249).
@@ -249,6 +261,8 @@ func compactAgentButton(c *ui.Context, o AgentRowOpts) ui.Element {
 	p := theme.Current()
 	row := ui.ButtonBase(c).Label(o.Label).Height(theme.SizeRowHeight).Shrink(0).Center().
 		MarginX(theme.Space6).Radius(theme.Radius8).Cursor(ui.CursorPointer).Selected(o.Selected)
+	// Only the selection changes the fill here; it fades in theme.MotionSelect (D256).
+	row = row.Transition(FadeTransition(theme.MotionSelect))
 	row = row.Background(rowFill(p, o.Selected, row.Hovered()))
 	if o.OnClick != nil {
 		row = row.OnClick(o.OnClick)

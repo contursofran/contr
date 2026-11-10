@@ -15,6 +15,7 @@ what the redesign does not settle.
 | Spec | Part |
 |---|---|
 | [tokens.md](tokens.md) | every token, its dark and light value, and its use |
+| [Motion.md](Motion.md) | the short transitions: their tokens, where each is used, Reduce Motion |
 | [Window.md](Window.md) | glass window, title bar row, three panels |
 | [Panel.md](Panel.md) | rounded area with a head and a footer |
 | [TitleBar.md](TitleBar.md) | traffic lights, tabs, diff summary, icon buttons |

@@ -696,3 +696,28 @@ func TestOrchestratePillSitsLeftOfSearchAndGetsNarrow(t *testing.T) {
 		t.Errorf("compact %v: want false, then true after Narrow", compact)
 	}
 }
+
+// A tab that is selected fades its fill and ink in MotionSelect, then asks for no frame (D256).
+func TestSelectingATabFadesThenRests(t *testing.T) {
+	b := newBar(t, tabsOf(), true)
+	b.tt.Frame()
+	b.tt.Advance(time.Second)
+	if b.tt.FramePending() {
+		t.Fatal("a frame is asked at rest")
+	}
+	tabs := tabsOf()
+	tabs[0].Selected, tabs[1].Selected = false, true
+	b.bar.SetTabs(tabs)
+	b.tt.Frame()
+	b.tt.Advance(theme.MotionSelect / 2)
+	if !b.tt.FramePending() {
+		t.Error("no frame asked half way: the selection does not fade")
+	}
+	b.tt.Advance(theme.MotionSelect/2 + 20*time.Millisecond)
+	if b.tt.FramePending() {
+		t.Errorf("a frame is asked after %v; want none at rest", theme.MotionSelect)
+	}
+	if !b.has(LabelCloseTab) {
+		t.Error("the selected plain tab has no close button at once")
+	}
+}
