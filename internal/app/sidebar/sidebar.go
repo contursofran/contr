@@ -156,9 +156,12 @@ func (l *SpacesList) settingsFoot(c *ui.Context) {
 }
 
 // head is a section head: the name in the label style, then icon buttons.
+// Its padding is the head padding of docs/spec/Panel.md plus the panel
+// padding (10px), which the sidebar does not set: the name sits 20px and the
+// buttons 14px from the panel side (D231).
 func (l *SpacesList) head(c *ui.Context, name string, buttons func()) {
 	ui.Row(c).Label(name+" header").FillWidth().Shrink(0).AlignItems(ui.Center).Gap(theme.Space2).
-		Padding(theme.Space6, theme.Space10, theme.Space2, theme.Space16).Children(func() {
+		Padding(theme.Space6, kit.RowInsetX+theme.Space4, theme.Space2, kit.RowInsetX+theme.Space10).Children(func() {
 		ui.Text(c, name).SingleLine().Grow(1).MinWidth(0).TextColor(theme.Current().Ink45).
 			Font(theme.StyleLabel.Family()).FontSize(theme.StyleLabel.Size).FontWeight(theme.StyleLabel.Weight)
 		if buttons != nil {
@@ -214,7 +217,7 @@ func (l *SpacesList) coreLine(c *ui.Context) {
 	}
 	ui.Text(c, l.line).TextColor(theme.Current().Ink38).
 		Font(theme.StyleSmall.Family()).FontSize(theme.StyleSmall.Size).
-		PaddingX(theme.Space16).PaddingY(theme.Space2)
+		MarginX(kit.RowInsetX + theme.Space10).PaddingY(theme.Space2)
 }
 
 // projectList is the projects, in the owner's order, with the agents of each

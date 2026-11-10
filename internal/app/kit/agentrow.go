@@ -20,6 +20,13 @@ const (
 	WorkerPadY       = 5
 )
 
+// RowInsetX is the side margin of a sidebar row (ProjectRow, ServerRow,
+// AgentRow). The sidebar panel has no padding of its own, so this margin is
+// the panel padding of docs/spec/Panel.md (10px): with the row padding
+// (10px) the content sits 20px from the panel side (D231). The hover fill
+// stays inside it.
+const RowInsetX = theme.Space10
+
 // AgentRowOpts describes an AgentRow.
 type AgentRowOpts struct {
 	// Label is the screen-reader label: "<title>, <state>, <issue>, <model>".
@@ -68,10 +75,10 @@ func AgentRow(c *ui.Context, o AgentRowOpts) {
 			return
 		}
 		if o.Orchestrator {
-			agentRowButton(c, o, theme.Space6, theme.Space6+OrchestratorIndent)
+			agentRowButton(c, o, RowInsetX, RowInsetX+OrchestratorIndent)
 			return
 		}
-		ui.Row(c).Shrink(0).MarginStart(theme.Space6+OrchestratorIndent+RailIndent).MarginEnd(theme.Space6).
+		ui.Row(c).Shrink(0).MarginStart(RowInsetX+OrchestratorIndent+RailIndent).MarginEnd(RowInsetX).
 			PaddingStart(RailPad).BorderWidth(0, 0, 0, 1).BorderColor(theme.Current().Rail).Children(func() {
 			agentRowButton(c, o, 0, 0)
 		})

@@ -44,10 +44,13 @@ const (
 	// outlineInset is the space between the ticks and the right edge.
 	outlineInset = 10
 	// outlineHitWidth and outlineHitHeight are the hit area of a tick
-	// (spec: at least 20×10 px, for a 2px tick). The height plus the gap
-	// below it is the 11px pitch of 2px ticks 9px apart.
+	// (spec: at least 20×10 px, for a 2px tick).
 	outlineHitWidth  = 20
 	outlineHitHeight = 10
+	// outlinePitch is the distance from one tick to the next: 2px ticks
+	// 9px apart (Outline.md, gap 9px). A hit area plus the margin below it
+	// is one pitch.
+	outlinePitch = theme.SizeTickHeight + theme.Space9
 	// outlineHover is the width of a hovered or focused tick.
 	outlineHover = 20
 	// outlineMinWidth and outlineMaxWidth bound the width of a tick, which
@@ -305,7 +308,7 @@ func (o *Outline) tickView(c *ui.Context, addr string, t OutlineTick, isNew bool
 		o.open = t.ID
 		o.Env.Redraw()
 	})
-	b.Margin(0, 0, theme.Space9-1, 0) // the 11px pitch: 10px of hit area and 1px more
+	b.Margin(0, 0, outlinePitch-outlineHitHeight, 0) // the 11px pitch: 10px of hit area and 1px more
 	grow := b.Hovered() || b.FocusVisible()
 	width := t.Width
 	if grow {
