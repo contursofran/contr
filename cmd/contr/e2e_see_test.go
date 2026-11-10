@@ -133,7 +133,7 @@ var seeFixtures = map[string]seeFixture{
 		ready: "lead, ",
 	},
 	"orchestrate": {
-		about: "the workers fixture with three pins: lead does not orchestrate, so its terminal has the Orchestrate pill 10px from the right side, over a short outline column (D234, D237); press Orchestrate. Open",
+		about: "the workers fixture with three pins: lead does not orchestrate, so the title bar has the Orchestrate pill left of the diff summary, and the Chat | Terminal switch sits alone 10px from the terminal's right side, over a short outline column (D234, D253); press Orchestrate. Open",
 		setup: func(t *testing.T, h *harness) {
 			seeWorkers(t, h)
 			h.owner(t, seePins(3))
@@ -141,7 +141,7 @@ var seeFixtures = map[string]seeFixture{
 		ready: "lead, ",
 	},
 	"orchestrating": {
-		about: "project demo: lead orchestrates (the Stop hook's label) with two live builders, so its pill says Orchestrating · 2 workers (D234); 40 pins make a full outline column, which the pill leaves at 10px while the column's top is under the pill (D237)",
+		about: "project demo: lead orchestrates (the Stop hook's label) with two live builders, so the title bar pill says Orchestrating · 2 workers, or shows the mascot and 2 under CONTR_E2E_WIDTH=1000 (D234, D253); 40 pins make a full outline column, which the switch leaves at 10px while the column's top is under the switch (D237, D253)",
 		setup: func(t *testing.T, h *harness) {
 			seeOrchestrating(t, h)
 			h.owner(t, seePins(40))

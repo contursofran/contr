@@ -1,6 +1,6 @@
 # TitleBar
 
-The title bar holds the traffic lights, the tabs of the open project, the update pill, the diff summary and three icon buttons; it is also the drag area of the window.
+The title bar holds the traffic lights, the tabs of the open project, the update pill, the orchestrate pill, the diff summary and three icon buttons; it is also the drag area of the window.
 
 Design system page: component TitleBar. Shared rules: [README.md](README.md).
 
@@ -16,8 +16,9 @@ From left to right:
 2. Tabs (see Tab) and a "New tab" icon button.
 3. Flexible space (drags the window).
 4. UpdatePill (see UpdatePill), only while an update is ready (D176).
-5. DiffSummary of the selected project.
-6. Icon buttons: Search, Hide files (pressed while files show).
+5. OrchestratePill (see OrchestratePill), only for a selected Claude session (D253).
+6. DiffSummary of the selected project.
+7. Icon buttons: Search, Hide files (pressed while files show).
 
 Height `titlebar-height` (46px: a 30px tab, 8px above and below, D177; the panels start right under it), gap `space-8`, right padding `space-8` (D228: the last icon button ends at the files panel edge). Items center on the vertical axis.
 
@@ -65,6 +66,9 @@ Height `titlebar-height` (46px: a 30px tab, 8px above and below, D177; the panel
 
 - No agent selected: no tabs; `+` still shows.
 - Many tabs: tabs shrink to their min width, then the row scrolls.
+- Narrow window (under `FilesHideBelow`, 1100px): the files panel hides and
+  the OrchestratePill is compact (mascot and worker count), so the tabs keep
+  their room (D253).
 
 ## Accessibility
 
@@ -99,6 +103,8 @@ Height `titlebar-height` (46px: a 30px tab, 8px above and below, D177; the panel
 - View: Hide files is pressed while the files panel shows.
 - View: Search sits left of Hide files, shows "Search  ⌘F" and opens the
   find bar.
+- View: the OrchestratePill sits after the drag stretch and the UpdatePill,
+  left of Search, and gets compact from `Narrow`.
 
 ## Replaces
 
