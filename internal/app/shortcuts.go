@@ -15,6 +15,9 @@ func (f *Frame) windowKeys(c *ui.Context, win float32) {
 	if f.Notch != nil && shortcut.Of(shortcut.Questions).Pressed(c) {
 		f.Notch.Toggle()
 	}
+	if shortcut.Of(shortcut.Chat).Pressed(c) {
+		f.toggleChat()
+	}
 	if shortcut.Of(shortcut.Files).Pressed(c) && !narrowWindow(win) {
 		f.TogglePanel()
 	}
@@ -100,6 +103,9 @@ func (f *Frame) keyHints(c *ui.Context) {
 	}
 	if f.Notch != nil {
 		f.Notch.Hints = on
+	}
+	if f.Chat != nil {
+		f.Chat.Hints = on
 	}
 }
 

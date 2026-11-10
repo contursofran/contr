@@ -20,6 +20,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/chatview"
 	"github.com/contursofran/contr/internal/app/files"
 	"github.com/contursofran/contr/internal/app/ghostty"
 	"github.com/contursofran/contr/internal/app/ghsource"
@@ -118,6 +119,8 @@ type Frame struct {
 	// Review is the Review view. [Frame.Attach] makes it. While the Review toggle is on, it
 	// replaces the terminal area, and it follows the selected project.
 	Review *reviewview.Review
+	// Chat is the Chat mode of the terminal panel (D246). [Frame.Attach] makes it.
+	Chat *chatview.Chat
 	// SpacesList is the spaces column body. [Frame.Attach] makes it and puts
 	// its view in Slots.Spaces.
 	SpacesList *sidebar.SpacesList
@@ -1163,11 +1166,16 @@ func (f *Frame) terminalLine() (line string, colour ui.Color, ok bool) {
 
 // buildTerminal is the frame's terminal slot: the plugin's view of the
 // selected agent's terminal, dimmed and with a line while the connection is
-// down, and the overlay layer above them. The grid sits inside the spec's
-// padding: 14 above, 20 at the sides, 12 below (D228).
+// down, or the chat in Chat mode (D246), and the overlay layer above them.
+// The grid sits inside the spec's padding: 14 above, 20 at the sides, 12
+// below (D228).
 func (f *Frame) buildTerminal(c *ui.Context) {
 	line, colour, showLine := f.terminalLine()
 	ui.Box(c).Fill().Center().Children(func() {
+		if f.chatView(c) {
+			f.Overlay.View(c)
+			return
+		}
 		if f.term != nil {
 			ui.Box(c).Absolute().Fill().Padding(theme.Space14, theme.Space20, theme.Space12).Children(func() {
 				grid := gterm.View(c, f.term).Label(LabelTerminalGrid).Fill()

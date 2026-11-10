@@ -33,6 +33,8 @@ const (
 	Sidebar ID = "sidebar"
 	// Files shows or hides the files panel. The issue asked for ⌘⌥B; ⌘⇧E was there first and stays.
 	Files ID = "files"
+	// Chat switches the selected Claude session between Chat and Terminal (D246).
+	Chat ID = "chat"
 	// Find opens the find bar over the terminal (D130).
 	Find ID = "find"
 	// Questions opens or closes the questions card (D125).
@@ -87,6 +89,7 @@ var list = []Shortcut{
 	{Settings, ui.Cmd, ui.KeyComma, ","},
 	{Sidebar, ui.Cmd, ui.KeyB, "B"},
 	{Files, ui.Cmd | ui.Shift, ui.KeyE, "E"},
+	{Chat, ui.Cmd, ui.KeyE, "E"},
 	{Find, ui.Cmd, ui.KeyF, "F"},
 	{Questions, ui.Cmd, ui.KeyJ, "J"},
 	{OpenProject, ui.Cmd, ui.KeyO, "O"},

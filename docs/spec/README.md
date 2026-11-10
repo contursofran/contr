@@ -29,6 +29,7 @@ what the redesign does not settle.
 | [Terminal.md](Terminal.md) | the hc terminal of the selected tab |
 | [QuestionsNotch.md](QuestionsNotch.md) | glass tab at the top of each terminal of the project |
 | [QuestionsCard.md](QuestionsCard.md) | the open notch: one question, its choices, a free answer |
+| [ChatView.md](ChatView.md) | the Chat mode of a Claude session's terminal: the transcript, the work groups, the dock |
 | [OrchestratePill.md](OrchestratePill.md) | glass pill at the top right of a Claude session's terminal: Orchestrating, or the Orchestrate button |
 | [Outline.md](Outline.md) | message ticks on the right edge of the orchestrator terminal |
 | [OutlineCard.md](OutlineCard.md) | the card of a hovered tick |
@@ -156,6 +157,7 @@ The owner's from-zero canvas (https://claude.ai/artifact/9bmbRdJc8qDMSRXm6obEb3)
 | `⌘W` | close the selected tab when it is a plain terminal (D85) | window |
 | `⌘F` | search in the terminal, `FindBar` (D130) | window |
 | `⌘⇧E` | show or hide the files panel | window |
+| `⌘E` | switch the selected Claude session between Chat and Terminal (D246) | window, while the switch shows |
 | `⌘B` | show or hide the sidebar (View menu, D172) | window |
 | `⌘J` | open or close the questions card | window, while a question is open |
 | `⌘,` | open or close Settings (app menu) | window |
