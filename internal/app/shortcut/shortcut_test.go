@@ -53,6 +53,8 @@ func TestGlyphsHintAndAccelerator(t *testing.T) {
 		{NextTab, "⌘⇧]", "⇧]", "Shift+Cmd+]"},
 		{PrevAgent, "⌘⌥↑", "⌥↑", "Alt+Cmd+Up"},
 		{NextAgent, "⌘⌥↓", "⌥↓", "Alt+Cmd+Down"},
+		{PrevProject, "⌘⌥←", "⌥←", "Alt+Cmd+Left"},
+		{NextProject, "⌘⌥→", "⌥→", "Alt+Cmd+Right"},
 		{Tab1, "⌘1", "1", "Cmd+1"},
 		{LastTab, "⌘9", "9", "Cmd+9"},
 	} {

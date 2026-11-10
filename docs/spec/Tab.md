@@ -42,8 +42,8 @@ Design system page: component Tab. Shared rules: [README.md](README.md).
 
 - `⌘W` closes a plain terminal tab. Arrows move between tabs (`TabsBase`).
 - `⌘1`–`⌘8` select tabs 1 to 8 and `⌘9` the last tab, in the order of the bar; `⌘⇧[` and `⌘⇧]`
-  select the previous and next tab. While ⌘ is held, a tab shows its number in a key chip over its
-  left end (KeyHints.md).
+  select the previous and next tab. While ⌘ is held, a tab shows its number in a key chip on its
+  glyph (KeyHints.md).
 - Middle-click closes a plain terminal tab; an agent tab ignores it (D85, D142).
 - Context menu: Close and Close others (every plain terminal except this
   tab; an agent never closes that way). An agent tab has Stop first, and

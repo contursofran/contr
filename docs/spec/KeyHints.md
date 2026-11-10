@@ -14,16 +14,23 @@ Design system page: none yet. Shared rules: [README.md](README.md).
 
 ## Where the chips show
 
-| Element | Chip | Place |
-|---|---|---|
-| Title bar tab | `1` to `8` for the first eight tabs; `9` on the last tab past them | over the left end of the tab, centered in height |
-| New tab, Search, Hide files | `T`, `F`, `⇧E` | centered on the bottom right corner |
-| Sidebar Settings | `,` | centered on the bottom right corner |
-| Icon column: Open projects, New orchestrator | `O`, `N` | centered on the bottom right corner |
-| Agent rows above and below the selected row | `⌥↑`, `⌥↓` | at the right end of the row, over the age |
-| Questions notch | `J` | centered on the bottom right corner |
+One rule places every chip (D248): its center is on the center of the element's icon or glyph,
+and it lies fully inside the element and the window. A chip wider than the icon ("⇧E", "⌥↓")
+stays centered on it, and moves in along an edge of the element or the window when it would
+leave it. No chip is clipped. The icon column (D128) follows the same rule.
 
-A disabled button shows no chip.
+| Element | Chip | On |
+|---|---|---|
+| Title bar tab | `1` to `8` for the first eight tabs; `9` on the last tab past them | the tab's glyph |
+| New tab, Search, Hide files | `T`, `F`, `⇧E` | the icon |
+| Sidebar Settings | `,` | the icon |
+| Icon column: Open projects, New orchestrator | `O`, `N` | the icon |
+| Agent rows above and below the selected row | `⌥↑`, `⌥↓` | the status glyph (also of a worker row and in the icon column) |
+| Project rows before and after the open project | `⌥←`, `⌥→`; with two projects the other row shows `⌥→` | the folder icon |
+| Questions notch | `J` | the dot |
+| Chat \| Terminal switch | `E` | the switch (it has no icon) |
+
+A disabled button shows no chip. With one project no project row shows a chip.
 
 ## Behavior
 
@@ -44,6 +51,7 @@ A disabled button shows no chip.
 ## Edge cases
 
 - More than nine tabs: tabs 9 and on show no chip, except the last one, which shows `9`.
+- An element narrower than its chip: the chip is centered on the element.
 - ⌘ held while the window is not active: no chips.
 
 ## Accessibility
@@ -56,8 +64,12 @@ A disabled button shows no chip.
 
 ## Build in MyGo
 
-- One part: `kit.KeyHint(c, key, at, self)`, built as the last child of the element. It is out of
-  the flow (`Attach`), `IgnoreInput` and `AccessHidden`.
+- One part: `kit.KeyHint(c, key, box, icon)`, built as the last child of the element `box`, with
+  `icon` its icon or glyph element. It is out of the flow (`Attach` on the center of `box`, then
+  `Translate` to the icon's center, held inside `box` and the window), `IgnoreInput` and
+  `AccessHidden`. The place comes from the previous frame's boxes (`LayoutBounds`), which the
+  element has before ⌘ is held for the delay; the chip takes its width from its measured text, so
+  its place needs no layout of its own.
 - The frame reads ⌘ once a frame with `shortcut.Hints`. While ⌘ waits it asks for one frame at
   the end of the delay (`c.After`); after that no frame comes while nothing changes (D55).
 - The keys come from the one list in `internal/app/shortcut`: the handlers, the menus, the tooltips
@@ -66,7 +78,8 @@ A disabled button shows no chip.
 ## Tests
 
 - Unit: the chips show after the delay and not before; they hide on release, another key, blur and a menu key.
-- View: the chips of the tabs, the title bar buttons, the agent rows, the icon column and the notch; the chip does not move the button.
+- View: the chips of the tabs, the title bar buttons, the agent rows, the project rows, the icon column and the notch; each chip lies inside its element and the window and is centered on its icon; the chip does not move the button.
+- Unit: the move of a chip near each edge of its element and of the window.
 
 ## Replaces
 

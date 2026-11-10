@@ -9,6 +9,7 @@
 #   scripts/see.sh <fixture> [dark|light|both] [label ...]
 #
 # A label matches an element's whole label, else the start of one.
+# CONTR_E2E_HINTS=1 shows the key chips; CONTR_E2E_WIDTH=<n> opens the window that wide.
 # The default theme is both.
 set -eu
 cd "$(dirname "$0")/.."
