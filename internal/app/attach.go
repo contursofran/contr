@@ -162,7 +162,7 @@ func (f *Frame) attachSidebar(w Window, env view.Env, agentSnap func() agentstat
 	f.Slots.Spaces = l.View
 	if f.deps.PickFolder != nil && f.deps.SpawnOrchestrator != nil {
 		f.NewOrch = &NewOrchestrator{Pick: f.deps.PickFolder, Spawn: f.deps.SpawnOrchestrator,
-			Env: env}
+			Spawned: l.SelectWhenShown, Env: env}
 		l.OnNew = f.NewOrch.Start
 		l.OnNewIn = f.NewOrch.StartIn
 	}

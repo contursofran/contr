@@ -468,6 +468,9 @@ func (f *Frame) View(c *ui.Context) {
 		if f.Settings != nil {
 			f.Settings.View(c)
 		}
+		if f.NewOrch != nil {
+			f.NewOrch.View(c)
+		}
 		f.ToastView(c)
 	})
 }

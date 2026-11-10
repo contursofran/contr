@@ -192,7 +192,7 @@ func frameDeps() app.Deps {
 			return openTerminal(ctx, os.Getenv, dialAgents, project, dir, time.Now(), appColors())
 		},
 		PickFolder: pickFolder,
-		SpawnOrchestrator: func(dir string) error {
+		SpawnOrchestrator: func(dir string) (string, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
 			return spawnOrchestrator(ctx, os.Getenv, dialAgents, dir, time.Now(), appColors())

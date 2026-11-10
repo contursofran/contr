@@ -2,6 +2,7 @@ package sidebar
 
 import (
 	"testing"
+	"time"
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
@@ -91,5 +92,53 @@ func TestLaunchWaitsForTheProjectOrder(t *testing.T) {
 	h.list.ReleaseLaunch()
 	if sel, ok := h.sel.Current(); !ok || sel.ID != "lead" {
 		t.Errorf("selection %+v, %v after release", sel, ok)
+	}
+}
+
+func TestSelectWhenShownWaitsForTheRow(t *testing.T) {
+	h, cwds := twoRepos(t)
+	h.sel.Select(state.Selected{Kind: state.KindWorker, ID: "w1:p2"})
+	h.list.SelectWhenShown("orch-new")
+	if sel, _ := h.sel.Current(); sel.ID != "w1:p2" {
+		t.Fatalf("selection %+v before the row shows, want w1:p2", sel)
+	}
+	h.send(agentstate.Snapshot{CoreVersion: "0.1.18",
+		Orchestrators: []agents.Worker{orchestratorIn("orch-new", cwds[1])},
+		Workers:       []agents.Worker{apptest.SpPane("w1:p2", cwds[1], nil)}})
+	if sel, _ := h.sel.Current(); sel.Kind != state.KindOrchestrator || sel.ID != "orch-new" {
+		t.Fatalf("selection %+v, want orchestrator orch-new", sel)
+	}
+	h.sel.Select(state.Selected{Kind: state.KindWorker, ID: "w1:p2"})
+	h.send(agentstate.Snapshot{CoreVersion: "0.1.18",
+		Orchestrators: []agents.Worker{orchestratorIn("orch-new", cwds[1])},
+		Workers:       []agents.Worker{apptest.SpPane("w1:p2", cwds[1], nil)}})
+	if sel, _ := h.sel.Current(); sel.ID != "w1:p2" {
+		t.Errorf("selection %+v; the wanted address must be dropped once picked", sel)
+	}
+}
+
+func TestSelectWhenShownSelectsARowThatShows(t *testing.T) {
+	h, cwds := twoRepos(t)
+	h.send(agentstate.Snapshot{CoreVersion: "0.1.18",
+		Orchestrators: []agents.Worker{orchestratorIn("orch-new", cwds[0])}})
+	h.sel.Clear()
+	h.list.SelectWhenShown("orch-new")
+	if sel, _ := h.sel.Current(); sel.ID != "orch-new" {
+		t.Errorf("selection %+v, want orch-new at once", sel)
+	}
+}
+
+func TestSelectWhenShownGivesUpAfterAWhile(t *testing.T) {
+	h, cwds := twoRepos(t)
+	now := time.Unix(1000, 0)
+	h.list.Now = func() time.Time { return now }
+	h.sel.Select(state.Selected{Kind: state.KindWorker, ID: "w1:p2"})
+	h.list.SelectWhenShown("orch-new")
+	now = now.Add(wantWait + time.Second)
+	h.send(agentstate.Snapshot{CoreVersion: "0.1.18",
+		Orchestrators: []agents.Worker{orchestratorIn("orch-new", cwds[0])},
+		Workers:       []agents.Worker{apptest.SpPane("w1:p2", cwds[1], nil)}})
+	if sel, _ := h.sel.Current(); sel.ID != "w1:p2" {
+		t.Errorf("selection %+v; a late row must not take the selection", sel)
 	}
 }

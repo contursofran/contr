@@ -37,8 +37,12 @@ func TestSpawnOrchestratorStartsTheProfileWithRoleAndNoParent(t *testing.T) {
 	if err := os.Mkdir(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := spawnOrchestrator(context.Background(), getenv, dial, dir, now, paletteColors(theme.Light)); err != nil {
+	addr, err := spawnOrchestrator(context.Background(), getenv, dial, dir, now, paletteColors(theme.Light))
+	if err != nil {
 		t.Fatal(err)
+	}
+	if addr != "t4" {
+		t.Errorf("address %q, want t4 (D233)", addr)
 	}
 	if len(core.params) != 1 {
 		t.Fatalf("calls %q", core.calls)
@@ -67,7 +71,7 @@ func TestSpawnOrchestratorUsesTheDefaultProfile(t *testing.T) {
 		getenv, _ := orchEnv(t, body)
 		core := &cliCore{reply: map[string]any{"terminal.run": worker("t4", "o", "live", nil)}}
 		dial := func(context.Context, func(string) string) (agentsCore, error) { return core, nil }
-		if err := spawnOrchestrator(context.Background(), getenv, dial, t.TempDir(), time.Now(), nil); err != nil {
+		if _, err := spawnOrchestrator(context.Background(), getenv, dial, t.TempDir(), time.Now(), nil); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
 		if len(core.params) != 1 || core.params[0]["labels"].(map[string]any)["profile"] != "orchestrator" {
@@ -80,11 +84,11 @@ func TestSpawnOrchestratorReturnsTheCoreError(t *testing.T) {
 	getenv, _ := orchEnv(t, `{"profiles":{"orchestrator":{"argv":["claude"]}}}`)
 	core := &cliCore{errs: map[string]error{"terminal.run": errors.New("name taken")}}
 	dial := func(context.Context, func(string) string) (agentsCore, error) { return core, nil }
-	if err := spawnOrchestrator(context.Background(), getenv, dial, t.TempDir(), time.Now(), nil); err == nil || !strings.Contains(err.Error(), "name taken") {
+	if _, err := spawnOrchestrator(context.Background(), getenv, dial, t.TempDir(), time.Now(), nil); err == nil || !strings.Contains(err.Error(), "name taken") {
 		t.Errorf("error %v", err)
 	}
 	dial = func(context.Context, func(string) string) (agentsCore, error) { return nil, errors.New("no hc") }
-	if err := spawnOrchestrator(context.Background(), getenv, dial, "/work/p", time.Now(), nil); err == nil || !strings.Contains(err.Error(), "no hc") {
+	if _, err := spawnOrchestrator(context.Background(), getenv, dial, "/work/p", time.Now(), nil); err == nil || !strings.Contains(err.Error(), "no hc") {
 		t.Errorf("dial error %v", err)
 	}
 }
@@ -97,5 +101,12 @@ func TestOrchestratorNameFitsHC(t *testing.T) {
 	}
 	if got := orchestratorName("/", now); got != "orch--0102" {
 		t.Errorf("root: %q", got)
+	}
+}
+
+func TestOpenFolderCanMakeAFolder(t *testing.T) {
+	o := openFolderOptions()
+	if !o.Directory || !o.CreateDirectories {
+		t.Errorf("options %+v: want a folder picker with New Folder (D233)", o)
 	}
 }

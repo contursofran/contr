@@ -87,10 +87,11 @@ type Deps struct {
 	// UI thread. Nil makes both do nothing.
 	OpenTerminal func(project, dir string) (string, error)
 	// PickFolder and SpawnOrchestrator serve `+ new` (D57): the first asks the owner for a
-	// folder (ErrPickCancelled for none), the second starts the orchestrator profile there.
-	// Both block, so the frame runs them off the UI thread. Nil makes `+ new` do nothing.
+	// folder (ErrPickCancelled for none), the second starts the orchestrator profile there
+	// and returns its address, which the sidebar selects (D233). Both block, so the frame
+	// runs them off the UI thread. Nil makes `+ new` do nothing.
 	PickFolder        func() (string, error)
-	SpawnOrchestrator func(dir string) error
+	SpawnOrchestrator func(dir string) (string, error)
 
 	// OpenFolder asks the owner for a folder to add to the projects (D116). It blocks, so
 	// the modal calls it off the UI thread.
