@@ -1,7 +1,8 @@
 package chatview
 
 // The ChatView part of the spec sheet (D179, D246): a terminal-sized panel in Chat mode with a
-// prompt, an answer with a table, a folded work group, an open one, a note that needs the owner,
+// prompt, an answer with a table, open work groups with a background task and a message of another
+// session, notes that need the owner,
 // the live line of a working agent and the composer (D252). ChatViewNeedsYou shows the needs-you
 // line with a menu, and ChatViewWide a wide panel with a table wider than the column.
 
@@ -23,7 +24,7 @@ const (
 
 // TestSpecSheet draws the parts of package chatview (see apptest.SpecSheet).
 func TestSpecSheet(t *testing.T) {
-	working := sheetChat(t, "working", lPrompt, lHook, lSaid, lCall1, lNote1, lCall2, lRes1, lNote2, lSaid2, lCall1, lRes1, lCall2)
+	working := sheetChat(t, "working", lPrompt, lHook, lSaid, lCall1, lNote1, lCall2, lRes1, lNote2, lSaid2, lCall1, lRes1, lTaskOK, lAgent, lNudge, lCall2, lTaskBad)
 	blocked := sheetChat(t, "blocked", lPrompt, lSaid2)
 	wide := sheetChat(t, "idle", lPrompt, `{"type":"assistant","uuid":"w1","message":{"content":[{"type":"text","text":`+
 		strconv.Quote("Prose stays in the column.\n\n"+wideTable)+`}]}}`)

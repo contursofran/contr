@@ -4,6 +4,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/chatview"
 	"github.com/contursofran/contr/internal/app/ghsource"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/orchestrate"
@@ -245,9 +246,10 @@ func (f *Frame) loadSaved(env view.Env) {
 	f.loadWidths(env)
 }
 
-// attachQuestions puts the orchestrate pill and the notch with the questions card above the
-// terminal, starts the first pull request and issue title reads and, while the viewers show, makes
-// the board panel. The pill layer comes first, so the notch draws over it.
+// attachQuestions puts the Chat | Terminal switch and the notch with the questions card above the
+// terminal, makes the orchestrate pill of the title bar, starts the first pull request and issue
+// title reads and, while the viewers show, makes the board panel. The switch layer comes first, so
+// the notch draws over it.
 func (f *Frame) attachQuestions(env view.Env, agentSnap func() agentstate.Snapshot, src agentstate.AgentSource) {
 	f.Notch = &questions.Notch{Snapshot: agentSnap, Project: func() string { return f.openProject }}
 	if src != nil {
@@ -255,9 +257,9 @@ func (f *Frame) attachQuestions(env view.Env, agentSnap func() agentstate.Snapsh
 		f.Notch.Close = f.Card.Close
 		f.Notch.Opened = f.Card.IsOpen
 		f.Notch.Panel = f.Card.View
-		f.Pill = &orchestrate.Pill{Snapshot: agentSnap, Selected: f.selectedTerminal, NotchShown: f.Notch.Shown,
-			OutlineTop: f.Outline.Top, Send: src.Send, Env: env, Lead: f.chatLead}
-		f.Overlay.Add(orchestrate.LabelLayer, f.Pill.View)
+		f.Pill = &orchestrate.Pill{Snapshot: agentSnap, Selected: f.selectedTerminal, Send: src.Send, Env: env}
+		corner := &chatview.Corner{Switch: f.chatSwitch, OutlineTop: f.Outline.Top}
+		f.Overlay.Add(chatview.LabelSwitchLayer, corner.View)
 	}
 	f.Overlay.Add(questions.LabelNotchLayer, f.Notch.View)
 	f.syncWorkerPRs()

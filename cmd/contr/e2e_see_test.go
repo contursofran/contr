@@ -133,7 +133,7 @@ var seeFixtures = map[string]seeFixture{
 		ready: "lead, ",
 	},
 	"orchestrate": {
-		about: "the workers fixture with three pins: lead does not orchestrate, so its terminal has the Orchestrate pill 10px from the right side, over a short outline column (D234, D237); press Orchestrate. Open",
+		about: "the workers fixture with three pins: lead does not orchestrate, so the title bar has the Orchestrate pill left of the diff summary, and the Chat | Terminal switch sits alone 10px from the terminal's right side, over a short outline column (D234, D253); press Orchestrate. Open",
 		setup: func(t *testing.T, h *harness) {
 			seeWorkers(t, h)
 			h.owner(t, seePins(3))
@@ -141,7 +141,7 @@ var seeFixtures = map[string]seeFixture{
 		ready: "lead, ",
 	},
 	"orchestrating": {
-		about: "project demo: lead orchestrates (the Stop hook's label) with two live builders, so its pill says Orchestrating · 2 workers (D234); 40 pins make a full outline column, which the pill leaves at 10px while the column's top is under the pill (D237)",
+		about: "project demo: lead orchestrates (the Stop hook's label) with two live builders, so the title bar pill says Orchestrating · 2 workers, or shows the mascot and 2 under CONTR_E2E_WIDTH=1000 (D234, D253); 40 pins make a full outline column, which the switch leaves at 10px while the column's top is under the switch (D237, D253)",
 		setup: func(t *testing.T, h *harness) {
 			seeOrchestrating(t, h)
 			h.owner(t, seePins(40))
@@ -149,7 +149,7 @@ var seeFixtures = map[string]seeFixture{
 		ready: "lead, ",
 	},
 	"chat": {
-		about: "the orchestrator lead in Chat mode (D246, D252): two prompts, an answer with a table, work groups with tool calls and worker notes, a note that needs the owner, a call that runs in the live line, and the composer",
+		about: "the orchestrator lead in Chat mode (D246, D252): two prompts, an answer with a table, work groups with tool calls and worker notes, a note that needs the owner, a background task, a message of another session, a call that runs in the live line, and the composer",
 		setup: seeChat,
 		ready: "lead, ",
 		press: []string{"Chat"},
@@ -274,7 +274,8 @@ func seeChat(t *testing.T, h *harness) {
 }
 
 // seeTranscript is an orchestrator session as Claude Code writes it: hidden lines (meta, the
-// playbook, hook output), prompts, texts, tool calls and their results, and hc notes of workers.
+// playbook, hook output, a reminder), prompts, texts, tool calls and their results, hc notes of
+// workers, a background task and a message of another session.
 // from gives the hc sender ("ADDR NAME") of each worker. The session ends a little before now,
 // so the live line shows a short time.
 func seeTranscript(from map[string]string) string {
@@ -331,6 +332,9 @@ func seeTranscript(from map[string]string) string {
 		result(56, "t7", "fatal: not a git repository", true),
 		note(57, from["b-630"], "b-630: working, the model passes its tests"),
 		note(58, from["b-632"], "ended its turn without a report. Last words: Waiting for the full-suite run to finish."),
+		user(58, "<task-notification>\n<task-id>bx1</task-id>\n<tool-use-id>t9</tool-use-id>\n<output-file>/tmp/demo/bx1.output</output-file>\n<status>completed</status>\n<summary>Background command \"go test ./...\" completed (exit code 0)</summary>\n</task-notification>"),
+		user(58, "Another Claude session sent a message:\n<agent-message from=\"planner-657\">The plan for #657 is ready.\nRead it in the issue.</agent-message>"),
+		user(58, "<system-reminder>\nThe user hasn't heard from you in a while.\n</system-reminder>"),
 		said(59, "b-631 is done: PR `#633` is open and its check passed. b-632 stopped without a report; I asked it to report when the run ends.\n\nNext I review **#633** on its head:\n\n```sh\ngh pr diff 633\n```"),
 		call(60, "t8", "Bash", map[string]any{"command": "gh pr diff 633"}),
 	} {

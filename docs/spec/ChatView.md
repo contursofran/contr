@@ -14,7 +14,7 @@ Shared rules: [README.md](README.md).
 
 | Part | Value |
 |---|---|
-| Place | in the pill row of the terminal overlay, left of the [OrchestratePill](OrchestratePill.md), `space-8` apart; the two wrap as one |
+| Place | alone at the top right of the terminal panel, a layer of the terminal overlay under the notch: top `space-8`, right 10px (the outline inset); right 40px while the outline column's top is above the switch's bottom (34px), clear of the column (`Outline.Top`, the D237 rule, D253). The [OrchestratePill](OrchestratePill.md) is in the title bar. |
 | Control | `kit.Switch` (`SegmentedBase`): "Chat", "Terminal"; label "View of this session" |
 | Look | solid: on a `float-solid` fill with a 1px `float-line` border, radius 7, so the terminal text under it does not show through; the chosen segment keeps its `selected` fill (D252) |
 | Shows for | a Claude Code session: an orchestrator (with a plain terminal that runs Claude Code, D190), or a terminal whose transcript path a kit hook saved (a worker, D243). A plain terminal has no switch. |
@@ -39,17 +39,24 @@ Shared rules: [README.md](README.md).
 | Owner prompt | right-aligned, at most 560px, padding `8px 13px`, radius `radius-12`, fill `hover`, text `prose` in `ink-100` |
 | Sent time | the time the entry was sent, from its transcript timestamp: one line, mono `meta`, `ink-45` (the lowest text ink with 4.5:1), `space-4` above. Under an owner prompt, right-aligned with the bubble; under Claude's text, left-aligned, once per answer: under the last text before the next prompt, work group or note. In the Mac's time zone: "14:32" today, "Yesterday 14:32", else "9 Nov 14:32"; "today" is judged at each build, and nothing ticks (D55). No timestamp, no line; a pending prompt has none. |
 | Claude's text | `markdown.View`: `prose` size and line, sans; text `ink-85`, strong and links `ink-95`, muted `ink-45`; code mono `ink-90` on `hover`; code blocks with Copy on `hover` with a `hairline` line; tables with `hairline` lines and a `hover` header |
-| Work group, folded | the tool calls and kit notes between two texts, as one row 20px high, mono `value`, `ink-42` (`ink-62` on hover): "3 worker notes · 6 tool calls" (a part with no item is left out, "1 tool call"), a 6px dot for each worker that sent a note, then `›`. While a call has no result, a working StatusGlyph (14px) comes first. |
-| Work group, open | `⌄`; under it a card, a wide block: at least 584px (or the content width when less), as wide as its longest line, up to the content width, `space-6` below the row, padding `8px 12px`, radius `radius-9`, line `hairline`: the note lines, a `hairline` rule, the call lines |
-| Note line | 20px, gap `space-8`, mono `meta`: the sender's dot, the name (500, `ink-85`), the text on one line (`ink-42`). An owner answer or done mark has the name "owner". |
+| Work group, folded | the tool calls, kit notes and background tasks between two texts, as one row 20px high, mono `value`, `ink-42` (`ink-62` on hover): "2 worker notes · 1 background task · 6 tool calls" (a message of another session counts as a worker note; a part with no item is left out, "1 tool call"), a 6px dot for each worker that sent a note, then `›`. While a call has no result, a working StatusGlyph (14px) comes first. |
+| Work group, open | `⌄`; under it a card, a wide block: at least 584px (or the content width when less), as wide as its longest line (note, task and call lines alike), up to the content width, `space-6` below the row, padding `8px 12px`, radius `radius-9`, line `hairline`: the note lines, a `hairline` rule, the call lines |
+| Note line | 20px, gap `space-8`, mono `meta`: the sender's dot, the name (500, `ink-85`), the text on one line (`ink-42`). An owner answer or done mark has the name "owner". A message of another Claude session or a teammate (D254) has the sender as its name ("session" when it has none) and the first line of the message; a subagent's hand-back is "subagent" and "reported". |
+| Task line | a background task that ended (D254), as a note line without a dot: "Background task" (500, `ink-85`), its status (`ink-42` for "completed", else `blocked`), then "· " and its summary on one line (`ink-42`), without a leading "Background command " |
 | Call line | 20px, gap `space-8`, mono `meta`: a working StatusGlyph while it runs, the name (`ink-62`, at least 48px; an MCP tool shows its server, "contr"), the summary on one line (`ink-42`), "error" in `blocked` when the result is an error, the duration (`ink-38`): "0.4s", "12s", "2m 5s", from the timestamps of the call and its result, none when one is missing |
-| Note for the owner | outside the fold, as a note line with a `blocked` dot, the name in `ink-100` and the text in `ink-85`: an hc message of a worker that "ended its turn without a report", or that says it is blocked ("NAME: blocked, …", "blocked …") |
+| Note for the owner | outside the fold, as a note line with a `blocked` dot, the name in `ink-100` and the text in `ink-85`: an hc message of a worker that "ended its turn without a report", or that says it is blocked ("NAME: blocked, …", "blocked …"); and a task line whose status is "failed" or "killed" |
 | Dot | 6px, round: `blocked` for a blocked worker, `ink-85` for a working one, else `ink-40` |
 
 Hidden entries do not show: meta lines, system reminders, hook output (an
-attachment, or a user line in a `<…-hook>` tag), the kit's playbook, local
-command output, compact summaries, interrupt marks, system lines, thinking
-marks and the lines of subagents.
+attachment, a user line in a `<…-hook>` tag, or "Stop hook feedback:"),
+the kit's playbook, local command output, compact summaries, interrupt
+marks, system lines, thinking marks and the lines of subagents. Other
+harness texts hide too (D254): "[Image: source: …]" lines, "The user
+hasn't heard from you…" nudges, and a user line that is all inside one
+`<tag …>…</tag>` pair whose name is lowercase letters and dashes
+(`<command-message>`, `<local-command-caveat>`). A slash command
+(`<command-name>`) stays a prompt: "/name args". A prompt that carries a
+`<system-reminder>` or a hook's tag shows only its own text.
 
 ## Composer
 

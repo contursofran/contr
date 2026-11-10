@@ -4,6 +4,7 @@ import (
 	"image/color"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/session"
 )
@@ -332,5 +334,63 @@ func TestSentTimes(t *testing.T) {
 	}
 	if s.X > two.X+1 || s.Y < two.Y {
 		t.Errorf("answer time %+v is not under the text at the left %+v", s, two)
+	}
+}
+
+func TestTasksAndAgentMessagesShowAsLines(t *testing.T) {
+	r := newRig(t)
+	r.savePath(term)
+	r.selectTerm(term)
+	r.chat()
+	anon := `{"type":"user","uuid":"u12","message":{"content":"Another Claude session sent a message:\nrebase please"}}`
+	r.write(lPrompt, lCall1, lRes1, lTaskOK, lAgent, anon, lNudge, lTaskBad, lSaid2)
+	text := "2 worker notes · 1 background task · 1 tool call"
+	if !r.tt.HasText(text) {
+		t.Fatalf("no group %q in %v", text, r.tt.Texts())
+	}
+	// The failed task needs the owner: outside the fold.
+	if apptest.Absent(r.tt, LabelOwnerNote+" "+TextTask) || !slices.Contains(r.tt.Texts(), "failed") || !r.tt.HasText(`· "go vet" failed with exit code 1`) {
+		t.Errorf("no failed task outside the fold: %v", r.tt.Texts())
+	}
+	prompts := 0
+	for _, row := range r.ch.model.Rows() {
+		if row.Kind == RowPrompt {
+			prompts++
+		}
+	}
+	if prompts != 1 {
+		t.Errorf("%d prompt bubbles, want 1: a harness text shows as a prompt", prompts)
+	}
+	if err := r.tt.Click(LabelGroup + " " + text); err != nil {
+		t.Fatal(err)
+	}
+	r.tt.Frame()
+	if !slices.Contains(r.tt.Texts(), "completed") {
+		t.Errorf("no status word of the completed task: %v", r.tt.Texts())
+	}
+	for _, want := range []string{TextTask, `· "go test ./..." completed (exit code 0)`, "planner-12", "The plan is ready.", "session", "rebase please"} {
+		if !r.tt.HasText(want) {
+			t.Errorf("open group: no %q in %v", want, r.tt.Texts())
+		}
+	}
+	if apptest.Absent(r.tt, LabelNote+" "+TextTask) || apptest.Absent(r.tt, LabelNote+" planner-12") || apptest.Absent(r.tt, LabelNote+" session") {
+		t.Error("no task or agent line in the group")
+	}
+	for _, s := range r.tt.Texts() {
+		if strings.Contains(s, "<") || strings.Contains(s, "hasn't heard") {
+			t.Errorf("raw harness text shows: %q", s)
+		}
+	}
+}
+
+func TestTaskStatusInk(t *testing.T) {
+	pal := theme.Current()
+	if statusInk(pal, "completed", pal.Ink42) != pal.Ink42 {
+		t.Error("a completed task's status is not dim")
+	}
+	for _, s := range []string{"failed", "killed", "running"} {
+		if statusInk(pal, s, pal.Ink42) != pal.Blocked {
+			t.Errorf("status %q is not in blocked", s)
+		}
 	}
 }
