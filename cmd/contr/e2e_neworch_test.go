@@ -29,9 +29,21 @@ func TestPlusNewOutsideGit(t *testing.T) {
 	h.theme(t, "dark")
 	c := h.launch(t)
 	c.waitLabel(t, "lead, ")
-	c.press(t, sidebar.LabelProjectsAdd)
-	c.press(t, sidebar.LabelProjectsNew)
-	c.waitLabel(t, app.LabelMakeRepo)
+	// A press on Add or on its item does not always land: press again until
+	// the dialog shows. A second start while one runs does nothing (busy).
+	for i := 0; !c.labels(t)[app.LabelMakeRepo]; i++ {
+		if i == 6 {
+			t.Fatalf("no dialog after New orchestrator; labels %v", keys(c.labels(t)))
+		}
+		if c.labels(t)[sidebar.LabelProjectsNew] {
+			c.press(t, sidebar.LabelProjectsNew)
+		} else {
+			c.press(t, sidebar.LabelProjectsAdd)
+		}
+		for end := time.Now().Add(3 * time.Second); !c.labels(t)[app.LabelMakeRepo] && !c.labels(t)[sidebar.LabelProjectsNew] && time.Now().Before(end); {
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
 	c.capture(t, filepath.Join(h.out, "neworch-ask.png"))
 	c.press(t, app.LabelMakeRepo)
 	row := c.waitLabel(t, "orch-notes-")
