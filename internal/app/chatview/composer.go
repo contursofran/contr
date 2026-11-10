@@ -19,8 +19,8 @@ const (
 	// LabelStop names the Stop button, which shows while the agent works.
 	LabelStop = "Stop"
 	// TextAnswerFirst shows when Enter comes while the session waits on a menu: the text is kept,
-	// so a stray Enter never picks a choice (D51).
-	TextAnswerFirst = "Pick a choice above first, or switch to Terminal."
+	// so a stray Enter never picks a choice (D51). The notch answers the menu (D260).
+	TextAnswerFirst = "Answer in the notch first (⌘J), or switch to Terminal."
 )
 
 // Sizes of the composer.
@@ -62,7 +62,6 @@ func (ch *Chat) composer(c *ui.Context, id string, st liveState) {
 				OnTextKey(func(k ui.TextKey) bool { return ch.textKey(id, st, k) })
 			if in.Changed() {
 				delete(ch.errs, id)
-				ch.digit(id, st, draft)
 			}
 			if st.kind == liveWorking && ch.Interrupt != nil {
 				kit.CardButton(c, LabelStop, kit.ButtonOutlined, pal.Ink85, func() { ch.stop(id); ch.field.Focus() })

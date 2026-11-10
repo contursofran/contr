@@ -58,6 +58,20 @@ func TestTheOrchestratorRowCountsItsItemsAndThoseOfItsWorkers(t *testing.T) {
 	}
 }
 
+// The orchestrator's own menu is an item of its row, as it is of the notch: the chat's team row
+// counts it in "N needs you" (D260). With no other project, the row's count is the notch's.
+func TestTheOrchestratorsOwnMenuCountsInItsBadge(t *testing.T) {
+	h := newRows(t)
+	snap := h.live.get()
+	snap.Orchestrators[0].Status, snap.Orchestrators[0].Project = "blocked", "alpha"
+	snap.Questions = []owner.Question{{ID: "D1", Project: "alpha", Coordinator: "b-241", Question: "a worker asks"}}
+	h.send(snap)
+	notch := len(agentstate.NeedItemsOf(snap, "alpha"))
+	if got := h.list.ItemsOf("lead"); got != 2 || got != notch {
+		t.Errorf("ItemsOf(lead) = %d, notch %d; want 2 for both", got, notch)
+	}
+}
+
 func TestTheBadgeShowsOneItemAndGoesAtZero(t *testing.T) {
 	h := newRows(t)
 	snap := h.live.get()

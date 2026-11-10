@@ -32,10 +32,6 @@ type Chat struct {
 	// Interrupt presses the stop key of the terminal at addr, as Esc does in the terminal. It
 	// blocks. Nil: Esc and Stop do nothing.
 	Interrupt func(addr string) error
-	// Read and SendKeys read and answer the menu of a session that needs the owner
-	// (questions.Menu). They block. Nil Read: the needs-you line shows no choices.
-	Read     func(addr string, lines int) (string, error)
-	SendKeys func(addr string, keys []byte) error
 	// Meta is the model and the context of the terminal at addr, "opus high · 212k", for the
 	// right of the composer. May be nil.
 	Meta func(addr string) string
@@ -81,10 +77,6 @@ type Chat struct {
 	field ui.Handle
 	// ticks is set while the last View asked for a redraw in a second: the live line's time.
 	ticks bool
-	// toTerm is the toTerminal of the last View.
-	toTerm func()
-	// menu is the menu of the session that needs the owner (live.go).
-	menu menuState
 }
 
 // New returns a chat view that reads the session files under stateDir (package session).
@@ -109,7 +101,6 @@ func New(env view.Env, stateDir string, watch func(path string, notify func()) (
 func (ch *Chat) Sync(id string) {
 	if id != ch.src.Terminal() {
 		ch.shown = false
-		ch.menu = menuState{}
 	}
 	ch.src.Sync(id)
 }

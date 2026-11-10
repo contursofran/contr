@@ -28,11 +28,12 @@ const (
 	fadeHeight = 32
 )
 
-// Team is the team of an orchestrating session: its agents (the workers it started that hc still
-// lists, ended ones too), the open items of its sidebar row (D240), and its workers by state.
-// A blocked worker counts in Agents and in NeedsYou (its menu is an item), in no other part.
+// Team is the team of an orchestrating session: its live agents (the pill's number), the open
+// items of its sidebar row (D240: its own menu, those of its workers, its questions and to-dos),
+// and its live workers by state. A blocked worker counts in Agents and in NeedsYou (its menu is an
+// item), in no other part (D260).
 type Team struct {
-	Agents, NeedsYou, Working, Idle, Done int
+	Agents, NeedsYou, Error, Working, Idle int
 }
 
 // TeamHead is the head of the row: "Orchestrating", "Orchestrating · 1 agent",
@@ -56,7 +57,7 @@ func NeedsText(n int) string {
 	return strconv.Itoa(n) + " need you"
 }
 
-// TeamParts are the parts of the count, in order: needs you, working, idle, done. A part with no
+// TeamParts are the parts of the count, in order: needs you, error, working, idle. A part with no
 // agent is left out.
 func TeamParts(t Team) []string {
 	var out []string
@@ -66,7 +67,7 @@ func TeamParts(t Team) []string {
 	for _, p := range []struct {
 		n    int
 		word string
-	}{{t.Working, "working"}, {t.Idle, "idle"}, {t.Done, "done"}} {
+	}{{t.Error, "error"}, {t.Working, "working"}, {t.Idle, "idle"}} {
 		if p.n > 0 {
 			out = append(out, strconv.Itoa(p.n)+" "+p.word)
 		}
@@ -93,6 +94,15 @@ func fitParts(widths []float32, dot, room float32) int {
 		used += w
 	}
 	return len(widths)
+}
+
+// teamOf is the team of the session at id; ok is false when it does not orchestrate or the frame
+// gives no team.
+func (ch *Chat) teamOf(id string) (Team, bool) {
+	if ch.Team == nil {
+		return Team{}, false
+	}
+	return ch.Team(id)
 }
 
 // team builds the team row of t. st is the session's live state: while it works, its live text
@@ -131,7 +141,7 @@ func (ch *Chat) team(c *ui.Context, t Team, st liveState) {
 				kit.Styled(ui.Text(c, head), theme.StyleLabel).NoWrap().TextColor(pal.Ink85)
 			})
 			if shown > 0 {
-				ch.teamCount(c, pal, parts[:shown], t.NeedsYou > 0)
+				ch.teamCount(c, pal, parts[:shown], t)
 			}
 			if working {
 				ui.Row(c).Label(LabelLive + " " + what).Grow(1).MinWidth(0).Justify(ui.End).AlignItems(ui.Center).Gap(theme.Space8).Children(func() {
@@ -142,9 +152,17 @@ func (ch *Chat) team(c *ui.Context, t Team, st liveState) {
 	})
 }
 
-// teamCount is the count in words, its parts apart by dots. needs tells that the first part is
-// "N needs you": the one red of the row, and a button that opens the notch's card (as ⌘J).
-func (ch *Chat) teamCount(c *ui.Context, pal *theme.Palette, parts []string, needs bool) {
+// teamCount is the count of t in words, its parts apart by dots. "N needs you" is the one red of
+// the row and a button that opens the notch's card (as ⌘J). "N error" is in ink-100: not red, as
+// it is no item of the notch, and it takes no click (D260). The others are in ink-45.
+func (ch *Chat) teamCount(c *ui.Context, pal *theme.Palette, parts []string, t Team) {
+	needs, errAt := t.NeedsYou > 0, -1
+	if t.Error > 0 {
+		errAt = 0
+		if needs {
+			errAt = 1
+		}
+	}
 	ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(countGap).Children(func() {
 		for i, p := range parts {
 			if i > 0 {
@@ -164,7 +182,11 @@ func (ch *Chat) teamCount(c *ui.Context, pal *theme.Palette, parts []string, nee
 				})
 				continue
 			}
-			kit.Styled(ui.Text(c, p), theme.StyleValue).NoWrap().TextColor(pal.Ink45)
+			ink := pal.Ink45
+			if i == errAt {
+				ink = pal.Ink100
+			}
+			kit.Styled(ui.Text(c, p), theme.StyleValue).NoWrap().TextColor(ink)
 		}
 	})
 }

@@ -149,7 +149,7 @@ var seeFixtures = map[string]seeFixture{
 		ready: "lead, ",
 	},
 	"chat": {
-		about: "the orchestrator lead in Chat mode (D246, D252): two prompts, an answer with a table, work groups with tool calls and worker notes, a background task, a failed one outside the fold, a message of another session, the team row of 4 workers (working, idle, blocked, ended) with the running call at its right end (D259), and the composer; the last entry clears the dock",
+		about: "the orchestrator lead in Chat mode (D246, D252): two prompts, an answer with a table, work groups with tool calls and worker notes, a background task, a failed one outside the fold, a message of another session, the team row of 4 live workers (working, idle, blocked, error; an ended fifth is left out, as in the pill) with the running call at its right end (D259, D260), and the composer; the last entry clears the dock",
 		setup: seeChat,
 		ready: "lead, ",
 		press: []string{"Chat"},
@@ -252,7 +252,8 @@ func seeChat(t *testing.T, h *harness) {
 		{Name: "b-630", Profile: "claude-working", Role: "builder", Issue: "609", Project: "demo", Worktree: repo, Parent: w.Address},
 		{Name: "b-631", Profile: "claude-idle", Role: "builder", Issue: "611", Project: "demo", Worktree: repo, Parent: w.Address},
 		{Name: "b-632", Profile: "claude-blocked", Role: "builder", Issue: "613", Project: "demo", Worktree: repo, Parent: w.Address},
-		{Name: "b-633", Profile: "ended", Role: "builder", Issue: "615", Project: "demo", Worktree: repo, Parent: w.Address},
+		{Name: "b-633", Profile: "claude-error", Role: "builder", Issue: "615", Project: "demo", Worktree: repo, Parent: w.Address},
+		{Name: "b-634", Profile: "ended", Role: "builder", Issue: "617", Project: "demo", Worktree: repo, Parent: w.Address},
 	} {
 		b, err := h.mgr.Spawn(h.ctx, sp)
 		if err != nil {
