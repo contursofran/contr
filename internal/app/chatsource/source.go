@@ -1,7 +1,8 @@
 // Package chatsource gives the chat view the transcript of the selected hc
 // terminal (D243): its path, which the kit's hooks save in the terminal's
 // session file (package session), and a signal when the transcript changes.
-// It does not read the transcript.
+// It does not read the transcript: package transcript does. A reset signal
+// tells the reader to start again at offset 0.
 package chatsource
 
 import (
@@ -30,8 +31,10 @@ type Source struct {
 	// to the UI thread and redraws. The zero Env runs all at once.
 	Env view.Env
 	// Changed runs on the UI thread when the path moved or the transcript
-	// changed. Nil: only a redraw.
-	Changed func()
+	// changed. reset is true when the path moved, or when the file is
+	// shorter than before (it was replaced or removed): read it again from
+	// offset 0. Nil: only a redraw.
+	Changed func(reset bool)
 	// Watch watches the file at path and calls notify after each change,
 	// from any goroutine, until stop. A missing folder gives an error that
 	// wraps fs.ErrNotExist. Nil uses mygo.WatchFiles on the file's folder.
@@ -46,6 +49,8 @@ type Source struct {
 	// gen drops the signals of a transcript watch that stopped.
 	gen            uint64
 	stopTranscript func()
+	// size is the last size of the transcript file; -1 while not known.
+	size int64
 }
 
 // Sync points the source at terminal id; "" stops it. Call it with the
@@ -79,6 +84,7 @@ func (s *Source) Terminal() string { return s.id }
 func (s *Source) Path() string { return s.path }
 
 // Rev goes up by one at each change: a new path or a change of the file.
+// It goes up at a reset too.
 func (s *Source) Rev() uint64 { return s.rev }
 
 // Close stops the watches and forgets the terminal and its path.
@@ -123,37 +129,66 @@ func (s *Source) follow(path string) {
 		if watch == nil {
 			watch = watchFile
 		}
+		// The size is read on the watch goroutine, off the UI thread.
 		stop, err := watch(path, func() {
+			size := fileSize(path)
 			s.Env.Post(func() {
 				if gen == s.gen {
-					s.changed()
+					s.grew(size)
 				}
 			})
 		})
 		switch {
 		case err == nil:
 			s.stopTranscript, started = stop, true
+			// The first size, so that a shorter file later is a reset.
+			s.Env.Do(func() func() {
+				size := fileSize(path)
+				return func() {
+					if gen == s.gen && s.size < 0 {
+						s.size = size
+					}
+				}
+			})
 		case !errors.Is(err, fs.ErrNotExist):
 			log.Printf("chat source: watch %s: %v", filepath.Base(path), err)
 		}
 	}
 	if moved || started {
-		s.changed()
+		s.changed(moved)
 	}
+}
+
+// grew takes a new size of the file after a change of it.
+func (s *Source) grew(size int64) {
+	reset := s.size >= 0 && size < s.size
+	s.size = size
+	s.changed(reset)
+}
+
+// fileSize is the size of the file at path, 0 when it cannot be read: a
+// missing file has no text (D216).
+func fileSize(path string) int64 {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	return info.Size()
 }
 
 func (s *Source) stopWatch() {
 	s.gen++
+	s.size = -1
 	if s.stopTranscript != nil {
 		s.stopTranscript()
 		s.stopTranscript = nil
 	}
 }
 
-func (s *Source) changed() {
+func (s *Source) changed(reset bool) {
 	s.rev++
 	if s.Changed != nil {
-		s.Changed()
+		s.Changed(reset)
 	}
 	s.Env.Redraw()
 }
