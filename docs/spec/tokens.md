@@ -20,7 +20,7 @@ Contrast numbers are for Dark unless they say Light. "On glass" is on `glass-win
 | `panel-line` | `rgba(255,255,255,0.08)` | `rgba(0,0,0,0.06)` | 1px border of the stage. The wings have no border (D250). |
 | `window-line` | `rgba(255,255,255,0.09)` | `rgba(0,0,0,0.1)` | 1px border of the window. |
 | `float-line` | `rgba(255,255,255,0.075)` | `rgba(0,0,0,0.08)` | 1px border of floating glass (notch: no top border). |
-| `hairline` | `rgba(255,255,255,0.06)` | `rgba(0,0,0,0.07)` | Lines inside floating cards and modals. The wings and the file tree draw none (D258). |
+| `hairline` | `rgba(255,255,255,0.06)` | `rgba(0,0,0,0.07)` | Lines inside floating cards and modals, and the row lines of a table in the chat (D261). The wings and the file tree draw none (D258). |
 | `rail` | `rgba(255,255,255,0.07)` | `rgba(0,0,0,0.08)` | Not drawn since D258 (worker rows are indented, no rail). Kept for a later cleanup of the tokens. |
 | `hover` | `rgba(255,255,255,0.045)` | `rgba(0,0,0,0.04)` | Hover fill of rows, tabs, file rows and answer options; the fill of the picked option. |
 | `hover-strong` | `rgba(255,255,255,0.06)` | `rgba(0,0,0,0.055)` | Hover fill of icon buttons. |

@@ -142,8 +142,10 @@ var remarkText = "> [!NOTE]\n> A note.\n\n> [!done]\n> A done.\n\n> [!DECISION]\
 func TestRemarksDrawTheirColor(t *testing.T) {
 	for _, src := range []mygo.ThemeSource{mygo.ThemeDark, mygo.ThemeLight} {
 		tt, pal := contentRig(t, src, remarkText)
-		for _, k := range []RemarkKind{RemarkNote, RemarkDone, RemarkDecision, RemarkWarning, RemarkUnverified} {
-			want := rgba(theme.Over(k.Color(pal), pal.StageBase()))
+		kinds := map[RemarkKind]ui.Color{RemarkNote: pal.ContentInfo, RemarkDone: pal.ContentDone,
+			RemarkDecision: pal.ContentFailed, RemarkWarning: pal.ContentWaiting, RemarkUnverified: pal.ContentInfo}
+		for k, ink := range kinds {
+			want := rgba(theme.Over(ink, pal.StageBase()))
 			bar := find(t, tt, LabelRemarkBar+" "+k.Word())
 			// The top of the bar: a dash of the dashed bar starts there.
 			if got := pixel(tt, bar.X+bar.W/2, bar.Y+1); !near(got, want) {

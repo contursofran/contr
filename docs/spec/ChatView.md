@@ -38,7 +38,7 @@ Shared rules: [README.md](README.md).
 |---|---|
 | Owner prompt | right-aligned, at most 560px, padding `8px 13px`, radius `radius-12`, fill `hover`, text `prose` in `ink-100` |
 | Sent time | the time the entry was sent, from its transcript timestamp: one line, mono `meta`, `ink-45` (the lowest text ink with 4.5:1), `space-4` above. Under an owner prompt, right-aligned with the bubble; under Claude's text, left-aligned, once per answer: under the last text before the next prompt, work group or note. In the Mac's time zone: "14:32" today, "Yesterday 14:32", else "9 Nov 14:32"; "today" is judged at each build, and nothing ticks (D55). No timestamp, no line; a pending prompt has none. |
-| Claude's text | `markdown.View`: `prose` size and line, sans; text `ink-85`, strong and links `ink-95`, muted `ink-45`; code mono `ink-90` on `hover`; code blocks with Copy on `hover` with a `hairline` line; tables with `hairline` lines and a `hover` header |
+| Claude's text | `markdown.View`: `prose` size and line, sans; text `ink-85`, strong (500) and links `ink-95`, muted `ink-45`; each block as [Content](#content) says |
 | Work group, folded | the tool calls, kit notes and background tasks between two texts, as one row 20px high, mono `value`, `ink-42` (`ink-62` on hover): "2 worker notes · 1 background task · 6 tool calls" (a message of another session counts as a worker note; a part with no item is left out, "1 tool call"), a 6px dot for each worker that sent a note, then `›`. While a call has no result, a working StatusGlyph (14px) comes first. |
 | Work group, open | `⌄`; under it a card, a wide block: at least 584px (or the content width when less), as wide as its longest line (note, task and call lines alike), up to the content width, `space-6` below the row, padding `8px 12px`, radius `radius-9`, line `hairline`: the note lines, a `hairline` rule, the call lines |
 | Note line | 20px, gap `space-8`, mono `meta`: the sender's dot, the name (500, `ink-85`), the text on one line (`ink-42`). An owner answer or done mark has the name "owner". A message of another Claude session or a teammate (D254) has the sender as its name ("session" when it has none) and the first line of the message; a subagent's hand-back is "subagent" and "reported". |
@@ -57,6 +57,26 @@ hasn't heard from you…" nudges, and a user line that is all inside one
 (`<command-message>`, `<local-command-caveat>`). A slash command
 (`<command-name>`) stays a prompt: "/name args". A prompt that carries a
 `<system-reminder>` or a hook's tag shows only its own text.
+
+## Content
+
+How Claude's Markdown shows (D261). MyGo's theme options style what they can; the Block hook builds the rest (remarks, tables, numbered and task lists), and a Code builder the diff blocks. The Markdown inside a remark, a cell or an item shows in a `markdown.View` of its own that shares the selection.
+
+| Block | Value |
+|---|---|
+| Space | `space-12` between blocks |
+| Heading | every level 14px, 600, `ink-95`; 10px more room above than a block, `space-12` below |
+| Inline code | mono 12.5px, `ink-90` on `hover` |
+| Quote | a 2px `ink-30` bar, text in `ink-85` |
+| Numbered list | the numbers in mono `meta`, `ink-45` |
+| Task list | a 14px check in a ring (`ink-85`) for a done item, a ring (`ink-45`) for an open one |
+| Bullet list | MyGo's bullets in `ink-45` |
+| Table | no box, no header fill, no column lines: a `hairline` under each row but the last; cells padded `8px 16px 8px 0`, at most 340px wide, then they wrap; the header 12px, 500, `ink-45`. A column without an alignment in its delimiter row whose body cells are all numbers or dashes (one at least a number: "212", "+64", "−148", "3.5%", "2 / 3") sits at the right, its numbers mono 13px. A table wider than its box scrolls sideways (the wide-block rule stays). |
+| Remark | a quote whose first line starts with a tag, any case: a 2px bar in the kind's color, the word (`label`, 600) in that color, the text in `ink-85`; padding `6px 12px 7px 14px`, `space-2` between word and text. `[!NOTE]`, GitHub's `[!TIP]` and `[!IMPORTANT]`: "Note", `content-info`. `[!DONE]`: "Done", `content-done`. `[!DECISION]`: "Decision needed", `content-failed`, the only red one. `[!WARNING]`, GitHub's `[!CAUTION]`: "Warning", `content-waiting`. `[!UNVERIFIED]`: "Not verified", `content-info`, the bar dashed (4px on, 3px off). An unknown tag, or a tag with no text, stays a quote. |
+| Code block | the language and Copy in its first line, on `hover` with a `hairline` line, radius `radius-8`; mono 13px on 20px lines. MyGo's tokenizers, mapped to the code colors: keywords and annotations `code-keyword`; functions, types and tags `code-function`; strings, escapes and regular expressions `code-string`; numbers, constants and attributes `code-number`; comments `code-comment` in italic; the rest `ink-85`. Long lines scroll sideways. |
+| Diff block | a `diff` or `patch` block, as a code block: an added line in `content-done` and a removed one in `content-failed`, each on its tint (the color at 9% alpha) across the whole block; a hunk line (`@@`) in `content-info`; header and context lines in `ink-62` |
+
+Content colors show only as a dot, a word, a 2px bar or a 1px line: never a fill and never a row. Diff lines are the one exception (tokens.md, Content).
 
 ## Composer
 

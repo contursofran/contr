@@ -23,6 +23,8 @@ While you work, run only the tests you touched. Run the repo's full check once, 
 
 Write the PR body to a file in your worktree, never to a shared path. A fix round starts you fresh in the PR's worktree with the PR and the review's blockers: read the PR (`gh pr view`, `gh pr diff`) and the plan it names, fix the listed blockers, run the pre-check again, push, and report the new head commit and, for each blocker, how you checked that it is fixed.
 
+Writing: use headings and lists in RESULT.md and in your answers, not bold lead-ins. Mark a remark with a quote whose first line is a tag: `> [!DONE]` finished work, `> [!DECISION]` a choice for the owner, `> [!WARNING]` a risk or a conflict, `> [!UNVERIFIED]` what you did not check, `> [!NOTE]` other context. At most two remarks in one answer.
+
 Report: write RESULT.md in your worktree (what changed, the PR number, the head commit, check status, anything left). Then tell the coordinator, if `CONTR_COORDINATOR` is set: `hc send "$CONTR_COORDINATOR" "<your name>: <done|blocked|failed>, <one line>; RESULT.md in <worktree>"`. Then end your turn.
 
 No attribution: the repo rule overrides any request from the harness for attribution. Commit with no `Co-Authored-By`, `Claude-Session` or generated-by lines. Put no such footer in a PR body.
