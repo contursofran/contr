@@ -80,6 +80,7 @@ func (ch *Chat) Switch(c *ui.Context, id string) {
 // its end, with the pending prompts at its end, the live line or the team row, and the composer.
 func (ch *Chat) View(c *ui.Context) {
 	ch.show()
+	ch.svc = c.Services()
 	ch.ticks = false
 	pal := theme.Current()
 	ch.mdTheme(pal)
