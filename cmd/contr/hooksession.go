@@ -1,5 +1,6 @@
 // contr hook post-tool and contr hook prompt: the agent's todos and
-// artifacts, one session file per hc terminal (D195).
+// artifacts, one session file per hc terminal (D195), and the transcript
+// path of the terminal's session (D243).
 
 package main
 
@@ -46,11 +47,9 @@ func runSessionHook(name string, stdin io.Reader, stdout, stderr io.Writer, gete
 	}
 	var err error
 	if name == "prompt" {
-		if getenv("CONTR_COORDINATOR") != "" {
-			// A worker: its prompts come from the coordinator, not the owner.
-			return 0
-		}
-		err = promptHook(stdin, stdout)
+		// A worker's prompts come from the coordinator, not the owner: it gets
+		// no context text, but its transcript path is saved.
+		err = promptHook(stdin, stdout, stderr, stateDir, id, getenv("CONTR_COORDINATOR") != "")
 	} else {
 		err = postToolHook(stdin, stateDir, id, uint64(now.Unix()))
 	}
@@ -60,12 +59,18 @@ func runSessionHook(name string, stdin io.Reader, stdout, stderr io.Writer, gete
 	return 0
 }
 
-func promptHook(stdin io.Reader, stdout io.Writer) error {
+func promptHook(stdin io.Reader, stdout, stderr io.Writer, stateDir, id string, worker bool) error {
 	var in struct {
-		Prompt string `json:"prompt"`
+		Prompt         string `json:"prompt"`
+		SessionID      string `json:"session_id"`
+		TranscriptPath string `json:"transcript_path"`
 	}
 	if err := json.NewDecoder(stdin).Decode(&in); err != nil {
 		return fmt.Errorf("bad hook input: %w", err)
+	}
+	saveTranscript(stderr, "prompt", stateDir, id, in.SessionID, in.TranscriptPath)
+	if worker {
+		return nil
 	}
 	if strings.HasPrefix(strings.TrimSpace(in.Prompt), "<hc from=") || strings.TrimSpace(in.Prompt) == "" {
 		return nil
@@ -104,6 +109,21 @@ func postToolHook(stdin io.Reader, stateDir, id string, now uint64) error {
 		}
 		return changed, err
 	})
+}
+
+// saveTranscript saves the transcript path and the session id of a hook
+// input in the session file of terminal id (D243). It writes only when one of
+// them changed. An error goes to stderr and never fails the hook.
+func saveTranscript(stderr io.Writer, hook, stateDir, id, sessionID, path string) {
+	if id == "" || path == "" {
+		return
+	}
+	err := session.Update(stateDir, id, func(s *session.Session) (bool, error) {
+		return s.SetTranscript(sessionID, path), nil
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "contr hook %s: save transcript path: %v\n", hook, err)
+	}
 }
 
 // recordedTool reports whether post-tool records calls of the tool name.

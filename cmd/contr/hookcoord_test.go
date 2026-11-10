@@ -37,7 +37,7 @@ func newCoordRig(t *testing.T, lines ...string) *coordRig {
 	if err := os.WriteFile(r.tr, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	r.env = map[string]string{"HC_TERMINAL_ID": "t1", "CONTR_OWNER_FILE": filepath.Join(r.dir, "owner.json"), "CONTR_AGENTS_CONFIG": filepath.Join(r.dir, "agents.json")}
+	r.env = map[string]string{"HC_TERMINAL_ID": "t1", "CONTR_OWNER_FILE": filepath.Join(r.dir, "owner.json"), "CONTR_AGENTS_CONFIG": filepath.Join(r.dir, "agents.json"), "CONTR_STATE_DIR": filepath.Join(r.dir, "state")}
 	return r
 }
 

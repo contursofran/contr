@@ -60,6 +60,22 @@ type Session struct {
 	UpdatedAt uint64     `json:"updated_at"`
 	Todos     []Todo     `json:"todos"`
 	Artifacts []Artifact `json:"artifacts"`
+	// TranscriptPath is the transcript file of the terminal's Claude Code
+	// session and SessionID its session id, from the hook input (D243).
+	// /clear and a resume change both, so each hook run sets them again.
+	TranscriptPath string `json:"transcript_path,omitempty"`
+	SessionID      string `json:"session_id,omitempty"`
+}
+
+// SetTranscript sets the transcript path and the session id, and reports
+// whether one of them changed. An empty path changes nothing: the hook input
+// had no transcript.
+func (s *Session) SetTranscript(sessionID, path string) bool {
+	if path == "" || (path == s.TranscriptPath && sessionID == s.SessionID) {
+		return false
+	}
+	s.TranscriptPath, s.SessionID = path, sessionID
+	return true
 }
 
 // NewTodo makes a todo from the text, stripping the YouPrefix into You.

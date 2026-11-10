@@ -52,7 +52,7 @@ The `--plugin-dir` sessions below still work with the plugin installed.
    hc terminal with role orchestrator), the Stop hook keeps the turn going
    once when the context passes `CONTR_SAVE_AT` tokens (default 220000, under
    a 250000 `autoCompactWindow`) and asks for `COORDINATOR-STATE.md`. After
-   Claude Code compacts, the SessionStart hook (matcher `startup|compact`) adds the
+   Claude Code compacts, the SessionStart hook (matcher `startup|resume|clear|compact`) adds the
    playbook, the state file to read, the coordinator's live workers and its
    open owner items. Claude Code's own auto-compaction stays on.
 
@@ -71,6 +71,12 @@ list and artifacts in `<state dir>/session/<terminal>.json` (D195):
 
 Both hooks log errors to stderr and always exit 0, so they never block
 Claude Code.
+
+The Stop, SessionStart and UserPromptSubmit hooks also save the
+`transcript_path` and `session_id` of their input in the same file (D243),
+workers included: `/clear` and a resume change the path, so each run sets
+it again. The chat view of the app reads the path from there. A failed save
+is logged and does not fail the hook.
 
 ## Metrics
 
