@@ -14,7 +14,7 @@ Shared rules: [README.md](README.md).
 |---|---|
 | Place | in the [TitleBar](TitleBar.md), after the flexible space and the UpdatePill, `space-8` left of the DiffSummary (or of Search when no diff shows); centered on the bar's height (D253) |
 | Box | height `icon-button` (28px), padding `0 10px` (`0 6px` compact), gap `space-6`, radius 14px (fully round) |
-| Look | no fill; line `float-line` (1px all round); no shadow. Button hover, and while the popover is open: fill `hover` |
+| Look | no fill, no line and no shadow at rest (D258), in both states. Button hover, and while the popover is open: fill `hover` |
 | Glyph | StatusGlyph, Claude mascot, 14px, still: `claude` while it orchestrates, `ink-45` on the button (D191) |
 | Label | `label` (12/18/500), `ink-85`: "Orchestrating", "Orchestrating · 1 worker", "Orchestrating · 3 workers", or "Orchestrate" |
 | Compact | in a window under `FilesHideBelow` (1100px, the title bar's narrow rule): the mascot and the worker count (`count`, `ink-85`; none while it is 0), or the mascot alone on the button. The full text is the tooltip. |
@@ -123,7 +123,7 @@ Popover (button state only), below the pill, its right edge on the pill's right 
 **Don't**
 
 - Do not show the pill on worker or plain shell terminals.
-- Do not give the pill a fill or a shadow at rest: the title bar stays plain.
+- Do not give the pill a fill, a line or a shadow at rest: the title bar stays plain (D258).
 - Do not send to any terminal but the selected session's.
 
 ## Tests

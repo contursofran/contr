@@ -49,11 +49,11 @@ tests, and what it replaces.
 ┌ glass window ─────────────────────────────────────────────────────────────────┐
 │ ● ● ●                    │ tab · tab · +      ··········  +120 −126 9 files ⧉ ⌕ ▣ │  title bar 38
 │┌ sidebar 312 ─────┐┌ terminal (fills) ─────────────────────┐┌ files 280 ──────┐│
-││ Projects       + ││          ╭ 2 questions ╮              ││ Files        ⧩  ││
+││ Projects       + ││          ╭ 2 need you ╮               ││ Files        ⧩  ││
 ││ ▢ contr     main ││                                       ││ ▸ internal      ││
 ││  ✱ orchestrator  ││                                   ── ││   app.go  +4 −1 ││
-││  │ ⠋ worker      ││                                   ── ││                 ││
-││  │ ⠶ worker      ││                                    3 ││                 ││
+││    ⠋ worker      ││                                   ── ││                 ││
+││    ⠶ worker      ││                                    3 ││                 ││
 ││                  ││                                   ── ││                 ││
 ││ Servers        + ││                                   ── ││ Context  45%    ││
 ││ ▣ This Mac local ││ output                                ││ ▬▬▬▬▬▬▬──────── ││
@@ -210,7 +210,7 @@ tooltips and the key chips ([KeyHints.md](KeyHints.md)) read it. No window key t
 |---|---|---|
 | Top bar 40: tabs of the open project | TitleBar 38: tabs of the selected agent | replaced |
 | Sidebar: Spaces, `This computer` header | ServerRow section, then ProjectRow | replaced |
-| Sidebar: Agents section in state groups | AgentRow under its project: orchestrator first, workers on a rail | replaced |
+| Sidebar: Agents section in state groups | AgentRow under its project: orchestrator first, workers indented (D258) | replaced |
 | Panel 380: board or worker | Files panel 280: FileTree and UsageMeter | replaced; the board and worker detail are disabled (D122) |
 | Bottom row 32: needs-you tabs and counts | QuestionsNotch | replaced and removed (D146); to-dos and blocked workers are more chips (D124) |
 | Answer card | QuestionsCard | replaced |

@@ -12,7 +12,7 @@ Design system page: component UsageMeter. Shared rules: [README.md](README.md).
 
 | Part | Value |
 |---|---|
-| Block | line `hairline` on top, padding `12px 10px 2px` (D228), gap `space-7`; `space-6` more before each meter after the first |
+| Block | no line on top (D258), padding `12px 10px 2px` (D228), gap `space-7`; `space-6` more before each meter after the first |
 | Row | label `small`, `ink-42`; value mono `value`, `ink-62`, at the right |
 | Meter | height `meter-height` (4px), track `meter-track`, fill `meter-fill`, radius `radius-2` |
 
@@ -27,7 +27,7 @@ Plan meters, in the sidebar foot row (D196):
 | Meter | width 44px, the meter above |
 | Value | mono `value`, `ink-62` |
 
-"Claude ▬ 38%  Codex ▬ 12%", then free space, then the Settings button. The foot has padding `space-10` left and right, so the meters and the button have the same inset; a divider `hairline` with the same insets is above it, and the row has `space-6` above and below (D201).
+"Claude ▬ 38%  Codex ▬ 12%", then free space, then the Settings button. The foot has padding `space-10` left and right, so the meters and the button have the same inset; no divider is above it (D258): the foot has `space-6` on top, and the row has `space-6` above and below (D201).
 
 ## States
 
@@ -99,7 +99,7 @@ Plan meters, in the sidebar foot row (D196):
 
 ## Tokens
 
-`hairline`, `meter-track`, `meter-fill`, `meter-height`, `radius-2`, `space-7`, `ink-42`, `ink-62`, `small`, `value`.
+`meter-track`, `meter-fill`, `meter-height`, `radius-2`, `space-7`, `ink-42`, `ink-62`, `small`, `value`.
 
 ## Build in MyGo
 

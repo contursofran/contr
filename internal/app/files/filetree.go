@@ -33,7 +33,8 @@ const (
 	NoFolderLine = "Files of the open project show here"
 )
 
-// fileIndent is the indent of one level: space-16 plus space-4.
+// fileIndent is the indent of one level: space-16 plus space-4. Only the
+// indent shows the level: no guide lines (D258).
 const fileIndent = theme.Space16 + theme.Space4
 
 // fileReadDebounce waits for a burst of file events to end before the tree is
@@ -528,13 +529,6 @@ func (t *FileTree) item(c *ui.Context, rel string, e review.Entry, depth int) {
 	row := ui.TreeItem(c.Key(full), "", open, kids).Label(label).Height(theme.SizeFileRowHeight).
 		Gap(0).Radius(theme.Radius6).Cursor(ui.CursorPointer).
 		PaddingStart(theme.Space10 + float32(depth*fileIndent)).PaddingEnd(theme.Space10)
-	row = row.DrawOver(func(pt *ui.Painter, r ui.Rect) {
-		// One hairline on the left of each level above this row.
-		for l := 0; l < depth; l++ {
-			x := r.X + theme.Space10 + float32(l*fileIndent) + theme.Space8
-			pt.Fill(ui.Rect{X: x, Y: r.Y, W: 1, H: r.H}, theme.Current().Hairline, 0)
-		}
-	})
 	row.Children(func() {
 		// The margin takes back the room of the hidden arrow.
 		ui.Row(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(theme.Space7).MarginStart(-treeArrow).Children(func() {

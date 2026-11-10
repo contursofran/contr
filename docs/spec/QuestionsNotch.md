@@ -16,7 +16,8 @@ Design system page: component QuestionsNotch. Shared rules: [README.md](README.m
 | Glass | `glass-float`, blur `glass-blur`, line `float-line`, shadow `shadow-notch` |
 | Dot | 8px circle, `blocked`, 3px at each side (it takes the 14px of the small glyph); label "needs you" (D240) |
 | Glow | after an arrival only: a 1px ring in `blocked` at 0.6 and a shadow `0 0 18px 3px` in `blocked` at 0.42, fading out (D240) |
-| Label | 12px, `ink-100`: "1 question", "2 questions"; with to-dos or blocked menus, "3 items"; "1 item" for one to-do or menu alone (D124, D135) |
+| Label | `label` (12px, 500), `ink-100`: "1 needs you", "2 need you"; questions, to-dos and blocked menus count the same (D258) |
+| Newest item | 12px, `ink-62`, one line: the title (else the key) of the newest item, the one with the latest time (question asked, to-do pinned, blocked worker's last output; on a tie the last). At most 320px. In a narrow terminal it clips with an ellipsis first; the dot and the label keep their width (D258). No divider line inside the notch. |
 
 ## States
 
@@ -64,11 +65,11 @@ Design system page: component QuestionsNotch. Shared rules: [README.md](README.m
 
 ## Accessibility
 
-- Label: "2 questions. Open". With to-dos or blocked menus: "3 items. Open".
+- Label: "2 need you. Open" (D258). The newest item is not in the label: the card reads the items.
 
 ## Tokens
 
-`glass-float`, `float-line`, `shadow-notch`, `notch-height`, `radius-12`, `blocked`, `ink-100`, `label`.
+`glass-float`, `float-line`, `shadow-notch`, `notch-height`, `radius-12`, `blocked`, `ink-100`, `ink-62`, `label`.
 
 ## Build in MyGo
 
@@ -85,7 +86,7 @@ Design system page: component QuestionsNotch. Shared rules: [README.md](README.m
 
 **Do**
 
-- Say the count in words: "2 questions".
+- Say the count in words: "2 need you".
 
 **Don't**
 
@@ -95,8 +96,9 @@ Design system page: component QuestionsNotch. Shared rules: [README.md](README.m
 
 ## Tests
 
-- View: hidden at 0, "1 question", "2 questions".
-- View: a to-do and a blocked menu count with the questions ("3 items").
+- View: hidden at 0, "1 needs you", "2 need you".
+- View: a to-do and a blocked menu count with the questions ("3 need you").
+- View: the newest item shows after the label; in a narrow terminal it clips first and the label stays whole.
 - View: shows in an orchestrator and a worker terminal of the same project.
 - View: an arrival springs the notch and pulses the dot; no frame is asked
   after the effect; a lower count, the card and an item of another project

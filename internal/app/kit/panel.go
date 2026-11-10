@@ -66,7 +66,7 @@ func Panel(c *ui.Context, o PanelOpts) ui.Element {
 			}
 		})
 		if o.Footer != nil {
-			ui.Box(c).Height(1).Shrink(0).Background(p.Hairline)
+			// No hairline over the footer (D258): its padding keeps it apart.
 			ui.Row(c).AlignItems(ui.Center).Justify(ui.End).Gap(theme.Space2).Shrink(0).Padding(theme.Space6, 0, 0).Children(func() {
 				o.Footer()
 			})

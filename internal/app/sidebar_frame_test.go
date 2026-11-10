@@ -139,23 +139,24 @@ func TestTabsStayClearOfTheWindowButtonsInTheIconColumn(t *testing.T) {
 }
 
 // The foot row is centered in its area (#495): the meters' left inset equals the
-// gear's right inset, the divider has the same insets, and the content has as
-// much room above (to the divider) as below (to the sidebar's bottom edge).
+// gear's right inset, and the content has as much room above (to the top of
+// the foot row) as below (to the sidebar's bottom edge). No hairline sits over
+// the foot (D258).
 func TestSidebarFootIsCentered(t *testing.T) {
 	h := newSpaces(t, apptest.SpTree())
 	h.list.Plans = func() []kit.Meter { return planMeters(fakeLeft{usage.PlanClaude: 62}) }
 	h.tt.Frame()
-	foot, div := apptest.Box(t, h.tt, "sidebar foot"), apptest.Box(t, h.tt, "sidebar foot divider")
+	foot, row := apptest.Box(t, h.tt, "sidebar foot"), apptest.Box(t, h.tt, "sidebar foot row")
 	gear, plans := apptest.Box(t, h.tt, sidebar.LabelSettingsOpen), apptest.Box(t, h.tt, "plan usage")
 	right, left := foot.X+foot.W-(gear.X+gear.W), plans.X-foot.X
 	if right != left || left <= 0 {
 		t.Errorf("gear right inset %v, meters left inset %v", right, left)
 	}
-	if div.X != plans.X || div.X+div.W != gear.X+gear.W {
-		t.Errorf("divider x %v..%v, content %v..%v", div.X, div.X+div.W, plans.X, gear.X+gear.W)
+	if _, ok := h.tt.Find("sidebar foot divider"); ok {
+		t.Error("the sidebar foot has a divider; D258 removes it")
 	}
 	bottom := float32(theme.WindowHeight)
-	if above, below := gear.Y-(div.Y+div.H), bottom-(gear.Y+gear.H); above != below {
+	if above, below := gear.Y-row.Y, bottom-(gear.Y+gear.H); above != below {
 		t.Errorf("gear has %v above and %v below", above, below)
 	}
 	if mid, gm := plans.Y+plans.H/2, gear.Y+gear.H/2; mid != gm {

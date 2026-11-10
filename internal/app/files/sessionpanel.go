@@ -173,8 +173,8 @@ func TodoCount(todos []session.Todo) string {
 	return strconv.Itoa(done) + " of " + strconv.Itoa(len(todos))
 }
 
-// section builds one section: the head with its count, the rows, and a
-// hairline under them.
+// section builds one section: the head with its count, the rows, and space
+// under them. No hairline: the space keeps the next section apart (D258).
 func section(c *ui.Context, name, count string, rows func()) {
 	p := theme.Current()
 	ui.Column(c).Label(name).Shrink(0).Children(func() {
@@ -185,9 +185,7 @@ func section(c *ui.Context, name, count string, rows func()) {
 				Font(theme.StyleMeta.Family()).FontSize(theme.StyleMeta.Size)
 		})
 		rows()
-		ui.Box(c).Height(theme.Space12).Shrink(0)
-		ui.Box(c).Height(1).Shrink(0).Background(p.Hairline)
-		ui.Box(c).Height(theme.Space10).Shrink(0)
+		ui.Box(c).Height(theme.Space20).Shrink(0)
 	})
 }
 
@@ -253,9 +251,9 @@ func todoRow(c *ui.Context, t session.Todo) {
 			tx.Strikethrough()
 		}
 		if t.You {
+			// Plain text, no ring (D258).
 			ui.Text(c, LabelYouTag).Label(LabelYouTag).SingleLine().Shrink(0).TextColor(p.Ink50).
-				Font(theme.StyleMeta.Family()).FontSize(10.5).PaddingX(5).
-				Radius(theme.Radius4).Border(1, p.InputLine)
+				Font(theme.StyleMeta.Family()).FontSize(10.5)
 		}
 	})
 }

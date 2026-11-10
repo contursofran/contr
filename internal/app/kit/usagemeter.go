@@ -28,7 +28,8 @@ type Meter struct {
 
 // UsageMeter builds the info block of the files panel (docs/spec/UsageMeter.md):
 // for each line, its label and value, then its bar. Put it in the footer of
-// the Panel, which draws the hairline above it.
+// the Panel. No hairline sits above it (D258): the 12px above the text keep
+// it apart from the body.
 func UsageMeter(c *ui.Context, meters []Meter) ui.Element {
 	return ui.Column(c).Label("usage").Grow(1).MinWidth(0).Gap(theme.Space7).
 		// The Panel footer already has 6px above its content.

@@ -8,6 +8,7 @@ package agentstate
 import (
 	"cmp"
 	"strings"
+	"time"
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/icons"
@@ -64,6 +65,10 @@ type NeedTab struct {
 	// to read the worker's prompt.
 	Command   string
 	BlockKind string
+	// Since is when the item came: a question's Asked, a to-do's Pinned, a
+	// blocked worker's LastOutput. Zero when not known. The notch shows the
+	// newest item (D258).
+	Since time.Time
 }
 
 // Label is the accessible name: "{key} {title}".
@@ -98,7 +103,7 @@ func NeedItemsOf(snap Snapshot, project string) []NeedTab {
 		if w.Status == "blocked" && in(w.Project) {
 			tabs = append(tabs, NeedTab{Kind: NeedBlocked, Key: w.Name, Title: w.Msg, Icon: icons.Blocked,
 				Project: w.Project, Address: w.Address, Orchestrator: w.Orchestrator(),
-				Command: cmp.Or(w.Command, w.Profile), BlockKind: w.Kind})
+				Command: cmp.Or(w.Command, w.Profile), BlockKind: w.Kind, Since: w.LastOutput})
 		}
 	}
 	for _, q := range snap.Questions {
@@ -108,7 +113,7 @@ func NeedItemsOf(snap Snapshot, project string) []NeedTab {
 				title = q.Question
 			}
 			tabs = append(tabs, NeedTab{Kind: NeedQuestion, Key: q.ID, Title: oneLine(title), Icon: icons.Decide, Project: q.Project, Resolved: done[q.ID],
-				Coordinator: q.Coordinator})
+				Coordinator: q.Coordinator, Since: q.Asked})
 		}
 	}
 	for _, t := range snap.Todos {
@@ -118,7 +123,7 @@ func NeedItemsOf(snap Snapshot, project string) []NeedTab {
 				icon = icons.Fyi
 			}
 			tabs = append(tabs, NeedTab{Kind: NeedTodo, Key: t.ID, Title: oneLine(t.Text), Icon: icon, Project: t.Project, Resolved: done[t.ID],
-				Coordinator: t.Coordinator})
+				Coordinator: t.Coordinator, Since: t.Pinned})
 		}
 	}
 	return tabs
