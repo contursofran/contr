@@ -1,6 +1,7 @@
 // Package projects keeps the owner's choices about projects: their order,
 // the hidden ones and the recent ones. A project is a repo group of the
-// sidebar, keyed by its git common dir (D63).
+// sidebar, keyed by its git common dir (D63). A folder outside git is keyed by
+// the folder until it becomes a git repository (D236).
 package projects
 
 import (

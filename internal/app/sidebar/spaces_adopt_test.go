@@ -144,3 +144,53 @@ func TestTabsKeepTwoReposWithTheSameFolderNameApart(t *testing.T) {
 		t.Errorf("tabs of /one/app: %+v", tabs)
 	}
 }
+
+// A stored folder outside git that became a git repository (D236): the scan
+// finds it as the main checkout of alpha, so the stored entry moves to
+// alpha's common dir and one alpha group shows, at its stored place, folded
+// as before.
+func TestGitInitOfAStoredFolderShowsOneGroup(t *testing.T) {
+	h, _ := twoRepos(t)
+	alpha, beta := h.group(0).CommonDir, h.group(1).CommonDir
+	folder := filepath.Dir(alpha) // the stored key from before `git init`
+	at := time.Date(2026, 11, 10, 9, 0, 0, 0, time.UTC)
+	s := &projects.Store{}
+	s.AddFolder(beta, filepath.Dir(beta))
+	s.AddFolder(folder, folder)
+	s.Touch(folder, folder, at)
+	s.SetOrder([]string{beta, folder})
+	h.list.Fold(folder)
+	saved := 0
+	h.list.OnAdopted = func() { saved++ }
+	h.list.Adopt = true
+	h.list.SetProjects(s)
+	if got := strings.Join(groupNames(h.list.Groups()), ","); got != "beta,alpha" {
+		t.Errorf("groups %s, want beta,alpha (one alpha, at its stored place)", got)
+	}
+	if s.Known(folder) || s.Path(alpha) != folder || saved != 1 {
+		t.Errorf("store knows the folder %v, path %q, saved %d times", s.Known(folder), s.Path(alpha), saved)
+	}
+	if e := s.Recent(); len(e) != 1 || e[0].Dir != alpha || !e[0].At.Equal(at) {
+		t.Errorf("recent %+v, want the folder's entry under alpha", e)
+	}
+	if !h.list.Folded(alpha) || h.list.Folded(folder) {
+		t.Errorf("folded alpha %v, folder %v; the fold must follow", h.list.Folded(alpha), h.list.Folded(folder))
+	}
+	h.send(h.live.get())
+	if saved != 1 {
+		t.Errorf("saved %d times, want once", saved)
+	}
+}
+
+// A store that failed to load (Adopt off) is never changed, so the rekey
+// waits too.
+func TestGitInitRekeyWaitsForAGoodStore(t *testing.T) {
+	h, _ := twoRepos(t)
+	folder := filepath.Dir(h.group(0).CommonDir)
+	s := &projects.Store{}
+	s.AddFolder(folder, folder)
+	h.list.SetProjects(s)
+	if !s.Known(folder) {
+		t.Error("the store changed while Adopt is off")
+	}
+}

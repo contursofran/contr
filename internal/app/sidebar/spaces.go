@@ -387,7 +387,8 @@ func (l *SpacesList) startScan(cwds []string) {
 func (l *SpacesList) rebuild() {
 	snap := l.Snapshot()
 	built := spaces.Build(spaceTerms(snap), l.scan)
-	adopted := l.adopt(built)
+	rekeyed := l.rekey()
+	adopted := l.adopt(built) || rekeyed
 	groups := l.applyProjects(built)
 	l.online, l.line = true, ""
 	if l.snap != nil && snap.CoreVersion == "" {
@@ -404,6 +405,29 @@ func (l *SpacesList) rebuild() {
 	if l.OnGroups != nil {
 		l.OnGroups()
 	}
+}
+
+// rekey moves each stored project keyed by a folder that the scan found as
+// the main checkout of a repository to the repository's common dir, so the
+// project shows once after `git init` (D236). The fold state moves too. It
+// reads the scan only; the scan read the files off the UI thread, and
+// OnAdopted saves the store off the UI thread. It tells if it moved any.
+func (l *SpacesList) rekey() bool {
+	if l.projects == nil || !l.Adopt {
+		return false
+	}
+	moved := false
+	for dir, repo := range l.scan.Repos {
+		if repo.MainRoot == "" || !l.projects.Rekey(repo.MainRoot, dir) {
+			continue
+		}
+		moved = true
+		if l.folded[repo.MainRoot] {
+			delete(l.folded, repo.MainRoot)
+			l.folded[dir] = true
+		}
+	}
+	return moved
 }
 
 // adopt adds each project of groups that the store does not know to the
