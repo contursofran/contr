@@ -210,16 +210,16 @@ func agentRowButton(c *ui.Context, o AgentRowOpts, marginEnd, marginStart float3
 				if o.NeedsYou {
 					// The reason and the name take the place of the model and
 					// CI; the name is clipped first.
-					ui.Row(c).MinWidth(0).Shrink(1).Children(func() {
+					// This part takes the room left of the age; the age keeps its width.
+					ui.Row(c).Grow(1).MinWidth(0).Children(func() {
 						meta(NeedsYouText).Shrink(0).TextColor(p.BlockedText)
 						if rest := needRest(o.Reason, o.Name); rest != "" {
 							ui.Text(c, rest).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).
 								Font(theme.StyleMeta.Family()).FontSize(theme.StyleMeta.Size).FixedLineHeight(theme.StyleMeta.Line).TextColor(metaInk)
 						}
 					})
-					ui.Spacer(c)
 					if o.Age != "" {
-						meta(o.Age)
+						meta(o.Age).Shrink(0)
 					}
 					return
 				}

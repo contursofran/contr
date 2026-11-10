@@ -154,6 +154,22 @@ func TestAgentRowNeedsYouClipsTheName(t *testing.T) {
 	if age.X+age.W > row.X+row.W || need.X < row.X {
 		t.Errorf("line 2 leaves the row: needs you %v, age %v, row %v", need, age, row)
 	}
+	// The age and "needs you" keep their width: they are not clipped.
+	whole := ui.NewTester(func(c *ui.Context) {
+		theme.Apply(c)
+		AgentRow(c, AgentRowOpts{Label: "row", Title: "Checks", Age: "2m", State: GlyphNeedsYou, NeedsYou: true})
+	}, 600, 80)
+	whole.Frame()
+	if w := find(t, whole, "2m").W; age.W != w {
+		t.Errorf("the age is %v wide, want %v: it is clipped", age.W, w)
+	}
+	if w := find(t, whole, "needs you").W; need.W != w {
+		t.Errorf("needs you is %v wide, want %v: it is clipped", need.W, w)
+	}
+	// The rest fills the room up to the age.
+	if gap := age.X - (rest.X + rest.W); gap > theme.Space10+1 {
+		t.Errorf("the rest of line 2 stops %v before the age, want it clipped at the gap", gap)
+	}
 }
 
 // The item count is a plain number in `blocked-text`: no pill (D240, D249).
