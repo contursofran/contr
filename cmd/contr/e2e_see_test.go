@@ -149,7 +149,7 @@ var seeFixtures = map[string]seeFixture{
 		ready: "lead, ",
 	},
 	"chat": {
-		about: "the orchestrator lead in Chat mode (D246, D252): two prompts, an answer with a table, work groups with tool calls and worker notes, a note that needs the owner, a background task, a message of another session, a call that runs in the live line, and the composer",
+		about: "the orchestrator lead in Chat mode (D246, D252): two prompts, an answer with a table, work groups with tool calls and worker notes, a background task, a failed one outside the fold, a message of another session, the team row of 4 workers (working, idle, blocked, ended) with the running call at its right end (D259), and the composer; the last entry clears the dock",
 		setup: seeChat,
 		ready: "lead, ",
 		press: []string{"Chat"},
@@ -251,7 +251,8 @@ func seeChat(t *testing.T, h *harness) {
 	for _, sp := range []agents.Spec{
 		{Name: "b-630", Profile: "claude-working", Role: "builder", Issue: "609", Project: "demo", Worktree: repo, Parent: w.Address},
 		{Name: "b-631", Profile: "claude-idle", Role: "builder", Issue: "611", Project: "demo", Worktree: repo, Parent: w.Address},
-		{Name: "b-632", Profile: "claude-working", Role: "builder", Issue: "613", Project: "demo", Worktree: repo, Parent: w.Address},
+		{Name: "b-632", Profile: "claude-blocked", Role: "builder", Issue: "613", Project: "demo", Worktree: repo, Parent: w.Address},
+		{Name: "b-633", Profile: "ended", Role: "builder", Issue: "615", Project: "demo", Worktree: repo, Parent: w.Address},
 	} {
 		b, err := h.mgr.Spawn(h.ctx, sp)
 		if err != nil {
@@ -335,6 +336,7 @@ func seeTranscript(from map[string]string) string {
 		user(58, "<task-notification>\n<task-id>bx1</task-id>\n<tool-use-id>t9</tool-use-id>\n<output-file>/tmp/demo/bx1.output</output-file>\n<status>completed</status>\n<summary>Background command \"go test ./...\" completed (exit code 0)</summary>\n</task-notification>"),
 		user(58, "Another Claude session sent a message:\n<agent-message from=\"planner-657\">The plan for #657 is ready.\nRead it in the issue.</agent-message>"),
 		user(58, "<system-reminder>\nThe user hasn't heard from you in a while.\n</system-reminder>"),
+		user(58, "<task-notification>\n<task-id>bx2</task-id>\n<tool-use-id>t10</tool-use-id>\n<output-file>/tmp/demo/bx2.output</output-file>\n<status>failed</status>\n<summary>Background command \"go vet ./...\" failed with exit code 1</summary>\n</task-notification>"),
 		said(59, "b-631 is done: PR `#633` is open and its check passed. b-632 stopped without a report; I asked it to report when the run ends.\n\nNext I review **#633** on its head:\n\n```sh\ngh pr diff 633\n```"),
 		call(60, "t8", "Bash", map[string]any{"command": "gh pr diff 633"}),
 	} {
