@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/app/apptest"
+	"github.com/contursofran/contr/internal/app/theme"
 )
 
 // mixed is a team of 4 agents: one blocked (it needs you), one working, one idle, one done.
@@ -147,6 +148,7 @@ func TestTeamRowCarriesTheLiveText(t *testing.T) {
 	if s.has(LabelLive) {
 		t.Errorf("a live text at rest: %v", s.tt.Texts())
 	}
+	s.tt.Advance(2 * theme.MotionSelect) // past the end of the fade of the Chat | Terminal switch (D256)
 	if s.ch.ticks || s.tt.FramePending() {
 		t.Error("the team row asks for a redraw at rest")
 	}
