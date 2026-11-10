@@ -62,22 +62,23 @@ func sameKinds(a, b []RowKind) bool {
 func TestGrouping(t *testing.T) {
 	var m Model
 	apply(t, &m, &transcript.Reader{}, lPrompt, lHook, lMeta, lThink, lSaid, lCall1, lNote1, lCall2, lNote2, lSaid2, lSide)
-	want := []RowKind{RowPrompt, RowSaid, RowGroup, RowOwnerNote, RowSaid}
+	// A worker that ended its turn without a report folds too (D259).
+	want := []RowKind{RowPrompt, RowSaid, RowGroup, RowSaid}
 	if got := kinds(&m); !sameKinds(got, want) {
 		t.Fatalf("rows = %v, want %v", got, want)
 	}
 	g := m.Rows()[2]
-	if len(g.Calls) != 2 || len(g.Notes) != 1 || GroupText(len(g.Notes), 0, len(g.Calls)) != "1 worker note · 2 tool calls" {
+	if len(g.Calls) != 2 || len(g.Notes) != 2 || GroupText(len(g.Notes), 0, len(g.Calls)) != "2 worker notes · 2 tool calls" {
 		t.Errorf("group = %+v", g)
 	}
-	if s := m.Senders(g); len(s) != 1 || s[0] != "w2:t1" {
+	if s := m.Senders(g); len(s) != 2 || s[0] != "w2:t1" || s[1] != "w2:t2" {
 		t.Errorf("senders = %v", s)
 	}
 	if !m.Running(g) {
 		t.Error("calls without a result: the group must run")
 	}
-	if e := m.Entry(m.Rows()[3].Entry); e.Note == nil || e.Note.Name != "b-632" {
-		t.Errorf("owner note = %+v", e)
+	if e := m.Entry(g.Notes[1]); e.Note == nil || e.Note.Name != "b-632" {
+		t.Errorf("folded note = %+v", e)
 	}
 }
 
@@ -182,17 +183,11 @@ func TestNeedsOwner(t *testing.T) {
 	note := func(kind transcript.NoteKind, text string) transcript.Entry {
 		return transcript.Entry{Kind: transcript.Note, Text: text, Note: &transcript.KitNote{Kind: kind, Name: "b-1"}}
 	}
-	for text, want := range map[string]bool{
-		"ended its turn without a report. Last words: x": true,
-		"b-1: blocked, waits on a permission":            true,
-		"blocked: permission":                            true,
-		"b-1: done, PR #3":                               false,
-		"ended its turn; it may have sent a report":      false,
-		"the board is not blocked":                       false,
-		"b-1 says: blocked":                              false,
-	} {
-		if got := NeedsOwner(note(transcript.NoteMessage, text)); got != want {
-			t.Errorf("NeedsOwner(%q) = %v, want %v", text, got, want)
+	// A worker's message folds, whatever it says (D259).
+	for _, text := range []string{"ended its turn without a report. Last words: x", "b-1: blocked, waits on a permission",
+		"blocked: permission", "b-1: done, PR #3"} {
+		if NeedsOwner(note(transcript.NoteMessage, text)) {
+			t.Errorf("NeedsOwner(%q) = true: a worker note stays outside the fold", text)
 		}
 	}
 	if NeedsOwner(note(transcript.NoteAnswered, "blocked")) {
@@ -209,8 +204,8 @@ func TestNeedsOwner(t *testing.T) {
 	if NeedsOwner(transcript.Entry{Kind: transcript.Note, Text: "blocked", Note: &transcript.KitNote{Kind: transcript.NoteAgent, Name: "x"}}) {
 		t.Error("a message of another session never needs the owner")
 	}
-	if NeedsOwner(transcript.Entry{Kind: transcript.Said, Text: "blocked"}) {
-		t.Error("a text of Claude is no note")
+	if NeedsOwner(transcript.Entry{Kind: transcript.Tool, Text: "failed", Note: &transcript.KitNote{Kind: transcript.NoteTask, Status: "failed"}}) {
+		t.Error("an entry that is no note never needs the owner")
 	}
 }
 

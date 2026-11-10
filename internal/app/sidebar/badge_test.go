@@ -50,6 +50,12 @@ func TestTheOrchestratorRowCountsItsItemsAndThoseOfItsWorkers(t *testing.T) {
 	if !h.tt.HasText("4") {
 		t.Errorf("no badge number; texts %q", h.tt.Texts())
 	}
+	// The chat's team row reads the same numbers (D259).
+	for addr, want := range map[string]int{"lead": 2, "lead2": 4, "b-300": 0, "nobody": 0, "": 0} {
+		if got := h.list.ItemsOf(addr); got != want {
+			t.Errorf("ItemsOf(%q) = %d, want %d", addr, got, want)
+		}
+	}
 }
 
 func TestTheBadgeShowsOneItemAndGoesAtZero(t *testing.T) {

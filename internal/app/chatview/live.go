@@ -6,7 +6,6 @@ package chatview
 
 import (
 	"strconv"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -157,22 +156,24 @@ func (ch *Chat) digit(id string, st liveState, draft *string) {
 }
 
 // live builds the live line of st. Working: the working glyph, what the agent does now and the
-// time since the turn started, which asks for a redraw each second while it shows (D55). Needs
-// you: the question and its choices, or the fallback with Switch to Terminal. Idle: nothing.
-func (ch *Chat) live(c *ui.Context, st liveState, toTerminal func()) {
+// time since the turn started, which asks for a redraw each second while it shows (D55); while
+// the team row shows (team), that text sits at the row's right end and the line shows nothing.
+// Needs you: the question and its choices, or the fallback with Switch to Terminal. Idle: nothing.
+func (ch *Chat) live(c *ui.Context, st liveState, team bool, toTerminal func()) {
 	pal := theme.Current()
 	switch st.kind {
 	case liveWorking:
+		if team {
+			return
+		}
 		what, start, ok := ch.model.Activity()
+		elapsed := ""
+		if ok {
+			elapsed = ElapsedText(c.Now().Sub(start))
+		}
 		column(c, func() {
 			ui.Row(c).Label(LabelLive + " " + what).FillWidth().Height(lineHeight).AlignItems(ui.Center).Gap(theme.Space8).Children(func() {
-				kit.StatusGlyph(c, kit.GlyphOpts{State: kit.GlyphWorking, Small: true})
-				kit.Styled(ui.Text(c, what), theme.StyleValue).SingleLine().MinWidth(0).TextColor(pal.Ink62)
-				if ok {
-					kit.Styled(ui.Text(c, ElapsedText(c.Now().Sub(start))), theme.StyleValue).NoWrap().Shrink(0).TextColor(pal.Ink38)
-					ch.ticks = true
-					c.After(time.Second)
-				}
+				ch.working(c, pal, what, elapsed)
 			})
 		})
 	case liveNeedsYou:

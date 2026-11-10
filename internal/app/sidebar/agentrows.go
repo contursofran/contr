@@ -205,6 +205,24 @@ func (l *SpacesList) items() []sideItem {
 	return out
 }
 
+// ItemsOf is the number of open items of the orchestrator row at addr: the
+// number of its badge (D240). The chat's team row shows it (D259). 0 when no
+// project lists that orchestrator.
+func (l *SpacesList) ItemsOf(addr string) int {
+	if addr == "" {
+		return 0
+	}
+	s := l.Snapshot()
+	for _, g := range l.groups {
+		for _, a := range agentLines(g, s) {
+			if a.orchestrator && a.w.Address == addr {
+				return a.items
+			}
+		}
+	}
+	return 0
+}
+
 // agentAge is the age of an agent as of now.
 func agentAge(w agents.Worker, now time.Time) string { return AgeText(now, w.LastOutput) }
 
