@@ -3,6 +3,7 @@ package chatview
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -267,13 +268,14 @@ func TestTasksAndAgentMessagesShowAsLines(t *testing.T) {
 	r.savePath(term)
 	r.selectTerm(term)
 	r.chat()
-	r.write(lPrompt, lCall1, lRes1, lTaskOK, lAgent, lNudge, lTaskBad, lSaid2)
-	text := "1 worker note · 1 background task · 1 tool call"
+	anon := `{"type":"user","uuid":"u12","message":{"content":"Another Claude session sent a message:\nrebase please"}}`
+	r.write(lPrompt, lCall1, lRes1, lTaskOK, lAgent, anon, lNudge, lTaskBad, lSaid2)
+	text := "2 worker notes · 1 background task · 1 tool call"
 	if !r.tt.HasText(text) {
 		t.Fatalf("no group %q in %v", text, r.tt.Texts())
 	}
 	// The failed task needs the owner: outside the fold.
-	if apptest.Absent(r.tt, LabelOwnerNote+" "+TextTask) || !r.tt.HasText("failed") || !r.tt.HasText(`· "go vet" failed with exit code 1`) {
+	if apptest.Absent(r.tt, LabelOwnerNote+" "+TextTask) || !slices.Contains(r.tt.Texts(), "failed") || !r.tt.HasText(`· "go vet" failed with exit code 1`) {
 		t.Errorf("no failed task outside the fold: %v", r.tt.Texts())
 	}
 	prompts := 0
@@ -289,12 +291,15 @@ func TestTasksAndAgentMessagesShowAsLines(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.tt.Frame()
-	for _, want := range []string{TextTask, "completed", `· "go test ./..." completed (exit code 0)`, "planner-12", "The plan is ready."} {
+	if !slices.Contains(r.tt.Texts(), "completed") {
+		t.Errorf("no status word of the completed task: %v", r.tt.Texts())
+	}
+	for _, want := range []string{TextTask, `· "go test ./..." completed (exit code 0)`, "planner-12", "The plan is ready.", "session", "rebase please"} {
 		if !r.tt.HasText(want) {
 			t.Errorf("open group: no %q in %v", want, r.tt.Texts())
 		}
 	}
-	if apptest.Absent(r.tt, LabelNote+" "+TextTask) || apptest.Absent(r.tt, LabelNote+" planner-12") {
+	if apptest.Absent(r.tt, LabelNote+" "+TextTask) || apptest.Absent(r.tt, LabelNote+" planner-12") || apptest.Absent(r.tt, LabelNote+" session") {
 		t.Error("no task or agent line in the group")
 	}
 	for _, s := range r.tt.Texts() {
