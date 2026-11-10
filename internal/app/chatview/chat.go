@@ -94,7 +94,10 @@ func (ch *Chat) Toggle(id string) { ch.SetOn(id, !ch.On(id)) }
 // Hide tells that the chat does not show: changes of the file wait until it shows again.
 func (ch *Chat) Hide() { ch.shown = false }
 
-// changed is the source's signal: the path moved or the file changed.
+// changed is the source's signal: the path moved or the file changed. The source asks for no
+// redraw (#660, D257): a change redraws only after its batch is applied, so a transcript that
+// grows while the chat does not show asks for no frame. A reset redraws: the switch may show or
+// go (HasPath), and the chat is empty again.
 func (ch *Chat) changed(reset bool) {
 	if reset {
 		ch.gen++
@@ -102,6 +105,7 @@ func (ch *Chat) changed(reset bool) {
 		ch.reader = transcript.NewReader(0)
 		ch.model.Reset()
 		ch.folds = map[string]*bool{}
+		ch.Env.Redraw()
 	}
 	ch.stale = true
 	ch.pull()
@@ -123,9 +127,16 @@ func (ch *Chat) pull() {
 		return
 	}
 	ch.stale, ch.reading = false, true
-	r, gen := ch.reader, ch.gen
+	r, gen, first := ch.reader, ch.gen, ch.model.Len() == 0
 	ch.Env.Do(func() func() {
 		b, err := r.ReadFile(path)
+		// The first read gives the whole file: its model is made here, off the UI thread (#660).
+		// Only this read changes the model until it lands, and a reset drops it (gen).
+		var m *Model
+		if first {
+			m = &Model{}
+			m.Apply(b)
+		}
 		return func() {
 			if gen != ch.gen {
 				return
@@ -134,7 +145,11 @@ func (ch *Chat) pull() {
 			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				log.Printf("chat: read transcript: %v", err)
 			}
-			ch.model.Apply(b)
+			if m != nil {
+				ch.model = *m
+			} else {
+				ch.model.Apply(b)
+			}
 			ch.Env.Redraw()
 			ch.pull()
 		}

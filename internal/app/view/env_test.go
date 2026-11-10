@@ -59,3 +59,18 @@ func TestEnvCallsItsFunctions(t *testing.T) {
 		t.Fatalf("redraws %d, shown %v, opened %v", redraws, shown, opened)
 	}
 }
+
+func TestEnvPostQuietUsesQuietElsePost(t *testing.T) {
+	var quiet, posted int
+	e := Env{Run: Runner{Post: func(f func()) { posted++; f() }}}
+	ran := 0
+	e.PostQuiet(func() { ran++ })
+	if posted != 1 || ran != 1 {
+		t.Fatalf("without Quiet: posted %d, ran %d; want Post", posted, ran)
+	}
+	e.Quiet = func(f func()) { quiet++; f() }
+	e.PostQuiet(func() { ran++ })
+	if quiet != 1 || posted != 1 || ran != 2 {
+		t.Fatalf("with Quiet: quiet %d, posted %d, ran %d", quiet, posted, ran)
+	}
+}
