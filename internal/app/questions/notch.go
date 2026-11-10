@@ -18,6 +18,7 @@ import (
 
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/shortcut"
 	"github.com/contursofran/contr/internal/app/theme"
 )
 
@@ -73,6 +74,9 @@ type Notch struct {
 	Opened func() bool
 	// Panel builds the card anchored to the notch while it is open; may be nil.
 	Panel func(c *ui.Context, anchor ui.Element, items []agentstate.NeedTab)
+	// Hints shows the key chip of ⌘J at the notch's right end: ⌘ is held
+	// (docs/spec/KeyHints.md). The frame sets it on each frame.
+	Hints bool
 
 	// arrivals tells when the count of the open project goes up (D240).
 	arrivals kit.Arrivals
@@ -206,6 +210,7 @@ func (n *Notch) View(c *ui.Context) {
 			if look.Glow > 0 {
 				notchGlow(c, p, look.Glow)
 			}
+			kit.KeyHint(c, shortcut.Of(shortcut.Questions).HintIf(n.Hints), ui.AnchorBottomRight, ui.AnchorCenter)
 		})
 	})
 }

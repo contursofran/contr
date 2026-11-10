@@ -55,6 +55,8 @@ type AgentRowOpts struct {
 	// icon column (D128). The label, click and menu stay.
 	Compact bool
 	Tip     string
+	// Hint is the key chip at the right end of the row while ⌘ is held (KeyHint). Empty: none.
+	Hint string
 	// Items is the number of open items of an orchestrator: questions, to-dos
 	// and blocked menus of it and its workers. Above 0 a `blocked` badge with
 	// the number shows at the right of line 1, or a dot on the glyph in an icon
@@ -105,6 +107,7 @@ func AgentRow(c *ui.Context, o AgentRowOpts) {
 	// The column takes the width; the margins sit inside it, so they count in
 	// the row's width (D40) and the age at the right is not cut off.
 	ui.Column(c).FillWidth().Shrink(0).Children(func() {
+		defer KeyHint(c, o.Hint, ui.AnchorRight, ui.AnchorRight)
 		if o.Compact {
 			compactAgentButton(c, o)
 			return

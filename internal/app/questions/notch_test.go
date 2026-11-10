@@ -3,6 +3,7 @@ package questions
 import (
 	"context"
 	"path/filepath"
+	"slices"
 	"syscall"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/apptest"
+	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/owner"
 )
@@ -327,5 +329,19 @@ func TestNotchShownFollowsItemsAndTheFileProblem(t *testing.T) {
 	}
 	if (&Notch{}).Shown() {
 		t.Error("a notch without data is Shown")
+	}
+}
+
+func TestNotchShowsTheCmdJChipWhileCmdIsHeld(t *testing.T) {
+	src := &source{Snap: agentstate.Snapshot{Questions: apptest.Questions("a", 1)}}
+	r := newNotchRig(t, src, "a")
+	r.tt.Frame()
+	if _, ok := r.tt.Find(kit.LabelKeyHint); ok {
+		t.Fatal("a chip without Hints")
+	}
+	r.n.Hints = true
+	r.tt.Frame()
+	if _, ok := r.tt.Find(kit.LabelKeyHint); !ok || !slices.Contains(r.tt.Texts(), "J") {
+		t.Errorf("no J chip: %q", r.tt.Texts())
 	}
 }

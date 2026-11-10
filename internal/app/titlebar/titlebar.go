@@ -15,6 +15,7 @@ import (
 	"github.com/contursofran/contr/internal/app/files"
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/shortcut"
 	"github.com/contursofran/contr/internal/app/tabmodel"
 	"github.com/contursofran/contr/internal/app/theme"
 )
@@ -72,6 +73,8 @@ type TitleBar struct {
 	OpenReview func()
 	// Update builds the update pill left of the diff summary (D176). Nil: none.
 	Update func(c *ui.Context)
+	// Hints shows the key chips: ⌘ is held (docs/spec/KeyHints.md).
+	Hints bool
 	// choice is the index the tab list edits; model is the selected tab's index at the last build.
 	choice, model int
 }
@@ -107,7 +110,9 @@ func (b *TitleBar) syncChoice() {
 func (b *TitleBar) Build(c *ui.Context, filesOn, filesDisabled bool, toggleFiles func()) {
 	b.tabRow(c)
 	if b.NewTab != nil {
-		kit.IconButton(c, kit.IconButtonOpts{Icon: "plus", Label: LabelNewTab, Key: "⌘T", OnClick: b.NewTab}).
+		s := shortcut.Of(shortcut.NewTab)
+		kit.IconButton(c, kit.IconButtonOpts{Icon: "plus", Label: LabelNewTab, Key: s.Glyphs(), Hint: s.HintIf(b.Hints),
+			OnClick: b.NewTab}).
 			MarginStart(theme.Space8)
 	}
 	ui.Box(c).Label(LabelTitleDrag).Grow(1).MinWidth(0).FillHeight().DragWindow()
@@ -118,11 +123,13 @@ func (b *TitleBar) Build(c *ui.Context, filesOn, filesDisabled bool, toggleFiles
 		ui.Row(c).Shrink(0).MarginEnd(theme.Space8).Children(func() { b.Diff.View(c, b.OpenReview) })
 	}
 	if b.Search != nil {
-		kit.IconButton(c, kit.IconButtonOpts{Icon: "search", Label: LabelSearch, Key: "⌘F", OnClick: b.Search}).
-			MarginEnd(theme.Space8)
+		s := shortcut.Of(shortcut.Find)
+		kit.IconButton(c, kit.IconButtonOpts{Icon: "search", Label: LabelSearch, Key: s.Glyphs(), Hint: s.HintIf(b.Hints),
+			OnClick: b.Search}).MarginEnd(theme.Space8)
 	}
-	kit.IconButton(c, kit.IconButtonOpts{Icon: "sidebar-right", Label: LabelFilesToggle, Key: "⌘⇧E",
-		On: &filesOn, OnClick: toggleFiles, Disabled: filesDisabled})
+	s := shortcut.Of(shortcut.Files)
+	kit.IconButton(c, kit.IconButtonOpts{Icon: "sidebar-right", Label: LabelFilesToggle, Key: s.Glyphs(),
+		Hint: s.HintIf(b.Hints), On: &filesOn, OnClick: toggleFiles, Disabled: filesDisabled})
 }
 
 // tabRow shows the tabs in model order, space-2 apart. When they do not fit, each tab shrinks
@@ -132,14 +139,25 @@ func (b *TitleBar) tabRow(c *ui.Context) {
 	tabs := ui.TabsBase(c.Key("agent tabs"), &b.choice, len(b.Tabs))
 	tabs.List.Label(LabelTabs).FillHeight().MinWidth(0).Shrink(1).AlignItems(ui.Center).Gap(theme.Space2).Clip().Children(func() {
 		for i, t := range b.Tabs {
-			b.tab(c, tabs.Tab(i), t)
+			b.tab(c, tabs.Tab(i), t, b.tabHint(i))
 		}
 	})
 }
 
+// tabHint is the key chip of tab i while ⌘ is held: its number, or "9" on the last tab past the
+// eighth. "" when the chips do not show or the tab has no key.
+func (b *TitleBar) tabHint(i int) string {
+	s, ok := shortcut.TabShortcut(i, len(b.Tabs))
+	if !ok {
+		return ""
+	}
+	return s.HintIf(b.Hints)
+}
+
 // tab draws one tab: the glyph, the title (SingleLine: NoWrap().Ellipsis() does not cut a title that
-// is wider than the tab, D175) and, on the selected plain terminal, the close button.
-func (b *TitleBar) tab(c *ui.Context, tab ui.Element, t tabmodel.Tab) {
+// is wider than the tab, D175), on the selected plain terminal the close button, and the key chip
+// hint over the left end while ⌘ is held.
+func (b *TitleBar) tab(c *ui.Context, tab ui.Element, t tabmodel.Tab, hint string) {
 	p := theme.Current()
 	el := tab.Label(t.Title).Height(theme.SizeRowHeight).MaxWidth(theme.SizeTabMaxWidth).MinWidth(0).Shrink(1).
 		Padding(0, theme.Space10).Gap(theme.Space8).AlignItems(ui.Center).Radius(theme.Radius8)
@@ -184,6 +202,7 @@ func (b *TitleBar) tab(c *ui.Context, tab ui.Element, t tabmodel.Tab) {
 		if t.Selected && t.Closable() && b.CloseTab != nil {
 			closeButton(c, func() { b.CloseTab(t) })
 		}
+		kit.KeyHint(c, hint, ui.AnchorLeft, ui.AnchorLeft)
 	})
 }
 

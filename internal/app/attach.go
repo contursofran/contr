@@ -294,13 +294,13 @@ func (f *Frame) attachVisibility(w Window, src agentstate.AgentSource) (unwatch 
 // Deps.OpenTerminal and Close Terminal with an agent source. The stop clears all four.
 func (f *Frame) attachMenu(w Window, src agentstate.AgentSource) (stop func()) {
 	if src != nil {
-		setHandler(handlerCloseTerminal, func() { w.Update(f.closeSelectedTerminal) })
+		setHandler(handlerCloseTerminal, func() { w.Update(f.usedKey(f.closeSelectedTerminal)) })
 	}
 	if f.deps.OpenTerminal != nil {
-		setHandler(handlerNewTerminal, func() { w.Update(f.newTerminal) })
+		setHandler(handlerNewTerminal, func() { w.Update(f.usedKey(f.newTerminal)) })
 	}
-	setHandler(handlerSettings, func() { w.Update(f.Settings.Toggle) })
-	setHandler(handlerSidebar, func() { w.Update(f.ToggleSidebar) })
+	setHandler(handlerSettings, func() { w.Update(f.usedKey(f.Settings.Toggle)) })
+	setHandler(handlerSidebar, func() { w.Update(f.usedKey(f.ToggleSidebar)) })
 	return func() {
 		setHandler(handlerNewTerminal, nil)
 		setHandler(handlerSidebar, nil)
