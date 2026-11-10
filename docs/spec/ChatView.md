@@ -3,7 +3,8 @@
 The Chat mode of the terminal panel for a Claude Code session (D246). It
 shows the session from its transcript (D242) in the place of the terminal
 grid, with a composer that types into the session's own terminal and a live
-line that shows what the agent does (D252). The overlays (notch, pill,
+line that shows what the agent does (D252). While the session orchestrates,
+a team row takes the live line's place (D259). The overlays (notch, pill,
 outline) stay above it.
 
 Design system page: none yet; the mockups C1 (base), C2a (lines of an open
@@ -25,11 +26,13 @@ Shared rules: [README.md](README.md).
 
 | Region | Value |
 |---|---|
-| Transcript |  `ui.List` with `FollowEnd`: it follows the end while the owner is at the end. Rows `space-18` apart, padding 44px above (the switch row), `space-20` at the sides, `space-12` below; rows that do not fill it sit at the bottom. The pending prompts come after the rows. |
-| Column | the prose (prompts, Claude's text, notes, the fold rows, the live line and the composer), at most 920px wide, centered in the content width: the panel less `space-20` at each side |
+| Transcript |  `ui.List` with `FollowEnd`: it follows the end while the owner is at the end. Rows `space-18` apart, padding 44px above (the switch row), `space-20` at the sides, 32px below (the fade's height, so the fade covers no entry, D259); rows that do not fill it sit at the bottom. The pending prompts come after the rows. |
+| Fade | a gradient 32px high over the bottom edge of the transcript, from the stage at 0 opacity to the stage as it shows (`StageBase`, D250); it takes no click (D259) |
+| Column | the prose (prompts, Claude's text, notes, the fold rows, the live line, the team row and the composer), at most 920px wide, centered in the content width: the panel less `space-20` at each side |
 | Wide block | a table, a code block or the card of an open work group: as wide as its content, at least the column and at most the content width, centered. A block that fits in 920px stays in the column, its left edge on the column's left edge; in a panel not wider than 920px and the insets, the column is the content width. Claude's text is cut into runs of prose and these blocks, each cut at the start of a line. |
 | Live line | under the transcript, above the composer, `space-12` apart, padding `space-20` at the sides; see [Live line](#live-line) |
-| Composer | under the live line, `space-14` below; see [Composer](#composer) |
+| Team row | while the session orchestrates: in the live line's place, above the composer; see [Team row](#team-row) |
+| Composer | under the live line or the team row, `space-14` below; see [Composer](#composer) |
 | Empty | "No transcript yet" (`body`, `ink-42`), centered, while the session has no path, no file or no row yet. The switch and the composer still work. |
 
 ## Rows
@@ -42,10 +45,10 @@ Shared rules: [README.md](README.md).
 | Work group, folded | the tool calls, kit notes and background tasks between two texts, as one row 20px high, mono `value`, `ink-42` (`ink-62` on hover): "2 worker notes · 1 background task · 6 tool calls" (a message of another session counts as a worker note; a part with no item is left out, "1 tool call"), a 6px dot for each worker that sent a note, then `›`. While a call has no result, a working StatusGlyph (14px) comes first. |
 | Work group, open | `⌄`; under it a card, a wide block: at least 584px (or the content width when less), as wide as its longest line (note, task and call lines alike), up to the content width, `space-6` below the row, padding `8px 12px`, radius `radius-9`, line `hairline`: the note lines, a `hairline` rule, the call lines |
 | Note line | 20px, gap `space-8`, mono `meta`: the sender's dot, the name (500, `ink-85`), the text on one line (`ink-42`). An owner answer or done mark has the name "owner". A message of another Claude session or a teammate (D254) has the sender as its name ("session" when it has none) and the first line of the message; a subagent's hand-back is "subagent" and "reported". |
-| Task line | a background task that ended (D254), as a note line without a dot: "Background task" (500, `ink-85`), its status (`ink-42` for "completed", else `blocked`), then "· " and its summary on one line (`ink-42`), without a leading "Background command " |
+| Task line | a background task that ended (D254), as a note line without a dot: "Background task" (500, `ink-85`), its status (`ink-42`), then "· " and its summary on one line (`ink-42`), without a leading "Background command " |
 | Call line | 20px, gap `space-8`, mono `meta`: a working StatusGlyph while it runs, the name (`ink-62`, at least 48px; an MCP tool shows its server, "contr"), the summary on one line (`ink-42`), "error" in `blocked` when the result is an error, the duration (`ink-38`): "0.4s", "12s", "2m 5s", from the timestamps of the call and its result, none when one is missing |
-| Note for the owner | outside the fold, as a note line with a `blocked` dot, the name in `ink-100` and the text in `ink-85`: an hc message of a worker that "ended its turn without a report", or that says it is blocked ("NAME: blocked, …", "blocked …"); and a task line whose status is "failed" or "killed" |
-| Dot | 6px, round: `blocked` for a blocked worker, `ink-85` for a working one, else `ink-40` |
+| Failed task | a task line whose status is "failed" or "killed" stays outside the fold: no dot, "Background task" and the status in `ink-100`, the summary in `ink-85`; no red (D259). Every other note folds, a worker's message too ("ended its turn without a report", "NAME: blocked, …"): the team row and the notch tell what needs the owner. |
+| Dot | 6px, round: `ink-100` for a blocked worker (no red: the team row's "N needs you" is the chat's one red for it, D259), `ink-85` for a working one, else `ink-40` |
 
 Hidden entries do not show: meta lines, system reminders, hook output (an
 attachment, a user line in a `<…-hook>` tag, or "Stop hook feedback:"),
@@ -98,6 +101,28 @@ hasn't heard from you…" nudges, and a user line that is all inside one
 
 The time asks for a redraw each second only while the agent works, the
 chat shows and the turn has a time (D55). Idle, nothing is asked.
+
+While the session orchestrates, the working line shows at the right end of
+the team row and not as a line of its own; the needs-you line stays, above
+the team row.
+
+## Team row
+
+One row, 20px high (the live line's height), in the column, above the
+composer, while the selected session runs and orchestrates (D191, the
+orchestrate pill's rule). Not orchestrating: no row; the live line shows
+alone. No hover fill, no chips, nothing opens (D259).
+
+| Part | Value |
+|---|---|
+| Mascot | the still Claude glyph (14px) in its orchestrating color, as the [OrchestratePill](OrchestratePill.md) has it |
+| Head | `space-8` after the mascot: "Orchestrating · 4 agents", "Orchestrating · 1 agent", "Orchestrating" with no agent; `label`, `ink-85`. The agents are the workers the session started that hc still lists, ended ones too. |
+| Count | `space-14` after the head, mono `value`, `ink-45`, the parts `space-6` apart with a "·" between: "1 needs you · 2 working · 1 idle · 1 done". In this order; a part with no agent is left out. "N needs you" ("1 needs you", "2 need you", as the notch) is the number of the orchestrator row's badge (D240): the questions, to-dos and blocked menus of the session and its workers. It is in `blocked-text`, the one red of the row, and a click on it opens the notch's card as ⌘J does; the rest of the row takes no click. A blocked worker counts only there; "working" is a live worker that works, "idle" any other live worker, "done" an ended one. |
+| Live text | at the right end, `space-14` after the count, while the session works: the working line's glyph, what it does and its time ([Live line](#live-line)) |
+| Narrow | the row clips from the right: first the live text's words shorten (`…`), then the count drops its last parts; the mascot, the head and the live text's glyph and time stay |
+
+The row redraws when the agent state changes; it has no timer of its own.
+Only the live text's time ticks, as the live line's does (D55, D257).
 
 ## Behavior
 

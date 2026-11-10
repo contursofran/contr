@@ -22,6 +22,8 @@ func (f *Frame) attachChat(env view.Env, src agentstate.AgentSource) (stop func(
 	f.Chat = chatview.New(env, f.Session.StateDir, nil)
 	f.Chat.Worker = f.agentAt
 	f.Chat.Meta = f.chatMeta
+	f.Chat.Team = f.chatTeam
+	f.Chat.OpenNeeds = f.openNeeds
 	if src != nil {
 		f.Chat.Send, f.Chat.Interrupt, f.Chat.Read, f.Chat.SendKeys = src.Send, src.Interrupt, src.Read, src.SendKeys
 	}
@@ -43,6 +45,54 @@ func (f *Frame) chatMeta(addr string) string {
 		parts = append(parts, c.Used())
 	}
 	return strings.Join(parts, " · ")
+}
+
+// chatTeam is the team of the orchestrator at addr for the chat's team row (D259), from the agent
+// state: ok only while it runs and orchestrates (D191, the pill's rule). Its agents are the workers
+// it started that hc still lists: an ended one is done, a working one working, a blocked one only
+// in NeedsYou (its menu is an item), any other idle. NeedsYou is the badge of its sidebar row (D240).
+func (f *Frame) chatTeam(addr string) (chatview.Team, bool) {
+	snap := f.snapshot()
+	var o agents.Worker
+	found := false
+	for _, w := range snap.Orchestrators {
+		if w.Address == addr && w.Live {
+			o, found = w, true
+			break
+		}
+	}
+	if addr == "" || !found || !snap.Orchestrating(o) {
+		return chatview.Team{}, false
+	}
+	var t chatview.Team
+	for _, w := range snap.Workers {
+		if w.Parent != addr {
+			continue
+		}
+		t.Agents++
+		switch {
+		case !w.Live:
+			t.Done++
+		case w.Status == "working":
+			t.Working++
+		case w.Status == "blocked":
+		default:
+			t.Idle++
+		}
+	}
+	if f.SpacesList != nil {
+		t.NeedsYou = f.SpacesList.ItemsOf(addr)
+	}
+	return t, true
+}
+
+// openNeeds opens the notch's card as ⌘J does: the click on "N needs you" of the team row. An
+// open card stays open.
+func (f *Frame) openNeeds() {
+	if f.Notch == nil || (f.Notch.Opened != nil && f.Notch.Opened()) {
+		return
+	}
+	f.Notch.Toggle()
 }
 
 // syncChat points the chat view at the selected terminal.

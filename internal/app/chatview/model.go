@@ -23,8 +23,8 @@ const (
 	// RowGroup is the work between two texts: tool calls, kit notes and background tasks, folded
 	// into one row.
 	RowGroup
-	// RowOwnerNote is a kit note or a background task that needs the owner (NeedsOwner). It shows
-	// outside the fold.
+	// RowOwnerNote is a background task that failed or was killed (NeedsOwner). It shows outside
+	// the fold.
 	RowOwnerNote
 )
 
@@ -270,25 +270,12 @@ func containsString(ss []string, s string) bool {
 	return false
 }
 
-// NeedsOwner tells that a kit note needs the owner: an hc message of a worker that ended its turn
-// without a report, or that says the worker is blocked ("NAME: blocked, …", the kit's report
-// line, or a text that starts with "blocked"), or a background task that failed or was killed.
+// NeedsOwner tells that a note stays outside the fold: a background task that failed or was
+// killed. Every other note, a worker's message too ("ended its turn without a report",
+// "NAME: blocked, …"), folds into its work group: the team row and the notch tell what needs the
+// owner (D259).
 func NeedsOwner(e transcript.Entry) bool {
-	if e.Kind != transcript.Note || e.Note == nil {
-		return false
-	}
-	if e.Note.Kind == transcript.NoteTask {
-		return TaskFailed(e.Note.Status)
-	}
-	if e.Note.Kind != transcript.NoteMessage {
-		return false
-	}
-	s := strings.ToLower(strings.TrimSpace(e.Text))
-	if strings.HasPrefix(s, "ended its turn without a report") || firstWord(s) == "blocked" {
-		return true
-	}
-	who, rest, ok := strings.Cut(s, ":")
-	return ok && !strings.Contains(who, " ") && firstWord(rest) == "blocked"
+	return e.Kind == transcript.Note && e.Note != nil && e.Note.Kind == transcript.NoteTask && TaskFailed(e.Note.Status)
 }
 
 // TaskFailed tells a background task's status that needs the owner: "failed" or "killed".
@@ -316,12 +303,6 @@ func (m *Model) Counts(g Row) (notes, tasks int) {
 		}
 	}
 	return notes, tasks
-}
-
-// firstWord is the first word of s without the marks after it.
-func firstWord(s string) string {
-	w, _, _ := strings.Cut(strings.TrimSpace(s), " ")
-	return strings.TrimRight(w, ",.;:")
 }
 
 // GroupText is the text of a folded work group: "3 worker notes · 1 background task · 6 tool

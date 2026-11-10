@@ -117,6 +117,8 @@ func newHarness(t *testing.T) *harness {
 	cfg.Profiles["claude-idle"] = agents.Profile{Argv: []string{claude, "idle"}}
 	cfg.Profiles["claude-working"] = agents.Profile{Argv: []string{claude, "working"}}
 	cfg.Profiles["claude-blocked"] = agents.Profile{Argv: []string{claude, "blocked:kind=permission:msg=Allow%20rm"}}
+	// ended exits at once: hc keeps listing its terminal, as a worker that is done.
+	cfg.Profiles["ended"] = agents.Profile{Argv: []string{"sh", "-c", "echo done"}}
 	h.mgr = agents.New(agents.HC{Client: cl}, cfg)
 	return h
 }

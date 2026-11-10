@@ -9,6 +9,7 @@ import (
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/apptest"
+	"github.com/contursofran/contr/internal/app/chatview"
 	"github.com/contursofran/contr/internal/app/questions"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/theme"
@@ -121,5 +122,50 @@ func TestFrameTellsTheOutlineWhichTerminalHasTheFocus(t *testing.T) {
 	w.blur()
 	if f.Outline.Focused() != "" {
 		t.Errorf("blur: the outline has %q", f.Outline.Focused())
+	}
+}
+
+// The chat's team row (D259): the team of a running orchestrator by the state of its workers,
+// with the badge of its sidebar row; a click on "N needs you" opens the card as ⌘J and leaves an
+// open card open.
+func TestFrameChatTeam(t *testing.T) {
+	f, tt, src := notchFrame(t)
+	if _, ok := f.chatTeam("oa"); ok {
+		t.Error("an orchestrator with no worker and no /contr:orchestrate has a team")
+	}
+	src.Snap.Workers = append(src.Snap.Workers,
+		agents.Worker{Name: "b-1", Address: "w1", Parent: "oa", Status: "working", Live: true},
+		agents.Worker{Name: "b-2", Address: "w2", Parent: "oa", Status: "blocked", Live: true},
+		agents.Worker{Name: "b-3", Address: "w3", Parent: "oa", Status: "idle", Live: true},
+		agents.Worker{Name: "b-4", Address: "w4", Parent: "oa", Status: "error", Live: true},
+		agents.Worker{Name: "b-5", Address: "w5", Parent: "oa"},
+		agents.Worker{Name: "b-6", Address: "w6", Parent: "ob", Status: "working", Live: true})
+	f.syncAgents()
+	got, ok := f.chatTeam("oa")
+	// NeedsYou is the badge of the sidebar row (TestTheOrchestratorRowCountsItsItemsAndThoseOfItsWorkers
+	// checks ItemsOf); this frame scans no repository, so no row lists oa and the badge is 0.
+	want := chatview.Team{Agents: 5, Working: 1, Idle: 2, Done: 1, NeedsYou: f.SpacesList.ItemsOf("oa")}
+	if !ok || got != want {
+		t.Errorf("chatTeam(oa) = %+v, %v; want %+v", got, ok, want)
+	}
+	for _, addr := range []string{"", "wa", "w1", "nobody"} {
+		if _, ok := f.chatTeam(addr); ok {
+			t.Errorf("%q is no orchestrator, yet it has a team", addr)
+		}
+	}
+	src.Snap.Orchestrators[0].Live = false
+	f.syncAgents()
+	if _, ok := f.chatTeam("oa"); ok {
+		t.Error("an orchestrator that ended has a team")
+	}
+	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "wa"})
+	tt.Frame()
+	f.openNeeds()
+	if !f.Card.IsOpen() || f.Card.Key() != "D1" {
+		t.Fatalf("openNeeds: card key %q open=%v, want D1", f.Card.Key(), f.Card.IsOpen())
+	}
+	f.openNeeds()
+	if !f.Card.IsOpen() {
+		t.Error("a second click closed the card")
 	}
 }
