@@ -133,8 +133,8 @@ func TestTerminalLinesUseTheirTokens(t *testing.T) {
 		}
 		theme.Follow(&fakeTheme{dark: p.Dark}, &fakeWindow{}, src).Stop()
 		f, w, _, _ := terminalFrame(t, nil)
-		if _, c, ok := f.terminalLine(); !ok || c != p.Ink42 {
-			t.Errorf("dark=%v: empty text colour %v, want ink-42 %v", p.Dark, c, p.Ink42)
+		if line, _, ok := f.terminalLine(); ok {
+			t.Errorf("dark=%v: the empty terminal has the line %q, want none (emptyTerminal draws it)", p.Dark, line)
 		}
 		f.termErr = "terminal unavailable: x"
 		if _, c, _ := f.terminalLine(); c != p.Ink42 {

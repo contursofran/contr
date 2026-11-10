@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/chatview"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/session"
@@ -99,5 +100,22 @@ func TestFrameTestsUseAScratchStateDir(t *testing.T) {
 	home, _ := os.UserHomeDir()
 	if dir := statedir.Dir(); dir == "" || (home != "" && strings.HasPrefix(dir, home)) {
 		t.Errorf("state dir %q is not a scratch folder", dir)
+	}
+}
+
+// Chat mode shows no hands drawing, and the empty terminal shows no chat (D246, D247).
+func TestFrameChatAndTheEmptyTerminalExcludeEachOther(t *testing.T) {
+	r := attachCounting(t)
+	r.pick(t, state.KindOrchestrator, "oa")
+	r.f.Chat.SetOn("oa", true)
+	r.tt.Frame()
+	if !r.tt.HasText(chatview.TextDock) || !apptest.Absent(r.tt, LabelTerminalArt) {
+		t.Errorf("chat mode: dock %v, art absent %v", r.tt.HasText(chatview.TextDock), apptest.Absent(r.tt, LabelTerminalArt))
+	}
+	r.f.Selection.Clear()
+	r.w.flush()
+	r.tt.Frame()
+	if r.tt.HasText(chatview.TextDock) || r.tt.HasText(chatview.TextChat) || apptest.Absent(r.tt, LabelTerminalArt) {
+		t.Errorf("empty terminal: texts %v", r.tt.Texts())
 	}
 }
