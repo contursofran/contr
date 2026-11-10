@@ -220,6 +220,34 @@ func TestChipClicksOpenTheirSource(t *testing.T) {
 	}
 }
 
+// A chip inside a block that the Block hook builds (a table cell, a header cell, a remark, a list
+// item) shows its icon and opens its source, as in prose (D261, D262).
+func TestChipsWorkInsideContentBlocks(t *testing.T) {
+	s := newSession(t, "idle")
+	fc := knownChips()
+	fc.known["668"] = Chip{Kind: ChipPR, State: StateOpen}
+	fc.known["b-665"] = Chip{Kind: ChipWorker, State: StateWorking}
+	s.ch.Chips = fc
+	s.write(lPrompt, said("c1", "| PR #668 | Worker |\n|---|---|\n| #667 | text |\n\n"+
+		"> [!DONE]\n> b-649 is done.\n\n1. my_file.go\n2. b-665\n"))
+	s.tt.SetSize(1000, 1400)
+	s.tt.Frame()
+	for _, name := range []string{"#668", "#667", "b-649", "my_file.go", "b-665"} {
+		// On the chip's text: a link that is all its paragraph is as wide as its box, and its
+		// center can be past the text.
+		r, ok := s.tt.Find(iconMark + name)
+		if !ok {
+			t.Fatalf("no chip %s in %v", name, s.tt.Texts())
+		}
+		s.tt.ClickAt(r.X+12, r.Y+r.H/2)
+		s.tt.Frame()
+	}
+	want := []string{term + " 1 668", term + " 1 667", term + " 3 b-649", term + " 4 my_file.go", term + " 3 b-665"}
+	if !slices.Equal(fc.opened, want) {
+		t.Errorf("opened %q, want %q", fc.opened, want)
+	}
+}
+
 func TestOpenLinkScrollsToAHeadingAndIgnoresOtherSchemes(t *testing.T) {
 	ch := New(view.Env{}, t.TempDir(), nil)
 	ch.openLink("#install")

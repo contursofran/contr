@@ -56,6 +56,9 @@ type Chat struct {
 	chat map[string]bool
 	list ui.ListState
 	md   markdown.Options
+	// mdNest shows the Markdown of a remark's text and a list item, mdHead a table's header cell
+	// and mdNum a cell of a number column (content.go).
+	mdNest, mdHead, mdNum markdown.Options
 	// folds holds the open work groups by row id.
 	folds map[string]*bool
 
@@ -87,6 +90,7 @@ func New(env view.Env, stateDir string, watch func(path string, notify func()) (
 		chips: map[string]*chipPart{}}
 	ch.md.LinkIcon, ch.md.OnLink = chipIcon, ch.openLink
 	ch.src = &chatsource.Source{StateDir: stateDir, Env: env, Watch: watch, Changed: ch.changed}
+	ch.mdHooks()
 	ch.list.FollowEnd = true
 	ch.list.Key = func(i int) any {
 		if i < len(ch.model.rows) {

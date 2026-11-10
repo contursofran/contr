@@ -135,7 +135,8 @@ Add packages under `internal/` when a change needs them.
   parts the specs do not cover. Views use token names only, never a color
   value, so each theme works (D119). Sans for interface text, mono for
   values and the terminal; greys (inks) with `ink-100` only for what is
-  selected or needs the owner; hues only `blocked` and `claude`.
+  selected or needs the owner; hues only `blocked` and `claude`, and the
+  content palette only in what Claude writes in the chat (D261).
 - Build views from `internal/app/kit` and MyGo's components (`ui.List`,
   `ui.Segmented`, `editor.DiffView`, `Text.NoWrap().Ellipsis`); do not build
   rows, clipping, scroll lists or code views by hand again.

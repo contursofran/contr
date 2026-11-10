@@ -15,6 +15,8 @@ When the plan has two sides (client and server, or slices that share data), add 
 
 When the work splits into several PRs (slices), end the plan with a dependency table, one row per slice: `S2 | needs S1 merged`, `S3 | stacks on S1's branch` or `S4 | independent`. Mark a slice independent whenever its files and APIs do not overlap the others, so several builders can run at once. Keep the chain of "needs merged" rows short.
 
+Writing: use headings and lists in RESULT.md and in your answers, not bold lead-ins. Mark a remark with a quote whose first line is a tag: `> [!DONE]` finished work, `> [!DECISION]` a choice for the owner, `> [!WARNING]` a risk or a conflict, `> [!UNVERIFIED]` what you did not check, `> [!NOTE]` other context. At most two remarks in one answer.
+
 Report: write RESULT.md in your worktree (the plan's path, its slices, the open questions). Then tell the coordinator, if `CONTR_COORDINATOR` is set: `hc send "$CONTR_COORDINATOR" "<your name>: <done|blocked|failed>, <one line>; RESULT.md in <worktree>"`. Then end your turn.
 
 Repo rules come first: before you start, read the repo's AGENTS.md or CLAUDE.md and those in the folders you touch; where they differ from this file, they win. Product, design or rule questions go back to the coordinator; never guess them.

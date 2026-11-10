@@ -20,7 +20,7 @@ Contrast numbers are for Dark unless they say Light. "On glass" is on `glass-win
 | `panel-line` | `rgba(255,255,255,0.08)` | `rgba(0,0,0,0.06)` | 1px border of the stage. The wings have no border (D250). |
 | `window-line` | `rgba(255,255,255,0.09)` | `rgba(0,0,0,0.1)` | 1px border of the window. |
 | `float-line` | `rgba(255,255,255,0.075)` | `rgba(0,0,0,0.08)` | 1px border of floating glass (notch: no top border). |
-| `hairline` | `rgba(255,255,255,0.06)` | `rgba(0,0,0,0.07)` | Lines inside floating cards and modals. The wings and the file tree draw none (D258). |
+| `hairline` | `rgba(255,255,255,0.06)` | `rgba(0,0,0,0.07)` | Lines inside floating cards and modals, and the row lines of a table in the chat (D261). The wings and the file tree draw none (D258). |
 | `rail` | `rgba(255,255,255,0.07)` | `rgba(0,0,0,0.08)` | Not drawn since D258 (worker rows are indented, no rail). Kept for a later cleanup of the tokens. |
 | `hover` | `rgba(255,255,255,0.045)` | `rgba(0,0,0,0.04)` | Hover fill of rows, tabs, file rows and answer options; the fill of the picked option. |
 | `hover-strong` | `rgba(255,255,255,0.06)` | `rgba(0,0,0,0.055)` | Hover fill of icon buttons. |
@@ -55,11 +55,23 @@ Contrast numbers are for Dark unless they say Light. "On glass" is on `glass-win
 | `claude` | `#d97757` | `#c15f3c` | Stroke of the Claude agent glyph (orchestrators) while it works or idles. 6.0:1 on glass. Light: #c15f3c, 3.7:1 on glass (#d97757 is only 2.9:1 on light). |
 | `focus-ring` | `rgba(255,255,255,0.5)` | `rgba(0,0,0,0.45)` | The 1px keyboard focus ring of every button, 2px outside it. |
 | `lights` | `rgba(255,255,255,0.14)` | `rgba(0,0,0,0.14)` | Previews only: the traffic-light stand-ins. macOS draws the real ones. |
-| `content-done` | `#7fb88a` | `#1f7a3d` | Content palette (D262), for the chat's content only and only as a 6px dot: a PR whose checks passed or that merged, a worker that is done. Dark 8.6:1 on stage; Light 5.3:1. |
-| `content-running` | `#7aa7e6` | `#1f5fbf` | Content palette: a PR whose checks run, a worker that works. Dark 7.9:1 on stage; Light 5.9:1. |
-| `content-waiting` | `#d9b36a` | `#8a5a00` | Content palette: a worker that waits (idle). Dark 9.8:1 on stage; Light 5.7:1. |
-| `content-failed` | `#f07178` | `#c73947` | Content palette: a PR whose checks failed, a worker that needs the owner. The value of `blocked`. Dark 6.6:1 on stage; Light 4.9:1. |
-| `content-info` | `rgba(255,255,255,0.64)` | `rgba(0,0,0,0.7)` | Content palette, no hue: an open PR with no checks, a closed PR. |
+
+### Content
+
+The content palette (D261) colors what Claude writes in the chat, never the chrome. A content color shows only as a dot, a word, a 2px bar or a 1px line: never a fill and never a row. Diff lines are the one exception: a line added or removed in a diff block has a tint of its color (`DiffTint`, the color at 9% alpha). Each color has 4.5:1 as text on the stage; the code colors on a code block (`hover` over the stage); `content-done` and `content-failed` also on their diff tint. The Light values of the canvas board were estimates: `content-done` is #1e763b, not #1f7a3d (4.3:1 on its tint), and `content-failed` is `blocked-text`, not `blocked` (4.1:1 on its tint).
+
+| Token | Dark | Light | Use |
+|---|---|---|---|
+| `content-done` | `#7fb88a` | `#1e763b` | Done, merged, passed: the Done remark, added diff lines, the dot of a chip whose PR passed or merged or whose worker is done (D262). Dark 8.4:1 on stage, 6.7:1 on its tint; Light 5.6:1 and 4.5:1. |
+| `content-running` | `#7aa7e6` | `#1f5fbf` | Work in progress: the dot of a chip whose PR checks run or whose worker works (D262). Dark 7.9:1, Light 6.0:1 on stage. |
+| `content-waiting` | `#d9b36a` | `#8a5a00` | Waits, at risk: the Warning remark, the dot of a chip whose worker waits (D262). Dark 9.8:1, Light 5.8:1 on stage. |
+| `content-failed` | `#f07178` | `#b1333f` | Failed, needs the owner: the Decision needed remark, removed diff lines, the dot of a chip whose PR failed or whose worker needs the owner (D262). The chrome's red text (`blocked-text`). Dark 6.8:1 on stage, 5.6:1 on its tint; Light 6.0:1 and 4.9:1. |
+| `content-info` | `rgba(255,255,255,0.64)` | `rgba(0,0,0,0.7)` | Neutral remarks: Note, Not verified; hunk lines of a diff; the dot of a chip whose PR is open with no checks or closed (D262). Dark 8.2:1, Light 8.6:1 on stage. |
+| `code-keyword` | `#b79ce6` | `#8250df` | Keywords in code blocks. Dark 7.6:1, Light 4.5:1 on a code block. |
+| `code-function` | `#86b4ee` | `#1f5fbf` | Functions, types, tags. Dark 8.3:1, Light 5.5:1 on a code block. |
+| `code-string` | `#9cc58f` | `#1e763b` | Strings, escapes, regular expressions. Dark 9.2:1, Light 5.1:1 on a code block. |
+| `code-number` | `#e0b36a` | `#8a5a00` | Numbers and constants. Dark 9.2:1, Light 5.3:1 on a code block. |
+| `code-comment` | `rgba(255,255,255,0.48)` | `rgba(0,0,0,0.586)` | Comments, in italic. Dark 4.9:1, Light 5.3:1 on a code block. |
 
 ## ANSI
 
