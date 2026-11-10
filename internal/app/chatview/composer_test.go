@@ -223,7 +223,7 @@ func TestLiveLineWorking(t *testing.T) {
 	// With Reduce Motion the glyph stands still, so only the line's own redraw moves the time.
 	s.tt.SetPreferences(ui.Preferences{ReduceMotion: true})
 	s.tt.Frame()
-	if !s.tt.FramePending() {
+	if !s.ch.ticks {
 		t.Error("a working agent with a turn time asks for no redraw")
 	}
 	s.tt.Advance(1100 * time.Millisecond)
@@ -245,7 +245,7 @@ func TestLiveLineWorking(t *testing.T) {
 			t.Errorf("a turn without time shows %q", x)
 		}
 	}
-	if s.tt.FramePending() {
+	if s.ch.ticks {
 		t.Error("a turn without time asks for a redraw")
 	}
 }
@@ -258,7 +258,7 @@ func TestIdleHasNoLineAndNoRedraw(t *testing.T) {
 	if s.has(LabelLive) {
 		t.Errorf("a live line while idle: %v", s.tt.Texts())
 	}
-	if s.tt.FramePending() {
+	if s.ch.ticks || s.tt.FramePending() {
 		t.Error("a redraw is asked while idle")
 	}
 }

@@ -170,6 +170,7 @@ func (ch *Chat) live(c *ui.Context, st liveState, toTerminal func()) {
 				kit.Styled(ui.Text(c, what), theme.StyleValue).SingleLine().MinWidth(0).TextColor(pal.Ink62)
 				if ok {
 					kit.Styled(ui.Text(c, ElapsedText(c.Now().Sub(start))), theme.StyleValue).NoWrap().Shrink(0).TextColor(pal.Ink38)
+					ch.ticks = true
 					c.After(time.Second)
 				}
 			})

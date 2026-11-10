@@ -78,6 +78,7 @@ func (ch *Chat) Switch(c *ui.Context, id string) {
 func (ch *Chat) View(c *ui.Context, toTerminal func()) {
 	ch.show()
 	ch.toTerm = toTerminal
+	ch.ticks = false
 	pal := theme.Current()
 	ch.mdTheme(pal)
 	id := ch.src.Terminal()

@@ -68,6 +68,8 @@ type Chat struct {
 	partsOf map[string]string
 	// field is the composer's field, which takes the focus back after a click on a button.
 	field ui.Handle
+	// ticks is set while the last View asked for a redraw in a second: the live line's time.
+	ticks bool
 	// toTerm is the toTerminal of the last View.
 	toTerm func()
 	// menu is the menu of the session that needs the owner (live.go).
