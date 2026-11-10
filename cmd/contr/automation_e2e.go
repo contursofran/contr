@@ -14,7 +14,13 @@ import (
 // CONTR_E2E_WIDTH opens the window at that width, and lets it be that narrow,
 // so a test can capture the icon column of the sidebar (D128). The automation
 // plugin cannot resize a window. Release builds do not read it.
+//
+// CONTR_E2E_PICK_FOLDER is the folder that `+ new` gets in place of the system
+// dialog, which a test cannot drive (D233).
 func init() {
+	if d := os.Getenv("CONTR_E2E_PICK_FOLDER"); d != "" {
+		folderPicker = func() (string, error) { return d, nil }
+	}
 	if w, err := strconv.Atoi(os.Getenv("CONTR_E2E_WIDTH")); err == nil && w > 0 {
 		windowWidth, minWidth, fillScreen = w, min(w, minWidth), false
 	}

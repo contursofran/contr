@@ -159,7 +159,14 @@ type SpacesList struct {
 	HoldLaunch bool
 	// launched is true once the launch pick ran, or the owner chose first.
 	launched bool
+	// want is the address of an agent to select once its row shows, and
+	// wantUntil the time it is dropped ([SpacesList.SelectWhenShown]).
+	want      string
+	wantUntil time.Time
 }
+
+// wantWait is how long [SpacesList.SelectWhenShown] waits for the row.
+const wantWait = 30 * time.Second
 
 // NewSpacesList returns the list. snap (may be nil) gives the hc terminals,
 // selection the clicks. env runs the git reads off the UI thread. The list is empty until [SpacesList.Sync], which the
@@ -224,6 +231,37 @@ func (l *SpacesList) pickLaunch() {
 	if worker != nil {
 		l.launched = true
 		l.selection.Select(state.Selected{Kind: state.KindWorker, ID: worker.w.Address})
+	}
+}
+
+// SelectWhenShown selects the agent at addr when its row shows: now, or after
+// a later snapshot or scan (D233). It drops addr when the row does not show in
+// wantWait. Call it on the UI thread.
+func (l *SpacesList) SelectWhenShown(addr string) {
+	l.want, l.wantUntil = addr, l.clock().Add(wantWait)
+	l.pickWanted()
+}
+
+// pickWanted selects the wanted agent once a group holds its row, folded or
+// not, and then forgets it.
+func (l *SpacesList) pickWanted() {
+	if l.want == "" || l.selection == nil {
+		return
+	}
+	if l.clock().After(l.wantUntil) {
+		l.want = ""
+		return
+	}
+	s := l.Snapshot()
+	for _, g := range l.groups {
+		for _, a := range agentLines(g, s) {
+			if a.w.Address != l.want {
+				continue
+			}
+			l.want, l.launched = "", true
+			l.selection.Select(l.target(sideItem{agent: &a}))
+			return
+		}
 	}
 }
 
@@ -359,6 +397,7 @@ func (l *SpacesList) rebuild() {
 	l.syncHeads()
 	l.syncAges()
 	l.pickLaunch()
+	l.pickWanted()
 	if adopted && l.OnAdopted != nil {
 		l.OnAdopted()
 	}

@@ -18,6 +18,10 @@ import (
 // orchestratorProfile is the profile that `+ new` starts (D57).
 const orchestratorProfile = "orchestrator"
 
+// folderPicker is the picker of `+ new`. E2e builds can replace it
+// (CONTR_E2E_PICK_FOLDER), as the system dialog cannot be driven.
+var folderPicker = pickFolder
+
 // pickFolder asks the owner for a project folder with the system dialog. It
 // blocks, so the frame calls it off the UI thread.
 func pickFolder() (string, error) {
@@ -40,11 +44,7 @@ func pickFolder() (string, error) {
 // blocks, so the modal calls it off the UI thread. The folder goes to the
 // recent documents of the Dock menu.
 func openFolder() (string, error) {
-	paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{
-		Title:       "Open a folder as a project",
-		ButtonLabel: "Open",
-		Directory:   true,
-	})
+	paths, err := mygo.Dialog.Open(openFolderOptions())
 	if err != nil {
 		return "", err
 	}
@@ -53,6 +53,17 @@ func openFolder() (string, error) {
 	}
 	mygo.App.AddRecentDocument(paths[0])
 	return paths[0], nil
+}
+
+// openFolderOptions are the options of the openFolder dialog. New Folder is
+// on, so the owner can make the project folder there (D233).
+func openFolderOptions() mygo.OpenDialogOptions {
+	return mygo.OpenDialogOptions{
+		Title:             "Open a folder as a project",
+		ButtonLabel:       "Open",
+		Directory:         true,
+		CreateDirectories: true,
+	}
 }
 
 // projectKey returns the git common dir of a folder, or the folder when it is
@@ -83,26 +94,26 @@ func orchestratorName(dir string, now time.Time) string {
 // spawnOrchestrator starts the orchestrator profile in dir, with role
 // orchestrator and no parent: the same as `contr agents spawn --role
 // orchestrator --no-parent`. DefaultConfig has the profile, so it needs no file
-// (D206).
-func spawnOrchestrator(ctx context.Context, getenv func(string) string, dial func(context.Context, func(string) string) (agentsCore, error), dir string, now time.Time, colors *agents.Colors) error {
+// (D206). It returns the address of the orchestrator's terminal (D233).
+func spawnOrchestrator(ctx context.Context, getenv func(string) string, dial func(context.Context, func(string) string) (agentsCore, error), dir string, now time.Time, colors *agents.Colors) (string, error) {
 	cfg, err := agents.LoadConfig(configPath(getenv))
 	if err != nil {
-		return err
+		return "", err
 	}
 	if kit := getenv("CONTR_KIT"); kit != "" {
 		cfg.Kit = kit
 	}
 	if dir == "" {
-		return errors.New("no folder")
+		return "", errors.New("no folder")
 	}
 	core, err := dial(ctx, getenv)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer core.Close()
-	_, err = agents.New(core, cfg).Spawn(ctx, agents.Spec{
+	w, err := agents.New(core, cfg).Spawn(ctx, agents.Spec{
 		Name: orchestratorName(dir, now), Profile: orchestratorProfile, Role: agents.RoleOrchestrator,
 		Worktree: dir, Project: filepath.Base(dir), Colors: colors,
 	})
-	return err
+	return w.Address, err
 }

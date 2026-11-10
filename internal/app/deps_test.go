@@ -58,7 +58,7 @@ func TestNewFrameTakesTheDeps(t *testing.T) {
 	f = attach(Deps{
 		Projects:          Store[*projects.Store]{Load: func() (*projects.Store, error) { return nil, nil }},
 		PickFolder:        func() (string, error) { return "", projectsview.ErrPickCancelled },
-		SpawnOrchestrator: func(string) error { return nil },
+		SpawnOrchestrator: func(string) (string, error) { return "", nil },
 		OpenTerminal:      func(string, string) (string, error) { return "", nil },
 	})
 	if f.NewOrch == nil || f.NewTerm == nil || !f.SpacesList.HoldLaunch {
