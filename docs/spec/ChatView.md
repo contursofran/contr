@@ -12,7 +12,7 @@ Shared rules: [README.md](README.md).
 
 | Part | Value |
 |---|---|
-| Place | in the pill row of the terminal overlay, left of the [OrchestratePill](OrchestratePill.md), `space-8` apart; the two wrap as one |
+| Place | alone at the top right of the terminal panel, a layer of the terminal overlay under the notch: top `space-8`, right 10px (the outline inset); right 40px while the outline column's top is above the switch's bottom (34px), clear of the column (`Outline.Top`, the D237 rule, D253). The [OrchestratePill](OrchestratePill.md) is in the title bar. |
 | Control | `kit.Switch` (`SegmentedBase`): "Chat", "Terminal"; label "View of this session" |
 | Shows for | a Claude Code session: an orchestrator (with a plain terminal that runs Claude Code, D190), or a terminal whose transcript path a kit hook saved (a worker, D243). A plain terminal has no switch. |
 | Mode | kept for each terminal for the run of the app; Terminal is the default |
