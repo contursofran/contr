@@ -220,6 +220,9 @@ func TestLiveLineWorking(t *testing.T) {
 	if !s.has(LabelStop) {
 		t.Error("no Stop while working")
 	}
+	// With Reduce Motion the glyph stands still, so only the line's own redraw moves the time.
+	s.tt.SetPreferences(ui.Preferences{ReduceMotion: true})
+	s.tt.Frame()
 	s.tt.Advance(1100 * time.Millisecond)
 	if !s.tt.HasText("1m 6s") {
 		t.Errorf("the time does not count: %v", s.tt.Texts())
@@ -308,7 +311,11 @@ func TestNeedsYouFallback(t *testing.T) {
 	}
 	// An error state has no menu to read.
 	s.status = "error"
+	reads := s.reads
 	s.tt.Frame()
+	if s.reads != reads {
+		t.Error("the menu of an error state is read")
+	}
 	if !s.has(LabelLive + " " + TextNeedsYou) {
 		t.Fatalf("no fallback for an error: %v", s.tt.Texts())
 	}
