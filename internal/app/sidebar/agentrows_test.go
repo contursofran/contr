@@ -661,11 +661,36 @@ func TestLineTwoShowsTheEffortAfterTheModel(t *testing.T) {
 	if !h.tt.HasText("opus high") {
 		t.Errorf("no effort from the label in %q", h.tt.Texts())
 	}
-	// The profile's effort wins over both.
+	// The label also wins over the profile's effort (D244).
 	h.list.EffortOf = func(string) string { return "low" }
+	h.send(snap)
+	if !h.tt.HasText("opus high") {
+		t.Errorf("the profile's effort won over the label in %q", h.tt.Texts())
+	}
+	// With no label or argv value, the profile's effort wins over the status line.
+	snap.Orchestrators[0].Effort = ""
 	h.send(snap)
 	if !h.tt.HasText("opus low") {
 		t.Errorf("no effort from the profile in %q", h.tt.Texts())
+	}
+}
+
+// A session that contr started from a profile and that then ran /model
+// shows the model of the hook's label, not the profile's (D244).
+func TestTheLabelModelWinsOverTheProfile(t *testing.T) {
+	h := newRows(t)
+	h.list.ModelOf = func(string) string { return "opus" }
+	snap := h.live.get()
+	snap.Orchestrators[0].Model = "fable"
+	h.send(snap)
+	if !h.tt.HasText("lead, idle, fable") {
+		t.Errorf("want the label model fable, not the profile's, in %q", h.tt.Texts())
+	}
+	// With no label or argv value, the profile's model shows.
+	snap.Orchestrators[0].Model = ""
+	h.send(snap)
+	if !h.tt.HasText("lead, idle, opus") {
+		t.Errorf("no model from the profile in %q", h.tt.Texts())
 	}
 }
 

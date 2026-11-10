@@ -223,24 +223,21 @@ func (l *SpacesList) modelOf(w agents.Worker) string {
 }
 
 // modelFor is the model of line 2 with its effort ("opus high", D189). The
-// model is the profile's, else the --model of the program's own command
-// line or the hook's label (an orchestrator contr did not start, D169), else
+// model is the worker's (the hook's label, which follows /model, else the
+// --model of the program's own command line, D244), else the profile's, else
 // the status line's. The effort comes from the same places, in the same
 // order; "" when not known.
 func (l *SpacesList) modelFor(w agents.Worker) string {
-	model := l.modelOf(w)
+	model := w.Model
 	if model == "" {
-		model = w.Model
+		model = l.modelOf(w)
 	}
 	if model == "" && l.StatusModel != nil {
 		model = l.StatusModel(w.Address)
 	}
-	effort := ""
-	if l.EffortOf != nil {
+	effort := w.Effort
+	if effort == "" && l.EffortOf != nil {
 		effort = l.EffortOf(w.Profile)
-	}
-	if effort == "" {
-		effort = w.Effort
 	}
 	if effort == "" && l.StatusEffort != nil {
 		effort = l.StatusEffort(w.Address)
