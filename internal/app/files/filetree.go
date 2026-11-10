@@ -29,6 +29,8 @@ import (
 const (
 	LabelFileTree   = "file tree"
 	LabelFileFilter = "Changed files only"
+	// NoFolderLine says what the tree shows while it has no folder (D255).
+	NoFolderLine = "Files of the open project show here"
 )
 
 // fileIndent is the indent of one level: space-16 plus space-4. Only the
@@ -332,7 +334,7 @@ func (t *FileTree) View(c *ui.Context) {
 	t.sync()
 	ui.Column(c).Label(LabelFileTree).FillWidth().Children(func() {
 		if t.dir == "" {
-			t.note(c, "No folder")
+			t.note(c, NoFolderLine)
 			return
 		}
 		if t.err != "" && len(t.loaded) == 0 {

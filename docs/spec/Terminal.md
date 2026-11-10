@@ -28,6 +28,15 @@ Design system page: component Terminal. Shared rules: [README.md](README.md).
   the New tab key "⌘T" (`kbd`, `ink-50`, 4 to its right). The drawing is still: no animation.
   It decodes once, off the UI thread. A live terminal, a terminal that cannot show
   ("terminal unavailable: …") and the Review view show no drawing.
+- **Empty, no project open (D255):** the same drawing and fade. In the middle of the band,
+  "No project open" (`label`, `ink-62`) and, 10 below, two buttons 8 apart, each 28 high,
+  radius 8, the label `small` with its key in `kbd` 8 to its right: "Open a project ⌘O" (fill
+  `ink-100`, text `ground` weight 500, key at 60% of `ground`) and "New terminal ⌘T" (no fill
+  and no border: label `ink-62`, key `ink-42`, the label underlined on hover). They run what
+  ⌘O (the projects modal) and ⌘T (a new plain terminal) run. "No project open" is: the sidebar
+  lists no project, or none is open (the title bar names no project and no row is selected).
+  With a project open the texts above stay. A narrow panel cuts the labels with an ellipsis;
+  the keys stay.
 
 - **Focused:** the cursor blinks; keys go to the terminal.
 - **Not focused:** the cursor is a hollow box.
@@ -120,7 +129,8 @@ Design system page: component Terminal. Shared rules: [README.md](README.md).
 ## Tests
 
 - View: palette per theme; overlays do not take keys.
-- View: the Empty state shows the drawing and both texts; a live or unavailable terminal does
+- View: the Empty state shows the drawing and both texts with a project open, and the first
+  run (text and two buttons that open the projects modal and a terminal) with none (D255); a live or unavailable terminal does
   not; the cover keeps the gap at the center at any panel size. Sheet parts `TerminalEmpty` and
   `TerminalEmptyNarrow`.
 - View: `⌘F` and the Search button show the `FindBar` over the terminal; typing

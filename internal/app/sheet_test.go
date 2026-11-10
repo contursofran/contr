@@ -10,9 +10,12 @@ import (
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/sidebar"
 	"github.com/contursofran/contr/internal/app/tabmodel"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/titlebar"
+	"github.com/contursofran/contr/internal/app/view"
+	"github.com/contursofran/contr/internal/projects"
 )
 
 // sheetParts are the spec'd components of package app that the spec sheet draws (#458, D179).
@@ -118,16 +121,40 @@ func TestSpecSheet(t *testing.T) {
 	parts := append(slices.Clip(sheetParts), apptest.SheetPart{Name: "KeyHints", W: 640, H: 300, View: sheetKeyHints},
 		apptest.SheetPart{Name: "TerminalEmpty", W: 960, H: 620, View: sheetTerminalEmpty},
 		apptest.SheetPart{Name: "TerminalEmptyNarrow", W: 480, H: 620, View: sheetTerminalEmpty},
+		apptest.SheetPart{Name: "TerminalFirstRun", W: 960, H: 620, View: sheetTerminalFirstRun},
+		apptest.SheetPart{Name: "TerminalFirstRunNarrow", W: 260, H: 620, View: sheetTerminalFirstRun},
+		apptest.SheetPart{Name: "SidebarEmpty", W: theme.SidebarWidth, H: 360, View: sheetSidebarEmpty},
+		apptest.SheetPart{Name: "SidebarEmptyNarrow", W: theme.SidebarMinWidth, H: 360, View: sheetSidebarEmpty},
 		apptest.SheetPart{Name: "Panel", W: 560, H: 220, View: sheetPanel})
 	// The sheet draws one frame: the drawing must be decoded before it.
 	for deadline := time.Now().Add(5 * time.Second); handsBitmap(nil) == nil && time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
 	}
-	apptest.SpecSheet(t, parts, []string{"KeyHints", "TerminalEmpty", "TerminalEmptyNarrow"})
+	apptest.SpecSheet(t, parts, []string{"KeyHints", "TerminalEmpty", "TerminalEmptyNarrow", "TerminalFirstRun",
+		"TerminalFirstRunNarrow", "SidebarEmpty", "SidebarEmptyNarrow"})
 }
 
-// sheetTerminalEmpty is the terminal panel while no terminal is open (docs/spec/Terminal.md).
+// sheetTerminalEmpty is the terminal panel while a project is open and no terminal is
+// (docs/spec/Terminal.md, D247).
 func sheetTerminalEmpty(c *ui.Context) {
-	f := &Frame{}
+	store := &projects.Store{}
+	store.AddFolder("/p/.git", "/p")
+	f := &Frame{SpacesList: sidebar.NewSpacesList(nil, nil, view.Env{}), openProject: "p"}
+	f.SpacesList.SetProjects(store)
+	sheetTerminal(c, f)
+}
+
+// sheetTerminalFirstRun is the terminal panel while no project is open (D255).
+func sheetTerminalFirstRun(c *ui.Context) { sheetTerminal(c, &Frame{}) }
+
+// sheetSidebarEmpty is the sidebar with no project (D255) and plans with no data, on the glass.
+func sheetSidebarEmpty(c *ui.Context) {
+	l := sidebar.NewSpacesList(nil, nil, view.Env{})
+	l.Sync()
+	l.Plans = func() []kit.Meter { return planMeters(nil) }
+	ui.Column(c).Fill().Background(theme.Current().GlassWindow).Children(func() { l.View(c) })
+}
+
+func sheetTerminal(c *ui.Context, f *Frame) {
 	kit.Panel(c, kit.PanelOpts{Name: LabelPanelTerminal, Bare: true, Stage: true, Body: func() {
 		ui.Box(c).Fill().Center().Children(func() { f.emptyTerminal(c) })
 	}})

@@ -57,6 +57,8 @@ Design system page: component FileTree. Shared rules: [README.md](README.md).
 
 ## Edge cases
 
+- No folder (no project open): one line, "Files of the open project show here" (`small`,
+  `ink-42`), in place of "No folder" (D255). A narrow panel cuts it with an ellipsis.
 - Not a git repo: no counts.
 - A folder with thousands of files: the list is virtual (`ui.Tree`).
 
@@ -93,7 +95,7 @@ Design system page: component FileTree. Shared rules: [README.md](README.md).
 ## Tests
 
 - Unit: tree build and counts on a temp repo.
-- View: filter on shows changed files only; deleted style.
+- View: filter on shows changed files only; deleted style; no folder shows the D255 line.
 
 ## Replaces
 

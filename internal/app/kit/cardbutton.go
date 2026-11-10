@@ -70,3 +70,55 @@ func CardButton(c *ui.Context, label string, style ButtonStyle, colour ui.Color,
 		}
 	})
 }
+
+// KeyStyle says how a [KeyButton] is drawn (D255).
+type KeyStyle int
+
+// The key button styles.
+const (
+	// KeyMain is ink-100 with ground text: the one fill of an empty window, on the stage.
+	KeyMain KeyStyle = iota
+	// KeyPlain is ink-62 text and its key, no fill or border; the label underlines on hover.
+	KeyPlain
+	// KeyRow is ink-85 text and its key, no fill or border; on hover the fill of a plain row.
+	KeyRow
+)
+
+// KeyButton is a first-run action with its key at the right (D255), such as "Open a project ⌘O",
+// in the given style. The accessible name is the label alone, so a click by label finds it.
+// The label shortens with an ellipsis when the button is narrow; the key stays.
+func KeyButton(c *ui.Context, label, key string, style KeyStyle, click ClickFn) ui.Element {
+	p := theme.Current()
+	text, keyInk := p.Ink62, p.Ink42
+	el := ui.ButtonBase(c).Label(label).Height(theme.KeyButtonHeight).MinWidth(0).
+		Padding(0, theme.KeyButtonPadR, 0, theme.KeyButtonPadL).AlignItems(ui.Center).Gap(theme.Space8).
+		Radius(theme.Radius8)
+	main := style == KeyMain
+	switch {
+	case main:
+		el = el.Background(p.Ink100)
+		text, keyInk = p.Ground, p.Ground.Alpha(0.6)
+	case style == KeyRow:
+		text = p.Ink85
+		// ButtonBase has its own look; the explicit background keeps it flat, as a plain row.
+		if el.Hovered() {
+			el = el.Background(p.Hover)
+		} else {
+			el = el.Background(ui.Transparent)
+		}
+	}
+	if click != nil {
+		el = el.Cursor(ui.CursorPointer).OnClick(click)
+	}
+	return el.TextColor(text).Children(func() {
+		t := Styled(ui.Text(c, label), theme.StyleSmall).SingleLine().MinWidth(0).Shrink(1).TextColor(text)
+		if main {
+			t.FontWeight(theme.StyleLabel.Weight)
+		} else if style == KeyPlain && el.Hovered() {
+			t.Underline()
+		}
+		if key != "" {
+			Styled(ui.Text(c, key), theme.StyleKbd).NoWrap().Shrink(0).TextColor(keyInk)
+		}
+	})
+}
