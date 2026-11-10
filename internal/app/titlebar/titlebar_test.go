@@ -591,9 +591,9 @@ func TestTheSelectedTabHasThePanelFillAndFollowsTheSliders(t *testing.T) {
 			b.tt.Frame()
 			sel := b.rect(t, "lead")
 			got := apptest.RGB(b.tt.Image(), sel.X+sel.W-3, sel.Y+sel.H/2)
-			want := theme.Over(theme.Current().Panel, tc.Pal.Ground)
+			want := theme.Over(theme.Current().Stage, tc.Pal.Ground)
 			if !apptest.Near(got, want, 10) {
-				t.Errorf("%s panel alpha %v: selected tab %v, want the panel fill %v", tc.Name, a, got, want)
+				t.Errorf("%s panel alpha %v: selected tab %v, want the stage fill %v", tc.Name, a, got, want)
 			}
 		}
 	}
@@ -611,8 +611,8 @@ func TestTheSelectedTabIsAPillInBothThemes(t *testing.T) {
 		// A point at the right edge inside the tab, clear of the glyph and the title.
 		at := func(r ui.Rect) ui.Color { return apptest.RGB(img, r.X+r.W-3, r.Y+r.H/2) }
 		ground := tc.Pal.Ground
-		if want := theme.Over(theme.Current().Panel, ground); !apptest.Near(at(sel), want, 14) {
-			t.Errorf("%s: selected tab %v, want the panel fill %v", tc.Name, at(sel), want)
+		if want := theme.Over(theme.Current().Stage, ground); !apptest.Near(at(sel), want, 14) {
+			t.Errorf("%s: selected tab %v, want the stage fill %v", tc.Name, at(sel), want)
 		}
 		if !apptest.Near(at(other), ground, 3) {
 			t.Errorf("%s: tab that is not selected %v, want the bare ground %v", tc.Name, at(other), ground)

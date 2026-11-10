@@ -143,3 +143,23 @@ func TestFrameFollowsTheTheme(t *testing.T) {
 		t.Errorf("files %v wide in Light, want 280", got)
 	}
 }
+
+// Only the terminal is drawn as a panel, the stage; the sidebar and the files panel show the
+// window glass at their edges, as the gap between the panels does (D250).
+func TestOnlyTheTerminalIsDrawnAsAPanel(t *testing.T) {
+	_, tt := newTester(t)
+	img := tt.Image()
+	side, term, files := apptest.Box(t, tt, LabelPanelSidebar), apptest.Box(t, tt, LabelPanelTerminal), apptest.Box(t, tt, LabelPanelFiles)
+	glass := apptest.RGB(img, side.X+side.W+theme.PanelGap/2, term.Y+term.H/2)
+	for name, at := range map[string]ui.Color{
+		"sidebar top": apptest.RGB(img, side.X+side.W/2, side.Y),
+		"files left":  apptest.RGB(img, files.X, files.Y+files.H/2),
+	} {
+		if !apptest.Near(at, glass, 1) {
+			t.Errorf("%s %v, want the glass %v", name, at, glass)
+		}
+	}
+	if at := apptest.RGB(img, term.X+term.W/2, term.Y); apptest.Near(at, glass, 1) {
+		t.Errorf("terminal top %v is the glass: the stage draws no line", at)
+	}
+}

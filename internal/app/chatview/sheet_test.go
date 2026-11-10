@@ -34,7 +34,7 @@ func TestSpecSheet(t *testing.T) {
 	}
 	view := func(c *ui.Context) {
 		pal := theme.Current()
-		ui.Box(c).Width(sheetW).Height(sheetH).Background(pal.Panel).Border(1, pal.PanelLine).
+		ui.Box(c).Width(sheetW).Height(sheetH).Background(pal.Stage).Border(1, pal.PanelLine).
 			Radius(theme.Radius12).Children(func() {
 			ui.Row(c).Absolute().Top(theme.Space8).Right(10).Children(func() { r.ch.Switch(c, term) })
 			r.ch.View(c, func() {})

@@ -24,7 +24,7 @@ const TerminalNewLine = "New terminal"
 // height: a little above the middle (#644).
 const handsGapTop = 0.45
 
-// handsFade is the part of the panel, from the bottom, that fades to the panel color under the
+// handsFade is the part of the panel, from the bottom, that fades to the stage color under the
 // texts.
 const handsFade = 30
 
@@ -58,7 +58,7 @@ func handsCover(r ui.Rect, iw, ih float32) ui.Rect {
 }
 
 // emptyTerminal is the terminal slot while no terminal is open (docs/spec/Terminal.md, Empty):
-// the dot drawing of the two hands covers the panel in ink-50, and over a fade to the panel at
+// the dot drawing of the two hands covers the panel in ink-50, and over a fade to the stage at
 // the bottom 30% it says "No terminal open" and "New terminal ⌘T". It is still: it draws
 // nothing while idle (D55).
 func (f *Frame) emptyTerminal(c *ui.Context) {
@@ -83,7 +83,7 @@ func (f *Frame) emptyTerminal(c *ui.Context) {
 		})
 	ui.Column(c).IgnoreInput(true).Absolute().Left(0).Right(0).Bottom(0).
 		HeightPercent(handsFade).AlignItems(ui.Center).Justify(ui.Center).Gap(theme.Space6).
-		LinearGradient(ui.LinearGradient{Angle: 180, Stops: []ui.GradientStop{{Color: p.Panel.Alpha(0), At: 0}, {Color: p.Panel, At: 0.65}}}).
+		LinearGradient(ui.LinearGradient{Angle: 180, Stops: []ui.GradientStop{{Color: p.Stage.Alpha(0), At: 0}, {Color: p.Stage, At: 0.65}}}).
 		Radius(0, 0, theme.Radius12-1, theme.Radius12-1).
 		Children(func() {
 			kit.Styled(ui.Text(c, TerminalOffLine), theme.StyleLabel).NoWrap().TextColor(p.Ink62)

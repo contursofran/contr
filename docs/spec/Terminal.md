@@ -23,7 +23,7 @@ Design system page: component Terminal. Shared rules: [README.md](README.md).
   the panel and puts the gap between the fingertips at the panel's horizontal center; the gap
   sits at 45% of the height when the drawing is tall enough, else the drawing's bottom edge
   meets the panel's. The dots are `ink-50` in both themes (Dark: white 50%). The bottom 30% of
-  the panel fades from clear to `panel` (solid at 65% of the band); in the middle of the band,
+  the panel fades from clear to `stage` (solid at 65% of the band); in the middle of the band,
   "No terminal open" (`label`, `ink-62`) and, 6 below, "New terminal" (`small`, `ink-50`) with
   the New tab key "⌘T" (`kbd`, `ink-50`, 4 to its right). The drawing is still: no animation.
   It decodes once, off the UI thread. A live terminal, a terminal that cannot show
@@ -37,12 +37,12 @@ Design system page: component Terminal. Shared rules: [README.md](README.md).
 
 - Shows the hc terminal of the selected tab (D80). contr watches until the
   owner types; the first key sizes the terminal (D91).
-- The background is clear over `panel`; the text color is
+- The background is clear over `stage`; the text color is
   `terminal-text`; the ANSI palette is the theme's (README Themes). The
   Light palette is a known light palette tuned for contrast on the light
-  panel (D129). The 16 colors and their contrast ratios are in
+  stage (D129, D250). The 16 colors and their contrast ratios are in
   [tokens.md](tokens.md), ANSI. The plugin draws solid colors, so contr gives
-  it `terminal-text` and `panel` flattened over the ground (D133).
+  it `terminal-text` and `stage` flattened over the ground (D133).
 - The overlay layer (`TerminalOverlay` in `internal/app/kit`) builds nothing
   while no overlay is set. A layer draws small floating elements placed with
   `Absolute`; it never covers the grid, so the terminal keeps the pointer and
@@ -99,12 +99,12 @@ Design system page: component Terminal. Shared rules: [README.md](README.md).
 
 ## Tokens
 
-`terminal`, `terminal-text`, `ink-62`, `ink-50`, `label`, `small`, `kbd`, `space-6`, `space-4`, `ink-42`, `ink-38`, `ink-95` (cursor, selected search match), `press` (search matches), `ansi-*`, `space-14`, `space-20`, `space-12`, `panel`.
+`terminal`, `terminal-text`, `ink-62`, `ink-50`, `label`, `small`, `kbd`, `space-6`, `space-4`, `ink-42`, `ink-38`, `ink-95` (cursor, selected search match), `press` (search matches), `ansi-*`, `space-14`, `space-20`, `space-12`, `stage`.
 
 ## Build in MyGo
 
 - MyGo's terminal plugin (`docs/plugins/terminal.md`) with `internal/app/ghostty`'s `Conn` as the connection to the hc terminal.
-- Set the terminal colors from the tokens: background transparent over `panel`, foreground `terminal-text`.
+- Set the terminal colors from the tokens: background transparent over `stage`, foreground `terminal-text`.
 - Put the notch and the outline in an overlay layer above the terminal; they must not take keys from it unless focused.
 
 ## Do and do not

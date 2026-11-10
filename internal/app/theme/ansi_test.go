@@ -48,12 +48,12 @@ func TestANSIMatchesTokensMd(t *testing.T) {
 	}
 }
 
-// The Light palette is readable on the Light panel: 4.5:1 for each color (D129).
-func TestLightANSIIsReadableOnThePanel(t *testing.T) {
-	bg := Light.PanelBase()
+// The Light palette is readable on the Light stage: 4.5:1 for each color (D129).
+func TestLightANSIIsReadableOnTheStage(t *testing.T) {
+	bg := Light.StageBase()
 	for i, c := range Light.ANSI {
 		if got := contrast(c, bg); got < 4.5 {
-			t.Errorf("%s %v has %.2f:1 on the Light panel, want 4.5:1", ANSIName[i], c, got)
+			t.Errorf("%s %v has %.2f:1 on the Light stage, want 4.5:1", ANSIName[i], c, got)
 		}
 	}
 }
@@ -61,8 +61,8 @@ func TestLightANSIIsReadableOnThePanel(t *testing.T) {
 // The numbers in tokens.md match the colors.
 func TestANSIContrastNumbersInTokensMd(t *testing.T) {
 	for i, r := range specRows(t, "ANSI") {
-		want := "Dark " + ratio(contrast(Dark.ANSI[i], Dark.PanelBase())) +
-			", Light " + ratio(contrast(Light.ANSI[i], Light.PanelBase())) + " on panel."
+		want := "Dark " + ratio(contrast(Dark.ANSI[i], Dark.StageBase())) +
+			", Light " + ratio(contrast(Light.ANSI[i], Light.StageBase())) + " on stage."
 		if !strings.Contains(r[3], want) {
 			t.Errorf("%s: %q, want %q", r[0], r[3], want)
 		}
@@ -71,12 +71,12 @@ func TestANSIContrastNumbersInTokensMd(t *testing.T) {
 
 func ratio(v float64) string { return strconv.FormatFloat(v, 'f', 1, 64) + ":1" }
 
-func TestPanelBaseIsTheFlatPanel(t *testing.T) {
-	if got, want := Light.PanelBase(), ui.RGB(250, 251, 251); got != want {
-		t.Errorf("Light panel = %v, want %v", got, want)
+func TestStageBaseIsTheFlatStage(t *testing.T) {
+	if got, want := Light.StageBase(), ui.RGB(253, 253, 253); got != want {
+		t.Errorf("Light stage = %v, want %v", got, want)
 	}
-	if got, want := Dark.PanelBase(), ui.RGB(20, 21, 24); got != want {
-		t.Errorf("Dark panel = %v, want %v", got, want)
+	if got, want := Dark.StageBase(), ui.RGB(12, 13, 16); got != want {
+		t.Errorf("Dark stage = %v, want %v", got, want)
 	}
 }
 

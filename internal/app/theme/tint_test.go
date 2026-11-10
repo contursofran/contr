@@ -34,8 +34,8 @@ func TestTintDefaultsMatchThePalettes(t *testing.T) {
 		if got := int(p.GlassWindow.A); got != int(d.window*255+0.5) {
 			t.Errorf("dark=%v window alpha %d does not match %v", dark, got, d.window)
 		}
-		if got := int(p.Panel.A); got != int(d.panel*255+0.5) {
-			t.Errorf("dark=%v panel alpha %d does not match %v", dark, got, d.panel)
+		if got := int(p.Stage.A); got != int(d.panel*255+0.5) {
+			t.Errorf("dark=%v stage alpha %d does not match %v", dark, got, d.panel)
 		}
 	}
 }
@@ -45,8 +45,8 @@ func TestTintOverridesApplyPerTheme(t *testing.T) {
 	SetTint(true, f64(0.8), f64(0.1))
 	SetTint(false, f64(0.2), nil)
 	p := Current()
-	if p.GlassWindow.A != 204 || p.Panel.A != 26 {
-		t.Errorf("dark window %d panel %d, want 204 and 26", p.GlassWindow.A, p.Panel.A)
+	if p.GlassWindow.A != 204 || p.Stage.A != 26 {
+		t.Errorf("dark window %d stage %d, want 204 and 26", p.GlassWindow.A, p.Stage.A)
 	}
 	if p.GlassWindow.R != Dark.GlassWindow.R || p.Ground != Dark.Ground {
 		t.Error("the override changed more than the alpha")
@@ -56,20 +56,20 @@ func TestTintOverridesApplyPerTheme(t *testing.T) {
 	}
 	Follow(tintPlatform{}, tintWindow{}, mygo.ThemeLight).Stop()
 	p = Current()
-	if p.GlassWindow.A != 51 || p.Panel.A != Light.Panel.A {
-		t.Errorf("light window %d panel %d, want 51 and the default", p.GlassWindow.A, p.Panel.A)
+	if p.GlassWindow.A != 51 || p.Stage.A != Light.Stage.A {
+		t.Errorf("light window %d stage %d, want 51 and the default", p.GlassWindow.A, p.Stage.A)
 	}
 }
 
 func TestTintAppliesAtOnceAndClears(t *testing.T) {
 	useTheme(t, mygo.ThemeLight)
 	w, p := TintValues()
-	if w != 0.60 || p != 0.70 {
-		t.Errorf("defaults %v %v, want 0.60 0.70", w, p)
+	if w != 0.60 || p != 0.86 {
+		t.Errorf("defaults %v %v, want 0.60 0.86", w, p)
 	}
 	SetTint(false, f64(0.5), f64(0.5))
-	if got := Current().Panel.A; got != 128 {
-		t.Errorf("panel alpha %d, want 128 at once", got)
+	if got := Current().Stage.A; got != 128 {
+		t.Errorf("stage alpha %d, want 128 at once", got)
 	}
 	if w, p := TintValues(); w != 0.5 || p != 0.5 {
 		t.Errorf("values %v %v, want 0.5 0.5", w, p)
