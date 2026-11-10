@@ -72,10 +72,11 @@ func (ch *Chat) said(c *ui.Context, id, src string) {
 	ui.Column(c).FillWidth().Gap(theme.Space12).Children(func() {
 		for i, p := range parts {
 			c := c.Key(i)
+			text := ch.chipText(id, i, p.Text)
 			if p.Wide {
-				ch.wide(c, func() { markdown.View(c, p.Text, &ch.md) })
+				ch.wide(c, func() { markdown.View(c, text, &ch.md) })
 			} else {
-				column(c, func() { markdown.View(c, p.Text, &ch.md) })
+				column(c, func() { markdown.View(c, text, &ch.md) })
 			}
 		}
 	})

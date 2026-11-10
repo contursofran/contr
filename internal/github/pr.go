@@ -244,3 +244,71 @@ func (c Client) IssueTitle(ctx context.Context, n int) (string, error) {
 	}
 	return strings.TrimSpace(v.Title), nil
 }
+
+// Ref is what a number of the repository is: a pull request, an issue or
+// nothing. State is OPEN, MERGED or CLOSED; Checks count the checks of a pull
+// request's head commit.
+type Ref struct {
+	Number int
+	PR     bool
+	State  string
+	Checks CheckSummary
+}
+
+// notFound reports a gh error for a number that the repository does not have.
+func notFound(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "Could not resolve to")
+}
+
+// RefState reads what number n of the repository of c.Dir is, from `gh pr view`
+// and, when n is no pull request, `gh issue view` (D262). A number the
+// repository does not have gives the zero Ref and no error.
+func (c Client) RefState(ctx context.Context, n int) (Ref, error) {
+	out, err := c.run(ctx, "pr", "view", fmt.Sprint(n), "--json", "number,state,statusCheckRollup")
+	if notFound(err) {
+		out, err = c.run(ctx, "issue", "view", fmt.Sprint(n), "--json", "number,state")
+		if notFound(err) {
+			return Ref{}, nil
+		}
+		if err != nil {
+			return Ref{}, err
+		}
+		var r struct {
+			Number int    `json:"number"`
+			State  string `json:"state"`
+		}
+		if err := json.Unmarshal(out, &r); err != nil {
+			return Ref{}, fmt.Errorf("gh: read issue %d: %w", n, err)
+		}
+		return Ref{Number: r.Number, State: r.State}, nil
+	}
+	if err != nil {
+		return Ref{}, err
+	}
+	var r struct {
+		Number int    `json:"number"`
+		State  string `json:"state"`
+		Rollup []struct {
+			Status     string `json:"status"`
+			Conclusion string `json:"conclusion"`
+			State      string `json:"state"`
+		} `json:"statusCheckRollup"`
+	}
+	if err := json.Unmarshal(out, &r); err != nil {
+		return Ref{}, fmt.Errorf("gh: read pr %d: %w", n, err)
+	}
+	ref := Ref{Number: r.Number, PR: true, State: r.State}
+	for _, k := range r.Rollup {
+		switch rollupResult(k.Status, k.Conclusion, k.State) {
+		case "pass":
+			ref.Checks.Pass++
+		case "fail":
+			ref.Checks.Fail++
+		case "skip":
+			ref.Checks.Skip++
+		default:
+			ref.Checks.Pending++
+		}
+	}
+	return ref, nil
+}

@@ -35,6 +35,8 @@ type Chat struct {
 	// Meta is the model and the context of the terminal at addr, "opus high · 212k", for the
 	// right of the composer. May be nil.
 	Meta func(addr string) string
+	// Chips knows the names in Claude's text that show as chips (chips.go, D262). Nil: none do.
+	Chips ChipSource
 	// Team is the team of the session at addr while it orchestrates, for the team row (D259);
 	// ok is false when it does not orchestrate. May be nil: no team row.
 	Team func(addr string) (Team, bool)
@@ -70,6 +72,10 @@ type Chat struct {
 	// parts holds the parts of each text of Claude by row id, and partsOf the text they came from.
 	parts   map[string][]Part
 	partsOf map[string]string
+	// chips holds the parts of Claude's texts with their chips, by row id and part (chips.go).
+	chips map[string]*chipPart
+	// svc opens the links of Claude's text: the services of the window of the last View.
+	svc ui.Services
 	// field is the composer's field, which takes the focus back after a click on a button.
 	field ui.Handle
 	// ticks is set while the last View asked for a redraw in a second: the live line's time.
@@ -80,7 +86,9 @@ type Chat struct {
 // watch replaces the file watch in tests; nil uses the real one.
 func New(env view.Env, stateDir string, watch func(path string, notify func()) (func(), error)) *Chat {
 	ch := &Chat{Env: env, reader: transcript.NewReader(0), chat: map[string]bool{}, folds: map[string]*bool{},
-		drafts: map[string]*string{}, errs: map[string]string{}, parts: map[string][]Part{}, partsOf: map[string]string{}}
+		drafts: map[string]*string{}, errs: map[string]string{}, parts: map[string][]Part{}, partsOf: map[string]string{},
+		chips: map[string]*chipPart{}}
+	ch.md.LinkIcon, ch.md.OnLink = chipIcon, ch.openLink
 	ch.src = &chatsource.Source{StateDir: stateDir, Env: env, Watch: watch, Changed: ch.changed}
 	ch.mdHooks()
 	ch.list.FollowEnd = true
@@ -145,6 +153,7 @@ func (ch *Chat) changed(reset bool) {
 		ch.model.Reset()
 		ch.folds = map[string]*bool{}
 		ch.parts, ch.partsOf = map[string][]Part{}, map[string]string{}
+		ch.chips = map[string]*chipPart{}
 		ch.Env.Redraw()
 	}
 	ch.stale = true

@@ -62,11 +62,11 @@ The content palette (D261) colors what Claude writes in the chat, never the chro
 
 | Token | Dark | Light | Use |
 |---|---|---|---|
-| `content-done` | `#7fb88a` | `#1e763b` | Done, merged, passed: the Done remark, added diff lines. Dark 8.4:1 on stage, 6.7:1 on its tint; Light 5.6:1 and 4.5:1. |
-| `content-running` | `#7aa7e6` | `#1f5fbf` | Work in progress. Dark 7.9:1, Light 6.0:1 on stage. |
-| `content-waiting` | `#d9b36a` | `#8a5a00` | Waits, at risk: the Warning remark. Dark 9.8:1, Light 5.8:1 on stage. |
-| `content-failed` | `#f07178` | `#b1333f` | Failed, needs the owner: the Decision needed remark, removed diff lines. The chrome's red text (`blocked-text`). Dark 6.8:1 on stage, 5.6:1 on its tint; Light 6.0:1 and 4.9:1. |
-| `content-info` | `rgba(255,255,255,0.64)` | `rgba(0,0,0,0.7)` | Neutral remarks: Note, Not verified; hunk lines of a diff. Dark 8.2:1, Light 8.6:1 on stage. |
+| `content-done` | `#7fb88a` | `#1e763b` | Done, merged, passed: the Done remark, added diff lines, the dot of a chip whose PR passed or merged or whose worker is done (D262). Dark 8.4:1 on stage, 6.7:1 on its tint; Light 5.6:1 and 4.5:1. |
+| `content-running` | `#7aa7e6` | `#1f5fbf` | Work in progress: the dot of a chip whose PR checks run or whose worker works (D262). Dark 7.9:1, Light 6.0:1 on stage. |
+| `content-waiting` | `#d9b36a` | `#8a5a00` | Waits, at risk: the Warning remark, the dot of a chip whose worker waits (D262). Dark 9.8:1, Light 5.8:1 on stage. |
+| `content-failed` | `#f07178` | `#b1333f` | Failed, needs the owner: the Decision needed remark, removed diff lines, the dot of a chip whose PR failed or whose worker needs the owner (D262). The chrome's red text (`blocked-text`). Dark 6.8:1 on stage, 5.6:1 on its tint; Light 6.0:1 and 4.9:1. |
+| `content-info` | `rgba(255,255,255,0.64)` | `rgba(0,0,0,0.7)` | Neutral remarks: Note, Not verified; hunk lines of a diff; the dot of a chip whose PR is open with no checks or closed (D262). Dark 8.2:1, Light 8.6:1 on stage. |
 | `code-keyword` | `#b79ce6` | `#8250df` | Keywords in code blocks. Dark 7.6:1, Light 4.5:1 on a code block. |
 | `code-function` | `#86b4ee` | `#1f5fbf` | Functions, types, tags. Dark 8.3:1, Light 5.5:1 on a code block. |
 | `code-string` | `#9cc58f` | `#1e763b` | Strings, escapes, regular expressions. Dark 9.2:1, Light 5.1:1 on a code block. |

@@ -132,8 +132,11 @@ func (ch *Chat) mdHooks() {
 	code := map[string]func(*ui.Context, *markdown.CodeBlockView){"diff": ch.diffBlock, "patch": ch.diffBlock}
 	ch.md.Block, ch.md.Code = ch.block, code
 	ch.mdNest.Block, ch.mdNest.Code = ch.block, code
+	// The views inside a remark, a cell or an item show the chips of the pre-pass (chips.go) as the
+	// view around them does: the same icon and the same click.
 	for _, o := range []*markdown.Options{&ch.mdNest, &ch.mdHead, &ch.mdNum} {
 		o.ShareSelection = true
+		o.LinkIcon, o.OnLink = chipIcon, ch.openLink
 	}
 }
 
