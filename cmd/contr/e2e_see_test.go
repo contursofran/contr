@@ -149,7 +149,7 @@ var seeFixtures = map[string]seeFixture{
 		ready: "lead, ",
 	},
 	"chat": {
-		about: "the orchestrator lead in Chat mode (D246): two prompts, an answer with a table, work groups with tool calls and worker notes, a note that needs the owner and a call that runs",
+		about: "the orchestrator lead in Chat mode (D246): two prompts, an answer with a table, work groups with tool calls and worker notes, a note that needs the owner, a background task, a message of another session and a call that runs",
 		setup: seeChat,
 		ready: "lead, ",
 		press: []string{"Chat"},
@@ -274,7 +274,8 @@ func seeChat(t *testing.T, h *harness) {
 }
 
 // seeTranscript is an orchestrator session as Claude Code writes it: hidden lines (meta, the
-// playbook, hook output), prompts, texts, tool calls and their results, and hc notes of workers.
+// playbook, hook output, a reminder), prompts, texts, tool calls and their results, hc notes of
+// workers, a background task and a message of another session.
 // from gives the hc sender ("ADDR NAME") of each worker.
 func seeTranscript(from map[string]string) string {
 	n := 0
@@ -327,6 +328,9 @@ func seeTranscript(from map[string]string) string {
 		result(56, "t7", "fatal: not a git repository", true),
 		note(57, from["b-630"], "b-630: working, the model passes its tests"),
 		note(58, from["b-632"], "ended its turn without a report. Last words: Waiting for the full-suite run to finish."),
+		user(58, "<task-notification>\n<task-id>bx1</task-id>\n<tool-use-id>t9</tool-use-id>\n<output-file>/tmp/demo/bx1.output</output-file>\n<status>completed</status>\n<summary>Background command \"go test ./...\" completed (exit code 0)</summary>\n</task-notification>"),
+		user(58, "Another Claude session sent a message:\n<agent-message from=\"planner-657\">The plan for #657 is ready.\nRead it in the issue.</agent-message>"),
+		user(58, "<system-reminder>\nThe user hasn't heard from you in a while.\n</system-reminder>"),
 		said(59, "b-631 is done: PR `#633` is open and its check passed. b-632 stopped without a report; I asked it to report when the run ends.\n\nNext I review **#633** on its head:\n\n```sh\ngh pr diff 633\n```"),
 		call(60, "t8", "Bash", map[string]any{"command": "gh pr diff 633"}),
 	} {
