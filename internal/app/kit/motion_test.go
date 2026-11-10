@@ -232,3 +232,63 @@ func TestPlanUsageComesToRest(t *testing.T) {
 func formatPct(v float64) string {
 	return strconv.Itoa(int(v)) + "%"
 }
+
+// The card of a dialog scales in from 0.96 as it fades in; with Reduce Motion
+// it only fades, at its size.
+func TestDialogCardScalesIn(t *testing.T) {
+	for _, reduce := range []bool{false, true} {
+		open := false
+		tt := motionTester(func(c *ui.Context) {
+			if !open {
+				return
+			}
+			o := true
+			ui.DialogBase(c, &o, func(backdrop, panel ui.Element) {
+				panel.Size(100, 60).Background(ui.RGBA(255, 0, 0, 1))
+				PopDialog(c, backdrop, panel)
+			})
+		}, reduce)
+		tt.Frame()
+		open = true
+		tt.Frame()
+		tt.Advance(theme.MotionPopIn / 3)
+		width := redWidth(tt, tt.Image().Bounds().Dy()/2)
+		if reduce && width != 100 || !reduce && (width == 0 || width >= 100) {
+			t.Errorf("reduce %v: card %d px wide at a third of the way in; want 100 with Reduce Motion, less without", reduce, width)
+		}
+	}
+}
+
+// A popover panel scales in from 0.96 as it fades in; with Reduce Motion it
+// only fades, at its size.
+func TestPopoverPanelScalesIn(t *testing.T) {
+	for _, reduce := range []bool{false, true} {
+		open := false
+		tt := motionTester(func(c *ui.Context) {
+			a := ui.Box(c).Size(20, 20)
+			ui.PopoverBase(c, a, &open, func(panel ui.Element) {
+				PopIn(panel).Size(100, 60).Background(ui.RGBA(255, 0, 0, 1))
+			})
+		}, reduce)
+		tt.Frame()
+		open = true
+		tt.Frame()
+		tt.Advance(theme.MotionPopIn / 3)
+		width := redWidth(tt, 50)
+		if reduce && width != 100 || !reduce && (width == 0 || width >= 100) {
+			t.Errorf("reduce %v: panel %d px wide at a third of the way in; want 100 with Reduce Motion, less without", reduce, width)
+		}
+	}
+}
+
+// redWidth counts the red pixels of row y of the tester's image.
+func redWidth(tt *ui.Tester, y int) int {
+	img := tt.Image()
+	n := 0
+	for x := 0; x < img.Bounds().Dx(); x++ {
+		if px := img.RGBAAt(x, y); px.R > px.G+20 {
+			n++
+		}
+	}
+	return n
+}
