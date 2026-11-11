@@ -4,9 +4,13 @@ package app
 // chatview.
 
 import (
+	"context"
+	"errors"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -15,6 +19,7 @@ import (
 	"github.com/contursofran/contr/internal/app/chatview"
 	"github.com/contursofran/contr/internal/app/questions"
 	"github.com/contursofran/contr/internal/app/view"
+	"github.com/contursofran/contr/internal/review"
 	"github.com/contursofran/contr/internal/slash"
 )
 
@@ -41,6 +46,69 @@ func (s slashSource) Suggestions(addr string) func() ([]chatview.Suggestion, err
 	}
 }
 
+// pathSource gives the "@" popup the files and folders of the working folder of the session at
+// an address (D279): what git lists there, or a plain read of the typed folder outside git.
+type pathSource struct {
+	worker func(addr string) (agents.Worker, bool)
+}
+
+// Paths finds the folder on the UI thread; the read runs off it.
+func (s pathSource) Paths(addr, dir string) func() ([]chatview.Suggestion, error) {
+	var root string
+	if w, ok := s.worker(addr); ok {
+		root = w.Worktree
+	}
+	return func() ([]chatview.Suggestion, error) {
+		if root == "" {
+			return nil, errors.New("no working folder")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), pathTimeout)
+		defer cancel()
+		return listPaths(ctx, root, dir)
+	}
+}
+
+// pathTimeout bounds the read of the paths for "@".
+const pathTimeout = 10 * time.Second
+
+// listPaths lists the files of root that git knows or does not ignore, each folder that holds
+// them once, as "dir/", before its files. Outside git it reads the folder dir of root alone.
+func listPaths(ctx context.Context, root, dir string) ([]chatview.Suggestion, error) {
+	repo := review.Repo{Dir: root}
+	files, ok, err := repo.KnownFiles(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []chatview.Suggestion
+	if !ok {
+		es, err := repo.Entries(ctx, strings.TrimSuffix(dir, "/"))
+		for _, e := range es {
+			name := dir + e.Name
+			if e.Dir {
+				name += "/"
+			}
+			out = append(out, chatview.Suggestion{Name: name})
+		}
+		return out, err
+	}
+	seen := map[string]bool{}
+	for _, f := range files {
+		if _, err := os.Lstat(filepath.Join(root, filepath.FromSlash(f))); err != nil {
+			continue // deleted in the work tree, not yet in git
+		}
+		for i := range len(f) {
+			if d := f[:i+1]; f[i] == '/' && !seen[d] {
+				seen[d] = true
+				out = append(out, chatview.Suggestion{Name: d})
+			}
+		}
+		if !seen[f] { // git lists a nested repository as "dir/"
+			out = append(out, chatview.Suggestion{Name: f})
+		}
+	}
+	return out, nil
+}
+
 // attachChat makes the chat view, which reads the session files under the state dir of the
 // session panel. Its composer sends and interrupts through the agent source, as the orchestrate
 // pill and the questions card do (D252); without a source it sends nothing. The stop ends its
@@ -65,6 +133,7 @@ func (f *Frame) attachChat(env view.Env, src agentstate.AgentSource) (stop func(
 	} else {
 		log.Printf("chat: no home folder, no slash popup: %v", err)
 	}
+	f.Chat.Path = pathSource{worker: f.agentAt}
 	if f.Outline != nil {
 		f.Outline.Chat = f.chatOutline
 	}
