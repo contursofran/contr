@@ -349,10 +349,10 @@ func TestUIThemeGetsPaletteValues(t *testing.T) {
 		}{
 			{"Background", u.Background, p.GlassWindow}, {"Surface", u.Surface, p.Hover},
 			{"SurfaceHover", u.SurfaceHover, p.HoverStrong}, {"SurfacePressed", u.SurfacePressed, p.Press},
-			{"Border", u.Border, p.InputLine}, {"Text", u.Text, p.Ink95},
-			{"TextMuted", u.TextMuted, p.Ink50}, {"Danger", u.Danger, p.Blocked},
+			{"Border", u.Border, p.InputLine}, {"Text", u.Text, p.Ink88},
+			{"TextMuted", u.TextMuted, p.Ink48}, {"Danger", u.Danger, p.Blocked},
 			{"Focus", u.Focus, p.FocusRing}, {"Selection", u.Selection, p.Selected},
-			{"Warning", u.Warning, p.Ink85},
+			{"Warning", u.Warning, p.Ink88},
 		}
 		for _, c := range checks {
 			if c.got != c.want {
@@ -379,7 +379,7 @@ func TestApplySetsUITheme(t *testing.T) {
 	for _, p := range []*Palette{Light, Dark} {
 		current.Store(p)
 		ui.NewTester(view, 100, 40)
-		if seen.Text != p.Ink95 || seen.Dark != p.Dark {
+		if seen.Text != p.Ink88 || seen.Dark != p.Dark {
 			t.Errorf("dark=%v: ui theme Text = %v, Dark = %v", p.Dark, seen.Text, seen.Dark)
 		}
 	}

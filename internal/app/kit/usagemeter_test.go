@@ -84,8 +84,8 @@ func TestASoonMeterIsInk100(t *testing.T) {
 		ink  ui.Color
 	}{
 		{Meter{Value: "86%", Has: true, Soon: true}, "86%", p.Ink100},
-		{Meter{Value: "45%", Has: true}, "45%", p.Ink62},
-		{Meter{Value: "86%", Soon: true}, NoValue, p.Ink42},
+		{Meter{Value: "45%", Has: true}, "45%", p.Ink64},
+		{Meter{Value: "86%", Soon: true}, NoValue, p.Ink48},
 	} {
 		if text, ink := meterValueText(p, c.m); text != c.text || ink != c.ink {
 			t.Errorf("%+v: %q %v, want %q %v", c.m, text, ink, c.text, c.ink)

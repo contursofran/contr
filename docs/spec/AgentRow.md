@@ -13,9 +13,9 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
 | Part | Value |
 |---|---|
 | Row | orchestrator padding `7px 10px`, worker padding `5px 10px`, gap `space-10`, radius `radius-8` |
-| Leading | Claude glyph (orchestrator; grey `ink-45` for a Claude session that does not orchestrate, D191) or dot StatusGlyph (worker) |
-| Line 1 | title in `body`, `ink-60`; one line, ellipsis. A worker shows its issue title, else its task (the terminal title); an orchestrator its name |
-| Line 2 | mono `meta` (11px), `ink-42`, items `space-10` apart: worker name, model and effort, then the age at the right ("b-241  sonnet medium  6m"). An orchestrator shows its role in place of the name: "2 workers", or "orchestrator" with no workers yet; a Claude session that does not orchestrate shows none (D191) |
+| Leading | Claude glyph (orchestrator; grey `ink-48` for a Claude session that does not orchestrate, D191) or dot StatusGlyph (worker) |
+| Line 1 | title in `body`, `ink-64`; one line, ellipsis. A worker shows its issue title, else its task (the terminal title); an orchestrator its name |
+| Line 2 | mono `meta` (11px), `ink-48`, items `space-10` apart: worker name, model and effort, then the age at the right ("b-241  sonnet medium  6m"). An orchestrator shows its role in place of the name: "2 workers", or "orchestrator" with no workers yet; a Claude session that does not orchestrate shows none (D191) |
 | Indent | the orchestrator row sits 16px in from its project row (D169) |
 | Item badge | orchestrator rows with open items (D240): at the right of line 1, `space-8` from the title, height 16px; the number alone in `badge` (mono 11px, 600), `blocked-text`. No pill (D249) |
 | Kids indent | workers sit 26px further in than the orchestrator row; no rail line, the indent alone groups them (D258) |
@@ -24,7 +24,7 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
 
 - **Default.**
 - **Hover:** fill `hover`.
-- **Selected (D249):** fill `selected-quiet`, no ring. Title turns `ink-100`, line 2 `ink-62`. The tabs and the right panel follow the selected row.
+- **Selected (D249):** fill `selected-quiet`, no ring. Title turns `ink-100`, line 2 `ink-64`. The tabs and the right panel follow the selected row.
 - **Needs you (D249):** a worker blocked on a menu, or in error. Red never fills or rings the row: the glyph dots turn `blocked`, the title is `ink-100`, and line 2 starts with "needs you" in `blocked-text`. Then, in the line 2 ink: " · " and the block kind (`permission`, `question` or `auth`), then " · " and the worker name when line 1 does not show it ("needs you · permission · b-250"). This part is clipped with an ellipsis; the age stays at the right. The model and CI are left out. When the kind is not known (an error, or another kind), the kind is left out ("needs you · b-250"). Selected and needs you: the `selected-quiet` fill and the same red parts. An orchestrator keeps its look: its item badge counts the menu (D240).
 - **Items for you (D240):** an orchestrator whose project has open items
   that belong to it or its workers shows the item badge with their number.
@@ -107,7 +107,7 @@ Design system page: component AgentRow. Shared rules: [README.md](README.md).
 
 ## Tokens
 
-`hover`, `selected-quiet`, `blocked-text`, `ink-100`, `ink-62`, `ink-60`, `ink-42`, `space-8`, `space-10`, `radius-8`, `body`, `meta`, `badge`, `blocked`, `ground`.
+`hover`, `selected-quiet`, `blocked-text`, `ink-100`, `ink-64`, `ink-48`, `space-8`, `space-10`, `radius-8`, `body`, `meta`, `badge`, `blocked`, `ground`.
 
 ## Build in MyGo
 

@@ -68,13 +68,13 @@ func (s Status) glyph(p *theme.Palette) (file string, color ui.Color) {
 	case Working:
 		return "working_ring", p.Ink30
 	case Waiting:
-		return "waiting", p.Ink50
+		return "waiting", p.Ink48
 	case Idle:
-		return "idle", p.Ink50
+		return "idle", p.Ink48
 	case Done:
-		return "done", p.Ink50
+		return "done", p.Ink48
 	case Fyi:
-		return "fyi", p.Ink50
+		return "fyi", p.Ink48
 	default:
 		return "not_started", p.Ink30
 	}

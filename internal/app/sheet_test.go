@@ -46,7 +46,7 @@ var sheetParts = []apptest.SheetPart{
 				for _, g := range glyphs[line*4 : line*4+4] {
 					ui.Row(c).Width(160).Gap(8).AlignItems(ui.Center).Children(func() {
 						kit.StatusGlyph(c, g.o)
-						ui.Text(c, g.text).TextColor(theme.Current().Ink62)
+						ui.Text(c, g.text).TextColor(theme.Current().Ink64)
 					})
 				}
 			})
@@ -59,11 +59,11 @@ var sheetParts = []apptest.SheetPart{
 			kit.IconButton(c, kit.IconButtonOpts{Icon: "search", Label: "Search"})
 			kit.IconButton(c, kit.IconButtonOpts{Icon: "plus", Label: "New tab"})
 			kit.IconButton(c, kit.IconButtonOpts{Icon: "sidebar-right", Label: "Files", On: &on})
-			ui.Text(c, "pressed").TextColor(theme.Current().Ink50)
+			ui.Text(c, "pressed").TextColor(theme.Current().Ink48)
 			kit.IconButton(c, kit.IconButtonOpts{Icon: "settings", Label: "Settings", Small: true})
-			ui.Text(c, "24px footer").TextColor(theme.Current().Ink50)
+			ui.Text(c, "24px footer").TextColor(theme.Current().Ink48)
 			kit.IconButton(c, kit.IconButtonOpts{Icon: "close", Label: "Close", Small: true})
-			ui.Text(c, "close, 16px").TextColor(theme.Current().Ink50)
+			ui.Text(c, "close, 16px").TextColor(theme.Current().Ink48)
 		})
 	}},
 	{Name: "DiffSummary", W: 500, H: 30, View: func(c *ui.Context) {
@@ -168,11 +168,11 @@ func sheetPanel(c *ui.Context) {
 	ui.Row(c).Fill().AlignItems(ui.Stretch).Gap(theme.PanelGap).Padding(theme.PanelGap).Background(p.GlassWindow).Children(func() {
 		ui.Column(c).Width(220).Children(func() {
 			kit.Panel(c, kit.PanelOpts{Name: "contr", Body: func() {
-				ui.Text(c, "wing: no fill, no line").TextColor(p.Ink50)
+				ui.Text(c, "wing: no fill, no line").TextColor(p.Ink48)
 			}})
 		})
 		kit.Panel(c, kit.PanelOpts{Name: "stage", Stage: true, Body: func() {
-			ui.Text(c, "stage: fill and line").TextColor(p.Ink95)
+			ui.Text(c, "stage: fill and line").TextColor(p.Ink88)
 		}})
 	})
 }

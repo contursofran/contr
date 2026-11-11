@@ -12,8 +12,8 @@ Design system page: component DiffSummary. Shared rules: [README.md](README.md).
 
 `+120  −126  9 files`, in style `value` (mono 11.5/16):
 
-- Added count and file count: `ink-42`.
-- Removed count: `ink-30`.
+- Added count and file count: `ink-48`.
+- Removed count: `ink-48`.
 
 The counts sit `space-8` apart. The button has padding `4px 8px` and radius `radius-7`.
 
@@ -56,7 +56,7 @@ The counts sit `space-8` apart. The button has padding `4px 8px` and radius `rad
 
 ## Tokens
 
-`value` type style, `ink-42`, `ink-30`, `hover`, `radius-7`, `space-8`.
+`value` type style, `ink-48`, `hover`, `radius-7`, `space-8`.
 
 ## Build in MyGo
 

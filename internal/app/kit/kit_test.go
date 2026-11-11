@@ -199,7 +199,7 @@ func TestSwitchLook(t *testing.T) {
 
 func TestCountsWithShowsOnlyTheCountsAskedFor(t *testing.T) {
 	p := theme.Dark
-	look := CountsLook{Added: p.Ink40, Removed: p.Ink24, Gap: theme.Space6, Style: theme.StyleMeta}
+	look := CountsLook{Added: p.Ink48, Removed: p.Ink48, Gap: theme.Space6, Style: theme.StyleMeta}
 	build := func(only CountsOnly) *ui.Tester {
 		look.Only = only
 		return ui.NewTester(func(c *ui.Context) { CountsWith(c, 7, 2, look) }, 200, 40)
@@ -271,8 +271,8 @@ func TestRowAndSwitchFollowTheTheme(t *testing.T) {
 	}
 }
 
-// Diff counts and the code theme use greys, not hues: added ink-42, removed
-// ink-30 (docs/spec/DiffSummary.md), in each theme (#403, D157).
+// Diff counts and the code theme use greys, not hues: counts in ink-48, the code theme
+// added ink-48 and deleted ink-30 (docs/spec/DiffSummary.md), in each theme (#403, D157).
 func TestCountsAndCodeThemeUseInks(t *testing.T) {
 	for _, tc := range []struct {
 		src mygo.ThemeSource
@@ -285,7 +285,7 @@ func TestCountsAndCodeThemeUseInks(t *testing.T) {
 			ui.Column(c).Fill().Background(tc.pal.Ground).Children(func() { Counts(c, 3, 1) })
 		}, 200, 40)
 		tt.Frame()
-		if th.Added != theme.Over(tc.pal.Ink42, tc.pal.Ground) || th.Deleted != theme.Over(tc.pal.Ink30, tc.pal.Ground) {
+		if th.Added != theme.Over(tc.pal.Ink48, tc.pal.Ground) || th.Deleted != theme.Over(tc.pal.Ink30, tc.pal.Ground) {
 			t.Errorf("code theme added %v deleted %v", th.Added, th.Deleted)
 		}
 		r, ok := tt.Find(CountsText(3, 1))
@@ -308,7 +308,7 @@ func TestCountsAndCodeThemeUseInks(t *testing.T) {
 				}
 			}
 		}
-		want := theme.Over(tc.pal.Ink42, tc.pal.Ground)
+		want := theme.Over(tc.pal.Ink48, tc.pal.Ground)
 		if diff := int(best[0]) - int(want.R); diff > 12 || diff < -12 {
 			t.Errorf("added count pixel %v, want grey near %v", best, want)
 		}

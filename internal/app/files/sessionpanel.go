@@ -179,9 +179,9 @@ func section(c *ui.Context, name, count string, rows func()) {
 	p := theme.Current()
 	ui.Column(c).Label(name).Shrink(0).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(theme.Space8).Padding(theme.Space2, theme.Space4, theme.Space4, theme.Space10).Children(func() {
-			ui.Text(c, name).SingleLine().Grow(1).MinWidth(0).TextColor(p.Ink45).
+			ui.Text(c, name).SingleLine().Grow(1).MinWidth(0).TextColor(p.Ink48).
 				FontSize(theme.StyleLabel.Size).FontWeight(theme.StyleLabel.Weight)
-			ui.Text(c, count).SingleLine().Shrink(0).PaddingEnd(theme.Space6).TextColor(p.Ink38).
+			ui.Text(c, count).SingleLine().Shrink(0).PaddingEnd(theme.Space6).TextColor(p.Ink48).
 				Font(theme.StyleMeta.Family()).FontSize(theme.StyleMeta.Size)
 		})
 		rows()
@@ -229,12 +229,12 @@ func sessionRow(e ui.Element, label string) ui.Element {
 
 func todoRow(c *ui.Context, t session.Todo) {
 	p := theme.Current()
-	ink, iconInk := p.Ink60, p.Ink35
+	ink, iconInk := p.Ink64, p.Ink30
 	switch t.Status {
 	case session.Completed:
-		ink, iconInk = p.Ink30, p.Ink30
+		ink, iconInk = p.Ink48, p.Ink30
 	case session.InProgress:
-		ink = p.Ink90
+		ink = p.Ink88
 	}
 	sessionRow(ui.Row(c), TodoLabel(t)).Children(func() {
 		switch t.Status {
@@ -252,7 +252,7 @@ func todoRow(c *ui.Context, t session.Todo) {
 		}
 		if t.You {
 			// Plain text, no ring (D258).
-			ui.Text(c, LabelYouTag).Label(LabelYouTag).SingleLine().Shrink(0).TextColor(p.Ink50).
+			ui.Text(c, LabelYouTag).Label(LabelYouTag).SingleLine().Shrink(0).TextColor(p.Ink48).
 				Font(theme.StyleMeta.Family()).FontSize(10.5)
 		}
 	})
@@ -347,16 +347,16 @@ func (s *SessionPanel) artifacts(c *ui.Context, arts []session.Artifact, now tim
 	section(c, LabelArtifacts, strconv.Itoa(len(arts)), func() {
 		for i, a := range arts {
 			title, url := artifactTitle(a), artifactURL(a)
-			row := sessionRow(ui.ButtonBase(c.Key("artifact "+strconv.Itoa(i))), "Open "+title).TextColor(p.Ink60)
+			row := sessionRow(ui.ButtonBase(c.Key("artifact "+strconv.Itoa(i))), "Open "+title).TextColor(p.Ink64)
 			if url != "" {
 				row = row.Cursor(ui.CursorPointer)
 			}
 			row.Children(func() {
-				lineIcon(c, "artifact", p.Ink38)
-				ui.Text(c, title).SingleLine().Ellipsis("…").Grow(1).MinWidth(0).TextColor(p.Ink60).
+				lineIcon(c, "artifact", p.Ink30)
+				ui.Text(c, title).SingleLine().Ellipsis("…").Grow(1).MinWidth(0).TextColor(p.Ink64).
 					FontSize(theme.StyleRowSmall.Size)
 				if age := ArtifactAge(now, a.UpdatedAt); age != "" {
-					ui.Text(c, age).SingleLine().Shrink(0).TextColor(p.Ink38).
+					ui.Text(c, age).SingleLine().Shrink(0).TextColor(p.Ink48).
 						Font(theme.StyleMeta.Family()).FontSize(theme.StyleMeta.Size)
 				}
 			})
