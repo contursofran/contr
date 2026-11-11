@@ -120,7 +120,7 @@ func TestJumpToLatest(t *testing.T) {
 		t.Fatalf("scrolled up: jump %v, new %v; texts %v", r.has(TextJump), r.has(TextNew), r.tt.Texts())
 	}
 	r.write(turns(1, 7)...)
-	if !r.has(TextJump + ", new messages") || !r.tt.HasText(TextNew) {
+	if !r.has(TextJump+", new messages") || !r.tt.HasText(TextNew) {
 		t.Fatalf("content came: no New messages in %v", r.tt.Texts())
 	}
 	if err := r.tt.Click(TextJump + ", new messages"); err != nil {

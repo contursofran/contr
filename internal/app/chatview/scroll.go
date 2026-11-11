@@ -83,7 +83,7 @@ func (ch *Chat) pinned(c *ui.Context, i int) {
 	if p, sw := ch.panel.Bounds(c), ch.switchBox.Bounds(c); sw.W > 0 && p.W > 0 {
 		right = max(p.X+p.W-sw.X+theme.Space12, theme.Space12)
 	}
-	ui.ButtonBase(c).Label(LabelPinned+" "+text).Absolute().Top(0).Left(0).Right(0).Height(topSpace).
+	ui.ButtonBase(c).Label(LabelPinned + " " + text).Absolute().Top(0).Left(0).Right(0).Height(topSpace).
 		Background(pal.StageBase()).Cursor(ui.CursorPointer).
 		OnClick(func() { ch.list.ScrollTo(i, ui.Start) }).Children(func() {
 		ui.Row(c).Fill().AlignItems(ui.Center).Gap(theme.Space12).Padding(0, right, 0, theme.Space16).Children(func() {
@@ -104,7 +104,7 @@ func (ch *Chat) jump(c *ui.Context, news bool) {
 	}
 	ui.Row(c).Absolute().Left(0).Right(0).Bottom(theme.Space8).Justify(ui.Center).PassThrough().Children(func() {
 		b := ui.ButtonBase(c).Label(label).Row().Height(jumpHeight).AlignItems(ui.Center).Gap(theme.Space8).
-			Padding(0, 13, 0, 11).Radius(jumpHeight / 2).Background(pal.FloatSolid).Border(1, pal.FloatLine).
+			Padding(0, 13, 0, 11).Radius(jumpHeight/2).Background(pal.FloatSolid).Border(1, pal.FloatLine).
 			Cursor(ui.CursorPointer).OnClick(func() {
 			ch.list.ScrollToEnd()
 			ch.away = false
