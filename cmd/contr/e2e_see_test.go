@@ -197,6 +197,12 @@ var seeFixtures = map[string]seeFixture{
 		ready: "lead, ",
 		press: []string{"Chat"},
 	},
+	"chat-next": {
+		about: "the chat fixture with lead idle and a suggested next prompt in its terminal's input line (D281): the composer shows it in place of the placeholder",
+		setup: func(t *testing.T, h *harness) { seeChatAs(t, h, "claude-next") },
+		ready: "lead, ",
+		press: []string{"Chat"},
+	},
 	"chat-blocks": {
 		about: "the orchestrator lead in Chat mode with an older status board (frozen: the agent's three columns, its answer's time), the live board (state, PR and checks from a fake gh: CI running 2 of 3, CI passed 3 of 3, building, waiting, and a worker that is not found) and a merge queue (merged, CI running, blocked: 1 check failed, a note) (D267)",
 		setup: seeChatBlocks,

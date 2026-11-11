@@ -118,13 +118,13 @@ type chunk struct {
 // again with backoff and with Resumed, and holds what is typed meanwhile. Its
 // Read ends only when Close is called, so the plugin keeps its screen.
 type Conn struct {
-	src Source
-	on  func(State)
+	src   Source
+	on    func(State)
 	onOut func() // Options.OnOutput
-	ctx context.Context
-	end context.CancelFunc
-	wg  sync.WaitGroup
-	out chan chunk // output and sizes from the pump to Read
+	ctx   context.Context
+	end   context.CancelFunc
+	wg    sync.WaitGroup
+	out   chan chunk // output and sizes from the pump to Read
 
 	rmu sync.Mutex // Read's leftover
 	buf []byte
