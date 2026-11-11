@@ -127,14 +127,8 @@ func (ch *Chat) View(c *ui.Context) {
 				ch.jump(c, sc.news)
 			}
 		})
-		ui.Column(c).FillWidth().Shrink(0).Gap(theme.Space12).Padding(0, theme.Space20, theme.Space14).Children(func() {
-			// While the session orchestrates, the team row takes the live line's place and carries
-			// its text, so the dock does not change height when work starts and stops.
-			if t, ok := ch.teamOf(id); ok {
-				ch.team(c, t, st)
-			} else {
-				ch.live(c, st)
-			}
+		// The dock is the composer card, with the team row or the live line on top (D271).
+		ui.Column(c).FillWidth().Shrink(0).Padding(0, theme.Space20, theme.Space14).Children(func() {
 			ch.composer(c, id, st)
 		})
 	})
