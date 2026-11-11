@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
@@ -19,9 +20,14 @@ import (
 const (
 	// LabelComposer names the field; its placeholder is "Message <name>…".
 	LabelComposer = "Message"
-	// LabelCard names the card: the top line, the field, the button and the foot (D271).
+	// LabelCard names the card: the field and the button (D271, D276).
 	LabelCard = "composer"
-	// LabelSend names the round button while it sends: with text, or dimmed while idle and empty.
+	// LabelFooter names the line under the card: the status at its left, the model at its right
+	// (D276).
+	LabelFooter = "composer footer"
+	// TextKeys is the footer's left text while the agent does not work.
+	TextKeys = "⏎ send · ⇧⏎ new line"
+	// LabelSend names the round button while the field has text.
 	LabelSend = "Send"
 	// LabelStop names the round button while the agent works and the field is empty.
 	LabelStop = "Stop"
@@ -42,16 +48,16 @@ const (
 	keyEnter      = '\r'
 )
 
-// Sizes of the composer card (D271).
+// Sizes of the composer card (D271, D276).
 const (
 	composerLines = 8  // the field grows to this many lines, then scrolls
-	actionSize    = 28 // the round button
-	cardPadY      = theme.Space6
-	cardPadLeft   = theme.Space14
-	cardPadRight  = theme.Space8 // the button sits closer to the edge than the text
-	// cardInset is the room the card takes from the column's width: its border and paddings.
-	cardInset = 2 + cardPadLeft + cardPadRight
-	// fieldGap is the room between the top line and the field.
+	actionSize    = 30 // the round button
+	cardPadY      = theme.Space8
+	cardPadLeft   = theme.Space8
+	cardPadRight  = theme.Space8
+	footerHeight  = 18            // the line under the card
+	footerInset   = theme.Space16 // its side inset
+	// fieldGap is the room between the image chips and the field.
 	fieldGap = theme.Space2
 )
 
@@ -60,7 +66,7 @@ type Action int
 
 // The actions of the round button.
 const (
-	// ActionIdle is Send, dimmed: nothing to send and nothing to stop.
+	// ActionIdle is no button: nothing to send and nothing to stop (D276).
 	ActionIdle Action = iota
 	// ActionSend sends the text, also while the agent works: the message queues (D265).
 	ActionSend
@@ -69,7 +75,7 @@ const (
 )
 
 // ActionOf is the round button's action: Send with text, Stop while the agent works and the
-// field is empty (when it can be stopped), else Send dimmed.
+// field is empty (when it can be stopped), else no button.
 func ActionOf(text string, working, canStop bool) Action {
 	switch {
 	case strings.TrimSpace(text) != "":
@@ -98,48 +104,43 @@ func (ch *Chat) draft(id string) *string {
 	return d
 }
 
-// composer builds the card of terminal id (D271): one surface with, on top, the team row or the
-// live line when there is one; the field that grows with its text and, in line with its last line,
-// the round Send or Stop button; under it the model and context. The last failure shows under the
-// card. The field takes the focus as it appears: when the chat shows.
+// composerText is the field's text: 14px on 22px lines (D276).
+var composerText = theme.TextStyle{Size: 14, Line: 22, Weight: 400}
+
+// composer builds the card of terminal id (D271, D276). Above the card, outside it, the team row
+// while the session orchestrates. The card holds the field that grows with its text and, in line with its last
+// line, the round Send or Stop button. Under the card, outside it, the footer: the status at the
+// left, the model and context at the right. The last failure shows under the footer. The field
+// takes the focus as it appears: when the chat shows.
 func (ch *Chat) composer(c *ui.Context, id string, st liveState) {
 	pal := theme.Current()
 	draft := ch.draft(id)
+	ct := ch.ts(composerText) // the field follows the Chat text size (D272)
 	column(c, func() {
+		// While the session orchestrates, the team row sits above the card, outside it (D276).
+		if t, ok := ch.teamOf(id); ok {
+			ch.team(c, t)
+		}
 		card := ui.Column(c).Label(LabelCard).FillWidth().Padding(cardPadY, cardPadRight, cardPadY, cardPadLeft).
 			Radius(theme.Radius12).Border(1, pal.InputLine).Background(pal.Hover).Children(func() {
-			// While the session orchestrates, the team row takes the live line's place and carries
-			// its text, so the card does not change height when work starts and stops.
-			top := false
-			if t, ok := ch.teamOf(id); ok {
-				ch.team(c, t, st)
-				top = true
-			} else {
-				top = ch.live(c, st)
-			}
-			// The chips of the images pasted since the last send, between the top line and the field
+			// The chips of the images pasted since the last send, above the field
 			// (D269).
 			if n := ch.attached[id]; n > 0 {
-				chips := ui.Row(c).FillWidth().Wrap().Gap(theme.Space6).Padding(theme.Space6, 0, theme.Space2, 0)
-				if top {
-					chips = chips.Margin(fieldGap, 0, 0, 0)
-				}
-				chips.Children(func() {
+				ui.Row(c).FillWidth().Wrap().Gap(theme.Space6).Padding(theme.Space6, 0, theme.Space2, 0).Children(func() {
 					for i := range n {
 						ch.imageChip(c, "Image "+strconv.Itoa(i+1), LabelAttached)
 					}
 				})
-				top = true
 			}
 			svc := c.Services()
 			field := ui.Row(c).FillWidth().AlignItems(ui.End).Gap(theme.Space8)
-			if top {
+			if ch.attached[id] > 0 {
 				field = field.Margin(fieldGap, 0, 0, 0)
 			}
 			field.Children(func() {
 				in := ui.TextAreaBase(c.Key("composer:"+id), draft).Label(LabelComposer).Placeholder(Placeholder(ch.name(id))).
-					PlaceholderColor(pal.Ink48).TextColor(pal.Ink100).FontSize(ch.ts(theme.StyleProse).Size).LineHeight(ch.ts(theme.StyleProse).Line/ch.ts(theme.StyleProse).Size).
-					Lines(1, composerLines).Grow(1).MinWidth(0).PaddingY((actionSize - ch.ts(theme.StyleProse).Line) / 2).AutoFocus().Bind(&ch.field).
+					PlaceholderColor(pal.Ink48).TextColor(pal.Ink100).FontSize(ct.Size).LineHeight(ct.Line/ct.Size).
+					Lines(1, composerLines).Grow(1).MinWidth(0).Padding((actionSize-ct.Line)/2, 0, (actionSize-ct.Line)/2, theme.Space6).AutoFocus().Bind(&ch.field).
 					OnTextKey(func(k ui.TextKey) bool { return ch.textKey(id, st, k) }).
 					OnPaste(func(text string) bool { return ch.paste(id, svc, text) })
 				if in.Changed() {
@@ -150,28 +151,66 @@ func (ch *Chat) composer(c *ui.Context, id string, st liveState) {
 					// Pasted images are something to send (D269).
 					a = ActionSend
 				}
-				ch.action(c, id, st, a)
-			})
-			if ch.Meta != nil {
-				if m := ch.Meta(id); m != "" {
-					kit.Styled(ui.Text(c, m), ch.ts(theme.StyleMeta)).SingleLine().MinWidth(0).TextColor(pal.Ink48)
+				if a == ActionIdle {
+					// No button: the field keeps the height of one.
+					ui.Box(c).Size(0, actionSize).Shrink(0)
+				} else {
+					ch.action(c, id, st, a)
 				}
-			}
+			})
 		})
 		if paths := card.DroppedFiles(); len(paths) > 0 {
 			ch.drop(draft, paths)
 			ch.field.Focus()
 		}
+		ch.footer(c, id, st)
 		if e := ch.errs[id]; e != "" {
 			kit.Styled(ui.Text(c, e), ch.ts(theme.StyleSmall)).Wrap().
-				Padding(theme.Space6, cardPadLeft, 0).TextColor(pal.Ink64)
+				Padding(theme.Space6, footerInset, 0).TextColor(pal.Ink64)
+		}
+	})
+}
+
+// footer is the line under the card (D276), mono meta in ink-48: at the left the working glyph and
+// "Working 7s · Bash · gh pr diff 633" while the agent works, which asks for a redraw each second
+// (D55), else the keys; at the right the model and context, which never clips: the left text
+// clips first.
+func (ch *Chat) footer(c *ui.Context, id string, st liveState) {
+	pal := theme.Current()
+	ui.Row(c).Label(LabelFooter).FillWidth().Height(footerHeight).Padding(0, footerInset).AlignItems(ui.Center).
+		Gap(theme.Space8).Children(func() {
+		left := ui.Row(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(theme.Space6)
+		if st.kind == liveWorking {
+			text := TextWorking
+			what, start, ok := ch.model.Activity()
+			if ok {
+				text += " " + ElapsedText(c.Now().Sub(start))
+				ch.ticks = true
+				c.After(time.Second)
+			}
+			if what != "" && what != TextWorking {
+				text += " · " + what
+			}
+			left.Label(LabelLive + " " + text).Children(func() {
+				kit.StatusGlyph(c, kit.GlyphOpts{State: kit.GlyphWorking, Small: true})
+				kit.Styled(ui.Text(c, text), ch.ts(theme.StyleMeta)).SingleLine().Ellipsis("…").MinWidth(0).TextColor(pal.Ink48)
+			})
+		} else {
+			left.Children(func() {
+				kit.Styled(ui.Text(c, TextKeys), ch.ts(theme.StyleMeta)).SingleLine().MinWidth(0).TextColor(pal.Ink48)
+			})
+		}
+		if ch.Meta != nil {
+			if m := ch.Meta(id); m != "" {
+				kit.Styled(ui.Text(c, m), ch.ts(theme.StyleMeta)).NoWrap().Shrink(0).TextColor(pal.Ink48)
+			}
 		}
 	})
 }
 
 // action is the round button of the card: Send in ink-100 with a ground arrow, the one strong
-// thing of the card; Stop as a quiet outline with a square; Send dimmed as an outline with a dim
-// arrow, which takes no click. A click gives the focus back to the field.
+// thing of the card; Stop as a quiet 1px ring with a 9px square. A click gives the focus back to
+// the field.
 func (ch *Chat) action(c *ui.Context, id string, st liveState, a Action) {
 	pal := theme.Current()
 	label, tip := LabelSend, TipSend
@@ -193,15 +232,12 @@ func (ch *Chat) action(c *ui.Context, id string, st liveState, a Action) {
 		if b.Hovered() {
 			b = b.Background(pal.HoverStrong)
 		}
-	default:
-		mark = pal.Ink30
-		b = b.Border(1, pal.InputLine).Disabled(true)
 	}
 	focus := b.FocusVisible()
 	b.Draw(func(p *ui.Painter, r ui.Rect) {
 		cx, cy := r.X+r.W/2, r.Y+r.H/2
 		if a == ActionStop {
-			const s = 8
+			const s = 9
 			p.Fill(ui.Rect{X: cx - s/2, Y: cy - s/2, W: s, H: s}, mark, 1.5)
 		} else {
 			arrow := &ui.Path{}

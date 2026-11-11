@@ -196,7 +196,7 @@ func TestLiveLineWorking(t *testing.T) {
 	turn := s.tt.Now().Add(-65 * time.Second).UTC().Format(time.RFC3339Nano)
 	lTurn := strings.Replace(lTurn, "2026-11-10T10:00:00Z", turn, 1)
 	s.write(lTurn, lRunning)
-	if !s.has(LabelLive+" Bash · go test ./...") || !s.tt.HasText("1m 5s") {
+	if !s.has(LabelLive+" "+TextWorking+" 1m 5s · Bash · go test ./...") || s.tt.HasText(TextKeys) {
 		t.Fatalf("running tool: texts %v", s.tt.Texts())
 	}
 	if !s.has(LabelStop) {
@@ -209,21 +209,13 @@ func TestLiveLineWorking(t *testing.T) {
 		t.Error("a working agent with a turn time asks for no redraw")
 	}
 	s.tt.Advance(1100 * time.Millisecond)
-	if !s.tt.HasText("1m 6s") {
+	if !s.tt.HasText(TextWorking + " 1m 6s") {
 		t.Errorf("the time does not count: %v", s.tt.Texts())
-	}
-	s.write(lTurn, lRunning, lThink)
-	if !s.has(LabelLive + " " + TextThinking) {
-		t.Errorf("thinking: texts %v", s.tt.Texts())
-	}
-	s.write(lTurn, lRunning, lThink, lDone, lSaid2)
-	if !s.has(LabelLive + " " + TextWorking) {
-		t.Errorf("working: texts %v", s.tt.Texts())
 	}
 	// Without a time, no time shows and no redraw is asked.
 	s.write(lTurn, lRunning, lThink, lDone, lSaid2, `{"type":"user","uuid":"p2","message":{"content":"go"}}`)
 	for _, x := range s.tt.Texts() {
-		if elapsedRe.MatchString(x) {
+		if elapsedRe.MatchString(x) || x != TextWorking && strings.HasPrefix(x, TextWorking+" ") {
 			t.Errorf("a turn without time shows %q", x)
 		}
 	}
@@ -237,8 +229,8 @@ var elapsedRe = regexp.MustCompile(`^\d+(m \d+)?s$`)
 func TestIdleHasNoLineAndNoRedraw(t *testing.T) {
 	s := newSession(t, "idle")
 	s.write(lTurn, lRunning)
-	if s.has(LabelLive) {
-		t.Errorf("a live line while idle: %v", s.tt.Texts())
+	if s.has(LabelLive) || !s.tt.HasText(TextKeys) {
+		t.Errorf("idle: a working status or no keys: %v", s.tt.Texts())
 	}
 	s.tt.Advance(2 * theme.MotionSelect) // past the end of the fade of the Chat | Terminal switch (D256)
 	if s.ch.ticks || s.tt.FramePending() {
@@ -292,16 +284,23 @@ func (s *sess) rect(label string) ui.Rect {
 	return r
 }
 
-// The round button while idle and empty is Send, dimmed: a click sends nothing (D271).
-func TestComposerIdleEmptySendIsDimmed(t *testing.T) {
+// Idle and empty, the card has no button and the footer shows the keys (D276); with text, Send
+// shows.
+func TestComposerIdleEmptyHasNoButton(t *testing.T) {
 	s := newSession(t, "idle")
-	if !s.has(LabelSend) || s.has(LabelStop) {
+	if s.has(LabelSend) || s.has(LabelStop) {
 		t.Fatalf("idle and empty: send %v, stop %v", s.has(LabelSend), s.has(LabelStop))
 	}
-	_ = s.tt.Click(LabelSend)
-	s.tt.Frame()
-	if len(s.sent) != 0 || s.has(LabelPending) {
-		t.Errorf("the dimmed Send sent %q", s.sent)
+	if !s.tt.HasText(TextKeys) || s.has(LabelLive) {
+		t.Errorf("idle footer: %v", s.tt.Texts())
+	}
+	field := s.rect(LabelComposer)
+	if field.H != actionSize {
+		t.Errorf("the empty field is %vpx high, want %d", field.H, actionSize)
+	}
+	s.typeIn("hi")
+	if !s.has(LabelSend) || s.has(LabelStop) || !s.tt.HasText(TextKeys) {
+		t.Errorf("typing: send %v, stop %v, texts %v", s.has(LabelSend), s.has(LabelStop), s.tt.Texts())
 	}
 }
 
@@ -361,8 +360,7 @@ func TestComposerSendButtonOnAMenuWaits(t *testing.T) {
 // field (12) and the field box (44).
 const todayDock = 20 + 12 + 44
 
-// At rest, with the team row, the card is not taller than the team row and the field were, by more
-// than a few px; the button is in line with the field's one line; the model and context sit under
+// With the team row, the row sits above the card, outside it, its text at the footer's inset; the button is in line with the field's one line; the model and context sit under
 // the field, outside it.
 func TestComposerCardAtRestWithTeam(t *testing.T) {
 	s := newSession(t, "working")
@@ -372,15 +370,24 @@ func TestComposerCardAtRestWithTeam(t *testing.T) {
 	if card.H > todayDock+4 {
 		t.Errorf("the card is %vpx high, today's dock %dpx", card.H, todayDock)
 	}
-	if team.Y < card.Y || team.Y+team.H > field.Y {
-		t.Errorf("the team row %v is not on top of the field %v in the card %v", team, field, card)
+	if team.Y+team.H > card.Y || team.X != card.X {
+		t.Errorf("the team row %v is not above the card %v", team, card)
+	}
+	if head := s.rect("Orchestrating · 2 agents"); head.Y+head.H > card.Y || head.X < card.X+footerInset {
+		t.Errorf("the team head %v is not at the footer's inset above the card %v", head, card)
+	}
+	if field.Y < card.Y || field.Y+field.H > card.Y+card.H {
+		t.Errorf("the field %v is not in the card %v", field, card)
 	}
 	if stop.W != actionSize || stop.H != actionSize || stop.Y+stop.H != field.Y+field.H {
-		t.Errorf("the button %v is not 28px and in line with the field %v", stop, field)
+		t.Errorf("the button %v is not 30px and in line with the field %v", stop, field)
 	}
-	meta := s.rect("opus high · 212k")
-	if meta.Y < field.Y+field.H || meta.Y+meta.H > card.Y+card.H || meta.X != field.X {
-		t.Errorf("the meta %v is not under the field %v in the card %v", meta, field, card)
+	foot, meta := s.rect(LabelFooter), s.rect("opus high · 212k")
+	if foot.Y < card.Y+card.H || foot.H != footerHeight || meta.Y < foot.Y || meta.X+meta.W != foot.X+foot.W-footerInset {
+		t.Errorf("the footer %v with the meta %v is not under the card %v at its right", foot, meta, card)
+	}
+	if !s.footerWorks() {
+		t.Errorf("no working status in the footer: %v", s.tt.Texts())
 	}
 	if field.X+field.W > stop.X {
 		t.Errorf("the field %v runs under the button %v", field, stop)
@@ -411,7 +418,7 @@ func TestComposerGrowsToEightLines(t *testing.T) {
 		s.tt.Frame()
 		return s.rect(LabelComposer).H
 	}
-	line := float32(theme.StyleProse.Line)
+	line := float32(composerText.Line)
 	if h := lines(3); h != one+2*line {
 		t.Errorf("3 lines: %vpx, want %v", h, one+2*line)
 	}
@@ -422,8 +429,20 @@ func TestComposerGrowsToEightLines(t *testing.T) {
 	if h := lines(12); h != eight {
 		t.Errorf("12 lines: %vpx, want the height of 8, %v", h, eight)
 	}
+	*s.ch.draft(term) += "x"
+	s.tt.Frame()
 	field, send := s.rect(LabelComposer), s.rect(LabelSend)
 	if send.Y+send.H != field.Y+field.H {
 		t.Errorf("the button %v is not in line with the last line of the field %v", send, field)
 	}
+}
+
+// footerWorks says whether the footer shows the working status, "Working" and a time.
+func (r *rig) footerWorks() bool {
+	for _, x := range r.tt.Texts() {
+		if strings.HasPrefix(x, LabelLive+" "+TextWorking+" ") {
+			return true
+		}
+	}
+	return false
 }

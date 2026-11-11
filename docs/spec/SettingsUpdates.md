@@ -14,8 +14,11 @@ the herdr-core block (D277). The tab bar is in [SettingsAgents.md](SettingsAgent
 
 ## Behavior
 
-- `Update hc` runs `hc update --json` off the UI thread, with a 5 minute limit. The button is
-  dim while it runs. contr never runs it without the click.
+- A click on `Update hc` opens a confirm (MyGo `AlertDialog`): title `Update hc?`, body
+  `hc downloads the newest version and restarts the core. Running terminals keep running.`,
+  buttons `Cancel` and `Update`. `Cancel` and Escape close it and run nothing.
+- `Update` runs `hc update --json` off the UI thread, with a 5 minute limit. The button is
+  dim while it runs. contr never runs it without the confirm.
 - hc has no check flag, so the tab does not tell of a newer hc before the update.
 - `hc update` puts the new hc in place and restarts the core by itself; the terminals keep
   running. The texts after it:
