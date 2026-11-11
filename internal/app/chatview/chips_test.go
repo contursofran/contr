@@ -55,9 +55,11 @@ func TestTokens(t *testing.T) {
 
 // fakeChips knows some names, and records what is looked up and opened.
 type fakeChips struct {
-	known  map[string]Chip
-	looked []string
-	opened []string
+	known   map[string]Chip
+	workers map[string]WorkerInfo
+	refs    map[int]RefInfo
+	looked  []string
+	opened  []string
 }
 
 func (f *fakeChips) Look(addr string, t Token) (Chip, bool) {
@@ -68,6 +70,16 @@ func (f *fakeChips) Look(addr string, t Token) (Chip, bool) {
 
 func (f *fakeChips) Open(addr string, c Chip, name string) {
 	f.opened = append(f.opened, fmt.Sprintf("%s %d %s", addr, c.Kind, name))
+}
+
+func (f *fakeChips) Worker(addr, name string) (WorkerInfo, bool) {
+	w, ok := f.workers[name]
+	return w, ok
+}
+
+func (f *fakeChips) Ref(addr string, n int) (RefInfo, bool) {
+	r, ok := f.refs[n]
+	return r, ok
 }
 
 func knownChips() *fakeChips {

@@ -77,6 +77,12 @@ type Chat struct {
 	partsOf map[string]string
 	// chips holds the parts of Claude's texts with their chips, by row id and part (chips.go).
 	chips map[string]*chipPart
+	// boards holds what each status board showed while it was live, by row id and part
+	// (blocks.go). newest is the key of the newest board, found when the rows were newestN.
+	boards   map[string]*blockSnap
+	newest   string
+	newestN  int
+	newestOK bool
 	// svc opens the links of Claude's text: the services of the window of the last View.
 	svc ui.Services
 	// field is the composer's field, which takes the focus back after a click on a button.
@@ -98,7 +104,7 @@ type Chat struct {
 func New(env view.Env, stateDir string, watch func(path string, notify func()) (func(), error)) *Chat {
 	ch := &Chat{Env: env, reader: transcript.NewReader(0), chat: map[string]bool{}, folds: map[string]*bool{},
 		drafts: map[string]*string{}, errs: map[string]string{}, parts: map[string][]Part{}, partsOf: map[string]string{},
-		chips: map[string]*chipPart{}}
+		chips: map[string]*chipPart{}, boards: map[string]*blockSnap{}}
 	ch.md.LinkIcon, ch.md.OnLink = chipIcon, ch.openLink
 	ch.src = &chatsource.Source{StateDir: stateDir, Env: env, Watch: watch, Changed: ch.changed}
 	ch.mdHooks()
@@ -165,6 +171,7 @@ func (ch *Chat) changed(reset bool) {
 		ch.folds = map[string]*bool{}
 		ch.parts, ch.partsOf = map[string][]Part{}, map[string]string{}
 		ch.chips = map[string]*chipPart{}
+		ch.boards, ch.newestOK = map[string]*blockSnap{}, false
 		ch.away = false
 		ch.Env.Redraw()
 	}

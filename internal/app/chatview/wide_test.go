@@ -41,7 +41,7 @@ func wideRig(t *testing.T, w int) (prose, table, code ui.Rect) {
 	ch := New(view.Env{}, t.TempDir(), nil)
 	ch.md.Theme = nil
 	tt := ui.NewTester(func(c *ui.Context) {
-		ui.Column(c).Fill().Bind(&ch.panel).Padding(0, 20).Children(func() { ch.said(c, "r1", wideText) })
+		ui.Column(c).Fill().Bind(&ch.panel).Padding(0, 20).Children(func() { ch.said(c, "r1", wideText, "") })
 	}, w, 700)
 	tt.Frame()
 	p, ok := tt.Find("A short line of prose.")

@@ -5,8 +5,10 @@ package chatview
 // session, a failed task outside the fold, the live line of a working agent and the composer
 // (D252). ChatViewWide shows a wide panel with a table wider than the column, ChatViewTeam the
 // team row of an orchestrating session (D259, D260), ChatViewChips the chips of each kind and
-// state in Claude's text (D262), ChatContent one answer with each kind of content (D261), and
-// ChatViewScrolled a chat scrolled up with the pinned prompt and New messages (D266).
+// state in Claude's text (D262), ChatContent one answer with each kind of content (D261),
+// ChatViewScrolled a chat scrolled up with the pinned prompt and New messages (D266), ChatBlocks an
+// older board (frozen), the live board and a queue, and ChatBlocksBlocked a queue with a blocked
+// step (D267).
 
 import (
 	"strconv"
@@ -18,6 +20,7 @@ import (
 
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/github"
 )
 
 const (
@@ -36,6 +39,12 @@ func TestSpecSheet(t *testing.T) {
 		strconv.Quote(contentAnswer)+`}]}}`)
 	chips := sheetChat(t, "idle", lPrompt, said("k1", chipsText))
 	chips.s.ch.Chips = sheetChips
+	blocks := sheetChat(t, "idle", lPrompt, saidAt("o1", today(18, 45), oldBoard), saidAt("n1", today(18, 49), newBoard))
+	blocks.s.ch.Chips = blockChips()
+	keepBoard(blocks.s.ch, "o1", today(18, 45))
+	blocked := sheetChat(t, "idle", lPrompt, saidAt("q1", today(18, 52), blockedQueue))
+	blocked.s.ch.Chips = blockChips()
+	blocked.s.ch.Chips.(*fakeChips).refs[656] = RefInfo{Chip: Chip{ChipPR, StateFailed}, Checks: github.CheckSummary{Pass: 2, Fail: 1}}
 	scrolled := sheetScrolled(t)
 	apptest.SpecSheet(t, []apptest.SheetPart{
 		{Name: "ChatView", W: sheetW, H: sheetH, View: working.view},
@@ -43,8 +52,11 @@ func TestSpecSheet(t *testing.T) {
 		{Name: "ChatViewTeam", W: sheetW, H: 420, View: team.view},
 		{Name: "ChatViewChips", W: sheetW, H: 420, View: chips.view},
 		{Name: "ChatContent", W: sheetW, H: 2300, View: content.view},
+		{Name: "ChatBlocks", W: sheetW, H: 900, View: blocks.view},
 		{Name: "ChatViewScrolled", W: sheetW, H: scrolledH, View: scrolled.view},
-	}, []string{"ChatView", "ChatViewWide", "ChatViewTeam", "ChatViewChips", "ChatContent", "ChatViewScrolled"})
+		{Name: "ChatBlocks", W: sheetW, H: 900, View: blocks.view},
+		{Name: "ChatBlocksBlocked", W: sheetW, H: 360, View: blocked.view},
+	}, []string{"ChatView", "ChatViewWide", "ChatViewTeam", "ChatViewChips", "ChatContent", "ChatViewScrolled", "ChatBlocks", "ChatBlocksBlocked"})
 }
 
 // contentAnswer has each kind of content: headings, lists, a quote, the five remarks, a table

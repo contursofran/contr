@@ -161,7 +161,8 @@ func (ch *Chat) row(c *ui.Context, r Row) {
 			sentAt(c, e.Time)
 		})
 	case RowSaid:
-		ch.said(c, r.ID, ch.model.Entry(r.Entry).Text)
+		e := ch.model.Entry(r.Entry)
+		ch.said(c, r.ID, e.Text, e.Time)
 	case RowGroup:
 		ch.group(c, r)
 	case RowOwnerNote:

@@ -163,6 +163,12 @@ var seeFixtures = map[string]seeFixture{
 		ready: "lead, ",
 		press: []string{"Chat"},
 	},
+	"chat-blocks": {
+		about: "the orchestrator lead in Chat mode with an older status board (frozen: the agent's three columns, its answer's time), the live board (state, PR and checks from a fake gh: CI running 2 of 3, CI passed 3 of 3, building, waiting, and a worker that is not found) and a merge queue (merged, CI running, blocked: 1 check failed, a note) (D267)",
+		setup: seeChatBlocks,
+		ready: "lead, ",
+		press: []string{"Chat"},
+	},
 	"chat-scrolled": {
 		about: "the chat fixture scrolled up into the first turn (D266): its prompt pinned at the top, Jump to latest above the dock, and the time once per turn, under each prompt; the long first prompt ends before the questions notch",
 		setup: seeChatLong,
