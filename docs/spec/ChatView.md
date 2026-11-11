@@ -45,7 +45,7 @@ Shared rules: [README.md](README.md).
 | Owner prompt | right-aligned, at most 560px, padding `8px 13px`, radius `radius-12`, fill `hover`, text `prose` in `ink-100` |
 | Prompt images | the images of a prompt (D269), under the bubble, at the right, `space-6` above, gap `space-6`, wrapping: a `thumb` (64px) thumbnail for each image whose bytes are in the transcript, cropped to fill, `radius-12`, 1px `hairline`; while it is read, a `hover` box of its size. A click opens it larger: over the `scrim`, as large as it is and at most the chat less 40px at each side, `radius-12`; Escape or a click outside closes it. The images with no bytes, and those that do not read or decode, show as one quiet chip after the thumbnails: "1 image" / "2 images", mono `meta`, `ink-48`, padding `2px 8px`, `radius-6`, 1px `hairline`. Their "[Image #N]" marks do not show; a prompt of images alone has no bubble. A pending prompt with images shows the chip. |
 | Sent time | the time the prompt was sent, from its transcript timestamp: one line, mono `meta`, `ink-48` (the lowest text ink with 4.5:1), `space-4` above, under the owner prompt, right-aligned with the bubble. Once per turn: Claude's texts, groups and notes show no time (D266). In the Mac's time zone: "14:32" today, "Yesterday 14:32", else "9 Nov 14:32"; "today" is judged at each build, and nothing ticks (D55). No timestamp, no line; a pending prompt has none. |
-| Claude's text | `markdown.View`: `prose` size and line, sans; text `ink-88`, strong (500) and links `ink-88`, muted `ink-48`; each block as [Content](#content) says |
+| Claude's text | `markdown.View`: `prose` size and line, sans; text `ink-88`, strong (500) `ink-88`; links (Markdown links, bare URLs, file links and chips) in `content-link`, underlined while the pointer is over them (D275), and nothing else in that color; muted `ink-48`; each block as [Content](#content) says |
 | Work group, folded | the tool calls, kit notes and background tasks between two texts, as one row 20px high, mono `value`, `ink-48` (`ink-64` on hover): "2 worker notes · 1 background task · 6 tool calls" (a message of another session counts as a worker note; a part with no item is left out, "1 tool call"), a 6px dot for each worker that sent a note, then `›`. While a call has no result, a working StatusGlyph (14px) comes first. |
 | Work group, open | `⌄`; under it a card, a wide block: at least 584px (or the content width when less), as wide as its longest line (note, task and call lines alike), up to the content width, `space-6` below the row, padding `8px 12px`, radius `radius-9`, line `hairline`: the note lines, a `hairline` rule, the call lines |
 | Note line | 20px, gap `space-8`, mono `meta`: the sender's dot, the name (500, `ink-88`), the text on one line (`ink-48`). An owner answer or done mark has the name "owner". A message of another Claude session or a teammate (D254) has the sender as its name ("session" when it has none) and the first line of the message; a subagent's hand-back is "subagent" and "reported". |
@@ -210,7 +210,7 @@ The row redraws when the agent state changes; it has no timer of its own
 ## Chips
 
 Names in Claude's text that contr knows show live (D262): a 6px dot in the
-color of the state, then the name as a link (`ink-88`). Only text counts:
+color of the state, then the name as a link (`content-link`, D275). Only text counts:
 code, code blocks, links, images and HTML are not touched. A name contr
 does not know stays plain text.
 
