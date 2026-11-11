@@ -11,7 +11,7 @@ import (
 func TestContentColorsAreReadable(t *testing.T) {
 	for _, p := range []*Palette{Dark, Light} {
 		words := map[string]ui.Color{"content-done": p.ContentDone, "content-running": p.ContentRunning,
-			"content-waiting": p.ContentWaiting, "content-failed": p.ContentFailed, "content-info": p.ContentInfo}
+			"content-waiting": p.ContentWaiting, "content-failed": p.ContentFailed, "content-info": p.ContentInfo, "content-link": p.ContentLink}
 		for name, c := range words {
 			if got := contrast(Over(c, p.StageBase()), p.StageBase()); got < 4.5 {
 				t.Errorf("dark=%v: %s has %.2f:1 on the stage, want 4.5:1", p.Dark, name, got)
@@ -39,5 +39,18 @@ func TestContentColorsAreReadable(t *testing.T) {
 func TestContentFailedIsTheChromeRed(t *testing.T) {
 	if Dark.ContentFailed != Dark.Blocked || Light.ContentFailed != Light.BlockedText {
 		t.Errorf("content-failed: Dark %v, Light %v", Dark.ContentFailed, Light.ContentFailed)
+	}
+}
+
+// Links are the one thing in the chat with content-link, and it differs from every other content
+// color, so a link never reads as a state (D275).
+func TestContentLinkIsItsOwnColor(t *testing.T) {
+	for _, p := range []*Palette{Dark, Light} {
+		for _, c := range []ui.Color{p.ContentDone, p.ContentRunning, p.ContentWaiting, p.ContentFailed, p.ContentInfo, p.Ink88} {
+			if p.ContentLink == c {
+				t.Errorf("dark=%v: content-link is %v, the same as another content color", p.Dark, c)
+			}
+		}
+		t.Logf("dark=%v: content-link %.2f:1 on the stage", p.Dark, contrast(Over(p.ContentLink, p.StageBase()), p.StageBase()))
 	}
 }

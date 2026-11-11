@@ -55,6 +55,7 @@ type Palette struct {
 	ContentWaiting ui.Color `token:"content-waiting"`
 	ContentFailed  ui.Color `token:"content-failed"`
 	ContentInfo    ui.Color `token:"content-info"`
+	ContentLink    ui.Color `token:"content-link"`
 	CodeKeyword    ui.Color `token:"code-keyword"`
 	CodeFunction   ui.Color `token:"code-function"`
 	CodeString     ui.Color `token:"code-string"`
@@ -149,6 +150,7 @@ var Dark = &Palette{
 	ContentWaiting: ui.Hex("#d9b36a"),
 	ContentFailed:  ui.Hex("#f07178"),
 	ContentInfo:    white(0.64),
+	ContentLink:    ui.Hex("#8cb8ff"),
 	CodeKeyword:    ui.Hex("#b79ce6"),
 	CodeFunction:   ui.Hex("#86b4ee"),
 	CodeString:     ui.Hex("#9cc58f"),
@@ -217,6 +219,7 @@ var Light = &Palette{
 	ContentWaiting: ui.Hex("#8a5a00"),
 	ContentFailed:  ui.Hex("#b1333f"),
 	ContentInfo:    black(0.7),
+	ContentLink:    ui.Hex("#1a5fd0"),
 	CodeKeyword:    ui.Hex("#8250df"),
 	CodeFunction:   ui.Hex("#1f5fbf"),
 	CodeString:     ui.Hex("#1e763b"),
