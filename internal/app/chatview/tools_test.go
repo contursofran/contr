@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/apptest"
+	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/transcript"
 )
@@ -47,8 +48,8 @@ func TestCallLineIcon(t *testing.T) {
 	tt := ui.NewTester(v.view, sheetW, 700)
 	tt.Frame()
 	for label, icon := range map[string]string{
-		"Skill · chat-writing": "skill", "Slack · send message": "connector", "contr · send": "plugin",
-		"linear · list issues": "connector", "Agent · Explore": "agent", "Fetch": "globe",
+		"Skill · chat-writing": "skill", "Slack · send message": LabelBrand + " slack", "contr · send": "plugin",
+		"linear · list issues": LabelBrand + " linear", "Agent · Explore": "agent", "Fetch": "globe",
 		"Bash": "terminal", "Read": "file", "Grep": "search",
 	} {
 		if apptest.Absent(tt, LabelCall+" "+label) {
@@ -166,5 +167,58 @@ func TestExcerptText(t *testing.T) {
 	}
 	if got := ExcerptText("1\n2\n3\n4\n5\n6"); got != "1\n2\n3\n4…" {
 		t.Errorf("long: %q", got)
+	}
+}
+
+// TestBrand: a server name maps to its mark without regard to case and to the "claude.ai ",
+// "claude_ai_" and "plugin_<plugin>_" prefixes; an unknown server has none (D274).
+func TestBrand(t *testing.T) {
+	for in, want := range map[string]string{
+		"Slack": "slack", "claude.ai Slack": "slack", "claude_ai_Slack": "slack", "SLACK": "slack",
+		"claude_ai_Google_Calendar": "googlecalendar", "Google Drive": "googledrive",
+		"plugin_design_figma": "figma", "plugin_engineering_datadog": "datadog",
+		"plugin_design_google_calendar": "googlecalendar", "linear": "linear", "github": "github",
+		"Atlassian": "atlassian", "jira": "jira", "contr": "", "plugin_contr_contr": "", "": "",
+		"acme": "", "plugin_design": "",
+	} {
+		if got := brand(in); got != want {
+			t.Errorf("brand(%q) = %q, want %q", in, got, want)
+		}
+	}
+	for name, want := range map[string]string{
+		"mcp__claude_ai_Notion__search": "notion", "mcp__plugin_design_slack__x": "slack",
+		"mcp__acme__x": "", "Bash": "", "Skill": "",
+	} {
+		if got := brandOf(&transcript.Call{Name: name}); got != want {
+			t.Errorf("brandOf(%q) = %q, want %q", name, got, want)
+		}
+	}
+}
+
+// TestCallLineBrand: a call of a known server shows its brand mark; an unknown server keeps the
+// generic connector icon (D274).
+func TestCallLineBrand(t *testing.T) {
+	v := sheetChat(t, "idle", lPrompt,
+		callOf("k1", "mcp__claude_ai_Notion__notion_search", `{"query":"specs"}`), resultOf("k1"),
+		callOf("k2", "mcp__acme__list_things", `{"query":"x"}`), resultOf("k2"), said("s1", "Done."))
+	tt := ui.NewTester(v.view, sheetW, 400)
+	tt.Frame()
+	if apptest.Absent(tt, LabelCallIcon+" "+LabelBrand+" notion") {
+		t.Error("a Notion call shows no Notion mark")
+	}
+	if apptest.Absent(tt, LabelCallIcon+" connector") {
+		t.Error("an unknown server does not keep the connector icon")
+	}
+	if !apptest.Absent(tt, LabelCallIcon+" "+LabelBrand+" acme") {
+		t.Error("an unknown server shows a mark")
+	}
+}
+
+// TestBrandMarks: each mark of the table is embedded and parses.
+func TestBrandMarks(t *testing.T) {
+	for _, b := range brands {
+		if icons.Brand(b) == nil {
+			t.Errorf("no mark %q", b)
+		}
 	}
 }
