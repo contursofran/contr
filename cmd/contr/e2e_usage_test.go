@@ -25,7 +25,7 @@ import (
 // usage: a Claude status line (62 % of the 5-hour window used, 18 % of the
 // 7-day window) and a Codex rollout log (27 % used). The files panel must show
 // Context with no data, then (after a plain terminal opens and `contr
-// statusline` input for it is saved) "90k of 200k  45%", Claude 62 % and
+// statusline` input for it is saved) "90k of 200k" and "45%", Claude 62 % and
 // Codex 27 %. It captures the window in
 // Dark and in Light to tmp/e2e/usage-*.png. HOME, the state folder and
 // CODEX_HOME are scratch folders; it never reads ~/.claude or ~/.codex and

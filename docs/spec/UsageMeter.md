@@ -13,10 +13,10 @@ Design system page: component UsageMeter. Shared rules: [README.md](README.md).
 | Part | Value |
 |---|---|
 | Block | no line on top (D258), padding `12px 10px 2px` (D228), gap `space-7`; `space-6` more before each meter after the first |
-| Row | label `small`, `ink-42`; value mono `value`, `ink-62`, at the right |
+| Row | label `small`, `ink-42`; then the sizes, mono `meta`, `ink-42`, `space-8` after the label, clipped with an ellipsis (D264); value mono `value`, `ink-62`, at the right. The label and the value never clip. |
 | Meter | height `meter-height` (4px), track `meter-track`, fill `meter-fill`, radius `radius-2` |
 
-Rows: "Context  90k of 200k  45%" only.
+Rows: "Context  90k of 200k  45%" only. From 80%: "Context  172k of 200k · compacts soon  86%" (D264).
 
 Plan meters, in the sidebar foot row (D196):
 
@@ -32,7 +32,9 @@ Plan meters, in the sidebar foot row (D196):
 ## States
 
 - **Default.**
-- **Above 80%:** not in the design. Keep `meter-fill`; the number says it.
+- **80% and above (D264):** the value and the meter fill turn `ink-100`, and the sizes say
+  "compacts soon": "172k of 200k · compacts soon". No hue. Only the Context line has this
+  state.
 - **No data:** the value shows "no data yet" in `ink-42` (D255; a dash before). Under the
   file tree the meter is empty; in the sidebar foot the plan has no meter, only its label and
   "no data yet".
@@ -99,7 +101,7 @@ Plan meters, in the sidebar foot row (D196):
 
 ## Tokens
 
-`meter-track`, `meter-fill`, `meter-height`, `radius-2`, `space-7`, `ink-42`, `ink-62`, `small`, `value`.
+`meter-track`, `meter-fill`, `meter-height`, `radius-2`, `space-7`, `space-8`, `ink-42`, `ink-62`, `ink-100`, `small`, `meta`, `value`.
 
 ## Build in MyGo
 
@@ -118,7 +120,9 @@ Plan meters, in the sidebar foot row (D196):
 
 ## Tests
 
-- View: values, no data, 100%; the file wins over the labels; labels without a file.
+- View: values, no data, 100%; the file wins over the labels; labels without a file; 79% is
+  plain, 80% says "compacts soon" in `ink-100`; a long sizes text clips, the label and the
+  value stay whole.
 - The files panel has only Context; the sidebar foot has Claude, then Codex, then the gear, in one row; the icon column has no plan meters.
 
 ## Motion (D256)

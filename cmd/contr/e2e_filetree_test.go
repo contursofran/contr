@@ -153,6 +153,9 @@ func TestFileTreePanel(t *testing.T) {
 		t.Fatalf("no worktree row; labels %v", keys(c.labels(t)))
 	}
 	click(row)
+	// The tree opens on Changed (D264); All shows the whole tree.
+	waitLabel(files.LabelAll)
+	click(files.LabelAll)
 	rows := []string{"main.go, +5 −1", "old.go, −4", "internal", ".gitignore", "README.md"}
 	for deadline := time.Now().Add(15 * time.Second); time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
 		wake()
@@ -186,11 +189,20 @@ func TestFileTreePanel(t *testing.T) {
 		wake()
 		c.capture(t, filepath.Join(out, "filetree-"+strings.ToLower(theme)+".png"))
 	}
-	click(files.LabelFileFilter)
+	changed := ""
+	for l := range c.labels(t) {
+		if strings.HasPrefix(l, "Changed ") {
+			changed = l
+		}
+	}
+	if changed == "" {
+		t.Fatalf("no Changed segment; labels %v", keys(c.labels(t)))
+	}
+	click(changed)
 	time.Sleep(600 * time.Millisecond)
 	labels = c.labels(t)
-	if labels["README.md"] || labels["keep.go"] || !labels["new.go, +3"] || !labels["old.go, −4"] {
-		t.Errorf("filter on shows %v", keys(labels))
+	if labels["README.md"] || labels["keep.go"] || !labels["internal/util"] || !labels["new.go, +3"] || !labels["old.go, −4"] {
+		t.Errorf("Changed shows %v", keys(labels))
 	}
 	c.capture(t, filepath.Join(out, "filetree-light-filter.png"))
 }

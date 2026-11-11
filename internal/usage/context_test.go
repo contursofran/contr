@@ -16,8 +16,8 @@ func TestParseContextSumsTheInputTokens(t *testing.T) {
 	if c == nil || c.Tokens != 90000 || c.Size != 200000 || c.UpdatedAt != 7 {
 		t.Fatalf("context %+v", c)
 	}
-	if c.Percent() != 45 || c.Label() != "90k of 200k  45%" {
-		t.Errorf("percent %v label %q", c.Percent(), c.Label())
+	if c.Percent() != 45 || c.Sizes() != "90k of 200k" || c.PercentText() != "45%" {
+		t.Errorf("percent %v sizes %q %q", c.Percent(), c.Sizes(), c.PercentText())
 	}
 }
 
@@ -37,19 +37,23 @@ func TestParseContextSkipsInputWithoutUsage(t *testing.T) {
 	}
 }
 
-func TestContextLabelAndPercentEdges(t *testing.T) {
+func TestContextSizesAndPercentEdges(t *testing.T) {
 	for _, tc := range []struct {
 		c     Context
-		label string
+		sizes string
+		text  string
 		pct   float64
 	}{
-		{Context{Tokens: 250000, Size: 200000}, "250k of 200k  100%", 100},
-		{Context{Tokens: 0, Size: 1000000}, "0 of 1M  0%", 0},
-		{Context{Tokens: 999, Size: 200000}, "999 of 200k  0%", 0},
-		{Context{Tokens: 5, Size: 0}, "5 of 0  0%", 0},
+		{Context{Tokens: 250000, Size: 200000}, "250k of 200k · compacts soon", "100%", 100},
+		{Context{Tokens: 0, Size: 1000000}, "0 of 1M", "0%", 0},
+		{Context{Tokens: 999, Size: 200000}, "999 of 200k", "0%", 0},
+		{Context{Tokens: 5, Size: 0}, "5 of 0", "0%", 0},
+		{Context{Tokens: 159000, Size: 200000}, "159k of 200k", "79%", 79},
+		{Context{Tokens: 160000, Size: 200000}, "160k of 200k · compacts soon", "80%", 80},
+		{Context{Tokens: 172000, Size: 200000}, "172k of 200k · compacts soon", "86%", 86},
 	} {
-		if got := tc.c.Label(); got != tc.label || tc.c.Percent() != tc.pct {
-			t.Errorf("%+v: label %q percent %v, want %q %v", tc.c, got, tc.c.Percent(), tc.label, tc.pct)
+		if got := tc.c.Sizes(); got != tc.sizes || tc.c.PercentText() != tc.text || tc.c.Percent() != tc.pct {
+			t.Errorf("%+v: sizes %q %q percent %v, want %q %q %v", tc.c, got, tc.c.PercentText(), tc.c.Percent(), tc.sizes, tc.text, tc.pct)
 		}
 	}
 }
