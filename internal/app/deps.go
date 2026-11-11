@@ -10,6 +10,7 @@ import (
 	"github.com/contursofran/contr/internal/git"
 	"github.com/contursofran/contr/internal/prefs"
 	"github.com/contursofran/contr/internal/projects"
+	"github.com/contursofran/contr/internal/setup"
 	"github.com/contursofran/contr/internal/updated"
 	"github.com/contursofran/contr/internal/widths"
 )
@@ -70,6 +71,9 @@ type Deps struct {
 	AgentsNotice string
 	// AgentsConfig is the path of agents.json that the Agents tab of Settings edits (D186).
 	AgentsConfig string
+	// Setup is what the checks of Settings → Setup read (D278). Nil runs no check: tests leave it
+	// nil, so no test runs a real program.
+	Setup *setup.Env
 	// ModelOf names the model that an agent profile starts, for line 2 of the agent rows.
 	// Nil shows no model.
 	ModelOf func(profile string) string

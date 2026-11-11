@@ -179,6 +179,26 @@ the circle.
 - The keys of the field work only with the focus in it; ⌘ shortcuts keep
   working.
 
+
+### Slash popup
+
+"/" at the start of the field, with no space or line break after it, opens a
+popup above the card (D273), label "suggestions": `space-6` above the card,
+440px wide, padding `space-4`, radius `radius-12`, `float-solid` fill, 1px
+`float-line` border, `shadow-float`. One row per match, at most 8 before the
+list scrolls: radius `radius-8`, padding `0 space-8`, gap `space-8`; the name
+"/name" (mono `value`, `ink-100`) and the description (`small`, `ink-48`,
+clipped with "…"); the selected row on `hover-strong`. The texts follow the
+Chat text size (D272). With no match, one line "No commands match" (or
+"Loading…", or the read's error) in `small`, `ink-48`.
+
+- Names that start with the typed text come first, then names that hold it,
+  without regard to case.
+- Up and Down move the selection and wrap; Enter or Tab put "/name " in the
+  field with the caret after it and send nothing; a click on a row does the
+  same. Esc closes the popup until the text changes and does not stop the
+  agent. With no match, Enter sends the text as typed.
+
 ## Live line
 
 The working status of the agent (D276): the left of the composer's footer

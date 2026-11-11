@@ -30,6 +30,7 @@ import (
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/prefs"
+	"github.com/contursofran/contr/internal/setup"
 )
 
 // Version is contr's version, shown in Settings. It comes from the VERSION file (D107).
@@ -55,12 +56,13 @@ const (
 	TintReset       = "Reset"
 )
 
-// SettingsTabs are the tabs of Settings, in order (D186).
-var SettingsTabs = [...]string{"General", "Agents", "Updates"}
+// SettingsTabs are the tabs of Settings, in order (D186, D278).
+var SettingsTabs = [...]string{"Setup", "General", "Agents", "Updates"}
 
 // The indexes of SettingsTabs.
 const (
-	TabGeneral = iota
+	TabSetup = iota
+	TabGeneral
 	TabAgents
 	TabUpdates
 )
@@ -159,11 +161,14 @@ type Settings struct {
 	AgentsConfig string
 	// HCUpdate runs `hc update` (D277); nil hides the "Update hc" button.
 	HCUpdate HCRunner
+	// Setup is what the checks of the Setup tab read (D278); nil runs no check.
+	Setup *setup.Env
 
 	// tab is the tab that shows: SettingsTabs[tab].
 	tab int
 	ag  agentsState
 	hc  hcState
+	su  setupState
 
 	// tintWin and tintPan are the values the sliders edit; the Seen ones are what the last build showed.
 	tintWin, tintPan, tintSeenWin, tintSeenPan float64
@@ -197,6 +202,7 @@ func (s *Settings) Toggle() {
 	s.open = true
 	s.ag = agentsState{}
 	s.probe()
+	s.recheck()
 	s.Env.Redraw()
 }
 
@@ -325,6 +331,9 @@ func (s *Settings) dueCheck() {
 func (s *Settings) Activated() {
 	if s.Updates != nil && s.olderThan(ActiveAfter) {
 		s.AutoCheck()
+	}
+	if s.open && s.tab == TabSetup {
+		s.recheck()
 	}
 }
 
@@ -605,6 +614,8 @@ func (s *Settings) body(c *ui.Context) {
 	})
 	s.tabBar(c)
 	switch s.tab {
+	case TabSetup:
+		s.setupTab(c)
 	case TabAgents:
 		s.agentsTab(c)
 	case TabUpdates:
@@ -628,7 +639,8 @@ func (s *Settings) SelectTab(i int) {
 	}
 }
 
-// tabBar is the tab bar on TabsBase. The Updates tab has the dot of D146 while an update waits.
+// tabBar is the tab bar on TabsBase. The Updates tab has the dot of D146 while an update waits;
+// the Setup tab has it while a required check is not ready (D278).
 func (s *Settings) tabBar(c *ui.Context) {
 	p := theme.Current()
 	ui.Row(c).Shrink(0).Padding(0, theme.ModalPadX, 12, theme.ModalPadX).Children(func() {
@@ -645,6 +657,9 @@ func (s *Settings) tabBar(c *ui.Context) {
 					ui.Text(c, name).TextColor(text)
 					if i == TabUpdates && s.Ready() {
 						ui.Box(c).Label("update dot").Size(6, 6).Radius(3).Background(p.Ink100)
+					}
+					if i == TabSetup && s.SetupSteps() > 0 {
+						ui.Box(c).Label(LabelSetupDot).Size(6, 6).Radius(3).Background(p.Ink100)
 					}
 				})
 			}

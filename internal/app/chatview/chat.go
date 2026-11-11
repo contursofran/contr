@@ -51,6 +51,12 @@ type Chat struct {
 	// pinned prompt ends before it (D266). May be nil.
 	Notch func() (ui.Rect, bool)
 
+	// Slash gives the slash commands and skills of the session at addr for the composer's popup
+	// (D273). Nil: "/" opens no popup.
+	Slash SuggestSource
+	// sg is the state of the composer's suggestion popup.
+	sg suggest
+
 	// TextScale returns the chat text size picked in Settings (D272): 1 is Default. Nil is 1.
 	TextScale func() float32
 	// mdScale is the text scale of the Markdown themes, so a new pick makes them again.
@@ -127,6 +133,7 @@ func New(env view.Env, stateDir string, watch func(path string, notify func()) (
 	ch := &Chat{Env: env, reader: transcript.NewReader(0), chat: map[string]bool{}, folds: map[string]*bool{}, calls: map[string]*bool{},
 		drafts: map[string]*string{}, errs: map[string]string{}, parts: map[string][]Part{}, partsOf: map[string]string{},
 		chips: map[string]*chipPart{}, boards: map[string]*blockSnap{}, pics: map[picKey]*picState{}, attached: map[string]int{}}
+	ch.sg = suggest{items: map[string][]Suggestion{}, errs: map[string]string{}, loading: map[string]bool{}}
 	ch.md.LinkIcon, ch.md.OnLink = chipIcon, ch.openLink
 	ch.src = &chatsource.Source{StateDir: stateDir, Env: env, Watch: watch, Changed: ch.changed}
 	ch.mdHooks()

@@ -23,6 +23,7 @@ import (
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/prefs"
 	"github.com/contursofran/contr/internal/projects"
+	"github.com/contursofran/contr/internal/setup"
 	"github.com/contursofran/contr/internal/statedir"
 	"github.com/contursofran/contr/internal/updated"
 	"github.com/contursofran/contr/internal/usage"
@@ -182,6 +183,7 @@ func frameDeps() app.Deps {
 		StartAgents:    startAgents(os.Getenv, dialAgents),
 		AgentsNotice:   cfg.Notice,
 		AgentsConfig:   configPath(os.Getenv),
+		Setup:          &setup.Env{Home: home, StateDir: statedir.Dir()},
 		ModelOf:        cfg.ModelOf,
 		EffortOf:       cfg.EffortOf,
 		WatchHead:      files.WatchFile,

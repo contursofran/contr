@@ -127,6 +127,12 @@ var seeFixtures = map[string]seeFixture{
 		},
 		ready: app.UpdatedPrefix,
 	},
+	"setup-missing": {
+		about: "Settings on the Setup tab (D278): a fake claude lists the contr plugin as disabled, a fake gh is signed out and the meter has no data, so three required steps are left",
+		setup: seeSetupMissing,
+		ready: "Sidebar",
+		press: []string{"Settings"},
+	},
 	"multi": {
 		about: "three projects (demo, api, site): demo has an orchestrator and a builder, the others one builder each",
 		setup: func(t *testing.T, h *harness) {
@@ -863,4 +869,23 @@ func TestSee(t *testing.T) {
 		t.Logf("see: %s.png", base)
 		t.Logf("see: %s.txt", base)
 	}
+}
+
+// seeSetupMissing puts a fake claude and a fake gh first on PATH: the contr plugin is disabled
+// and gh is signed out. The scratch state folder has no meter data.
+func seeSetupMissing(t *testing.T, h *harness) {
+	bin := filepath.Join(h.dir, "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fakes := map[string]string{
+		"claude": "#!/bin/sh\necho '[{\"id\":\"contr@contr\",\"version\":\"0.1.0\",\"enabled\":false}]'\n",
+		"gh":     "#!/bin/sh\necho 'You are not logged into any GitHub hosts.' >&2\nexit 1\n",
+	}
+	for name, body := range fakes {
+		if err := os.WriteFile(filepath.Join(bin, name), []byte(body), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h.env = append(h.env, "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 }
