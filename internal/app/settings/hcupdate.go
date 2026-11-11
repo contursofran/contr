@@ -34,6 +34,14 @@ const (
 	TextHCUpToDate = "hc is up to date"
 )
 
+// The texts of the confirm that "Update hc" opens.
+const (
+	TextHCConfirmTitle = "Update hc?"
+	TextHCConfirmBody  = "hc downloads the newest version and restarts the core. Running terminals keep running."
+	LabelHCCancel      = "Cancel"
+	LabelHCUpdate      = "Update"
+)
+
 // HCRunner runs `hc update --json` and returns what it wrote on stdout. Tests give a fake.
 type HCRunner func(ctx context.Context) ([]byte, error)
 
@@ -50,9 +58,10 @@ type hcResult struct {
 
 // hcState is the state of the hc block.
 type hcState struct {
-	busy bool
-	line string
-	err  string
+	busy    bool
+	confirm bool
+	line    string
+	err     string
 }
 
 // RunHCUpdate runs `hc update --json` with the hc that contr connects to (CONTR_HC, else
@@ -68,7 +77,33 @@ func RunHCUpdate(ctx context.Context) ([]byte, error) {
 	return cmd.Output()
 }
 
-// UpdateHC runs HCUpdate off the UI thread. Only a click on "Update hc" calls it.
+// AskUpdateHC opens the confirm. Only its "Update" button runs UpdateHC.
+func (s *Settings) AskUpdateHC() {
+	if s.HCUpdate == nil || s.hc.busy {
+		return
+	}
+	s.hc.confirm = true
+	s.Env.Redraw()
+}
+
+// hcConfirm builds the confirm while it is open. Cancel and Escape run nothing.
+func (s *Settings) hcConfirm(c *ui.Context) {
+	if !s.hc.confirm {
+		return
+	}
+	open := true
+	choice := ui.AlertDialog(c, &open, TextHCConfirmTitle, TextHCConfirmBody, LabelHCCancel, LabelHCUpdate)
+	switch {
+	case choice == 1:
+		s.hc.confirm = false
+		s.UpdateHC()
+	case choice == 0 || choice == ui.AlertDismissed || !open:
+		s.hc.confirm = false
+		s.Env.Redraw()
+	}
+}
+
+// UpdateHC runs HCUpdate off the UI thread. Only "Update" in the confirm calls it.
 func (s *Settings) UpdateHC() {
 	if s.HCUpdate == nil || s.hc.busy {
 		return
@@ -128,7 +163,7 @@ func (s *Settings) hcRow(c *ui.Context) {
 		if s.HCUpdate != nil {
 			var click kit.ClickFn
 			if !s.hc.busy {
-				click = s.UpdateHC
+				click = s.AskUpdateHC
 			}
 			SettingsButton(c, SettingsHCUpdate, kit.ButtonOutlined, click)
 		}

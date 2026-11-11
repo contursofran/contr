@@ -590,6 +590,7 @@ func (s *Settings) View(c *ui.Context) {
 		kit.PopDialog(c, backdrop, panel)
 		panel.Children(func() { s.body(c) })
 	})
+	s.hcConfirm(c)
 	if d.Dismissed() || !open {
 		s.open = false
 		s.Env.Redraw()

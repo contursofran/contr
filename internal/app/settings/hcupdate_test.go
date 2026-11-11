@@ -6,6 +6,8 @@ import (
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/egoist/mygo/ui"
 )
 
 // fakeHC returns an HCRunner that writes out and returns err, and counts its runs.
@@ -23,11 +25,51 @@ func updateHC(t *testing.T, run HCRunner) *settingsRig {
 	r.s.HCUpdate = run
 	r.s.CoreVersion = func() (string, bool) { return "0.1.18", true }
 	r.openUpdates()
+	clickUpdateHC(t, r, LabelHCUpdate)
+	return r
+}
+
+// clickUpdateHC clicks "Update hc", then the confirm button named button.
+func clickUpdateHC(t *testing.T, r *settingsRig, button string) {
+	t.Helper()
 	if err := r.tt.Click(SettingsHCUpdate); err != nil {
 		t.Fatal(err)
 	}
 	r.tt.Frame()
-	return r
+	if !r.tt.HasText(TextHCConfirmTitle) || !r.tt.HasText(TextHCConfirmBody) {
+		t.Fatalf("no confirm: texts %q", r.texts())
+	}
+	if err := r.tt.Click(button); err != nil {
+		t.Fatal(err)
+	}
+	r.tt.Frame()
+}
+
+func TestUpdateHCCancelRunsNothing(t *testing.T) {
+	runs := 0
+	r := newSettingsRig(t, nil)
+	r.s.HCUpdate = fakeHC(`{}`, nil, &runs)
+	r.openUpdates()
+	clickUpdateHC(t, r, LabelHCCancel)
+	if runs != 0 || r.tt.HasText(TextHCConfirmTitle) || r.s.hc.busy {
+		t.Fatalf("runs %d, texts %q", runs, r.texts())
+	}
+}
+
+func TestUpdateHCEscapeRunsNothing(t *testing.T) {
+	runs := 0
+	r := newSettingsRig(t, nil)
+	r.s.HCUpdate = fakeHC(`{}`, nil, &runs)
+	r.openUpdates()
+	if err := r.tt.Click(SettingsHCUpdate); err != nil {
+		t.Fatal(err)
+	}
+	r.tt.Frame()
+	r.tt.Key(0, ui.KeyEscape)
+	r.tt.Frame()
+	if runs != 0 || r.tt.HasText(TextHCConfirmTitle) || r.s.hc.busy {
+		t.Fatalf("runs %d, texts %q", runs, r.texts())
+	}
 }
 
 func TestUpdateHCShowsNewVersion(t *testing.T) {
@@ -102,10 +144,7 @@ func TestUpdateHCShowsProgressOffUIThread(t *testing.T) {
 	runs := 0
 	r.s.HCUpdate = fakeHC(`{"now":"hc 0.1.18","updated":false}`, nil, &runs)
 	r.openUpdates()
-	if err := r.tt.Click(SettingsHCUpdate); err != nil {
-		t.Fatal(err)
-	}
-	r.tt.Frame()
+	clickUpdateHC(t, r, LabelHCUpdate)
 	if runs != 0 || !slices.Contains(r.texts(), TextHCUpdating) {
 		t.Fatalf("runs %d, texts %q", runs, r.texts())
 	}
