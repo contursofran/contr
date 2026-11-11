@@ -27,8 +27,12 @@ import (
 // Element labels of the files panel. Tests and the e2e driver find its parts
 // by them.
 const (
-	LabelFileTree   = "file tree"
-	LabelFileFilter = "Changed files only"
+	LabelFileTree = "file tree"
+	// LabelFilesShown names the Changed | All switch of the panel head (D264).
+	LabelFilesShown = "Files shown"
+	// LabelAll is the segment that shows the whole tree. The other segment
+	// is [ChangedLabel].
+	LabelAll = "All"
 	// NoFolderLine says what the tree shows while it has no folder (D255).
 	NoFolderLine = "Files of the open project show here"
 )
@@ -79,8 +83,11 @@ type FileTree struct {
 	loaded  map[string][]review.Entry
 	loading map[string]bool
 	opened  map[string]*bool
-	// onlyChanged is the filter toggle; its folders have a state of their own.
-	onlyChanged  bool
+	// picks holds the owner's choice of the Changed | All switch per folder,
+	// for this run of the app (D264): true is Changed. Without a pick the
+	// tree shows Changed when the folder has changes. The Changed view has
+	// its own open state of the folders.
+	picks        map[string]bool
 	openFiltered map[string]*bool
 	err          string
 	// reads drops the result of an older read and ends its context: a newer
@@ -115,8 +122,31 @@ func (t *FileTree) Summary() (sum review.Summary, ok bool) {
 // Shown is the folder that the tree shows now.
 func (t *FileTree) Shown() string { return t.dir }
 
-// OnlyChanged tells whether the filter shows the changed files only.
-func (t *FileTree) OnlyChanged() bool { return t.onlyChanged }
+// OnlyChanged tells whether the tree shows the Changed view: the owner's pick
+// for the folder, else true when the folder has changes (D264).
+func (t *FileTree) OnlyChanged() bool {
+	if v, ok := t.picks[t.dir]; ok {
+		return v
+	}
+	return len(t.changes) > 0
+}
+
+// pick keeps the owner's choice of the switch for the folder shown.
+func (t *FileTree) pick(onlyChanged bool) {
+	if t.picks == nil {
+		t.picks = map[string]bool{}
+	}
+	t.picks[t.dir] = onlyChanged
+}
+
+// ChangedLabel is the Changed segment of the switch: "Changed" and the count
+// of changed files, once the changes were read.
+func ChangedLabel(n int, ok bool) string {
+	if !ok {
+		return "Changed"
+	}
+	return "Changed " + strconv.Itoa(n)
+}
 
 // Close ends the watch and the reads in flight. Call it when the window ends.
 func (t *FileTree) Close() { t.setDir("") }
@@ -323,10 +353,23 @@ func watchFolder(dir string, notify func()) (func(), error) {
 	return cancel, nil
 }
 
-// Head builds the filter toggle of the panel head.
+// Head builds the Changed | All switch of the panel head (D264). With no
+// folder it builds nothing.
 func (t *FileTree) Head(c *ui.Context) {
-	kit.IconButton(c, kit.IconButtonOpts{Icon: "filter", Label: LabelFileFilter, On: &t.onlyChanged,
-		OnClick: t.Env.Redraw})
+	t.sync()
+	if t.dir == "" {
+		return
+	}
+	only := t.OnlyChanged()
+	choice := 1
+	if only {
+		choice = 0
+	}
+	kit.Switch(c, LabelFilesShown, &choice, ChangedLabel(len(t.changes), t.changesOK), LabelAll)
+	if (choice == 0) != only {
+		t.pick(choice == 0)
+		t.Env.Redraw()
+	}
 }
 
 // View builds the tree. It reads nothing on the UI thread.
@@ -346,7 +389,7 @@ func (t *FileTree) View(c *ui.Context) {
 			ui.Tree(c, func() { shown = t.level(c, "", 0) })
 		})
 		if shown == 0 && t.ready() {
-			if t.onlyChanged {
+			if t.OnlyChanged() {
 				t.note(c, "No changes")
 			} else {
 				t.note(c, "Empty folder")
@@ -382,8 +425,11 @@ func (t *FileTree) note(c *ui.Context, s string) {
 		Padding(theme.Space4, theme.Space10).SingleLine()
 }
 
-// entries lists the folder rel: with the filter on, the changed paths under
-// it; else the folder as read, with the deleted files put back.
+// entries lists the folder rel. The Changed view has one level of path rows:
+// at the root, each folder that holds changed files as one row named by its
+// path ("internal/app"), then the changed files of the root; under a path
+// row, its changed files (D264). The All view lists the folder as read, with
+// the deleted files put back.
 func (t *FileTree) entries(rel string) []review.Entry {
 	var list []review.Entry
 	seen := map[string]bool{}
@@ -393,20 +439,29 @@ func (t *FileTree) entries(rel string) []review.Entry {
 			list = append(list, review.Entry{Name: name, Dir: dir})
 		}
 	}
-	if !t.onlyChanged {
-		for _, e := range t.loaded[rel] {
-			add(e.Name, e.Dir)
+	if t.OnlyChanged() {
+		for _, f := range t.changes {
+			folder, name := path.Split(f.Path)
+			folder = strings.TrimSuffix(folder, "/")
+			switch {
+			case rel == "" && folder != "":
+				add(folder, true)
+			case folder == rel:
+				add(name, false)
+			}
 		}
+		review.SortEntries(list)
+		return list
+	}
+	for _, e := range t.loaded[rel] {
+		add(e.Name, e.Dir)
 	}
 	prefix := ""
 	if rel != "" {
 		prefix = rel + "/"
 	}
 	for _, f := range t.changes {
-		if !strings.HasPrefix(f.Path, prefix) {
-			continue
-		}
-		if !t.onlyChanged && f.Status != review.Deleted {
+		if !strings.HasPrefix(f.Path, prefix) || f.Status != review.Deleted {
 			continue
 		}
 		rest := f.Path[len(prefix):]
@@ -420,18 +475,19 @@ func (t *FileTree) entries(rel string) []review.Entry {
 	return list
 }
 
-// openFor returns the open state of a folder. With the filter on, folders
+// openFor returns the open state of a folder. In the Changed view, path rows
 // start open.
 func (t *FileTree) openFor(rel string) *bool {
+	only := t.OnlyChanged()
 	m := t.opened
-	if t.onlyChanged {
+	if only {
 		m = t.openFiltered
 	}
 	if v, ok := m[rel]; ok {
 		return v
 	}
 	v := new(bool)
-	*v = t.onlyChanged
+	*v = only
 	m[rel] = v
 	return v
 }
@@ -480,11 +536,14 @@ func FileLabel(name string, f review.File, changed bool) string {
 
 // fileInks gives the ink of the name and of the icon, and whether the name
 // has a line through it (docs/spec/FileTree.md, States). changed is false for a
-// folder and for a file git does not list.
-func fileInks(p *theme.Palette, f review.File, changed bool) (name, icon ui.Color, strike bool) {
+// folder and for a file git does not list. pathRow is a folder row of the
+// Changed view: it holds changed files, so its name has their ink (D264).
+func fileInks(p *theme.Palette, f review.File, changed, pathRow bool) (name, icon ui.Color, strike bool) {
 	switch {
+	case pathRow:
+		return p.Ink90, p.Ink38, false
 	case changed && f.Status == review.Deleted:
-		return p.Ink24, p.Ink22, true
+		return p.Ink50, p.Ink38, true
 	case changed:
 		return p.Ink90, p.Ink38, false
 	}
@@ -497,12 +556,13 @@ func fileCounts(p *theme.Palette, f review.File, changed bool) (kit.CountsLook, 
 	if !changed || f.Binary || (f.Added == 0 && f.Removed == 0) {
 		return kit.CountsLook{}, false
 	}
-	look := kit.CountsLook{Added: p.Ink40, Removed: p.Ink24, Gap: theme.Space6, Style: theme.StyleMeta}
+	// + and − in one readable ink: the sign says which (D264).
+	look := kit.CountsLook{Added: p.Ink50, Removed: p.Ink50, Gap: theme.Space6, Style: theme.StyleMeta}
 	switch f.Status {
 	case review.Added:
 		look.Only = kit.CountsAddedOnly
 	case review.Deleted:
-		look.Only, look.Added, look.Removed = kit.CountsRemovedOnly, p.Ink22, p.Ink22
+		look.Only = kit.CountsRemovedOnly
 	}
 	return look, true
 }
@@ -517,14 +577,14 @@ func (t *FileTree) item(c *ui.Context, rel string, e review.Entry, depth int) {
 	if e.Dir {
 		open = t.openFor(full)
 		kids = func() {
-			if !t.onlyChanged {
+			if !t.OnlyChanged() {
 				t.loadDir(full)
 			}
 			t.level(c, full, depth+1)
 		}
 	}
 	isOpen := open != nil && *open
-	name, icon, deleted := fileInks(p, f, changed && !e.Dir)
+	name, icon, deleted := fileInks(p, f, changed && !e.Dir, e.Dir && t.OnlyChanged())
 	label := FileLabel(e.Name, f, changed && !e.Dir)
 	row := ui.TreeItem(c.Key(full), "", open, kids).Label(label).Height(theme.SizeFileRowHeight).
 		Gap(0).Radius(theme.Radius6).Cursor(ui.CursorPointer).

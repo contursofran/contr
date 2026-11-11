@@ -92,6 +92,14 @@ var seeFixtures = map[string]seeFixture{
 		},
 		ready: "lead, ",
 	},
+	"changes": {
+		about: "the workers fixture with changes in demo (two folders, the root, a deleted file), so the files panel opens on Changed, and lead's context at 86%, so the Context line says compacts soon (D264)",
+		setup: func(t *testing.T, h *harness) {
+			seeChanges(t, seeWorkersRepo(t, h))
+			h.labelTerminal(t, "lead", map[string]string{agents.LabelContext: "172000", agents.LabelContextLimit: "200000"})
+		},
+		ready: "lead, ",
+	},
 	"updated": {
 		about: "the first start after an update: the Updated to pill with What's new open (D209)",
 		setup: func(t *testing.T, h *harness) {
@@ -507,6 +515,31 @@ func (c *client) restingList(t *testing.T, label string) rect {
 		}
 		last = rows.String()
 		time.Sleep(300 * time.Millisecond)
+	}
+}
+
+// seeChanges makes the changes of the changes fixture in repo: a committed file
+// deleted, edits in internal/app, a new file in internal/hc, an edit at the root.
+func seeChanges(t *testing.T, repo string) {
+	write := func(rel, text string) {
+		p := filepath.Join(repo, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("internal/app/panel.go", "package app\n")
+	write("HANDOFF.md", "one\ntwo\nthree\n")
+	gitIn(t, repo, "add", "-A")
+	gitIn(t, repo, "commit", "-qm", "base")
+	write("internal/app/panel.go", "package app\n\n// Panel draws a panel.\nfunc Panel() {}\n")
+	write("internal/app/tabs.go", "package app\n\nfunc Tabs() {}\n")
+	write("internal/hc/events.go", "package hc\n\nfunc Events() {}\n")
+	write("README.md", "# demo\n\nChanged.\n")
+	if err := os.Remove(filepath.Join(repo, "HANDOFF.md")); err != nil {
+		t.Fatal(err)
 	}
 }
 
