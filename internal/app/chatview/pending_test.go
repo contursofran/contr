@@ -83,6 +83,10 @@ func TestMatches(t *testing.T) {
 		{"<system-reminder>\nThe user sent a new message while you were working:\nfix it\n[Image #1]" + surfaceTail + "\n</system-reminder>", "fix it", true},
 		{"fix it\n\nIMPORTANT: After completing your current task, you MUST address the user's message above.", "fix it", true},
 		{"fix it\nThis is how I want it", "fix it", false},
+		// The marks of images pasted in the composer come before the text (D269).
+		{"[Image #1] [Image #2] fix it", "fix it", true},
+		{"[Image #1]\nfix it", "fix it", true},
+		{"[Image #x] fix it", "fix it", false},
 	}
 	for _, c := range cases {
 		if got := Matches(c.text, c.sent); got != c.want {

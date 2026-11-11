@@ -64,14 +64,20 @@ type Model struct {
 // transcript brings its prompt entry. At is when it was sent.
 type Pending struct {
 	ID, Text string
-	At       time.Time
+	// Images counts the images pasted with it (D269).
+	Images int
+	At     time.Time
 }
 
 // AddPending shows text as a pending prompt and returns its id.
-func (m *Model) AddPending(text string) string {
+func (m *Model) AddPending(text string) string { return m.AddPendingImages(text, 0) }
+
+// AddPendingImages shows text with a count of images pasted in the composer as a pending prompt
+// and returns its id (D269).
+func (m *Model) AddPendingImages(text string, images int) string {
 	m.seq++
 	id := "pending:" + strconv.Itoa(m.seq)
-	m.pending = append(m.pending, Pending{ID: id, Text: text, At: time.Now()})
+	m.pending = append(m.pending, Pending{ID: id, Text: text, Images: images, At: time.Now()})
 	return id
 }
 
@@ -93,7 +99,8 @@ func (m *Model) matchPending(text string) {
 // Matches tells that a prompt entry with text brings the owner's sent text: the same text, or the
 // sent text with only harness text around it. Before it: markup (a part that starts with "<" and
 // ends with ">"), and the lead of a message sent during a turn. After it: "[Image #N]" lines, then
-// markup or a known tail of that message (D265).
+// markup or a known tail of that message (D265). "[Image #N]" marks before it are harness text too
+// (D269).
 func Matches(text, sent string) bool {
 	text, sent = strings.TrimSpace(text), strings.TrimSpace(sent)
 	if sent == "" {
@@ -103,7 +110,7 @@ func Matches(text, sent string) bool {
 	if i < 0 {
 		return false
 	}
-	before := strings.TrimSpace(text[:i])
+	before := strings.TrimSpace(transcript.DropImageMarks(text[:i]))
 	before = strings.TrimSpace(strings.TrimSuffix(before, transcript.QueuedLead))
 	after := strings.TrimSpace(text[i+len(sent):])
 	for {

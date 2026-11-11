@@ -125,6 +125,7 @@ const (
 	SizeOutlineCardWidth = 380
 	SizeTickHeight       = 2
 	SizeMeterHeight      = 4
+	SizeThumb            = 64
 )
 
 // Effect: backdrop blur and saturation of glass-window and glass-float.

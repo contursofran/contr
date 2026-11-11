@@ -104,7 +104,10 @@ func (ch *Chat) View(c *ui.Context) {
 					return
 				}
 				p := pending[i-len(rows)]
-				column(c.Key(p.ID), func() { ch.prompt(c, p.Text, true) })
+				column(c.Key(p.ID), func() {
+					ch.prompt(c, p.Text, true)
+					ch.images(c, nil, p.Images)
+				})
 			}).
 				Grow(1).MinHeight(0).Gap(rowGap).Padding(0, theme.Space20, fadeHeight).Justify(ui.End).
 				Children(func() {
@@ -130,6 +133,7 @@ func (ch *Chat) View(c *ui.Context) {
 		ui.Column(c).FillWidth().Shrink(0).Padding(0, theme.Space20, theme.Space14).Children(func() {
 			ch.composer(c, id, st)
 		})
+		ch.bigImage(c)
 	})
 }
 
@@ -152,6 +156,7 @@ func (ch *Chat) row(c *ui.Context, r Row) {
 		e := ch.model.Entry(r.Entry)
 		column(c, func() {
 			ch.prompt(c, e.Text, false)
+			ch.images(c, e.Pics, e.Images)
 			sentAt(c, e.Time)
 		})
 	case RowSaid:
@@ -191,8 +196,11 @@ func TimeText(t, now time.Time) string {
 }
 
 // prompt is the owner's text, at the right, on a hover fill, in ink-100. A pending prompt is
-// dimmed.
+// dimmed. A prompt of images alone has no bubble.
 func (ch *Chat) prompt(c *ui.Context, text string, pending bool) {
+	if text == "" {
+		return
+	}
 	pal := theme.Current()
 	label, opacity := LabelPrompt, float32(1)
 	if pending {

@@ -8,7 +8,8 @@ package chatview
 // state in Claude's text (D262), ChatContent one answer with each kind of content (D261),
 // ChatViewScrolled a chat scrolled up with the pinned prompt and New messages (D266), ChatBlocks an
 // older board (frozen), the live board and a queue, and ChatBlocksBlocked a queue with a blocked
-// step (D267). ChatViewComposer shows the composer card in each state (D271).
+// step (D267). ChatViewComposer shows the composer card in each state (D271), ChatViewImages the
+// images of prompts and the composer's image chips (D269).
 
 import (
 	"strconv"
@@ -46,6 +47,9 @@ func TestSpecSheet(t *testing.T) {
 	blocked.s.ch.Chips = blockChips()
 	blocked.s.ch.Chips.(*fakeChips).refs[656] = RefInfo{Chip: Chip{ChipPR, StateFailed}, Checks: github.CheckSummary{Pass: 2, Fail: 1}}
 	scrolled := sheetScrolled(t)
+	images := sheetChat(t, "idle", picPrompt("i1", "[Image #1] [Image #2] The row clips here, see both shots.", pngOf(t, 240, 150), pngOf(t, 90, 160)),
+		said("i2", "I see it: the time runs into the badge."), picPrompt("i3", "and these, from the old build", nil, nil))
+	images.s.ch.attached[term] = 2
 	composer := sheetComposer(t)
 	apptest.SpecSheet(t, []apptest.SheetPart{
 		{Name: "ChatView", W: sheetW, H: sheetH, View: working.view},
@@ -58,7 +62,8 @@ func TestSpecSheet(t *testing.T) {
 		{Name: "ChatBlocks", W: sheetW, H: 900, View: blocks.view},
 		{Name: "ChatBlocksBlocked", W: sheetW, H: 360, View: blocked.view},
 		{Name: "ChatViewComposer", W: sheetW, H: composerSheetH, View: composer},
-	}, []string{"ChatViewComposer", "ChatView", "ChatViewWide", "ChatViewTeam", "ChatViewChips", "ChatContent", "ChatViewScrolled", "ChatBlocks", "ChatBlocksBlocked"})
+		{Name: "ChatViewImages", W: sheetW, H: 420, View: images.view},
+	}, []string{"ChatViewComposer", "ChatView", "ChatViewWide", "ChatViewTeam", "ChatViewChips", "ChatContent", "ChatViewScrolled", "ChatBlocks", "ChatBlocksBlocked", "ChatViewImages"})
 }
 
 // contentAnswer has each kind of content: headings, lists, a quote, the five remarks, a table

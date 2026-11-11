@@ -29,6 +29,10 @@ type Chat struct {
 	// Send types text into the terminal at addr and presses Enter. It blocks: it runs off the UI
 	// thread. Nil: the composer sends nothing.
 	Send func(addr, text string) error
+	// Keys presses raw keys in the terminal at addr, with no Enter: Ctrl+V for an image pasted in
+	// the composer, Enter for a send of images alone (D269). It blocks. Nil: an image paste does
+	// nothing.
+	Keys func(addr string, keys []byte) error
 	// Interrupt presses the stop key of the terminal at addr, as Esc does in the terminal. It
 	// blocks. Nil: Esc and Stop do nothing.
 	Interrupt func(addr string) error
@@ -68,6 +72,8 @@ type Chat struct {
 	// The composer: the text being typed and the last failure, for each terminal.
 	drafts map[string]*string
 	errs   map[string]string
+	// attached counts the images pasted in the composer of each terminal since its last send.
+	attached map[string]int
 	// sending is set while a send or an interrupt runs.
 	sending bool
 	// panel is the chat's box, for the width of wide blocks (wide.go).
@@ -97,6 +103,11 @@ type Chat struct {
 	awayAt int
 	// switchBox is the box of the switch, for the room at the right of the pinned prompt.
 	switchBox ui.Handle
+	// pics caches the images of prompts, and picUse orders them (images.go); big is the image
+	// opened larger, nil when none.
+	pics   map[picKey]*picState
+	picUse uint64
+	big    *picKey
 }
 
 // New returns a chat view that reads the session files under stateDir (package session).
@@ -104,7 +115,7 @@ type Chat struct {
 func New(env view.Env, stateDir string, watch func(path string, notify func()) (func(), error)) *Chat {
 	ch := &Chat{Env: env, reader: transcript.NewReader(0), chat: map[string]bool{}, folds: map[string]*bool{},
 		drafts: map[string]*string{}, errs: map[string]string{}, parts: map[string][]Part{}, partsOf: map[string]string{},
-		chips: map[string]*chipPart{}, boards: map[string]*blockSnap{}}
+		chips: map[string]*chipPart{}, boards: map[string]*blockSnap{}, pics: map[picKey]*picState{}, attached: map[string]int{}}
 	ch.md.LinkIcon, ch.md.OnLink = chipIcon, ch.openLink
 	ch.src = &chatsource.Source{StateDir: stateDir, Env: env, Watch: watch, Changed: ch.changed}
 	ch.mdHooks()
@@ -172,6 +183,8 @@ func (ch *Chat) changed(reset bool) {
 		ch.parts, ch.partsOf = map[string][]Part{}, map[string]string{}
 		ch.chips = map[string]*chipPart{}
 		ch.boards, ch.newestOK = map[string]*blockSnap{}, false
+		// The offsets of the images may hold other lines now.
+		ch.pics, ch.big = map[picKey]*picState{}, nil
 		ch.away = false
 		ch.Env.Redraw()
 	}

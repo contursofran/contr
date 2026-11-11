@@ -43,6 +43,7 @@ Shared rules: [README.md](README.md).
 | Row | Value |
 |---|---|
 | Owner prompt | right-aligned, at most 560px, padding `8px 13px`, radius `radius-12`, fill `hover`, text `prose` in `ink-100` |
+| Prompt images | the images of a prompt (D269), under the bubble, at the right, `space-6` above, gap `space-6`, wrapping: a `thumb` (64px) thumbnail for each image whose bytes are in the transcript, cropped to fill, `radius-12`, 1px `hairline`; while it is read, a `hover` box of its size. A click opens it larger: over the `scrim`, as large as it is and at most the chat less 40px at each side, `radius-12`; Escape or a click outside closes it. The images with no bytes, and those that do not read or decode, show as one quiet chip after the thumbnails: "1 image" / "2 images", mono `meta`, `ink-48`, padding `2px 8px`, `radius-6`, 1px `hairline`. Their "[Image #N]" marks do not show; a prompt of images alone has no bubble. A pending prompt with images shows the chip. |
 | Sent time | the time the prompt was sent, from its transcript timestamp: one line, mono `meta`, `ink-48` (the lowest text ink with 4.5:1), `space-4` above, under the owner prompt, right-aligned with the bubble. Once per turn: Claude's texts, groups and notes show no time (D266). In the Mac's time zone: "14:32" today, "Yesterday 14:32", else "9 Nov 14:32"; "today" is judged at each build, and nothing ticks (D55). No timestamp, no line; a pending prompt has none. |
 | Claude's text | `markdown.View`: `prose` size and line, sans; text `ink-88`, strong (500) and links `ink-88`, muted `ink-48`; each block as [Content](#content) says |
 | Work group, folded | the tool calls, kit notes and background tasks between two texts, as one row 20px high, mono `value`, `ink-48` (`ink-64` on hover): "2 worker notes · 1 background task · 6 tool calls" (a message of another session counts as a worker note; a part with no item is left out, "1 tool call"), a 6px dot for each worker that sent a note, then `›`. While a call has no result, a working StatusGlyph (14px) comes first. |
@@ -105,7 +106,7 @@ to bottom:
 |---|---|
 | Card | the column's width; one surface: `hover` fill, 1px `input-line` border, radius `radius-12`; padding `space-6` top and bottom, 14px left, `space-8` right. No shadow, no glow, no other fill. |
 | Top line | the [Team row](#team-row) while the session orchestrates, else the [Live line](#live-line) while the agent works; 20px, its right end 14px from the card's edge. No box of its own; `space-2` to the field. With neither, there is no top line: the card is the field and the foot. |
-| Attachments | room for attachment chips, between the top line and the field (none yet) |
+| Attachments | a quiet chip "Image 1", "Image 2" for each image pasted since the last send, as the chip of prompt images (D269); wrapping, gap `space-6`, `space-6` above and `space-2` below; none: no room |
 | Field | `TextAreaBase`, label "Message", placeholder "Message <session name>…" (or "Message…" when the agent is not known) in `ink-48`; text `prose` (13.5px, 21px lines) in `ink-100`; padding 3.5px top and bottom, so one line is 28px. One line at first; it grows with its text to 8 lines, then scrolls. Caret only: no focus ring. |
 | Button | `space-8` right of the field, in line with its last line (bottom-aligned): one round button, 28px, radius 14. See the states below. |
 | Foot | the model and context, mono `meta`, `ink-48`, one line under the field at its left edge, outside the field: "opus high · 212k", the model of line 2 of the agent's row and the size of its context from the Context line; a part that is not known is left out. With neither: no foot. |
@@ -113,7 +114,7 @@ to bottom:
 
 | Button state | When | Look | Label, tooltip |
 |---|---|---|---|
-| Send | the field has text (not only spaces), also while the agent works: the message queues (D265) | `ink-100` fill, an arrow up in `ground` (1.6px line, 10px high): the one strong thing in the card | "Send", "Send  ↩" |
+| Send | the field has text (not only spaces) or image chips (D269), also while the agent works: the message queues (D265) | `ink-100` fill, an arrow up in `ground` (1.6px line, 10px high): the one strong thing in the card | "Send", "Send  ↩" |
 | Stop | the agent works and the field is empty | 1px `input-line` outline, an 8px square (radius 1.5) in `ink-88`; `hover-strong` fill on hover | "Stop", "Stop  esc" |
 | Send, dimmed | idle (or nothing can stop the agent) and the field is empty | 1px `input-line` outline, the arrow in `ink-30` (a mark); disabled: no click | "Send", "Send  ↩" |
 
@@ -143,6 +144,17 @@ the team row, its gap and the field box were 76px before D271.
   or in error), Enter sends nothing and keeps the text: "Answer in the notch
   first (⌘J), or switch to Terminal." A stray Enter never picks a choice
   (D51); a digit is text like any other (D260).
+- ⌘V with an image and no text on the clipboard (D269) presses Ctrl+V in
+  the session's terminal (the agent source's `SendKeys`): Claude Code reads
+  the clipboard itself and writes "[Image #N]" in its own field. The
+  composer shows a chip for it until the send. A paste with text goes into
+  the field as before. With images and no text, Enter presses Enter in the
+  terminal. A failed paste shows its error and adds no chip; a failed send
+  keeps the chips.
+- Files dropped on the composer add their paths to the field, each escaped
+  as a terminal pastes a dropped path ("/tmp/shot\ one.png"); the send
+  pastes them into the session, where Claude Code takes the path of an image
+  as an image (D269).
 - Esc in the field interrupts the agent while it works (the agent source's
   `Interrupt`, the stop key that Esc is in the terminal); so does Stop. With
   nothing running, Esc does nothing: it closes and switches nothing.

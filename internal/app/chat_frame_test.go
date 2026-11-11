@@ -115,3 +115,12 @@ func TestFrameChatAndTheEmptyTerminalExcludeEachOther(t *testing.T) {
 		t.Errorf("empty terminal: texts %v", r.tt.Texts())
 	}
 }
+
+// TestFrameChatPressesKeysThroughTheSource: the composer presses its keys (Ctrl+V of a pasted image,
+// D269) through the agent source, as it sends and interrupts.
+func TestFrameChatPressesKeysThroughTheSource(t *testing.T) {
+	r := attachCounting(t)
+	if r.f.Chat.Send == nil || r.f.Chat.Keys == nil || r.f.Chat.Interrupt == nil {
+		t.Fatalf("send %v, keys %v, interrupt %v", r.f.Chat.Send != nil, r.f.Chat.Keys != nil, r.f.Chat.Interrupt != nil)
+	}
+}
