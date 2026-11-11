@@ -58,6 +58,7 @@ Design system page: component ProjectRow. Shared rules: [README.md](README.md).
 
 - ↑ ↓ move; ⏎ focuses the terminal (D145). A key never folds a project. ← fold and → open are not built yet.
 - `⌘⌥←` and `⌘⌥→` select the project before or after the open one from anywhere in the window, around the ends, as a click on its row does (D248). Hidden projects are skipped; with one project they do nothing. While ⌘ is held, the row before shows `⌥←` and the row after `⌥→` on its folder icon; with two projects the other row shows `⌥→` (KeyHints.md).
+- `⌘⇧1` to `⌘⇧8` select the first to the eighth project in the sidebar's order, and `⌘⇧9` the last, as a click on its row does: its orchestrator, else its main checkout (D289). A number with no project does nothing. While ⌘ is held, a row that is not before or after the open one shows its key on the folder icon: `⇧1` to `⇧8`, and `⇧9` on the last row past the eighth.
 
 ## Edge cases
 

@@ -157,13 +157,16 @@ func TestCmdAltArrowsStepTheAgentRowsOfTheSidebar(t *testing.T) {
 	}
 }
 
-func TestCmdAltLeftRightStepTheProjectsOfTheSidebar(t *testing.T) {
+// projectsFrame is a frame with a sidebar of one project for each name, each with an orchestrator
+// "o"+name, and "oa" selected.
+func projectsFrame(t *testing.T, names ...string) (*Frame, *ui.Tester) {
+	t.Helper()
 	snap := tabSnap()
 	f, tt := agentFrame(t, &snap)
 	base := apptest.CanonicalTmp(t)
 	var orchs []agents.Worker
 	var panes []agents.Worker
-	for i, name := range []string{"a", "b"} {
+	for i, name := range names {
 		dir := filepath.Join(base, name)
 		apptest.MainRepo(t, dir, "ref: refs/heads/main\n")
 		o := apptest.OrchW("o"+name, "lead-"+name, "p")
@@ -178,11 +181,31 @@ func TestCmdAltLeftRightStepTheProjectsOfTheSidebar(t *testing.T) {
 	f.SpacesList.Sync()
 	f.Selection.Select(state.Selected{Kind: state.KindOrchestrator, ID: "oa"})
 	tt.Frame()
+	return f, tt
+}
+
+func TestCmdAltLeftRightStepTheProjectsOfTheSidebar(t *testing.T) {
+	f, tt := projectsFrame(t, "a", "b")
 	for _, c := range []struct {
 		key  shortcut.ID
 		want string
 	}{
 		{shortcut.NextProject, "ob"}, {shortcut.NextProject, "oa"}, {shortcut.PrevProject, "ob"}, {shortcut.PrevProject, "oa"},
+	} {
+		press(tt, c.key)
+		if got := selected(f); got != c.want {
+			t.Fatalf("after %s: %q, want %q", c.key, got, c.want)
+		}
+	}
+}
+
+func TestCmdShiftNumbersSelectTheProjectsOfTheSidebar(t *testing.T) {
+	f, tt := projectsFrame(t, "a", "b", "c")
+	for _, c := range []struct {
+		key  shortcut.ID
+		want string
+	}{
+		{shortcut.Project2, "ob"}, {shortcut.LastProject, "oc"}, {shortcut.Project5, "oc"}, {shortcut.Project1, "oa"},
 	} {
 		press(tt, c.key)
 		if got := selected(f); got != c.want {
