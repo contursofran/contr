@@ -89,12 +89,13 @@ func (f *Frame) emptyTerminal(c *ui.Context) {
 			})
 		})
 	first := f.noProjectOpen()
+	starts := !first && f.projectStarts()
 	gap := float32(theme.Space6)
-	if first {
+	if first || starts {
 		gap = theme.Space10
 	}
 	// Only the buttons take input: the texts of D247 let clicks through.
-	ui.Column(c).IgnoreInput(!first).Absolute().Left(0).Right(0).Bottom(0).
+	ui.Column(c).IgnoreInput(!first && !starts).Absolute().Left(0).Right(0).Bottom(0).
 		HeightPercent(handsFade).AlignItems(ui.Center).Justify(ui.Center).Gap(gap).
 		Padding(0, theme.Space20).
 		LinearGradient(ui.LinearGradient{Angle: 180, Stops: []ui.GradientStop{{Color: p.Stage.Alpha(0), At: 0}, {Color: p.Stage, At: 0.65}}}).
@@ -102,6 +103,10 @@ func (f *Frame) emptyTerminal(c *ui.Context) {
 		Children(func() {
 			if first {
 				f.firstRun(c)
+				return
+			}
+			if starts {
+				f.startsIn(c)
 				return
 			}
 			kit.Styled(ui.Text(c, TerminalOffLine), theme.StyleLabel).SingleLine().MinWidth(0).TextColor(p.Ink64)
@@ -126,6 +131,36 @@ func (f *Frame) firstRun(c *ui.Context) {
 			term = f.newTerminal
 		}
 		kit.KeyButton(c, sidebar.LabelOpenProject, shortcut.Of(shortcut.OpenProject).Glyphs(), kit.KeyMain, open).Shrink(1)
+		kit.KeyButton(c, TerminalNewLine, shortcut.Of(shortcut.NewTab).Glyphs(), kit.KeyPlain, term).Shrink(1)
+	})
+}
+
+// projectStarts tells whether the empty terminal offers the starts of a selected project row
+// (D291): a project row is selected, as a click on an empty project does.
+func (f *Frame) projectStarts() bool {
+	if f.SpacesList == nil {
+		return false
+	}
+	_, _, ok := f.SpacesList.SelectedProject()
+	return ok
+}
+
+// startsIn is the text and the two buttons of the empty terminal while a project row is
+// selected (D291): "New orchestrator" and "New terminal ⌘T" start in that project's folder,
+// as the items of its row menu do. A button whose action is not there does nothing.
+func (f *Frame) startsIn(c *ui.Context) {
+	p := theme.Current()
+	name, dir, _ := f.SpacesList.SelectedProject()
+	kit.Styled(ui.Text(c, TerminalOffLine), theme.StyleLabel).SingleLine().MinWidth(0).TextColor(p.Ink64)
+	ui.Row(c).AlignItems(ui.Center).Gap(theme.Space8).MaxWidthPercent(100).MinWidth(0).Children(func() {
+		var orch, term kit.ClickFn
+		if n := f.NewOrch; n != nil {
+			orch = func() { n.StartIn(dir) }
+		}
+		if t := f.NewTerm; t != nil {
+			term = func() { t.Start(name, dir) }
+		}
+		kit.KeyButton(c, sidebar.MenuNewOrchestrator, "", kit.KeyMain, orch).Shrink(1)
 		kit.KeyButton(c, TerminalNewLine, shortcut.Of(shortcut.NewTab).Glyphs(), kit.KeyPlain, term).Shrink(1)
 	})
 }

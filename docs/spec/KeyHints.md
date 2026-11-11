@@ -27,6 +27,7 @@ leave it. No chip is clipped. The icon column (D128) follows the same rule.
 | Icon column: Open projects, New orchestrator | `O`, `N` | the icon |
 | Agent rows above and below the selected row | `⌥↑`, `⌥↓` | the status glyph (also of a worker row and in the icon column) |
 | Project rows before and after the open project | `⌥←`, `⌥→`; with two projects the other row shows `⌥→` | the folder icon |
+| Other project rows | `⇧1` to `⇧8` for the first eight projects; `⇧9` on the last project past them (D289) | the folder icon |
 | Questions notch | `J` | the dot |
 | Chat \| Terminal switch | `E` | the switch (it has no icon) |
 

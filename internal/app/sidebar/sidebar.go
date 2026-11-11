@@ -8,6 +8,8 @@ package sidebar
 // ui.List of kit.Row, then the Servers section with the This Mac row (D154). The model is in spaces.go.
 
 import (
+	"slices"
+
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/icons"
@@ -26,9 +28,12 @@ const (
 	LabelProjectsNew  = "New orchestrator"
 	// LabelProjectsAdd names the `+` button of the Projects head; its menu has the two above.
 	LabelProjectsAdd = "Add"
-	// MenuCloseAll and MenuHideProject are the items of a project row's menu (D219).
-	MenuCloseAll    = "Close all agents"
-	MenuHideProject = "Hide project"
+	// MenuNewOrchestrator, MenuNewTerminal, MenuCloseAll and MenuHideProject are the items
+	// of a project row's menu (D219, D291).
+	MenuNewOrchestrator = "New orchestrator"
+	MenuNewTerminal     = "New terminal"
+	MenuCloseAll        = "Close all agents"
+	MenuHideProject     = "Close project"
 	// LabelNoProjects heads the empty project list (D255).
 	LabelNoProjects = "No projects yet"
 	// LabelOpenProject is the first-run button that opens the projects modal, as ⌘O does
@@ -82,9 +87,6 @@ func projectMeta(g spaces.RepoGroup) string {
 	}
 	return g.Branch
 }
-
-// LabelNewIn is the menu item of an empty project that starts an orchestrator there.
-func LabelNewIn(g spaces.RepoGroup) string { return "New orchestrator in " + g.Name }
 
 // View builds the sidebar head part.
 func (l *SpacesList) View(c *ui.Context) {
@@ -332,26 +334,30 @@ func (l *SpacesList) noteNewRows() {
 	}
 }
 
-// projectMenu is the menu of a project row (D219). An empty project (D116) has
-// a new orchestrator in its folder; a project with agents has Close all agents:
-// it stops each agent and removes its terminal, also one that already ended.
-// Both have Hide project. Close all agents asks for no second click, as Stop
-// of an agent row.
+// projectMenu is the menu of a project row (D219, D291): New orchestrator while the
+// project has none, New terminal, then Close all agents while it has agents, and Close
+// project. The two starts run in the project's folder. Close all agents stops each agent
+// and removes its terminal, also one that already ended, with no second click, as Stop of
+// an agent row. Close project takes the project out of the sidebar and stops nothing.
 func (l *SpacesList) projectMenu(m *ui.Menu, g spaces.RepoGroup) {
-	if g.Path != "" {
-		if m.Item(LabelNewIn(g)).Chosen() && l.OnNewIn != nil {
-			l.OnNewIn(g.Path)
+	lines := agentLines(g, l.Snapshot())
+	dir := projectRoot(g)
+	if !slices.ContainsFunc(lines, func(a agentLine) bool { return a.orchestrator }) {
+		if m.Item(MenuNewOrchestrator).Disabled(l.OnNewIn == nil).Chosen() && l.OnNewIn != nil {
+			l.OnNewIn(dir)
 		}
-	} else {
-		lines := agentLines(g, l.Snapshot())
-		off := l.Source == nil || len(lines) == 0
-		if m.Item(MenuCloseAll).Disabled(off).Chosen() && !off {
+	}
+	if m.Item(MenuNewTerminal).Disabled(l.OnNewTerminalIn == nil).Chosen() && l.OnNewTerminalIn != nil {
+		l.OnNewTerminalIn(g.Name, dir)
+	}
+	m.Separator()
+	if len(lines) > 0 && l.Source != nil {
+		if m.Item(MenuCloseAll).Chosen() {
 			for _, a := range lines {
 				l.act(a.w, "closed", l.Source.Close)
 			}
 		}
 	}
-	m.Separator()
 	if m.Item(MenuHideProject).Disabled(l.OnHide == nil).Chosen() && l.OnHide != nil {
 		l.OnHide(g.CommonDir)
 	}
@@ -381,18 +387,23 @@ func (l *SpacesList) projectRow(c *ui.Context, g spaces.RepoGroup, index int) {
 	}
 	if g.Path != "" {
 		// An empty project is dim: name ink-48 and icon ink-30, no `+` (#436). The
-		// start of an orchestrator in its folder (D116) is in the row's menu.
+		// starts in its folder (D116, D291) are in the row's menu.
 		o.NameInk, iconInk = p.Ink48, projectIconInk(p, false, true)
 	}
 	o.Menu = func(m *ui.Menu) { l.projectMenu(m, g) }
 	o.Lead = func() ui.Element { return rowIcon(c, "folder", iconInk) }
 	// The rows before and after the open project show the keys that select them (⌘⌥←, ⌘⌥→). With
-	// two projects the other one is both: it shows ⌥→.
+	// two projects the other one is both: it shows ⌥→. A row has one chip, so the other rows with
+	// a number key show it: ⇧1 to ⇧8, and ⇧9 on the last past the eighth (D289).
 	switch index {
 	case l.projectStep(1):
 		o.Hint = shortcut.Of(shortcut.NextProject).HintIf(l.Hints)
 	case l.projectStep(-1):
 		o.Hint = shortcut.Of(shortcut.PrevProject).HintIf(l.Hints)
+	default:
+		if s, ok := shortcut.ProjectShortcut(index, len(l.groups)); ok {
+			o.Hint = s.HintIf(l.Hints)
+		}
 	}
 	if index == 0 {
 		kit.Row(c, o)

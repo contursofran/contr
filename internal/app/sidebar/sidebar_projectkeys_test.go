@@ -9,6 +9,7 @@ import (
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/kit"
+	"github.com/contursofran/contr/internal/app/shortcut"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/projects"
 )
@@ -170,4 +171,56 @@ func TestTheAgentRowChipsStayInTheirRows(t *testing.T) {
 	h.tt.Frame()
 	apptest.ChipOn(t, h.tt, kit.KeyHintLabel("⌥↑"), "lead, idle, opus", theme.SidebarWidth, theme.WindowHeight)
 	apptest.ChipOn(t, h.tt, kit.KeyHintLabel("⌥↓"), "b-242, working, sonnet", theme.SidebarWidth, theme.WindowHeight)
+}
+
+func TestCmdShiftNumbersPickTheProjects(t *testing.T) {
+	h := repos(t, "alpha", "beta", "gamma")
+	h.sel.Clear()
+	h.list.PickProject(shortcut.Project2)
+	if got := openProject(h); got != "beta" {
+		t.Fatalf("⌘⇧2: %q, want beta", got)
+	}
+	h.list.PickProject(shortcut.LastProject)
+	if got := openProject(h); got != "gamma" {
+		t.Fatalf("⌘⇧9: %q, want gamma", got)
+	}
+	before, _ := h.sel.Current()
+	h.list.PickProject(shortcut.Project5)
+	if after, _ := h.sel.Current(); after != before {
+		t.Errorf("⌘⇧5 of 3 projects: %+v, then %+v", before, after)
+	}
+}
+
+func TestTheProjectPickIsAClickOnTheRow(t *testing.T) {
+	h := repos(t, "alpha", "beta")
+	g := h.list.Groups()[1]
+	h.sel.Clear()
+	h.list.PickProject(shortcut.Project2)
+	picked, _ := h.sel.Current()
+	h.sel.Clear()
+	h.list.Activate(g)
+	clicked, _ := h.sel.Current()
+	if picked != clicked {
+		t.Errorf("⌘⇧2 selected %+v, a click %+v", picked, clicked)
+	}
+}
+
+func TestTheOtherProjectRowsShowTheirNumberChips(t *testing.T) {
+	h := repos(t, "alpha", "beta", "gamma", "delta")
+	groups := h.list.Groups()
+	h.list.Switch(groups[0].CommonDir) // beta shows ⌥→, delta ⌥←
+	h.list.Hints = true
+	h.tt.Frame()
+	apptest.ChipOn(t, h.tt, kit.KeyHintLabel("⇧1"), ProjectLabel(groups[0]), theme.SidebarWidth, theme.WindowHeight)
+	apptest.ChipOn(t, h.tt, kit.KeyHintLabel("⇧3"), ProjectLabel(groups[2]), theme.SidebarWidth, theme.WindowHeight)
+	for _, key := range []string{"⇧2", "⇧4", "⇧9"} {
+		if !apptest.Absent(h.tt, kit.KeyHintLabel(key)) {
+			t.Errorf("chip %q shows", key)
+		}
+	}
+	h.list.Hints = false
+	h.tt.Frame()
+	if !apptest.Absent(h.tt, kit.KeyHintLabel("⇧1")) {
+		t.Error("⇧1 shows with ⌘ up")
+	}
 }

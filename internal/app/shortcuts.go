@@ -42,6 +42,11 @@ func (f *Frame) windowKeys(c *ui.Context, win float32) {
 		if shortcut.Of(shortcut.NextProject).Pressed(c) {
 			f.SpacesList.StepProject(1)
 		}
+		for _, s := range shortcut.ProjectKeys() {
+			if s.Pressed(c) {
+				f.SpacesList.PickProject(s.ID)
+			}
+		}
 	}
 	if shortcut.Of(shortcut.PrevTab).Pressed(c) {
 		f.stepTab(-1)

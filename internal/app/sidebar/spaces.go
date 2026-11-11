@@ -23,6 +23,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/shortcut"
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/tabmodel"
@@ -60,10 +61,13 @@ type SpacesList struct {
 	// Plans gives the plan meters of the sidebar foot, left of the Settings
 	// button (D196). Nil: no meters.
 	Plans func() []kit.Meter
-	// OnNewIn runs when `+ new` of an empty project is clicked, with the
-	// project's folder (D116). Nil: the button does nothing.
+	// OnNewIn runs when "New orchestrator" of a project row's menu is chosen,
+	// with the project's folder (D116, D291). Nil: the item is off.
 	OnNewIn func(dir string)
-	// OnHide runs when "Hide project" of a project row's menu is chosen, with
+	// OnNewTerminalIn runs when "New terminal" of a project row's menu is
+	// chosen, with the project's name and folder (D291). Nil: the item is off.
+	OnNewTerminalIn func(project, dir string)
+	// OnHide runs when "Close project" of a project row's menu is chosen, with
 	// the project key (D219). Nil: the item is off.
 	OnHide func(dir string)
 	// OnReordered runs after a drag changed the order in the store, so the
@@ -702,6 +706,14 @@ func (l *SpacesList) StepProject(d int) {
 	}
 }
 
+// PickProject selects the project that the shortcut id stands for (⌘⇧1 to ⌘⇧8, ⌘⇧9 the last;
+// D289), as StepProject does. A number past the last project does nothing. UI thread.
+func (l *SpacesList) PickProject(id shortcut.ID) {
+	if i, ok := shortcut.ProjectIndex(id, len(l.groups)); ok && l.selection != nil {
+		l.selectProject(l.groups[i])
+	}
+}
+
 // Orchestrated tells whether an orchestrator holds a terminal in project g.
 func (l *SpacesList) Orchestrated(g spaces.RepoGroup) bool {
 	for _, o := range l.Snapshot().Orchestrators {
@@ -752,4 +764,23 @@ func (l *SpacesList) holds(g spaces.RepoGroup, sel state.Selected) bool {
 		return sel.ID == projectRoot(g)
 	}
 	return l.holdsAddress(g, sel.ID)
+}
+
+// SelectedProject is the project of a selected project row, as a click on an empty project
+// selects it (D291): its name and the selected folder. ok is false while an agent or a
+// terminal is selected, or the row is gone.
+func (l *SpacesList) SelectedProject() (name, dir string, ok bool) {
+	if l.selection == nil {
+		return "", "", false
+	}
+	sel, has := l.selection.Current()
+	if !has || sel.Kind != state.KindWorktree {
+		return "", "", false
+	}
+	for _, g := range l.Groups() {
+		if l.holds(g, sel) {
+			return g.Name, sel.ID, true
+		}
+	}
+	return "", "", false
 }

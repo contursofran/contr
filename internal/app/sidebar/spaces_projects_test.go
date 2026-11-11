@@ -98,14 +98,9 @@ func TestSidebarShowsStoredProjectWithoutTerminalAsEmptyGroup(t *testing.T) {
 	h.list.OnNewIn = func(dir string) { started = append(started, dir) }
 	h.tt.Frame()
 	h.tt.RightClick(ProjectLabel(g))
-	h.tt.ChooseMenuItem(LabelNewIn(g))
+	h.tt.ChooseMenuItem(MenuNewOrchestrator)
 	if len(started) != 1 || started[0] != "/proj/gamma" {
 		t.Errorf("started %v", started)
-	}
-	for _, name := range []string{"alpha", "beta"} {
-		if _, ok := h.tt.Find(LabelNewIn(spaces.RepoGroup{Name: name})); ok {
-			t.Errorf("group %s with terminals has an empty-group button", name)
-		}
 	}
 }
 

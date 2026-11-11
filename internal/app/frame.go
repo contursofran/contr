@@ -754,6 +754,13 @@ func (f *Frame) newTerminal() {
 	if f.NewTerm == nil {
 		return
 	}
+	if f.SpacesList != nil {
+		// A selected project row (an empty project, D291) is where the terminal opens.
+		if name, dir, ok := f.SpacesList.SelectedProject(); ok {
+			f.NewTerm.Start(name, dir)
+			return
+		}
+	}
 	project := f.openProject
 	f.NewTerm.Start(project, f.terminalDir(project))
 }
@@ -1164,10 +1171,6 @@ func (f *Frame) syncTerminal() {
 	f.setTerminalFocus(f.winFocused)
 }
 
-// TerminalNotRunningLine shows over the grid while the terminal's program is
-// not running, or the connection to hc is lost.
-const TerminalNotRunningLine = "not running"
-
 // coreVersion is the hc core's version while the agents follow the core.
 func (f *Frame) coreVersion() (string, bool) {
 	if f.agentSnap == nil {
@@ -1181,10 +1184,15 @@ func (f *Frame) coreVersion() (string, bool) {
 // screen on show may be out of date.
 const staleOpacity = 0.5
 
+// gridDimmed is true while the connection is not live: the grid then draws at
+// staleOpacity, with no line over it (D290).
+func (f *Frame) gridDimmed() bool { return f.termState.Kind != ghostty.Live }
+
 // terminalLine is the line shown instead of, or over, the grid, with its
 // colour. ok is false when the grid speaks for itself, and while no terminal is
 // open: emptyTerminal draws that state. The reasons the terminal cannot show
-// are ink-48; the line of an ended process is ink-48 (docs/spec/Terminal.md).
+// are ink-48. An ended process or a lost connection has no line: the dimmed
+// grid shows it (D290).
 func (f *Frame) terminalLine() (line string, colour ui.Color, ok bool) {
 	p := theme.Current()
 	if f.term == nil {
@@ -1194,8 +1202,6 @@ func (f *Frame) terminalLine() (line string, colour ui.Color, ok bool) {
 		return "", ui.Color{}, false
 	}
 	switch f.termState.Kind {
-	case ghostty.NotRunning:
-		return TerminalNotRunningLine, p.Ink48, true
 	case ghostty.Incompatible:
 		return f.termState.Message, p.Ink48, true
 	}
@@ -1226,7 +1232,7 @@ func (f *Frame) buildTerminal(c *ui.Context) {
 					f.find.refocus = false
 					grid.Focus()
 				}
-				if f.termState.Kind != ghostty.Live {
+				if f.gridDimmed() {
 					grid.Opacity(staleOpacity)
 				}
 				if f.focusTerm {

@@ -14,8 +14,8 @@ import (
 // ProjectsUndo is the label of the Undo button of the hide toast.
 const ProjectsUndo = "Undo"
 
-// hiddenToast is the text of the toast after Hide.
-func hiddenToast(name string) string { return name + " hidden from the sidebar" }
+// hiddenToast is the text of the toast after Close project (D291).
+func hiddenToast(name string) string { return name + " closed" }
 
 // Hide hides the project and offers Undo in a toast.
 func (m *ProjectsModal) Hide(dir string) {

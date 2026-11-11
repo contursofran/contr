@@ -13,10 +13,10 @@ import (
 func TestHideToastOfTheFrameRunsUndoOnClick(t *testing.T) {
 	f, tt := toastFrame()
 	ran := false
-	f.Toasts.ShowAction("b hidden from the sidebar", projectsview.ProjectsUndo, func() { ran = true })
+	f.Toasts.ShowAction("b closed", projectsview.ProjectsUndo, func() { ran = true })
 	tt.Frame()
 	tt.Frame()
-	if !slices.Contains(tt.Texts(), "b hidden from the sidebar") {
+	if !slices.Contains(tt.Texts(), "b closed") {
 		t.Fatalf("no toast in %q", tt.Texts())
 	}
 	if err := tt.Click(projectsview.ProjectsUndo); err != nil {
@@ -29,8 +29,8 @@ func TestHideToastOfTheFrameRunsUndoOnClick(t *testing.T) {
 
 func TestHideToastsGetUniqueIDs(t *testing.T) {
 	f, tt := toastFrame()
-	f.Toasts.ShowAction("b hidden from the sidebar", projectsview.ProjectsUndo, func() {})
-	f.Toasts.ShowAction("b hidden from the sidebar", projectsview.ProjectsUndo, func() {})
+	f.Toasts.ShowAction("b closed", projectsview.ProjectsUndo, func() {})
+	f.Toasts.ShowAction("b closed", projectsview.ProjectsUndo, func() {})
 	a := f.Toasts.TakeActions()
 	if len(a) != 2 || a[0].ID == a[1].ID {
 		t.Errorf("ids = %v", a)
