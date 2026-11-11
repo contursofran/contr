@@ -112,7 +112,14 @@ rest asks for no frame (D55). At the end of the chat neither shows.
   through the agent source's `Send`, as the orchestrate pill does. The field
   clears at once and the text shows at the end of the transcript as a
   pending prompt (the prompt bubble at 55% opacity) until the transcript
-  brings a prompt with the same text; a reset drops it. A failed send drops
+  brings a prompt with the same text, also with harness text around it, or
+  the same message given to the session during a turn (D265); a reset drops
+  it. A pending prompt never stays dimmed below newer work (D265): when the
+  prompt of a later message comes, or a prompt sent after it, it shows as a
+  sent prompt (full opacity, no sent time) before that prompt; when the
+  session ends a turn, it shows as a sent prompt at the end. If its own
+  prompt comes after that, before the next prompt, the prompt takes its
+  place. A failed send drops
   the pending prompt, puts the text back in an empty field and shows the
   error. One send runs at a time.
 - Text can be sent while the agent works. While it waits on a menu (blocked

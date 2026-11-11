@@ -85,6 +85,11 @@ func (ch *Chat) View(c *ui.Context) {
 	ch.mdTheme(pal)
 	id := ch.src.Terminal()
 	st := ch.state(id)
+	// The end of a turn settles the pending prompts (D265).
+	if ch.wasWorking && st.kind == liveIdle {
+		ch.model.TurnEnded()
+	}
+	ch.wasWorking = st.kind == liveWorking
 	ui.Column(c).Label(LabelChat).Fill().Bind(&ch.panel).Children(func() {
 		rows, pending := ch.model.Rows(), ch.model.Pendings()
 		sc := ch.scrollState()
@@ -146,6 +151,10 @@ func (ch *Chat) row(c *ui.Context, r Row) {
 	c = c.Key(r.ID)
 	switch r.Kind {
 	case RowPrompt:
+		if r.Sent() {
+			column(c, func() { ch.prompt(c, r.Text, false) })
+			return
+		}
 		e := ch.model.Entry(r.Entry)
 		column(c, func() {
 			ch.prompt(c, e.Text, false)

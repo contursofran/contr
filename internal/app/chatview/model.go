@@ -30,14 +30,20 @@ const (
 
 // Row is one row of the chat. Entry is the index of the entry of a prompt, a text or an owner
 // note; Notes (kit notes and background tasks) and Calls are the indexes of the entries of a work
-// group, in order.
+// group, in order. A sent prompt that the transcript did not bring (D265) has Entry -1, and Text
+// holds it.
 type Row struct {
 	Kind  RowKind
 	ID    string
 	Entry int
+	Text  string
 	Notes []int
 	Calls []int
 }
+
+// Sent tells a prompt row that is a pending prompt that the safety net settled (D265): it has no
+// entry.
+func (r Row) Sent() bool { return r.Kind == RowPrompt && r.Entry < 0 }
 
 // Model holds the entries of one transcript and its rows. Apply adds a batch of the reader in
 // place: new entries append, a result updates its call. UI thread only.
@@ -55,16 +61,17 @@ type Model struct {
 }
 
 // Pending is a text the owner sent from the composer, shown dimmed at the end until the
-// transcript brings its prompt entry.
+// transcript brings its prompt entry. At is when it was sent.
 type Pending struct {
 	ID, Text string
+	At       time.Time
 }
 
 // AddPending shows text as a pending prompt and returns its id.
 func (m *Model) AddPending(text string) string {
 	m.seq++
 	id := "pending:" + strconv.Itoa(m.seq)
-	m.pending = append(m.pending, Pending{ID: id, Text: text})
+	m.pending = append(m.pending, Pending{ID: id, Text: text, At: time.Now()})
 	return id
 }
 
@@ -76,26 +83,130 @@ func (m *Model) DropPending(id string) {
 // Pendings are the pending prompts, in the order they were sent. The caller must not change them.
 func (m *Model) Pendings() []Pending { return m.pending }
 
-// matchPending drops the first pending prompt with the text of a prompt entry.
+// matchPending drops the first pending prompt that a prompt entry with text brings.
 func (m *Model) matchPending(text string) {
-	text = strings.TrimSpace(text)
-	if i := slices.IndexFunc(m.pending, func(p Pending) bool { return strings.TrimSpace(p.Text) == text }); i >= 0 {
+	if i := slices.IndexFunc(m.pending, func(p Pending) bool { return Matches(text, p.Text) }); i >= 0 {
 		m.pending = slices.Delete(m.pending, i, i+1)
 	}
 }
 
+// Matches tells that a prompt entry with text brings the owner's sent text: the same text, or the
+// sent text with only harness text around it. Before it: markup (a part that starts with "<" and
+// ends with ">"), and the lead of a message sent during a turn. After it: "[Image #N]" lines, then
+// markup or a known tail of that message (D265).
+func Matches(text, sent string) bool {
+	text, sent = strings.TrimSpace(text), strings.TrimSpace(sent)
+	if sent == "" {
+		return false
+	}
+	i := strings.Index(text, sent)
+	if i < 0 {
+		return false
+	}
+	before := strings.TrimSpace(text[:i])
+	before = strings.TrimSpace(strings.TrimSuffix(before, transcript.QueuedLead))
+	after := strings.TrimSpace(text[i+len(sent):])
+	for {
+		line, rest, _ := strings.Cut(after, "\n")
+		if !transcript.ImageMarker(line) {
+			break
+		}
+		after = strings.TrimSpace(rest)
+	}
+	return markup(before) && (markup(after) || transcript.QueuedTailAt(after) == 0)
+}
+
+// markup tells a part of a text that is empty or harness markup: it starts with "<" and ends
+// with ">".
+func markup(s string) bool {
+	s = strings.TrimSpace(s)
+	return s == "" || strings.HasPrefix(s, "<") && strings.HasSuffix(s, ">")
+}
+
+// prompt places what a prompt entry e of the owner changes in the pending prompts (D265). The
+// pending prompt it brings goes, and the pending prompts sent before it show as sent prompts
+// here: the session got them before it. An entry that brings no pending prompt takes the place
+// of a sent prompt with its text since the last prompt entry, else the pending prompts sent before
+// its time show as sent prompts here.
+func (m *Model) prompt(e transcript.Entry) {
+	if i := slices.IndexFunc(m.pending, func(p Pending) bool { return Matches(e.Text, p.Text) }); i >= 0 {
+		m.settle(m.pending[:i])
+		m.pending = slices.Delete(m.pending, 0, i+1)
+		return
+	}
+	if m.unsettle(e.Text) {
+		return
+	}
+	at, err := time.Parse(time.RFC3339Nano, e.Time)
+	if err != nil {
+		return
+	}
+	n := 0
+	for n < len(m.pending) && m.pending[n].At.Before(at) {
+		n++
+	}
+	m.settle(m.pending[:n])
+	m.pending = slices.Delete(m.pending, 0, n)
+}
+
+// TurnEnded tells that the session ended a turn: the pending prompts show as sent prompts at the
+// end (D265). Claude Code may give a message that the owner sent during a turn to the session in
+// the turn without a prompt line the reader knows.
+func (m *Model) TurnEnded() {
+	m.settle(m.pending)
+	m.pending = nil
+}
+
+// settle shows pending prompts ps as sent prompts at the end of the rows, with their ids.
+func (m *Model) settle(ps []Pending) {
+	for _, p := range ps {
+		m.rows, m.open = append(m.rows, Row{Kind: RowPrompt, ID: p.ID, Entry: -1, Text: p.Text}), false
+	}
+}
+
+// unsettle removes the last sent prompt that a prompt entry with text brings, after the last
+// prompt entry, and tells whether it did: the entry takes its place.
+func (m *Model) unsettle(text string) bool {
+	for j := len(m.rows) - 1; j >= 0; j-- {
+		r := m.rows[j]
+		if r.Kind != RowPrompt {
+			continue
+		}
+		if !r.Sent() {
+			return false
+		}
+		if Matches(text, r.Text) {
+			m.rows = slices.Delete(m.rows, j, j+1)
+			return true
+		}
+	}
+	return false
+}
+
 // takePending gives m, a model made from a first read off the UI thread (#660), the pending
 // prompts of old, the model it replaces, with their ids. A pending prompt whose prompt entry the
-// read brought is dropped, as Apply drops it.
+// read brought is dropped, as Apply drops it. The sent prompts of old (D265) go to the end,
+// except one that the last prompt entry of the read brings.
 func (m *Model) takePending(old *Model) {
 	m.pending, m.seq = old.pending, old.seq
+	last := ""
 	for _, r := range m.rows {
-		if len(m.pending) == 0 {
-			return
-		}
 		if r.Kind == RowPrompt {
-			m.matchPending(m.entries[r.Entry].Text)
+			last = m.entries[r.Entry].Text
+			if len(m.pending) > 0 {
+				m.matchPending(last)
+			}
 		}
+	}
+	for _, r := range old.rows {
+		if !r.Sent() {
+			continue
+		}
+		if last != "" && Matches(last, r.Text) {
+			last = ""
+			continue
+		}
+		m.rows, m.open = append(m.rows, r), false
 	}
 }
 
@@ -173,7 +284,7 @@ func (m *Model) add(e transcript.Entry) {
 	}
 	switch e.Kind {
 	case transcript.Prompt:
-		m.matchPending(e.Text)
+		m.prompt(e)
 		m.rows, m.open = append(m.rows, Row{Kind: RowPrompt, ID: id, Entry: i}), false
 	case transcript.Said:
 		m.rows, m.open = append(m.rows, Row{Kind: RowSaid, ID: id, Entry: i}), false

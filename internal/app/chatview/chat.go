@@ -83,6 +83,8 @@ type Chat struct {
 	field ui.Handle
 	// ticks is set while the last View asked for a redraw in a second: the live line's time.
 	ticks bool
+	// wasWorking is set while the last View saw the agent work: a turn ends when it goes idle.
+	wasWorking bool
 	// away is set while the list is not at its end; awayAt is the count of shown entries when it
 	// left the end (scroll.go).
 	away   bool
@@ -113,7 +115,7 @@ func New(env view.Env, stateDir string, watch func(path string, notify func()) (
 // Sync follows terminal id; "" stops. Call it with the selected terminal.
 func (ch *Chat) Sync(id string) {
 	if id != ch.src.Terminal() {
-		ch.shown = false
+		ch.shown, ch.wasWorking = false, false
 	}
 	ch.src.Sync(id)
 }
