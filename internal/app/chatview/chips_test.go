@@ -197,7 +197,7 @@ func TestChipIcon(t *testing.T) {
 		t.Error("a web link has an icon")
 	}
 	side := float32(14 * 0.9)
-	// A PR or an issue shows its Octicon; a PR with checks adds their dot after it (D286).
+	// A PR or an issue shows its Octicon; no dot follows it (D288).
 	for _, tc := range []struct {
 		c Chip
 		w float32
@@ -208,8 +208,8 @@ func TestChipIcon(t *testing.T) {
 		{Chip{Kind: ChipPR, State: StateOpen, Draft: true}, side + chipDotGap},
 		{Chip{Kind: ChipPR, State: StateMerged}, side + chipDotGap},
 		{Chip{Kind: ChipPR, State: StateClosed}, side + chipDotGap},
-		{Chip{Kind: ChipPR, State: StatePassed}, side + 2*chipDotGap + chipDot},
-		{Chip{Kind: ChipPR, State: StateFailed, Draft: true}, side + 2*chipDotGap + chipDot},
+		{Chip{Kind: ChipPR, State: StatePassed}, side + chipDotGap},
+		{Chip{Kind: ChipPR, State: StateFailed, Draft: true}, side + chipDotGap},
 	} {
 		o, ok := chipIcon(chipDest(tc.c, "4"), 14)
 		if !ok || o.Width != tc.w || o.Draw == nil {
@@ -356,5 +356,28 @@ func TestChipsAskForNoRedrawAtRest(t *testing.T) {
 	s.tt.Advance(2 * theme.MotionSelect) // past the switch's fade (D256)
 	if s.tt.FramePending() {
 		t.Error("a redraw is asked at rest")
+	}
+}
+
+func TestGitHubColor(t *testing.T) {
+	for _, p := range []*theme.Palette{theme.Dark, theme.Light} {
+		for _, tc := range []struct {
+			c    Chip
+			want any
+		}{
+			{Chip{Kind: ChipPR, State: StateFailed, Draft: true}, p.ContentFailed},
+			{Chip{Kind: ChipPR, State: StateRunning}, p.ContentRunning},
+			{Chip{Kind: ChipPR, State: StatePassed}, p.ContentDone},
+			{Chip{Kind: ChipPR, State: StateOpen}, p.ContentDone},
+			{Chip{Kind: ChipPR, State: StateOpen, Draft: true}, p.Ink48},
+			{Chip{Kind: ChipPR, State: StateMerged}, p.ContentLink},
+			{Chip{Kind: ChipPR, State: StateClosed}, p.Ink48},
+			{Chip{Kind: ChipIssue}, p.ContentDone},
+			{Chip{Kind: ChipIssue, State: StateClosed}, p.ContentLink},
+		} {
+			if got := GitHubColor(p, tc.c); any(got) != tc.want {
+				t.Errorf("dark=%v %+v: %v, want %v", p.Dark, tc.c, got, tc.want)
+			}
+		}
 	}
 }
