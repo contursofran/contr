@@ -68,7 +68,7 @@ func TestSpecSheet(t *testing.T) {
 
 // contentAnswer has each kind of content: headings, lists, a quote, the five remarks, a table
 // with numbers and status words, inline code, a Go code block and a diff block.
-const contentAnswer = "Four builders work with the M1 rules: red never fills or rings anything.\n\n" +
+const contentAnswer = "Four builders work with the M1 rules: red never fills or rings anything. See [the design notes](https://example.com/design) or https://example.com/runs, and **bold text** that is not a link.\n\n" +
 	"| Worker | Builds | State | Checks | Added | Removed |\n|---|---|---|---|---|---|\n" +
 	"| b-649 | Rows and badge | CI running | 2 / 3 | +212 | −148 |\n" +
 	"| b-665 | Fewer lines | building | — | +64 | −131 |\n" +
