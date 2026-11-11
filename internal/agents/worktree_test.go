@@ -102,7 +102,7 @@ func TestSpawnRunsTheProjectSetupInANewWorktree(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Setup = map[string]string{main: "cp -R \"$CONTR_MAIN/.husky\" ."}
 	f := runFake()
-	m := New(f, cfg)
+	m := New(f, cfg).WithEnv(noEnv)
 	if _, err := m.Spawn(context.Background(), Spec{Name: "w", Profile: "builder", Worktree: wt, Parent: "t0", Task: "go"}); err != nil {
 		t.Fatal(err)
 	}

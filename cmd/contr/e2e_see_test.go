@@ -229,10 +229,10 @@ var seeFixtures = map[string]seeFixture{
 		press: []string{"Chat", "wait:image 2"},
 	},
 	"chat-tools": {
-		about: "the chat fixture with a turn of mixed tool calls, its work group open (D274): a call line of each kind with its icon (skill, Slack connector, contr plugin, other MCP, agent, fetch, Bash, Read, Grep), a tool of no kind with an empty slot, and the label and key argument of each",
+		about: "the chat fixture with a turn of mixed tool calls, its work group open (D274): a call line of each kind with its icon (skill, Slack connector, contr plugin, other MCP, agent, fetch, Bash, Read, Grep), a tool of no kind with an empty slot, the label and key argument of each, and the Bash call open on its detail",
 		setup: seeChatTools,
 		ready: "lead, ",
-		press: []string{"Chat", "wait:work group 10 tool calls", "work group 10 tool calls", "wait:tool call Grep"},
+		press: []string{"Chat", "wait:work group 10 tool calls", "work group 10 tool calls", "wait:tool call Grep", "tool call Bash", "wait:call detail Bash"},
 	},
 	"session": {
 		about: "the orchestrator lead with the todos and artifacts of canvas board 11 (D197)",
