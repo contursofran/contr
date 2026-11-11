@@ -1,5 +1,5 @@
-// Package diagram draws the flow diagrams of Claude's answers (D284): a fenced contr-flow block,
-// one arrow per line, drawn with MyGo's Painter.
+// Package diagram draws the diagrams of Claude's answers: a fenced contr-flow block (D284),
+// one arrow per line, and a contr-seq block (D287), one message per line, drawn with MyGo's Painter.
 package diagram
 
 import (

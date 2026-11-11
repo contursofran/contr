@@ -130,7 +130,7 @@ func quoteText(src string) string {
 
 // mdHooks sets the hooks of the chat's Markdown options.
 func (ch *Chat) mdHooks() {
-	code := map[string]func(*ui.Context, *markdown.CodeBlockView){"diff": ch.diffBlock, "patch": ch.diffBlock, diagram.Lang: ch.flowBlock}
+	code := map[string]func(*ui.Context, *markdown.CodeBlockView){"diff": ch.diffBlock, "patch": ch.diffBlock, diagram.Lang: ch.flowBlock, diagram.LangSeq: ch.seqBlock}
 	ch.md.Block, ch.md.Code = ch.block, code
 	ch.mdNest.Block, ch.mdNest.Code = ch.block, code
 	// The views inside a remark, a cell or an item show the chips of the pre-pass (chips.go) as the
@@ -501,6 +501,20 @@ func (ch *Chat) flowBlock(c *ui.Context, b *markdown.CodeBlockView) {
 	}
 	st := diagram.Style{Node: ch.ts(theme.StyleBody), Label: ch.ts(theme.StyleMeta)}
 	if err == nil && !b.Open && diagram.View(c, f, maxW, st) {
+		return
+	}
+	markdown.DefaultCodeBlock(c, b)
+}
+
+// seqBlock is a contr-seq block drawn as a sequence diagram (D287), as flowBlock draws a flow.
+func (ch *Chat) seqBlock(c *ui.Context, b *markdown.CodeBlockView) {
+	s, err := diagram.ParseSeq(b.Code())
+	maxW := float32(columnMax)
+	if w := ch.contentWidth(c); w > 0 {
+		maxW = min(maxW, w)
+	}
+	st := diagram.Style{Node: ch.ts(theme.StyleBody), Label: ch.ts(theme.StyleMeta)}
+	if err == nil && !b.Open && diagram.SeqView(c, s, maxW, st) {
 		return
 	}
 	markdown.DefaultCodeBlock(c, b)

@@ -84,9 +84,30 @@ For a merge order, a `contr-queue` block, one line `#<n> <label>` for each step 
 #665 Fewer lines -- waits for #656
 ```
 
+## Diagrams
+
+Write a diagram only when the arrows say more than a list. Put the block at the top level of the answer, with only these lines. A block that does not parse or is too large shows as code; a larger or other diagram stays as a list or a table.
+
+A flow, as a `contr-flow` block: one line `A -> B` or `A -> B: label` for each arrow, `A [done]` for a state (`done`, `running`, `waiting`, `failed`, `info`). No chains `A -> B -> C`. At most 12 boxes, 6 steps deep, 4 side by side, 28 characters for a name.
+
+```contr-flow
+issue -> build: plan
+build -> review: PR
+review -> build: blockers
+review [waiting]
+```
+
+A sequence, as a `contr-seq` block: one line `A -> B: message` for each message, top to bottom; `A --> B: reply` for a reply (dashed); `A -> A: text` for a message to itself. The text is required; a name has no `:`. At most 6 actors, 16 messages, 28 characters for a name and 40 for a message.
+
+```contr-seq
+owner -> lead: fix #696
+lead -> b-696: build it
+b-696 --> lead: PR open
+```
+
 ## What the chat does not show
 
-- Diagrams: a `mermaid` or other diagram block shows as code. Use a list of steps, a table, or a `contr-queue` block for an order.
+- Diagrams other than `contr-flow` and `contr-seq`: a `mermaid` or other diagram block shows as code. Use a list of steps, a table, or a `contr-queue` block for an order.
 - Images: `![…](…)` shows only its description. Give the path of the file as text.
 - An HTML block shows as its source text. Use Markdown.
 - Math shows as its TeX source. Write the formula in a code span or in words.
