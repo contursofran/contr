@@ -102,6 +102,21 @@ func TestSettingsButtonNamesAnUpdateThatWaits(t *testing.T) {
 	}
 }
 
+func TestSettingsButtonNamesSetupStepsLeft(t *testing.T) {
+	h := newSpaces(t, apptest.SpTree())
+	steps := 0
+	h.list.SetupSteps = func() int { return steps }
+	h.tt.Frame()
+	if h.has(LabelSettingsSetup) || !h.has(LabelSettingsOpen) {
+		t.Fatal("the setup label shows with no step left")
+	}
+	steps = 2
+	h.tt.Frame()
+	if !h.has(LabelSettingsSetup) {
+		t.Errorf("the button does not say that setup steps are left: %q", h.tt.Texts())
+	}
+}
+
 func TestServerRowHasNoPlusUntilRemoteServers(t *testing.T) {
 	h := newSpaces(t, apptest.SpTree())
 	h.tt.Frame()

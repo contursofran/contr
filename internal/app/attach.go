@@ -226,11 +226,12 @@ func (f *Frame) attachSettings(w Window, env view.Env) (stop func()) {
 	}
 	f.Settings = &settings.Settings{Updates: f.deps.Updates, Version: settings.Version, CoreVersion: f.coreVersion, Env: env,
 		Relaunch: f.deps.Relaunch, OnReady: f.updateReady, Visible: func() bool { return f.Visibility == nil || f.Visibility.Visible() },
-		AgentsConfig: f.deps.AgentsConfig, Appearance: f.Appearance, SetAppearance: f.SetAppearance,
+		AgentsConfig: f.deps.AgentsConfig, Setup: f.deps.Setup, Appearance: f.Appearance, SetAppearance: f.SetAppearance,
 		Tint: f.Tint, SetTint: f.SetTint, ResetTint: f.ResetTint, ChatText: f.ChatText, SetChatText: f.SetChatText, RecordInstall: f.recordInstall}
 	f.loadUpdated(env)
 	f.SpacesList.OnSettings = func() { f.Settings.Toggle() }
 	f.SpacesList.UpdateReady = f.Settings.Ready
+	f.SpacesList.SetupSteps = f.Settings.SetupSteps
 	stopChecks := f.Settings.StartChecks()
 	offActive := mygo.App.OnDidBecomeActive(func() { w.Update(f.Settings.Activated) })
 	return func() {

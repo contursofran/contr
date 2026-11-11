@@ -54,6 +54,16 @@ func newSettingsRig(t *testing.T, u *fakeUpdates) *settingsRig {
 // open opens the modal and lets its way in end (D256).
 func (r *settingsRig) open() { r.s.Toggle(); r.tt.Frame(); r.tt.Advance(theme.MotionPopIn) }
 
+// openGeneral opens the modal on the General tab with a click on the tab.
+func (r *settingsRig) openGeneral() {
+	r.t.Helper()
+	r.open()
+	if err := r.tt.Click(SettingsTabs[TabGeneral]); err != nil {
+		r.t.Fatal(err)
+	}
+	r.tt.Frame()
+}
+
 // openUpdates opens the modal on the Updates tab with a click on the tab.
 func (r *settingsRig) openUpdates() {
 	r.t.Helper()
@@ -418,7 +428,7 @@ func TestSkippedHiddenCheckDoesNotCountAsACheck(t *testing.T) {
 
 func TestSettingsAppearanceRowShowsTheThreeChoices(t *testing.T) {
 	r := newSettingsRig(t, &fakeUpdates{On: true})
-	r.open()
+	r.openGeneral()
 	for _, name := range AppearanceNames {
 		if !r.has(name) {
 			t.Errorf("the Appearance row has no %q segment", name)
@@ -435,7 +445,7 @@ func TestSettingsAppearanceRowChangesTheSource(t *testing.T) {
 	var set []mygo.ThemeSource
 	r.s.Appearance = func() mygo.ThemeSource { return cur }
 	r.s.SetAppearance = func(s mygo.ThemeSource) { set = append(set, s); cur = s }
-	r.open()
+	r.openGeneral()
 	if err := r.tt.Click("Dark"); err != nil {
 		t.Fatal(err)
 	}
@@ -470,7 +480,7 @@ func TestSettingsAppearanceRowDoesNotSetAgainForTheSameChoice(t *testing.T) {
 
 func TestSettingsAppearanceRowNeedsNoHandlers(t *testing.T) {
 	r := newSettingsRig(t, &fakeUpdates{On: true})
-	r.open()
+	r.openGeneral()
 	if err := r.tt.Click("Light"); err != nil {
 		t.Fatal(err)
 	}
@@ -549,7 +559,7 @@ func TestOpenSettingsDialogChangesWithTheTheme(t *testing.T) {
 func TestSettingsShowsTheTintSlidersWithValues(t *testing.T) {
 	r := newSettingsRig(t, &fakeUpdates{On: true})
 	r.s.Tint = func() (float64, float64) { return 30, 55 }
-	r.open()
+	r.openGeneral()
 	for _, want := range []string{LabelBackground, LabelPanels, "30%", "55%", TintReset} {
 		if !r.hasText(want) {
 			t.Errorf("Settings has no %q: %v", want, r.texts())
@@ -578,7 +588,7 @@ func TestSettingsTintSliderNameMatchesTheScreenText(t *testing.T) {
 	r := newSettingsRig(t, &fakeUpdates{On: true})
 	r.s.Tint = func() (float64, float64) { return 30, 55 }
 	r.s.SetTint = func(w, p float64) {}
-	r.open()
+	r.openGeneral()
 	for _, name := range []string{LabelBackground, LabelPanels} {
 		n := 0
 		for _, s := range r.texts() {
@@ -601,7 +611,7 @@ func TestSettingsTintSliderCallsSetTint(t *testing.T) {
 	var calls [][2]float64
 	r.s.Tint = func() (float64, float64) { return win, pan }
 	r.s.SetTint = func(w, p float64) { win, pan = w, p; calls = append(calls, [2]float64{w, p}) }
-	r.open()
+	r.openGeneral()
 	r.clickSlider(t, LabelBackground, "30%", 0.5)
 	r.tt.Key(0, ui.KeyHome)
 	r.tt.Frame()
@@ -619,7 +629,7 @@ func TestSettingsTintResetCallsResetTint(t *testing.T) {
 	resets := 0
 	r.s.Tint = func() (float64, float64) { return 30, 55 }
 	r.s.ResetTint = func() { resets++ }
-	r.open()
+	r.openGeneral()
 	if err := r.tt.Click(TintReset); err != nil {
 		t.Fatal(err)
 	}
@@ -641,7 +651,7 @@ func TestSettingsTintSliderFollowsAClickOnTheTrack(t *testing.T) {
 	win, pan := 30.0, 55.0
 	r.s.Tint = func() (float64, float64) { return win, pan }
 	r.s.SetTint = func(w, p float64) { win, pan = w, p }
-	r.open()
+	r.openGeneral()
 	r.clickSlider(t, LabelPanels, "55%", 0.5)
 	r.tt.Frame()
 	r.tt.Frame()
@@ -803,7 +813,7 @@ func TestSettingsChatTextRowSetsTheSize(t *testing.T) {
 	var set []string
 	r.s.ChatText = func() string { return cur }
 	r.s.SetChatText = func(v string) { set = append(set, v); cur = v }
-	r.open()
+	r.openGeneral()
 	if !r.has(LabelChatText) {
 		t.Fatal("no Chat text row")
 	}
