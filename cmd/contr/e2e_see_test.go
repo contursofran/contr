@@ -240,6 +240,12 @@ var seeFixtures = map[string]seeFixture{
 		ready: "lead, ",
 		press: []string{"Chat", "type:Look at @app", "wait:@internal/app/"},
 	},
+	"chat-paths": {
+		about: "the chat fixture with \"Look at @app\" typed in the composer (D279): the popup above the card with the folder and files of the repo whose paths hold app, the paths with a part that starts with it first",
+		setup: seeChatPaths,
+		ready: "lead, ",
+		press: []string{"Chat", "type:Look at @app", "wait:@internal/app/"},
+	},
 	"session": {
 		about: "the orchestrator lead with the todos and artifacts of canvas board 11 (D197)",
 		setup: seeSession,
