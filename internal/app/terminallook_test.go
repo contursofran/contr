@@ -146,8 +146,11 @@ func TestTerminalLinesUseTheirTokens(t *testing.T) {
 			w.flush()
 		}
 		f.termState = ghostty.State{Kind: ghostty.NotRunning}
-		if line, c, ok := f.terminalLine(); !ok || line != TerminalNotRunningLine || c != p.Ink48 {
-			t.Errorf("dark=%v: ended line %q colour %v, want ink-48 %v", p.Dark, line, c, p.Ink48)
+		if line, _, ok := f.terminalLine(); ok {
+			t.Errorf("dark=%v: an ended program shows the line %q, want none (D290)", p.Dark, line)
+		}
+		if !f.gridDimmed() {
+			t.Errorf("dark=%v: the grid of an ended program is not dimmed", p.Dark)
 		}
 		f.termState = ghostty.State{Kind: ghostty.Incompatible, Message: "core too old"}
 		if line, c, ok := f.terminalLine(); !ok || line != "core too old" || c != p.Ink48 {
