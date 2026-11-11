@@ -9,7 +9,8 @@ package chatview
 // ChatViewScrolled a chat scrolled up with the pinned prompt and New messages (D266), ChatBlocks an
 // older board (frozen), the live board and a queue, and ChatBlocksBlocked a queue with a blocked
 // step (D267). ChatViewComposer shows the composer card in each state (D271), ChatViewImages the
-// images of prompts and the composer's image chips (D269).
+// images of prompts and the composer's image chips (D269), CallLines an open work group with a
+// call line of each kind and a running call (D274).
 
 import (
 	"strconv"
@@ -51,6 +52,7 @@ func TestSpecSheet(t *testing.T) {
 		said("i2", "I see it: the time runs into the badge."), picPrompt("i3", "and these, from the old build", nil, nil))
 	images.s.ch.attached[term] = 2
 	composer := sheetComposer(t)
+	calls := sheetChat(t, "working", append(mixedCalls[:len(mixedCalls)-1], callOf("k11", "Grep", `{"pattern":"kindIcon"}`))...)
 	apptest.SpecSheet(t, []apptest.SheetPart{
 		{Name: "ChatView", W: sheetW, H: sheetH, View: working.view},
 		{Name: "ChatViewWide", W: 1500, H: 420, View: wide.view},
@@ -63,7 +65,8 @@ func TestSpecSheet(t *testing.T) {
 		{Name: "ChatBlocksBlocked", W: sheetW, H: 360, View: blocked.view},
 		{Name: "ChatViewComposer", W: sheetW, H: composerSheetH, View: composer},
 		{Name: "ChatViewImages", W: sheetW, H: 420, View: images.view},
-	}, []string{"ChatViewComposer", "ChatView", "ChatViewWide", "ChatViewTeam", "ChatViewChips", "ChatContent", "ChatViewScrolled", "ChatBlocks", "ChatBlocksBlocked", "ChatViewImages"})
+		{Name: "CallLines", W: sheetW, H: 420, View: calls.view},
+	}, []string{"ChatViewComposer", "ChatView", "ChatViewWide", "ChatViewTeam", "ChatViewChips", "ChatContent", "ChatViewScrolled", "ChatBlocks", "ChatBlocksBlocked", "ChatViewImages", "CallLines"})
 }
 
 // contentAnswer has each kind of content: headings, lists, a quote, the five remarks, a table
