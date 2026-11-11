@@ -141,7 +141,7 @@ func (ch *Chat) mdHooks() {
 }
 
 // mdTheme styles Claude's Markdown with the tokens of the current theme: prose in ink-88, strong
-// text and links in ink-88, code in mono with the code colors.
+// text in ink-88, links in content-link (D275; MyGo underlines a link on hover), code in mono with the code colors.
 func (ch *Chat) mdTheme(pal *theme.Palette) {
 	scale := ch.scale()
 	if ch.md.Theme != nil && ch.md.Theme.Text == pal.Ink88 && ch.mdScale == scale {
@@ -154,7 +154,7 @@ func (ch *Chat) mdTheme(pal *theme.Palette) {
 	th := &markdown.Theme{
 		FontSize: size, Font: theme.FontFamilySans, CodeFont: theme.FontFamily,
 		LineHeight: ch.ts(theme.StyleProse).Line / size, CodeLineHeight: ch.ts(theme.StyleTerminal).Line / ch.ts(theme.StyleTerminal).Size,
-		Text: pal.Ink88, Muted: pal.Ink48, Link: pal.Ink88, Strong: pal.Ink88, StrongWeight: 500,
+		Text: pal.Ink88, Muted: pal.Ink48, Link: pal.ContentLink, Strong: pal.Ink88, StrongWeight: 500,
 		Code: pal.Ink88, CodeBackground: pal.Hover, CodeSize: em(inlineCodeSize),
 		BlockSpacing: em(theme.Space12),
 		QuoteBar:     pal.Ink30, QuoteText: pal.Ink88, QuoteBarWidth: remarkBar, Rule: pal.Hairline,
