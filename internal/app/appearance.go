@@ -51,6 +51,7 @@ func (f *Frame) StartTheme() {
 		} else {
 			src = p.Source()
 			f.tint = p.Tint
+			f.chatText = prefs.NormalizeChatText(p.ChatText)
 			theme.SetTint(true, f.tint.Dark.Window, f.tint.Dark.Panel)
 			theme.SetTint(false, f.tint.Light.Window, f.tint.Light.Panel)
 		}
@@ -101,7 +102,7 @@ func (f *Frame) persist(delay time.Duration) {
 		f.saveMu.Lock()
 		defer f.saveMu.Unlock()
 		f.appearanceMu.Lock()
-		cur := prefs.Prefs{Appearance: f.appearance, Tint: f.tint}
+		cur := prefs.Prefs{Appearance: f.appearance, Tint: f.tint, ChatText: f.chatText}
 		f.appearanceMu.Unlock()
 		if err := save(cur); err != nil && post != nil {
 			post(func() { f.Toasts.Show(err.Error()) })
@@ -144,4 +145,26 @@ func (f *Frame) storeTint(dark bool, w, p *float64) {
 	if f.invalidate != nil {
 		f.invalidate()
 	}
+}
+
+// ChatText returns the chat text size, one of prefs.ChatTextSizes (D272).
+func (f *Frame) ChatText() string {
+	f.appearanceMu.Lock()
+	defer f.appearanceMu.Unlock()
+	return prefs.NormalizeChatText(f.chatText)
+}
+
+// ChatScale returns the scale of the chat text size: 1 for Default.
+func (f *Frame) ChatScale() float32 { return prefs.Prefs{ChatText: f.ChatText()}.ChatScale() }
+
+// SetChatText changes the chat text size, applies it at once and stores it. The Chat text row
+// calls it, on the UI thread.
+func (f *Frame) SetChatText(size string) {
+	f.appearanceMu.Lock()
+	f.chatText = prefs.NormalizeChatText(size)
+	f.appearanceMu.Unlock()
+	if f.invalidate != nil {
+		f.invalidate()
+	}
+	f.persist(0)
 }

@@ -114,7 +114,7 @@ func (ch *Chat) View(c *ui.Context) {
 				Children(func() {
 					if len(rows)+len(pending) == 0 {
 						ui.Box(c).Fill().Center().Children(func() {
-							kit.Styled(ui.Text(c, TextEmpty), theme.StyleBody).TextColor(pal.Ink48)
+							kit.Styled(ui.Text(c, TextEmpty), ch.ts(theme.StyleBody)).TextColor(pal.Ink48)
 						})
 					}
 				})
@@ -158,7 +158,7 @@ func (ch *Chat) row(c *ui.Context, r Row) {
 		column(c, func() {
 			ch.prompt(c, e.Text, false)
 			ch.images(c, e.Pics, e.Images)
-			sentAt(c, e.Time)
+			ch.sentAt(c, e.Time)
 		})
 	case RowSaid:
 		e := ch.model.Entry(r.Entry)
@@ -172,12 +172,12 @@ func (ch *Chat) row(c *ui.Context, r Row) {
 
 // sentAt is the line with the time a prompt was sent, at the end of the column. A time that is
 // missing or does not parse shows nothing. It is a fixed text: nothing ticks (D55).
-func sentAt(c *ui.Context, at string) {
+func (ch *Chat) sentAt(c *ui.Context, at string) {
 	t, err := time.Parse(time.RFC3339Nano, at)
 	if at == "" || err != nil {
 		return
 	}
-	kit.Styled(ui.Text(c, TimeText(t, c.Now())), theme.StyleMeta).NoWrap().AlignSelf(ui.End).
+	kit.Styled(ui.Text(c, TimeText(t, c.Now())), ch.ts(theme.StyleMeta)).NoWrap().AlignSelf(ui.End).
 		Margin(theme.Space4, 0, 0, 0).TextColor(theme.Current().Ink48)
 }
 
@@ -210,7 +210,7 @@ func (ch *Chat) prompt(c *ui.Context, text string, pending bool) {
 	ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
 		ui.Box(c).Label(label).MaxWidth(promptMax).Padding(theme.Space8, 13).Radius(theme.Radius12).
 			Background(pal.Hover).Opacity(opacity).Children(func() {
-			kit.Styled(ui.Text(c, text), theme.StyleProse).TextColor(pal.Ink100).Selectable()
+			kit.Styled(ui.Text(c, text), ch.ts(theme.StyleProse)).TextColor(pal.Ink100).Selectable()
 		})
 	})
 }
@@ -271,7 +271,7 @@ func (ch *Chat) groupRow(c *ui.Context, p ui.CollapsibleParts, r Row, open *bool
 		if ch.model.Running(r) {
 			kit.StatusGlyph(c, kit.GlyphOpts{State: kit.GlyphWorking, Small: true})
 		}
-		kit.Styled(ui.Text(c, text), theme.StyleValue).NoWrap().TextColor(ink)
+		kit.Styled(ui.Text(c, text), ch.ts(theme.StyleValue)).NoWrap().TextColor(ink)
 		for _, addr := range ch.model.Senders(r) {
 			ch.dot(c, addr)
 		}
@@ -279,7 +279,7 @@ func (ch *Chat) groupRow(c *ui.Context, p ui.CollapsibleParts, r Row, open *bool
 		if *open {
 			chev = "⌄"
 		}
-		kit.Styled(ui.Text(c, chev), theme.StyleValue).TextColor(ink).AccessHidden(true)
+		kit.Styled(ui.Text(c, chev), ch.ts(theme.StyleValue)).TextColor(ink).AccessHidden(true)
 	})
 }
 
@@ -332,11 +332,11 @@ func (ch *Chat) noteLine(c *ui.Context, e transcript.Entry, own bool) {
 		if addr != "" {
 			ch.dot(c, addr)
 		}
-		kit.Styled(ui.Text(c, name), theme.StyleMeta).FontWeight(500).NoWrap().Shrink(0).TextColor(nameInk)
+		kit.Styled(ui.Text(c, name), ch.ts(theme.StyleMeta)).FontWeight(500).NoWrap().Shrink(0).TextColor(nameInk)
 		if status != "" {
-			kit.Styled(ui.Text(c, status), theme.StyleMeta).NoWrap().Shrink(0).TextColor(statusInk)
+			kit.Styled(ui.Text(c, status), ch.ts(theme.StyleMeta)).NoWrap().Shrink(0).TextColor(statusInk)
 		}
-		kit.Styled(ui.Text(c, text), theme.StyleMeta).SingleLine().Grow(1).MinWidth(0).TextColor(textInk)
+		kit.Styled(ui.Text(c, text), ch.ts(theme.StyleMeta)).SingleLine().Grow(1).MinWidth(0).TextColor(textInk)
 	})
 }
 
@@ -345,18 +345,18 @@ func (ch *Chat) noteLine(c *ui.Context, e transcript.Entry, own bool) {
 func (ch *Chat) callLine(c *ui.Context, e transcript.Entry) {
 	pal := theme.Current()
 	call := e.Tool
-	name := ToolName(call.Name)
+	name := ToolName(call)
 	ui.Row(c).Label(LabelCall + " " + name).FillWidth().Height(lineHeight).AlignItems(ui.Center).Gap(theme.Space8).Children(func() {
 		if !call.Done {
 			kit.StatusGlyph(c, kit.GlyphOpts{State: kit.GlyphWorking, Small: true})
 		}
-		kit.Styled(ui.Text(c, name), theme.StyleMeta).NoWrap().MinWidth(nameWidth).Shrink(0).TextColor(pal.Ink64)
-		kit.Styled(ui.Text(c, call.Summary), theme.StyleMeta).SingleLine().Grow(1).MinWidth(0).TextColor(pal.Ink48)
+		kit.Styled(ui.Text(c, name), ch.ts(theme.StyleMeta)).NoWrap().MinWidth(nameWidth).Shrink(0).TextColor(pal.Ink64)
+		kit.Styled(ui.Text(c, call.Summary), ch.ts(theme.StyleMeta)).SingleLine().Grow(1).MinWidth(0).TextColor(pal.Ink48)
 		if call.Error {
-			kit.Styled(ui.Text(c, TextError), theme.StyleMeta).NoWrap().Shrink(0).TextColor(pal.Blocked)
+			kit.Styled(ui.Text(c, TextError), ch.ts(theme.StyleMeta)).NoWrap().Shrink(0).TextColor(pal.Blocked)
 		}
 		if d, ok := Duration(e); ok {
-			kit.Styled(ui.Text(c, DurationText(d)), theme.StyleMeta).NoWrap().Shrink(0).TextColor(pal.Ink48)
+			kit.Styled(ui.Text(c, DurationText(d)), ch.ts(theme.StyleMeta)).NoWrap().Shrink(0).TextColor(pal.Ink48)
 		}
 	})
 }

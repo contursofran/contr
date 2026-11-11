@@ -115,6 +115,7 @@ var composerText = theme.TextStyle{Size: 14, Line: 22, Weight: 400}
 func (ch *Chat) composer(c *ui.Context, id string, st liveState) {
 	pal := theme.Current()
 	draft := ch.draft(id)
+	ct := ch.ts(composerText) // the field follows the Chat text size (D272)
 	column(c, func() {
 		// While the session orchestrates, the team row sits above the card, outside it (D276).
 		if t, ok := ch.teamOf(id); ok {
@@ -127,7 +128,7 @@ func (ch *Chat) composer(c *ui.Context, id string, st liveState) {
 			if n := ch.attached[id]; n > 0 {
 				ui.Row(c).FillWidth().Wrap().Gap(theme.Space6).Padding(theme.Space6, 0, theme.Space2, 0).Children(func() {
 					for i := range n {
-						imageChip(c, "Image "+strconv.Itoa(i+1), LabelAttached)
+						ch.imageChip(c, "Image "+strconv.Itoa(i+1), LabelAttached)
 					}
 				})
 			}
@@ -138,8 +139,8 @@ func (ch *Chat) composer(c *ui.Context, id string, st liveState) {
 			}
 			field.Children(func() {
 				in := ui.TextAreaBase(c.Key("composer:"+id), draft).Label(LabelComposer).Placeholder(Placeholder(ch.name(id))).
-					PlaceholderColor(pal.Ink48).TextColor(pal.Ink100).FontSize(composerText.Size).LineHeight(composerText.Line/composerText.Size).
-					Lines(1, composerLines).Grow(1).MinWidth(0).Padding((actionSize-composerText.Line)/2, 0, (actionSize-composerText.Line)/2, theme.Space6).AutoFocus().Bind(&ch.field).
+					PlaceholderColor(pal.Ink48).TextColor(pal.Ink100).FontSize(ct.Size).LineHeight(ct.Line/ct.Size).
+					Lines(1, composerLines).Grow(1).MinWidth(0).Padding((actionSize-ct.Line)/2, 0, (actionSize-ct.Line)/2, theme.Space6).AutoFocus().Bind(&ch.field).
 					OnTextKey(func(k ui.TextKey) bool { return ch.textKey(id, st, k) }).
 					OnPaste(func(text string) bool { return ch.paste(id, svc, text) })
 				if in.Changed() {
@@ -164,7 +165,7 @@ func (ch *Chat) composer(c *ui.Context, id string, st liveState) {
 		}
 		ch.footer(c, id, st)
 		if e := ch.errs[id]; e != "" {
-			kit.Styled(ui.Text(c, e), theme.StyleSmall).Wrap().
+			kit.Styled(ui.Text(c, e), ch.ts(theme.StyleSmall)).Wrap().
 				Padding(theme.Space6, footerInset, 0).TextColor(pal.Ink64)
 		}
 	})
@@ -192,16 +193,16 @@ func (ch *Chat) footer(c *ui.Context, id string, st liveState) {
 			}
 			left.Label(LabelLive + " " + text).Children(func() {
 				kit.StatusGlyph(c, kit.GlyphOpts{State: kit.GlyphWorking, Small: true})
-				kit.Styled(ui.Text(c, text), theme.StyleMeta).SingleLine().Ellipsis("…").MinWidth(0).TextColor(pal.Ink48)
+				kit.Styled(ui.Text(c, text), ch.ts(theme.StyleMeta)).SingleLine().Ellipsis("…").MinWidth(0).TextColor(pal.Ink48)
 			})
 		} else {
 			left.Children(func() {
-				kit.Styled(ui.Text(c, TextKeys), theme.StyleMeta).SingleLine().MinWidth(0).TextColor(pal.Ink48)
+				kit.Styled(ui.Text(c, TextKeys), ch.ts(theme.StyleMeta)).SingleLine().MinWidth(0).TextColor(pal.Ink48)
 			})
 		}
 		if ch.Meta != nil {
 			if m := ch.Meta(id); m != "" {
-				kit.Styled(ui.Text(c, m), theme.StyleMeta).NoWrap().Shrink(0).TextColor(pal.Ink48)
+				kit.Styled(ui.Text(c, m), ch.ts(theme.StyleMeta)).NoWrap().Shrink(0).TextColor(pal.Ink48)
 			}
 		}
 	})

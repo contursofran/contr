@@ -40,6 +40,8 @@ Shared rules: [README.md](README.md).
 
 ## Rows
 
+The sizes in this file are the Default chat text size. The Chat text setting (D272) multiplies each type style of the chat (size and line height) and the Markdown font size by its scale; spacing, radii and widths stay.
+
 | Row | Value |
 |---|---|
 | Owner prompt | right-aligned, at most 560px, padding `8px 13px`, radius `radius-12`, fill `hover`, text `prose` in `ink-100` |
@@ -50,7 +52,7 @@ Shared rules: [README.md](README.md).
 | Work group, open | `⌄`; under it a card, a wide block: at least 584px (or the content width when less), as wide as its longest line (note, task and call lines alike), up to the content width, `space-6` below the row, padding `8px 12px`, radius `radius-9`, line `hairline`: the note lines, a `hairline` rule, the call lines |
 | Note line | 20px, gap `space-8`, mono `meta`: the sender's dot, the name (500, `ink-88`), the text on one line (`ink-48`). An owner answer or done mark has the name "owner". A message of another Claude session or a teammate (D254) has the sender as its name ("session" when it has none) and the first line of the message; a subagent's hand-back is "subagent" and "reported". |
 | Task line | a background task that ended (D254), as a note line without a dot: "Background task" (500, `ink-88`), its status (`ink-48`), then "· " and its summary on one line (`ink-48`), without a leading "Background command " |
-| Call line | 20px, gap `space-8`, mono `meta`: a working StatusGlyph while it runs, the name (`ink-64`, at least 48px; an MCP tool shows its server, "contr"), the summary on one line (`ink-48`), "error" in `blocked` when the result is an error, the duration (`ink-48`): "0.4s", "12s", "2m 5s", from the timestamps of the call and its result, none when one is missing |
+| Call line | 20px, gap `space-8`, mono `meta`: a working StatusGlyph while it runs, the label (`ink-64`, at least 48px: "Bash", "Skill · chat-writing", "Slack · send message", "contr · send", "Agent · Explore", "Fetch"; D274), the key argument on one line (`ink-48`: a file's base name, Bash's description or command, a pattern, a URL's host and path, an MCP tool's channel, query or target), "error" in `blocked` when the result is an error, the duration (`ink-48`): "0.4s", "12s", "2m 5s", from the timestamps of the call and its result, none when one is missing |
 | Failed task | a task line whose status is "failed" or "killed" stays outside the fold: no dot, "Background task" and the status in `ink-100`, the summary in `ink-88`; no red (D259). Every other note folds, a worker's message too ("ended its turn without a report", "NAME: blocked, …"): the team row and the notch tell what needs the owner. |
 | Dot | 6px, round: `ink-100` for a blocked worker (no red: the team row's "N needs you" is the chat's one red for it, D259), `ink-88` for a working one, else `ink-30` |
 

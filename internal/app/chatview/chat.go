@@ -10,6 +10,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/chatsource"
+	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/transcript"
 )
@@ -49,6 +50,11 @@ type Chat struct {
 	// Notch is the box of the questions notch as last painted, and false while none shows: the
 	// pinned prompt ends before it (D266). May be nil.
 	Notch func() (ui.Rect, bool)
+
+	// TextScale returns the chat text size picked in Settings (D272): 1 is Default. Nil is 1.
+	TextScale func() float32
+	// mdScale is the text scale of the Markdown themes, so a new pick makes them again.
+	mdScale float32
 
 	src    *chatsource.Source
 	model  Model
@@ -241,4 +247,23 @@ func (ch *Chat) pull() {
 			ch.pull()
 		}
 	})
+}
+
+// scale is the chat text scale (D272): TextScale's value, or 1 when there is none.
+func (ch *Chat) scale() float32 {
+	if ch.TextScale == nil {
+		return 1
+	}
+	if s := ch.TextScale(); s > 0 {
+		return s
+	}
+	return 1
+}
+
+// ts returns the type style s at the chat text scale: size and line height grow, the weight and
+// family stay.
+func (ch *Chat) ts(s theme.TextStyle) theme.TextStyle {
+	f := ch.scale()
+	s.Size, s.Line = s.Size*f, s.Line*f
+	return s
 }

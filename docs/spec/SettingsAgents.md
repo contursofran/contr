@@ -11,7 +11,7 @@ Shared rules: [README.md](README.md). Design: board 10 of the from-zero canvas.
   `hover` track, `radius` of a card, 2px padding. The selected tab has the `selected` fill and
   `ink-100` text; the others `ink-64`. While an update waits, `Updates` has a 6px `ink-100`
   dot (D146).
-- **General:** Appearance and the transparency sliders, then `Done`.
+- **General:** Appearance, Chat text (D272) and the transparency sliders, then `Done`.
 - **Updates:** the versions, the update status, the notes, and the buttons `Check for updates`,
   `Install and restart` or `Restart now` (D176), `Done`.
 - **Agents**, from top to bottom:
