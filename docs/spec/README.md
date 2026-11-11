@@ -38,6 +38,7 @@ what the redesign does not settle.
 | [FileTree.md](FileTree.md) | the files panel tree with +/− counts |
 | [UsageMeter.md](UsageMeter.md) | context and plan usage under the file tree |
 | [SettingsAgents.md](SettingsAgents.md) | Settings tab bar and the Roles of the Agents tab |
+| [SettingsUpdates.md](SettingsUpdates.md) | the Updates tab of Settings: versions, Update hc |
 | [KeyHints.md](KeyHints.md) | key chips while ⌘ is held |
 
 Each component spec has these sections: purpose, anatomy, states,
