@@ -118,3 +118,30 @@ func TestTintValuesAreLimitedToZeroToOne(t *testing.T) {
 		t.Fatalf("Load = %+v, %v; want 1 and 0", got.Tint.Dark, err)
 	}
 }
+
+func TestChatTextSaveThenLoad(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := Save(path, Prefs{ChatText: ChatLarger}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(path)
+	if err != nil || got.ChatText != ChatLarger || got.ChatScale() != 1.3 {
+		t.Fatalf("Load = %+v, %v; want larger at 1.3", got, err)
+	}
+}
+
+func TestChatTextMissingOrUnknownIsDefault(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	for _, body := range []string{`{"version":1}`, `{"version":1,"chatText":"huge"}`} {
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		got, err := Load(path)
+		if err != nil || got.ChatText != ChatDefault || got.ChatScale() != 1 {
+			t.Errorf("%s: Load = %+v, %v; want default at 1", body, got, err)
+		}
+	}
+	if (Prefs{}).ChatScale() != 1 {
+		t.Error("zero Prefs: scale is not 1")
+	}
+}

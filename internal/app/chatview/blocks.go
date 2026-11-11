@@ -344,7 +344,7 @@ func (ch *Chat) board(c *ui.Context, id string, part int, lines []BoardLine, sen
 			BorderWidth(1, 0, 1, 0).BorderColor(pal.Hairline).Children(func() {
 			for k, h := range boardHeads[:cols] {
 				boardCell(c.Key(k), k == cols-1, ui.RoleColumnHeader, func() {
-					kit.Styled(ui.Text(c, h), theme.StyleMeta).NoWrap().TextColor(pal.Ink48)
+					kit.Styled(ui.Text(c, h), ch.ts(theme.StyleMeta)).NoWrap().TextColor(pal.Ink48)
 				})
 			}
 			for r, l := range lines {
@@ -359,7 +359,7 @@ func (ch *Chat) board(c *ui.Context, id string, part int, lines []BoardLine, sen
 			if live {
 				ui.Box(c).Size(5, 5).Radius(2.5).Background(pal.ContentRunning)
 			}
-			kit.Styled(ui.Text(c, foot), theme.StyleMeta).NoWrap().TextColor(pal.Ink48)
+			kit.Styled(ui.Text(c, foot), ch.ts(theme.StyleMeta)).NoWrap().TextColor(pal.Ink48)
 		})
 	})
 }
@@ -385,14 +385,14 @@ func (ch *Chat) boardRow(c *ui.Context, key int, pal *theme.Palette, l BoardLine
 			} else if values && !row.Found {
 				ink = pal.Ink48
 			}
-			kit.Styled(ui.Text(c, l.Worker), theme.StyleBody).NoWrap().TextColor(ink)
+			kit.Styled(ui.Text(c, l.Worker), ch.ts(theme.StyleBody)).NoWrap().TextColor(ink)
 		})
 	})
 	cell(1, func() {
-		kit.Styled(ui.Text(c, "#"+strconv.Itoa(l.Issue)), theme.StyleMeta).NoWrap().TextColor(pal.Ink64)
+		kit.Styled(ui.Text(c, "#"+strconv.Itoa(l.Issue)), ch.ts(theme.StyleMeta)).NoWrap().TextColor(pal.Ink64)
 	})
 	cell(2, func() {
-		kit.Styled(ui.Text(c, l.Builds), theme.StyleBody).SingleLine().Ellipsis("…").MinWidth(0).TextColor(pal.Ink88)
+		kit.Styled(ui.Text(c, l.Builds), ch.ts(theme.StyleBody)).SingleLine().Ellipsis("…").MinWidth(0).TextColor(pal.Ink88)
 	})
 	if !values {
 		return
@@ -405,17 +405,17 @@ func (ch *Chat) boardRow(c *ui.Context, key int, pal *theme.Palette, l BoardLine
 		case !row.Found:
 			ink = pal.Ink48
 		}
-		kit.Styled(ui.Text(c, row.State), theme.StyleMeta).NoWrap().TextColor(ink)
+		kit.Styled(ui.Text(c, row.State), ch.ts(theme.StyleMeta)).NoWrap().TextColor(ink)
 	})
 	cell(4, func() {
 		if row.PR == 0 {
-			kit.Styled(ui.Text(c, "—"), theme.StyleMeta).NoWrap().TextColor(pal.Ink48)
+			kit.Styled(ui.Text(c, "—"), ch.ts(theme.StyleMeta)).NoWrap().TextColor(pal.Ink48)
 			return
 		}
 		ch.prChip(c, pal, row.PR, row.PRState)
 	})
 	cell(5, func() {
-		kit.Styled(ui.Text(c, row.Checks), theme.StyleMeta).NoWrap().TextColor(pal.Ink64)
+		kit.Styled(ui.Text(c, row.Checks), ch.ts(theme.StyleMeta)).NoWrap().TextColor(pal.Ink64)
 	})
 }
 
@@ -435,7 +435,7 @@ func (ch *Chat) prChip(c *ui.Context, pal *theme.Palette, n int, st ChipState) {
 			if col, ok := ChipColor(pal, st); ok {
 				ui.Box(c).Size(chipDot, chipDot).Radius(chipDot / 2).Background(col)
 			}
-			ui.Text(c, "#"+name).Font(theme.FontFamily).FontSize(12).NoWrap().TextColor(pal.Ink88)
+			ui.Text(c, "#"+name).Font(theme.FontFamily).FontSize(12 * ch.scale()).NoWrap().TextColor(pal.Ink88)
 		})
 	})
 }
@@ -467,10 +467,10 @@ func (ch *Chat) queue(c *ui.Context, steps []QueueStep) {
 					bottom = 0
 				}
 				ui.Row(c).Grow(1).MinWidth(0).AlignItems(ui.Baseline).Gap(theme.Space10).Padding(0, 0, bottom, 0).Children(func() {
-					kit.Styled(ui.Text(c, strconv.Itoa(k+1)), theme.StyleMeta).NoWrap().TextColor(pal.Ink48)
-					kit.Styled(ui.Text(c, "#"+strconv.Itoa(s.Ref)+" "+s.Label), theme.StyleProse).Shrink(1).MinWidth(0).TextColor(stepLabelInk(pal, v))
+					kit.Styled(ui.Text(c, strconv.Itoa(k+1)), ch.ts(theme.StyleMeta)).NoWrap().TextColor(pal.Ink48)
+					kit.Styled(ui.Text(c, "#"+strconv.Itoa(s.Ref)+" "+s.Label), ch.ts(theme.StyleProse)).Shrink(1).MinWidth(0).TextColor(stepLabelInk(pal, v))
 					if v.Words != "" {
-						kit.Styled(ui.Text(c, v.Words), theme.StyleMeta).Shrink(1).MinWidth(0).TextColor(stepInk(pal, v))
+						kit.Styled(ui.Text(c, v.Words), ch.ts(theme.StyleMeta)).Shrink(1).MinWidth(0).TextColor(stepInk(pal, v))
 					}
 				})
 			})

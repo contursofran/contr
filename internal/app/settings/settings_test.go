@@ -15,6 +15,7 @@ import (
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/theme/themetest"
 	"github.com/contursofran/contr/internal/app/view"
+	"github.com/contursofran/contr/internal/prefs"
 )
 
 // fakeUpdates is an update service that the test controls.
@@ -793,5 +794,35 @@ func TestAFailedRecordStillRelaunches(t *testing.T) {
 	s.Install()
 	if !slices.Equal(*log, []recorded{{what: "relaunch"}}) {
 		t.Errorf("calls %+v, want the relaunch", *log)
+	}
+}
+
+func TestSettingsChatTextRowSetsTheSize(t *testing.T) {
+	r := newSettingsRig(t, &fakeUpdates{On: true})
+	cur := ""
+	var set []string
+	r.s.ChatText = func() string { return cur }
+	r.s.SetChatText = func(v string) { set = append(set, v); cur = v }
+	r.open()
+	if !r.has(LabelChatText) {
+		t.Fatal("no Chat text row")
+	}
+	for _, name := range []string{"Larger", "Small", "Default"} {
+		if err := r.tt.Click(name); err != nil {
+			t.Fatal(err)
+		}
+		r.tt.Frame()
+	}
+	want := []string{prefs.ChatLarger, prefs.ChatSmall, prefs.ChatDefault}
+	if !slices.Equal(set, want) {
+		t.Errorf("SetChatText got %v, want %v", set, want)
+	}
+}
+
+func TestSettingsChatTextRowHidesWithoutAHook(t *testing.T) {
+	r := newSettingsRig(t, &fakeUpdates{On: true})
+	r.open()
+	if r.has(LabelChatText) {
+		t.Error("the Chat text row shows without ChatText")
 	}
 }

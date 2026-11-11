@@ -143,14 +143,17 @@ func (ch *Chat) mdHooks() {
 // mdTheme styles Claude's Markdown with the tokens of the current theme: prose in ink-88, strong
 // text and links in ink-88, code in mono with the code colors.
 func (ch *Chat) mdTheme(pal *theme.Palette) {
-	if ch.md.Theme != nil && ch.md.Theme.Text == pal.Ink88 {
+	scale := ch.scale()
+	if ch.md.Theme != nil && ch.md.Theme.Text == pal.Ink88 && ch.mdScale == scale {
 		return
 	}
-	size := theme.StyleProse.Size
-	em := func(px float32) float32 { return px / size }
+	ch.mdScale = scale
+	// em is relative to the font size, so the sizes below grow with it.
+	size := ch.ts(theme.StyleProse).Size
+	em := func(px float32) float32 { return px / theme.StyleProse.Size }
 	th := &markdown.Theme{
 		FontSize: size, Font: theme.FontFamilySans, CodeFont: theme.FontFamily,
-		LineHeight: theme.StyleProse.Line / size, CodeLineHeight: theme.StyleTerminal.Line / theme.StyleTerminal.Size,
+		LineHeight: ch.ts(theme.StyleProse).Line / size, CodeLineHeight: ch.ts(theme.StyleTerminal).Line / ch.ts(theme.StyleTerminal).Size,
 		Text: pal.Ink88, Muted: pal.Ink48, Link: pal.Ink88, Strong: pal.Ink88, StrongWeight: 500,
 		Code: pal.Ink88, CodeBackground: pal.Hover, CodeSize: em(inlineCodeSize),
 		BlockSpacing: em(theme.Space12),
@@ -164,8 +167,8 @@ func (ch *Chat) mdTheme(pal *theme.Palette) {
 			Top: em(theme.Space12 + headingMore), Bottom: em(theme.Space12)}
 	}
 	head, num := *th, *th
-	head.FontSize, head.LineHeight, head.Text, head.Strong = headSize, float32(headLine)/headSize, pal.Ink48, pal.Ink48
-	num.FontSize, num.Font = numSize, theme.FontFamily
+	head.FontSize, head.LineHeight, head.Text, head.Strong = headSize*scale, float32(headLine)/headSize, pal.Ink48, pal.Ink48
+	num.FontSize, num.Font = numSize*scale, theme.FontFamily
 	ch.md.Theme, ch.mdNest.Theme, ch.mdHead.Theme, ch.mdNum.Theme = th, th, &head, &num
 }
 
@@ -230,7 +233,7 @@ func (ch *Chat) remark(c *ui.Context, r Remark) {
 			bar.Background(color)
 		}
 		ui.Column(c).Grow(1).MinWidth(0).Gap(theme.Space2).Padding(theme.Space6, theme.Space12, theme.Space7, theme.Space14).Children(func() {
-			kit.Styled(ui.Text(c, r.Kind.Word()), theme.StyleLabel).FontWeight(600).TextColor(color)
+			kit.Styled(ui.Text(c, r.Kind.Word()), ch.ts(theme.StyleLabel)).FontWeight(600).TextColor(color)
 			markdown.View(c, r.Body, &ch.mdNest)
 		})
 	})
@@ -365,7 +368,7 @@ func (ch *Chat) mdList(c *ui.Context, d *parser.Document, i int) {
 	width := float32(markerSize)
 	if b.Ordered {
 		last := b.Number + max(0, countItems(d, i)-1)
-		w, _ := c.MeasureText(0, ui.Span{Text: strconv.Itoa(last) + string(b.Marker), Font: theme.FontFamily, Size: theme.StyleMeta.Size})
+		w, _ := c.MeasureText(0, ui.Span{Text: strconv.Itoa(last) + string(b.Marker), Font: theme.FontFamily, Size: ch.ts(theme.StyleMeta).Size})
 		width = max(width, w)
 	}
 	ui.Column(c).Role(ui.RoleList).Children(func() {
@@ -380,7 +383,7 @@ func (ch *Chat) mdList(c *ui.Context, d *parser.Document, i int) {
 			num := n
 			row.Children(func() {
 				marker := ui.Box(c).Width(width).Shrink(0).Unselectable()
-				marker.Children(func() { itemMarker(c, pal, b, item, num) })
+				marker.Children(func() { ch.itemMarker(c, pal, b, item, num) })
 				ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Children(func() {
 					markdown.View(c, ItemText(src, item), &ch.mdNest)
 				})
@@ -391,8 +394,8 @@ func (ch *Chat) mdList(c *ui.Context, d *parser.Document, i int) {
 }
 
 // itemMarker is the mark of an item: its check or ring, its number or a bullet.
-func itemMarker(c *ui.Context, pal *theme.Palette, list, item *parser.Block, n int) {
-	line := theme.StyleProse.Line
+func (ch *Chat) itemMarker(c *ui.Context, pal *theme.Palette, list, item *parser.Block, n int) {
+	line := ch.ts(theme.StyleProse).Line
 	switch {
 	case item.Task != parser.NoTask:
 		checked := item.Task == parser.Checked
@@ -410,10 +413,10 @@ func itemMarker(c *ui.Context, pal *theme.Palette, list, item *parser.Block, n i
 				}
 			})
 	case list.Ordered:
-		kit.Styled(ui.Text(c, strconv.Itoa(n)+string(list.Marker)), theme.StyleMeta).NoWrap().
-			Margin((line-theme.StyleMeta.Line)/2, 0, 0, 0).TextColor(pal.Ink48)
+		kit.Styled(ui.Text(c, strconv.Itoa(n)+string(list.Marker)), ch.ts(theme.StyleMeta)).NoWrap().
+			Margin((line-ch.ts(theme.StyleMeta).Line)/2, 0, 0, 0).TextColor(pal.Ink48)
 	default:
-		kit.Styled(ui.Text(c, "•"), theme.StyleProse).TextColor(pal.Ink48)
+		kit.Styled(ui.Text(c, "•"), ch.ts(theme.StyleProse)).TextColor(pal.Ink48)
 	}
 }
 
@@ -498,12 +501,12 @@ func (ch *Chat) diffBlock(c *ui.Context, b *markdown.CodeBlockView) {
 		Role(ui.RoleGroup).Label("Code, " + b.Language)
 	box.Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Padding(theme.Space4, theme.Space6, 0, pad).Children(func() {
-			kit.Styled(ui.Text(c, b.Language), theme.StyleMeta).TextColor(pal.Ink48).Unselectable()
+			kit.Styled(ui.Text(c, b.Language), ch.ts(theme.StyleMeta)).TextColor(pal.Ink48).Unselectable()
 			ui.Spacer(c)
 			b.CopyButton(c)
 		})
 		lines := strings.Split(code, "\n")
-		lineH := theme.StyleTerminal.Line
+		lineH := ch.ts(theme.StyleTerminal).Line
 		// The tints lie under the scroll, as wide as the block: the lines in the scroll are only as
 		// wide as the longest one.
 		ui.Box(c).AlignSelf(ui.Stretch).Children(func() {
@@ -523,8 +526,8 @@ func (ch *Chat) diffBlock(c *ui.Context, b *markdown.CodeBlockView) {
 						if line == "" {
 							line = " "
 						}
-						kit.Styled(ui.Text(c.Key(k), line), theme.StyleTerminal).NoWrap().Height(lineH).
-							LineHeight(lineH / theme.StyleTerminal.Size).TextColor(ink)
+						kit.Styled(ui.Text(c.Key(k), line), ch.ts(theme.StyleTerminal)).NoWrap().Height(lineH).
+							LineHeight(lineH / ch.ts(theme.StyleTerminal).Size).TextColor(ink)
 					}
 				})
 			})
