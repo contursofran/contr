@@ -53,6 +53,13 @@ func TestSpecSheet(t *testing.T) {
 	images.s.ch.attached[term] = 2
 	composer := sheetComposer(t)
 	calls := sheetChat(t, "working", append(mixedCalls[:len(mixedCalls)-1], callOf("k11", "Grep", `{"pattern":"kindIcon"}`))...)
+	detail := sheetChat(t, "idle", lPrompt, callOf("k1", "Bash", `{"command":"go test ./internal/app/chatview","description":"Run the chat tests"}`),
+		`{"type":"user","uuid":"rk1","timestamp":"2026-11-10T10:00:02.4Z","message":{"content":[{"type":"tool_result","tool_use_id":"k1","content":"ok  \tchatview\t2.1s\nok  \ttranscript\t0.4s"}]}}`,
+		callOf("k2", "Read", `{"file_path":"/repo/a.go"}`), errOf("k2", "File does not exist."), said("s1", "Done."))
+	for _, id := range []string{"k1", "k2"} {
+		open := true
+		detail.s.ch.calls[id] = &open
+	}
 	apptest.SpecSheet(t, []apptest.SheetPart{
 		{Name: "ChatView", W: sheetW, H: sheetH, View: working.view},
 		{Name: "ChatViewWide", W: 1500, H: 420, View: wide.view},
@@ -66,7 +73,8 @@ func TestSpecSheet(t *testing.T) {
 		{Name: "ChatViewComposer", W: sheetW, H: composerSheetH, View: composer},
 		{Name: "ChatViewImages", W: sheetW, H: 420, View: images.view},
 		{Name: "CallLines", W: sheetW, H: 420, View: calls.view},
-	}, []string{"ChatViewComposer", "ChatView", "ChatViewWide", "ChatViewTeam", "ChatViewChips", "ChatContent", "ChatViewScrolled", "ChatBlocks", "ChatBlocksBlocked", "ChatViewImages", "CallLines"})
+		{Name: "CallDetail", W: sheetW, H: 360, View: detail.view},
+	}, []string{"ChatViewComposer", "ChatView", "ChatViewWide", "ChatViewTeam", "ChatViewChips", "ChatContent", "ChatViewScrolled", "ChatBlocks", "ChatBlocksBlocked", "ChatViewImages", "CallLines", "CallDetail"})
 }
 
 // contentAnswer has each kind of content: headings, lists, a quote, the five remarks, a table
