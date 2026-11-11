@@ -515,3 +515,26 @@ func TestClosedFollowsTheConnection(t *testing.T) {
 		t.Fatal("Closed() = false after Close")
 	}
 }
+
+// #728: CleanArgv adds the folders of CONTR_PATH after PATH and removes the
+// variable; without it PATH stays.
+func TestCleanArgvAddsThePath(t *testing.T) {
+	for _, c := range []struct{ extra, want string }{
+		{"/x/bin:/y", "/usr/bin:/bin:/x/bin:/y"},
+		{"", "/usr/bin:/bin"},
+	} {
+		argv := CleanArgv([]string{"/bin/sh", "-c", `echo "$PATH|${` + EnvPath + `-unset}"`})
+		cmd := exec.Command(argv[0], argv[1:]...)
+		cmd.Env = []string{"PATH=/usr/bin:/bin"}
+		if c.extra != "" {
+			cmd.Env = append(cmd.Env, EnvPath+"="+c.extra)
+		}
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.TrimSpace(string(out)); got != c.want+"|unset" {
+			t.Errorf("extra %q: got %q, want %q", c.extra, got, c.want+"|unset")
+		}
+	}
+}
