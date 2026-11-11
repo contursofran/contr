@@ -21,6 +21,11 @@ Copyright 2026 Fabien Penso, licensed under the Apache License, Version 2.0.
 Each file with adapted code has a header comment that says so and names the
 changes.
 
+The brand marks in assets/icons/brands/ are icons of Simple Icons
+(https://github.com/simple-icons/simple-icons), v16.37.0, released under
+CC0 1.0 Universal; they are used without changes. The marks belong to their
+owners; contr uses them only to show which service a tool call goes to.
+
 The Claude Code mascot (assets/icons/claude-mascot.svg) is the "Claude Code"
 icon of LobeHub icons (https://github.com/lobehub/lobe-icons), licensed under
 the MIT License; changes: the viewBox is cropped to the shape, and it has one

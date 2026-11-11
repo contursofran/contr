@@ -35,6 +35,9 @@ const (
 	LabelCall      = "tool call"
 	// LabelCallIcon names the kind icon of a call line, followed by the icon's name.
 	LabelCallIcon = "tool icon"
+	// LabelBrand follows LabelCallIcon when the icon is the brand mark of the call's server,
+	// followed by the mark's name (D274).
+	LabelBrand = "brand"
 	// LabelCallDetail names the detail under an open call line, followed by the call's name.
 	LabelCallDetail = "call detail"
 	// LabelFade names the gradient over the bottom of the transcript, above the dock.
@@ -373,6 +376,8 @@ func (ch *Chat) callHead(c *ui.Context, t ui.Element, e transcript.Entry, name s
 		slot.Children(func() {
 			if !call.Done {
 				kit.StatusGlyph(c, kit.GlyphOpts{State: kit.GlyphWorking, Small: true})
+			} else if b := brandOf(call); b != "" && icons.Brand(b) != nil {
+				ui.Icon(c, icons.Brand(b)).Size(callIconSize, callIconSize).Label(LabelCallIcon + " " + LabelBrand + " " + b)
 			} else if icon := kindIcon(call.Kind); icon != "" {
 				if s := icons.Line(icon); s != nil {
 					ui.Icon(c, s).Size(callIconSize, callIconSize).Label(LabelCallIcon + " " + icon)

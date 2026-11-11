@@ -223,10 +223,10 @@ var seeFixtures = map[string]seeFixture{
 		press: []string{"Chat", "wait:image 2"},
 	},
 	"chat-tools": {
-		about: "the chat fixture with a turn of mixed tool calls, its work group open (D274): a call line of each kind with its icon (skill, Slack connector, contr plugin, other MCP, agent, fetch, Bash, Read, Grep), a tool of no kind with an empty slot, the label and key argument of each, and the Bash call open on its detail",
+		about: "the chat fixture with a turn of mixed tool calls, its work group open (D274): a call line of each kind with its icon (skill, Slack connector, contr plugin, Linear MCP and Notion connector with their brand marks, an unknown MCP server with the connector icon, agent, fetch, Bash, Read, Grep), a tool of no kind with an empty slot, the label and key argument of each, and the Bash call open on its detail",
 		setup: seeChatTools,
 		ready: "lead, ",
-		press: []string{"Chat", "wait:work group 10 tool calls", "work group 10 tool calls", "wait:tool call Grep", "tool call Bash", "wait:call detail Bash"},
+		press: []string{"Chat", "wait:work group 12 tool calls", "work group 12 tool calls", "wait:tool call Grep", "tool call Bash", "wait:call detail Bash"},
 	},
 	"session": {
 		about: "the orchestrator lead with the todos and artifacts of canvas board 11 (D197)",
@@ -444,6 +444,8 @@ func seeChatTools(t *testing.T, h *harness) {
 		{"mcp__claude_ai_Slack__slack_send_message", map[string]any{"channel": "#dev", "text": "the call line has icons"}},
 		{"mcp__plugin_contr_contr__send", map[string]any{"to": "b-709", "body": "merge main"}},
 		{"mcp__linear__list_issues", map[string]any{"query": "chat rows"}},
+		{"mcp__claude_ai_Notion__notion_search", map[string]any{"query": "chat spec"}},
+		{"mcp__acme__list_things", map[string]any{"query": "rows"}},
 		{"Task", map[string]any{"subagent_type": "Explore", "description": "Find the call line"}},
 		{"WebFetch", map[string]any{"url": "https://example.com/docs/chat"}},
 		{"Bash", map[string]any{"command": "go test ./internal/app/chatview", "description": "Run the chat tests"}},

@@ -6,6 +6,7 @@ package icons
 
 import (
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -90,25 +91,8 @@ var (
 func svg(name string) *ui.SVG {
 	loadOnce.Do(func() {
 		parsed = make(map[string]*ui.SVG)
-		files, err := assets.Icons.ReadDir("icons")
-		if err != nil {
-			log.Printf("icons: %v", err)
-			return
-		}
-		for _, f := range files {
-			base := f.Name()[:len(f.Name())-len(".svg")]
-			data, err := assets.Icons.ReadFile("icons/" + f.Name())
-			if err != nil {
-				log.Printf("icons: %v", err)
-				continue
-			}
-			s, err := ui.ParseSVG(data)
-			if err != nil {
-				log.Printf("icons: %s: %v", f.Name(), err)
-				continue
-			}
-			parsed[base] = s
-		}
+		load("icons", "")
+		load("icons/brands", brandPrefix)
 	})
 	return parsed[name]
 }
@@ -162,4 +146,33 @@ func Monitor(c *ui.Context, size float32) ui.Element {
 		return ui.Box(c).Size(size, size).Label("monitor") // file missing, logged
 	}
 	return ui.Icon(c, svg("monitor")).Size(size, size).Label("monitor")
+}
+
+// brandPrefix starts the key of a brand mark in parsed.
+const brandPrefix = "brand/"
+
+// load parses the SVG files of folder dir into parsed, each under prefix and its base name.
+func load(dir, prefix string) {
+	files, err := assets.Icons.ReadDir(dir)
+	if err != nil {
+		log.Printf("icons: %v", err)
+		return
+	}
+	for _, f := range files {
+		if f.IsDir() {
+			continue
+		}
+		base := strings.TrimSuffix(f.Name(), ".svg")
+		data, err := assets.Icons.ReadFile(dir + "/" + f.Name())
+		if err != nil {
+			log.Printf("icons: %v", err)
+			continue
+		}
+		s, err := ui.ParseSVG(data)
+		if err != nil {
+			log.Printf("icons: %s: %v", f.Name(), err)
+			continue
+		}
+		parsed[prefix+base] = s
+	}
 }
