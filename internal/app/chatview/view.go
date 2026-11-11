@@ -295,23 +295,35 @@ func (ch *Chat) groupRow(c *ui.Context, p ui.CollapsibleParts, r Row, open *bool
 
 // dot is the state of the worker at addr: blocked in ink-100, working in ink-88, else ink-30. A
 // blocked worker gets no red: the team row's "N needs you" is the chat's one red for it (D259).
+// A worker of a known model family shows its mark in that ink in place of the dot (D285).
 func (ch *Chat) dot(c *ui.Context, addr string) {
 	pal := theme.Current()
 	color, state := pal.Ink30, "idle"
 	if ch.Worker != nil {
 		if w, ok := ch.Worker(addr); ok {
-			state = w.Status
-			switch w.Status {
-			case "blocked":
-				color = pal.Ink100
-			case "working":
-				color = pal.Ink88
+			state, color = w.Status, WorkerInk(pal, w.Status)
+			label := w.DisplayName() + " " + state
+			if m := familyMark(ch.familyOf(w)); m != nil {
+				ch.mark(c, m, label, color, w.Status == "working")
+				return
 			}
-			ch.dotBox(c, w.DisplayName()+" "+state, color)
+			ch.dotBox(c, label, color)
 			return
 		}
 	}
 	ch.dotBox(c, addr+" "+state, color)
+}
+
+// WorkerInk is the ink of a worker's dot or mark in status: blocked ink-100, working ink-88, else
+// ink-30 (D259, D285).
+func WorkerInk(pal *theme.Palette, status string) ui.Color {
+	switch status {
+	case "blocked":
+		return pal.Ink100
+	case "working":
+		return pal.Ink88
+	}
+	return pal.Ink30
 }
 
 func (ch *Chat) dotBox(c *ui.Context, label string, color ui.Color) {
