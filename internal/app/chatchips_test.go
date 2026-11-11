@@ -171,3 +171,37 @@ func TestChatChipsOpen(t *testing.T) {
 		t.Error("a name that is gone opened something")
 	}
 }
+
+// A board reads a worker with the PR of its branch, and a number with the counts of its checks
+// (D267), from the data of the chips.
+func TestChatChipsGiveBoardData(t *testing.T) {
+	r := newChipsRig(t)
+	if _, ok := r.s.Worker("o1", "b-650"); ok {
+		t.Error("an unknown worker is known")
+	}
+	w, ok := r.s.Worker("o1", "b-649")
+	if !ok || w != (chatview.WorkerInfo{Chip: chatview.Chip{Kind: chatview.ChipWorker, State: chatview.StateNeedsYou}}) {
+		t.Errorf("b-649 before its PR is known: %+v %v", w, ok)
+	}
+	prs := ghsourcetest.NewPRSourceRig(map[string]string{"/wt/b": `{"number":656,"state":"OPEN","statusCheckRollup":[{"status":"IN_PROGRESS"}]}`})
+	prs.W.Sync(r.f.snap.Workers)
+	prs.Flush()
+	r.f.WorkerPRs = prs.W
+	if w, _ := r.s.Worker("o1", "b-649"); w.PR != 656 {
+		t.Errorf("b-649's PR is %d, want 656", w.PR)
+	}
+	// Before its read by number, the worker's PR is known without counts.
+	ref, ok := r.s.Ref("o1", 656)
+	if !ok || ref != (chatview.RefInfo{Chip: chatview.Chip{Kind: chatview.ChipPR, State: chatview.StateRunning}}) {
+		t.Errorf("656 before its read: %+v %v", ref, ok)
+	}
+	r.runner.out = `{"number":656,"state":"OPEN","statusCheckRollup":[{"status":"COMPLETED","conclusion":"SUCCESS"},{"status":"COMPLETED","conclusion":"FAILURE"}]}`
+	r.flush()
+	ref, ok = r.s.Ref("o1", 656)
+	if !ok || ref.Chip.State != chatview.StateFailed || ref.Checks.Pass != 1 || ref.Checks.Fail != 1 || ref.Done {
+		t.Errorf("656 after its read: %+v %v", ref, ok)
+	}
+	if _, ok := r.s.Ref("nobody", 656); ok {
+		t.Error("a session without a folder knows a number")
+	}
+}

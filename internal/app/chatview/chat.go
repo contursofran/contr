@@ -42,6 +42,9 @@ type Chat struct {
 	Team func(addr string) (Team, bool)
 	// OpenNeeds opens the notch's card, as ⌘J does: the click on "N needs you". May be nil.
 	OpenNeeds func()
+	// Notch is the box of the questions notch as last painted, and false while none shows: the
+	// pinned prompt ends before it (D266). May be nil.
+	Notch func() (ui.Rect, bool)
 
 	src    *chatsource.Source
 	model  Model
@@ -74,6 +77,12 @@ type Chat struct {
 	partsOf map[string]string
 	// chips holds the parts of Claude's texts with their chips, by row id and part (chips.go).
 	chips map[string]*chipPart
+	// boards holds what each status board showed while it was live, by row id and part
+	// (blocks.go). newest is the key of the newest board, found when the rows were newestN.
+	boards   map[string]*blockSnap
+	newest   string
+	newestN  int
+	newestOK bool
 	// svc opens the links of Claude's text: the services of the window of the last View.
 	svc ui.Services
 	// field is the composer's field, which takes the focus back after a click on a button.
@@ -82,6 +91,12 @@ type Chat struct {
 	ticks bool
 	// wasWorking is set while the last View saw the agent work: a turn ends when it goes idle.
 	wasWorking bool
+	// away is set while the list is not at its end; awayAt is the count of shown entries when it
+	// left the end (scroll.go).
+	away   bool
+	awayAt int
+	// switchBox is the box of the switch, for the room at the right of the pinned prompt.
+	switchBox ui.Handle
 }
 
 // New returns a chat view that reads the session files under stateDir (package session).
@@ -89,7 +104,7 @@ type Chat struct {
 func New(env view.Env, stateDir string, watch func(path string, notify func()) (func(), error)) *Chat {
 	ch := &Chat{Env: env, reader: transcript.NewReader(0), chat: map[string]bool{}, folds: map[string]*bool{},
 		drafts: map[string]*string{}, errs: map[string]string{}, parts: map[string][]Part{}, partsOf: map[string]string{},
-		chips: map[string]*chipPart{}}
+		chips: map[string]*chipPart{}, boards: map[string]*blockSnap{}}
 	ch.md.LinkIcon, ch.md.OnLink = chipIcon, ch.openLink
 	ch.src = &chatsource.Source{StateDir: stateDir, Env: env, Watch: watch, Changed: ch.changed}
 	ch.mdHooks()
@@ -156,6 +171,8 @@ func (ch *Chat) changed(reset bool) {
 		ch.folds = map[string]*bool{}
 		ch.parts, ch.partsOf = map[string][]Part{}, map[string]string{}
 		ch.chips = map[string]*chipPart{}
+		ch.boards, ch.newestOK = map[string]*blockSnap{}, false
+		ch.away = false
 		ch.Env.Redraw()
 	}
 	ch.stale = true

@@ -18,6 +18,9 @@ import (
 type Part struct {
 	Text string
 	Wide bool
+	// Board and Queue are the lines of a contr-status or contr-queue block (blocks.go).
+	Board []BoardLine
+	Queue []QueueStep
 }
 
 // Parts cuts a Markdown text into runs of prose and the blocks that may be wide (tables and code
@@ -28,7 +31,12 @@ func Parts(src string) []Part {
 	from := 0
 	add := func(to int, wide bool) {
 		if s := src[from:to]; strings.TrimSpace(s) != "" {
-			out = append(out, Part{Text: s, Wide: wide})
+			p := Part{Text: s, Wide: wide}
+			if wide {
+				p.Board, _ = ParseStatus(s)
+				p.Queue, _ = ParseQueue(s)
+			}
+			out = append(out, p)
 		}
 		from = to
 	}
@@ -62,8 +70,9 @@ func lineEnd(s string, i int) int {
 	return len(s)
 }
 
-// said is a text of Claude: its prose in the column and its wide blocks in a wide box.
-func (ch *Chat) said(c *ui.Context, id, src string) {
+// said is a text of Claude, sent at sent: its prose in the column, its wide blocks in a wide box
+// and its status boards and queues as blocks.go builds them.
+func (ch *Chat) said(c *ui.Context, id, src, sent string) {
 	parts := ch.parts[id]
 	if parts == nil || ch.partsOf[id] != src {
 		parts = Parts(src)
@@ -72,6 +81,14 @@ func (ch *Chat) said(c *ui.Context, id, src string) {
 	ui.Column(c).FillWidth().Gap(theme.Space12).Children(func() {
 		for i, p := range parts {
 			c := c.Key(i)
+			switch {
+			case p.Board != nil:
+				ch.wide(c, func() { ch.board(c, id, i, p.Board, sent) })
+				continue
+			case p.Queue != nil:
+				column(c, func() { ch.queue(c, p.Queue) })
+				continue
+			}
 			text := ch.chipText(id, i, p.Text)
 			if p.Wide {
 				ch.wide(c, func() { markdown.View(c, text, &ch.md) })

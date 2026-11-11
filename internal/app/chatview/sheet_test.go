@@ -5,17 +5,22 @@ package chatview
 // session, a failed task outside the fold, the live line of a working agent and the composer
 // (D252). ChatViewWide shows a wide panel with a table wider than the column, ChatViewTeam the
 // team row of an orchestrating session (D259, D260), ChatViewChips the chips of each kind and
-// state in Claude's text (D262), and ChatContent one answer with each kind of content (D261).
+// state in Claude's text (D262), ChatContent one answer with each kind of content (D261),
+// ChatViewScrolled a chat scrolled up with the pinned prompt and New messages (D266), ChatBlocks an
+// older board (frozen), the live board and a queue, and ChatBlocksBlocked a queue with a blocked
+// step (D267).
 
 import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/github"
 )
 
 const (
@@ -34,13 +39,24 @@ func TestSpecSheet(t *testing.T) {
 		strconv.Quote(contentAnswer)+`}]}}`)
 	chips := sheetChat(t, "idle", lPrompt, said("k1", chipsText))
 	chips.s.ch.Chips = sheetChips
+	blocks := sheetChat(t, "idle", lPrompt, saidAt("o1", today(18, 45), oldBoard), saidAt("n1", today(18, 49), newBoard))
+	blocks.s.ch.Chips = blockChips()
+	keepBoard(blocks.s.ch, "o1", today(18, 45))
+	blocked := sheetChat(t, "idle", lPrompt, saidAt("q1", today(18, 52), blockedQueue))
+	blocked.s.ch.Chips = blockChips()
+	blocked.s.ch.Chips.(*fakeChips).refs[656] = RefInfo{Chip: Chip{ChipPR, StateFailed}, Checks: github.CheckSummary{Pass: 2, Fail: 1}}
+	scrolled := sheetScrolled(t)
 	apptest.SpecSheet(t, []apptest.SheetPart{
 		{Name: "ChatView", W: sheetW, H: sheetH, View: working.view},
 		{Name: "ChatViewWide", W: 1500, H: 420, View: wide.view},
 		{Name: "ChatViewTeam", W: sheetW, H: 420, View: team.view},
 		{Name: "ChatViewChips", W: sheetW, H: 420, View: chips.view},
 		{Name: "ChatContent", W: sheetW, H: 2300, View: content.view},
-	}, []string{"ChatView", "ChatViewWide", "ChatViewTeam", "ChatViewChips", "ChatContent"})
+		{Name: "ChatBlocks", W: sheetW, H: 900, View: blocks.view},
+		{Name: "ChatViewScrolled", W: sheetW, H: scrolledH, View: scrolled.view},
+		{Name: "ChatBlocks", W: sheetW, H: 900, View: blocks.view},
+		{Name: "ChatBlocksBlocked", W: sheetW, H: 360, View: blocked.view},
+	}, []string{"ChatView", "ChatViewWide", "ChatViewTeam", "ChatViewChips", "ChatContent", "ChatViewScrolled", "ChatBlocks", "ChatBlocksBlocked"})
 }
 
 // contentAnswer has each kind of content: headings, lists, a quote, the five remarks, a table
@@ -81,6 +97,31 @@ var sheetChips = &fakeChips{known: map[string]Chip{
 }}
 
 var wideTable = "| one | two | three | four |\n|---|---|---|---|\n| " + strings.Repeat(strings.Repeat("a long cell text ", 6)+" | ", 4)
+
+// sheetScrolled is a chat scrolled up into its second turn, with content that came after the owner
+// left the end: the pinned prompt and Jump to latest (D266).
+func sheetScrolled(t *testing.T) sheetView {
+	lines := []string{lPrompt, lSaid, lCall1, lRes1, said("x1", scrolledAnswer),
+		`{"type":"user","uuid":"q2","timestamp":"2026-11-10T10:04:00Z","message":{"content":"merge #611 first, then tell b-632 to merge main and run the review on its exact head"}}`,
+		said("x2", scrolledAnswer), lCall2, lRes2Err, said("x3", scrolledAnswer), lCall1, lRes1, said("x4", scrolledAnswer), lCall2, said("x6", scrolledAnswer),
+		said("x7", "b-632 merged `main`. Its checks run again.")}
+	v := sheetChat(t, "working", lines...)
+	tt := ui.NewTester(v.view, sheetW, scrolledH)
+	tt.Frame()
+	v.s.ch.list.ScrollTo(6, ui.Start)
+	tt.Frame()
+	tt.Advance(time.Second)
+	// Content that came after the owner left the end.
+	v.s.write(append(lines, said("x5", "b-631 is done: PR #633, checks passed."))...)
+	tt.Frame()
+	return v
+}
+
+const scrolledH = 460
+
+const scrolledAnswer = "I merge #611 first: it and #613 both change `internal/app/panel.go`. Then b-632 merges `main` " +
+	"before its review, and each PR gets a review on its exact head. I tell you when a worker needs you, " +
+	"and the team row counts the workers that work."
 
 // sheetView is a chat of the sheet: its session and its view.
 type sheetView struct {
