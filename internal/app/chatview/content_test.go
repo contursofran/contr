@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo/ui/markdown"
 	"github.com/egoist/mygo/ui/markdown/parser"
 
+	"github.com/contursofran/contr/internal/app/diagram"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/theme/themetest"
 	"github.com/contursofran/contr/internal/app/view"
@@ -288,6 +289,33 @@ func TestLinksHaveTheLinkColor(t *testing.T) {
 			if th.Text == th.Link || th.Strong == th.Link {
 				t.Errorf("%v: plain text has the link color", src)
 			}
+		}
+	}
+}
+
+// wideFlow is six long boxes in a row: wider than the column.
+const wideFlow = "the first long box name -> the second long box name\nthe second long box name -> the third long box name\n" +
+	"the third long box name -> the fourth long box name\nthe fourth long box name -> the fifth long box name\n"
+
+const bigFlow = "a -> b\nb -> c\nc -> d\nd -> e\ne -> f\nf -> g\ng -> h\nh -> i\ni -> j\nj -> k\nk -> l\nl -> m\n"
+
+// A contr-flow block draws as a flow diagram (D284); one that does not parse or is too large
+// shows as its code block.
+func TestFlowBlock(t *testing.T) {
+	for _, tc := range []struct {
+		name, src string
+		drawn     bool
+	}{
+		{"good", "a -> b: go\nb [done]\n", true},
+		{"bad", "a -> b -> c\n", false},
+		{"large", bigFlow, false},
+		{"wide", wideFlow, false},
+	} {
+		tt, _ := contentRig(t, mygo.ThemeDark, "```contr-flow\n"+tc.src+"```\n")
+		_, drawn := tt.Access(diagram.LabelDiagram)
+		_, code := tt.AccessByRole(ui.RoleGroup, "Code, contr-flow")
+		if drawn != tc.drawn || code == tc.drawn {
+			t.Errorf("%s: diagram %v, code block %v", tc.name, drawn, code)
 		}
 	}
 }

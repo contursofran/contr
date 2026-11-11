@@ -60,6 +60,7 @@ func TestSpecSheet(t *testing.T) {
 		open := true
 		detail.s.ch.calls[id] = &open
 	}
+	flow := sheetChat(t, "idle", lPrompt, said("f1", flowAnswer))
 	apptest.SpecSheet(t, []apptest.SheetPart{
 		{Name: "ChatView", W: sheetW, H: sheetH, View: working.view},
 		{Name: "ChatViewWide", W: 1500, H: 420, View: wide.view},
@@ -74,7 +75,8 @@ func TestSpecSheet(t *testing.T) {
 		{Name: "ChatViewImages", W: sheetW, H: 420, View: images.view},
 		{Name: "CallLines", W: sheetW, H: 420, View: calls.view},
 		{Name: "CallDetail", W: sheetW, H: 360, View: detail.view},
-	}, []string{"ChatViewComposer", "ChatView", "ChatViewWide", "ChatViewTeam", "ChatViewChips", "ChatContent", "ChatViewScrolled", "ChatBlocks", "ChatBlocksBlocked", "ChatViewImages", "CallLines", "CallDetail"})
+		{Name: "ChatFlow", W: sheetW, H: 620, View: flow.view},
+	}, []string{"ChatFlow", "ChatViewComposer", "ChatView", "ChatViewWide", "ChatViewTeam", "ChatViewChips", "ChatContent", "ChatViewScrolled", "ChatBlocks", "ChatBlocksBlocked", "ChatViewImages", "CallLines", "CallDetail"})
 }
 
 // contentAnswer has each kind of content: headings, lists, a quote, the five remarks, a table
@@ -97,6 +99,12 @@ const contentAnswer = "Four builders work with the M1 rules: red never fills or 
 	"> [!FOO]\n> An unknown tag stays a quote.\n\n" +
 	"```go\n// Sync follows a terminal.\nfunc (s *Source) Sync(id string) error {\n\tif id == \"\" {\n\t\treturn errors.New(\"no terminal\")\n\t}\n\ts.limit = 920\n\treturn nil\n}\n```\n\n" +
 	"```diff\n--- a/kit/agentrow.go\n+++ b/kit/agentrow.go\n@@ -10,3 +10,3 @@\n if row.Selected {\n-\tb.Background(t.Selected)\n+\tb.Background(t.SelectedQuiet)\n }\n```\n"
+
+// flowAnswer has a flow diagram with states, a branch and a loop back, and a block too large to
+// draw, which shows as code (D284).
+const flowAnswer = "The fix goes through review:\n\n```contr-flow\nissue -> plan: owner picks\nplan -> build\n" +
+	"build -> review: PR\nreview -> merge: approved\nreview -> build: blockers\nmerge -> release\nmerge [done]\nreview [waiting]\n```\n\n" +
+	"Too many steps for a drawing:\n\n```contr-flow\n" + bigFlow + "```\n"
 
 // chipsText has each kind of chip in each state (D262), and names that stay text: an unknown
 // number, a name in code and a path that does not exist.

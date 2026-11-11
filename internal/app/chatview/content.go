@@ -17,6 +17,7 @@ import (
 	"github.com/egoist/mygo/ui/markdown"
 	"github.com/egoist/mygo/ui/markdown/parser"
 
+	"github.com/contursofran/contr/internal/app/diagram"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/theme"
 )
@@ -129,7 +130,7 @@ func quoteText(src string) string {
 
 // mdHooks sets the hooks of the chat's Markdown options.
 func (ch *Chat) mdHooks() {
-	code := map[string]func(*ui.Context, *markdown.CodeBlockView){"diff": ch.diffBlock, "patch": ch.diffBlock}
+	code := map[string]func(*ui.Context, *markdown.CodeBlockView){"diff": ch.diffBlock, "patch": ch.diffBlock, diagram.Lang: ch.flowBlock}
 	ch.md.Block, ch.md.Code = ch.block, code
 	ch.mdNest.Block, ch.mdNest.Code = ch.block, code
 	// The views inside a remark, a cell or an item show the chips of the pre-pass (chips.go) as the
@@ -488,6 +489,21 @@ func DiffKind(line string) DiffLineKind {
 		return DiffRemoved
 	}
 	return DiffContext
+}
+
+// flowBlock is a contr-flow block drawn as a flow diagram (D284), at most the column wide. A
+// block that does not parse, does not fit or is still being written shows as its code block.
+func (ch *Chat) flowBlock(c *ui.Context, b *markdown.CodeBlockView) {
+	f, err := diagram.Parse(b.Code())
+	maxW := float32(columnMax)
+	if w := ch.contentWidth(c); w > 0 {
+		maxW = min(maxW, w)
+	}
+	st := diagram.Style{Node: ch.ts(theme.StyleBody), Label: ch.ts(theme.StyleMeta)}
+	if err == nil && !b.Open && diagram.View(c, f, maxW, st) {
+		return
+	}
+	markdown.DefaultCodeBlock(c, b)
 }
 
 // diffBlock is a diff or patch code block: the language and Copy above its lines, an added line
