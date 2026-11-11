@@ -345,7 +345,7 @@ func (ch *Chat) noteLine(c *ui.Context, e transcript.Entry, own bool) {
 func (ch *Chat) callLine(c *ui.Context, e transcript.Entry) {
 	pal := theme.Current()
 	call := e.Tool
-	name := ToolName(call.Name)
+	name := ToolName(call)
 	ui.Row(c).Label(LabelCall + " " + name).FillWidth().Height(lineHeight).AlignItems(ui.Center).Gap(theme.Space8).Children(func() {
 		if !call.Done {
 			kit.StatusGlyph(c, kit.GlyphOpts{State: kit.GlyphWorking, Small: true})

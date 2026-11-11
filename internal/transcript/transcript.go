@@ -115,9 +115,15 @@ type Entry struct {
 type Call struct {
 	ID   string
 	Name string
-	// Summary is one line about the input: the file path, the command, the
-	// pattern or, for an MCP tool, the tool's own name.
+	// Kind is the kind of the tool (D274).
+	Kind ToolKind
+	// Label is the name a chat row shows: "Slack · send message", "Bash".
+	Label string
+	// Summary is the key argument, on one line: a file's base name, the
+	// command, the pattern, the channel of an MCP tool.
 	Summary string
+	// Args are at most 6 input pairs, values cut to 200 runes.
+	Args [][2]string
 	// Done is set when the result came.
 	Done bool
 	// Error is set when the result is an error.
@@ -547,7 +553,8 @@ func assistant(base Entry, content json.RawMessage) []Entry {
 			e.Kind = Thinking
 		case "tool_use", "server_tool_use":
 			e.Kind = Tool
-			e.Tool = &Call{ID: bl.ID, Name: bl.Name, Summary: summary(bl.Name, bl.Input)}
+			kind, _, label, arg, args := Describe(bl.Name, bl.Input)
+			e.Tool = &Call{ID: bl.ID, Name: bl.Name, Kind: kind, Label: label, Summary: arg, Args: args}
 		default:
 			continue
 		}
@@ -892,26 +899,6 @@ const (
 	summaryMax = 200
 	excerptMax = 200
 )
-
-// summary gives one line about a tool's input.
-func summary(name string, raw json.RawMessage) string {
-	if rest, ok := strings.CutPrefix(name, "mcp__"); ok {
-		if _, tool, ok := strings.Cut(rest, "__"); ok {
-			return tool
-		}
-		return rest
-	}
-	var in map[string]any
-	if json.Unmarshal(raw, &in) != nil {
-		return ""
-	}
-	for _, k := range []string{"file_path", "notebook_path", "command", "pattern", "path", "url", "query", "description", "prompt", "skill"} {
-		if v, ok := in[k].(string); ok && strings.TrimSpace(v) != "" {
-			return cut(v, summaryMax)
-		}
-	}
-	return ""
-}
 
 // text gives the text of content that is a string, a list of strings or a
 // list of text blocks.

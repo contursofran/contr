@@ -343,7 +343,7 @@ func (m *Model) Activity() (what string, start time.Time, ok bool) {
 		}
 		last = false
 		if what == TextWorking && e.Kind == transcript.Tool && e.Tool != nil && !e.Tool.Done {
-			what = ToolName(e.Tool.Name)
+			what = ToolName(e.Tool)
 			if e.Tool.Summary != "" {
 				what += " · " + e.Tool.Summary
 			}
@@ -482,16 +482,11 @@ func DurationText(d time.Duration) string {
 	return strconv.Itoa(m) + "m " + strconv.Itoa(int((d-time.Duration(m)*time.Minute)/time.Second)) + "s"
 }
 
-// ToolName is the name a tool line shows: the server of an MCP tool ("contr" for
-// mcp__plugin_contr_contr__send), else the tool's own name.
-func ToolName(name string) string {
-	rest, ok := strings.CutPrefix(name, "mcp__")
-	if !ok {
-		return name
+// ToolName is the name a tool line shows: the call's label ("contr · send",
+// "Bash"), else its raw name.
+func ToolName(c *transcript.Call) string {
+	if c.Label != "" {
+		return c.Label
 	}
-	server, _, _ := strings.Cut(rest, "__")
-	if i := strings.LastIndexByte(server, '_'); i >= 0 && i < len(server)-1 {
-		server = server[i+1:]
-	}
-	return server
+	return c.Name
 }

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -98,8 +99,9 @@ func TestToolCall(t *testing.T) {
 		t.Fatalf("batch = %+v", b)
 	}
 	c := b.Entries[0].Tool
-	want := Call{ID: "t1", Name: "Bash", Summary: "go test ./... …", Done: true, Excerpt: "ok\nall passed"}
-	if b.Entries[0].Kind != Tool || *c != want {
+	want := Call{ID: "t1", Name: "Bash", Kind: KindShell, Label: "Bash", Summary: "Run tests", Done: true, Excerpt: "ok\nall passed",
+		Args: [][2]string{{"command", "go test ./...\necho done"}, {"description", "Run tests"}}}
+	if b.Entries[0].Kind != Tool || !reflect.DeepEqual(*c, want) {
 		t.Errorf("call = %+v, want %+v", *c, want)
 	}
 	c = read(t, lCall, lErrResult).Entries[0].Tool
@@ -111,8 +113,8 @@ func TestToolCall(t *testing.T) {
 		t.Errorf("no result yet = %+v", *c)
 	}
 	long := `{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t5","name":"Bash","input":{"command":"` + strings.Repeat("a", 300) + `"}}]}}`
-	for line, want := range map[string]string{lMCP: "message", lRead: "/x/a.go", lGrep: "func main", long: strings.Repeat("a", summaryMax) + "…",
-		`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t6","name":"mcp__solo","input":{}}]}}`: "solo"} {
+	for line, want := range map[string]string{lMCP: "", lRead: "a.go", lGrep: "func main", long: strings.Repeat("a", summaryMax) + "…",
+		`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t6","name":"mcp__solo","input":{"query":"q"}}]}}`: "q"} {
 		if got := one(t, line).Tool.Summary; got != want {
 			t.Errorf("summary of %s = %q, want %q", line, got, want)
 		}
