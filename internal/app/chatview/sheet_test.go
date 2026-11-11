@@ -190,18 +190,20 @@ type composerState struct {
 	team            *Team
 	text            string
 	h               float32
+	next            string // Claude Code's suggested next prompt (D281)
 }
 
 var composerStates = []composerState{
-	{"Idle, empty: no button, the keys in the footer", "idle", &Team{Agents: 2, Idle: 2}, "", 150},
-	{"Idle, text: Send", "idle", &Team{Agents: 2, Idle: 2}, "Merge #611 first, then tell b-632 to merge main.", 150},
-	{"Working, empty: Stop", "working", &Team{Agents: 2, NeedsYou: 1, Working: 1}, "", 150},
-	{"Working, text, no team: Working in the footer, Send (the message queues)", "working", nil, "And run the review on its exact head.", 150},
-	{"Many lines: the field grows to 8 lines, then scrolls", "idle", &Team{Agents: 2, Working: 2}, strings.TrimSuffix(strings.Repeat("A line of the message\n", 11), "\n"), 330},
-	{"No team, idle: the field alone", "idle", nil, "", 130},
+	{"Idle, empty: no button, the keys in the footer", "idle", &Team{Agents: 2, Idle: 2}, "", 150, ""},
+	{"Idle, text: Send", "idle", &Team{Agents: 2, Idle: 2}, "Merge #611 first, then tell b-632 to merge main.", 150, ""},
+	{"Working, empty: Stop", "working", &Team{Agents: 2, NeedsYou: 1, Working: 1}, "", 150, ""},
+	{"Working, text, no team: Working in the footer, Send (the message queues)", "working", nil, "And run the review on its exact head.", 150, ""},
+	{"Many lines: the field grows to 8 lines, then scrolls", "idle", &Team{Agents: 2, Working: 2}, strings.TrimSuffix(strings.Repeat("A line of the message\n", 11), "\n"), 330, ""},
+	{"No team, idle: the field alone", "idle", nil, "", 130, ""},
+	{"Idle, empty, a suggested next prompt: it takes the placeholder's place (D281)", "idle", nil, "", 130, "commit this and open a PR"},
 }
 
-const composerSheetH = 1230
+const composerSheetH = 1380
 
 // sheetComposer stacks the composer card in each of composerStates, each under its caption, at the
 // bottom of a short chat.
@@ -213,6 +215,9 @@ func sheetComposer(t *testing.T) func(c *ui.Context) {
 			teamOf(v, *st.team)
 		}
 		*v.s.ch.draft(term) = st.text
+		if next := st.next; next != "" {
+			v.s.ch.NextPrompt = func(string) string { return next }
+		}
 		views[i] = v
 	}
 	return func(c *ui.Context) {

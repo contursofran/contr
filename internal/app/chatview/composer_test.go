@@ -51,6 +51,16 @@ func newSession(t *testing.T, status string) *sess {
 	return s
 }
 
+// hint is the composer field's placeholder.
+func (s *sess) hint() string {
+	s.t.Helper()
+	a, ok := s.tt.Access(LabelComposer)
+	if !ok {
+		s.t.Fatal("no composer field")
+	}
+	return a.Placeholder
+}
+
 // typeIn types text into the composer, which has the focus.
 func (s *sess) typeIn(text string) {
 	s.t.Helper()
@@ -445,4 +455,61 @@ func (r *rig) footerWorks() bool {
 		}
 	}
 	return false
+}
+
+func TestComposerShowsTheNextPrompt(t *testing.T) {
+	s := newSession(t, "idle")
+	next := "commit this"
+	s.ch.NextPrompt = func(addr string) string {
+		if addr != term {
+			return ""
+		}
+		return next
+	}
+	s.tt.Frame()
+	if h := s.hint(); h != "commit this" {
+		t.Fatalf("the field shows %q, want the suggestion", h)
+	}
+	// Enter with an empty field sends nothing, as before.
+	s.key(0, ui.KeyEnter)
+	if len(s.sent) != 0 {
+		t.Errorf("Enter sent %v", s.sent)
+	}
+	// Tab takes it into the field.
+	s.key(0, ui.KeyTab)
+	if s.draft() != "commit this" {
+		t.Fatalf("Tab gave the draft %q", s.draft())
+	}
+	s.key(0, ui.KeyEnter)
+	if len(s.sent) != 1 || s.sent[0] != "commit this" {
+		t.Errorf("sent %v", s.sent)
+	}
+}
+
+func TestComposerTypingHidesTheNextPrompt(t *testing.T) {
+	s := newSession(t, "idle")
+	s.ch.NextPrompt = func(string) string { return "commit this" }
+	s.tt.Frame()
+	s.typeIn("x")
+	if h := s.hint(); h == "commit this" {
+		t.Errorf("the suggestion stays with text in the field")
+	}
+	// Tab with text in the field does not replace it.
+	s.key(0, ui.KeyTab)
+	if s.draft() != "x" {
+		t.Errorf("Tab changed the draft to %q", s.draft())
+	}
+}
+
+func TestComposerWithoutNextPromptShowsThePlaceholder(t *testing.T) {
+	s := newSession(t, "idle")
+	s.ch.NextPrompt = func(string) string { return "" }
+	s.tt.Frame()
+	if h := s.hint(); h != "Message lead…" {
+		t.Errorf("the field shows %q, want the placeholder", h)
+	}
+	s.key(0, ui.KeyTab)
+	if s.draft() != "" {
+		t.Errorf("Tab with no suggestion gave %q", s.draft())
+	}
 }

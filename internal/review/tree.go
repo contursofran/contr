@@ -173,3 +173,23 @@ func joinRel(rel, name string) string {
 	}
 	return rel + "/" + name
 }
+
+// KnownFiles lists the files that git knows under Dir and the new ones that it does not ignore,
+// slash-separated and relative to Dir, sorted. ok is false when Dir is not a git work
+// tree.
+func (r Repo) KnownFiles(ctx context.Context) (files []string, ok bool, err error) {
+	if !r.IsRepo(ctx) {
+		return nil, false, nil
+	}
+	out, err := r.git(ctx, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--deduplicate")
+	if err != nil {
+		return nil, true, err
+	}
+	for _, p := range strings.Split(out, "\x00") {
+		if p != "" {
+			files = append(files, p)
+		}
+	}
+	sort.Strings(files)
+	return files, true, nil
+}

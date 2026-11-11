@@ -143,6 +143,15 @@ the circle.
 - The field takes the focus as it appears: when the chat shows (the switch,
   ⌘E). It keeps the focus after a send, and takes it back after a click on
   Send or Stop.
+- Suggested next prompt (D281): when a turn ends, Claude Code shows a
+  suggested next prompt as faint text after `❯` in its input line. contr
+  reads it from the selected terminal's screen (the faint text, SGR 2, after
+  the last `❯`), 300 ms after output, off the UI thread. While the field is
+  empty, the suggestion takes the place of the placeholder, in the same
+  `ink-48`. Tab or Right puts it into the field (the slash popup takes Tab
+  first while it shows). Enter with an empty field sends nothing. Typed text
+  hides it; a new turn clears the input line, so it goes. No suggestion: the
+  placeholder.
 - Enter sends, and so does a click on Send; ⇧Enter breaks the line. A blank field sends nothing. Send
   types the text into the selected session's own terminal and presses Enter
   through the agent source's `Send`, as the orchestrate pill does. The field
@@ -198,6 +207,24 @@ Chat text size (D272). With no match, one line "No commands match" (or
   field with the caret after it and send nothing; a click on a row does the
   same. Esc closes the popup until the text changes and does not stop the
   agent. With no match, Enter sends the text as typed.
+
+### Path popup
+
+"@" at the caret, at the start of the field or after a space, opens the same
+popup (D279) for the files and folders of the session's working folder; the
+text from "@" to the caret, with no space in it, filters it. Rows show
+"@path" with no description; a folder ends in "/". With no match, the line is
+"No files match".
+
+- The list is the files that git knows there and the untracked files that
+  git does not ignore, with each folder that holds them; files deleted in the
+  work tree are left out. Outside git, it is a plain read of the typed folder.
+  The read runs off the UI thread, once per folder typed.
+- Paths with a part that starts with the typed text come first, then paths
+  that hold it, without regard to case; at most 50 show.
+- Enter or Tab replace "@text" with "@path " and put the caret after it. A
+  folder goes in as "@dir/" with no space, and the popup stays open on its
+  content. Esc closes it as for "/".
 
 ## Live line
 
