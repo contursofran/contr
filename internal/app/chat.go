@@ -4,6 +4,8 @@ package app
 // chatview.
 
 import (
+	"log"
+	"os"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -13,7 +15,31 @@ import (
 	"github.com/contursofran/contr/internal/app/chatview"
 	"github.com/contursofran/contr/internal/app/questions"
 	"github.com/contursofran/contr/internal/app/view"
+	"github.com/contursofran/contr/internal/slash"
 )
+
+// slashSource gives the composer's popup the commands and skills of the session at an address,
+// read from the folder of its agent (D273).
+type slashSource struct {
+	r      *slash.Reader
+	worker func(addr string) (agents.Worker, bool)
+}
+
+// Suggestions finds the folder on the UI thread; the read runs off it.
+func (s slashSource) Suggestions(addr string) func() ([]chatview.Suggestion, error) {
+	var dir string
+	if w, ok := s.worker(addr); ok {
+		dir = w.Worktree
+	}
+	return func() ([]chatview.Suggestion, error) {
+		items, err := s.r.Items(dir)
+		out := make([]chatview.Suggestion, len(items))
+		for i, it := range items {
+			out[i] = chatview.Suggestion{Name: it.Name, Detail: it.Detail}
+		}
+		return out, err
+	}
+}
 
 // attachChat makes the chat view, which reads the session files under the state dir of the
 // session panel. Its composer sends and interrupts through the agent source, as the orchestrate
@@ -34,6 +60,11 @@ func (f *Frame) attachChat(env view.Env, src agentstate.AgentSource) (stop func(
 		return f.Notch.Bounds()
 	}
 	f.Chat.Chips = newChatChips(f, env)
+	if home, err := os.UserHomeDir(); err == nil {
+		f.Chat.Slash = slashSource{r: &slash.Reader{Home: home}, worker: f.agentAt}
+	} else {
+		log.Printf("chat: no home folder, no slash popup: %v", err)
+	}
 	if f.Outline != nil {
 		f.Outline.Chat = f.chatOutline
 	}
