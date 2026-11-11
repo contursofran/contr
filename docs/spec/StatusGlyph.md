@@ -11,7 +11,7 @@ Design system page: component StatusGlyph. Shared rules: [README.md](README.md).
 ## Anatomy
 
 - Dot glyph (D251): six drawn dots in a 2×3 grid, in a 16px box; 14px inside tabs, the notch and chat rows. In the 16px box each dot is a 3px circle; the centres are at x 5.5 and 10.5 and y 3, 8 and 13, so the grid is centred. The 14px box scales the same drawing (dots of 2.625px). Each frame lights some dots: a lit dot takes the ink of the state, a dim dot `ink-30`. The frames are the braille patterns below: dots 1 to 3 are the left column from the top, dots 4 to 6 the right column.
-- Claude glyph: the Claude Code mascot (D218), the pixel creature of Claude Code, in `claude`. A Claude session that does not orchestrate draws it in `ink-45`; needs you stays `blocked` (D191). It is one filled shape of 16×10 cells: the body, two eye holes, the arms and four legs (`assets/icons/claude-mascot.svg`, one fill; NOTICE credits the source). It is as wide as the glyph box and centred in it: a cell is 1px in the 16px box, so the edges are sharp, and .875px in the 14px box.
+- Claude glyph: the Claude Code mascot (D218), the pixel creature of Claude Code, in `claude`. A Claude session that does not orchestrate draws it in `ink-48`; needs you stays `blocked` (D191). It is one filled shape of 16×10 cells: the body, two eye holes, the arms and four legs (`assets/icons/claude-mascot.svg`, one fill; NOTICE credits the source). It is as wide as the glyph box and centred in it: a cell is 1px in the 16px box, so the edges are sharp, and .875px in the 14px box.
 
 ## States
 

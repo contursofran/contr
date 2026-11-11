@@ -13,18 +13,18 @@ Design system page: component QuestionsCard. Shared rules: [README.md](README.md
 Width `notch-open-width` (600px), padding `space-12`, fill `float-solid` (opaque, D212),
 `float-line` on the sides and the bottom, `shadow-notch` as the notch.
 
-1. **Head:** needs-you glyph; one chip per open question, then one chip per to-do and per blocked worker menu (D124) ("b-250 checks", `chip` 11.5px, padding `3px 9px`, radius `radius-6`; the title without the backticks of its code spans, clipped with an ellipsis); "via orchestrator" at the right (`ink-35`).
+1. **Head:** needs-you glyph; one chip per open question, then one chip per to-do and per blocked worker menu (D124) ("b-250 checks", `chip` 11.5px, padding `3px 9px`, radius `radius-6`; the title without the backticks of its code spans, clipped with an ellipsis); "via orchestrator" at the right (`ink-48`).
 2. **Question:** `question` style (14/20), `ink-100`, padding `2px 12px`.
-3. **Context:** `small` (12/17), `ink-42`.
-4. **Choices:** each a row, gap `space-12`, with a mono number (11px, `ink-32`), a label (`body`, `ink-90`), an optional "recommended" tag (mono 11px, `ink-32`), and its impact under it (below). An option has no other description: the owner file holds a label and, for each, an impact. Row padding `9px 12px`, radius `radius-9`. The impact of the option (D114) shows under the label, in `small`, `ink-42` (D125).
-5. **Field:** "Or type an answer", height 30px, line `input-line`, radius `radius-8`, placeholder `ink-30`.
-6. **Details:** a collapsible section "Details", closed at first, with the refs and the source excerpt (D114) in `small`, `ink-42`. It shows only when the question has refs or a source (D125).
+3. **Context:** `small` (12/17), `ink-48`.
+4. **Choices:** each a row, gap `space-12`, with a mono number (11px, `ink-48`), a label (`body`, `ink-88`), an optional "recommended" tag (mono 11px, `ink-48`), and its impact under it (below). An option has no other description: the owner file holds a label and, for each, an impact. Row padding `9px 12px`, radius `radius-9`. The impact of the option (D114) shows under the label, in `small`, `ink-48` (D125).
+5. **Field:** "Or type an answer", height 30px, line `input-line`, radius `radius-8`, placeholder `ink-48`.
+6. **Details:** a collapsible section "Details", closed at first, with the refs and the source excerpt (D114) in `small`, `ink-48`. It shows only when the question has refs or a source (D125).
 7. **Code chip:** a span in backticks in the question, the to-do text or the Details source shows without the backticks, in mono (`meta` size) on `hover-strong`, radius `radius-4`, padding `space-4` across and `space-2` down (D204).
-8. **Keys:** mono 11px, `ink-32`, by item: a question "1-3 pick  ⏎ send  ⇥ next  esc close"; a to-do "⏎ done  ⇥ next  esc close"; a blocked menu "1-3 send  ⇥ next  esc close". A blocked menu takes no ⏎, so a stray key never approves a permission (D51). The line shows no ⇥ when there is one item.
+8. **Keys:** mono 11px, `ink-48`, by item: a question "1-3 pick  ⏎ send  ⇥ next  esc close"; a to-do "⏎ done  ⇥ next  esc close"; a blocked menu "1-3 send  ⇥ next  esc close". A blocked menu takes no ⏎, so a stray key never approves a permission (D51). The line shows no ⇥ when there is one item.
 
 ## States
 
-- **Chip on:** fill `selected`, ring `shadow-selected`, text `ink-100`; other chips `ink-45`.
+- **Chip on:** fill `selected`, ring `shadow-selected`, text `ink-100`; other chips `ink-48`.
 - **Code chip hover:** pointer cursor.
 - **Choice hover:** fill `hover`.
 - **Choice picked:** fill `hover` (the same as hover); the keyboard moves it.
@@ -70,7 +70,7 @@ Width `notch-open-width` (600px), padding `space-12`, fill `float-solid` (opaque
 
 ## Tokens
 
-`notch-open-width`, `float-solid`, `float-line`, `shadow-notch`, `selected`, `shadow-selected`, `hover`, `input-line`, `hover-strong`, `radius-9`, `radius-8`, `radius-6`, `radius-4`, `space-4`, `space-2`, `question`, `body`, `small`, `chip`, `ink-100`, `ink-90`, `ink-45`, `ink-42`, `ink-35`, `ink-32`, `ink-30`, `meta`.
+`notch-open-width`, `float-solid`, `float-line`, `shadow-notch`, `selected`, `shadow-selected`, `hover`, `input-line`, `hover-strong`, `radius-9`, `radius-8`, `radius-6`, `radius-4`, `space-4`, `space-2`, `question`, `body`, `small`, `chip`, `ink-100`, `ink-88`, `ink-48`, `meta`.
 
 ## Build in MyGo
 

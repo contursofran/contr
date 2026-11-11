@@ -512,10 +512,10 @@ func outlineCard(c *ui.Context, tip ui.Element, t OutlineTick) {
 			head.SingleLine()
 		}
 		ui.Box(c).Row().Gap(theme.Space16).AlignItems(ui.End).Children(func() {
-			ui.Text(c, cardDetail(t)).SingleLine().Grow(1).MinWidth(0).TextColor(p.Ink42).
+			ui.Text(c, cardDetail(t)).SingleLine().Grow(1).MinWidth(0).TextColor(p.Ink48).
 				Font(detail.Stack()).FontSize(detail.Size).FontWeight(detail.Weight)
 			if !t.Pinned.IsZero() {
-				ui.Text(c, outlineClock(t.Pinned)).SingleLine().Shrink(0).TextColor(p.Ink30).
+				ui.Text(c, outlineClock(t.Pinned)).SingleLine().Shrink(0).TextColor(p.Ink48).
 					Font(meta.Stack()).FontSize(meta.Size).FontWeight(meta.Weight)
 			}
 		})

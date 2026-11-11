@@ -15,7 +15,7 @@ Design system page: component OutlineCard. Shared rules: [README.md](README.md).
 | Card | width `outline-card-width` (380px), padding `12px 14px 13px 16px`, gap 5px, radius `radius-12` |
 | Glass | `glass-float`, line `float-line`, `shadow-float` |
 | Headline | 14px, `ink-100` |
-| Row | detail 12.5/18, `ink-42`; time mono 11px, `ink-30`, at the bottom right, `space-16` from the detail |
+| Row | detail 12.5/18, `ink-48`; time mono 11px, `ink-48`, at the bottom right, `space-16` from the detail |
 
 ## States
 
@@ -45,7 +45,7 @@ Design system page: component OutlineCard. Shared rules: [README.md](README.md).
 
 ## Tokens
 
-`outline-card-width`, `glass-float`, `float-line`, `shadow-float`, `radius-12`, `space-16`, `ink-100`, `ink-42`, `ink-30`.
+`outline-card-width`, `glass-float`, `float-line`, `shadow-float`, `radius-12`, `space-16`, `ink-100`, `ink-48`.
 
 ## Build in MyGo
 

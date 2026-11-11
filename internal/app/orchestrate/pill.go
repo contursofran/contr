@@ -145,7 +145,7 @@ func withShadow(e ui.Element, s theme.Shadow) ui.Element {
 	return e
 }
 
-// mascot is the still Claude mascot of the pill: claude while it orchestrates, ink-45 on the
+// mascot is the still Claude mascot of the pill: claude while it orchestrates, ink-48 on the
 // button (D191). Waiting is a still state at full opacity; the pill's label names it.
 func mascot(c *ui.Context, grey bool) {
 	kit.StatusGlyph(c, kit.GlyphOpts{State: kit.GlyphWaiting, Claude: true, Grey: grey, Small: true}).AccessHidden(true)
@@ -164,9 +164,9 @@ func (p *Pill) stateView(c *ui.Context, n int, compact bool) {
 		mascot(c, false)
 		switch {
 		case !compact:
-			kit.Styled(ui.Text(c, text), theme.StyleLabel).NoWrap().TextColor(pal.Ink85)
+			kit.Styled(ui.Text(c, text), theme.StyleLabel).NoWrap().TextColor(pal.Ink88)
 		case n > 0:
-			kit.Styled(ui.Text(c, strconv.Itoa(n)), theme.StyleCount).NoWrap().TextColor(pal.Ink85)
+			kit.Styled(ui.Text(c, strconv.Itoa(n)), theme.StyleCount).NoWrap().TextColor(pal.Ink88)
 		}
 	})
 }
@@ -183,7 +183,7 @@ func (p *Pill) buttonView(c *ui.Context, addr string, compact bool) {
 		b = b.Tooltip(TextOrchestrate)
 	}
 	focus := b.FocusVisible()
-	ink := pal.Ink85
+	ink := pal.Ink88
 	if b.Hovered() || p.open {
 		b = b.Background(pal.Hover)
 		ink = pal.Ink100
@@ -214,19 +214,19 @@ func (p *Pill) popover(c *ui.Context, anchor, panel ui.Element) {
 	panel = kit.PopIn(panel)
 	withShadow(panel, pal.ShadowFloat).Children(func() {
 		in := ui.TextInputBase(c.Key("orchestrate-goal"), &p.goal).Label(LabelGoal).Placeholder(LabelGoal).
-			PlaceholderColor(pal.Ink30).TextColor(pal.Ink90).Height(30).FillWidth().Shrink(0).PaddingX(theme.Space12).
+			PlaceholderColor(pal.Ink48).TextColor(pal.Ink88).Height(30).FillWidth().Shrink(0).PaddingX(theme.Space12).
 			Radius(theme.Radius8).Border(1, pal.InputLine).AutoFocus()
 		if in.Submitted() {
 			p.send()
 		}
-		kit.Styled(ui.Text(c, CommandText(p.goal)), theme.StyleMeta).SingleLine().MinWidth(0).TextColor(pal.Ink42)
+		kit.Styled(ui.Text(c, CommandText(p.goal)), theme.StyleMeta).SingleLine().MinWidth(0).TextColor(pal.Ink48)
 		ui.Row(c).Justify(ui.End).Gap(theme.Space8).Children(func() {
-			kit.CardButton(c, TextCancel, kit.ButtonOutlined, pal.Ink95, func() { p.open = false })
+			kit.CardButton(c, TextCancel, kit.ButtonOutlined, pal.Ink88, func() { p.open = false })
 			var send kit.ClickFn
 			if !p.busy && p.Send != nil {
 				send = p.send
 			}
-			kit.CardButton(c, TextOrchestrate, kit.ButtonFilled, pal.Ink95, send)
+			kit.CardButton(c, TextOrchestrate, kit.ButtonFilled, pal.Ink88, send)
 		})
 	})
 }

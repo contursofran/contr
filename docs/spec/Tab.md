@@ -13,13 +13,13 @@ Design system page: component Tab. Shared rules: [README.md](README.md).
 | Part | Value |
 |---|---|
 | Box | height `row-height` (30px), padding `0 10px`, gap `space-8`, radius `radius-8`, max width `tab-max-width` (180px); tabs sit `space-2` apart |
-| Leading | StatusGlyph at 14px (worker), Claude glyph (orchestrator; grey `ink-45` for a Claude session that does not orchestrate, D191), or the bare `>_` prompt icon at 14px, with no box (plain terminal; D172) |
-| Title | `row-small` (12.5px), `ink-50`; one line, ellipsis |
-| Close | 16px box, radius `radius-4`, 10px `close` icon in `ink-45`; only on the selected tab |
+| Leading | StatusGlyph at 14px (worker), Claude glyph (orchestrator; grey `ink-48` for a Claude session that does not orchestrate, D191), or the bare `>_` prompt icon at 14px, with no box (plain terminal; D172) |
+| Title | `row-small` (12.5px), `ink-48`; one line, ellipsis |
+| Close | 16px box, radius `radius-4`, 10px `close` icon in `ink-48`; only on the selected tab |
 
 ## States
 
-- **Default:** no fill, title `ink-50`.
+- **Default:** no fill, title `ink-48`.
 - **Hover:** fill `hover`.
 - **Selected:** a pill: fill `stage` (the same fill as the terminal panel below it, with the owner's Settings tint, D175, D250), no ring (D249), title `ink-100`, close button shows (plain terminal only, D85).
 - **Close hover:** fill `press`, icon `ink-100`.
@@ -64,7 +64,7 @@ Design system page: component Tab. Shared rules: [README.md](README.md).
 
 ## Tokens
 
-`stage`, `hover`, `press`, `ink-100`, `ink-50`, `ink-45`, `row-height`, `radius-8`, `radius-4`, `space-8`, `space-2`, `tab-max-width`.
+`stage`, `hover`, `press`, `ink-100`, `ink-48`, `row-height`, `radius-8`, `radius-4`, `space-8`, `space-2`, `tab-max-width`.
 
 ## Build in MyGo
 

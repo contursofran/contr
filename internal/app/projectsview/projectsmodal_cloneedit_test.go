@@ -12,13 +12,13 @@ import (
 	"github.com/contursofran/contr/internal/app/view"
 )
 
-// The progress line has the track `hairline` and the bar `ink-62` (spec).
+// The progress line has the track `hairline` and the bar `ink-64` (spec).
 func TestCloneProgressThemeColours(t *testing.T) {
 	p := theme.Current()
 	base := &ui.Theme{Border: p.InputLine, Accent: p.Ink100}
 	got := progressTheme(base, p)
-	if got.Border != p.Hairline || got.Accent != p.Ink62 {
-		t.Errorf("track %v bar %v, want %v and %v", got.Border, got.Accent, p.Hairline, p.Ink62)
+	if got.Border != p.Hairline || got.Accent != p.Ink64 {
+		t.Errorf("track %v bar %v, want %v and %v", got.Border, got.Accent, p.Hairline, p.Ink64)
 	}
 	if base.Border != p.InputLine || base.Accent != p.Ink100 {
 		t.Error("the base theme changed")

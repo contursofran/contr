@@ -311,7 +311,8 @@ func TestQueueSteps(t *testing.T) {
 	if r := find(t, s.tt, "blocked: 1 check failed"); !hasInk(s.tt, r, rgba(pal.BlockedText)) {
 		t.Error("the blocked words are not in blocked-text")
 	}
-	if r := find(t, s.tt, "#667 First-run texts"); hasInk(s.tt, r, rgba(pal.Ink95)) || !hasInk(s.tt, r, rgba(pal.Ink62)) {
+	// The tester draws on a white ground, where white inks at an alpha read alike: test the ink.
+	if stepLabelInk(pal, StepView{Done: true}) != pal.Ink64 || stepLabelInk(pal, StepView{}) != pal.Ink88 {
 		t.Error("the merged step does not dim")
 	}
 }
@@ -340,8 +341,8 @@ func TestStateWordsAreGrey(t *testing.T) {
 	pal := theme.Current()
 	for _, w := range []string{"CI running", "merged", "waiting"} {
 		r := find(t, s.tt, w)
-		if !hasInk(s.tt, r, rgba(pal.Ink62)) {
-			t.Errorf("the board's %q is not in ink-62", w)
+		if !hasInk(s.tt, r, rgba(pal.Ink64)) {
+			t.Errorf("the board's %q is not in ink-64", w)
 		}
 	}
 	for _, c := range []ui.Color{pal.ContentRunning, pal.ContentDone, pal.ContentWaiting} {
@@ -354,7 +355,7 @@ func TestStateWordsAreGrey(t *testing.T) {
 	}
 	for _, w := range []string{"CI running · 2 of 3", "waits for #656"} {
 		r := find(t, s.tt, w)
-		if !hasInk(s.tt, r, rgba(pal.Ink62)) || hasInk(s.tt, r, rgba(pal.ContentRunning)) || hasInk(s.tt, r, rgba(pal.ContentWaiting)) {
+		if !hasInk(s.tt, r, rgba(pal.Ink64)) || hasInk(s.tt, r, rgba(pal.ContentRunning)) || hasInk(s.tt, r, rgba(pal.ContentWaiting)) {
 			t.Errorf("the queue's %q is not grey", w)
 		}
 	}

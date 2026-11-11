@@ -72,7 +72,7 @@ func projectsModalSheet(c *ui.Context) {
 			ui.Row(c).Gap(pmGap).Children(func() {
 				for _, k := range cells[r:min(r+pmCols, len(cells))] {
 					ui.Column(c).Width(pmW).Children(func() {
-						ui.Text(c, k.caption).Height(pmCaptH).TextColor(theme.Current().Ink62)
+						ui.Text(c, k.caption).Height(pmCaptH).TextColor(theme.Current().Ink64)
 						if k.bm != nil {
 							ui.Image(c, k.bm)
 						}

@@ -13,7 +13,7 @@ Design system page: component UsageMeter. Shared rules: [README.md](README.md).
 | Part | Value |
 |---|---|
 | Block | no line on top (D258), padding `12px 10px 2px` (D228), gap `space-7`; `space-6` more before each meter after the first |
-| Row | label `small`, `ink-42`; then the sizes, mono `meta`, `ink-42`, `space-8` after the label, clipped with an ellipsis (D264); value mono `value`, `ink-62`, at the right. The label and the value never clip. |
+| Row | label `small`, `ink-48`; then the sizes, mono `meta`, `ink-48`, `space-8` after the label, clipped with an ellipsis (D264); value mono `value`, `ink-64`, at the right. The label and the value never clip. |
 | Meter | height `meter-height` (4px), track `meter-track`, fill `meter-fill`, radius `radius-2` |
 
 Rows: "Context  90k of 200k  45%" only. From 80%: "Context  172k · compacts soon  86%" (D264).
@@ -23,9 +23,9 @@ Plan meters, in the sidebar foot row (D196):
 | Part | Value |
 |---|---|
 | Group | one row, inline, gap `space-7`; `space-6` more between two plans |
-| Label | `small`, `ink-42` |
+| Label | `small`, `ink-48` |
 | Meter | width 44px, the meter above |
-| Value | mono `value`, `ink-62` |
+| Value | mono `value`, `ink-64` |
 
 "Claude ▬ 38%  Codex ▬ 12%", then free space, then the Settings button. The foot has padding `space-10` left and right, so the meters and the button have the same inset; no divider is above it (D258): the foot has `space-6` on top, and the row has `space-6` above and below (D201).
 
@@ -36,7 +36,7 @@ Plan meters, in the sidebar foot row (D196):
   drops the window and says "compacts soon": "172k · compacts soon", so it fits the 280px
   panel. No hue. Only the Context line has this
   state.
-- **No data:** the value shows "no data yet" in `ink-42` (D255; a dash before). Under the
+- **No data:** the value shows "no data yet" in `ink-48` (D255; a dash before). Under the
   file tree the meter is empty; in the sidebar foot the plan has no meter, only its label and
   "no data yet".
 
@@ -102,7 +102,7 @@ Plan meters, in the sidebar foot row (D196):
 
 ## Tokens
 
-`meter-track`, `meter-fill`, `meter-height`, `radius-2`, `space-7`, `space-8`, `ink-42`, `ink-62`, `ink-100`, `small`, `meta`, `value`.
+`meter-track`, `meter-fill`, `meter-height`, `radius-2`, `space-7`, `space-8`, `ink-48`, `ink-64`, `ink-100`, `small`, `meta`, `value`.
 
 ## Build in MyGo
 

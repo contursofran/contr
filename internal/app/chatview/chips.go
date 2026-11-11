@@ -188,7 +188,7 @@ func chipIcon(dest string, size float32) (markdown.InlineObject, bool) {
 		return markdown.InlineObject{Width: side + chipDotGap, Height: side * 0.82, Depth: side * 0.18,
 			Draw: func(p *ui.Painter, r ui.Rect) {
 				if s := icons.Line("file"); s != nil {
-					p.Icon(s, ui.Rect{X: r.X, Y: r.Y, W: side, H: side}, theme.Current().Ink45)
+					p.Icon(s, ui.Rect{X: r.X, Y: r.Y, W: side, H: side}, theme.Current().Ink48)
 				}
 			}}, true
 	}

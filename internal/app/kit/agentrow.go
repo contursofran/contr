@@ -160,9 +160,9 @@ func AgentRow(c *ui.Context, o AgentRowOpts) ui.Element {
 // agentRowButton builds the button of a two-line row and returns its status glyph.
 func agentRowButton(c *ui.Context, o AgentRowOpts, marginEnd, marginStart float32) ui.Element {
 	p := theme.Current()
-	titleInk, metaInk := p.Ink60, p.Ink42
+	titleInk, metaInk := p.Ink64, p.Ink48
 	if o.Selected {
-		titleInk, metaInk = p.Ink100, p.Ink62
+		titleInk, metaInk = p.Ink100, p.Ink64
 	}
 	if o.NeedsYou {
 		titleInk = p.Ink100

@@ -13,15 +13,15 @@ Design system page: component IconButton. Shared rules: [README.md](README.md).
 | Part | Value |
 |---|---|
 | Box | `icon-button` (28px) square; 24px in panel footers; radius `radius-8` |
-| Icon | 16px drawing shown at 14px, stroke 1.2–1.4, `currentColor` = `ink-50` |
+| Icon | 16px drawing shown at 14px, stroke 1.2–1.4, `currentColor` = `ink-48` |
 
 ## States
 
-- **Default:** icon `ink-50`, no fill.
+- **Default:** icon `ink-48`, no fill.
 - **Hover:** fill `hover-strong`, icon `ink-100`.
-- **Pressed (toggle on):** icon `ink-85`, no fill.
+- **Pressed (toggle on):** icon `ink-88`, no fill.
 - **Focus (keyboard):** 1px ring in `focus-ring`, 2px offset, radius `radius-8`. This is the focus ring for every button.
-- **Disabled:** not in the design. If needed, use icon `ink-22` and no hover.
+- **Disabled:** not in the design. If needed, use icon `ink-30` and no hover.
 
 ## Behavior
 
@@ -37,7 +37,7 @@ Design system page: component IconButton. Shared rules: [README.md](README.md).
 
 ## Edge cases
 
-- Disabled is not in the design: use `ink-22`, no hover, no tooltip key.
+- Disabled is not in the design: use `ink-30`, no hover, no tooltip key.
 
 ## Accessibility
 
@@ -45,7 +45,7 @@ Design system page: component IconButton. Shared rules: [README.md](README.md).
 
 ## Tokens
 
-`icon-button`, `radius-8`, `hover-strong`, `focus-ring`, `ink-50`, `ink-85`, `ink-100`.
+`icon-button`, `radius-8`, `hover-strong`, `focus-ring`, `ink-48`, `ink-88`, `ink-100`.
 
 ## Build in MyGo
 

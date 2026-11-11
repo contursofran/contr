@@ -229,23 +229,23 @@ func (f *Frame) updatePanel(c *ui.Context, info settings.UpdateInfo, from string
 	p := theme.Current()
 	meta := theme.StyleMeta
 	ui.Row(c).AlignItems(ui.Center).Gap(theme.Space8).Padding(theme.Space14, theme.Space16, theme.Space10, theme.Space16).Children(func() {
-		ui.Text(c, "contr "+info.Version).Bold().Grow(1).TextColor(p.Ink95)
-		ui.Text(c, "from "+from).Font(meta.Stack()).FontSize(meta.Size).TextColor(p.Ink50)
+		ui.Text(c, "contr "+info.Version).Bold().Grow(1).TextColor(p.Ink88)
+		ui.Text(c, "from "+from).Font(meta.Stack()).FontSize(meta.Size).TextColor(p.Ink48)
 	})
 	if notes := noteLines(info.Notes); len(notes) > 0 {
 		ui.Column(c).Gap(theme.Space4).Padding(0, theme.Space16, theme.Space12, theme.Space16).Children(func() {
-			ui.Text(c, UpdateWhatsNew).TextColor(p.Ink50)
+			ui.Text(c, UpdateWhatsNew).TextColor(p.Ink48)
 			for _, n := range notes {
 				ui.Row(c).Gap(theme.Space6).Children(func() {
-					ui.Text(c, "·").Shrink(0).TextColor(p.Ink50)
-					ui.Text(c, n).Grow(1).MinWidth(0).TextColor(p.Ink85)
+					ui.Text(c, "·").Shrink(0).TextColor(p.Ink48)
+					ui.Text(c, n).Grow(1).MinWidth(0).TextColor(p.Ink88)
 				})
 			}
 		})
 	}
 	if !after {
 		ui.Row(c).Gap(theme.Space8).Margin(0, theme.Space16, theme.Space12, theme.Space16).Padding(theme.Space8, theme.Space10).
-			Radius(theme.Radius8).Background(p.Hover).TextColor(p.Ink62).Children(func() {
+			Radius(theme.Radius8).Background(p.Hover).TextColor(p.Ink64).Children(func() {
 			if s := icons.Line("server"); s != nil {
 				ui.Icon(c, s).Size(14, 14).Shrink(0)
 			}
@@ -255,11 +255,11 @@ func (f *Frame) updatePanel(c *ui.Context, info settings.UpdateInfo, from string
 	ui.Row(c).AlignItems(ui.Center).Gap(theme.Space8).Padding(theme.Space10, theme.Space16).
 		BorderWidth(1, 0, 0, 0).BorderColor(p.Hairline).Children(func() {
 		if after {
-			ui.Text(c, sinceText("Updated", time.Now(), at)).NoWrap().Grow(1).TextColor(p.Ink50)
+			ui.Text(c, sinceText("Updated", time.Now(), at)).NoWrap().Grow(1).TextColor(p.Ink48)
 			settings.SettingsButton(c, UpdateGotIt+" ⏎", kit.ButtonFilled, f.updatedShown)
 			return
 		}
-		ui.Text(c, sinceText("Downloaded", time.Now(), at)).NoWrap().Grow(1).TextColor(p.Ink50)
+		ui.Text(c, sinceText("Downloaded", time.Now(), at)).NoWrap().Grow(1).TextColor(p.Ink48)
 		settings.SettingsButton(c, UpdateLater, kit.ButtonPlain, func() { f.upd.open = false })
 		settings.SettingsButton(c, settings.SettingsRestart+" ⏎", kit.ButtonFilled, f.Settings.RestartNow)
 	})
@@ -327,16 +327,16 @@ func (f *Frame) updateToast(c *ui.Context, t ui.Toast) {
 	root.Transition(ui.ElementTransition{Enter: &ui.Motion{Y: -8}, Exit: &ui.Motion{}})
 	root.Padding(theme.Space12, theme.Space12, theme.Space12, theme.Space16).Gap(theme.Space6).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(theme.Space8).Children(func() {
-			ui.Text(c, t.Title).Bold().Grow(1).MinWidth(0).TextColor(p.Ink95)
+			ui.Text(c, t.Title).Bold().Grow(1).MinWidth(0).TextColor(p.Ink88)
 			toast.CloseButton().Label(LabelToastClose).Size(kit.SizeIconButtonSmall, kit.SizeIconButtonSmall).
-				Shrink(0).AlignItems(ui.Center).Justify(ui.Center).Radius(theme.Radius8).TextColor(p.Ink50).
+				Shrink(0).AlignItems(ui.Center).Justify(ui.Center).Radius(theme.Radius8).TextColor(p.Ink48).
 				Cursor(ui.CursorPointer).Children(func() {
 				if s := icons.Line("close"); s != nil {
 					ui.Icon(c, s).Size(12, 12)
 				}
 			})
 		})
-		ui.Text(c, t.Description).TextColor(p.Ink62)
+		ui.Text(c, t.Description).TextColor(p.Ink64)
 		ui.Row(c).Justify(ui.End).Gap(theme.Space8).Margin(theme.Space4, 0, 0, 0).Children(func() {
 			settings.SettingsButton(c, UpdateLater, kit.ButtonPlain, func() { c.CloseToast(t.ID) })
 			settings.SettingsButton(c, settings.SettingsRestart, kit.ButtonFilled, func() {

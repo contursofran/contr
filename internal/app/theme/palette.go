@@ -35,23 +35,12 @@ type Palette struct {
 	MeterFill     ui.Color `token:"meter-fill"`
 	Tick          ui.Color `token:"tick"`
 
-	Ink100 ui.Color `token:"ink-100"`
-	Ink95  ui.Color `token:"ink-95"`
-	Ink90  ui.Color `token:"ink-90"`
-	Ink85  ui.Color `token:"ink-85"`
-	Ink62  ui.Color `token:"ink-62"`
-	Ink60  ui.Color `token:"ink-60"`
-	Ink50  ui.Color `token:"ink-50"`
-	Ink45  ui.Color `token:"ink-45"`
-	Ink42  ui.Color `token:"ink-42"`
-	Ink40  ui.Color `token:"ink-40"`
-	Ink38  ui.Color `token:"ink-38"`
-	Ink35  ui.Color `token:"ink-35"`
-	Ink32  ui.Color `token:"ink-32"`
-	Ink30  ui.Color `token:"ink-30"`
-	Ink26  ui.Color `token:"ink-26"`
-	Ink24  ui.Color `token:"ink-24"`
-	Ink22  ui.Color `token:"ink-22"`
+	// The five text inks (D268): each means one thing. ink-30 is for marks only, never text.
+	Ink100 ui.Color `token:"ink-100"` // chosen, needs the owner
+	Ink88  ui.Color `token:"ink-88"`  // text, live rows
+	Ink64  ui.Color `token:"ink-64"`  // rows at rest
+	Ink48  ui.Color `token:"ink-48"`  // meta, labels: at least 4.5:1 where text sits
+	Ink30  ui.Color `token:"ink-30"`  // marks only: icons, rails, dots
 
 	TerminalText ui.Color `token:"terminal-text"`
 	Blocked      ui.Color `token:"blocked"`
@@ -143,22 +132,10 @@ var Dark = &Palette{
 	Tick:          white(0.14),
 
 	Ink100: ui.Hex("#f4f4f5"),
-	Ink95:  ui.Hex("#e9e9ea"),
-	Ink90:  white(0.9),
-	Ink85:  white(0.85),
-	Ink62:  white(0.62),
-	Ink60:  white(0.6),
-	Ink50:  white(0.5),
-	Ink45:  white(0.45),
-	Ink42:  white(0.42),
-	Ink40:  white(0.4),
-	Ink38:  white(0.38),
-	Ink35:  white(0.35),
-	Ink32:  white(0.32),
+	Ink88:  white(0.88),
+	Ink64:  white(0.64),
+	Ink48:  white(0.48),
 	Ink30:  white(0.3),
-	Ink26:  white(0.26),
-	Ink24:  white(0.24),
-	Ink22:  white(0.22),
 
 	TerminalText: white(0.82),
 	Blocked:      ui.Hex("#f07178"),
@@ -223,22 +200,10 @@ var Light = &Palette{
 	Tick:          black(0.16),
 
 	Ink100: ui.Hex("#141414"),
-	Ink95:  ui.Hex("#1e1e1e"),
-	Ink90:  black(0.873),
-	Ink85:  black(0.836),
-	Ink62:  black(0.679),
-	Ink60:  black(0.665),
-	Ink50:  black(0.586),
-	Ink45:  black(0.543),
-	Ink42:  black(0.515),
-	Ink40:  black(0.495),
-	Ink38:  black(0.475),
-	Ink35:  black(0.444),
-	Ink32:  black(0.41),
-	Ink30:  black(0.387),
-	Ink26:  black(0.339),
-	Ink24:  black(0.313),
-	Ink22:  black(0.287),
+	Ink88:  black(0.86),
+	Ink64:  black(0.7),
+	Ink48:  black(0.57),
+	Ink30:  black(0.38),
 
 	TerminalText: black(0.815),
 	Blocked:      ui.Hex("#c73947"),

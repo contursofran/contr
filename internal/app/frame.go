@@ -68,7 +68,7 @@ func PlaceholderSlots() Slots {
 
 func placeholder(name string) Slot {
 	return func(c *ui.Context) {
-		ui.Text(c, "["+name+"]").TextColor(theme.Current().Ink42)
+		ui.Text(c, "["+name+"]").TextColor(theme.Current().Ink48)
 	}
 }
 
@@ -459,7 +459,7 @@ func (f *Frame) View(c *ui.Context) {
 	} else {
 		c.Root().Background(p.Ground)
 	}
-	ui.Column(c).Fill().Background(p.GlassWindow).TextColor(p.Ink85).Children(func() {
+	ui.Column(c).Fill().Background(p.GlassWindow).TextColor(p.Ink88).Children(func() {
 		f.sidebarW = clampWidth(f.sidebarW, theme.SidebarMinWidth, theme.SidebarMaxWidth)
 		f.panelW = clampWidth(f.panelW, theme.PanelMinWidth, theme.PanelMaxWidth)
 		sidebar, files, showFiles := fitWidths(win, f.sidebarW, f.panelW, f.sidebarOpen, f.panelOpen)
@@ -603,7 +603,7 @@ func (f *Frame) split(c *ui.Context, stored *float32, shown, lo, hi float32, rtl
 	base := c.Theme()
 	line := *base
 	line.Border = ui.Transparent
-	line.Accent = p.Ink22
+	line.Accent = p.Ink30
 	// Both halves and the 1px divider make PanelGap: 4 + 1 + 3.
 	near, far := float32(theme.PanelGap/2), float32(theme.PanelGap/2-1)
 	firstPad, secondPad := [4]float32{0, near, 0, 0}, [4]float32{0, 0, 0, far} // top, right, bottom, left
@@ -1172,20 +1172,20 @@ const staleOpacity = 0.5
 // terminalLine is the line shown instead of, or over, the grid, with its
 // colour. ok is false when the grid speaks for itself, and while no terminal is
 // open: emptyTerminal draws that state. The reasons the terminal cannot show
-// are ink-42; the line of an ended process is ink-38 (docs/spec/Terminal.md).
+// are ink-48; the line of an ended process is ink-48 (docs/spec/Terminal.md).
 func (f *Frame) terminalLine() (line string, colour ui.Color, ok bool) {
 	p := theme.Current()
 	if f.term == nil {
 		if f.termErr != "" {
-			return f.termErr, p.Ink42, true
+			return f.termErr, p.Ink48, true
 		}
 		return "", ui.Color{}, false
 	}
 	switch f.termState.Kind {
 	case ghostty.NotRunning:
-		return TerminalNotRunningLine, p.Ink38, true
+		return TerminalNotRunningLine, p.Ink48, true
 	case ghostty.Incompatible:
-		return f.termState.Message, p.Ink42, true
+		return f.termState.Message, p.Ink48, true
 	}
 	return "", ui.Color{}, false
 }
