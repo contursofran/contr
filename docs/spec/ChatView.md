@@ -143,6 +143,15 @@ the circle.
 - The field takes the focus as it appears: when the chat shows (the switch,
   ⌘E). It keeps the focus after a send, and takes it back after a click on
   Send or Stop.
+- Suggested next prompt (D281): when a turn ends, Claude Code shows a
+  suggested next prompt as faint text after `❯` in its input line. contr
+  reads it from the selected terminal's screen (the faint text, SGR 2, after
+  the last `❯`), 300 ms after output, off the UI thread. While the field is
+  empty, the suggestion takes the place of the placeholder, in the same
+  `ink-48`. Tab or Right puts it into the field (the slash popup takes Tab
+  first while it shows). Enter with an empty field sends nothing. Typed text
+  hides it; a new turn clears the input line, so it goes. No suggestion: the
+  placeholder.
 - Enter sends, and so does a click on Send; ⇧Enter breaks the line. A blank field sends nothing. Send
   types the text into the selected session's own terminal and presses Enter
   through the agent source's `Send`, as the orchestrate pill does. The field
