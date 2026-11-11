@@ -2,6 +2,7 @@ package kit
 
 import (
 	"image/color"
+	"math"
 	"slices"
 	"testing"
 	"time"
@@ -160,10 +161,10 @@ func TestAgentRowNeedsYouClipsTheName(t *testing.T) {
 		AgentRow(c, AgentRowOpts{Label: "row", Title: "Checks", Age: "2m", State: GlyphNeedsYou, NeedsYou: true})
 	}, 600, 80)
 	whole.Frame()
-	if w := find(t, whole, "2m").W; age.W != w {
+	if w := find(t, whole, "2m").W; !sameLen(age.W, w) {
 		t.Errorf("the age is %v wide, want %v: it is clipped", age.W, w)
 	}
-	if w := find(t, whole, "needs you").W; need.W != w {
+	if w := find(t, whole, "needs you").W; !sameLen(need.W, w) {
 		t.Errorf("needs you is %v wide, want %v: it is clipped", need.W, w)
 	}
 	// The rest fills the room up to the age.
@@ -242,3 +243,7 @@ func TestItemBadgeHasNoGlowOnArrival(t *testing.T) {
 		}
 	}
 }
+
+// sameLen reports whether two measured lengths are equal within 0.01px. Text
+// widths differ in the last float bits between layouts, mostly under -race.
+func sameLen(a, b float32) bool { return math.Abs(float64(a-b)) <= 0.01 }
