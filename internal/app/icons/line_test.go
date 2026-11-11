@@ -16,7 +16,7 @@ import (
 func TestEveryLineIconLoads(t *testing.T) {
 	want := []string{"project", "computer", "server", "folder", "folder-open", "file-go",
 		"file-md", "file", "close", "plus", "split", "search", "sidebar-right", "filter", "terminal", "settings", "download", "chevron-down",
-		"todo", "todo-done", "artifact"}
+		"todo", "todo-done", "artifact", "skill", "connector", "plugin", "agent", "globe"}
 	if len(LineNames) != len(want) {
 		t.Fatalf("%d line names, want %d", len(LineNames), len(want))
 	}

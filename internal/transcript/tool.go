@@ -70,8 +70,8 @@ func Describe(name string, input json.RawMessage) (kind ToolKind, server, label,
 			kind, server = KindMCP, srv
 		}
 		label = server
-		if tool != "" {
-			label += " · " + strings.ToLower(strings.ReplaceAll(tool, "_", " "))
+		if tool = toolWords(server, tool); tool != "" {
+			label += " · " + tool
 		}
 		return kind, server, label, str(keys...), args
 	}
@@ -138,4 +138,15 @@ func pairs(in map[string]any) [][2]string {
 		out = append(out, [2]string{k, clip(v, summaryMax)})
 	}
 	return out
+}
+
+// toolWords gives the words of an MCP tool name, lower case. A tool name that
+// starts with its server's name ("slack_send_message", "notion-search") does
+// not repeat it: "send message", "search".
+func toolWords(server, tool string) string {
+	words := strings.NewReplacer("_", " ", "-", " ").Replace(strings.ToLower(tool))
+	if rest, ok := strings.CutPrefix(words, strings.ToLower(server)+" "); ok && strings.TrimSpace(rest) != "" {
+		words = rest
+	}
+	return strings.TrimSpace(words)
 }
