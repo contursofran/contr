@@ -228,12 +228,13 @@ func (f *Frame) attachSettings(w Window, env view.Env) (stop func()) {
 		Relaunch: f.deps.Relaunch, OnReady: f.updateReady, Visible: func() bool { return f.Visibility == nil || f.Visibility.Visible() },
 		AgentsConfig: f.deps.AgentsConfig, Setup: f.deps.Setup, Appearance: f.Appearance, SetAppearance: f.SetAppearance,
 		Tint: f.Tint, SetTint: f.SetTint, ResetTint: f.ResetTint, ChatText: f.ChatText, SetChatText: f.SetChatText, RecordInstall: f.recordInstall,
-		HCUpdate: settings.RunHCUpdate}
+		HCUpdate: settings.RunHCUpdate, SetupRun: f.deps.SetupRun}
 	f.loadUpdated(env)
 	f.SpacesList.OnSettings = func() { f.Settings.Toggle() }
 	f.SpacesList.UpdateReady = f.Settings.Ready
 	f.SpacesList.SetupSteps = f.Settings.SetupSteps
 	stopChecks := f.Settings.StartChecks()
+	f.Settings.FirstSetup(f.firstSetup)
 	offActive := mygo.App.OnDidBecomeActive(func() { w.Update(f.Settings.Activated) })
 	return func() {
 		stopChecks()
@@ -320,4 +321,21 @@ func (f *Frame) attachMenu(w Window, src agentstate.AgentSource) (stop func()) {
 		setHandler(handlerCloseTerminal, nil)
 		setHandler(handlerSettings, nil)
 	}
+}
+
+// firstSetup runs on the UI thread after the first setup pass. When a required check is not
+// ready and the Setup tab never opened by itself, it opens Settings on that tab once and stores
+// that (D280).
+func (f *Frame) firstSetup(steps int) {
+	f.appearanceMu.Lock()
+	seen := f.setupSeen
+	if steps > 0 && !seen {
+		f.setupSeen = true
+	}
+	f.appearanceMu.Unlock()
+	if steps == 0 || seen {
+		return
+	}
+	f.Settings.OpenSetup()
+	f.persist(0)
 }

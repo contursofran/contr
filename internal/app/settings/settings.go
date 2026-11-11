@@ -75,7 +75,7 @@ var AppearanceSources = [...]mygo.ThemeSource{mygo.ThemeSystem, mygo.ThemeDark, 
 const LabelChatText = "Chat text"
 
 // ChatTextNames are the texts of the chat text size segments.
-var ChatTextNames = [...]string{"Small", "Default", "Large", "Larger"}
+var ChatTextNames = [...]string{"Small", "Default", "Medium", "Large", "Larger"}
 
 // AppearanceNames are the texts of the segments, in the order of AppearanceSources.
 var AppearanceNames = [...]string{"System", "Dark", "Light"}
@@ -163,6 +163,8 @@ type Settings struct {
 	HCUpdate HCRunner
 	// Setup is what the checks of the Setup tab read (D278); nil runs no check.
 	Setup *setup.Env
+	// SetupRun runs the checks; nil runs setup.Run. Tests give a fake.
+	SetupRun func(context.Context, setup.Env) []setup.Result
 
 	// tab is the tab that shows: SettingsTabs[tab].
 	tab int
@@ -731,7 +733,7 @@ func (s *Settings) appearanceRow(c *ui.Context) {
 	}
 }
 
-// chatTextRow is the Chat text row: Small, Default, Large or Larger (D272). A pick calls
+// chatTextRow is the Chat text row: Small, Default, Medium, Large or Larger (D272). A pick calls
 // SetChatText, which scales the text of the Chat view at once.
 func (s *Settings) chatTextRow(c *ui.Context) {
 	if s.ChatText == nil {

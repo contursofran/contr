@@ -39,8 +39,12 @@ Shared rules: [README.md](README.md).
 ## Behavior
 
 - The checks run off the UI thread, each command with a 5 s limit, when Settings opens, on
-  `Recheck`, and when the app becomes active while the tab shows. Nothing runs while Settings
-  is closed.
+  `Recheck`, and when the app becomes active while the tab shows. They also run once at start,
+  after the window shows, so the dot shows without opening Settings (D280). Nothing else runs
+  while Settings is closed, and no timer runs them again.
+- First launch (D280): when that start pass finds a required check not ready, the hc core not
+  counted (it can still be connecting), and `setupSeen` is not set in the settings file,
+  Settings opens on the `Setup` tab and `setupSeen` is stored. It never opens by itself again.
 - A command that times out shows `timed out`; output in another format shows
   `unexpected … output`.
 - No check reads files in Claude Code's or Codex's folders. contr runs no command for the owner
