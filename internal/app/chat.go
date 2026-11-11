@@ -26,6 +26,7 @@ func (f *Frame) attachChat(env view.Env, src agentstate.AgentSource) (stop func(
 	f.Chat.Team = f.chatTeam
 	f.Chat.OpenNeeds = f.openNeeds
 	// The notch is made after the chat: it is read when the pinned prompt builds.
+	f.Chat.TextScale = f.ChatScale
 	f.Chat.Notch = func() (ui.Rect, bool) {
 		if f.Notch == nil {
 			return ui.Rect{}, false

@@ -29,6 +29,7 @@ import (
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
+	"github.com/contursofran/contr/internal/prefs"
 )
 
 // Version is contr's version, shown in Settings. It comes from the VERSION file (D107).
@@ -66,6 +67,13 @@ const (
 
 // AppearanceSources are the choices of the Appearance row, in order (D119).
 var AppearanceSources = [...]mygo.ThemeSource{mygo.ThemeSystem, mygo.ThemeDark, mygo.ThemeLight}
+
+// LabelChatText names the chat text size row (D272); its segments are named by ChatTextNames,
+// in the order of prefs.ChatTextSizes.
+const LabelChatText = "Chat text"
+
+// ChatTextNames are the texts of the chat text size segments.
+var ChatTextNames = [...]string{"Small", "Default", "Large", "Larger"}
 
 // AppearanceNames are the texts of the segments, in the order of AppearanceSources.
 var AppearanceNames = [...]string{"System", "Dark", "Light"}
@@ -142,6 +150,10 @@ type Settings struct {
 	Tint      func() (window, panel float64)
 	SetTint   func(window, panel float64)
 	ResetTint func()
+	// ChatText returns the chat text size, one of prefs.ChatTextSizes; SetChatText applies a new
+	// one at once and stores it (D272). Nil ChatText hides the row.
+	ChatText    func() string
+	SetChatText func(string)
 	// AgentsConfig is the path of agents.json, which the Agents tab edits (D186). Empty shows
 	// an error in that tab.
 	AgentsConfig string
@@ -595,6 +607,7 @@ func (s *Settings) body(c *ui.Context) {
 		s.updatesTab(c)
 	default:
 		s.appearanceRow(c)
+		s.chatTextRow(c)
 		s.tintRows(c)
 		ui.Row(c).Shrink(0).Justify(ui.End).Padding(12, theme.ModalPadX).Margin(12, 0, 0, 0).
 			BorderWidth(1, 0, 0, 0).BorderColor(p.Hairline).Children(func() {
@@ -685,7 +698,6 @@ func (s *Settings) updatesTab(c *ui.Context) {
 // calls SetAppearance, which applies the theme at once. The row reads the current palette on
 // each build, like the rest of this modal (D155).
 func (s *Settings) appearanceRow(c *ui.Context) {
-	p := theme.Current()
 	cur := mygo.ThemeSystem
 	if s.Appearance != nil {
 		cur = s.Appearance()
@@ -694,12 +706,35 @@ func (s *Settings) appearanceRow(c *ui.Context) {
 	if sel < 0 {
 		sel = 0
 	}
+	picked := segmentRow(c, "appearance", LabelAppearance, AppearanceNames[:], sel)
+	if picked != sel && s.SetAppearance != nil {
+		s.SetAppearance(AppearanceSources[picked])
+	}
+}
+
+// chatTextRow is the Chat text row: Small, Default, Large or Larger (D272). A pick calls
+// SetChatText, which scales the text of the Chat view at once.
+func (s *Settings) chatTextRow(c *ui.Context) {
+	if s.ChatText == nil {
+		return
+	}
+	sel := slices.Index(prefs.ChatTextSizes[:], prefs.NormalizeChatText(s.ChatText()))
+	picked := segmentRow(c, "chat-text", LabelChatText, ChatTextNames[:], sel)
+	if picked != sel && s.SetChatText != nil {
+		s.SetChatText(prefs.ChatTextSizes[picked])
+	}
+}
+
+// segmentRow is a row of the General tab: the label and one segment for each name on
+// SegmentedBase. It returns the segment picked in this build: sel when there is no click.
+func segmentRow(c *ui.Context, key, label string, names []string, sel int) int {
+	p := theme.Current()
 	picked := sel
 	ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(8).Padding(0, theme.ModalPadX, 12, theme.ModalPadX).Children(func() {
-		ui.Text(c, LabelAppearance).Grow(1).TextColor(p.Ink48)
-		seg := ui.SegmentedBase(c.Key("appearance"), &picked, len(AppearanceNames))
-		seg.Track.Label(LabelAppearance).Padding(2).Radius(theme.CardRadius).Background(p.Hover).Children(func() {
-			for i, name := range AppearanceNames {
+		ui.Text(c, label).Grow(1).TextColor(p.Ink48)
+		seg := ui.SegmentedBase(c.Key(key), &picked, len(names))
+		seg.Track.Label(label).Padding(2).Radius(theme.CardRadius).Background(p.Hover).Children(func() {
+			for i, name := range names {
 				e := seg.Segment(i).Label(name).Padding(4, 12).Radius(theme.CardRadius)
 				text := p.Ink64
 				if i == picked {
@@ -710,9 +745,7 @@ func (s *Settings) appearanceRow(c *ui.Context) {
 			}
 		})
 	})
-	if picked != sel && s.SetAppearance != nil {
-		s.SetAppearance(AppearanceSources[picked])
-	}
+	return picked
 }
 
 // SettingsButton is a button of the Settings dialog, drawn from the palette of the current theme

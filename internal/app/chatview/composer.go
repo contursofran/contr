@@ -126,7 +126,7 @@ func (ch *Chat) composer(c *ui.Context, id string, st liveState) {
 				}
 				chips.Children(func() {
 					for i := range n {
-						imageChip(c, "Image "+strconv.Itoa(i+1), LabelAttached)
+						ch.imageChip(c, "Image "+strconv.Itoa(i+1), LabelAttached)
 					}
 				})
 				top = true
@@ -138,8 +138,8 @@ func (ch *Chat) composer(c *ui.Context, id string, st liveState) {
 			}
 			field.Children(func() {
 				in := ui.TextAreaBase(c.Key("composer:"+id), draft).Label(LabelComposer).Placeholder(Placeholder(ch.name(id))).
-					PlaceholderColor(pal.Ink48).TextColor(pal.Ink100).FontSize(theme.StyleProse.Size).LineHeight(theme.StyleProse.Line/theme.StyleProse.Size).
-					Lines(1, composerLines).Grow(1).MinWidth(0).PaddingY((actionSize - theme.StyleProse.Line) / 2).AutoFocus().Bind(&ch.field).
+					PlaceholderColor(pal.Ink48).TextColor(pal.Ink100).FontSize(ch.ts(theme.StyleProse).Size).LineHeight(ch.ts(theme.StyleProse).Line/ch.ts(theme.StyleProse).Size).
+					Lines(1, composerLines).Grow(1).MinWidth(0).PaddingY((actionSize - ch.ts(theme.StyleProse).Line) / 2).AutoFocus().Bind(&ch.field).
 					OnTextKey(func(k ui.TextKey) bool { return ch.textKey(id, st, k) }).
 					OnPaste(func(text string) bool { return ch.paste(id, svc, text) })
 				if in.Changed() {
@@ -154,7 +154,7 @@ func (ch *Chat) composer(c *ui.Context, id string, st liveState) {
 			})
 			if ch.Meta != nil {
 				if m := ch.Meta(id); m != "" {
-					kit.Styled(ui.Text(c, m), theme.StyleMeta).SingleLine().MinWidth(0).TextColor(pal.Ink48)
+					kit.Styled(ui.Text(c, m), ch.ts(theme.StyleMeta)).SingleLine().MinWidth(0).TextColor(pal.Ink48)
 				}
 			}
 		})
@@ -163,7 +163,7 @@ func (ch *Chat) composer(c *ui.Context, id string, st liveState) {
 			ch.field.Focus()
 		}
 		if e := ch.errs[id]; e != "" {
-			kit.Styled(ui.Text(c, e), theme.StyleSmall).Wrap().
+			kit.Styled(ui.Text(c, e), ch.ts(theme.StyleSmall)).Wrap().
 				Padding(theme.Space6, cardPadLeft, 0).TextColor(pal.Ink64)
 		}
 	})
