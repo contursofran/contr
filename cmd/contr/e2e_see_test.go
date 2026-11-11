@@ -100,6 +100,15 @@ var seeFixtures = map[string]seeFixture{
 		},
 		ready: "lead, ",
 	},
+	"changes-long": {
+		about: "the session fixture with the changes of the changes fixture and 18 nested worktrees under .claude/worktrees, which git lists as untracked folders: the Changed list is longer than the panel (#693)",
+		setup: func(t *testing.T, h *harness) {
+			repo := seeSessionRepo(t, h)
+			seeChanges(t, repo)
+			seeNestedWorktrees(t, repo, 18)
+		},
+		ready: "Todos",
+	},
 	"updated": {
 		about: "the first start after an update: the Updated to pill with What's new open (D209)",
 		setup: func(t *testing.T, h *harness) {
@@ -237,7 +246,10 @@ func (h *harness) labelTerminal(t *testing.T, name string, labels map[string]str
 
 // seeSession spawns lead and writes the session file of its terminal, as the
 // kit's hooks do (D195).
-func seeSession(t *testing.T, h *harness) {
+func seeSession(t *testing.T, h *harness) { seeSessionRepo(t, h) }
+
+// seeSessionRepo is seeSession; it returns the folder of demo.
+func seeSessionRepo(t *testing.T, h *harness) string {
 	repo := h.repo(t, "demo", "main")
 	w, err := h.mgr.Spawn(h.ctx, agents.Spec{Name: "lead", Profile: "claude-working", Role: agents.RoleOrchestrator, Project: "demo", Worktree: repo})
 	if err != nil {
@@ -264,6 +276,7 @@ func seeSession(t *testing.T, h *harness) {
 	if err := session.Write(filepath.Join(h.dir, "state"), w.Address, s); err != nil {
 		t.Fatal(err)
 	}
+	return repo
 }
 
 // seeChat spawns lead and writes a transcript of an orchestrator session in the scratch home, and
@@ -499,6 +512,19 @@ func (c *client) wheel(t *testing.T, label, dy string) {
 	c.settle(t)
 }
 
+// wheelAt scrolls the element with this label by dy points at its center, as a touchpad does,
+// without waiting for a list to rest.
+func (c *client) wheelAt(t *testing.T, label, dy string) {
+	t.Helper()
+	d, err := strconv.ParseFloat(dy, 64)
+	if err != nil {
+		t.Fatalf("scroll %q: %v", dy, err)
+	}
+	b := c.boundsOf(t, label)
+	c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "wheel", "x": b.X + b.Width/2, "y": b.Y + b.Height/2, "dx": 0, "dy": d, "precise": true}}})
+	c.settle(t)
+}
+
 // restingList waits until the element with this label has rows that stay the same for two looks
 // 300 ms apart, and no Jump to latest shows: the list was laid out and is at its end. It returns
 // the bounds of the element.
@@ -555,10 +581,27 @@ func seeChanges(t *testing.T, repo string) {
 	}
 }
 
+// seeNestedWorktrees makes n git repos under .claude/worktrees in repo, as an
+// agent's nested worktrees: git lists each as one untracked folder whose path
+// ends with "/" (#693).
+func seeNestedWorktrees(t *testing.T, repo string, n int) {
+	for i := range n {
+		dir := filepath.Join(repo, ".claude", "worktrees", fmt.Sprintf("agent-a004bd4%02d7f1c9e5", i))
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		gitIn(t, dir, "init", "-q", "-b", "main")
+		if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 // TestSee is scripts/see.sh (#457, D178). It starts the fixture CONTR_SEE
 // names, in the themes of CONTR_SEE_THEME (dark, light or both), presses the
 // labels of CONTR_SEE_PRESS (one per line, `type:<text>` types text, `wheel:<dy>`
-// scrolls the chat by dy points once it rests at its end, `wait:<label>` fails the run when no
+// scrolls the chat by dy points once it rests at its end, `scroll:<label>:<dy>` scrolls the
+// element with that label by dy points, `wait:<label>` fails the run when no
 // element with that label shows in 20 s) in order, and writes
 // tmp/see/<fixture>-<theme>.png and tmp/see/<fixture>-<theme>.txt, the tree
 // of elements. Without CONTR_SEE it lists the fixtures.
@@ -611,6 +654,9 @@ func TestSee(t *testing.T) {
 				c.text(t, text)
 			} else if dy, ok := strings.CutPrefix(l, "wheel:"); ok { // scroll the chat
 				c.wheel(t, "chat", dy)
+			} else if rest, ok := strings.CutPrefix(l, "scroll:"); ok { // scroll the element with this label
+				label, dy, _ := strings.Cut(rest, ":")
+				c.wheelAt(t, label, dy)
 			} else if label, ok := strings.CutPrefix(l, "wait:"); ok { // fail when it does not show
 				c.waitLabel(t, label)
 			} else {

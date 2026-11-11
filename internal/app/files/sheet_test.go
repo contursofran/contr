@@ -29,10 +29,29 @@ func sheetTree() *FileTree {
 	return t
 }
 
-// TestSpecSheet draws the files panel's tree on Changed (D264) for scripts/sheet.sh (D179).
+// sheetLongTree is sheetTree with three nested worktrees that git lists as
+// untracked folders, so the Changed list is taller than the part (#693).
+func sheetLongTree() *FileTree {
+	t := sheetTree()
+	list := append([]review.File(nil), t.changes...)
+	for _, id := range []string{"a004bd4e7f1c9e5", "b19f2c06d3a8e21", "c7e3d9a2b5f4c10"} {
+		list = append(list, review.File{Path: ".claude/worktrees/agent-" + id + "/", Status: review.Added, Binary: true})
+	}
+	t.setChanges(list)
+	return t
+}
+
+// TestSpecSheet draws the files panel's tree on Changed (D264) for scripts/sheet.sh (D179), and
+// FileTreeLong: a Changed list longer than the panel, with untracked folders (#693).
 func TestSpecSheet(t *testing.T) {
-	tree := sheetTree()
-	apptest.SpecSheet(t, []apptest.SheetPart{{Name: "FileTree", W: 282, H: 380, View: func(c *ui.Context) {
-		kit.Panel(c, kit.PanelOpts{Name: "Files", Head: func() { tree.Head(c) }, Body: func() { tree.View(c) }})
-	}}}, nil)
+	tree, long := sheetTree(), sheetLongTree()
+	panel := func(tree *FileTree) func(c *ui.Context) {
+		return func(c *ui.Context) {
+			kit.Panel(c, kit.PanelOpts{Name: "Files", Head: func() { tree.Head(c) }, Body: func() { tree.View(c) }})
+		}
+	}
+	apptest.SpecSheet(t, []apptest.SheetPart{
+		{Name: "FileTree", W: 282, H: 380, View: panel(tree)},
+		{Name: "FileTreeLong", W: 282, H: 380, View: panel(long)},
+	}, []string{"FileTreeLong"})
 }
