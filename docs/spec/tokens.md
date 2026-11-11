@@ -167,6 +167,7 @@ The 16 colors a program in the terminal asks for (SGR 30-37, 90-97, palette 0-15
 | `outline-card-width` | `380px` | Outline hover card. |
 | `tick-height` | `2px` | One outline tick. |
 | `meter-height` | `4px` | Context and usage meters. |
+| `thumb` | `64px` | Image thumbnails in the chat (D269). |
 
 ## Effect
 

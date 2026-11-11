@@ -201,7 +201,7 @@ func TestScaleTokens(t *testing.T) {
 		"icon-button": SizeIconButton, "tab-max-width": SizeTabMaxWidth,
 		"notch-height": SizeNotchHeight, "notch-open-width": SizeNotchOpenWidth,
 		"outline-card-width": SizeOutlineCardWidth, "tick-height": SizeTickHeight,
-		"meter-height": SizeMeterHeight})
+		"meter-height": SizeMeterHeight, "thumb": SizeThumb})
 	add("Effect", map[string]float32{"glass-blur": GlassBlur, "glass-saturate": GlassSaturate})
 }
 
