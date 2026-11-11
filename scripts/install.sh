@@ -12,7 +12,8 @@
 # "Ours" means a bundle whose CFBundleIdentifier is dev.contr. Anything else is refused
 # (exit 2) unless --replace is given. All refusal checks run before the first change.
 # The new bundle is copied to a staging name first; the old one is removed only after the copy.
-# On success prints the installed app path, the link path and, if needed, a PATH hint.
+# On success prints the installed app path, the link path, if needed a PATH hint, and the
+# status line hint for the Claude usage meter.
 # Errors go to stderr as "install.sh: <message>": exit 1 for bad input or a failed step,
 # exit 2 for a refusal that protects an existing file or dir.
 
@@ -159,6 +160,10 @@ print_hint() {
         *":$bin_dir:"*) ;;
         *) echo "install.sh: hint: $bin_dir is not in PATH. Add it to run contr by name." ;;
     esac
+    # contr does not edit Claude Code's settings. The Claude meter needs this step.
+    echo "install.sh: hint: for the Claude usage meter, set the statusLine command in Claude Code's settings.json to"
+    echo "    $link statusline -- <your current status line command>"
+    echo "  or to \"$link statusline\" if you have none."
 }
 
 # When the file is sourced, only the functions above are defined.

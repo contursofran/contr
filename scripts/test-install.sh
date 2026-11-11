@@ -140,6 +140,7 @@ grep -q "is not in PATH" "$tmp/run.out" || fail "no PATH hint when the bin dir i
 PATH="$tmp/bin7:/usr/bin:/bin" "$install" --app "$app" --dest "$tmp/apps7" --bin-dir "$tmp/bin7" \
     >"$tmp/run.out" 2>"$tmp/run.err" || fail "install should succeed with the bin dir in PATH: $(cat "$tmp/run.err")"
 grep -q "is not in PATH" "$tmp/run.out" && fail "PATH hint printed although the bin dir is in PATH"
+grep -q "$tmp/bin7/contr statusline -- " "$tmp/run.out" || fail "no status line hint: $(cat "$tmp/run.out")"
 
 # A failed copy keeps the installed app, removes the partial copy, and fails with exit 1.
 run_install --app "$app" --dest "$tmp/apps8" --bin-dir "$tmp/bin8"
