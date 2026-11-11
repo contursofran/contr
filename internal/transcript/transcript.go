@@ -169,6 +169,9 @@ type Reader struct {
 	next    int64
 	count   int            // entries returned so far
 	pending map[string]int // call id -> entry index, for calls without a result
+	// queued is the text of the last queued message read since the last text
+	// of Claude or prompt, so that a second shape of it is no second prompt.
+	queued string
 }
 
 // NewReader returns a Reader that starts at offset. Calls before the offset
@@ -253,6 +256,9 @@ func (r *Reader) line(raw []byte, b *Batch, idx map[string]int) {
 		r.user(base, l.IsMeta, l.IsCompactSummary, l.Message.Content, b, idx, add)
 	case "assistant":
 		for _, e := range assistant(base, l.Message.Content) {
+			if e.Kind == Said {
+				r.queued = ""
+			}
 			add(e)
 		}
 	case "system":
@@ -266,8 +272,14 @@ func (r *Reader) line(raw []byte, b *Batch, idx map[string]int) {
 			e.Text = l.Subtype
 		}
 		add(e)
+	case "queue-operation":
+		// Claude Code's queue (enqueue, dequeue, remove) is no delivery: a
+		// queued message shows where the session got it (D265).
 	case "attachment":
-		if e, ok := attachment(base, l.Attachment); ok {
+		if e, queued, ok := attachment(base, l.Attachment); ok {
+			if queued {
+				r.once(&e)
+			}
 			add(e)
 		}
 	}
@@ -320,12 +332,113 @@ func (r *Reader) user(base Entry, meta, compact bool, content json.RawMessage, b
 	switch {
 	case compact:
 		e.Kind, e.Hidden = Hidden, HideCompactSummary
+	case queuedOK(e.Text):
+		// The reminder of a message sent while the turn ran: read also on
+		// a line marked meta.
+		var n int
+		e.Text, n, _ = queuedReminder(e.Text)
+		classify(&e, n)
+		r.once(&e)
 	case meta:
 		e.Kind, e.Hidden = Hidden, HideMeta
 	default:
 		classify(&e, images)
+		if e.Kind == Prompt {
+			r.queued = ""
+		}
 	}
 	add(e)
+}
+
+// once reads e, a message that the owner sent while a turn ran: the first
+// shape of it stays, a second shape of the same text is hidden (D265).
+func (r *Reader) once(e *Entry) {
+	if e.Kind == Hidden {
+		return
+	}
+	key := strings.TrimSpace(e.Text)
+	if key != "" && key == r.queued {
+		e.Kind, e.Hidden, e.Note, e.Images = Hidden, HideHarness, nil, 0
+		return
+	}
+	r.queued = key
+}
+
+// QueuedLead starts the text that tells Claude of a message the owner sent
+// while it worked.
+const QueuedLead = "The user sent a new message while you were working:"
+
+// queuedTails start the harness's sentence after the message, each at the
+// start of a line. A new Claude Code version may write another: add it here
+// (D265).
+var queuedTails = []string{
+	"This is how Claude Code surfaces messages",
+	"IMPORTANT: After completing your current task",
+}
+
+func queuedOK(s string) bool { _, _, ok := queuedReminder(s); return ok }
+
+// queuedReminder reads the message of a text that starts with QueuedLead,
+// alone, in a reminder or after other reminders, and tells whether s has
+// that shape (D265). The message ends at the reminder's end or at a line
+// that starts a tail of queuedTails. Its "[Image #N]" lines are dropped and
+// counted in images.
+func queuedReminder(s string) (msg string, images int, ok bool) {
+	i := strings.Index(s, QueuedLead)
+	if i < 0 || !harnessLead(s[:i]) {
+		return "", 0, false
+	}
+	msg = s[i+len(QueuedLead):]
+	msg, _, _ = strings.Cut(msg, "</system-reminder>")
+	msg = msg[:QueuedTailAt(msg)]
+	var keep []string
+	for _, l := range strings.Split(msg, "\n") {
+		if ImageMarker(l) {
+			images++
+			continue
+		}
+		keep = append(keep, l)
+	}
+	msg = strings.TrimSpace(strings.Join(keep, "\n"))
+	return msg, images, msg != "" || images > 0
+}
+
+// QueuedTailAt gives the place of the first line of s that starts a tail of
+// queuedTails, or len(s) when none does.
+func QueuedTailAt(s string) int {
+	end := len(s)
+	for _, t := range queuedTails {
+		for off := 0; ; {
+			j := strings.Index(s[off:], t)
+			if j < 0 {
+				break
+			}
+			j += off
+			if j == 0 || s[j-1] == '\n' {
+				end = min(end, j)
+				break
+			}
+			off = j + 1
+		}
+	}
+	return end
+}
+
+// ImageMarker tells a line that is only Claude Code's "[Image #N]" mark of
+// a pasted image.
+func ImageMarker(l string) bool {
+	l = strings.TrimSpace(l)
+	n, ok := strings.CutPrefix(l, "[Image #")
+	n, ok2 := strings.CutSuffix(n, "]")
+	if !ok || !ok2 || n == "" {
+		return false
+	}
+	for _, r := range n {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // result joins a tool result to its call: in this batch when the call is
@@ -372,17 +485,38 @@ func assistant(base Entry, content json.RawMessage) []Entry {
 
 // attachment reads a line of type "attachment": Claude Code writes hook
 // output this way. Its shape is not documented, so any text in it is taken.
-func attachment(base Entry, raw json.RawMessage) (Entry, bool) {
+// A "queued_command" is a message that the owner sent while a turn ran and
+// that Claude Code gave to Claude in the turn: it is read as a user text at
+// its place (queued is set, D265).
+func attachment(base Entry, raw json.RawMessage) (e Entry, queued, ok bool) {
 	var a struct {
 		Type      string          `json:"type"`
 		HookEvent string          `json:"hookEvent"`
 		Content   json.RawMessage `json:"content"`
 		Stdout    string          `json:"stdout"`
+		Prompt    json.RawMessage `json:"prompt"`
 	}
 	if json.Unmarshal(raw, &a) != nil {
-		return Entry{}, false
+		return Entry{}, false, false
 	}
-	e := base
+	e = base
+	if a.Type == "queued_command" {
+		var texts []string
+		images := 0
+		for _, bl := range blocks(a.Prompt) {
+			switch bl.Type {
+			case "text":
+				texts = append(texts, bl.Text)
+			case "image":
+				images++
+			}
+		}
+		if len(texts) > 0 || images > 0 {
+			e.Text = strings.Join(texts, "\n")
+			classify(&e, images)
+			return e, true, true
+		}
+	}
 	e.Kind, e.Hidden = Hidden, HideHook
 	e.Text = text(a.Content)
 	if e.Text == "" {
@@ -394,7 +528,7 @@ func attachment(base Entry, raw json.RawMessage) (Entry, bool) {
 	if isPlaybook(e.Text) {
 		e.Hidden = HidePlaybook
 	}
-	return e, true
+	return e, false, true
 }
 
 // classify sets the kind of a user text that is not marked meta. images

@@ -80,6 +80,8 @@ type Chat struct {
 	field ui.Handle
 	// ticks is set while the last View asked for a redraw in a second: the live line's time.
 	ticks bool
+	// wasWorking is set while the last View saw the agent work: a turn ends when it goes idle.
+	wasWorking bool
 }
 
 // New returns a chat view that reads the session files under stateDir (package session).
@@ -104,7 +106,7 @@ func New(env view.Env, stateDir string, watch func(path string, notify func()) (
 // Sync follows terminal id; "" stops. Call it with the selected terminal.
 func (ch *Chat) Sync(id string) {
 	if id != ch.src.Terminal() {
-		ch.shown = false
+		ch.shown, ch.wasWorking = false, false
 	}
 	ch.src.Sync(id)
 }
