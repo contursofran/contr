@@ -56,6 +56,8 @@ type Model struct {
 	// pending holds the texts the owner sent that the transcript has not brought yet.
 	pending []Pending
 	seq     int
+	// shown counts the entries placed in a row: what the owner can see came (Jump to latest).
+	shown int
 }
 
 // Pending is a text the owner sent from the composer, shown dimmed at the end until the
@@ -217,6 +219,9 @@ func (m *Model) Rows() []Row { return m.rows }
 // Entry is the entry at index i.
 func (m *Model) Entry(i int) transcript.Entry { return m.entries[i] }
 
+// Shown is the count of entries placed in a row: prompts, texts, notes and tool calls.
+func (m *Model) Shown() int { return m.shown }
+
 // Len is the count of entries, hidden ones included.
 func (m *Model) Len() int { return len(m.entries) }
 
@@ -272,6 +277,10 @@ func (m *Model) add(e transcript.Entry) {
 	id := m.id(e, i)
 	if e.Sidechain {
 		return
+	}
+	switch e.Kind {
+	case transcript.Prompt, transcript.Said, transcript.Note, transcript.Tool:
+		m.shown++
 	}
 	switch e.Kind {
 	case transcript.Prompt:

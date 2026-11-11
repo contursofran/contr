@@ -24,6 +24,13 @@ func (f *Frame) attachChat(env view.Env, src agentstate.AgentSource) (stop func(
 	f.Chat.Meta = f.chatMeta
 	f.Chat.Team = f.chatTeam
 	f.Chat.OpenNeeds = f.openNeeds
+	// The notch is made after the chat: it is read when the pinned prompt builds.
+	f.Chat.Notch = func() (ui.Rect, bool) {
+		if f.Notch == nil {
+			return ui.Rect{}, false
+		}
+		return f.Notch.Bounds()
+	}
 	f.Chat.Chips = newChatChips(f, env)
 	if src != nil {
 		f.Chat.Send, f.Chat.Interrupt = src.Send, src.Interrupt

@@ -42,6 +42,9 @@ type Chat struct {
 	Team func(addr string) (Team, bool)
 	// OpenNeeds opens the notch's card, as ⌘J does: the click on "N needs you". May be nil.
 	OpenNeeds func()
+	// Notch is the box of the questions notch as last painted, and false while none shows: the
+	// pinned prompt ends before it (D266). May be nil.
+	Notch func() (ui.Rect, bool)
 
 	src    *chatsource.Source
 	model  Model
@@ -82,6 +85,12 @@ type Chat struct {
 	ticks bool
 	// wasWorking is set while the last View saw the agent work: a turn ends when it goes idle.
 	wasWorking bool
+	// away is set while the list is not at its end; awayAt is the count of shown entries when it
+	// left the end (scroll.go).
+	away   bool
+	awayAt int
+	// switchBox is the box of the switch, for the room at the right of the pinned prompt.
+	switchBox ui.Handle
 }
 
 // New returns a chat view that reads the session files under stateDir (package session).
@@ -156,6 +165,7 @@ func (ch *Chat) changed(reset bool) {
 		ch.folds = map[string]*bool{}
 		ch.parts, ch.partsOf = map[string][]Part{}, map[string]string{}
 		ch.chips = map[string]*chipPart{}
+		ch.away = false
 		ch.Env.Redraw()
 	}
 	ch.stale = true

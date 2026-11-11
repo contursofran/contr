@@ -8,7 +8,7 @@ a team row takes the live line's place (D259). The overlays (notch, pill,
 outline) stay above it.
 
 Design system page: none yet; the mockups C1 (base), C2a (lines of an open
-group) and C2b (the folded group) are the design intent.
+group), C2b (the folded group) and C5 (scrolled up) are the design intent.
 Shared rules: [README.md](README.md).
 
 ## Switch
@@ -26,13 +26,15 @@ Shared rules: [README.md](README.md).
 
 | Region | Value |
 |---|---|
-| Transcript |  `ui.List` with `FollowEnd`: it follows the end while the owner is at the end. Rows `space-18` apart, padding 44px above (the switch row), `space-20` at the sides, 32px below (the fade's height, so the fade covers no entry, D259); rows that do not fill it sit at the bottom. The pending prompts come after the rows. |
+| Transcript |  `ui.List` with `FollowEnd`: it follows the end while the owner is at the end. Rows `space-18` apart, 44px of room above the list (the switch row: rows do not scroll under it, D266), padding `space-20` at the sides, 32px below (the fade's height, so the fade covers no entry, D259); rows that do not fill it sit at the bottom. The pending prompts come after the rows. |
 | Fade | a gradient 32px high over the bottom edge of the transcript, from the stage at 0 opacity to the stage as it shows (`StageBase`, D250); it takes no click (D259) |
 | Column | the prose (prompts, Claude's text, notes, the fold rows, the live line, the team row and the composer), at most 920px wide, centered in the content width: the panel less `space-20` at each side |
 | Wide block | a table, a code block or the card of an open work group: as wide as its content, at least the column and at most the content width, centered. A block that fits in 920px stays in the column, its left edge on the column's left edge; in a panel not wider than 920px and the insets, the column is the content width. Claude's text is cut into runs of prose and these blocks, each cut at the start of a line. |
 | Live line | under the transcript, above the composer, `space-12` apart, padding `space-20` at the sides; see [Live line](#live-line) |
 | Team row | while the session orchestrates: in the live line's place, above the composer; see [Team row](#team-row) |
 | Composer | under the live line or the team row, `space-14` below; see [Composer](#composer) |
+| Pinned prompt | while the list is not at its end and the prompt of the turn in view is above the rows in view: see [Scrolled up](#scrolled-up) |
+| Jump to latest | while the list is not at its end: see [Scrolled up](#scrolled-up) |
 | Empty | "No transcript yet" (`body`, `ink-42`), centered, while the session has no path, no file or no row yet. The switch and the composer still work. |
 
 ## Rows
@@ -40,7 +42,7 @@ Shared rules: [README.md](README.md).
 | Row | Value |
 |---|---|
 | Owner prompt | right-aligned, at most 560px, padding `8px 13px`, radius `radius-12`, fill `hover`, text `prose` in `ink-100` |
-| Sent time | the time the entry was sent, from its transcript timestamp: one line, mono `meta`, `ink-45` (the lowest text ink with 4.5:1), `space-4` above. Under an owner prompt, right-aligned with the bubble; under Claude's text, left-aligned, once per answer: under the last text before the next prompt, work group or note. In the Mac's time zone: "14:32" today, "Yesterday 14:32", else "9 Nov 14:32"; "today" is judged at each build, and nothing ticks (D55). No timestamp, no line; a pending prompt has none. |
+| Sent time | the time the prompt was sent, from its transcript timestamp: one line, mono `meta`, `ink-45` (the lowest text ink with 4.5:1), `space-4` above, under the owner prompt, right-aligned with the bubble. Once per turn: Claude's texts, groups and notes show no time (D266). In the Mac's time zone: "14:32" today, "Yesterday 14:32", else "9 Nov 14:32"; "today" is judged at each build, and nothing ticks (D55). No timestamp, no line; a pending prompt has none. |
 | Claude's text | `markdown.View`: `prose` size and line, sans; text `ink-85`, strong (500) and links `ink-95`, muted `ink-45`; each block as [Content](#content) says |
 | Work group, folded | the tool calls, kit notes and background tasks between two texts, as one row 20px high, mono `value`, `ink-42` (`ink-62` on hover): "2 worker notes · 1 background task · 6 tool calls" (a message of another session counts as a worker note; a part with no item is left out, "1 tool call"), a 6px dot for each worker that sent a note, then `›`. While a call has no result, a working StatusGlyph (14px) comes first. |
 | Work group, open | `⌄`; under it a card, a wide block: at least 584px (or the content width when less), as wide as its longest line (note, task and call lines alike), up to the content width, `space-6` below the row, padding `8px 12px`, radius `radius-9`, line `hairline`: the note lines, a `hairline` rule, the call lines |
@@ -80,6 +82,17 @@ How Claude's Markdown shows (D261). MyGo's theme options style what they can; th
 | Diff block | a `diff` or `patch` block, as a code block: an added line in `content-done` and a removed one in `content-failed`, each on its tint (the color at 9% alpha) across the whole block; a hunk line (`@@`) in `content-info`; header and context lines in `ink-62` |
 
 Content colors show only as a dot, a word, a 2px bar or a 1px line: never a fill and never a row. Diff lines are the one exception (tokens.md, Content).
+
+## Scrolled up
+
+What shows while the owner scrolls up (D266, mockup C5). Both parts come
+from where the list was in the last frame (`Visible`, `AtEnd`): a chat at
+rest asks for no frame (D55). At the end of the chat neither shows.
+
+| Part | Value |
+|---|---|
+| Pinned prompt | the turn in view is that of the first row in view. When its prompt is above that row: a bar over the switch row, 44px high, across the panel, on the stage (`StageBase`) with a `hairline` under it, padding 16px at the left; at the right it ends `space-12` before the switch, and before the questions notch while the notch shows over it (D266); gap `space-12`: "You" (`small`, `ink-45`), then the prompt on one line, clipped with `…` (`small`, `ink-100`; line breaks show as spaces). Label "pinned prompt" and the text. A click scrolls the list to the prompt, at the top. A first row that is a prompt, or a pending prompt, shows itself: nothing is pinned. |
+| Jump to latest | a pill centered over the bottom of the transcript, `space-8` above the dock: 28px high, padding `0 13px 0 11px`, radius 14, gap `space-8`, `float-solid` fill, 1px `float-line` border, `shadow-float`; "Jump to latest" and "↓" (`small`, `ink-100`). When entries that show (prompts, texts, notes, tool calls) came after the owner left the end: a 6px `claude` dot first and "New messages" in place of the text; label "Jump to latest, new messages". A click scrolls to the end, where the list follows again. No key: ⌘↓ moves the caret in the composer. |
 
 ## Composer
 
