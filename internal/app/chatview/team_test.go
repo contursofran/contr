@@ -90,8 +90,8 @@ func TestTeamRowShowsWhileTheSessionOrchestrates(t *testing.T) {
 	if s.has(LabelTeam) {
 		t.Error("a team row while the session does not orchestrate")
 	}
-	if !s.has(LabelLive + " Bash · go test ./...") {
-		t.Errorf("no live line alone: %v", s.tt.Texts())
+	if !s.footerWorks() {
+		t.Errorf("no working status in the footer: %v", s.tt.Texts())
 	}
 }
 
