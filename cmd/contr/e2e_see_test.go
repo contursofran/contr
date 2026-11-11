@@ -3,8 +3,13 @@
 package main
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"maps"
 	"os"
 	"path/filepath"
@@ -175,6 +180,12 @@ var seeFixtures = map[string]seeFixture{
 		ready: "lead, ",
 		press: []string{"Chat", "wheel:-300", "wait:pinned prompt", "wait:Jump to latest"},
 	},
+	"chat-images": {
+		about: "the chat fixture with two more prompts (D269): one with two generated images as thumbnails under the bubble, one with images whose bytes are not in the transcript as the chip \"2 images\"",
+		setup: seeChatImages,
+		ready: "lead, ",
+		press: []string{"Chat", "wait:image 2"},
+	},
 	"session": {
 		about: "the orchestrator lead with the todos and artifacts of canvas board 11 (D197)",
 		setup: seeSession,
@@ -328,6 +339,53 @@ func seeChatLong(t *testing.T, h *harness) {
 		line("x4", 5*time.Second, "user", "then start a planner for #657"),
 		line("x5", 3*time.Second, "assistant", text("The planner for #657 is out as planner-657. It reads the issue, the code it touches and the spec, "+
 			"then writes the plan in the issue. I tell you when the plan is ready.")),
+	} {
+		if _, err := f.WriteString(l); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// seeChatImages is seeChat with a prompt of two generated images and a prompt of two images
+// without bytes (D269).
+func seeChatImages(t *testing.T, h *harness) {
+	t.Helper()
+	seeChat(t, h)
+	path := filepath.Join(h.home, ".claude", "projects", "demo", "chat.jsonl")
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	now := time.Now()
+	shot := func(w, h int) map[string]any {
+		img := image.NewRGBA(image.Rect(0, 0, w, h))
+		for x := range w {
+			for y := range h {
+				v := uint8(60 + 120*x/w)
+				if y > h/3 && y < h/2 {
+					v = 230
+				}
+				img.Set(x, y, color.RGBA{v, v, v, 255})
+			}
+		}
+		var b bytes.Buffer
+		if err := png.Encode(&b, img); err != nil {
+			t.Fatal(err)
+		}
+		return map[string]any{"type": "image", "source": map[string]any{"type": "base64", "media_type": "image/png", "data": base64.StdEncoding.EncodeToString(b.Bytes())}}
+	}
+	noBytes := map[string]any{"type": "image", "source": map[string]any{"type": "url", "url": "https://example.invalid/old.png"}}
+	text := func(s string) map[string]any { return map[string]any{"type": "text", "text": s} }
+	line := func(uuid string, ago time.Duration, typ string, content any) string {
+		b, _ := json.Marshal(map[string]any{"type": typ, "uuid": uuid, "timestamp": now.Add(-ago).UTC().Format(time.RFC3339Nano),
+			"sessionId": "chat", "message": map[string]any{"role": typ, "content": content}})
+		return string(b) + "\n"
+	}
+	for _, l := range []string{
+		line("i1", 6*time.Second, "user", []any{text("[Image #1] [Image #2] The row clips here, see both shots."), shot(480, 300), shot(180, 320)}),
+		line("i2", 5*time.Second, "assistant", []any{text("I see it: the time runs into the badge.")}),
+		line("i3", 4*time.Second, "user", []any{text("and these, from the old build"), noBytes, noBytes}),
 	} {
 		if _, err := f.WriteString(l); err != nil {
 			t.Fatal(err)

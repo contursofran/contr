@@ -18,12 +18,19 @@ import (
 )
 
 // tinyPNG is a generated 8×6 PNG.
-func tinyPNG(t testing.TB) []byte {
+func tinyPNG(t testing.TB) []byte { return pngOf(t, 8, 6) }
+
+// pngOf is a generated w×h PNG: a grey gradient with a lighter band, so a thumbnail shows its crop.
+func pngOf(t testing.TB, w, h int) []byte {
 	t.Helper()
-	img := image.NewRGBA(image.Rect(0, 0, 8, 6))
-	for x := range 8 {
-		for y := range 6 {
-			img.Set(x, y, color.RGBA{uint8(30 * x), uint8(40 * y), 160, 255})
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for x := range w {
+		for y := range h {
+			v := uint8(60 + 120*x/w)
+			if y > h/3 && y < h/2 {
+				v = 230
+			}
+			img.Set(x, y, color.RGBA{v, v, v, 255})
 		}
 	}
 	var b bytes.Buffer
@@ -182,6 +189,12 @@ func TestPasteTextIsUnchanged(t *testing.T) {
 	if s.draft() != "plain words" || len(*keys) != 0 {
 		t.Errorf("draft %q, keys %q", s.draft(), *keys)
 	}
+	// Text and an image on the clipboard: the text goes into the field.
+	s.tt.SetClipboardData(transfer.New(transfer.NewItem(transfer.Bytes(transfer.Text, []byte(" more")), transfer.Bytes(transfer.PNG, []byte("\x89PNG")))))
+	s.key(ui.Cmd, ui.KeyV)
+	if s.draft() != "plain words more" || len(*keys) != 0 {
+		t.Errorf("text and image: draft %q, keys %q", s.draft(), *keys)
+	}
 	// No Keys: an image paste takes nothing.
 	s.ch.Keys = nil
 	pngClipboard(s.tt)
@@ -195,6 +208,10 @@ func TestPasteTextIsUnchanged(t *testing.T) {
 // the chips and shows the error.
 func TestSendImagesAlonePressesEnter(t *testing.T) {
 	s, keys, keyErr := keysSession(t)
+	s.key(0, ui.KeyEnter)
+	if len(*keys) != 0 || s.has(LabelPending) {
+		t.Fatalf("a blank field with no images sent: keys %q", *keys)
+	}
 	pngClipboard(s.tt)
 	s.key(ui.Cmd, ui.KeyV)
 	*keyErr = errors.New("terminal gone")
@@ -250,5 +267,26 @@ func TestShellEscape(t *testing.T) {
 		if got := ShellEscape(in); got != want {
 			t.Errorf("ShellEscape(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// TestResetDropsTheImages: a reset of the transcript drops the cached images and closes the
+// larger one: the offsets may hold other lines now.
+func TestResetDropsTheImages(t *testing.T) {
+	r := newRig(t)
+	r.savePath(term)
+	r.selectTerm(term)
+	r.chat()
+	r.write(picPrompt("u1", "look", tinyPNG(t)))
+	r.tt.Frame()
+	if err := r.tt.Click(LabelThumb + " 1"); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.ch.pics) == 0 || r.ch.big == nil {
+		t.Fatal("no image cached or open")
+	}
+	r.ch.changed(true)
+	if len(r.ch.pics) != 0 || r.ch.big != nil {
+		t.Errorf("after a reset: %d images, big %v", len(r.ch.pics), r.ch.big)
 	}
 }
