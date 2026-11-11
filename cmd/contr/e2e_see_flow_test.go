@@ -43,7 +43,7 @@ func flowTranscript() string {
 	line := func(n int, typ string, content any) string {
 		b, _ := json.Marshal(map[string]any{"type": typ, "uuid": fmt.Sprintf("u%d", n), "sessionId": "flow",
 			"timestamp": start.Add(time.Duration(n*10) * time.Second).UTC().Format(time.RFC3339Nano),
-			"message": map[string]any{"role": typ, "content": content}})
+			"message":   map[string]any{"role": typ, "content": content}})
 		return string(b) + "\n"
 	}
 	return strings.Join([]string{
