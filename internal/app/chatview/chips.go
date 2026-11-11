@@ -242,27 +242,43 @@ func ChipGitHub(c Chip) icons.GitHub {
 	return icons.GitHubNone
 }
 
-// checksDot reports whether the chip's state is one of checks, which a dot shows after the
-// Octicon: running, passed or failed.
-func checksDot(s ChipState) bool { return s == StateRunning || s == StatePassed || s == StateFailed }
+// GitHubColor is the color of the Octicon of a PR or an issue chip (D288). While a PR is open,
+// its checks win: failed, running, passed. Then merged, closed, draft, open. An issue is open or
+// closed. The palette has no purple, so merged and a closed issue take content-link, the nearest
+// hue; a closed PR and a draft take ink-48, so a closed PR does not read as failed.
+func GitHubColor(p *theme.Palette, c Chip) ui.Color {
+	if c.Kind == ChipIssue {
+		if c.State == StateClosed {
+			return p.ContentLink
+		}
+		return p.ContentDone
+	}
+	switch c.State {
+	case StateFailed:
+		return p.ContentFailed
+	case StateRunning:
+		return p.ContentRunning
+	case StatePassed:
+		return p.ContentDone
+	case StateMerged:
+		return p.ContentLink
+	case StateClosed:
+		return p.Ink48
+	}
+	if c.Draft {
+		return p.Ink48
+	}
+	return p.ContentDone
+}
 
-// githubIcon is the LinkIcon of a PR or an issue chip: its Octicon in ink-48, 0.9 of the text
-// size as the file icon, then the dot of its checks when it has one.
+// githubIcon is the LinkIcon of a PR or an issue chip: its Octicon in the color of its state,
+// 0.9 of the text size as the file icon.
 func githubIcon(c Chip, g icons.GitHub, size float32) markdown.InlineObject {
 	side := size * 0.9
-	w := side + chipDotGap
-	if checksDot(c.State) {
-		w += chipDot + chipDotGap
-	}
-	return markdown.InlineObject{Width: w, Height: side * 0.82, Depth: side * 0.18,
+	return markdown.InlineObject{Width: side + chipDotGap, Height: side * 0.82, Depth: side * 0.18,
 		Draw: func(p *ui.Painter, r ui.Rect) {
-			pal := theme.Current()
 			if s := icons.GitHubSVG(g); s != nil {
-				p.Icon(s, ui.Rect{X: r.X, Y: r.Y, W: side, H: side}, pal.Ink48)
-			}
-			if col, ok := ChipColor(pal, c.State); ok && checksDot(c.State) {
-				y := r.Y + side/2 - chipDot/2
-				p.Fill(ui.Rect{X: r.X + side + chipDotGap, Y: y, W: chipDot, H: chipDot}, col, chipDot/2)
+				p.Icon(s, ui.Rect{X: r.X, Y: r.Y, W: side, H: side}, GitHubColor(theme.Current(), c))
 			}
 		}}
 }

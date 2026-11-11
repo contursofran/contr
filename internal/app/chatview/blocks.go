@@ -423,7 +423,7 @@ func (ch *Chat) boardRow(c *ui.Context, key int, pal *theme.Palette, l BoardLine
 	})
 }
 
-// prChip is the PR of a board row: its Octicon in ink-48 (D286), the dot of its checks, and its
+// prChip is the PR of a board row: its Octicon in the color of its state (D288), and its
 // number in mono on hover; a click opens it as a chip does.
 func (ch *Chat) prChip(c *ui.Context, pal *theme.Palette, n int, chip Chip) {
 	name := strconv.Itoa(n)
@@ -435,10 +435,7 @@ func (ch *Chat) prChip(c *ui.Context, pal *theme.Palette, n int, chip Chip) {
 	})
 	b.Cursor(ui.CursorPointer).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(theme.Space4).Children(func() {
-			icons.GitHubIcon(c, ChipGitHub(chip), 12*ch.scale(), pal.Ink48)
-			if col, ok := ChipColor(pal, chip.State); ok && checksDot(chip.State) {
-				ui.Box(c).Size(chipDot, chipDot).Radius(chipDot / 2).Background(col)
-			}
+			icons.GitHubIcon(c, ChipGitHub(chip), 12*ch.scale(), GitHubColor(pal, chip))
 			ui.Text(c, "#"+name).Font(theme.FontFamily).FontSize(12 * ch.scale()).NoWrap().TextColor(pal.Ink88)
 		})
 	})
