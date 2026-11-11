@@ -74,6 +74,8 @@ type Deps struct {
 	// Setup is what the checks of Settings → Setup read (D278). Nil runs no check: tests leave it
 	// nil, so no test runs a real program.
 	Setup *setup.Env
+	// SetupRun runs the setup checks; nil runs setup.Run. Tests give a fake.
+	SetupRun func(context.Context, setup.Env) []setup.Result
 	// ModelOf names the model that an agent profile starts, for line 2 of the agent rows.
 	// Nil shows no model.
 	ModelOf func(profile string) string

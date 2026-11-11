@@ -26,6 +26,9 @@ type Prefs struct {
 	// ChatText is the text size of the Chat view (D272): one of ChatTextSizes. Empty or unknown
 	// is ChatDefault. ChatScale reads it.
 	ChatText string `json:"chatText,omitempty"`
+	// SetupSeen is set once the first launch opened Settings on the Setup tab (D280). Missing
+	// is false.
+	SetupSeen bool `json:"setupSeen,omitempty"`
 }
 
 // The chat text sizes (D272).
