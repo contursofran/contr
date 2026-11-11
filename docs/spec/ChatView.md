@@ -71,7 +71,7 @@ hasn't heard from you…" nudges, and a user line that is all inside one
 
 ## Content
 
-How Claude's Markdown shows (D261). MyGo's theme options style what they can; the Block hook builds the rest (remarks, tables, numbered and task lists), and a Code builder the diff blocks. The Markdown inside a remark, a cell or an item shows in a `markdown.View` of its own that shares the selection.
+How Claude's Markdown shows (D261). MyGo's theme options style what they can; the Block hook builds the rest (remarks, tables, numbered and task lists), a Code builder the diff blocks, and the `contr-flow` blocks draw as [diagrams](#diagrams). The Markdown inside a remark, a cell or an item shows in a `markdown.View` of its own that shares the selection.
 
 | Block | Value |
 |---|---|
@@ -303,6 +303,16 @@ State of a board row: a worker that needs the owner says "needs you"; else the s
 State of a queue step: a merged step has a 12px check in `content-done` and "merged"; a closed PR or issue has an `ink-30` dot and "closed"; both dim (the label in `ink-64`) and drop the note. A step whose checks failed is `blocked`: the dot in `blocked`, "blocked: 1 check failed" in `blocked-text`. Checks that run or passed: "CI running · 2 of 3", "CI passed · 3 of 3", the dot in their content color; an open PR without checks "open", a `content-info` dot. The note follows the state after " · "; a note alone has a `content-waiting` dot. The words of a step are mono `meta`, `ink-64`, but for a blocked step: only the rail's mark has the step's color (owner, minimal: grey words).
 
 Live and frozen: only the newest board of the thread is live. Under it, a 5px `content-running` dot and "live · updated 18:49" (mono `meta`, `ink-48`): the time its values last changed. An older board keeps the values it showed while it was live, dims to 60% and says "as of 18:45 · a newer board is below". When contr did not show it live (an older answer read after the app started), it shows only the three columns the agent wrote and the time of its answer, so it never shows a state newer than its answer. Nothing ticks (D55): the times are fixed texts.
+
+## Diagrams
+
+Claude writes a flow diagram as a fenced block `contr-flow` (D284). contr draws it with MyGo's Painter, in the column; the lines read well in a terminal too.
+
+- Syntax: one line per arrow, `A -> B` or `A -> B: label`; a state as `A [done]`, with `done`, `running`, `waiting`, `failed` or `info`. A node is any text without `->`; empty lines are skipped.
+- Layout: layers left to right from the longest path, one sweep orders each layer; an arrow back (a cycle) is an arc under the boxes, its label under the arc.
+- Box: height at least 36px, text `body` (at the chat text size, D272) in `ink-88`, centered, 14px side padding, at least 88px wide, radius 8; `hover` fill and an `ink-30` line; a node with a state takes the tint of its content color and a line in that color.
+- Arrow: a 1.2px `ink-30` line, an open `ink-48` head; its label in mono `meta` (at the chat text size), `ink-48`, on a patch of the stage, in the middle of the gap.
+- Falls back to the code block: a block that does not parse (a chain `A -> B -> C`, a line without an arrow, no arrow at all), more than 12 nodes, a label longer than 28 characters, more than 6 layers, more than 4 nodes in a layer, wider than the column, or a block that is still being written.
 
 ## Behavior
 
