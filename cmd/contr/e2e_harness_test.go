@@ -48,6 +48,9 @@ type harness struct {
 	runs int // app launches, for a new socket each time
 	proc *exec.Cmd
 	c    *client
+	// firstLaunch keeps settings.json without setupSeen, so the app opens Settings on the
+	// Setup tab when a required check is not ready (D280). Other tests start with it seen.
+	firstLaunch bool
 }
 
 var (
@@ -218,7 +221,7 @@ func (h *harness) settings(t *testing.T, doc string) {
 // theme sets the appearance: "dark", "light" or "system".
 func (h *harness) theme(t *testing.T, name string) {
 	t.Helper()
-	h.settings(t, `{"version": 1, "appearance": "`+name+`"}`)
+	h.settings(t, `{"version": 1, "appearance": "`+name+`", "setupSeen": `+strconv.FormatBool(!h.firstLaunch)+`}`)
 }
 
 // appEnv is the env of the app: the scratch core, the scratch home and the
@@ -237,6 +240,9 @@ func (h *harness) launch(t *testing.T) *client {
 	t.Helper()
 	h.quit()
 	h.runs++
+	if _, err := os.Stat(filepath.Join(h.home, "Library", "Application Support", "contr", "settings.json")); os.IsNotExist(err) && !h.firstLaunch {
+		h.settings(t, `{"version": 1, "setupSeen": true}`)
+	}
 	sock := filepath.Join(h.dir, fmt.Sprintf("a%d.sock", h.runs))
 	proc := exec.Command(filepath.Join(h.out, "contr-e2e"))
 	proc.Env = h.appEnv(sock)

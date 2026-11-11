@@ -191,11 +191,13 @@ type Frame struct {
 	saveMu       sync.Mutex
 	prefsTimer   *time.Timer
 	tint         prefs.Tints
-	chatText     string
-	follower     *theme.Follower
-	lateWin      lateWindow
-	themeErr     error
-	saveTimer    stopper
+	// setupSeen is prefs.SetupSeen: the first launch opened the Setup tab (D280). appearanceMu guards it.
+	setupSeen bool
+	chatText  string
+	follower  *theme.Follower
+	lateWin   lateWindow
+	themeErr  error
+	saveTimer stopper
 	// term is the plugin's terminal of the selected agent and conn its hc
 	// connection; both are nil with no terminal. termAddr is the hc terminal
 	// they show; termSet is false before the first sync. termState is the

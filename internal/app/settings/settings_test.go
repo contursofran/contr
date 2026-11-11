@@ -817,13 +817,13 @@ func TestSettingsChatTextRowSetsTheSize(t *testing.T) {
 	if !r.has(LabelChatText) {
 		t.Fatal("no Chat text row")
 	}
-	for _, name := range []string{"Larger", "Small", "Default"} {
+	for _, name := range []string{"Larger", "Small", "Medium", "Default"} {
 		if err := r.tt.Click(name); err != nil {
 			t.Fatal(err)
 		}
 		r.tt.Frame()
 	}
-	want := []string{prefs.ChatLarger, prefs.ChatSmall, prefs.ChatDefault}
+	want := []string{prefs.ChatLarger, prefs.ChatSmall, prefs.ChatMedium, prefs.ChatDefault}
 	if !slices.Equal(set, want) {
 		t.Errorf("SetChatText got %v, want %v", set, want)
 	}

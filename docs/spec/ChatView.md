@@ -208,6 +208,24 @@ Chat text size (D272). With no match, one line "No commands match" (or
   same. Esc closes the popup until the text changes and does not stop the
   agent. With no match, Enter sends the text as typed.
 
+### Path popup
+
+"@" at the caret, at the start of the field or after a space, opens the same
+popup (D279) for the files and folders of the session's working folder; the
+text from "@" to the caret, with no space in it, filters it. Rows show
+"@path" with no description; a folder ends in "/". With no match, the line is
+"No files match".
+
+- The list is the files that git knows there and the untracked files that
+  git does not ignore, with each folder that holds them; files deleted in the
+  work tree are left out. Outside git, it is a plain read of the typed folder.
+  The read runs off the UI thread, once per folder typed.
+- Paths with a part that starts with the typed text come first, then paths
+  that hold it, without regard to case; at most 50 show.
+- Enter or Tab replace "@text" with "@path " and put the caret after it. A
+  folder goes in as "@dir/" with no space, and the popup stays open on its
+  content. Esc closes it as for "/".
+
 ## Live line
 
 The working status of the agent (D276): the left of the composer's footer

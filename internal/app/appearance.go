@@ -52,6 +52,7 @@ func (f *Frame) StartTheme() {
 			src = p.Source()
 			f.tint = p.Tint
 			f.chatText = prefs.NormalizeChatText(p.ChatText)
+			f.setupSeen = p.SetupSeen
 			theme.SetTint(true, f.tint.Dark.Window, f.tint.Dark.Panel)
 			theme.SetTint(false, f.tint.Light.Window, f.tint.Light.Panel)
 		}
@@ -102,7 +103,7 @@ func (f *Frame) persist(delay time.Duration) {
 		f.saveMu.Lock()
 		defer f.saveMu.Unlock()
 		f.appearanceMu.Lock()
-		cur := prefs.Prefs{Appearance: f.appearance, Tint: f.tint, ChatText: f.chatText}
+		cur := prefs.Prefs{Appearance: f.appearance, Tint: f.tint, ChatText: f.chatText, SetupSeen: f.setupSeen}
 		f.appearanceMu.Unlock()
 		if err := save(cur); err != nil && post != nil {
 			post(func() { f.Toasts.Show(err.Error()) })

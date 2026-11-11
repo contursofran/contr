@@ -156,6 +156,7 @@ func (ch *Chat) composer(c *ui.Context, id string, st liveState) {
 					in.SetTextSelection(n, n)
 					ch.sg.caret = 0
 				}
+				_, ch.sg.at = in.TextSelection()
 				if in.Changed() {
 					delete(ch.errs, id)
 				}
