@@ -51,6 +51,9 @@ type SpacesList struct {
 	// contr waits; the button shows a dot then. Nil: no dot.
 	OnSettings  func()
 	UpdateReady func() bool
+	// SetupSteps is the number of required setup checks that are not ready (D278); more than 0
+	// shows the dot too. Nil: no dot for it.
+	SetupSteps func() int
 	// OnRetry runs when the offline This Mac row is clicked: connect to hc
 	// at once (ServerRow spec). Nil: the row has no click.
 	OnRetry func()

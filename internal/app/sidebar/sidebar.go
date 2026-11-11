@@ -38,6 +38,8 @@ const (
 	LabelSettingsOpen = "Settings"
 	// LabelSettingsUpdate names it while an update waits.
 	LabelSettingsUpdate = "Settings, update ready"
+	// LabelSettingsSetup names it while a required setup check is not ready (D278).
+	LabelSettingsSetup = "Settings, setup steps left"
 )
 
 // ServerLabel is the label of the This Mac row: "This Mac, local", or
@@ -146,11 +148,13 @@ func (l *SpacesList) addMenu(m *ui.Menu) {
 
 // settingsFoot is the foot row of the sidebar: the plan meters at the left (D196)
 // and the Settings button at the right; the icon column shows only the button,
-// centered (D147). The dot shows while an update waits (D146).
+// centered (D147). The dot shows while an update waits (D146) or a setup step is left (D278).
 func (l *SpacesList) settingsFoot(c *ui.Context) {
 	label, ready := LabelSettingsOpen, l.UpdateReady != nil && l.UpdateReady()
 	if ready {
 		label = LabelSettingsUpdate
+	} else if l.SetupSteps != nil && l.SetupSteps() > 0 {
+		label, ready = LabelSettingsSetup, true
 	}
 	plans := !l.Compact && l.Plans != nil
 	justify := ui.End
