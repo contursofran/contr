@@ -388,7 +388,8 @@ func TestApplySetsUITheme(t *testing.T) {
 func TestMotionTokens(t *testing.T) {
 	names := map[string]time.Duration{"motion-select": MotionSelect, "motion-pop-in": MotionPopIn,
 		"motion-pop-out": MotionPopOut, "motion-state": MotionState, "motion-number": MotionNumber,
-		"motion-meter": MotionMeter}
+		"motion-meter": MotionMeter, "motion-tab": MotionTab, "motion-panel": MotionPanel,
+		"motion-notch-open": MotionNotchOpen, "motion-notch-close": MotionNotchClose, "motion-row-in": MotionRowIn}
 	rows := specRows(t, "Motion")
 	for _, r := range rows {
 		want, err := time.ParseDuration(r[1])

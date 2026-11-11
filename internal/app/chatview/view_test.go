@@ -306,8 +306,8 @@ func TestTimeText(t *testing.T) {
 	}
 }
 
-// The time of a prompt shows under it at the right; the time of an answer once, under its last
-// text, at the left. A pending prompt and an entry with no time show none.
+// The time shows once per turn, under its prompt at the right; Claude's texts show none (D266).
+// A pending prompt and a prompt with no time show none.
 func TestSentTimes(t *testing.T) {
 	r := newRig(t)
 	r.savePath(term)
@@ -321,22 +321,18 @@ func TestSentTimes(t *testing.T) {
 	r.write(`{"type":"user","uuid":"p1","timestamp":"`+at(5*time.Minute)+`","message":{"content":"first"}}`,
 		text("s1", "one", 4*time.Minute), text("s2", "two", 3*time.Minute),
 		`{"type":"user","uuid":"p2","message":{"content":"no time"}}`)
-	want := []string{TimeText(now.Add(-5*time.Minute), now), TimeText(now.Add(-3*time.Minute), now)}
 	prompt, _ := r.tt.Find("first")
-	two, _ := r.tt.Find("two")
-	p, ok1 := r.tt.Find(want[0])
-	s, ok2 := r.tt.Find(want[1])
-	if !ok1 || !ok2 {
-		t.Fatalf("times %q not in %v", want, r.tt.Texts())
+	p, ok := r.tt.Find(TimeText(now.Add(-5*time.Minute), now))
+	if !ok {
+		t.Fatalf("no prompt time in %v", r.tt.Texts())
 	}
-	if r.tt.HasText(TimeText(now.Add(-4*time.Minute), now)) {
-		t.Error("the time of a text that is not the last of its answer shows")
+	for _, d := range []time.Duration{4 * time.Minute, 3 * time.Minute} {
+		if x := TimeText(now.Add(-d), now); r.tt.HasText(x) {
+			t.Errorf("the time %q of a text of Claude shows", x)
+		}
 	}
 	if p.X+p.W < prompt.X+prompt.W-14 || p.Y < prompt.Y {
 		t.Errorf("prompt time %+v is not under the bubble at the right %+v", p, prompt)
-	}
-	if s.X > two.X+1 || s.Y < two.Y {
-		t.Errorf("answer time %+v is not under the text at the left %+v", s, two)
 	}
 }
 

@@ -62,7 +62,7 @@ func (ch *Chat) Switch(c *ui.Context, id string) {
 	// Solid: the float-solid fill and the float-line line keep the terminal text under it from
 	// showing through; the chosen segment keeps its selected fill.
 	pal := theme.Current()
-	box := ui.Box(c).Label(LabelSwitchBack).Shrink(0).Radius(theme.SegmentRadius).Background(pal.FloatSolid)
+	box := ui.Box(c).Label(LabelSwitchBack).Bind(&ch.switchBox).Shrink(0).Radius(theme.SegmentRadius).Background(pal.FloatSolid)
 	box.Children(func() {
 		kit.Switch(c, LabelSwitch, &choice, TextChat, TextTerm).Tooltip(LabelSwitch + " " + shortcut.Of(shortcut.Chat).Glyphs())
 		// The switch has no icon: the chip is centered on it, inside it (KeyHint, D248).
@@ -85,20 +85,28 @@ func (ch *Chat) View(c *ui.Context) {
 	ch.mdTheme(pal)
 	id := ch.src.Terminal()
 	st := ch.state(id)
+	// The end of a turn settles the pending prompts (D265).
+	if ch.wasWorking && st.kind == liveIdle {
+		ch.model.TurnEnded()
+	}
+	ch.wasWorking = st.kind == liveWorking
 	ui.Column(c).Label(LabelChat).Fill().Bind(&ch.panel).Children(func() {
 		rows, pending := ch.model.Rows(), ch.model.Pendings()
+		sc := ch.scrollState()
 		// The list has room under its last entry as tall as the fade over its bottom edge, so the
 		// fade covers no entry and the dock cuts none (D259).
-		ui.Column(c).FillWidth().Grow(1).MinHeight(0).Children(func() {
+		// The switch row is room above the list, not in it: the rows in view (Visible) are those
+		// under it, and the pinned prompt takes its place while the chat is scrolled up (D266).
+		ui.Column(c).FillWidth().Grow(1).MinHeight(0).Padding(topSpace, 0, 0, 0).Children(func() {
 			ui.List(c, &ch.list, len(rows)+len(pending), func(i int) {
 				if i < len(rows) {
-					ch.row(c, rows[i], i+1 < len(rows) && rows[i+1].Kind == RowSaid)
+					ch.row(c, rows[i])
 					return
 				}
 				p := pending[i-len(rows)]
 				column(c.Key(p.ID), func() { ch.prompt(c, p.Text, true) })
 			}).
-				Grow(1).MinHeight(0).Gap(rowGap).Padding(topSpace, theme.Space20, fadeHeight).Justify(ui.End).
+				Grow(1).MinHeight(0).Gap(rowGap).Padding(0, theme.Space20, fadeHeight).Justify(ui.End).
 				Children(func() {
 					if len(rows)+len(pending) == 0 {
 						ui.Box(c).Fill().Center().Children(func() {
@@ -111,6 +119,12 @@ func (ch *Chat) View(c *ui.Context) {
 			stage := pal.StageBase()
 			ui.Box(c).Label(LabelFade).Absolute().Left(0).Right(0).Bottom(0).Height(fadeHeight).PassThrough().
 				LinearGradient(ui.LinearGradient{Angle: 180, Stops: []ui.GradientStop{{Color: stage.Alpha(0), At: 0}, {Color: stage, At: 1}}})
+			if sc.pin >= 0 {
+				ch.pinned(c, sc.pin)
+			}
+			if sc.jump {
+				ch.jump(c, sc.news)
+			}
 		})
 		ui.Column(c).FillWidth().Shrink(0).Gap(theme.Space12).Padding(0, theme.Space20, theme.Space14).Children(func() {
 			// While the session orchestrates, the team row takes the live line's place and carries
@@ -132,23 +146,23 @@ func column(c *ui.Context, fn func()) {
 	})
 }
 
-// row builds row r. moreSaid tells that a text of Claude comes next: the time of an answer shows
-// once, under its last text.
-func (ch *Chat) row(c *ui.Context, r Row, moreSaid bool) {
+// row builds row r. The time shows once per turn, under its prompt (D266).
+func (ch *Chat) row(c *ui.Context, r Row) {
 	c = c.Key(r.ID)
 	switch r.Kind {
 	case RowPrompt:
+		if r.Sent() {
+			column(c, func() { ch.prompt(c, r.Text, false) })
+			return
+		}
 		e := ch.model.Entry(r.Entry)
 		column(c, func() {
 			ch.prompt(c, e.Text, false)
-			sentAt(c, e.Time, ui.End)
+			sentAt(c, e.Time)
 		})
 	case RowSaid:
 		e := ch.model.Entry(r.Entry)
 		ch.said(c, r.ID, e.Text, e.Time)
-		if !moreSaid {
-			column(c, func() { sentAt(c, e.Time, ui.Start) })
-		}
 	case RowGroup:
 		ch.group(c, r)
 	case RowOwnerNote:
@@ -156,14 +170,14 @@ func (ch *Chat) row(c *ui.Context, r Row, moreSaid bool) {
 	}
 }
 
-// sentAt is the line with the time an entry was sent, at the start or the end of the column. A
-// time that is missing or does not parse shows nothing. It is a fixed text: nothing ticks (D55).
-func sentAt(c *ui.Context, at string, align ui.Align) {
+// sentAt is the line with the time a prompt was sent, at the end of the column. A time that is
+// missing or does not parse shows nothing. It is a fixed text: nothing ticks (D55).
+func sentAt(c *ui.Context, at string) {
 	t, err := time.Parse(time.RFC3339Nano, at)
 	if at == "" || err != nil {
 		return
 	}
-	kit.Styled(ui.Text(c, TimeText(t, c.Now())), theme.StyleMeta).NoWrap().AlignSelf(align).
+	kit.Styled(ui.Text(c, TimeText(t, c.Now())), theme.StyleMeta).NoWrap().AlignSelf(ui.End).
 		Margin(theme.Space4, 0, 0, 0).TextColor(theme.Current().Ink45)
 }
 

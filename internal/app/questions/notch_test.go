@@ -403,3 +403,86 @@ func TestNotchShowsTheCmdJChipWhileCmdIsHeld(t *testing.T) {
 	chip := apptest.ChipOn(t, r.tt, kit.KeyHintLabel("J"), NotchAccessible(r.n.Items()), 900, 400)
 	apptest.Centered(t, "chip", chip, "the dot", apptest.Box(t, r.tt, LabelNotchDot))
 }
+
+// Bounds is the box of the notch, or of the file problem in its place, as painted; false while
+// none shows. The chat's pinned prompt ends before it (D266).
+func TestNotchBounds(t *testing.T) {
+	src := &source{}
+	r := newNotchRig(t, src, "a")
+	if _, ok := r.n.Bounds(); ok {
+		t.Fatal("no item, and Bounds is ok")
+	}
+	src.Snap.Questions = apptest.Questions("a", 1)
+	r.tt.Frame()
+	want, _ := r.tt.Find("1 needs you. Open")
+	if got, ok := r.n.Bounds(); !ok || !near(got, want) {
+		t.Errorf("Bounds = %+v, %v; want the notch %+v", got, ok, want)
+	}
+	src.Snap.Questions, src.Snap.OwnerProblem = nil, "owner: owner.json: invalid character"
+	r.tt.Frame()
+	want, _ = r.tt.Find(LabelOwnerProblem)
+	if got, ok := r.n.Bounds(); !ok || !near(got, want) {
+		t.Errorf("file problem: Bounds = %+v, %v; want %+v", got, ok, want)
+	}
+	src.Snap.OwnerProblem = ""
+	r.tt.Frame()
+	if b, ok := r.n.Bounds(); ok {
+		t.Errorf("nothing shows, and Bounds is %+v", b)
+	}
+}
+
+// near tells that two boxes are the same to a hundredth of a point.
+func near(a, b ui.Rect) bool {
+	d := func(x, y float32) bool { return x-y < 0.01 && y-x < 0.01 }
+	return d(a.X, b.X) && d(a.Y, b.Y) && d(a.W, b.W) && d(a.H, b.H)
+}
+
+// The questions card grows from the notch in MotionNotchOpen; closed, the notch shrinks back from
+// the card in MotionNotchClose. Each asks for no frame after its end (D263, D55). With Reduce Motion
+// the card and the notch are at their size at once and ask for no frame.
+func TestCardGrowsFromTheNotchAndBack(t *testing.T) {
+	const name = "Which database should it use?"
+	for _, reduce := range []bool{false, true} {
+		r := newQRigWith(t, askSource(), ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: reduce}})
+		r.tt.Frame()
+		r.tt.Advance(kit.NotchAttentionLength + time.Second) // the arrival effect ends (D240)
+		notch, _ := r.tt.Find(NotchAccessible(r.notch.Items()))
+		r.notch.Toggle()
+		r.tt.Frame()
+		if reduce {
+			card, _ := r.tt.Find(name)
+			if card.W != theme.SizeNotchOpenWidth || r.tt.FramePending() {
+				t.Errorf("reduce motion: card %v wide, frame asked %v; want %d at once and none",
+					card.W, r.tt.FramePending(), theme.SizeNotchOpenWidth)
+			}
+			r.notch.Toggle()
+			r.tt.Frame()
+			if r.tt.FramePending() {
+				t.Error("reduce motion: closing asks for frames; want the notch at once")
+			}
+			continue
+		}
+		r.tt.Advance(theme.MotionNotchOpen / 3)
+		if card, ok := r.tt.Find(name); !ok || card.W <= notch.W || card.W >= theme.SizeNotchOpenWidth {
+			t.Errorf("card %v wide a third of the way, want between the notch's %v and %d", card.W, notch.W, theme.SizeNotchOpenWidth)
+		}
+		r.tt.Advance(theme.MotionNotchOpen*3/4 - theme.MotionNotchOpen/3)
+		if !r.tt.FramePending() {
+			t.Errorf("no frame asked at 3/4 of %v: the card does not grow", theme.MotionNotchOpen)
+		}
+		r.tt.Advance(theme.MotionNotchOpen/4 + 20*time.Millisecond)
+		if r.tt.FramePending() {
+			t.Errorf("a frame is asked after %v; want none at rest", theme.MotionNotchOpen)
+		}
+		r.notch.Toggle()
+		r.tt.Frame()
+		r.tt.Advance(theme.MotionNotchClose * 3 / 4)
+		if !r.tt.FramePending() {
+			t.Errorf("no frame asked at 3/4 of %v: the notch does not shrink back", theme.MotionNotchClose)
+		}
+		r.tt.Advance(theme.MotionNotchClose/4 + 20*time.Millisecond)
+		if r.tt.FramePending() {
+			t.Errorf("a frame is asked after %v; want none at rest", theme.MotionNotchClose)
+		}
+	}
+}
