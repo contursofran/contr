@@ -32,14 +32,15 @@ type Prefs struct {
 const (
 	ChatSmall   = "small"
 	ChatDefault = "default"
+	ChatMedium  = "medium"
 	ChatLarge   = "large"
 	ChatLarger  = "larger"
 )
 
 // ChatTextSizes are the chat text sizes in order, and ChatTextScales the scale of each.
 var (
-	ChatTextSizes  = [...]string{ChatSmall, ChatDefault, ChatLarge, ChatLarger}
-	ChatTextScales = [...]float32{0.9, 1, 1.15, 1.3}
+	ChatTextSizes  = [...]string{ChatSmall, ChatDefault, ChatMedium, ChatLarge, ChatLarger}
+	ChatTextScales = [...]float32{0.9, 1, 1.07, 1.15, 1.3}
 )
 
 // NormalizeChatText returns size when it is one of ChatTextSizes, and ChatDefault otherwise.
