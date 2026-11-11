@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/egoist/mygo/ui"
 )
 
 // turns are n turns of a session: a prompt "prompt N", then a long answer of Claude.
@@ -144,15 +146,25 @@ func TestJumpToLatest(t *testing.T) {
 	}
 }
 
-// A scrolled chat at rest asks for no frame (D55): the pin and the jump come from the list state.
-func TestScrolledChatAtRestAsksForNoFrame(t *testing.T) {
+// A scrolled chat at rest builds no frame (D55): the pin and the jump come from the list state.
+// The window has no focus, so the composer's caret does not blink.
+func TestScrolledChatAtRestBuildsNoFrame(t *testing.T) {
 	r := scrolledRig(t)
+	builds := 0
+	r.tt.SetWindowHidden(true)
+	r.tt = ui.NewTester(func(c *ui.Context) {
+		builds++
+		r.ch.View(c)
+	}, 1000, 900)
+	r.tt.SetFocused(false)
+	r.tt.Frame()
 	r.up(500)
-	if _, ok := r.pinnedText(); !ok {
-		t.Fatal("nothing pinned")
+	if _, ok := r.pinnedText(); !ok || !r.has(TextJump) {
+		t.Fatal("nothing pinned, or no jump")
 	}
+	before := builds
 	r.tt.Advance(3 * time.Second)
-	if r.tt.FramePending() {
-		t.Error("a scrolled chat at rest asks for a frame")
+	if builds != before || r.tt.FramePending() {
+		t.Errorf("a scrolled chat at rest built %d frames in 3 s, pending %v; want 0", builds-before, r.tt.FramePending())
 	}
 }
