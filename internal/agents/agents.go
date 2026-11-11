@@ -569,10 +569,15 @@ func (m *Manager) Spawn(ctx context.Context, s Spec) (Worker, error) {
 	}
 	// A Claude worker starts without the Claude Code session variables of
 	// the core's environment, so Claude Code saves its transcript (D216).
+	env := map[string]string{}
 	if isClaude(argv) {
 		argv = hc.CleanArgv(argv)
+		// The core's PATH can be the short one of launchd (#728): the clean
+		// wrapper adds the folders of this process after it.
+		if path := m.spawnPath(); path != "" {
+			env[hc.EnvPath] = path
+		}
 	}
-	env := map[string]string{}
 	if setup, main := m.setupFor(ctx, s.Worktree); setup != "" {
 		argv = withSetup(setup, argv)
 		env[EnvMain] = main
@@ -941,4 +946,28 @@ func orText(s, other string) string {
 		return s
 	}
 	return other
+}
+
+// spawnPath is the PATH of this process, then the folders where the tools of
+// a worker usually are. Empty when the environment is not read or has no
+// PATH.
+func (m *Manager) spawnPath() string {
+	if m.getenv == nil {
+		return ""
+	}
+	dirs := filepath.SplitList(m.getenv("PATH"))
+	if len(dirs) == 0 {
+		return ""
+	}
+	if home := m.getenv("HOME"); home != "" {
+		dirs = append(dirs, filepath.Join(home, ".local", "bin"))
+	}
+	dirs = append(dirs, "/opt/homebrew/bin", "/usr/local/bin")
+	var out []string
+	for _, d := range dirs {
+		if d != "" && !slices.Contains(out, d) {
+			out = append(out, d)
+		}
+	}
+	return strings.Join(out, string(filepath.ListSeparator))
 }
