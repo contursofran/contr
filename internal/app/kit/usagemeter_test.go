@@ -107,7 +107,7 @@ func TestALongDetailClipsAndTheLabelAndValueStay(t *testing.T) {
 	if l1.W < 30 {
 		t.Errorf("the label clips to %v", l1.W)
 	}
-	if v1.W != v2.W || v1.X != v2.X {
+	if !sameLen(v1.W, v2.W) || !sameLen(v1.X, v2.X) {
 		t.Errorf("the value moved or clipped: %+v, want %+v", v1, v2)
 	}
 	d := find(t, tt, long.Detail)

@@ -226,9 +226,13 @@ func TestTexts(t *testing.T) {
 			t.Errorf("DurationText(%v) = %q, want %q", d, got, want)
 		}
 	}
-	for name, want := range map[string]string{"Bash": "Bash", "mcp__plugin_contr_contr__send": "contr", "mcp__github__x": "github"} {
-		if got := ToolName(name); got != want {
-			t.Errorf("ToolName(%q) = %q", name, got)
+	for _, c := range []transcript.Call{{Name: "Bash", Label: "Bash"}, {Name: "mcp__plugin_contr_contr__send", Label: "contr · send"}, {Name: "Raw"}} {
+		want := c.Label
+		if want == "" {
+			want = c.Name
+		}
+		if got := ToolName(&c); got != want {
+			t.Errorf("ToolName(%+v) = %q", c, got)
 		}
 	}
 	for _, e := range []transcript.Entry{
@@ -239,5 +243,19 @@ func TestTexts(t *testing.T) {
 		if _, ok := Duration(e); ok {
 			t.Errorf("Duration(%+v) has a value", e)
 		}
+	}
+}
+
+// TestLiveLineLabel: the live line shows the label and the key argument of
+// the running call (D274).
+func TestLiveLineLabel(t *testing.T) {
+	kind, _, label, arg, _ := transcript.Describe("mcp__claude_ai_Slack__send_message", []byte(`{"channel":"#general","text":"hi"}`))
+	m := &Model{}
+	m.Apply(transcript.Batch{Entries: []transcript.Entry{
+		{Kind: transcript.Prompt, Text: "go", Time: "2026-11-10T10:00:00Z"},
+		{Kind: transcript.Tool, Tool: &transcript.Call{ID: "t1", Name: "mcp__claude_ai_Slack__send_message", Kind: kind, Label: label, Summary: arg}},
+	}})
+	if what, _, _ := m.Activity(); what != "Slack · send message · #general" {
+		t.Errorf("live line = %q", what)
 	}
 }
