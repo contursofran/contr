@@ -5,9 +5,6 @@ package projectsview_test
 // its last cell is the hide toast that the frame draws (app.Frame.ToastView).
 
 import (
-	"bytes"
-	"fmt"
-	"image/png"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -27,24 +24,18 @@ const (
 	pmRows   = 5 // the toast state is the last cell
 )
 
-// pmImage renders one state and returns it as a bitmap for ui.Image. An
-// encode or decode error panics: the view runs inside ui.Render, where there
-// is no testing.T, and a panic fails the test (a blank cell would hide it).
+// pmImage renders one state at rest and returns it as a bitmap for ui.Image.
+// A Tester under Reduce Motion draws it: the modal shows in the first frame,
+// so its way in (D256) does not start. ui.Render draws one frame, which is the
+// first frame of the way in: a card scaled to 0.96, and a full raster of it in
+// MyGo's transformed path, which is slow under -race.
 func pmImage(draw func(c *ui.Context)) *ui.Bitmap {
-	img := ui.Render(func(c *ui.Context) {
+	tt := ui.NewTesterWith(func(c *ui.Context) {
 		theme.Apply(c)
 		ui.Column(c).Width(pmW).Height(pmH).Background(theme.Current().Ground).Font(theme.FontFamilySans).
 			FontSize(theme.FontSize).Children(func() { draw(c) })
-	}, pmW, pmH, 1)
-	var b bytes.Buffer
-	if err := png.Encode(&b, img); err != nil {
-		panic(fmt.Sprintf("projects modal sheet: encode a state: %v", err))
-	}
-	bm, err := ui.DecodeBitmap(b.Bytes())
-	if err != nil {
-		panic(fmt.Sprintf("projects modal sheet: decode a state: %v", err))
-	}
-	return bm
+	}, pmW, pmH, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
+	return ui.NewBitmap(tt.Image())
 }
 
 // pmToast draws the hide toast of the frame, with no modal.
