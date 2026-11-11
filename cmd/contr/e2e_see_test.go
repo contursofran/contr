@@ -186,10 +186,16 @@ var seeFixtures = map[string]seeFixture{
 		press: []string{"Chat"},
 	},
 	"chat-composer": {
-		about: "the chat fixture with text in the composer card (D271): the team row on top, two lines of text, the round Send button in ink-100 in line with the last line, and the model and context in the foot",
+		about: "the chat fixture with text in the composer card (D271): the team row above the card, two lines of text, the round Send button in ink-100 in line with the last line, and the footer under the card: Working with what lead does at the left, the model and context at the right (D276)",
 		setup: seeChat,
 		ready: "lead, ",
 		press: []string{"Chat", "type:Merge #611 first, then tell b-632 to merge main and run the review on its exact head. Then tell me when the queue is empty and all the checks pass."},
+	},
+	"chat-idle": {
+		about: "the chat fixture with lead idle (D276): no round button in the composer card, and the keys at the left of the footer under it",
+		setup: seeChatIdle,
+		ready: "lead, ",
+		press: []string{"Chat"},
 	},
 	"chat-blocks": {
 		about: "the orchestrator lead in Chat mode with an older status board (frozen: the agent's three columns, its answer's time), the live board (state, PR and checks from a fake gh: CI running 2 of 3, CI passed 3 of 3, building, waiting, and a worker that is not found) and a merge queue (merged, CI running, blocked: 1 check failed, a note) (D267)",
@@ -307,9 +313,15 @@ func seeSessionRepo(t *testing.T, h *harness) string {
 
 // seeChat spawns lead and writes a transcript of an orchestrator session in the scratch home, and
 // its path in the session file of lead's terminal, as the kit's hooks do (D243).
-func seeChat(t *testing.T, h *harness) {
+func seeChat(t *testing.T, h *harness) { seeChatAs(t, h, "claude-working") }
+
+// seeChatIdle is seeChat with lead idle (D276).
+func seeChatIdle(t *testing.T, h *harness) { seeChatAs(t, h, "claude-idle") }
+
+// seeChatAs is seeChat with lead in profile.
+func seeChatAs(t *testing.T, h *harness, profile string) {
 	repo := h.repo(t, "demo", "main")
-	w, err := h.mgr.Spawn(h.ctx, agents.Spec{Name: "lead", Profile: "claude-working", Role: agents.RoleOrchestrator, Project: "demo", Worktree: repo})
+	w, err := h.mgr.Spawn(h.ctx, agents.Spec{Name: "lead", Profile: profile, Role: agents.RoleOrchestrator, Project: "demo", Worktree: repo})
 	if err != nil {
 		t.Fatalf("spawn lead: %v", err)
 	}

@@ -2,7 +2,7 @@ package chatview
 
 // The ChatView part of the spec sheet (D179, D246): a terminal-sized panel in Chat mode with a
 // prompt, an answer with a table, open work groups with a background task and a message of another
-// session, a failed task outside the fold, the live line of a working agent and the composer
+// session, a failed task outside the fold, the working footer of the composer and the composer
 // (D252). ChatViewWide shows a wide panel with a table wider than the column, ChatViewTeam the
 // team row of an orchestrating session (D259, D260), ChatViewChips the chips of each kind and
 // state in Claude's text (D262), ChatContent one answer with each kind of content (D261),
@@ -172,10 +172,10 @@ type composerState struct {
 }
 
 var composerStates = []composerState{
-	{"Idle, empty: Send dimmed", "idle", &Team{Agents: 2, Idle: 2}, "", 150},
+	{"Idle, empty: no button, the keys in the footer", "idle", &Team{Agents: 2, Idle: 2}, "", 150},
 	{"Idle, text: Send", "idle", &Team{Agents: 2, Idle: 2}, "Merge #611 first, then tell b-632 to merge main.", 150},
 	{"Working, empty: Stop", "working", &Team{Agents: 2, NeedsYou: 1, Working: 1}, "", 150},
-	{"Working, text, no team: the live line on top, Send (the message queues)", "working", nil, "And run the review on its exact head.", 150},
+	{"Working, text, no team: Working in the footer, Send (the message queues)", "working", nil, "And run the review on its exact head.", 150},
 	{"Many lines: the field grows to 8 lines, then scrolls", "idle", &Team{Agents: 2, Working: 2}, strings.TrimSuffix(strings.Repeat("A line of the message\n", 11), "\n"), 330},
 	{"No team, idle: the field alone", "idle", nil, "", 130},
 }
