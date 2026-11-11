@@ -128,8 +128,31 @@ func TestTerminalGridIsInsideTheTerminalAreaAndShowsNoLineWhileLive(t *testing.T
 	if top, left, right, bottom := grid.Y-area.Y, grid.X-area.X, area.X+area.W-(grid.X+grid.W), area.Y+area.H-(grid.Y+grid.H); top != theme.Space14 || left != theme.Space20 || right != theme.Space20 || bottom != theme.Space12 {
 		t.Errorf("grid insets top %v left %v right %v bottom %v, want 14 20 20 12", top, left, right, bottom)
 	}
-	if got := strings.Join(tt.Texts(), "\n"); strings.Contains(got, TerminalNotRunningLine) || strings.Contains(got, TerminalOffLine) {
+	if got := strings.Join(tt.Texts(), "\n"); strings.Contains(got, "not running") || strings.Contains(got, TerminalOffLine) {
 		t.Errorf("a live terminal shows a line: %q", got)
+	}
+}
+
+// An ended program shows the dimmed grid and no line (D290).
+func TestAnEndedTerminalShowsADimmedGridAndNoLine(t *testing.T) {
+	f, w, tt, _ := terminalFrame(t, map[string]error{"t2": &hc.Error{Kind: "finished", Message: "done"}})
+	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t2"})
+	for deadline := time.Now().Add(3 * time.Second); f.termState.Kind != ghostty.NotRunning && time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		w.flush()
+		tt.Frame()
+	}
+	if f.termState.Kind != ghostty.NotRunning {
+		t.Fatalf("state %+v, want not running", f.termState)
+	}
+	tt.Frame()
+	if _, ok := tt.Find(LabelTerminalGrid); !ok {
+		t.Error("the grid should stay")
+	}
+	if !f.gridDimmed() {
+		t.Error("the grid should be dimmed")
+	}
+	if got := strings.Join(tt.Texts(), "\n"); strings.Contains(got, "not running") || strings.Contains(got, "done") {
+		t.Errorf("an ended terminal shows a line: %q", got)
 	}
 }
 
@@ -138,7 +161,6 @@ func TestTerminalSlotShowsWhyItIsNotRunning(t *testing.T) {
 		err  error
 		want string
 	}{
-		"finished":     {&hc.Error{Kind: "finished", Message: "done"}, TerminalNotRunningLine},
 		"incompatible": {&hc.Error{Kind: hc.KindIncompatible, Message: "core too old"}, "core too old"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -200,7 +222,10 @@ func TestAHiddenWindowDoesNotRetryAndShowingItDoes(t *testing.T) {
 	w.flush() // before the terminal exists: the terminal must start hidden by itself
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t2"})
 	tt := ui.NewTester(f.buildTerminal, 600, 400)
-	waitLine(t, w, tt, TerminalNotRunningLine)
+	for deadline := time.Now().Add(3 * time.Second); f.termState.Kind != ghostty.NotRunning && time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		w.flush()
+		tt.Frame()
+	}
 	time.Sleep(1200 * time.Millisecond) // longer than the first backoff step
 	if n, _ := src.counts(); n != 1 {
 		t.Fatalf("attaches while hidden = %d, want 1", n)
