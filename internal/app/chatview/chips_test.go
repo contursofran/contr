@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/app/view"
 	"github.com/contursofran/contr/internal/github"
@@ -145,13 +146,16 @@ func TestChipStates(t *testing.T) {
 		ref  github.Ref
 		want Chip
 	}{
-		{pr("OPEN", 0, 0, 0), Chip{ChipPR, StateOpen}},
-		{pr("OPEN", 2, 0, 1), Chip{ChipPR, StateRunning}},
-		{pr("OPEN", 2, 1, 1), Chip{ChipPR, StateFailed}},
-		{pr("OPEN", 3, 0, 0), Chip{ChipPR, StatePassed}},
-		{pr("MERGED", 0, 1, 0), Chip{ChipPR, StateMerged}},
-		{pr("CLOSED", 3, 0, 0), Chip{ChipPR, StateClosed}},
-		{github.Ref{Number: 1, State: "OPEN"}, Chip{ChipIssue, StateNone}},
+		{pr("OPEN", 0, 0, 0), Chip{Kind: ChipPR, State: StateOpen}},
+		{pr("OPEN", 2, 0, 1), Chip{Kind: ChipPR, State: StateRunning}},
+		{pr("OPEN", 2, 1, 1), Chip{Kind: ChipPR, State: StateFailed}},
+		{pr("OPEN", 3, 0, 0), Chip{Kind: ChipPR, State: StatePassed}},
+		{pr("MERGED", 0, 1, 0), Chip{Kind: ChipPR, State: StateMerged}},
+		{pr("CLOSED", 3, 0, 0), Chip{Kind: ChipPR, State: StateClosed}},
+		{github.Ref{Number: 1, PR: true, State: "OPEN", Draft: true}, Chip{Kind: ChipPR, State: StateOpen, Draft: true}},
+		{github.Ref{Number: 1, PR: true, State: "MERGED", Draft: true}, Chip{Kind: ChipPR, State: StateMerged}},
+		{github.Ref{Number: 1, State: "OPEN"}, Chip{Kind: ChipIssue, State: StateNone}},
+		{github.Ref{Number: 1, State: "CLOSED"}, Chip{Kind: ChipIssue, State: StateClosed}},
 	} {
 		if got := RefChip(tc.ref); got != tc.want {
 			t.Errorf("RefChip(%+v) = %v, want %v", tc.ref, got, tc.want)
@@ -167,7 +171,7 @@ func TestChipStates(t *testing.T) {
 		{agents.Worker{Live: true}, StateWaiting},
 		{agents.Worker{Status: "working"}, StateDone},
 	} {
-		if got := WorkerChip(tc.w); got != (Chip{ChipWorker, tc.want}) {
+		if got := WorkerChip(tc.w); got != (Chip{Kind: ChipWorker, State: tc.want}) {
 			t.Errorf("WorkerChip(%+v) = %v", tc.w, got)
 		}
 	}
@@ -192,15 +196,67 @@ func TestChipIcon(t *testing.T) {
 	if _, ok := chipIcon("https://example.com", 14); ok {
 		t.Error("a web link has an icon")
 	}
-	if _, ok := chipIcon(chipDest(Chip{Kind: ChipIssue}, "4"), 14); ok {
-		t.Error("an issue has a dot")
+	side := float32(14 * 0.9)
+	// A PR or an issue shows its Octicon; a PR with checks adds their dot after it (D286).
+	for _, tc := range []struct {
+		c Chip
+		w float32
+	}{
+		{Chip{Kind: ChipIssue}, side + chipDotGap},
+		{Chip{Kind: ChipIssue, State: StateClosed}, side + chipDotGap},
+		{Chip{Kind: ChipPR, State: StateOpen}, side + chipDotGap},
+		{Chip{Kind: ChipPR, State: StateOpen, Draft: true}, side + chipDotGap},
+		{Chip{Kind: ChipPR, State: StateMerged}, side + chipDotGap},
+		{Chip{Kind: ChipPR, State: StateClosed}, side + chipDotGap},
+		{Chip{Kind: ChipPR, State: StatePassed}, side + 2*chipDotGap + chipDot},
+		{Chip{Kind: ChipPR, State: StateFailed, Draft: true}, side + 2*chipDotGap + chipDot},
+	} {
+		o, ok := chipIcon(chipDest(tc.c, "4"), 14)
+		if !ok || o.Width != tc.w || o.Draw == nil {
+			t.Errorf("%+v: %+v %v, want width %v", tc.c, o, ok, tc.w)
+		}
 	}
-	o, ok := chipIcon(chipDest(Chip{ChipPR, StatePassed}, "4"), 14)
-	if !ok || o.Width != chipDot+chipDotGap || o.Draw == nil {
-		t.Errorf("PR dot: %+v %v", o, ok)
+	if o, ok := chipIcon(chipDest(Chip{Kind: ChipWorker, State: StateWorking}, "b-1"), 14); !ok || o.Width != chipDot+chipDotGap {
+		t.Errorf("worker dot: %+v %v", o, ok)
 	}
 	if o, ok := chipIcon(chipDest(Chip{Kind: ChipFile}, "a.go"), 14); !ok || o.Draw == nil || o.Width <= 0 {
 		t.Errorf("file icon: %+v %v", o, ok)
+	}
+}
+
+func TestChipGitHub(t *testing.T) {
+	for _, tc := range []struct {
+		c    Chip
+		want icons.GitHub
+	}{
+		{Chip{Kind: ChipPR, State: StateOpen}, icons.PROpen},
+		{Chip{Kind: ChipPR, State: StateRunning}, icons.PROpen},
+		{Chip{Kind: ChipPR, State: StateFailed, Draft: true}, icons.PRDraft},
+		{Chip{Kind: ChipPR, State: StateOpen, Draft: true}, icons.PRDraft},
+		{Chip{Kind: ChipPR, State: StateMerged}, icons.PRMerged},
+		{Chip{Kind: ChipPR, State: StateClosed}, icons.PRClosed},
+		{Chip{Kind: ChipIssue}, icons.IssueOpen},
+		{Chip{Kind: ChipIssue, State: StateClosed}, icons.IssueClosed},
+		{Chip{Kind: ChipWorker, State: StateWorking}, icons.GitHubNone},
+		{Chip{Kind: ChipFile}, icons.GitHubNone},
+	} {
+		if got := ChipGitHub(tc.c); got != tc.want {
+			t.Errorf("ChipGitHub(%+v) = %v, want %v", tc.c, got, tc.want)
+		}
+	}
+}
+
+func TestDraftChipDest(t *testing.T) {
+	c := Chip{Kind: ChipPR, State: StateFailed, Draft: true}
+	dest := chipDest(c, "12")
+	if got, name, ok := parseChipDest(dest); !ok || got != c || name != "12" {
+		t.Errorf("parse %q: %+v %q %v", dest, got, name, ok)
+	}
+	if chipTip(c, "12") != "Draft PR #12 · checks failed" {
+		t.Errorf("tip %q", chipTip(c, "12"))
+	}
+	if _, _, ok := parseChipDest("contr-chip:issue.draft//12"); ok {
+		t.Error("a draft issue parses")
 	}
 }
 
@@ -267,7 +323,7 @@ func TestOpenLinkScrollsToAHeadingAndIgnoresOtherSchemes(t *testing.T) {
 		t.Errorf("anchor %q v%d", ch.md.Anchor, ch.md.AnchorVersion)
 	}
 	// No source, no window: nothing happens, nothing panics.
-	ch.openLink(chipDest(Chip{ChipPR, StateOpen}, "1"))
+	ch.openLink(chipDest(Chip{Kind: ChipPR, State: StateOpen}, "1"))
 	ch.openLink("javascript:alert(1)")
 	ch.openLink("https://example.com")
 }

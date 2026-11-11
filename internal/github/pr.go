@@ -252,6 +252,7 @@ type Ref struct {
 	Number int
 	PR     bool
 	State  string
+	Draft  bool // a draft pull request
 	Checks CheckSummary
 }
 
@@ -264,7 +265,7 @@ func notFound(err error) bool {
 // and, when n is no pull request, `gh issue view` (D262). A number the
 // repository does not have gives the zero Ref and no error.
 func (c Client) RefState(ctx context.Context, n int) (Ref, error) {
-	out, err := c.run(ctx, "pr", "view", fmt.Sprint(n), "--json", "number,state,statusCheckRollup")
+	out, err := c.run(ctx, "pr", "view", fmt.Sprint(n), "--json", "number,state,isDraft,statusCheckRollup")
 	if notFound(err) {
 		out, err = c.run(ctx, "issue", "view", fmt.Sprint(n), "--json", "number,state")
 		if notFound(err) {
@@ -288,6 +289,7 @@ func (c Client) RefState(ctx context.Context, n int) (Ref, error) {
 	var r struct {
 		Number int    `json:"number"`
 		State  string `json:"state"`
+		Draft  bool   `json:"isDraft"`
 		Rollup []struct {
 			Status     string `json:"status"`
 			Conclusion string `json:"conclusion"`
@@ -297,7 +299,7 @@ func (c Client) RefState(ctx context.Context, n int) (Ref, error) {
 	if err := json.Unmarshal(out, &r); err != nil {
 		return Ref{}, fmt.Errorf("gh: read pr %d: %w", n, err)
 	}
-	ref := Ref{Number: r.Number, PR: true, State: r.State}
+	ref := Ref{Number: r.Number, PR: true, State: r.State, Draft: r.Draft}
 	for _, k := range r.Rollup {
 		switch rollupResult(k.Status, k.Conclusion, k.State) {
 		case "pass":

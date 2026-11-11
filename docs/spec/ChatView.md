@@ -266,14 +266,15 @@ does not know stays plain text.
 
 | Chip | Recognized | Known when | Dot | Click |
 |---|---|---|---|---|
-| PR | "#667" | gh says it is a pull request of the session's repository (read by number), or it is the PR of a worker's branch (D104, D145) | open `content-info`, checks running `content-running`, passed `content-done`, failed `content-failed`, merged `content-done`, closed `content-info`. A failed check wins over a pending one, a pending one over a passed one. | opens the PR as the agent rows do: in the browser (the PR pane is hidden, D147) |
-| Issue | "#649" | gh says it is an issue | none | opens the issue in the browser |
+| PR | "#667" | gh says it is a pull request of the session's repository (read by number), or it is the PR of a worker's branch (D104, D145) | GitHub's pull request Octicon of its state, 0.9 of the text size, `ink-48`: open, draft, merged, closed (D286). An open PR with checks adds a 6px dot after it: running `content-running`, passed `content-done`, failed `content-failed`. A failed check wins over a pending one, a pending one over a passed one. | opens the PR as the agent rows do: in the browser (the PR pane is hidden, D147) |
+| Issue | "#649" | gh says it is an issue | GitHub's issue Octicon, open or closed, 0.9 of the text size, `ink-48` (D286) | opens the issue in the browser |
 | Worker | a word that is the name of a worker contr lists ("b-649"); a live one wins | always | needs you `content-failed`, working `content-running`, done (ended) `content-done`, waiting (idle) `content-waiting` | selects the worker in the sidebar |
 | File | a word with a slash or an extension, with an optional ":42" | it is a file in the session's folder | none: the `file` line icon, 0.9 of the text size, `ink-48` | opens the file in the Review view, as the files panel does (the line is not used) |
 
 - The dot is 6px, round, `space-4` before the text, its center near the
-  middle of the lowercase letters. The tip of a chip says what it is:
-  "PR #667 · checks passed", "Worker b-649 · needs you", "Open
+  middle of the lowercase letters. The Octicons take the ink of the
+  text around them, never GitHub's colors (D119, D261, D286). The tip of a
+  chip says what it is: "PR #667 · checks passed", "Draft PR #661", "Worker b-649 · needs you", "Open
   internal/app/x.go".
 - A number is read only while its text is on screen and only once: the
   answer holds for 5 minutes, 1 minute for a PR with checks running, and
@@ -283,8 +284,8 @@ does not know stays plain text.
 - A chip shows the state of now: it follows the agent state and the
   answers of the reads. Nothing polls and no timer runs (D55); a text at
   rest asks for no frame.
-- Not yet: the quiet fill behind a chip, the mono text, the PR and issue
-  icons and the "merged" word of the mockup (K2, KC1). The chip is a link
+- Not yet: the quiet fill behind a chip, the mono text and the "merged"
+  word of the mockup (K2, KC1). The chip is a link
   of the markdown view, which styles all its links alike.
 
 ## Blocks
@@ -293,7 +294,7 @@ A coordinator writes a status board or a merge queue as a fenced block (D267). T
 
 | Block | Syntax | Shows |
 |---|---|---|
-| Status board | info string `contr-status`; a line `<worker> \| #<issue> \| <what it builds>` | six columns: Worker, Issue, Builds, State, PR, Checks; heads mono `meta`, `ink-48`; no box, a `hairline` above and below the grid, `space-16` between columns; the worker in `body`, `ink-88`, after its 6px dot (the chip's worker colors); the issue mono `meta` `ink-64`; what it builds `body` `ink-88`, one line with "…"; the state in mono `meta`, `ink-64` (grey: only the dots have content colors), "needs you" in `blocked-text`; the PR as a mono 12px number with its dot on `hover`, radius 5, a click opens it as a chip does; the checks "2 of 3" (passed of passed, failed and pending) mono `meta` `ink-64`; "—" for none |
+| Status board | info string `contr-status`; a line `<worker> \| #<issue> \| <what it builds>` | six columns: Worker, Issue, Builds, State, PR, Checks; heads mono `meta`, `ink-48`; no box, a `hairline` above and below the grid, `space-16` between columns; the worker in `body`, `ink-88`, after its 6px dot (the chip's worker colors); the issue mono `meta` `ink-64`; what it builds `body` `ink-88`, one line with "…"; the state in mono `meta`, `ink-64` (grey: only the dots have content colors), "needs you" in `blocked-text`; the PR as its Octicon (12px, `ink-48`, D286), the dot of its checks when it has some, and a mono 12px number on `hover`, radius 5, a click opens it as a chip does; the checks "2 of 3" (passed of passed, failed and pending) mono `meta` `ink-64`; "—" for none |
 | Merge queue | info string `contr-queue`; a line `#<n> <label>`, optional ` -- <note>` | the steps in order on one rail 14px wide: an 8px dot, a 1px `hairline` line down to the next step; the step's number mono `meta` `ink-48`, `#n label` in `prose` `ink-88`, the state in words in mono `meta` |
 
 State of a board row: a worker that needs the owner says "needs you"; else the state of its PR: "PR open", "CI running", "CI passed", "CI failed", "merged", "closed"; else the worker's own state: "building", "waiting", "done". A worker contr does not list shows its name in `ink-48` and "not found" in `ink-48`, no dot.

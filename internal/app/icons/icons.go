@@ -93,6 +93,7 @@ func svg(name string) *ui.SVG {
 		parsed = make(map[string]*ui.SVG)
 		load("icons", "")
 		load("icons/brands", brandPrefix)
+		load("icons/github", githubPrefix)
 	})
 	return parsed[name]
 }

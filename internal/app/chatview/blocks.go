@@ -15,6 +15,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/github"
@@ -149,9 +150,11 @@ type BoardRow struct {
 	// State is the state word, in grey (D267): blocked-text for a worker that needs the owner,
 	// ink-48 for one that is not found, else ink-64.
 	State string
-	// PR is the number of the worker's PR, 0 for none, and PRState the state of its dot.
+	// PR is the number of the worker's PR, 0 for none, PRState the state of its dot and PRDraft
+	// whether it is a draft (its Octicon, D286).
 	PR      int
 	PRState ChipState
+	PRDraft bool
 	// Checks is "2 of 3", or "—".
 	Checks string
 }
@@ -174,6 +177,7 @@ func BoardRowOf(w WorkerInfo, found bool, pr RefInfo, prKnown bool) BoardRow {
 	row.PRState = StateOpen
 	if prKnown {
 		row.PRState = pr.Chip.State
+		row.PRDraft = pr.Chip.Draft
 		row.Checks = checksText(pr.Checks)
 	}
 	if w.Chip.State != StateNeedsYou {
@@ -412,18 +416,17 @@ func (ch *Chat) boardRow(c *ui.Context, key int, pal *theme.Palette, l BoardLine
 			kit.Styled(ui.Text(c, "—"), ch.ts(theme.StyleMeta)).NoWrap().TextColor(pal.Ink48)
 			return
 		}
-		ch.prChip(c, pal, row.PR, row.PRState)
+		ch.prChip(c, pal, row.PR, Chip{Kind: ChipPR, State: row.PRState, Draft: row.PRDraft})
 	})
 	cell(5, func() {
 		kit.Styled(ui.Text(c, row.Checks), ch.ts(theme.StyleMeta)).NoWrap().TextColor(pal.Ink64)
 	})
 }
 
-// prChip is the PR of a board row: its dot and its number in mono on hover; a click opens it as
-// a chip does.
-func (ch *Chat) prChip(c *ui.Context, pal *theme.Palette, n int, st ChipState) {
+// prChip is the PR of a board row: its Octicon in ink-48 (D286), the dot of its checks, and its
+// number in mono on hover; a click opens it as a chip does.
+func (ch *Chat) prChip(c *ui.Context, pal *theme.Palette, n int, chip Chip) {
 	name := strconv.Itoa(n)
-	chip := Chip{Kind: ChipPR, State: st}
 	b := ui.ButtonBase(c).Label("PR #"+name).Shrink(0).Height(20).Padding(0, theme.Space6).Radius(5).
 		Background(pal.Hover).Tooltip(chipTip(chip, name)).OnClick(func() {
 		if ch.Chips != nil {
@@ -432,7 +435,8 @@ func (ch *Chat) prChip(c *ui.Context, pal *theme.Palette, n int, st ChipState) {
 	})
 	b.Cursor(ui.CursorPointer).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(theme.Space4).Children(func() {
-			if col, ok := ChipColor(pal, st); ok {
+			icons.GitHubIcon(c, ChipGitHub(chip), 12*ch.scale(), pal.Ink48)
+			if col, ok := ChipColor(pal, chip.State); ok && checksDot(chip.State) {
 				ui.Box(c).Size(chipDot, chipDot).Radius(chipDot / 2).Background(col)
 			}
 			ui.Text(c, "#"+name).Font(theme.FontFamily).FontSize(12 * ch.scale()).NoWrap().TextColor(pal.Ink88)
