@@ -74,24 +74,40 @@ func PinnedRow(rows []Row, first int) int {
 }
 
 // pinned is the prompt of row i as one clipped line across the top of the chat, on the stage with
-// a hairline under it: "You" and the text. The switch keeps its place at the right. A click
+// a hairline under it: "You" and the text. The text ends before the notch and the switch. A click
 // scrolls to the prompt.
 func (ch *Chat) pinned(c *ui.Context, i int) {
 	pal := theme.Current()
 	text := strings.Join(strings.Fields(ch.model.Entry(ch.model.Rows()[i].Entry).Text), " ")
-	right := float32(pinRight)
-	if p, sw := ch.panel.Bounds(c), ch.switchBox.Bounds(c); sw.W > 0 && p.W > 0 {
-		right = max(p.X+p.W-sw.X+theme.Space12, theme.Space12)
-	}
-	ui.ButtonBase(c).Label(LabelPinned + " " + text).Absolute().Top(0).Left(0).Right(0).Height(topSpace).
+	ui.ButtonBase(c).Label(LabelPinned+" "+text).Absolute().Top(0).Left(0).Right(0).Height(topSpace).
+		Row().AlignItems(ui.Center).Gap(theme.Space12).Padding(0, ch.pinnedRight(c), 0, theme.Space16).
 		Background(pal.StageBase()).Cursor(ui.CursorPointer).
 		OnClick(func() { ch.list.ScrollTo(i, ui.Start) }).Children(func() {
-		ui.Row(c).Fill().AlignItems(ui.Center).Gap(theme.Space12).Padding(0, right, 0, theme.Space16).Children(func() {
-			kit.Styled(ui.Text(c, TextYou), theme.StyleSmall).NoWrap().Shrink(0).TextColor(pal.Ink45)
-			kit.Styled(ui.Text(c, text), theme.StyleSmall).SingleLine().Grow(1).MinWidth(0).TextColor(pal.Ink100)
-		})
+		kit.Styled(ui.Text(c, TextYou), theme.StyleSmall).NoWrap().Shrink(0).TextColor(pal.Ink45)
+		kit.Styled(ui.Text(c, text), theme.StyleSmall).SingleLine().Grow(1).MinWidth(0).TextColor(pal.Ink100)
 		ui.Box(c).Absolute().Left(0).Right(0).Bottom(0).Height(1).Background(pal.Hairline)
 	})
+}
+
+// pinnedRight is the room at the right of the pinned prompt: up to the switch, and up to the
+// notch while it shows over the bar, each with space-12 to spare. A box that is not over the bar
+// takes no room.
+func (ch *Chat) pinnedRight(c *ui.Context) float32 {
+	p := ch.panel.Bounds(c)
+	if p.W <= 0 {
+		return pinRight
+	}
+	over := func(r ui.Rect) bool { return r.W > 0 && r.Y < p.Y+topSpace && r.Y+r.H > p.Y && r.X > p.X }
+	right := float32(theme.Space16)
+	if sw := ch.switchBox.Bounds(c); over(sw) {
+		right = max(right, p.X+p.W-sw.X+theme.Space12)
+	}
+	if ch.Notch != nil {
+		if n, ok := ch.Notch(); ok && over(n) {
+			right = max(right, p.X+p.W-n.X+theme.Space12)
+		}
+	}
+	return right
 }
 
 // jump is the control at the bottom of the chat that goes to the end, where the list follows

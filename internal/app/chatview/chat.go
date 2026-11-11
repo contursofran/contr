@@ -42,6 +42,9 @@ type Chat struct {
 	Team func(addr string) (Team, bool)
 	// OpenNeeds opens the notch's card, as ⌘J does: the click on "N needs you". May be nil.
 	OpenNeeds func()
+	// Notch is the box of the questions notch as last painted, and false while none shows: the
+	// pinned prompt ends before it (D266). May be nil.
+	Notch func() (ui.Rect, bool)
 
 	src    *chatsource.Source
 	model  Model

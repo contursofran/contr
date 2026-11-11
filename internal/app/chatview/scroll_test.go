@@ -168,3 +168,45 @@ func TestScrolledChatAtRestBuildsNoFrame(t *testing.T) {
 		t.Errorf("a scrolled chat at rest built %d frames in 3 s, pending %v; want 0", builds-before, r.tt.FramePending())
 	}
 }
+
+// longPrompt is a prompt of two lines; the pinned prompt shows it on one.
+const longPrompt = "review #633 on its head and merge it when the checks pass,\nthen tell b-632 to merge main, run the full suite again and report before it asks for review"
+
+// The pinned prompt ends before the notch while the notch shows over the bar, and runs past
+// where it would be when none shows (D266).
+func TestPinnedPromptEndsBeforeTheNotch(t *testing.T) {
+	r := newRig(t)
+	r.savePath(term)
+	r.selectTerm(term)
+	r.chat()
+	lines := turns(1, 6)
+	for i := 0; i < len(lines); i += 4 {
+		lines[i] = strings.Replace(lines[i], `"content":"prompt`, `"content":`+strconv.Quote(longPrompt)[:len(strconv.Quote(longPrompt))-1]+` prompt`, 1)
+	}
+	r.write(lines...)
+	r.up(500)
+	notch := ui.Rect{X: 400, Y: 20, W: 200, H: 30}
+	shows := true
+	r.ch.Notch = func() (ui.Rect, bool) { return notch, shows }
+	r.tt.Frame()
+	one := strings.ReplaceAll(longPrompt, "\n", " ")
+	end := func() float32 {
+		t.Helper()
+		for _, s := range r.tt.Texts() {
+			if strings.HasPrefix(s, one) {
+				b, _ := r.tt.Find(s)
+				return b.X + b.W
+			}
+		}
+		t.Fatalf("no pinned prompt in %v", r.tt.Texts())
+		return 0
+	}
+	if e := end(); e > notch.X-12+0.5 {
+		t.Errorf("the pinned prompt ends at %v, under the notch at %v", e, notch.X)
+	}
+	shows = false
+	r.tt.Frame()
+	if e := end(); e <= notch.X {
+		t.Errorf("without the notch the pinned prompt ends at %v: too short to show the clip", e)
+	}
+}

@@ -87,6 +87,30 @@ type Notch struct {
 
 	// arrivals tells when the count of the open project goes up (D240).
 	arrivals kit.Arrivals
+	// rect is the box of the notch (or of the file problem in its place) as last painted, zero
+	// while none shows (Bounds).
+	rect ui.Rect
+}
+
+// Bounds is the box of the notch, or of the file problem in its place, as last painted, in
+// window DIPs; false while none shows. The chat's pinned prompt ends before it (D266).
+func (n *Notch) Bounds() (ui.Rect, bool) { return n.rect, n.rect.W > 0 }
+
+// painted keeps the box r of the notch as it is painted. A box that changed asks for one more
+// frame, so a view that reads Bounds while it builds sees it.
+func (n *Notch) painted(c *ui.Context, r ui.Rect) {
+	if r != n.rect {
+		n.rect = r
+		c.Invalidate()
+	}
+}
+
+// hidden forgets the box of the notch when none shows, and asks for one more frame when it had one.
+func (n *Notch) hidden(c *ui.Context) {
+	if n.rect != (ui.Rect{}) {
+		n.rect = ui.Rect{}
+		c.Invalidate()
+	}
 }
 
 // Items returns the open items of the project: questions, then to-dos, then
@@ -189,6 +213,7 @@ func (n *Notch) View(c *ui.Context) {
 		}
 		focus := b.FocusVisible()
 		b = b.DrawOver(func(pt *ui.Painter, r ui.Rect) {
+			n.painted(c, r)
 			if focus {
 				// 1px ring, 2px outside the box (docs/spec/README.md, Focus).
 				const gap, width = 2, 1
@@ -290,16 +315,19 @@ const (
 // the file reads well.
 func (n *Notch) problemView(c *ui.Context) {
 	if n.Snapshot == nil {
+		n.hidden(c)
 		return
 	}
 	prob := n.Snapshot().OwnerProblem
 	if prob == "" {
+		n.hidden(c)
 		return
 	}
 	p := theme.Current()
 	ui.Row(c).Absolute().Top(0).Left(0).Right(0).Justify(ui.Center).PassThrough().Children(func() {
 		b := ui.Box(c).Label(LabelOwnerProblem).Height(theme.SizeNotchHeight).Shrink(0).
-			Radius(0, 0, theme.Radius12, theme.Radius12).Tooltip(prob)
+			Radius(0, 0, theme.Radius12, theme.Radius12).Tooltip(prob).
+			DrawOver(func(_ *ui.Painter, r ui.Rect) { n.painted(c, r) })
 		notchShadow(b, p).Children(func() {
 			kit.GlassFloat(ui.Row(c).Height(theme.SizeNotchHeight).AlignItems(ui.Center).Gap(theme.Space9).
 				Padding(0, theme.Space16, 0, theme.Space12).
