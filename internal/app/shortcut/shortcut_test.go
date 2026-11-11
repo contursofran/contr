@@ -165,3 +165,43 @@ func TestAKeyWithCmdShowsNothingUntilCmdIsReleased(t *testing.T) {
 		t.Error("a new ⌘ press shows no chips")
 	}
 }
+
+// The project keys and the project chips agree, as the tab keys do (D289).
+func TestProjectKeysAndProjectIndexAgree(t *testing.T) {
+	for n := 0; n <= 12; n++ {
+		for i := range n {
+			s, ok := ProjectShortcut(i, n)
+			if !ok {
+				if i < NumberedTabs || i == n-1 {
+					t.Errorf("project %d of %d has no key", i, n)
+				}
+				continue
+			}
+			if got, ok := ProjectIndex(s.ID, n); !ok || got != i {
+				t.Errorf("project %d of %d: key %q selects %d %v", i, n, s.ID, got, ok)
+			}
+		}
+	}
+	keys := ProjectKeys()
+	if len(keys) != 9 || keys[0].ID != Project1 || keys[8].ID != LastProject {
+		t.Fatalf("ProjectKeys %v", keys)
+	}
+	if keys[0].Glyphs() != "⌘⇧1" || keys[0].Hint() != "⇧1" || keys[8].Hint() != "⇧9" {
+		t.Errorf("project key caps %q %q %q", keys[0].Glyphs(), keys[0].Hint(), keys[8].Hint())
+	}
+	if _, ok := ProjectIndex(Project5, 3); ok {
+		t.Error("⌘⇧5 selects a project of 3")
+	}
+	if i, ok := ProjectIndex(LastProject, 3); !ok || i != 2 {
+		t.Errorf("⌘⇧9 of 3 projects: %d %v", i, ok)
+	}
+	if _, ok := ProjectIndex(LastProject, 0); ok {
+		t.Error("⌘⇧9 with no projects")
+	}
+	if _, ok := ProjectIndex(Tab1, 3); ok {
+		t.Error("⌘1 selects a project")
+	}
+	if _, ok := ProjectShortcut(9, 12); ok {
+		t.Error("project 9 of 12 has a key")
+	}
+}

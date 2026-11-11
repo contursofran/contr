@@ -23,6 +23,7 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
+	"github.com/contursofran/contr/internal/app/shortcut"
 	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/app/state"
 	"github.com/contursofran/contr/internal/app/tabmodel"
@@ -698,6 +699,14 @@ func (l *SpacesList) projectStep(d int) int {
 // new terminal takes the focus as after a click. With one project it does nothing. UI thread.
 func (l *SpacesList) StepProject(d int) {
 	if i := l.projectStep(d); i >= 0 && l.selection != nil {
+		l.selectProject(l.groups[i])
+	}
+}
+
+// PickProject selects the project that the shortcut id stands for (⌘⇧1 to ⌘⇧8, ⌘⇧9 the last;
+// D289), as StepProject does. A number past the last project does nothing. UI thread.
+func (l *SpacesList) PickProject(id shortcut.ID) {
+	if i, ok := shortcut.ProjectIndex(id, len(l.groups)); ok && l.selection != nil {
 		l.selectProject(l.groups[i])
 	}
 }

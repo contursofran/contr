@@ -62,6 +62,17 @@ const (
 	Tab7    ID = "tab-7"
 	Tab8    ID = "tab-8"
 	LastTab ID = "last-tab"
+	// Project1 to Project8 select that project of the sidebar; LastProject selects the last
+	// project (D289).
+	Project1    ID = "project-1"
+	Project2    ID = "project-2"
+	Project3    ID = "project-3"
+	Project4    ID = "project-4"
+	Project5    ID = "project-5"
+	Project6    ID = "project-6"
+	Project7    ID = "project-7"
+	Project8    ID = "project-8"
+	LastProject ID = "last-project"
 )
 
 // Shortcut is one key of the list.
@@ -109,6 +120,15 @@ var list = []Shortcut{
 	{Tab7, ui.Cmd, ui.Key7, "7"},
 	{Tab8, ui.Cmd, ui.Key8, "8"},
 	{LastTab, ui.Cmd, ui.Key9, "9"},
+	{Project1, ui.Cmd | ui.Shift, ui.Key1, "1"},
+	{Project2, ui.Cmd | ui.Shift, ui.Key2, "2"},
+	{Project3, ui.Cmd | ui.Shift, ui.Key3, "3"},
+	{Project4, ui.Cmd | ui.Shift, ui.Key4, "4"},
+	{Project5, ui.Cmd | ui.Shift, ui.Key5, "5"},
+	{Project6, ui.Cmd | ui.Shift, ui.Key6, "6"},
+	{Project7, ui.Cmd | ui.Shift, ui.Key7, "7"},
+	{Project8, ui.Cmd | ui.Shift, ui.Key8, "8"},
+	{LastProject, ui.Cmd | ui.Shift, ui.Key9, "9"},
 }
 
 // All returns a copy of the list.
@@ -202,45 +222,70 @@ func (s Shortcut) Accelerator() string {
 	return strings.Join(append(parts, key), "+")
 }
 
-// tabIDs are the ids of the numbered tabs, in order.
-var tabIDs = [NumberedTabs]ID{Tab1, Tab2, Tab3, Tab4, Tab5, Tab6, Tab7, Tab8}
-
 // TabKeys are the tab shortcuts in the order the checks run: ⌘1 to ⌘8, then ⌘9.
-func TabKeys() []Shortcut {
-	out := make([]Shortcut, 0, NumberedTabs+1)
-	for _, id := range tabIDs {
-		out = append(out, Of(id))
-	}
-	return append(out, Of(LastTab))
-}
+func TabKeys() []Shortcut { return tabSet.keys() }
 
 // TabIndex is the index of the tab that s selects among n tabs, in the visible order of the
 // title bar (D190), and false when s selects none: a numbered tab past the last, or no tabs.
-func TabIndex(s ID, n int) (int, bool) {
+func TabIndex(s ID, n int) (int, bool) { return tabSet.index(s, n) }
+
+// TabShortcut is the shortcut that selects tab i of n: ⌘1 to ⌘8 for the first eight, ⌘9 for the
+// last tab past them. false: the tab has no key.
+func TabShortcut(i, n int) (Shortcut, bool) { return tabSet.shortcut(i, n) }
+
+// ProjectKeys are the project shortcuts in the order the checks run: ⌘⇧1 to ⌘⇧8, then ⌘⇧9 (D289).
+func ProjectKeys() []Shortcut { return projectSet.keys() }
+
+// ProjectIndex is the index of the project that s selects among n projects, in the order of the
+// sidebar, and false when s selects none: a numbered project past the last, or no projects.
+func ProjectIndex(s ID, n int) (int, bool) { return projectSet.index(s, n) }
+
+// ProjectShortcut is the shortcut that selects project i of n: ⌘⇧1 to ⌘⇧8 for the first eight,
+// ⌘⇧9 for the last project past them. false: the project has no key.
+func ProjectShortcut(i, n int) (Shortcut, bool) { return projectSet.shortcut(i, n) }
+
+// numbered is a set of numbered shortcuts: ⌘1 to ⌘8 and ⌘9 for the last, or the same with ⇧.
+type numbered struct {
+	ids  [NumberedTabs]ID
+	last ID
+}
+
+var (
+	tabSet     = numbered{[NumberedTabs]ID{Tab1, Tab2, Tab3, Tab4, Tab5, Tab6, Tab7, Tab8}, LastTab}
+	projectSet = numbered{[NumberedTabs]ID{Project1, Project2, Project3, Project4, Project5, Project6, Project7, Project8}, LastProject}
+)
+
+func (s numbered) keys() []Shortcut {
+	out := make([]Shortcut, 0, NumberedTabs+1)
+	for _, id := range s.ids {
+		out = append(out, Of(id))
+	}
+	return append(out, Of(s.last))
+}
+
+func (s numbered) index(id ID, n int) (int, bool) {
 	if n <= 0 {
 		return 0, false
 	}
-	if s == LastTab {
+	if id == s.last {
 		return n - 1, true
 	}
-	for i, id := range tabIDs {
-		if id == s {
+	for i, x := range s.ids {
+		if x == id {
 			return i, i < n
 		}
 	}
 	return 0, false
 }
 
-// TabShortcut is the shortcut that selects tab i of n: ⌘1 to ⌘8 for the first eight, ⌘9 for the
-// last tab past them. false: the tab has no key.
-func TabShortcut(i, n int) (Shortcut, bool) {
+func (s numbered) shortcut(i, n int) (Shortcut, bool) {
 	switch {
 	case i < 0 || i >= n:
 		return Shortcut{}, false
 	case i < NumberedTabs:
-		return Of(tabIDs[i]), true
+		return Of(s.ids[i]), true
 	case i == n-1:
-		return Of(LastTab), true
+		return Of(s.last), true
 	}
 	return Shortcut{}, false
 }

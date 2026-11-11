@@ -178,6 +178,8 @@ The owner's from-zero canvas (https://claude.ai/artifact/9bmbRdJc8qDMSRXm6obEb3)
 | `⌘⇧[` `⌘⇧]` | select the previous or next tab, around the ends | window |
 | `⌘⌥↑` `⌘⌥↓` | select the agent row above or below in the sidebar | window |
 | `⌘⌥←` `⌘⌥→` | select the project before or after the open one in the sidebar, around the ends (D248) | window |
+| `⌘⇧1`–`⌘⇧8` | select that project of the sidebar, in its order, as a click on its row (D289) | window |
+| `⌘⇧9` | select the last project of the sidebar (D289) | window |
 | `1`–`9` | pick that choice | questions card, with the focus |
 | `⏎` | send the typed answer, else the picked choice; go to the next question | questions card |
 | `⇥` | next question chip | questions card |
