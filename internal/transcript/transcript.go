@@ -169,6 +169,9 @@ type Reader struct {
 	next    int64
 	count   int            // entries returned so far
 	pending map[string]int // call id -> entry index, for calls without a result
+	// queued is the text of the last queued message read since the last text
+	// of Claude or prompt, so that a second shape of it is no second prompt.
+	queued string
 }
 
 // NewReader returns a Reader that starts at offset. Calls before the offset
@@ -253,6 +256,9 @@ func (r *Reader) line(raw []byte, b *Batch, idx map[string]int) {
 		r.user(base, l.IsMeta, l.IsCompactSummary, l.Message.Content, b, idx, add)
 	case "assistant":
 		for _, e := range assistant(base, l.Message.Content) {
+			if e.Kind == Said {
+				r.queued = ""
+			}
 			add(e)
 		}
 	case "system":
@@ -266,8 +272,14 @@ func (r *Reader) line(raw []byte, b *Batch, idx map[string]int) {
 			e.Text = l.Subtype
 		}
 		add(e)
+	case "queue-operation":
+		// Claude Code's queue (enqueue, dequeue, remove) is no delivery: a
+		// queued message shows where the session got it (D265).
 	case "attachment":
-		if e, ok := attachment(base, l.Attachment); ok {
+		if e, queued, ok := attachment(base, l.Attachment); ok {
+			if queued {
+				r.once(&e)
+			}
 			add(e)
 		}
 	}
@@ -320,12 +332,59 @@ func (r *Reader) user(base Entry, meta, compact bool, content json.RawMessage, b
 	switch {
 	case compact:
 		e.Kind, e.Hidden = Hidden, HideCompactSummary
+	case queuedOK(e.Text):
+		// The reminder of a message sent while the turn ran: read also on
+		// a line marked meta.
+		e.Text, _ = queuedReminder(e.Text)
+		classify(&e, 0)
+		r.once(&e)
 	case meta:
 		e.Kind, e.Hidden = Hidden, HideMeta
 	default:
 		classify(&e, images)
+		if e.Kind == Prompt {
+			r.queued = ""
+		}
 	}
 	add(e)
+}
+
+// once reads e, a message that the owner sent while a turn ran: the first
+// shape of it stays, a second shape of the same text is hidden (D265).
+func (r *Reader) once(e *Entry) {
+	if e.Kind == Hidden {
+		return
+	}
+	key := strings.TrimSpace(e.Text)
+	if key != "" && key == r.queued {
+		e.Kind, e.Hidden, e.Note, e.Images = Hidden, HideHarness, nil, 0
+		return
+	}
+	r.queued = key
+}
+
+// queuedLead starts the text that tells Claude of a message the owner sent
+// while it worked; queuedTail ends it.
+const (
+	queuedLead = "The user sent a new message while you were working:"
+	queuedTail = "\n\nIMPORTANT: After completing your current task"
+)
+
+func queuedOK(s string) bool { _, ok := queuedReminder(s); return ok }
+
+// queuedReminder reads the message of a reminder that starts with
+// queuedLead, alone or after other reminders, and tells whether s has that
+// shape (D265).
+func queuedReminder(s string) (string, bool) {
+	i := strings.Index(s, queuedLead)
+	if i < 0 || !harnessLead(s[:i]) {
+		return "", false
+	}
+	msg := s[i+len(queuedLead):]
+	msg, _, _ = strings.Cut(msg, "</system-reminder>")
+	msg, _, _ = strings.Cut(msg, queuedTail)
+	msg = strings.TrimSpace(msg)
+	return msg, msg != ""
 }
 
 // result joins a tool result to its call: in this batch when the call is
@@ -372,17 +431,38 @@ func assistant(base Entry, content json.RawMessage) []Entry {
 
 // attachment reads a line of type "attachment": Claude Code writes hook
 // output this way. Its shape is not documented, so any text in it is taken.
-func attachment(base Entry, raw json.RawMessage) (Entry, bool) {
+// A "queued_command" is a message that the owner sent while a turn ran and
+// that Claude Code gave to Claude in the turn: it is read as a user text at
+// its place (queued is set, D265).
+func attachment(base Entry, raw json.RawMessage) (e Entry, queued, ok bool) {
 	var a struct {
 		Type      string          `json:"type"`
 		HookEvent string          `json:"hookEvent"`
 		Content   json.RawMessage `json:"content"`
 		Stdout    string          `json:"stdout"`
+		Prompt    json.RawMessage `json:"prompt"`
 	}
 	if json.Unmarshal(raw, &a) != nil {
-		return Entry{}, false
+		return Entry{}, false, false
 	}
-	e := base
+	e = base
+	if a.Type == "queued_command" {
+		var texts []string
+		images := 0
+		for _, bl := range blocks(a.Prompt) {
+			switch bl.Type {
+			case "text":
+				texts = append(texts, bl.Text)
+			case "image":
+				images++
+			}
+		}
+		if len(texts) > 0 || images > 0 {
+			e.Text = strings.Join(texts, "\n")
+			classify(&e, images)
+			return e, true, true
+		}
+	}
 	e.Kind, e.Hidden = Hidden, HideHook
 	e.Text = text(a.Content)
 	if e.Text == "" {
@@ -394,7 +474,7 @@ func attachment(base Entry, raw json.RawMessage) (Entry, bool) {
 	if isPlaybook(e.Text) {
 		e.Hidden = HidePlaybook
 	}
-	return e, true
+	return e, false, true
 }
 
 // classify sets the kind of a user text that is not marked meta. images

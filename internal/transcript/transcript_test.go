@@ -448,3 +448,111 @@ func TestPromptWithHarnessParts(t *testing.T) {
 		}
 	}
 }
+
+// Shapes of a message that the owner sent while a turn ran (D265). They come
+// from what the harness is known or likely to write, not from a real file.
+const (
+	lQueuedStr    = `{"type":"attachment","uuid":"q1","timestamp":"2026-11-10T10:00:05.000Z","attachment":{"type":"queued_command","prompt":"add auto compact later","commandMode":"prompt"}}`
+	lQueuedBlocks = `{"type":"attachment","attachment":{"type":"queued_command","prompt":[{"type":"text","text":"add auto compact later"},{"type":"image","source":{"type":"base64","data":"AAAA"}}]}}`
+	lQueuedHC     = `{"type":"attachment","attachment":{"type":"queued_command","prompt":"<hc from=\"t7 b1\">b1: done</hc>"}}`
+	lQueuedEmpty  = `{"type":"attachment","attachment":{"type":"queued_command","prompt":""}}`
+	lEnqueue      = `{"type":"queue-operation","operation":"enqueue","timestamp":"2026-11-10T10:00:04.000Z","content":"add auto compact later"}`
+	lDequeue      = `{"type":"queue-operation","operation":"dequeue","timestamp":"2026-11-10T10:00:05.000Z"}`
+	lRemove       = `{"type":"queue-operation","operation":"remove","content":"add auto compact later"}`
+	lCallResult   = `{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"},{"type":"text","text":"<system-reminder>\nThe user sent a new message while you were working:\nadd auto compact later\n\nIMPORTANT: After completing your current task, you MUST address the user's message above. Do not ignore it.\n</system-reminder>"}]}}`
+)
+
+func prompts(b Batch) []Entry {
+	var out []Entry
+	for _, e := range b.Entries {
+		if e.Kind == Prompt {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+func TestQueuedAttachment(t *testing.T) {
+	e := one(t, lQueuedStr)
+	if e.Kind != Prompt || e.Text != "add auto compact later" || e.UUID != "q1" || e.Time != "2026-11-10T10:00:05.000Z" {
+		t.Errorf("string prompt = %+v", e)
+	}
+	e = one(t, lQueuedBlocks)
+	if e.Kind != Prompt || e.Text != "add auto compact later" || e.Images != 1 {
+		t.Errorf("block prompt = %+v", e)
+	}
+	e = one(t, lQueuedHC)
+	if e.Kind != Note || e.Note == nil || e.Note.Kind != NoteMessage || e.Note.Addr != "t7" {
+		t.Errorf("queued hc message = %+v; want an hc note", e)
+	}
+	e = one(t, lQueuedEmpty)
+	if e.Kind != Hidden {
+		t.Errorf("empty queued prompt = %+v; want hidden", e)
+	}
+}
+
+func TestQueueOperationsAreNoPrompt(t *testing.T) {
+	b := read(t, lEnqueue, lDequeue, lRemove)
+	if len(b.Entries) != 0 {
+		t.Errorf("queue operations = %+v; want no entry", b.Entries)
+	}
+}
+
+func TestQueuedReminder(t *testing.T) {
+	b := read(t, lCall, lCallResult)
+	p := prompts(b)
+	if len(p) != 1 || p[0].Text != "add auto compact later" {
+		t.Fatalf("prompts = %+v; want the queued message", p)
+	}
+	if !b.Entries[0].Tool.Done || b.Entries[0].Tool.Excerpt != "ok" {
+		t.Errorf("call = %+v; want its result", b.Entries[0].Tool)
+	}
+	// After other reminders, and on a line marked meta.
+	e := one(t, userLine(t, 0, "<system-reminder>be brief</system-reminder>", "<system-reminder>The user sent a new message while you were working:\nstop now</system-reminder>"))
+	if e.Kind != Prompt || e.Text != "stop now" {
+		t.Errorf("after a reminder = %+v", e)
+	}
+	e = one(t, `{"type":"user","isMeta":true,"message":{"content":"<system-reminder>The user sent a new message while you were working:\nstop now\n</system-reminder>"}}`)
+	if e.Kind != Prompt || e.Text != "stop now" {
+		t.Errorf("meta line = %+v", e)
+	}
+	// The lead inside the owner's own text is no reminder.
+	e = one(t, userLine(t, 0, "why does it say The user sent a new message while you were working: here"))
+	if e.Kind != Prompt || !strings.HasPrefix(e.Text, "why does it say") {
+		t.Errorf("own text = %+v", e)
+	}
+	// A lead with no message is hidden.
+	e = one(t, userLine(t, 0, "<system-reminder>The user sent a new message while you were working:\n</system-reminder>"))
+	if e.Kind != Hidden {
+		t.Errorf("no message = %+v; want hidden", e)
+	}
+}
+
+func TestQueuedMessageIsOnePrompt(t *testing.T) {
+	b := read(t, lEnqueue, lCall, lRemove, lQueuedStr, lCallResult)
+	if p := prompts(b); len(p) != 1 || p[0].UUID != "q1" {
+		t.Errorf("prompts = %+v; want one, from the attachment", p)
+	}
+	// The same text again after Claude's text is a new message.
+	b = read(t, lQueuedStr, lSaid, lQueuedStr)
+	if p := prompts(b); len(p) != 2 {
+		t.Errorf("prompts = %+v; want two", p)
+	}
+	// So after a prompt of the owner.
+	b = read(t, lQueuedStr, userLine(t, 0, "go on"), lQueuedStr)
+	if p := prompts(b); len(p) != 3 {
+		t.Errorf("prompts = %+v; want three", p)
+	}
+	// Across reads.
+	var r Reader
+	if _, err := r.Read(strings.NewReader(lQueuedStr + "\n")); err != nil {
+		t.Fatal(err)
+	}
+	b2, err := r.Read(strings.NewReader(lCallResult + "\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := prompts(b2); len(p) != 0 {
+		t.Errorf("second read = %+v; want no second prompt", p)
+	}
+}
