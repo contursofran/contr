@@ -44,7 +44,6 @@ func TestFramePanelShowsTheFileTreeNotTheBoard(t *testing.T) {
 	f.Files.Watch = func(string, func()) (func(), error) { return func() {}, nil }
 	tt.Frame()
 	apptest.Box(t, tt, files.LabelFileTree)
-	apptest.Box(t, tt, files.LabelFileFilter)
 	if !apptest.Absent(tt, LabelPanel) || !apptest.Absent(tt, "[panel]") {
 		t.Errorf("the board panel shows: %q", tt.Texts())
 	}

@@ -45,10 +45,28 @@ func (c Context) Percent() float64 {
 	return float64(min(c.Tokens*100/c.Size, 100))
 }
 
-// Label is the value text of the Context line: "90k of 200k  45%".
-func (c Context) Label() string {
-	return fmt.Sprintf("%s of %s  %d%%", shortTokens(c.Tokens), shortTokens(c.Size), int(c.Percent()))
+// CompactsSoonPercent is the percent from which the Context line says that
+// Claude Code compacts soon (D264).
+const CompactsSoonPercent = 80
+
+// CompactsSoon is the note of the Context line from [CompactsSoonPercent].
+const CompactsSoon = "compacts soon"
+
+// Soon tells that the context is at [CompactsSoonPercent] or more.
+func (c Context) Soon() bool { return c.Size > 0 && c.Percent() >= CompactsSoonPercent }
+
+// Sizes is the text of the Context line before its percent: "90k of 200k".
+// From [CompactsSoonPercent] it drops the window, so the note fits the panel:
+// "172k · compacts soon" (D264).
+func (c Context) Sizes() string {
+	if c.Soon() {
+		return shortTokens(c.Tokens) + " · " + CompactsSoon
+	}
+	return shortTokens(c.Tokens) + " of " + shortTokens(c.Size)
 }
+
+// PercentText is the percent of the Context line: "45%".
+func (c Context) PercentText() string { return fmt.Sprintf("%d%%", int(c.Percent())) }
 
 // Used is the size of the context now, short: "212k".
 func (c Context) Used() string { return shortTokens(c.Tokens) }

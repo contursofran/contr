@@ -15,15 +15,22 @@ const NoValue = "no data yet"
 type Meter struct {
 	// Label names the line and the meter ("Context", "Claude").
 	Label string
-	// Value is the text at the right of the label, such as "62%". Empty
+	// Value is the text at the right of the line, such as "62%". Empty
 	// shows [NoValue].
 	Value string
+	// Detail is the text after the label, such as the sizes of the context
+	// ("90k of 200k"). It clips with an ellipsis; the label and the value
+	// do not. It shows only with data.
+	Detail string
 	// Percent is the filled part of the bar, 0 to 100. It counts only when
 	// Has is true.
 	Percent float64
 	// Has tells that there is data. Without it the value is [NoValue] and
 	// the bar is empty.
 	Has bool
+	// Soon draws the value and the fill in ink-100: the context compacts
+	// soon (D264). No hue.
+	Soon bool
 }
 
 // UsageMeter builds the info block of the files panel (docs/spec/UsageMeter.md):
@@ -50,19 +57,36 @@ func UsageMeter(c *ui.Context, meters []Meter) ui.Element {
 // more space above it.
 func meterLine(c *ui.Context, m Meter, top float32) {
 	p := theme.Current()
-	value, ink := m.Value, p.Ink62
-	if !m.Has || value == "" {
-		value, ink = NoValue, p.Ink42
-	}
+	value, ink := meterValueText(p, m)
 	ui.Column(c).Label(m.Label+" line").Gap(theme.Space4).Margin(top, 0, 0).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(theme.Space4).Children(func() {
-			ui.Text(c, m.Label).SingleLine().Grow(1).MinWidth(0).
+			label := ui.Text(c, m.Label).SingleLine().
 				Font(theme.StyleSmall.Family()).FontSize(theme.StyleSmall.Size).FixedLineHeight(theme.StyleSmall.Line).TextColor(p.Ink42)
+			if m.Detail == "" || !m.Has {
+				label.Grow(1).MinWidth(0)
+			} else {
+				label.Shrink(0)
+				ui.Text(c, m.Detail).SingleLine().Ellipsis("…").Grow(1).MinWidth(0).MarginStart(theme.Space4).
+					Font(theme.StyleMeta.Family()).FontSize(theme.StyleMeta.Size).FixedLineHeight(theme.StyleSmall.Line).TextColor(p.Ink42)
+			}
 			meterValue(ui.Text(c, value).SingleLine().Shrink(0).
 				Font(theme.StyleValue.Family()).FontSize(theme.StyleValue.Size).FixedLineHeight(theme.StyleValue.Line).TextColor(ink), m)
 		})
 		meterBar(c, m)
 	})
+}
+
+// meterValueText is the value of a meter line and its ink: [NoValue] in
+// ink-42 without data, ink-100 when the context compacts soon (D264), else
+// ink-62.
+func meterValueText(p *theme.Palette, m Meter) (string, ui.Color) {
+	switch {
+	case !m.Has || m.Value == "":
+		return NoValue, p.Ink42
+	case m.Soon:
+		return m.Value, p.Ink100
+	}
+	return m.Value, p.Ink62
 }
 
 // meterBar is the bar of a meter. ui.Meter gives the role, the range and the
@@ -75,6 +99,9 @@ func meterBar(c *ui.Context, m Meter) ui.Element {
 		pct = math.Min(math.Max(m.Percent, 0), 100)
 	}
 	fill := p.MeterFill
+	if m.Soon && m.Has {
+		fill = p.Ink100
+	}
 	bar := ui.Meter(c, pct, 0, 100, nil).Label(m.Label + " meter").
 		Height(theme.SizeMeterHeight).MinWidth(0).Radius(theme.Radius2).Background(p.MeterTrack)
 	// The fill moves to its width in theme.MotionMeter (D256); the value

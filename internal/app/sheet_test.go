@@ -73,9 +73,11 @@ var sheetParts = []apptest.SheetPart{
 			kit.DiffSummary(c, kit.DiffSummaryOpts{})
 		})
 	}},
-	{Name: "UsageMeter", W: 258, H: 130, View: func(c *ui.Context) {
+	{Name: "UsageMeter", W: 258, H: 170, View: func(c *ui.Context) {
 		kit.UsageMeter(c, []kit.Meter{
-			{Label: "Context", Value: "90k of 200k 45%", Percent: 45, Has: true},
+			{Label: "Context", Detail: "90k of 200k", Value: "45%", Percent: 45, Has: true},
+			// From 80% (D264).
+			{Label: "Context", Detail: "172k · compacts soon", Value: "86%", Percent: 86, Has: true, Soon: true},
 			{Label: "Claude", Value: "38%", Percent: 38, Has: true},
 			{Label: "Codex", Value: "12%", Percent: 12, Has: true},
 		})
