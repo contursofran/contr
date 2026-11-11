@@ -18,7 +18,8 @@ Design system page: component FileTree. Shared rules: [README.md](README.md).
 | Icon | `folder`, `folder-open`, `file-go`, `file-md`, `file` at 15px, `ink-38` |
 | Name | `row-small` (12.5px), `ink-50`; ellipsis |
 | Counts | mono 11px (`meta`), `space-6` apart: added and removed both `ink-50`; the sign says which (D264) |
-| Path row | Changed view only: a folder that holds changed files, named by its path from the root (`internal/app`), name `ink-90`, with the folder icon. A long path clips at its end with an ellipsis; the row's tooltip gives the whole path (#693) |
+| Path row | Changed view only: a folder that holds changed files, named by its path from the root (`internal/app`), name `ink-90`, with the folder icon |
+| Long path | A path row that does not fit clips at its end with an ellipsis; the row's tooltip gives the whole path (#693) |
 | Untracked folder row | Changed view only: a folder that git lists as one untracked entry (its path ends with `/`, as a nested worktree). One path row with the `folder` icon, no row under it, no counts (#693) |
 | Indent | each level indents `space-16` plus `space-4` (D228); no guide lines (D258) |
 
