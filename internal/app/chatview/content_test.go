@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/markdown"
 	"github.com/egoist/mygo/ui/markdown/parser"
 
 	"github.com/contursofran/contr/internal/app/theme"
@@ -269,5 +270,24 @@ func TestListsAndItemText(t *testing.T) {
 	}
 	if got := ItemText(src, items[1]); !strings.HasPrefix(got, "twelve\nunder") {
 		t.Errorf("numbered item %q", got)
+	}
+}
+
+// Links in Claude's text, chips included, are in content-link and the text around them is not, in
+// each theme (D275).
+func TestLinksHaveTheLinkColor(t *testing.T) {
+	for _, src := range []mygo.ThemeSource{mygo.ThemeDark, mygo.ThemeLight} {
+		themetest.Use(t, src)
+		pal := theme.Current()
+		ch := New(view.Env{}, t.TempDir(), nil)
+		ch.mdTheme(pal)
+		for _, th := range []*markdown.Theme{ch.md.Theme, ch.mdNest.Theme, ch.mdHead.Theme, ch.mdNum.Theme} {
+			if th.Link != pal.ContentLink {
+				t.Errorf("%v: link color %v, want content-link %v", src, th.Link, pal.ContentLink)
+			}
+			if th.Text == th.Link || th.Strong == th.Link {
+				t.Errorf("%v: plain text has the link color", src)
+			}
+		}
 	}
 }
