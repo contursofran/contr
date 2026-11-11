@@ -12,7 +12,7 @@ Shared rules: [README.md](README.md). Design: board 10 of the from-zero canvas.
   `ink-100` text; the others `ink-64`. While an update waits, `Updates` has a 6px `ink-100`
   dot (D146).
 - **General:** Appearance, Chat text (D272) and the transparency sliders, then `Done`.
-- **Updates:** the versions, the update status, the notes, and the buttons `Check for updates`,
+- **Updates** ([SettingsUpdates.md](SettingsUpdates.md)): the versions with `Update hc` (D277), the update status, the notes, and the buttons `Check for updates`,
   `Install and restart` or `Restart now` (D176), `Done`.
 - **Agents**, from top to bottom:
   1. The Flow section ([FlowSection.md](FlowSection.md)). Items 1 to 4 scroll when the window

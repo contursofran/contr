@@ -339,7 +339,11 @@ func num(f float64) string {
 func (c *client) press(t *testing.T, label string) {
 	t.Helper()
 	nodes := c.fullNodes(t)
-	i := slices.IndexFunc(nodes, func(n fullNode) bool { return n.Label == label })
+	// An element that presses comes first: a list item can have the label of its disclosure.
+	i := slices.IndexFunc(nodes, func(n fullNode) bool { return n.Label == label && slices.Contains(n.Actions, "press") })
+	if i < 0 {
+		i = slices.IndexFunc(nodes, func(n fullNode) bool { return n.Label == label })
+	}
 	if i < 0 {
 		i = slices.IndexFunc(nodes, func(n fullNode) bool { return strings.HasPrefix(n.Label, label) })
 	}

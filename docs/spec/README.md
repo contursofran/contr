@@ -38,6 +38,7 @@ what the redesign does not settle.
 | [FileTree.md](FileTree.md) | the files panel tree with +/− counts |
 | [UsageMeter.md](UsageMeter.md) | context and plan usage under the file tree |
 | [SettingsAgents.md](SettingsAgents.md) | Settings tab bar and the Roles of the Agents tab |
+| [SettingsUpdates.md](SettingsUpdates.md) | the Updates tab of Settings: versions, Update hc |
 | [KeyHints.md](KeyHints.md) | key chips while ⌘ is held |
 
 Each component spec has these sections: purpose, anatomy, states,
@@ -146,7 +147,7 @@ The owner's from-zero canvas (https://claude.ai/artifact/9bmbRdJc8qDMSRXm6obEb3)
   (`ui.Icon`), so a state changes only the text color.
 - Names: `project`, `computer`, `server`, `folder`, `folder-open`,
   `file-go`, `file-md`, `file`, `close`, `plus`, `search`,
-  `sidebar-right`, `filter` (three lines), `terminal`, `settings`, `download`, `chevron-down` (dropdowns), `todo`, `todo-done` and `artifact` (SessionPanel). They go in `assets`.
+  `sidebar-right`, `filter` (three lines), `terminal`, `settings`, `download`, `chevron-down` (dropdowns), `todo`, `todo-done` and `artifact` (SessionPanel), `skill`, `connector`, `plugin`, `agent` and `globe` (the kinds of chat call lines, D274). They go in `assets`.
 - The Claude glyph is the Claude Code mascot (D218, replaces the mark of D123): `claude-mascot.svg`, one filled shape.
 
 ## Data

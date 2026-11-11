@@ -159,12 +159,15 @@ type Settings struct {
 	// AgentsConfig is the path of agents.json, which the Agents tab edits (D186). Empty shows
 	// an error in that tab.
 	AgentsConfig string
+	// HCUpdate runs `hc update` (D277); nil hides the "Update hc" button.
+	HCUpdate HCRunner
 	// Setup is what the checks of the Setup tab read (D278); nil runs no check.
 	Setup *setup.Env
 
 	// tab is the tab that shows: SettingsTabs[tab].
 	tab int
 	ag  agentsState
+	hc  hcState
 	su  setupState
 
 	// tintWin and tintPan are the values the sliders edit; the Seen ones are what the last build showed.
@@ -596,6 +599,7 @@ func (s *Settings) View(c *ui.Context) {
 		kit.PopDialog(c, backdrop, panel)
 		panel.Children(func() { s.body(c) })
 	})
+	s.hcConfirm(c)
 	if d.Dismissed() || !open {
 		s.open = false
 		s.Env.Redraw()
@@ -671,7 +675,7 @@ func (s *Settings) updatesTab(c *ui.Context) {
 	ui.Column(c).Shrink(0).Gap(8).PaddingX(theme.ModalPadX).Children(func() {
 		ui.Text(c, "Versions").TextColor(p.Ink48)
 		ui.Text(c, "contr "+s.Version).TextColor(p.Ink88)
-		ui.Text(c, s.coreText()).TextColor(p.Ink88)
+		s.hcRow(c)
 		ui.Text(c, "Updates").Margin(4, 0, 0, 0).TextColor(p.Ink48)
 		if st := s.status(); st != "" {
 			ui.Text(c, st).TextColor(p.Ink64)
