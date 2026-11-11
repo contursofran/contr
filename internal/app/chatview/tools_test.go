@@ -2,11 +2,15 @@ package chatview
 
 import (
 	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/apptest"
+	"github.com/contursofran/contr/internal/app/theme"
+	"github.com/contursofran/contr/internal/transcript"
 )
 
 // callOf is a transcript line with one tool call; resultOf is its result.
@@ -72,5 +76,95 @@ func TestCallLineRunningGlyph(t *testing.T) {
 	}
 	if apptest.Absent(tt, "working") {
 		t.Error("a running call shows no working glyph")
+	}
+}
+
+// errOf is an error result of call id with text.
+func errOf(id, text string) string {
+	return `{"type":"user","uuid":"r` + id + `","timestamp":"2026-11-10T10:00:02.4Z","message":{"content":[{"type":"tool_result","tool_use_id":"` +
+		id + `","is_error":true,"content":` + strconv.Quote(text) + `}]}}`
+}
+
+// TestCallDetailToggle: a click on a call line shows its input pairs and its result; a second
+// click hides them.
+func TestCallDetailToggle(t *testing.T) {
+	v := sheetChat(t, "idle", lPrompt, callOf("k1", "Bash", `{"command":"go test ./...","description":"Run the tests"}`), resultOf("k1"), said("s1", "Done."))
+	tt := ui.NewTester(v.view, sheetW, 500)
+	tt.Frame()
+	if !apptest.Absent(tt, LabelCallDetail+" Bash") {
+		t.Fatal("a call detail shows before a click")
+	}
+	if err := tt.Click(LabelCall + " Bash"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	tt.Frame()
+	if apptest.Absent(tt, LabelCallDetail+" Bash") {
+		t.Fatal("no call detail after a click")
+	}
+	for _, want := range []string{"command:", "go test ./...", "description:", "ok"} {
+		if !tt.HasText(want) {
+			t.Errorf("no %q in the detail: %v", want, tt.Texts())
+		}
+	}
+	if err := tt.Click(LabelCall + " Bash"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	tt.Frame()
+	if !apptest.Absent(tt, LabelCallDetail+" Bash") {
+		t.Error("the detail shows after a second click")
+	}
+}
+
+// TestCallDetailError: the excerpt of an error result shows in ink-64, no red; others in ink-48.
+func TestCallDetailError(t *testing.T) {
+	v := sheetChat(t, "idle", lPrompt, callOf("k1", "Read", `{"file_path":"a.go"}`), errOf("k1", "File does not exist."), said("s1", "No."))
+	tt := ui.NewTester(v.view, sheetW, 500)
+	tt.Frame()
+	if err := tt.Click(LabelCall + " Read"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	tt.Frame()
+	if !tt.HasText("File does not exist.") {
+		t.Errorf("no error excerpt in %v", tt.Texts())
+	}
+	pal := theme.Current()
+	if got := excerptInk(pal, &transcript.Call{Error: true}); got != pal.Ink64 {
+		t.Errorf("error excerpt ink %v, want ink-64", got)
+	}
+	if got := excerptInk(pal, &transcript.Call{}); got != pal.Ink48 {
+		t.Errorf("excerpt ink %v, want ink-48", got)
+	}
+}
+
+// TestCallDetailNoArgs: a call with no input shows only its result.
+func TestCallDetailNoArgs(t *testing.T) {
+	v := sheetChat(t, "idle", lPrompt, callOf("k1", "TodoWrite", `{}`), resultOf("k1"), said("s1", "Done."))
+	tt := ui.NewTester(v.view, sheetW, 500)
+	tt.Frame()
+	if err := tt.Click(LabelCall + " TodoWrite"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+	tt.Frame()
+	if apptest.Absent(tt, LabelCallDetail+" TodoWrite") || !tt.HasText("ok") {
+		t.Errorf("no detail with the result: %v", tt.Texts())
+	}
+	for _, s := range tt.Texts() {
+		if strings.HasSuffix(s, ":") {
+			t.Errorf("a key shows for a call with no input: %q", s)
+		}
+	}
+}
+
+// TestExcerptText: an excerpt keeps its first lines and marks the cut.
+func TestExcerptText(t *testing.T) {
+	if got := ExcerptText(" a\nb "); got != "a\nb" {
+		t.Errorf("short: %q", got)
+	}
+	if got := ExcerptText("1\n2\n3\n4\n5\n6"); got != "1\n2\n3\n4…" {
+		t.Errorf("long: %q", got)
 	}
 }

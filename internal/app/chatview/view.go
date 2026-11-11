@@ -1,6 +1,7 @@
 package chatview
 
 import (
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -34,6 +35,8 @@ const (
 	LabelCall      = "tool call"
 	// LabelCallIcon names the kind icon of a call line, followed by the icon's name.
 	LabelCallIcon = "tool icon"
+	// LabelCallDetail names the detail under an open call line, followed by the call's name.
+	LabelCallDetail = "call detail"
 	// LabelFade names the gradient over the bottom of the transcript, above the dock.
 	LabelFade = "transcript fade"
 	// TextTask names a background task's line, before its status and summary.
@@ -344,13 +347,28 @@ func (ch *Chat) noteLine(c *ui.Context, e transcript.Entry, own bool) {
 	})
 }
 
-// callLine is one tool call: a 14px slot with the working glyph while it runs, else the icon of
+// callLine is one tool call, with its detail under it while open (D274): a 14px slot with the working glyph while it runs, else the icon of
 // its kind (D274), its label, its key argument, an error mark and how long it took.
 func (ch *Chat) callLine(c *ui.Context, e transcript.Entry) {
-	pal := theme.Current()
 	call := e.Tool
 	name := ToolName(call)
-	ui.Row(c).Label(LabelCall + " " + name).FillWidth().Height(lineHeight).AlignItems(ui.Center).Gap(theme.Space8).Children(func() {
+	open := ch.calls[call.ID]
+	if open == nil {
+		open = new(bool)
+		ch.calls[call.ID] = open
+	}
+	p := ui.CollapsibleBase(c, open)
+	ui.Column(c).FillWidth().Children(func() {
+		ch.callHead(c, p.Trigger, e, name)
+		p.Panel(func() { ch.callDetail(c, call, name) })
+	})
+}
+
+// callHead is the line of a call, the trigger t that opens its detail.
+func (ch *Chat) callHead(c *ui.Context, t ui.Element, e transcript.Entry, name string) {
+	pal := theme.Current()
+	call := e.Tool
+	t.Label(LabelCall + " " + name).FillWidth().Height(lineHeight).AlignItems(ui.Center).Gap(theme.Space8).Cursor(ui.CursorPointer).Children(func() {
 		slot := ui.Box(c).Size(callIconSize, callIconSize).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).TextColor(pal.Ink48)
 		slot.Children(func() {
 			if !call.Done {
@@ -370,4 +388,43 @@ func (ch *Chat) callLine(c *ui.Context, e transcript.Entry) {
 			kit.Styled(ui.Text(c, DurationText(d)), ch.ts(theme.StyleMeta)).NoWrap().Shrink(0).TextColor(pal.Ink48)
 		}
 	})
+}
+
+// callDetail is the detail of an open call line: its input pairs, then the start of its result.
+func (ch *Chat) callDetail(c *ui.Context, call *transcript.Call, name string) {
+	pal := theme.Current()
+	ui.Column(c).Label(LabelCallDetail+" "+name).FillWidth().Padding(theme.Space2, 0, theme.Space6, callIconSize+theme.Space8).Gap(theme.Space2).Children(func() {
+		for _, kv := range call.Args {
+			ui.Row(c).FillWidth().Gap(theme.Space6).Children(func() {
+				kit.Styled(ui.Text(c, kv[0]+":"), ch.ts(theme.StyleMeta)).NoWrap().Shrink(0).TextColor(pal.Ink48)
+				kit.Styled(ui.Text(c, kv[1]), ch.ts(theme.StyleMeta)).Grow(1).MinWidth(0).TextColor(pal.Ink64)
+			})
+		}
+		if x := ExcerptText(call.Excerpt); x != "" {
+			kit.Styled(ui.Text(c, x), ch.ts(theme.StyleMeta)).FillWidth().MinWidth(0).Margin(theme.Space4, 0, 0, 0).TextColor(excerptInk(pal, call))
+		}
+	})
+}
+
+// excerptLines is the most lines of a result excerpt in a call's detail.
+const excerptLines = 4
+
+// ExcerptText is the start of a result excerpt: its first excerptLines lines, with "…" when it
+// has more.
+func ExcerptText(s string) string {
+	s = strings.TrimSpace(s)
+	lines := strings.SplitN(s, "\n", excerptLines+1)
+	if len(lines) > excerptLines {
+		return strings.Join(lines[:excerptLines], "\n") + "…"
+	}
+	return s
+}
+
+// excerptInk is the ink of a result excerpt: ink-48, and ink-64 for an error. No red: the
+// "error" word on the line is the one mark in blocked.
+func excerptInk(pal *theme.Palette, call *transcript.Call) ui.Color {
+	if call.Error {
+		return pal.Ink64
+	}
+	return pal.Ink48
 }
