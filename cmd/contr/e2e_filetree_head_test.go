@@ -12,12 +12,14 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/app/files"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/hc/hctest"
 )
 
 // TestFileTreeHeadCapture runs the built app against a scratch hc core, a scratch HOME and a scratch git
-// repository named contr. It checks the files panel head ("Files", D197), opens a folder and
+// repository named contr. It checks the files panel head ("Files", D197, and the Changed | All
+// switch, D264), picks All, opens a folder and
 // captures the window in Dark and Light: tmp/e2e/filetree-head-<theme>.png. It never touches the
 // owner's core:
 //
@@ -123,19 +125,32 @@ func TestFileTreeHeadCapture(t *testing.T) {
 			c := dial(t, sock)
 			defer c.conn.Close()
 			c.waitWindow(t)
+			// The folder has changes, so the panel opens on Changed (D264): panel.go shows with its
+			// counts, under the path row internal/app.
 			var labels map[string]bool
 			for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
 				c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "pointerMove", "x": 700, "y": 500}}})
-				if labels = c.labels(t); labels["panel.go"] {
+				if labels = c.labels(t); labels["internal/app"] && labels[files.ChangedLabel(2, true)] {
 					break
 				}
 			}
-			if !labels["panel.go"] && !labels["internal"] {
-				t.Fatalf("%s: the tree never showed; labels %v", theme, keys(labels))
+			if !labels["internal/app"] {
+				t.Fatalf("%s: the Changed view never showed; labels %v", theme, keys(labels))
 			}
 			// D197: the head is "Files"; it was the project name.
 			if !labels["Files name"] || labels["contr name"] {
 				t.Errorf("%s: the head does not show \"Files\"; labels %v", theme, keys(labels))
+			}
+			if !labels[files.LabelFilesShown] || !labels[files.ChangedLabel(2, true)] || !labels[files.LabelAll] {
+				t.Errorf("%s: the head has no Changed 2 | All switch (D264); labels %v", theme, keys(labels))
+			}
+			// All shows the whole tree.
+			b := c.boundsOf(t, files.LabelAll)
+			c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "click", "x": b.X + b.Width/2, "y": b.Y + b.Height/2}}})
+			for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline) && !c.labels(t)["internal"]; time.Sleep(200 * time.Millisecond) {
+			}
+			if !c.labels(t)["internal"] {
+				t.Fatalf("%s: All did not show the tree; labels %v", theme, keys(c.labels(t)))
 			}
 			// Open internal, then app.
 			for _, folder := range []string{"internal", "app"} {

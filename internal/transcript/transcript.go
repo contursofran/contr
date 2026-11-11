@@ -100,6 +100,9 @@ type Entry struct {
 	Text string
 	// Images is the number of images of a Prompt.
 	Images int
+	// Pics are the images of a Prompt whose bytes are in the transcript: a
+	// part of Images (D269). LoadPic reads one.
+	Pics []Pic
 	// Tool is set for a Tool entry.
 	Tool *Call
 	// Note is set for a Note entry.
@@ -140,6 +143,15 @@ type KitNote struct {
 	Status string
 }
 
+// Pic is an image of a prompt whose bytes are in the transcript. The bytes
+// are not kept: LoadPic reads them again from the line (D269).
+type Pic struct {
+	// Line is the offset of the line that holds the image, N the image's
+	// place among the image blocks of that line, from 0.
+	Line int64
+	N    int
+}
+
 // Result is a tool result for a call that an earlier read returned. Index
 // is the call's place among all entries the Reader returned, from 0.
 type Result struct {
@@ -172,6 +184,8 @@ type Reader struct {
 	// queued is the text of the last queued message read since the last text
 	// of Claude or prompt, so that a second shape of it is no second prompt.
 	queued string
+	// at is the offset of the line being read.
+	at int64
 }
 
 // NewReader returns a Reader that starts at offset. Calls before the offset
@@ -210,6 +224,7 @@ func (r *Reader) Read(src io.Reader) (Batch, error) {
 		if err != nil {
 			break // a part without '\n' is not consumed
 		}
+		r.at = r.next
 		r.next += int64(len(line))
 		r.line(line, &b, idx)
 	}
@@ -276,7 +291,7 @@ func (r *Reader) line(raw []byte, b *Batch, idx map[string]int) {
 		// Claude Code's queue (enqueue, dequeue, remove) is no delivery: a
 		// queued message shows where the session got it (D265).
 	case "attachment":
-		if e, queued, ok := attachment(base, l.Attachment); ok {
+		if e, queued, ok := attachment(base, r.at, l.Attachment); ok {
 			if queued {
 				r.once(&e)
 			}
@@ -295,6 +310,38 @@ type block struct {
 	ToolUseID string          `json:"tool_use_id"`
 	IsError   bool            `json:"is_error"`
 	Content   json.RawMessage `json:"content"`
+	Source    struct {
+		Type      string  `json:"type"`
+		MediaType string  `json:"media_type"`
+		Data      present `json:"data"`
+	} `json:"source"`
+}
+
+// present tells a JSON string that is not empty, and keeps none of it: the
+// bytes of an image stay in the file.
+type present bool
+
+func (p *present) UnmarshalJSON(b []byte) error {
+	*p = len(b) > 2 && b[0] == '"'
+	return nil
+}
+
+// picTypes are the media types of an image that the chat can show.
+var picTypes = map[string]bool{"image/png": true, "image/jpeg": true, "image/gif": true, "image/webp": true}
+
+// pics reads the image blocks of bs: their count, and a Pic for each one
+// whose bytes are in the line at offset at.
+func pics(bs []block, at int64) (n int, out []Pic) {
+	for _, bl := range bs {
+		if bl.Type != "image" {
+			continue
+		}
+		if bl.Source.Type == "base64" && bool(bl.Source.Data) && picTypes[bl.Source.MediaType] {
+			out = append(out, Pic{Line: at, N: n})
+		}
+		n++
+	}
+	return n, out
 }
 
 // blocks decodes content that is a list of blocks. A string gives one text
@@ -313,13 +360,12 @@ func blocks(raw json.RawMessage) []block {
 
 func (r *Reader) user(base Entry, meta, compact bool, content json.RawMessage, b *Batch, idx map[string]int, add func(Entry)) {
 	var texts []string
-	images := 0
-	for _, bl := range blocks(content) {
+	bs := blocks(content)
+	images, ps := pics(bs, r.at)
+	for _, bl := range bs {
 		switch bl.Type {
 		case "text":
 			texts = append(texts, bl.Text)
-		case "image":
-			images++
 		case "tool_result":
 			r.result(bl, base.Time, b, idx)
 		}
@@ -344,6 +390,7 @@ func (r *Reader) user(base Entry, meta, compact bool, content json.RawMessage, b
 	default:
 		classify(&e, images)
 		if e.Kind == Prompt {
+			e.Pics = ps
 			r.queued = ""
 		}
 	}
@@ -358,7 +405,7 @@ func (r *Reader) once(e *Entry) {
 	}
 	key := strings.TrimSpace(e.Text)
 	if key != "" && key == r.queued {
-		e.Kind, e.Hidden, e.Note, e.Images = Hidden, HideHarness, nil, 0
+		e.Kind, e.Hidden, e.Note, e.Images, e.Pics = Hidden, HideHarness, nil, 0, nil
 		return
 	}
 	r.queued = key
@@ -422,6 +469,32 @@ func QueuedTailAt(s string) int {
 		}
 	}
 	return end
+}
+
+// DropImageMarks removes Claude Code's "[Image #N]" marks from s, each
+// with one space after it, and trims what is left.
+func DropImageMarks(s string) string {
+	if !strings.Contains(s, "[Image #") {
+		return strings.TrimSpace(s)
+	}
+	var out strings.Builder
+	for s != "" {
+		i := strings.Index(s, "[Image #")
+		if i < 0 {
+			out.WriteString(s)
+			break
+		}
+		j := strings.IndexByte(s[i:], ']')
+		if j < 0 || !ImageMarker(s[i:i+j+1]) {
+			out.WriteString(s[:i+1])
+			s = s[i+1:]
+			continue
+		}
+		out.WriteString(s[:i])
+		s = s[i+j+1:]
+		s = strings.TrimPrefix(s, " ")
+	}
+	return strings.TrimSpace(out.String())
 }
 
 // ImageMarker tells a line that is only Claude Code's "[Image #N]" mark of
@@ -488,7 +561,7 @@ func assistant(base Entry, content json.RawMessage) []Entry {
 // A "queued_command" is a message that the owner sent while a turn ran and
 // that Claude Code gave to Claude in the turn: it is read as a user text at
 // its place (queued is set, D265).
-func attachment(base Entry, raw json.RawMessage) (e Entry, queued, ok bool) {
+func attachment(base Entry, at int64, raw json.RawMessage) (e Entry, queued, ok bool) {
 	var a struct {
 		Type      string          `json:"type"`
 		HookEvent string          `json:"hookEvent"`
@@ -502,18 +575,19 @@ func attachment(base Entry, raw json.RawMessage) (e Entry, queued, ok bool) {
 	e = base
 	if a.Type == "queued_command" {
 		var texts []string
-		images := 0
-		for _, bl := range blocks(a.Prompt) {
-			switch bl.Type {
-			case "text":
+		bs := blocks(a.Prompt)
+		images, ps := pics(bs, at)
+		for _, bl := range bs {
+			if bl.Type == "text" {
 				texts = append(texts, bl.Text)
-			case "image":
-				images++
 			}
 		}
 		if len(texts) > 0 || images > 0 {
 			e.Text = strings.Join(texts, "\n")
 			classify(&e, images)
+			if e.Kind == Prompt {
+				e.Pics = ps
+			}
 			return e, true, true
 		}
 	}
@@ -549,6 +623,11 @@ func classify(e *Entry, images int) {
 	// A prompt can carry a reminder or a hook's context: the prompt is what
 	// is left without them.
 	body, why := stripHarness(s)
+	if body == "" && images > 0 {
+		// Images with no text of the owner's (D269).
+		e.Text, e.Images = "", images
+		return
+	}
 	if body == "" {
 		e.Kind, e.Hidden = Hidden, why
 		return
@@ -571,6 +650,10 @@ func classify(e *Entry, images int) {
 		why = HideHarness
 	default:
 		e.Text = dropImageSources(body)
+		if images > 0 {
+			// The images show under the prompt: their marks go (D269).
+			e.Text = DropImageMarks(e.Text)
+		}
 		if e.Text == "" && images == 0 {
 			why = HideHarness
 		}
@@ -773,10 +856,12 @@ func isHookTag(s string) bool {
 }
 
 // isPlaybook tells a text of the kit's SessionStart hook (cmd/contr/hook.go:
-// startupText and restoreText).
+// chatSkillLine, which comes first in an hc terminal, startupText and
+// restoreText).
 func isPlaybook(s string) bool {
 	s = strings.TrimSpace(s)
-	return strings.HasPrefix(s, "contr: you are the coordinator") ||
+	return strings.HasPrefix(s, "contr: the owner reads your answers in contr's chat.") ||
+		strings.HasPrefix(s, "contr: you are the coordinator") ||
 		strings.HasPrefix(s, "contr: the conversation was compacted")
 }
 

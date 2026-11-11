@@ -33,6 +33,7 @@ const (
 	lHook      = `{"type":"attachment","attachment":{"type":"hook_additional_context","hookEvent":"UserPromptSubmit","content":["add it to your todos"]}}`
 	lPlaybook  = `{"type":"attachment","attachment":{"type":"hook_additional_context","hookEvent":"SessionStart","content":["contr: you are the coordinator of this project; …\nThe playbook:\n\n…"]}}`
 	lPlaybookU = `{"type":"user","message":{"content":"contr: the conversation was compacted. You are the coordinator"}}`
+	lSkillLine = `{"type":"user","message":{"content":"contr: the owner reads your answers in contr's chat. Before you write one, use the skill contr:chat-writing: it says what the chat shows.\ncontr: the conversation was compacted."}}`
 	lInterrupt = `{"type":"user","message":{"content":[{"type":"text","text":"[Request interrupted by user]"}]}}`
 	lCommand   = `{"type":"user","message":{"content":"<command-message>contr:orchestrate</command-message>\n<command-name>/contr:orchestrate</command-name>\n<command-args>ship #5</command-args>"}}`
 	lSide      = `{"type":"assistant","isSidechain":true,"message":{"content":[{"type":"text","text":"sub"}]}}`
@@ -167,6 +168,7 @@ func TestHidden(t *testing.T) {
 		{`{"type":"attachment","attachment":{"type":"new_thing","content":"x"}}`, HideMeta, "x"},
 		{lPlaybook, HidePlaybook, "contr: you are the coordinator of this project; …\nThe playbook:\n\n…"},
 		{lPlaybookU, HidePlaybook, "contr: the conversation was compacted. You are the coordinator"},
+		{lSkillLine, HidePlaybook, "contr: the owner reads your answers in contr's chat. Before you write one, use the skill contr:chat-writing: it says what the chat shows.\ncontr: the conversation was compacted."},
 		{lInterrupt, HideInterrupt, "[Request interrupted by user]"},
 		{`{"type":"user","message":{"content":"<user-prompt-submit-hook>check the board</user-prompt-submit-hook>"}}`, HideHook, "<user-prompt-submit-hook>check the board</user-prompt-submit-hook>"},
 		{`{"type":"user","message":{"content":"<session-start-hook>ok</session-start-hook>"}}`, HideHook, "<session-start-hook>ok</session-start-hook>"},

@@ -3,8 +3,13 @@
 package main
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"maps"
 	"os"
 	"path/filepath"
@@ -102,6 +107,15 @@ var seeFixtures = map[string]seeFixture{
 		},
 		ready: "lead, ",
 	},
+	"changes-long": {
+		about: "the session fixture with the changes of the changes fixture and 18 nested worktrees under .claude/worktrees, which git lists as untracked folders: the Changed list is longer than the panel (#693)",
+		setup: func(t *testing.T, h *harness) {
+			repo := seeSessionRepo(t, h)
+			seeChanges(t, repo)
+			seeNestedWorktrees(t, repo, 18)
+		},
+		ready: "Todos",
+	},
 	"updated": {
 		about: "the first start after an update: the Updated to pill with What's new open (D209)",
 		setup: func(t *testing.T, h *harness) {
@@ -190,6 +204,12 @@ var seeFixtures = map[string]seeFixture{
 		press: []string{"Chat", "b-630, ", "do:away", "lead, ", "wait:outline new count"},
 		hooks: map[string]func(t *testing.T, h *harness){"away": seeChatOutlineAway},
 	},
+	"chat-images": {
+		about: "the chat fixture with two more prompts (D269): one with two generated images as thumbnails under the bubble, one with images whose bytes are not in the transcript as the chip \"2 images\"",
+		setup: seeChatImages,
+		ready: "lead, ",
+		press: []string{"Chat", "wait:image 2"},
+	},
 	"session": {
 		about: "the orchestrator lead with the todos and artifacts of canvas board 11 (D197)",
 		setup: seeSession,
@@ -246,7 +266,10 @@ func (h *harness) labelTerminal(t *testing.T, name string, labels map[string]str
 
 // seeSession spawns lead and writes the session file of its terminal, as the
 // kit's hooks do (D195).
-func seeSession(t *testing.T, h *harness) {
+func seeSession(t *testing.T, h *harness) { seeSessionRepo(t, h) }
+
+// seeSessionRepo is seeSession; it returns the folder of demo.
+func seeSessionRepo(t *testing.T, h *harness) string {
 	repo := h.repo(t, "demo", "main")
 	w, err := h.mgr.Spawn(h.ctx, agents.Spec{Name: "lead", Profile: "claude-working", Role: agents.RoleOrchestrator, Project: "demo", Worktree: repo})
 	if err != nil {
@@ -273,6 +296,7 @@ func seeSession(t *testing.T, h *harness) {
 	if err := session.Write(filepath.Join(h.dir, "state"), w.Address, s); err != nil {
 		t.Fatal(err)
 	}
+	return repo
 }
 
 // seeChat spawns lead and writes a transcript of an orchestrator session in the scratch home, and
@@ -411,6 +435,53 @@ func seeAppend(t *testing.T, h *harness, end time.Time, lines ...seeLineT) {
 			t.Fatal(err)
 		}
 		if _, err := f.Write(append(b, '\n')); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// seeChatImages is seeChat with a prompt of two generated images and a prompt of two images
+// without bytes (D269).
+func seeChatImages(t *testing.T, h *harness) {
+	t.Helper()
+	seeChat(t, h)
+	path := filepath.Join(h.home, ".claude", "projects", "demo", "chat.jsonl")
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	now := time.Now()
+	shot := func(w, h int) map[string]any {
+		img := image.NewRGBA(image.Rect(0, 0, w, h))
+		for x := range w {
+			for y := range h {
+				v := uint8(60 + 120*x/w)
+				if y > h/3 && y < h/2 {
+					v = 230
+				}
+				img.Set(x, y, color.RGBA{v, v, v, 255})
+			}
+		}
+		var b bytes.Buffer
+		if err := png.Encode(&b, img); err != nil {
+			t.Fatal(err)
+		}
+		return map[string]any{"type": "image", "source": map[string]any{"type": "base64", "media_type": "image/png", "data": base64.StdEncoding.EncodeToString(b.Bytes())}}
+	}
+	noBytes := map[string]any{"type": "image", "source": map[string]any{"type": "url", "url": "https://example.invalid/old.png"}}
+	text := func(s string) map[string]any { return map[string]any{"type": "text", "text": s} }
+	line := func(uuid string, ago time.Duration, typ string, content any) string {
+		b, _ := json.Marshal(map[string]any{"type": typ, "uuid": uuid, "timestamp": now.Add(-ago).UTC().Format(time.RFC3339Nano),
+			"sessionId": "chat", "message": map[string]any{"role": typ, "content": content}})
+		return string(b) + "\n"
+	}
+	for _, l := range []string{
+		line("i1", 6*time.Second, "user", []any{text("[Image #1] [Image #2] The row clips here, see both shots."), shot(480, 300), shot(180, 320)}),
+		line("i2", 5*time.Second, "assistant", []any{text("I see it: the time runs into the badge.")}),
+		line("i3", 4*time.Second, "user", []any{text("and these, from the old build"), noBytes, noBytes}),
+	} {
+		if _, err := f.WriteString(l); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -574,6 +645,19 @@ func (c *client) wheel(t *testing.T, label, dy string) {
 	c.settle(t)
 }
 
+// wheelAt scrolls the element with this label by dy points at its center, as a touchpad does,
+// without waiting for a list to rest.
+func (c *client) wheelAt(t *testing.T, label, dy string) {
+	t.Helper()
+	d, err := strconv.ParseFloat(dy, 64)
+	if err != nil {
+		t.Fatalf("scroll %q: %v", dy, err)
+	}
+	b := c.boundsOf(t, label)
+	c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "wheel", "x": b.X + b.Width/2, "y": b.Y + b.Height/2, "dx": 0, "dy": d, "precise": true}}})
+	c.settle(t)
+}
+
 // restingList waits until the element with this label has rows that stay the same for two looks
 // 300 ms apart, and no Jump to latest shows: the list was laid out and is at its end. It returns
 // the bounds of the element.
@@ -630,10 +714,27 @@ func seeChanges(t *testing.T, repo string) {
 	}
 }
 
+// seeNestedWorktrees makes n git repos under .claude/worktrees in repo, as an
+// agent's nested worktrees: git lists each as one untracked folder whose path
+// ends with "/" (#693).
+func seeNestedWorktrees(t *testing.T, repo string, n int) {
+	for i := range n {
+		dir := filepath.Join(repo, ".claude", "worktrees", fmt.Sprintf("agent-a004bd4%02d7f1c9e5", i))
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		gitIn(t, dir, "init", "-q", "-b", "main")
+		if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 // TestSee is scripts/see.sh (#457, D178). It starts the fixture CONTR_SEE
 // names, in the themes of CONTR_SEE_THEME (dark, light or both), presses the
 // labels of CONTR_SEE_PRESS (one per line, `type:<text>` types text, `wheel:<dy>`
-// scrolls the chat by dy points once it rests at its end, `wait:<label>` fails the run when no
+// scrolls the chat by dy points once it rests at its end, `scroll:<label>:<dy>` scrolls the
+// element with that label by dy points, `wait:<label>` fails the run when no
 // element with that label shows in 20 s) in order, and writes
 // tmp/see/<fixture>-<theme>.png and tmp/see/<fixture>-<theme>.txt, the tree
 // of elements. Without CONTR_SEE it lists the fixtures.
@@ -686,6 +787,9 @@ func TestSee(t *testing.T) {
 				c.text(t, text)
 			} else if dy, ok := strings.CutPrefix(l, "wheel:"); ok { // scroll the chat
 				c.wheel(t, "chat", dy)
+			} else if rest, ok := strings.CutPrefix(l, "scroll:"); ok { // scroll the element with this label
+				label, dy, _ := strings.Cut(rest, ":")
+				c.wheelAt(t, label, dy)
 			} else if label, ok := strings.CutPrefix(l, "wait:"); ok { // fail when it does not show
 				c.waitLabel(t, label)
 			} else if hook, ok := strings.CutPrefix(l, "do:"); ok { // a step of the fixture

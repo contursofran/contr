@@ -4,8 +4,10 @@ A Claude Code plugin for agent work with `contr agents`:
 
 - `agents/`: the builder, planner and reviewer agent definitions.
 - `commands/orchestrate.md`: the coordinator playbook, as `/contr:orchestrate <goal>`.
+- `skills/chat-writing/SKILL.md`: what contr's chat shows (remarks, tables, chips, status board,
+  merge queue) and when to use each part, for any session in contr.
 - `hooks/hooks.json`: the Stop hook (a worker's turn that sent no report; a coordinator's state
-  before a compaction) and the SessionStart hook at startup of an orchestrator and after a compaction (the playbook).
+  before a compaction) and the SessionStart hook: in an hc terminal one line that names `contr:chat-writing`; at startup of an orchestrator and after a compaction, the playbook.
 - `.mcp.json`: starts `contr mcp`, which gives the session the agent tools (spawn, message,
   interrupt, stop, read, list, clear_ended). `stop` removes the
   worker's terminal unless `keep` is set. `contr` must be on the PATH; `scripts/install.sh` links it.

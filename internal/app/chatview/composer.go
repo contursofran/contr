@@ -4,8 +4,11 @@ package chatview
 // text into the session's own terminal and presses Enter, as the other sends of the app do.
 
 import (
+	"slices"
+	"strconv"
 	"strings"
 
+	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/contursofran/contr/internal/app/kit"
@@ -28,6 +31,15 @@ const (
 	// TextAnswerFirst shows when Enter comes while the session waits on a menu: the text is kept,
 	// so a stray Enter never picks a choice (D51). The notch answers the menu (D260).
 	TextAnswerFirst = "Answer in the notch first (⌘J), or switch to Terminal."
+	// LabelAttached names the chip of an image pasted in the composer: "attached Image 1".
+	LabelAttached = "attached"
+)
+
+// The keys that the composer presses in the terminal (D269).
+const (
+	// keyPasteImage is Ctrl+V: Claude Code reads the clipboard's image and writes "[Image #N]".
+	keyPasteImage = 0x16
+	keyEnter      = '\r'
 )
 
 // Sizes of the composer card (D271).
@@ -94,7 +106,7 @@ func (ch *Chat) composer(c *ui.Context, id string, st liveState) {
 	pal := theme.Current()
 	draft := ch.draft(id)
 	column(c, func() {
-		ui.Column(c).Label(LabelCard).FillWidth().Padding(cardPadY, cardPadRight, cardPadY, cardPadLeft).
+		card := ui.Column(c).Label(LabelCard).FillWidth().Padding(cardPadY, cardPadRight, cardPadY, cardPadLeft).
 			Radius(theme.Radius12).Border(1, pal.InputLine).Background(pal.Hover).Children(func() {
 			// While the session orchestrates, the team row takes the live line's place and carries
 			// its text, so the card does not change height when work starts and stops.
@@ -105,7 +117,21 @@ func (ch *Chat) composer(c *ui.Context, id string, st liveState) {
 			} else {
 				top = ch.live(c, st)
 			}
-			// Attachment chips go here, between the top line and the field.
+			// The chips of the images pasted since the last send, between the top line and the field
+			// (D269).
+			if n := ch.attached[id]; n > 0 {
+				chips := ui.Row(c).FillWidth().Wrap().Gap(theme.Space6).Padding(theme.Space6, 0, theme.Space2, 0)
+				if top {
+					chips = chips.Margin(fieldGap, 0, 0, 0)
+				}
+				chips.Children(func() {
+					for i := range n {
+						imageChip(c, "Image "+strconv.Itoa(i+1), LabelAttached)
+					}
+				})
+				top = true
+			}
+			svc := c.Services()
 			field := ui.Row(c).FillWidth().AlignItems(ui.End).Gap(theme.Space8)
 			if top {
 				field = field.Margin(fieldGap, 0, 0, 0)
@@ -114,11 +140,17 @@ func (ch *Chat) composer(c *ui.Context, id string, st liveState) {
 				in := ui.TextAreaBase(c.Key("composer:"+id), draft).Label(LabelComposer).Placeholder(Placeholder(ch.name(id))).
 					PlaceholderColor(pal.Ink48).TextColor(pal.Ink100).FontSize(theme.StyleProse.Size).LineHeight(theme.StyleProse.Line/theme.StyleProse.Size).
 					Lines(1, composerLines).Grow(1).MinWidth(0).PaddingY((actionSize - theme.StyleProse.Line) / 2).AutoFocus().Bind(&ch.field).
-					OnTextKey(func(k ui.TextKey) bool { return ch.textKey(id, st, k) })
+					OnTextKey(func(k ui.TextKey) bool { return ch.textKey(id, st, k) }).
+					OnPaste(func(text string) bool { return ch.paste(id, svc, text) })
 				if in.Changed() {
 					delete(ch.errs, id)
 				}
-				ch.action(c, id, st, ActionOf(*draft, st.kind == liveWorking, ch.Interrupt != nil))
+				a := ActionOf(*draft, st.kind == liveWorking, ch.Interrupt != nil)
+				if ch.attached[id] > 0 {
+					// Pasted images are something to send (D269).
+					a = ActionSend
+				}
+				ch.action(c, id, st, a)
 			})
 			if ch.Meta != nil {
 				if m := ch.Meta(id); m != "" {
@@ -126,6 +158,10 @@ func (ch *Chat) composer(c *ui.Context, id string, st liveState) {
 				}
 			}
 		})
+		if paths := card.DroppedFiles(); len(paths) > 0 {
+			ch.drop(draft, paths)
+			ch.field.Focus()
+		}
 		if e := ch.errs[id]; e != "" {
 			kit.Styled(ui.Text(c, e), theme.StyleSmall).Wrap().
 				Padding(theme.Space6, cardPadLeft, 0).TextColor(pal.Ink64)
@@ -200,10 +236,10 @@ func (ch *Chat) textKey(id string, st liveState, k ui.TextKey) bool {
 }
 
 // submit sends text from the field of terminal id, for Enter and for Send: clear empties the
-// field. A blank text, a send that runs or no Send does nothing. While the session waits on a
+// field. A blank text with no pasted images, a send that runs or no Send does nothing. While the session waits on a
 // menu, the text stays and the error says to answer the menu first.
 func (ch *Chat) submit(id string, st liveState, text string, clear func()) {
-	if strings.TrimSpace(text) == "" || ch.sending || ch.Send == nil {
+	if strings.TrimSpace(text) == "" && ch.attached[id] == 0 || ch.sending || ch.Send == nil {
 		return
 	}
 	if st.kind == liveNeedsYou {
@@ -215,18 +251,28 @@ func (ch *Chat) submit(id string, st liveState, text string, clear func()) {
 	ch.send(id, text)
 }
 
-// send types text into terminal id off the UI thread. The text shows at once as a pending prompt;
-// a failure drops it, puts the text back in an empty field and shows the error.
+// send types text into terminal id off the UI thread, with the images pasted since the last send.
+// The text shows at once as a pending prompt; a failure drops it, puts the text back in an empty
+// field, keeps the images and shows the error. Images alone press Enter: Claude Code's field holds
+// their marks (D269).
 func (ch *Chat) send(id, text string) {
 	ch.sending = true
 	delete(ch.errs, id)
-	pending := ch.model.AddPending(text)
+	images := ch.attached[id]
+	delete(ch.attached, id)
+	pending := ch.model.AddPendingImages(text, images)
 	ch.Env.Redraw()
 	ch.Env.Do(func() func() {
-		err := ch.Send(id, text)
+		var err error
+		if strings.TrimSpace(text) == "" {
+			err = ch.Keys(id, []byte{keyEnter})
+		} else {
+			err = ch.Send(id, text)
+		}
 		return func() {
 			ch.sending = false
 			if err != nil {
+				ch.attached[id] += images
 				ch.model.DropPending(pending)
 				if d := ch.draft(id); *d == "" {
 					*d = text
@@ -236,6 +282,63 @@ func (ch *Chat) send(id, text string) {
 			ch.Env.Redraw()
 		}
 	})
+}
+
+// paste takes a paste of the composer of terminal id that brings no text while the clipboard
+// holds an image: it presses Ctrl+V in the terminal off the UI thread, and Claude Code attaches the
+// image itself. The composer then shows a chip for it until the send; a failure shows under the
+// field. A paste with text, or with no image, goes on to the field (D269).
+func (ch *Chat) paste(id string, svc ui.Services, text string) bool {
+	if text != "" || ch.Keys == nil || !slices.Contains(svc.ClipboardFormats(), transfer.PNG) {
+		return false
+	}
+	if ch.sending {
+		return true
+	}
+	ch.sending = true
+	delete(ch.errs, id)
+	ch.Env.Do(func() func() {
+		err := ch.Keys(id, []byte{keyPasteImage})
+		return func() {
+			ch.sending = false
+			if err != nil {
+				ch.errs[id] = err.Error()
+			} else {
+				ch.attached[id]++
+			}
+			ch.Env.Redraw()
+		}
+	})
+	return true
+}
+
+// drop adds the paths of files dropped on the composer to the draft, each escaped as a terminal
+// pastes a dropped file. The send pastes them into the session, where Claude Code takes the path
+// of an image as an image (D269).
+func (ch *Chat) drop(draft *string, paths []string) {
+	parts := make([]string, 0, len(paths))
+	for _, p := range paths {
+		parts = append(parts, ShellEscape(p))
+	}
+	text := strings.Join(parts, " ")
+	if d := *draft; d != "" && !strings.HasSuffix(d, " ") && !strings.HasSuffix(d, "\n") {
+		text = " " + text
+	}
+	*draft += text
+	ch.Env.Redraw()
+}
+
+// ShellEscape puts a backslash before each byte of path that a shell reads as more than itself, as
+// a terminal does with the path of a dropped file.
+func ShellEscape(path string) string {
+	var b strings.Builder
+	for _, r := range path {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("/._-+,:@%=~", r) || r > 0x7f) {
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 // stop interrupts the agent of terminal id off the UI thread; a failure shows under the field.

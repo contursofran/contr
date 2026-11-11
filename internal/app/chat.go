@@ -37,7 +37,7 @@ func (f *Frame) attachChat(env view.Env, src agentstate.AgentSource) (stop func(
 		f.Outline.Chat = f.chatOutline
 	}
 	if src != nil {
-		f.Chat.Send, f.Chat.Interrupt = src.Send, src.Interrupt
+		f.Chat.Send, f.Chat.Keys, f.Chat.Interrupt = src.Send, src.SendKeys, src.Interrupt
 	}
 	f.syncChat()
 	return f.Chat.Close
