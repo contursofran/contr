@@ -48,6 +48,8 @@ type setupState struct {
 	copiedUntil time.Time
 	// write puts text on the clipboard; nil uses the system clipboard. Tests give a fake.
 	write func(string)
+	// passDone runs on the UI thread once, when the next pass ends (D280).
+	passDone func()
 }
 
 // SetupSteps is the number of required checks that are not ready, the core included. It is 0
@@ -84,15 +86,45 @@ func (s *Settings) recheck() {
 	if s.Setup == nil {
 		return
 	}
-	env := *s.Setup
+	env, run := *s.Setup, s.SetupRun
+	if run == nil {
+		run = setup.Run
+	}
 	s.su.latest.Reset()
 	s.su.latest.Read(s.Env, setupLimit, func(ctx context.Context) func() {
-		rs := setup.Run(ctx, env)
+		rs := run(ctx, env)
 		return func() {
 			s.su.results = rs
+			if done := s.su.passDone; done != nil {
+				s.su.passDone = nil
+				done()
+			}
 			s.Env.Redraw()
 		}
 	})
+	s.Env.Redraw()
+}
+
+// FirstSetup runs the checks once at start, off the UI thread, so the D146 dot shows without
+// opening Settings (D280). done runs on the UI thread when the pass ends, with the number of
+// required checks that are not ready, the hc core not counted: the core can still be connecting.
+// Without Setup it does nothing.
+func (s *Settings) FirstSetup(done func(steps int)) {
+	if s.Setup == nil {
+		return
+	}
+	s.su.passDone = func() { done(setup.Required(s.su.results)) }
+	s.recheck()
+}
+
+// OpenSetup opens the modal on the Setup tab, without a new pass.
+func (s *Settings) OpenSetup() {
+	s.tab = TabSetup
+	if !s.open {
+		s.open = true
+		s.ag = agentsState{}
+		s.probe()
+	}
 	s.Env.Redraw()
 }
 

@@ -145,3 +145,22 @@ func TestChatTextMissingOrUnknownIsDefault(t *testing.T) {
 		t.Error("zero Prefs: scale is not 1")
 	}
 }
+
+func TestSetupSeenSaveThenLoad(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if got, err := Load(path); err != nil || got.SetupSeen {
+		t.Fatalf("missing file: SetupSeen = %v, %v; want false", got.SetupSeen, err)
+	}
+	if err := os.WriteFile(path, []byte(`{"version":1}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := Load(path); err != nil || got.SetupSeen {
+		t.Fatalf("missing field: SetupSeen = %v, %v; want false", got.SetupSeen, err)
+	}
+	if err := Save(path, Prefs{SetupSeen: true}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := Load(path); err != nil || !got.SetupSeen {
+		t.Fatalf("SetupSeen = %v, %v; want true", got.SetupSeen, err)
+	}
+}
