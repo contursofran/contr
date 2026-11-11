@@ -29,6 +29,8 @@ type seeFixture struct {
 	ready string // a label prefix that shows once the state is on screen
 	// press are the labels pressed when CONTR_SEE_PRESS gives none.
 	press []string
+	// hooks are the steps that `do:<name>` runs between the presses.
+	hooks map[string]func(t *testing.T, h *harness)
 }
 
 // seeFixtures are the states scripts/see.sh knows. Add one when a change
@@ -174,6 +176,13 @@ var seeFixtures = map[string]seeFixture{
 		setup: seeChatLong,
 		ready: "lead, ",
 		press: []string{"Chat", "wheel:-300", "wait:pinned prompt", "wait:Jump to latest"},
+	},
+	"chat-outline": {
+		about: "the chat-scrolled transcript with a turn of each outline tick kind (D270): remarks (decision, warning, done, not verified, and a note that gets none), a pin and a question whose texts come from the owner store, the failed task outside the fold, the owner's prompts; then, while the owner looks at b-630, a turn comes with a prompt, a done remark and a new decision, so back on lead the column shows the three new (ink-100, count 3), and the open question and the new decision blocked",
+		setup: seeChatOutline,
+		ready: "lead, ",
+		press: []string{"Chat", "b-630, ", "do:away", "lead, ", "wait:outline new count"},
+		hooks: map[string]func(t *testing.T, h *harness){"away": seeChatOutlineAway},
 	},
 	"session": {
 		about: "the orchestrator lead with the todos and artifacts of canvas board 11 (D197)",
@@ -330,6 +339,72 @@ func seeChatLong(t *testing.T, h *harness) {
 			"then writes the plan in the issue. I tell you when the plan is ready.")),
 	} {
 		if _, err := f.WriteString(l); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// seeChatOutline is seeChatLong with a turn that has each kind of outline tick (D270), and the
+// owner store with the pin and the question that turn made.
+func seeChatOutline(t *testing.T, h *harness) {
+	t.Helper()
+	seeChatLong(t, h)
+	now := time.Now()
+	h.owner(t, fmt.Sprintf(`{"questions":[{"id":"D1","project":"demo","question":"Which name for the release: 0.42 or Notch?","asked":%q}],`+
+		`"todos":[{"id":"T1","project":"demo","kind":"do","text":"Test the build of 0.42 on your Mac","pinned":%q}],"next_question":2,"next_todo":2}`,
+		now.Add(-2*time.Second).UTC().Format(time.RFC3339Nano), now.Add(-2*time.Second).UTC().Format(time.RFC3339Nano)))
+	seeAppend(t, h, now.Add(-2*time.Second),
+		seeLine("o1", "assistant", seeText("The switch slice is merged.\n\n> [!DONE]\n> PR #633 is merged and `main` is green.\n\n"+
+			"> [!WARNING]\n> CI is slow on the hc tests: 9 minutes a run.\n\n> [!NOTE]\n> b-632 rebased on `main`.\n\n"+
+			"> [!UNVERIFIED]\n> The e2e run of the switch on a locked screen.")),
+		seeLine("o2", "assistant", []any{map[string]any{"type": "tool_use", "id": "tp1", "name": "mcp__plugin_contr_contr__pin_for_owner", "input": map[string]any{"text": "Test the build of 0.42 on your Mac"}}}),
+		seeLine("o3", "user", []any{map[string]any{"type": "tool_result", "tool_use_id": "tp1", "content": "T1"}}),
+		seeLine("o4", "assistant", []any{map[string]any{"type": "tool_use", "id": "tq1", "name": "mcp__plugin_contr_contr__ask_owner", "input": map[string]any{"question": "Which name for the release: 0.42 or Notch?"}}}),
+		seeLine("o5", "user", []any{map[string]any{"type": "tool_result", "tool_use_id": "tq1", "content": "D1"}}),
+		seeLine("o6", "assistant", seeText("I pinned the build test and asked for the release name.")),
+	)
+}
+
+// seeChatOutlineAway is the turn that comes while the owner looks at another worker: a done
+// remark and a decision that waits.
+func seeChatOutlineAway(t *testing.T, h *harness) {
+	t.Helper()
+	time.Sleep(1500 * time.Millisecond) // after the owner left lead
+	seeAppend(t, h, time.Now(),
+		seeLine("n1", "user", "merge #634 when its checks pass"),
+		seeLine("n2", "assistant", seeText("#634 is merged.\n\n> [!DONE]\n> PR #634 is merged.\n\n"+
+			"> [!DECISION]\n> Ship the notch now, before the release, or keep it behind the switch until you test the glass on a light wallpaper?")),
+	)
+}
+
+// seeText is the content of a text of Claude.
+func seeText(s string) []any { return []any{map[string]any{"type": "text", "text": s}} }
+
+// seeLine is a transcript line; seeAppend gives it its time.
+type seeLineT struct {
+	uuid, typ string
+	content   any
+}
+
+func seeLine(uuid, typ string, content any) seeLineT { return seeLineT{uuid, typ, content} }
+
+// seeAppend appends lines to the chat fixture's transcript, a second apart, the last at end.
+func seeAppend(t *testing.T, h *harness, end time.Time, lines ...seeLineT) {
+	t.Helper()
+	path := filepath.Join(h.home, ".claude", "projects", "demo", "chat.jsonl")
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	for i, l := range lines {
+		at := end.Add(-time.Duration(len(lines)-1-i) * 100 * time.Millisecond)
+		b, err := json.Marshal(map[string]any{"type": l.typ, "uuid": l.uuid, "timestamp": at.UTC().Format(time.RFC3339Nano),
+			"sessionId": "chat", "message": map[string]any{"role": l.typ, "content": l.content}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.Write(append(b, '\n')); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -607,6 +682,11 @@ func TestSee(t *testing.T) {
 				c.wheel(t, "chat", dy)
 			} else if label, ok := strings.CutPrefix(l, "wait:"); ok { // fail when it does not show
 				c.waitLabel(t, label)
+			} else if hook, ok := strings.CutPrefix(l, "do:"); ok { // a step of the fixture
+				if f.hooks[hook] == nil {
+					t.Fatalf("see: fixture %s has no hook %q", name, hook)
+				}
+				f.hooks[hook](t, h)
 			} else {
 				c.press(t, l)
 			}
