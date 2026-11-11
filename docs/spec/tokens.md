@@ -186,7 +186,7 @@ The 16 colors a program in the terminal asks for (SGR 30-37, 90-97, palette 0-15
 
 ## Motion
 
-Short transitions (D256, [Motion.md](Motion.md)). Each one eases out and ends; after its end no frame is drawn (D55).
+Short transitions (D256, D263, [Motion.md](Motion.md)). Each one eases out, unless its row gives another easing, and ends; after its end no frame is drawn (D55).
 
 | Token | Value | Use |
 |---|---|---|
@@ -196,3 +196,8 @@ Short transitions (D256, [Motion.md](Motion.md)). Each one eases out and ends; a
 | `motion-state` | `300ms` | The title ink and the "needs you" words of a worker row that turns to needs you. |
 | `motion-number` | `200ms` | The digits of a value roll. |
 | `motion-meter` | `300ms` | The fill of a meter moves to its new width. |
+| `motion-tab` | `180ms` | The pill of the selected tab slides to the tab selected now (D263). |
+| `motion-panel` | `220ms` | The sidebar or the files panel comes in as the owner shows it: 24px and a fade, along cubic-bezier(.2, 0, 0, 1) (D263). |
+| `motion-notch-open` | `260ms` | The questions card grows from the notch (D263). |
+| `motion-notch-close` | `160ms` | The notch shrinks back from the card, easing in (D263). |
+| `motion-row-in` | `200ms` | An agent row that arrives comes down 4px with a fade (D263). |

@@ -826,3 +826,51 @@ func TestSidebarContentSits20pxFromThePanelSide(t *testing.T) {
 	add := apptest.Box(t, h.tt, LabelProjectsAdd)
 	near("Projects head button right", add.X+add.W, right-14)
 }
+
+// An agent row that arrives fades and moves in over MotionRowIn, then asks for no frame (D263,
+// D55). A row that leaves goes at once.
+func TestAnArrivingAgentRowComesIn(t *testing.T) {
+	h := newRows(t)
+	h.tt.Advance(time.Second)
+	if h.tt.FramePending() {
+		t.Fatal("a frame is asked at rest")
+	}
+	snap := h.live.s
+	more := snap
+	more.Workers = append(slices.Clone(snap.Workers), builder("b-243", "lead", h.cwds[0], "243", time.Minute))
+	h.send(more)
+	if _, ok := h.tt.Find("b-243, working, 243, sonnet"); !ok {
+		t.Fatalf("no row b-243 at once; texts %q", h.tt.Texts())
+	}
+	h.tt.Advance(theme.MotionRowIn * 3 / 4)
+	if !h.tt.FramePending() {
+		t.Errorf("no frame asked at 3/4 of %v: the row does not come in", theme.MotionRowIn)
+	}
+	h.tt.Advance(theme.MotionRowIn/4 + 20*time.Millisecond)
+	if h.tt.FramePending() {
+		t.Errorf("a frame is asked after %v; want none at rest", theme.MotionRowIn)
+	}
+	h.send(snap)
+	if _, ok := h.tt.Find("b-243, working, 243, sonnet"); ok || h.tt.FramePending() {
+		t.Errorf("the row that left is still there (%v) or a frame is asked (%v); want it gone at once", ok, h.tt.FramePending())
+	}
+	// The rows that stay do not come in again.
+	h.send(more)
+	h.tt.Advance(theme.MotionRowIn + 20*time.Millisecond)
+	h.send(more)
+	if h.tt.FramePending() {
+		t.Error("a build with no new row asks for frames")
+	}
+}
+
+// The rows of the first build after the projects settle do not come in: at launch the sidebar
+// shows at rest (D263).
+func TestTheRowsAtLaunchDoNotComeIn(t *testing.T) {
+	h := newRows(t)
+	h.tt.Advance(time.Second)
+	h.list.rowsSeen = nil // as before the first build
+	h.send(h.live.s)
+	if len(h.list.rowsNew) != 0 || h.tt.FramePending() {
+		t.Errorf("new rows %v, frame asked %v at the first build; want none", h.list.rowsNew, h.tt.FramePending())
+	}
+}

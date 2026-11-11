@@ -366,7 +366,9 @@ func (l *SpacesList) agentRow(c *ui.Context, a agentLine, hint string) {
 			o.Selected = sel.ID == a.w.Address && sel.Kind != state.KindWorktree
 		}
 	}
-	kit.AgentRow(c, o)
+	// A row that came since the last build comes in (D263). A row that goes
+	// leaves at once: rows of a ui.List have no way out.
+	kit.RowIn(c, kit.AgentRow(c, o), l.rowsNew[a.w.Address])
 }
 
 // SelectAgent is a click on an agent row: the agent becomes the selection,

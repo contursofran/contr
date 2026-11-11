@@ -23,8 +23,38 @@ const (
 	MotionMeter = 300 * time.Millisecond
 )
 
+// Motion tokens of the second tier (D263): what moves and changes place.
+// All ease out (MotionEase), except a panel (MotionPanelEase) and the
+// questions card that closes into the notch (MotionNotchCloseEase).
+const (
+	// MotionTab: the pill of the selected tab slides to the tab selected now.
+	MotionTab = 180 * time.Millisecond
+	// MotionPanel: the sidebar or the files panel comes in as it shows.
+	MotionPanel = 220 * time.Millisecond
+	// MotionNotchOpen: the questions card grows from the notch.
+	MotionNotchOpen = 260 * time.Millisecond
+	// MotionNotchClose: the notch shrinks back from the card.
+	MotionNotchClose = 160 * time.Millisecond
+	// MotionRowIn: an agent row that arrives fades and moves in.
+	MotionRowIn = 200 * time.Millisecond
+)
+
+// Distances of the second tier (D263), in DIPs: a panel that shows comes in
+// from MotionPanelShift toward its outer edge; an agent row that arrives
+// comes down from MotionRowShift above its place.
+const (
+	MotionPanelShift = 24
+	MotionRowShift   = 4
+)
+
 // MotionPopScale is the scale a popover or modal comes in from and goes to.
 const MotionPopScale = 0.96
 
-// MotionEase is the easing of every motion token.
+// MotionEase is the easing of every motion token but the two below.
 var MotionEase ui.Easing = ui.EaseOut
+
+// MotionPanelEase is the easing of MotionPanel: cubic-bezier(.2, 0, 0, 1).
+var MotionPanelEase = ui.CubicBezier(0.2, 0, 0, 1)
+
+// MotionNotchCloseEase is the easing of MotionNotchClose.
+var MotionNotchCloseEase ui.Easing = ui.EaseIn

@@ -177,8 +177,13 @@ type Frame struct {
 	// waits for the dividers to rest before the save.
 	sidebarW, panelW float32
 	// icons tells that this frame draws the sidebar as an icon column (D128).
-	icons                   bool
-	movedNow, widthsTouched bool
+	icons bool
+	// panelsSeen tells that a frame drew the panels; wasSidebar and wasPanel are
+	// sidebarOpen and panelOpen in that frame. sidebarIn and filesIn tell that the
+	// owner showed the panel in this frame, so it comes in (D263).
+	panelsSeen, wasSidebar, wasPanel bool
+	sidebarIn, filesIn               bool
+	movedNow, widthsTouched          bool
 	// The Appearance setting (D119); see appearance.go.
 	appearance   mygo.ThemeSource
 	appearanceMu sync.Mutex
@@ -484,6 +489,7 @@ func (f *Frame) View(c *ui.Context) {
 // a draggable divider between neighbors (D111). sidebar and files are the
 // drawn widths.
 func (f *Frame) panels(c *ui.Context, sidebar, files float32, showFiles bool) {
+	f.panelsIn(showFiles)
 	terminal := func(c *ui.Context) {
 		if !showFiles {
 			f.terminalPanel(c)
@@ -498,8 +504,20 @@ func (f *Frame) panels(c *ui.Context, sidebar, files float32, showFiles bool) {
 	f.split(c, &f.sidebarW, sidebar, theme.SidebarMinWidth, theme.SidebarMaxWidth, false, f.icons, f.sidebarPanel, terminal)
 }
 
+// panelsIn sets sidebarIn and filesIn: the owner showed the panel since the last
+// frame (a toggle, not the window width), and it shows now. The first frame
+// shows the panels at rest.
+func (f *Frame) panelsIn(showFiles bool) {
+	f.sidebarIn = f.panelsSeen && f.sidebarOpen && !f.wasSidebar
+	f.filesIn = f.panelsSeen && showFiles && f.panelOpen && !f.wasPanel
+	f.panelsSeen, f.wasSidebar, f.wasPanel = true, f.sidebarOpen, f.panelOpen
+}
+
+// sidebarPanel is the sidebar slot. Shown by the owner, it comes in from the
+// left (kit.PanelIn, D263); the terminal takes its new width at once.
 func (f *Frame) sidebarPanel(c *ui.Context) {
-	kit.Panel(c, kit.PanelOpts{Name: LabelPanelSidebar, Bare: true, Body: func() { f.sidebar(c) }})
+	kit.PanelIn(c, kit.Panel(c, kit.PanelOpts{Name: LabelPanelSidebar, Bare: true, Body: func() { f.sidebar(c) }}),
+		f.sidebarIn, false)
 }
 
 func (f *Frame) terminalPanel(c *ui.Context) {
@@ -511,13 +529,14 @@ func (f *Frame) terminalPanel(c *ui.Context) {
 // D196). The v0.2 board and worker panel
 // stay in the code but are not shown (D122, D147).
 func (f *Frame) filesPanel(c *ui.Context) {
-	kit.Panel(c, kit.PanelOpts{Name: LabelPanelFiles,
+	// Shown by the owner, it comes in from the right (kit.PanelIn, D263).
+	kit.PanelIn(c, kit.Panel(c, kit.PanelOpts{Name: LabelPanelFiles,
 		Top:  func() { f.Session.View(c) },
 		Head: func() { f.Files.Head(c) },
 		Body: func() { f.Files.View(c) },
 		Footer: func() {
 			kit.UsageMeter(c, []kit.Meter{contextMeter(f.planUsage(), f.selectedTerminal(), f.contextLabels())})
-		}})
+		}}), f.filesIn, true)
 }
 
 // selectedTerminal is the hc terminal of the selected orchestrator, worker or

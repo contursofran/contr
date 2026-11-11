@@ -106,3 +106,65 @@ type roll struct {
 func MeterFill(e ui.Element, value float64) float64 {
 	return float64(e.AnimateWith("meter-fill", float32(value), theme.MotionMeter, theme.MotionEase))
 }
+
+// Second tier (D263): what moves and changes place. A pose only paints, so
+// a panel that shows and a row that arrives move without a new layout on
+// each frame: the terminal beside a panel resizes once, at the start.
+
+// SlideTransition slides an element that has the identity match from where
+// another element of the same match showed in the frame before, as the pill
+// of the selected tab, in theme.MotionTab. Match must be a type of the
+// caller's own, so that no other element shares it. With Reduce Motion it
+// is at its place at once.
+func SlideTransition(match any) ui.ElementTransition {
+	return ui.ElementTransition{Match: match, Duration: theme.MotionTab, Ease: theme.MotionEase}
+}
+
+// EnterPose poses e at from in the frame where enter is true, and from the
+// next frame moves it to rest as a says. Call it on each build of e, so that
+// the pose goes on. A pose only paints: the layout is at its end at once.
+// With Reduce Motion only the Fade of from plays.
+func EnterPose(c *ui.Context, e ui.Element, enter bool, from ui.Pose, a ui.Animation) ui.Element {
+	pose := ui.Pose{}
+	if enter {
+		pose = from
+		c.Invalidate()
+	}
+	return e.AnimatePose(pose, a)
+}
+
+// PanelIn moves a panel that shows in from theme.MotionPanelShift toward
+// its outer edge (left for the sidebar, right for the files panel) with a
+// fade, in theme.MotionPanel. show is true in the frame the panel shows.
+func PanelIn(c *ui.Context, panel ui.Element, show, fromRight bool) ui.Element {
+	x := float32(-theme.MotionPanelShift)
+	if fromRight {
+		x = theme.MotionPanelShift
+	}
+	return EnterPose(c, panel, show, ui.Pose{X: x, Fade: 1},
+		ui.Animation{Duration: theme.MotionPanel, Ease: theme.MotionPanelEase})
+}
+
+// RowIn moves a row that arrives down from theme.MotionRowShift above its
+// place with a fade, in theme.MotionRowIn. arrived is true in the frame the
+// row first shows after it arrived.
+func RowIn(c *ui.Context, row ui.Element, arrived bool) ui.Element {
+	return EnterPose(c, row, arrived, ui.Pose{Y: -theme.MotionRowShift, Fade: 1},
+		ui.Animation{Duration: theme.MotionRowIn, Ease: theme.MotionEase})
+}
+
+// GrowFrom grows an element that appears from the box and the colors of the
+// element of the same match in the frame before, as the questions card from
+// the notch, in theme.MotionNotchOpen. Match must be a type of the caller's
+// own. Other changes of the element (its size as its text changes) are at
+// once: only its colors fade. With Reduce Motion the element is at its
+// place at once.
+func GrowFrom(match any) ui.ElementTransition {
+	return ui.ElementTransition{Match: match, Colors: true, Duration: theme.MotionNotchOpen, Ease: theme.MotionEase}
+}
+
+// ShrinkFrom is GrowFrom on the way back, as the notch from the questions
+// card that closes: in theme.MotionNotchClose, easing in.
+func ShrinkFrom(match any) ui.ElementTransition {
+	return ui.ElementTransition{Match: match, Colors: true, Duration: theme.MotionNotchClose, Ease: theme.MotionNotchCloseEase}
+}

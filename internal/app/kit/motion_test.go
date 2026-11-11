@@ -287,6 +287,18 @@ func TestPopoverPanelScalesIn(t *testing.T) {
 	}
 }
 
+// redLeft is the x of the first red pixel of row y of the tester's image, or
+// -1.
+func redLeft(tt *ui.Tester, y int) int {
+	img := tt.Image()
+	for x := 0; x < img.Bounds().Dx(); x++ {
+		if px := img.RGBAAt(x, y); px.R > px.G+20 {
+			return x
+		}
+	}
+	return -1
+}
+
 // redWidth counts the red pixels of row y of the tester's image.
 func redWidth(tt *ui.Tester, y int) int {
 	img := tt.Image()
@@ -297,4 +309,99 @@ func redWidth(tt *ui.Tester, y int) int {
 		}
 	}
 	return n
+}
+
+// slideMatch is the identity of the pill in TestPillSlides.
+type slideMatch struct{}
+
+// The pill of the selected tab slides to the tab selected now in MotionTab,
+// and asks for no frame after it. The selected state is at once. With
+// Reduce Motion the pill is at its place at once and asks for no frame.
+func TestPillSlides(t *testing.T) {
+	for _, reduce := range []bool{false, true} {
+		sel := 0
+		tt := motionTester(func(c *ui.Context) {
+			ui.Row(c).Children(func() {
+				for i := range 2 {
+					ui.Box(c.Key(i)).Size(100, 20).Children(func() {
+						if i == sel {
+							ui.Box(c).Absolute().Fill().Background(ui.RGBA(255, 0, 0, 1)).
+								Transition(SlideTransition(slideMatch{}))
+						}
+					})
+				}
+			})
+		}, reduce)
+		if reduce {
+			tt.Frame()
+			sel = 1
+			tt.Frame()
+			if x := redLeft(tt, 10); x != 100 || tt.FramePending() {
+				t.Errorf("reduce motion: pill at x %v, frame asked %v; want 100 at once and none", x, tt.FramePending())
+			}
+			continue
+		}
+		plays(t, tt, func() { sel = 1 }, theme.MotionTab, "tab pill")
+		if w := redWidth(tt, 10); w != 100 {
+			t.Errorf("pill %d px wide at rest, want 100", w)
+		}
+		sel = 0
+		tt.Frame()
+		tt.Advance(theme.MotionTab / 3)
+		if x := redLeft(tt, 10); x <= 0 || x >= 100 {
+			t.Errorf("pill at x %v a third of the way, want between 0 and 100", x)
+		}
+	}
+}
+
+// A panel that shows comes in with a fade in MotionPanel, and asks for no frame after it. A panel
+// built with the frame (show false) is at rest at once. With Reduce Motion
+// only the fade plays.
+func TestPanelComesIn(t *testing.T) {
+	for _, reduce := range []bool{false, true} {
+		on, shown := false, false
+		tt := motionTester(func(c *ui.Context) {
+			if !on {
+				return
+			}
+			b := ui.Box(c).Size(100, 60).Background(ui.RGBA(255, 0, 0, 1))
+			PanelIn(c, b, !shown, true)
+			shown = true
+		}, reduce)
+		plays(t, tt, func() { on = true }, theme.MotionPanel, "panel in")
+		if w := redWidth(tt, 30); w != 100 {
+			t.Errorf("reduce %v: panel %d px wide at rest, want 100", reduce, w)
+		}
+	}
+	// Half way the panel is still to the right of its place.
+	on := false
+	tt := motionTester(func(c *ui.Context) {
+		if on {
+			PanelIn(c, ui.Box(c).Size(100, 60).Background(ui.RGBA(255, 0, 0, 1)), true, true)
+		}
+	}, false)
+	tt.Frame()
+	on = true
+	tt.Frame()
+	if px := tt.Image().RGBAAt(2, 30); px.R > px.G+100 {
+		t.Errorf("panel in its first frame shows at its place: %v", px)
+	}
+}
+
+// An agent row that arrives fades and moves in in MotionRowIn, and asks for
+// no frame after it.
+func TestRowComesIn(t *testing.T) {
+	for _, reduce := range []bool{false, true} {
+		on, built := false, false
+		tt := motionTester(func(c *ui.Context) {
+			if !on {
+				return
+			}
+			RowIn(c, ui.Column(c).Children(func() {
+				AgentRow(c, AgentRowOpts{Label: "row", Title: "Agent", State: GlyphWorking})
+			}), !built)
+			built = true
+		}, reduce)
+		plays(t, tt, func() { on = true }, theme.MotionRowIn, "row in")
+	}
 }
