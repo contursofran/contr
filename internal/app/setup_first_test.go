@@ -80,4 +80,3 @@ func TestSetupDoesNotOpenWhenAllReady(t *testing.T) {
 	default:
 	}
 }
-
