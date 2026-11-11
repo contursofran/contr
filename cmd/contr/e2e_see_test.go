@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -153,6 +154,12 @@ var seeFixtures = map[string]seeFixture{
 		setup: seeChat,
 		ready: "lead, ",
 		press: []string{"Chat"},
+	},
+	"chat-scrolled": {
+		about: "the chat fixture scrolled up into the first turn (D266): its prompt pinned at the top, Jump to latest above the dock, and the time once per turn, under each prompt",
+		setup: seeChat,
+		ready: "lead, ",
+		press: []string{"Chat", "wheel:-260"},
 	},
 	"session": {
 		about: "the orchestrator lead with the todos and artifacts of canvas board 11 (D197)",
@@ -419,9 +426,28 @@ func seeWorkersRepo(t *testing.T, h *harness) string {
 	return repo
 }
 
+// wheel scrolls the element with this label by dy points (a number), at its center, as a
+// touchpad does.
+func (c *client) wheel(t *testing.T, label, dy string) {
+	t.Helper()
+	d, err := strconv.ParseFloat(dy, 64)
+	if err != nil {
+		t.Fatalf("wheel %q: %v", dy, err)
+	}
+	nodes := c.fullNodes(t)
+	i := slices.IndexFunc(nodes, func(n fullNode) bool { return n.Label == label })
+	if i < 0 {
+		t.Fatalf("no element %q", label)
+	}
+	b := nodes[i].Bounds
+	c.call(t, "input", map[string]any{"events": []map[string]any{{"type": "wheel", "x": b.X + b.Width/2, "y": b.Y + b.Height/2, "dx": 0, "dy": d, "precise": true}}})
+	c.settle(t)
+}
+
 // TestSee is scripts/see.sh (#457, D178). It starts the fixture CONTR_SEE
 // names, in the themes of CONTR_SEE_THEME (dark, light or both), presses the
-// labels of CONTR_SEE_PRESS (one per line, `type:<text>` types text) in order, and writes
+// labels of CONTR_SEE_PRESS (one per line, `type:<text>` types text, `wheel:<dy>`
+// scrolls the chat by dy points) in order, and writes
 // tmp/see/<fixture>-<theme>.png and tmp/see/<fixture>-<theme>.txt, the tree
 // of elements. Without CONTR_SEE it lists the fixtures.
 func TestSee(t *testing.T) {
@@ -471,6 +497,8 @@ func TestSee(t *testing.T) {
 		for i, l := range press {
 			if text, ok := strings.CutPrefix(l, "type:"); ok { // type into the focused field
 				c.text(t, text)
+			} else if dy, ok := strings.CutPrefix(l, "wheel:"); ok { // scroll the chat
+				c.wheel(t, "chat", dy)
 			} else {
 				c.press(t, l)
 			}
