@@ -1,7 +1,9 @@
 package files
 
 import (
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -561,6 +563,142 @@ func TestFileTreeHasNoGuides(t *testing.T) {
 	for x := x0; x < int(name.X)-15-theme.Space7-2; x++ {
 		if got := img.RGBAAt(x, y); got != want {
 			t.Fatalf("%v at x %d in the indent of inner.go %+v, want %v", got, x, name, want)
+		}
+	}
+}
+
+// worktreesRepo is changedRepo with two nested worktrees under
+// .claude/worktrees: git lists each as one untracked folder whose path ends
+// with "/" (#693). It also adds a file in src/deep, so the view has a path row
+// of a tracked folder.
+func worktreesRepo(t *testing.T) string {
+	dir := changedRepo(t)
+	apptest.Write(t, dir, "src/deep/new.go", "n\n")
+	for _, name := range []string{"agent-a004bd4", "agent-b19f2c0"} {
+		wt := filepath.Join(dir, ".claude", "worktrees", name)
+		apptest.Write(t, wt, "main.go", "package main\n")
+		cmd := exec.Command("git", "init", "-q", "-b", "main")
+		cmd.Dir = wt
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git init: %v\n%s", err, out)
+		}
+	}
+	return dir
+}
+
+// An untracked folder is one row with its path, no row under it and no counts
+// (#693). A click opens nothing; ⌘-click reveals it.
+func TestFileTreeUntrackedFolderIsOneRow(t *testing.T) {
+	dir := worktreesRepo(t)
+	r := newTreeRig(t, dir)
+	r.frame()
+	if _, ok := r.ft.byPath[".claude/worktrees/agent-a004bd4/"]; !ok {
+		t.Fatalf("git did not list the worktree as an untracked folder: %v", r.ft.changes)
+	}
+	a := apptest.Box(t, r.tt, ".claude/worktrees/agent-a004bd4")
+	b := apptest.Box(t, r.tt, ".claude/worktrees/agent-b19f2c0")
+	if b.Y-a.Y != theme.SizeFileRowHeight {
+		t.Errorf("rows at %v and %v: want the second right under the first, with no row between", a.Y, b.Y)
+	}
+	if !apptest.Absent(r.tt, "main.go") {
+		t.Errorf("a file of the worktree shows: %q", r.tt.Texts())
+	}
+	if err := r.tt.Click(".claude/worktrees/agent-a004bd4"); err != nil {
+		t.Fatal(err)
+	}
+	r.frame()
+	if c := apptest.Box(t, r.tt, ".claude/worktrees/agent-b19f2c0"); c.Y != b.Y || len(r.opened) != 0 {
+		t.Errorf("a click changed the rows (next row at %v, was %v) or opened %v", c.Y, b.Y, r.opened)
+	}
+	if err := r.tt.ClickWith(ui.Cmd, ".claude/worktrees/agent-a004bd4"); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{filepath.Join(dir, ".claude", "worktrees", "agent-a004bd4")}; !slices.Equal(r.revealed, want) {
+		t.Errorf("revealed %v, want %v", r.revealed, want)
+	}
+	// In All the folder is a folder as any other: it opens on a click.
+	r.all()
+	r.tt.Click(".claude")
+	r.frame()
+	if !r.has("worktrees") {
+		t.Errorf("All: .claude did not open: %q", r.tt.Texts())
+	}
+}
+
+// A path row of the Changed view gives its whole path as a tip, as a long
+// path clips at its end (#693).
+func TestFileTreePathRowHasTheWholePathAsATip(t *testing.T) {
+	r := newTreeRig(t, worktreesRepo(t))
+	r.frame()
+	for _, label := range []string{".claude/worktrees/agent-a004bd4", "src/deep"} {
+		if a, ok := r.tt.Access(label); !ok || a.Description != label {
+			t.Errorf("%s: description %q (found %v), want the path", label, a.Description, ok)
+		}
+	}
+	if a, _ := r.tt.Access("mod.go, +3 −0"); a.Description != "" {
+		t.Errorf("a file row has a tip: %q", a.Description)
+	}
+}
+
+// longTree is a tree that has read a folder with 20 changes, 18 of them
+// untracked folders: taller than the panel (#693). It runs no read.
+func longTree() *FileTree {
+	t := &FileTree{dir: "/p", changesOK: true, Dir: func() string { return "/p" }}
+	var list []review.File
+	var root []review.Entry
+	for i := range 18 {
+		list = append(list, review.File{Path: fmt.Sprintf(".claude/worktrees/agent-a004bd4%02d/", i), Status: review.Added, Binary: true})
+	}
+	list = append(list, review.File{Path: "a.go", Status: review.Modified, Added: 2, Removed: 1},
+		review.File{Path: "z.go", Status: review.Modified, Added: 1})
+	for i := range 30 {
+		root = append(root, review.Entry{Name: fmt.Sprintf("f%02d.go", i)})
+	}
+	t.setChanges(list)
+	t.loaded = map[string][]review.Entry{"": root}
+	t.loading, t.opened, t.openFiltered = map[string]bool{}, map[string]*bool{}, map[string]*bool{}
+	return t
+}
+
+// A list taller than its area scrolls inside it, in Changed and in All; the
+// block above, the head and the footer keep their places (#693).
+func TestFileTreeLongListScrollsInItsArea(t *testing.T) {
+	for _, all := range []bool{false, true} {
+		tree := longTree()
+		last := "z.go, +1 −0"
+		if all {
+			tree.pick(false)
+			last = "f29.go"
+		}
+		tt := ui.NewTester(func(c *ui.Context) {
+			theme.Apply(c)
+			kit.Panel(c, kit.PanelOpts{Name: "Files",
+				Top:    func() { ui.Text(c, "top block") },
+				Head:   func() { tree.Head(c) },
+				Body:   func() { tree.View(c) },
+				Footer: func() { ui.Text(c, "footer") }})
+		}, theme.SizeFilesWidth, 400)
+		tt.Frame()
+		fixed := []string{"top block", "Files name", LabelFilesShown, "footer"}
+		before := map[string]ui.Rect{}
+		for _, l := range fixed {
+			before[l] = apptest.Box(t, tt, l)
+		}
+		foot := before["footer"]
+		if b, _ := tt.Find(last); b.H > 0 {
+			t.Fatalf("all %v: %s shows before a scroll: %+v", all, last, b)
+		}
+		area := apptest.Box(t, tt, LabelFileTree)
+		tt.Scroll(area.X+area.W/2, area.Y+area.H/2, 0, 2000)
+		tt.Frame()
+		b, _ := tt.Find(last)
+		if b.H == 0 || b.Y+b.H > foot.Y {
+			t.Errorf("all %v: after a scroll %s is at %+v, want it shown above the footer at %v", all, last, b, foot.Y)
+		}
+		for _, l := range fixed {
+			if got := apptest.Box(t, tt, l); got != before[l] {
+				t.Errorf("all %v: %s moved from %+v to %+v", all, l, before[l], got)
+			}
 		}
 	}
 }

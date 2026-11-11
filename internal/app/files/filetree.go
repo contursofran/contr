@@ -428,7 +428,9 @@ func (t *FileTree) note(c *ui.Context, s string) {
 // entries lists the folder rel. The Changed view has one level of path rows:
 // at the root, each folder that holds changed files as one row named by its
 // path ("internal/app"), then the changed files of the root; under a path
-// row, its changed files (D264). The All view lists the folder as read, with
+// row, its changed files (D264). An untracked folder that git lists as one
+// entry (its path ends with "/", as a nested worktree) is one row at the root
+// with no rows under it (#693). The All view lists the folder as read, with
 // the deleted files put back.
 func (t *FileTree) entries(rel string) []review.Entry {
 	var list []review.Entry
@@ -441,6 +443,12 @@ func (t *FileTree) entries(rel string) []review.Entry {
 	}
 	if t.OnlyChanged() {
 		for _, f := range t.changes {
+			if dir, ok := untrackedDir(f.Path); ok {
+				if rel == "" {
+					add(dir, true)
+				}
+				continue
+			}
 			folder, name := path.Split(f.Path)
 			folder = strings.TrimSuffix(folder, "/")
 			switch {
@@ -473,6 +481,22 @@ func (t *FileTree) entries(rel string) []review.Entry {
 	}
 	review.SortEntries(list)
 	return list
+}
+
+// untrackedDir gives the folder of a change that git lists as a whole
+// untracked folder: its path ends with "/".
+func untrackedDir(p string) (string, bool) {
+	if !strings.HasSuffix(p, "/") {
+		return "", false
+	}
+	return strings.TrimSuffix(p, "/"), true
+}
+
+// shut tells whether the folder row rel of the Changed view is an untracked
+// folder: a row with no rows under it and no counts (#693).
+func (t *FileTree) shut(rel string) bool {
+	_, ok := t.byPath[rel+"/"]
+	return ok && t.OnlyChanged()
 }
 
 // openFor returns the open state of a folder. In the Changed view, path rows
@@ -574,7 +598,8 @@ func (t *FileTree) item(c *ui.Context, rel string, e review.Entry, depth int) {
 	f, changed := t.byPath[full]
 	var open *bool
 	var kids func()
-	if e.Dir {
+	pathRow := e.Dir && t.OnlyChanged()
+	if e.Dir && !t.shut(full) {
 		open = t.openFor(full)
 		kids = func() {
 			if !t.OnlyChanged() {
@@ -584,11 +609,15 @@ func (t *FileTree) item(c *ui.Context, rel string, e review.Entry, depth int) {
 		}
 	}
 	isOpen := open != nil && *open
-	name, icon, deleted := fileInks(p, f, changed && !e.Dir, e.Dir && t.OnlyChanged())
+	name, icon, deleted := fileInks(p, f, changed && !e.Dir, pathRow)
 	label := FileLabel(e.Name, f, changed && !e.Dir)
 	row := ui.TreeItem(c.Key(full), "", open, kids).Label(label).Height(theme.SizeFileRowHeight).
 		Gap(0).Radius(theme.Radius6).Cursor(ui.CursorPointer).
 		PaddingStart(theme.Space10 + float32(depth*fileIndent)).PaddingEnd(theme.Space10)
+	if pathRow {
+		// A long path clips at its end: the tip gives the whole path (#693).
+		row.Tooltip(full)
+	}
 	row.Children(func() {
 		// The margin takes back the room of the hidden arrow.
 		ui.Row(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(theme.Space7).MarginStart(-treeArrow).Children(func() {
@@ -620,6 +649,9 @@ func (t *FileTree) click(row ui.Element, rel string, dir bool, open *bool) {
 		return
 	}
 	if dir {
+		if open == nil {
+			return // an untracked folder of the Changed view: nothing to open (#693)
+		}
 		*open = !*open
 		t.Env.Redraw()
 		return
