@@ -38,6 +38,22 @@ scripts/bundle.sh      # builds dist/bundle/contr.app with `go tool mygo build`
 scripts/install.sh     # installs to /Applications and links `contr` in ~/.local/bin
 ```
 
+The Claude usage meter reads Claude Code's status line. contr does not edit
+Claude Code's settings, so set the `statusLine` command in
+`~/.claude/settings.json` yourself. Put `contr statusline --` before the
+command you use now; contr gives it the same input and prints its output:
+
+```json
+"statusLine": {
+  "type": "command",
+  "command": "~/.local/bin/contr statusline -- <your current command>"
+}
+```
+
+With no status line of your own, use `contr statusline` alone. Tools that
+rewrite `statusLine` can remove contr again. Then the meter shows
+"no data yet".
+
 ## Build and check
 
 Go downloads the toolchain that `go.mod` names.
