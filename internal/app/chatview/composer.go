@@ -20,7 +20,7 @@ import (
 const (
 	// LabelComposer names the field; its placeholder is "Message <name>…".
 	LabelComposer = "Message"
-	// LabelCard names the card: the team row, the field and the button (D271, D276).
+	// LabelCard names the card: the field and the button (D271, D276).
 	LabelCard = "composer"
 	// LabelFooter names the line under the card: the status at its left, the model at its right
 	// (D276).
@@ -57,9 +57,7 @@ const (
 	cardPadRight  = theme.Space8
 	footerHeight  = 18            // the line under the card
 	footerInset   = theme.Space16 // its side inset
-	// cardInset is the room the card takes from the column's width: its border and paddings.
-	cardInset = 2 + cardPadLeft + cardPadRight
-	// fieldGap is the room between the top line and the field.
+	// fieldGap is the room between the image chips and the field.
 	fieldGap = theme.Space2
 )
 
@@ -109,8 +107,8 @@ func (ch *Chat) draft(id string) *string {
 // composerText is the field's text: 14px on 22px lines (D276).
 var composerText = theme.TextStyle{Size: 14, Line: 22, Weight: 400}
 
-// composer builds the card of terminal id (D271, D276): one surface with, on top, the team row
-// while the session orchestrates; the field that grows with its text and, in line with its last
+// composer builds the card of terminal id (D271, D276). Above the card, outside it, the team row
+// while the session orchestrates. The card holds the field that grows with its text and, in line with its last
 // line, the round Send or Stop button. Under the card, outside it, the footer: the status at the
 // left, the model and context at the right. The last failure shows under the footer. The field
 // takes the focus as it appears: when the chat shows.
@@ -118,31 +116,24 @@ func (ch *Chat) composer(c *ui.Context, id string, st liveState) {
 	pal := theme.Current()
 	draft := ch.draft(id)
 	column(c, func() {
+		// While the session orchestrates, the team row sits above the card, outside it (D276).
+		if t, ok := ch.teamOf(id); ok {
+			ch.team(c, t)
+		}
 		card := ui.Column(c).Label(LabelCard).FillWidth().Padding(cardPadY, cardPadRight, cardPadY, cardPadLeft).
 			Radius(theme.Radius12).Border(1, pal.InputLine).Background(pal.Hover).Children(func() {
-			// While the session orchestrates, the team row is on top and carries the live text.
-			top := false
-			if t, ok := ch.teamOf(id); ok {
-				ch.team(c, t, st)
-				top = true
-			}
-			// The chips of the images pasted since the last send, between the top line and the field
+			// The chips of the images pasted since the last send, above the field
 			// (D269).
 			if n := ch.attached[id]; n > 0 {
-				chips := ui.Row(c).FillWidth().Wrap().Gap(theme.Space6).Padding(theme.Space6, 0, theme.Space2, 0)
-				if top {
-					chips = chips.Margin(fieldGap, 0, 0, 0)
-				}
-				chips.Children(func() {
+				ui.Row(c).FillWidth().Wrap().Gap(theme.Space6).Padding(theme.Space6, 0, theme.Space2, 0).Children(func() {
 					for i := range n {
 						imageChip(c, "Image "+strconv.Itoa(i+1), LabelAttached)
 					}
 				})
-				top = true
 			}
 			svc := c.Services()
 			field := ui.Row(c).FillWidth().AlignItems(ui.End).Gap(theme.Space8)
-			if top {
+			if ch.attached[id] > 0 {
 				field = field.Margin(fieldGap, 0, 0, 0)
 			}
 			field.Children(func() {
@@ -180,8 +171,9 @@ func (ch *Chat) composer(c *ui.Context, id string, st liveState) {
 }
 
 // footer is the line under the card (D276), mono meta in ink-48: at the left the working glyph and
-// "Working 7s" while the agent works, which asks for a redraw each second (D55), else the keys; at
-// the right the model and context.
+// "Working 7s · Bash · gh pr diff 633" while the agent works, which asks for a redraw each second
+// (D55), else the keys; at the right the model and context, which never clips: the left text
+// clips first.
 func (ch *Chat) footer(c *ui.Context, id string, st liveState) {
 	pal := theme.Current()
 	ui.Row(c).Label(LabelFooter).FillWidth().Height(footerHeight).Padding(0, footerInset).AlignItems(ui.Center).
@@ -189,14 +181,18 @@ func (ch *Chat) footer(c *ui.Context, id string, st liveState) {
 		left := ui.Row(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(theme.Space6)
 		if st.kind == liveWorking {
 			text := TextWorking
-			if _, start, ok := ch.model.Activity(); ok {
+			what, start, ok := ch.model.Activity()
+			if ok {
 				text += " " + ElapsedText(c.Now().Sub(start))
 				ch.ticks = true
 				c.After(time.Second)
 			}
+			if what != "" && what != TextWorking {
+				text += " · " + what
+			}
 			left.Label(LabelLive + " " + text).Children(func() {
 				kit.StatusGlyph(c, kit.GlyphOpts{State: kit.GlyphWorking, Small: true})
-				kit.Styled(ui.Text(c, text), theme.StyleMeta).SingleLine().MinWidth(0).TextColor(pal.Ink48)
+				kit.Styled(ui.Text(c, text), theme.StyleMeta).SingleLine().Ellipsis("…").MinWidth(0).TextColor(pal.Ink48)
 			})
 		} else {
 			left.Children(func() {

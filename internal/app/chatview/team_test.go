@@ -145,28 +145,33 @@ func TestTeamRowErrorIsNotRed(t *testing.T) {
 	}
 }
 
-// While the session works, its live text sits at the right end of the team row, and no live line
-// shows apart: the dock keeps its height. Its time ticks; at rest nothing asks for a redraw.
-func TestTeamRowCarriesTheLiveText(t *testing.T) {
+// While the session works, the team row has no live text: the footer shows it after the status, and
+// the model text at its right does not clip. The time ticks; at rest nothing asks for a redraw.
+func TestFooterCarriesTheLiveText(t *testing.T) {
 	team, ok := mixed, true
 	s := teamSession(t, "working", &team, &ok)
 	turn := s.tt.Now().Add(-51 * time.Second).UTC().Format(time.RFC3339Nano)
 	s.write(strings.Replace(lTurn, "2026-11-10T10:00:00Z", turn, 1), lRunning)
-	live := LabelLive + " Bash · go test ./..."
-	row := apptest.Box(t, s.tt, LabelTeam)
-	text := apptest.Box(t, s.tt, live)
-	if text.Y < row.Y || text.Y+text.H > row.Y+row.H+0.5 || row.X+row.W-(text.X+text.W) > 1 {
-		t.Errorf("live text %+v is not at the right end of the team row %+v", text, row)
+	row, foot := apptest.Box(t, s.tt, LabelTeam), apptest.Box(t, s.tt, LabelFooter)
+	text := apptest.Box(t, s.tt, LabelLive+" "+TextWorking+" 51s · Bash · go test ./...")
+	if text.Y < foot.Y || text.Y+text.H > foot.Y+foot.H+0.5 {
+		t.Errorf("live text %+v is not in the footer %+v", text, foot)
 	}
 	if row.H != lineHeight {
-		t.Errorf("team row is %vpx high, want the live line's %v", row.H, lineHeight)
-	}
-	if !s.tt.HasText("51s") {
-		t.Errorf("no time: %v", s.tt.Texts())
+		t.Errorf("team row is %vpx high, want %v", row.H, lineHeight)
 	}
 	if !s.ch.ticks {
 		t.Error("a working session asks for no redraw of its time")
 	}
+	// Narrow: the live text clips, the model text keeps its width.
+	wide := apptest.Box(t, s.tt, "opus high · 212k").W
+	s.tt.SetSize(340, 900)
+	s.tt.Frame()
+	if meta := apptest.Box(t, s.tt, "opus high · 212k"); meta.W != wide {
+		t.Errorf("the model text clips: %v, want %v wide", meta.W, wide)
+	}
+	s.tt.SetSize(1000, 900)
+	s.tt.Frame()
 	working := s.dockTop(t)
 	s.status = "idle"
 	s.write(lTurn, lRunning, lDone, lSaid2)
@@ -191,14 +196,13 @@ func (s *sess) dockTop(t *testing.T) float32 {
 	return apptest.Box(t, s.tt, LabelTeam).Y
 }
 
-// In a narrow column the live text shortens first, then the count drops its last parts; the head
-// stays.
+// In a narrow column the count drops its last parts; the head stays.
 func TestTeamRowClipsFromTheRight(t *testing.T) {
 	team, ok := mixed, true
 	s := teamSession(t, "working", &team, &ok)
 	turn := s.tt.Now().Add(-51 * time.Second).UTC().Format(time.RFC3339Nano)
 	s.write(strings.Replace(lTurn, "2026-11-10T10:00:00Z", turn, 1), lRunning)
-	s.tt.SetSize(450, 900)
+	s.tt.SetSize(380, 900)
 	s.tt.Frame()
 	s.tt.Frame() // the content width of the last frame sets the room
 	if !shows(s, "Orchestrating · 4 agents") || !shows(s, "1 needs you") {
@@ -207,7 +211,7 @@ func TestTeamRowClipsFromTheRight(t *testing.T) {
 	if shows(s, "1 idle") {
 		t.Errorf("narrow: the last part stays: %v", s.tt.Texts())
 	}
-	s.tt.SetSize(340, 900)
+	s.tt.SetSize(280, 900)
 	s.tt.Frame()
 	s.tt.Frame()
 	if !shows(s, "Orchestrating · 4 agents") || shows(s, "1 needs you") {

@@ -180,7 +180,7 @@ var seeFixtures = map[string]seeFixture{
 		press: []string{"Chat"},
 	},
 	"chat-composer": {
-		about: "the chat fixture with text in the composer card (D271): the team row on top, two lines of text, the round Send button in ink-100 in line with the last line, and the footer under the card: Working at the left, the model and context at the right (D276)",
+		about: "the chat fixture with text in the composer card (D271): the team row above the card, two lines of text, the round Send button in ink-100 in line with the last line, and the footer under the card: Working with what lead does at the left, the model and context at the right (D276)",
 		setup: seeChat,
 		ready: "lead, ",
 		press: []string{"Chat", "type:Merge #611 first, then tell b-632 to merge main and run the review on its exact head. Then tell me when the queue is empty and all the checks pass."},

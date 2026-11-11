@@ -76,7 +76,7 @@ func (ch *Chat) Switch(c *ui.Context, id string) {
 }
 
 // View builds the chat of the terminal that Sync follows: the transcript in a list that follows
-// its end, with the pending prompts at its end, the live line or the team row, and the composer.
+// its end, with the pending prompts at its end, and the dock: team row, composer and footer.
 func (ch *Chat) View(c *ui.Context) {
 	ch.show()
 	ch.svc = c.Services()
@@ -130,7 +130,7 @@ func (ch *Chat) View(c *ui.Context) {
 				ch.jump(c, sc.news)
 			}
 		})
-		// The dock is the composer card, with the team row or the live line on top (D271).
+		// The dock is the team row, the composer card and its footer (D271, D276).
 		ui.Column(c).FillWidth().Shrink(0).Padding(0, theme.Space20, theme.Space14).Children(func() {
 			ch.composer(c, id, st)
 		})

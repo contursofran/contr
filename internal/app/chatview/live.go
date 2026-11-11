@@ -1,13 +1,11 @@
 package chatview
 
 // The live state (docs/spec/ChatView.md, D252, D276): whether the agent works, for the composer's
-// footer and the team row. The transcript gets Claude's text only when a block ends, so the footer
+// footer. The transcript gets Claude's text only when a block ends, so the footer
 // tells the owner that work goes on. A session that waits on a menu has no line: the notch answers it
 // (D260).
 
 import (
-	"github.com/egoist/mygo/ui"
-
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/tabmodel"
@@ -46,10 +44,4 @@ func (ch *Chat) state(id string) liveState {
 		return liveState{liveNeedsYou, w}
 	}
 	return liveState{w: w}
-}
-
-// topLine is the row of the team row at the top of the composer card. It ends as
-// far from the card's right edge as the text starts from its left edge.
-func topLine(c *ui.Context) ui.Element {
-	return ui.Row(c).FillWidth().Height(lineHeight).AlignItems(ui.Center).Margin(0, cardPadLeft-cardPadRight, 0, 0)
 }

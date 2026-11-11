@@ -196,7 +196,7 @@ func TestLiveLineWorking(t *testing.T) {
 	turn := s.tt.Now().Add(-65 * time.Second).UTC().Format(time.RFC3339Nano)
 	lTurn := strings.Replace(lTurn, "2026-11-10T10:00:00Z", turn, 1)
 	s.write(lTurn, lRunning)
-	if !s.has(LabelLive+" "+TextWorking+" 1m 5s") || s.tt.HasText(TextKeys) {
+	if !s.has(LabelLive+" "+TextWorking+" 1m 5s · Bash · go test ./...") || s.tt.HasText(TextKeys) {
 		t.Fatalf("running tool: texts %v", s.tt.Texts())
 	}
 	if !s.has(LabelStop) {
@@ -360,8 +360,7 @@ func TestComposerSendButtonOnAMenuWaits(t *testing.T) {
 // field (12) and the field box (44).
 const todayDock = 20 + 12 + 44
 
-// At rest, with the team row, the card is not taller than the team row and the field were, by more
-// than a few px; the button is in line with the field's one line; the model and context sit under
+// With the team row, the row sits above the card, outside it, its text at the footer's inset; the button is in line with the field's one line; the model and context sit under
 // the field, outside it.
 func TestComposerCardAtRestWithTeam(t *testing.T) {
 	s := newSession(t, "working")
@@ -371,8 +370,14 @@ func TestComposerCardAtRestWithTeam(t *testing.T) {
 	if card.H > todayDock+4 {
 		t.Errorf("the card is %vpx high, today's dock %dpx", card.H, todayDock)
 	}
-	if team.Y < card.Y || team.Y+team.H > field.Y {
-		t.Errorf("the team row %v is not on top of the field %v in the card %v", team, field, card)
+	if team.Y+team.H > card.Y || team.X != card.X {
+		t.Errorf("the team row %v is not above the card %v", team, card)
+	}
+	if head := s.rect("Orchestrating · 2 agents"); head.Y+head.H > card.Y || head.X < card.X+footerInset {
+		t.Errorf("the team head %v is not at the footer's inset above the card %v", head, card)
+	}
+	if field.Y < card.Y || field.Y+field.H > card.Y+card.H {
+		t.Errorf("the field %v is not in the card %v", field, card)
 	}
 	if stop.W != actionSize || stop.H != actionSize || stop.Y+stop.H != field.Y+field.H {
 		t.Errorf("the button %v is not 30px and in line with the field %v", stop, field)
