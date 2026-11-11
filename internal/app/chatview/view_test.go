@@ -432,3 +432,30 @@ func TestBlockedSenderDotHasNoRed(t *testing.T) {
 		t.Errorf("the blocked sender's dot has %d red pixels", n)
 	}
 }
+
+// The chat text size scales the chat's text (D272): a larger size makes the prompt bubble taller, and no TextScale is the Default size.
+func TestTextScaleGrowsTheChatText(t *testing.T) {
+	heights := func(scale float32) float32 {
+		r := newRig(t)
+		if scale != 0 {
+			r.ch.TextScale = func() float32 { return scale }
+		}
+		r.savePath(term)
+		r.selectTerm(term)
+		r.chat()
+		r.write(lPrompt, lSaid)
+		r.tt.Frame()
+		p, ok := r.tt.Find(LabelPrompt)
+		if !ok {
+			t.Fatal("no prompt")
+		}
+		return p.H
+	}
+	p0, p1, p2 := heights(0), heights(1), heights(1.3)
+	if p0 != p1 {
+		t.Errorf("no TextScale: prompt %v, want the Default %v", p0, p1)
+	}
+	if p2 <= p1 {
+		t.Errorf("at 1.3 the prompt is %v, default %v; want taller", p2, p1)
+	}
+}

@@ -121,24 +121,24 @@ func (ch *Chat) team(c *ui.Context, t Team, st liveState) {
 	shown := len(parts)
 	// The row is in the composer card: the card's border and paddings take room.
 	if w := min(ch.contentWidth(c), columnMax) - cardInset - (cardPadLeft - cardPadRight); w > 0 {
-		room := w - glyph - theme.Space8 - measure(c, head, theme.StyleLabel) - teamGap
+		room := w - glyph - theme.Space8 - measure(c, head, ch.ts(theme.StyleLabel)) - teamGap
 		if working {
 			room -= teamGap + glyph // the live text keeps its glyph and time; its words go first
 			if elapsed != "" {
-				room -= theme.Space8 + measure(c, elapsed, theme.StyleValue)
+				room -= theme.Space8 + measure(c, elapsed, ch.ts(theme.StyleValue))
 			}
 		}
 		widths := make([]float32, len(parts))
 		for i, p := range parts {
-			widths[i] = measure(c, p, theme.StyleValue)
+			widths[i] = measure(c, p, ch.ts(theme.StyleValue))
 		}
-		shown = fitParts(widths, measure(c, "·", theme.StyleValue), room)
+		shown = fitParts(widths, measure(c, "·", ch.ts(theme.StyleValue)), room)
 	}
 	topLine(c).Label(LabelTeam).Gap(teamGap).Children(func() {
 		ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(theme.Space8).Children(func() {
 			// The mascot in its orchestrating color, as the pill has it: still.
 			kit.StatusGlyph(c, kit.GlyphOpts{State: kit.GlyphWaiting, Claude: true, Small: true}).AccessHidden(true)
-			kit.Styled(ui.Text(c, head), theme.StyleLabel).NoWrap().TextColor(pal.Ink88)
+			kit.Styled(ui.Text(c, head), ch.ts(theme.StyleLabel)).NoWrap().TextColor(pal.Ink88)
 		})
 		if shown > 0 {
 			ch.teamCount(c, pal, parts[:shown], t)
@@ -165,7 +165,7 @@ func (ch *Chat) teamCount(c *ui.Context, pal *theme.Palette, parts []string, t T
 	ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(countGap).Children(func() {
 		for i, p := range parts {
 			if i > 0 {
-				kit.Styled(ui.Text(c, "·"), theme.StyleValue).NoWrap().TextColor(pal.Ink48).AccessHidden(true)
+				kit.Styled(ui.Text(c, "·"), ch.ts(theme.StyleValue)).NoWrap().TextColor(pal.Ink48).AccessHidden(true)
 			}
 			if i == 0 && needs {
 				b := ui.ButtonBase(c).Label(p).Shrink(0).OnClick(func() {
@@ -177,7 +177,7 @@ func (ch *Chat) teamCount(c *ui.Context, pal *theme.Palette, parts []string, t T
 					b = b.Cursor(ui.CursorPointer)
 				}
 				b.Children(func() {
-					kit.Styled(ui.Text(c, p), theme.StyleValue).NoWrap().TextColor(pal.BlockedText)
+					kit.Styled(ui.Text(c, p), ch.ts(theme.StyleValue)).NoWrap().TextColor(pal.BlockedText)
 				})
 				continue
 			}
@@ -185,7 +185,7 @@ func (ch *Chat) teamCount(c *ui.Context, pal *theme.Palette, parts []string, t T
 			if i == errAt {
 				ink = pal.Ink100
 			}
-			kit.Styled(ui.Text(c, p), theme.StyleValue).NoWrap().TextColor(ink)
+			kit.Styled(ui.Text(c, p), ch.ts(theme.StyleValue)).NoWrap().TextColor(ink)
 		}
 	})
 }
@@ -194,9 +194,9 @@ func (ch *Chat) teamCount(c *ui.Context, pal *theme.Palette, parts []string, t T
 // and the time since the turn started in ink-48. A time asks for a redraw in a second (D55).
 func (ch *Chat) working(c *ui.Context, pal *theme.Palette, what, elapsed string) {
 	kit.StatusGlyph(c, kit.GlyphOpts{State: kit.GlyphWorking, Small: true})
-	kit.Styled(ui.Text(c, what), theme.StyleValue).SingleLine().MinWidth(0).TextColor(pal.Ink64)
+	kit.Styled(ui.Text(c, what), ch.ts(theme.StyleValue)).SingleLine().MinWidth(0).TextColor(pal.Ink64)
 	if elapsed != "" {
-		kit.Styled(ui.Text(c, elapsed), theme.StyleValue).NoWrap().Shrink(0).TextColor(pal.Ink48)
+		kit.Styled(ui.Text(c, elapsed), ch.ts(theme.StyleValue)).NoWrap().Shrink(0).TextColor(pal.Ink48)
 		ch.ticks = true
 		c.After(time.Second)
 	}

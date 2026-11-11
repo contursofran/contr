@@ -211,3 +211,27 @@ func TestResetTintPutsBackTheDefaultsOfTheCurrentTheme(t *testing.T) {
 		t.Errorf("saved %+v: Dark must be empty and Light kept", v.Tint)
 	}
 }
+
+func TestChatTextLoadsSetsAndStores(t *testing.T) {
+	f, _ := themeFrame(t, func() (prefs.Prefs, error) {
+		return prefs.Prefs{Appearance: mygo.ThemeDark, ChatText: prefs.ChatLarge}, nil
+	})
+	saved := make(chan prefs.Prefs, 4)
+	f.deps.Prefs.Save = func(v prefs.Prefs) error { saved <- v; return nil }
+	f.StartTheme()
+	if f.ChatText() != prefs.ChatLarge || f.ChatScale() != 1.15 {
+		t.Fatalf("ChatText = %q at %v, want large at 1.15", f.ChatText(), f.ChatScale())
+	}
+	f.SetChatText(prefs.ChatSmall)
+	if f.ChatScale() != 0.9 {
+		t.Errorf("ChatScale = %v after Small, want 0.9 at once", f.ChatScale())
+	}
+	select {
+	case v := <-saved:
+		if v.ChatText != prefs.ChatSmall || v.Appearance != mygo.ThemeDark {
+			t.Errorf("saved %+v, want small and dark", v)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the size was not stored")
+	}
+}

@@ -127,7 +127,7 @@ func (ch *Chat) images(c *ui.Context, pics []transcript.Pic, count int) {
 			}
 		}
 		if quiet > 0 {
-			imageChip(c, ImagesText(quiet), LabelImages)
+			ch.imageChip(c, ImagesText(quiet), LabelImages)
 		}
 	})
 }
@@ -144,11 +144,11 @@ func (ch *Chat) thumb(c *ui.Context, k picKey, bmp *ui.Bitmap, label string) {
 }
 
 // imageChip is a quiet chip: "1 image" in a prompt, "Image 1" in the composer.
-func imageChip(c *ui.Context, text, label string) {
+func (ch *Chat) imageChip(c *ui.Context, text, label string) {
 	pal := theme.Current()
 	ui.Box(c).Label(label+" "+text).Shrink(0).Padding(theme.Space2, theme.Space8).Radius(theme.Radius6).
 		Border(1, pal.Hairline).Children(func() {
-		kit.Styled(ui.Text(c, text), theme.StyleMeta).NoWrap().TextColor(pal.Ink48)
+		kit.Styled(ui.Text(c, text), ch.ts(theme.StyleMeta)).NoWrap().TextColor(pal.Ink48)
 	})
 }
 

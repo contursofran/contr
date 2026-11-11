@@ -106,6 +106,11 @@ The owner's from-zero canvas (https://claude.ai/artifact/9bmbRdJc8qDMSRXm6obEb3)
 - Settings has an **Appearance** row: System, Dark, Light. The value is
   stored with the other settings, in `settings.json` in the user config
   folder (`internal/prefs`). An unknown stored value is System.
+- Settings has a **Chat text** row under it: Small, Default, Large, Larger
+  (D272). It scales the type styles of the Chat view only (0.9, 1, 1.15,
+  1.3): prompts, Claude's text, code, work rows and the composer. The
+  terminal and the chrome keep their size. A missing or unknown stored
+  value is Default.
 
 ## Type
 

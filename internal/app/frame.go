@@ -190,6 +190,7 @@ type Frame struct {
 	saveMu       sync.Mutex
 	prefsTimer   *time.Timer
 	tint         prefs.Tints
+	chatText     string
 	follower     *theme.Follower
 	lateWin      lateWindow
 	themeErr     error

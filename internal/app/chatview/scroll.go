@@ -83,8 +83,8 @@ func (ch *Chat) pinned(c *ui.Context, i int) {
 		Row().AlignItems(ui.Center).Gap(theme.Space12).Padding(0, ch.pinnedRight(c), 0, theme.Space16).
 		Background(pal.StageBase()).Cursor(ui.CursorPointer).
 		OnClick(func() { ch.list.ScrollTo(i, ui.Start) }).Children(func() {
-		kit.Styled(ui.Text(c, TextYou), theme.StyleSmall).NoWrap().Shrink(0).TextColor(pal.Ink48)
-		kit.Styled(ui.Text(c, text), theme.StyleSmall).SingleLine().Grow(1).MinWidth(0).TextColor(pal.Ink100)
+		kit.Styled(ui.Text(c, TextYou), ch.ts(theme.StyleSmall)).NoWrap().Shrink(0).TextColor(pal.Ink48)
+		kit.Styled(ui.Text(c, text), ch.ts(theme.StyleSmall)).SingleLine().Grow(1).MinWidth(0).TextColor(pal.Ink100)
 		ui.Box(c).Absolute().Left(0).Right(0).Bottom(0).Height(1).Background(pal.Hairline)
 	})
 }
@@ -134,8 +134,8 @@ func (ch *Chat) jump(c *ui.Context, news bool) {
 			if news {
 				ui.Box(c).Size(dotSize, dotSize).Shrink(0).Radius(dotSize / 2).Background(pal.Claude).AccessHidden(true)
 			}
-			kit.Styled(ui.Text(c, text), theme.StyleSmall).NoWrap().TextColor(pal.Ink100)
-			kit.Styled(ui.Text(c, "↓"), theme.StyleSmall).NoWrap().TextColor(pal.Ink100).AccessHidden(true)
+			kit.Styled(ui.Text(c, text), ch.ts(theme.StyleSmall)).NoWrap().TextColor(pal.Ink100)
+			kit.Styled(ui.Text(c, "↓"), ch.ts(theme.StyleSmall)).NoWrap().TextColor(pal.Ink100).AccessHidden(true)
 		})
 	})
 }

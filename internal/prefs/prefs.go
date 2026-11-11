@@ -23,6 +23,44 @@ type Prefs struct {
 	Appearance mygo.ThemeSource `json:"appearance"`
 	// Tint holds the transparency the owner tuned for each theme (D162).
 	Tint Tints `json:"tint"`
+	// ChatText is the text size of the Chat view (D272): one of ChatTextSizes. Empty or unknown
+	// is ChatDefault. ChatScale reads it.
+	ChatText string `json:"chatText,omitempty"`
+}
+
+// The chat text sizes (D272).
+const (
+	ChatSmall   = "small"
+	ChatDefault = "default"
+	ChatLarge   = "large"
+	ChatLarger  = "larger"
+)
+
+// ChatTextSizes are the chat text sizes in order, and ChatTextScales the scale of each.
+var (
+	ChatTextSizes  = [...]string{ChatSmall, ChatDefault, ChatLarge, ChatLarger}
+	ChatTextScales = [...]float32{0.9, 1, 1.15, 1.3}
+)
+
+// NormalizeChatText returns size when it is one of ChatTextSizes, and ChatDefault otherwise.
+func NormalizeChatText(size string) string {
+	for _, s := range ChatTextSizes {
+		if s == size {
+			return size
+		}
+	}
+	return ChatDefault
+}
+
+// ChatScale returns the scale of the chat text size: 1 for Default.
+func (p Prefs) ChatScale() float32 {
+	n := NormalizeChatText(p.ChatText)
+	for i, s := range ChatTextSizes {
+		if s == n {
+			return ChatTextScales[i]
+		}
+	}
+	return 1
 }
 
 // Tint is the alpha, 0 to 1, of the window ground (`glass-window`) and of the
@@ -80,7 +118,8 @@ func Path() (string, error) {
 // Load reads the settings at path. A missing file gives the defaults and no
 // error. A bad file gives the defaults and an error; the file stays as it is
 // until the next Save. A file without tint values gives the token defaults; values
-// outside 0 to 1 are limited to it. An unknown appearance value gives System and no error.
+// outside 0 to 1 are limited to it. An unknown appearance value gives System and no error; a missing or
+// unknown chat text size gives Default.
 func Load(path string) (Prefs, error) {
 	var f file
 	found, err := jsonfile.Load(path, &f)
@@ -95,6 +134,7 @@ func Load(path string) (Prefs, error) {
 	}
 	f.Appearance = Normalize(f.Appearance)
 	f.Tint = f.Tint.clean()
+	f.ChatText = NormalizeChatText(f.ChatText)
 	return f.Prefs, nil
 }
 
@@ -103,6 +143,7 @@ func Load(path string) (Prefs, error) {
 func Save(path string, p Prefs) error {
 	p.Appearance = Normalize(p.Appearance)
 	p.Tint = p.Tint.clean()
+	p.ChatText = NormalizeChatText(p.ChatText)
 	data, err := json.MarshalIndent(file{Version: version, Prefs: p}, "", "  ")
 	if err != nil {
 		return fmt.Errorf("prefs: encode: %w", err)

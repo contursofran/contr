@@ -40,6 +40,8 @@ Shared rules: [README.md](README.md).
 
 ## Rows
 
+The sizes in this file are the Default chat text size. The Chat text setting (D272) multiplies each type style of the chat (size and line height) and the Markdown font size by its scale; spacing, radii and widths stay.
+
 | Row | Value |
 |---|---|
 | Owner prompt | right-aligned, at most 560px, padding `8px 13px`, radius `radius-12`, fill `hover`, text `prose` in `ink-100` |
