@@ -48,10 +48,18 @@ func TestListPathsInGit(t *testing.T) {
 			t.Fatalf("git %v: %v %s", args, err, out)
 		}
 	}
+	if err := os.Remove(filepath.Join(root, "c.md")); err != nil {
+		t.Fatal(err)
+	}
+	nested := filepath.Join(root, "nest")
+	write(t, nested, "m.go")
+	if out, err := exec.Command("git", "-C", nested, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
 	got := names(t, root, "")
-	want := []string{".gitignore", "a/", "a/b.go", "c.md", "new/", "new/n.go"}
+	want := []string{".gitignore", "a/", "a/b.go", "nest/", "new/", "new/n.go"}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("paths = %q, want %q (tracked and untracked, not ignored)", got, want)
+		t.Errorf("paths = %q, want %q (tracked and untracked; not ignored, not deleted; a nested repo once)", got, want)
 	}
 }
 

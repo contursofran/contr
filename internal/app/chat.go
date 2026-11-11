@@ -8,6 +8,7 @@ import (
 	"errors"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -92,13 +93,18 @@ func listPaths(ctx context.Context, root, dir string) ([]chatview.Suggestion, er
 	}
 	seen := map[string]bool{}
 	for _, f := range files {
+		if _, err := os.Lstat(filepath.Join(root, filepath.FromSlash(f))); err != nil {
+			continue // deleted in the work tree, not yet in git
+		}
 		for i := range len(f) {
 			if d := f[:i+1]; f[i] == '/' && !seen[d] {
 				seen[d] = true
 				out = append(out, chatview.Suggestion{Name: d})
 			}
 		}
-		out = append(out, chatview.Suggestion{Name: f})
+		if !seen[f] { // git lists a nested repository as "dir/"
+			out = append(out, chatview.Suggestion{Name: f})
+		}
 	}
 	return out, nil
 }
