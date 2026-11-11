@@ -320,13 +320,13 @@ func TestEmptyProjectMenuStartsAnOrchestratorThere(t *testing.T) {
 	var started []string
 	h.list.OnNewIn = func(dir string) { started = append(started, dir) }
 	h.tt.Frame()
-	if _, ok := h.tt.Find(LabelNewIn(spaces.RepoGroup{Name: "gamma"})); ok {
+	if _, ok := h.tt.Find(MenuNewOrchestrator); ok {
 		t.Fatal("an empty project row shows a + button")
 	}
 	if err := h.tt.RightClick("gamma, nothing open"); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.tt.ChooseMenuItem(LabelNewIn(spaces.RepoGroup{Name: "gamma"})); err != nil {
+	if err := h.tt.ChooseMenuItem(MenuNewOrchestrator); err != nil {
 		t.Fatal(err)
 	}
 	if !slices.Equal(started, []string{"/proj/gamma"}) {

@@ -11,14 +11,14 @@ Opens from the "Open projects" item of the Projects head `+` menu (D171). The ow
 │ ⌕  Search projects, or paste a GitHub repo or a path            esc │  search
 ├─────────────────────────────────────────────────────────────────────┤
 │ Open · 2                              drag to reorder the sidebar   │  section + hint
-│ ⋮⋮ [C ] contr       ~/code/contr · main · orchestrator idle  Hide ⏎ switch │
+│ ⋮⋮ [C ] contr       ~/code/contr · main · orchestrator idle  Close ⏎ switch │
 │ ⋮⋮ [CR] contr-rune  ~/code/contr-rune · main · 1 needs you          │
 │ Recent                                                              │
 │    [S ] site        ~/code/site · main                      10m ago │
 ├─────────────────────────────────────────────────────────────────────┤
-│ ↑↓ move   ⏎ switch   ⌘⌫ hide                  [Open folder… ⌘O]    │  footer
+│ ↑↓ move   ⏎ switch   ⌘⌫ close project                  [Open folder… ⌘O]    │  footer
 └─────────────────────────────────────────────────────────────────────┘
-        toast: "<name> hidden from the sidebar"  Undo
+        toast: "<name> closed"  Undo
 ```
 
 | Part | Value |
@@ -33,13 +33,13 @@ Opens from the "Open projects" item of the Projects head `+` menu (D171). The ow
 | Name | Weight 600 `ink-100`; a recent name is weight 500 `ink-88`. One line, ellipsis. The part that matches the field is underlined in `ink-100`. |
 | Meta | Mono 11.5 px `ink-48`, one line, ellipsis. |
 | Need you | The `N need you` part of the meta is `blocked` text. This is the one exception to the `blocked` rule (Q1). |
-| Row actions | `Hide`: 12 px `ink-48`, radius 6, hover fill `hover`; shows on hover or selection. The hint is mono 11 px `ink-48`, only on the selected row. A recent row shows its age (mono 11 px `ink-48`) instead; the age hides on hover or selection. |
+| Row actions | `Close` (D291): 12 px `ink-48`, radius 6, hover fill `hover`; shows on hover or selection. The hint is mono 11 px `ink-48`, only on the selected row. A recent row shows its age (mono 11 px `ink-48`) instead; the age hides on hover or selection. |
 | Progress | 2 px line, radius 2, track `hairline`, bar `ink-64`, indeterminate (Q3). |
 | Error line | Mono 11.5 px `blocked`, wraps, under the meta. |
 | Empty | Text `ink-48`, centred, padding 22×12. |
 | Footer | Padding 10×16, `hairline` above, text 11.5 px `ink-48`, gap 14. `kbd`: mono 10.5 px weight 500 `ink-48`, border `input-line`, radius 5, padding 3×5. |
 | Ghost button | `Open folder… ⌘O`: border `input-line`, radius 7, padding 5×10, 12 px `ink-64`; hover fill `hover` and `ink-100`. Hidden when the app has no folder picker. |
-| Toast | Shown in the frame's toast viewport, so it outlives the dialog. Text `<name> hidden from the sidebar`; action `Undo`: weight 600 `ink-100`, no fill. |
+| Toast | Shown in the frame's toast viewport, so it outlives the dialog. Text `<name> closed`; action `Undo`: weight 600 `ink-100`, no fill. |
 
 ## States
 
@@ -65,9 +65,9 @@ Exact strings:
 - Sections: `Add`, `Open · N`, `Recent`.
 - Heading hint (not while filtering): `drag to reorder the sidebar`.
 - Add rows: `Clone owner/name`, meta `into <parent>/<name>`, `Change folder`, `Cancel`, `Try again`, `Open <folder>` (the path is the meta).
-- Hide: `Hide`; toast `<name> hidden from the sidebar` with `Undo`.
+- Close project: `Close`; toast `<name> closed` with `Undo`.
 - Empty: `No project matches "<text>". Paste a GitHub repo or a path to add one.`
-- Footer: `↑↓ move`, `⏎ <action>`, `⌘⌫ hide`, ghost `Open folder… ⌘O`.
+- Footer: `↑↓ move`, `⏎ <action>`, `⌘⌫ close project`, ghost `Open folder… ⌘O`.
 - A zero count never shows: no `0 worktrees`, no `0 need you`. The count reads `1 needs you` or `N need you` (N > 1).
 
 ## Behavior
@@ -92,7 +92,7 @@ Exact strings:
 |---|---|
 | `↑` `↓` | Move the selection; stop at the ends. |
 | `⏎` | Run the selected row (see the Enter label). |
-| `⌘⌫` | Hide the selected open row, only while the field is empty. With text in the field it deletes text, as in any field. The footer shows `⌘⌫ hide` only then. |
+| `⌘⌫` | Hide the selected open row, only while the field is empty. With text in the field it deletes text, as in any field. The footer shows `⌘⌫ close project` only then. |
 | `⌘O` | Open the folder dialog (same as the ghost button). |
 | Esc | With text in the field: clear it. With an empty field: close the dialog (Q2). |
 
@@ -113,7 +113,7 @@ Exact strings:
 ## Accessibility
 
 - The dialog label is `projects modal`; the field label is `Search projects, or paste a GitHub repo or a path`; the list label is `projects list`.
-- A row label is `project <name>`; the `Hide` label is `Hide <name>`. The add rows are `clone row` and `path row`.
+- A row label is `project <name>`; the `Close` label is `Close <name>`. The add rows are `clone row` and `path row`.
 - The selected row reports selected. The progress line says `Clone progress`.
 
 ## Tokens

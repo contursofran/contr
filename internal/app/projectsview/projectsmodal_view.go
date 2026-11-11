@@ -354,7 +354,7 @@ func (m *ProjectsModal) footer(c *ui.Context, rows []paletteRow) {
 			hint("⏎", lb)
 		}
 		if m.sel < len(rows) && rows[m.sel].kind == rowOpen && m.text() == "" {
-			hint("⌘⌫", "hide")
+			hint("⌘⌫", "close project")
 		}
 		ui.Spacer(c)
 		if m.PickFolder == nil {

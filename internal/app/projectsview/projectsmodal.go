@@ -33,7 +33,7 @@ const (
 	LabelProjectsFooter = "projects footer"
 	LabelProjectsDot    = "orchestrator dot"
 	LabelProjectsSearch = "Search projects, or paste a GitHub repo or a path"
-	ProjectsHide        = "Hide"
+	ProjectsHide        = "Close"
 	ProjectsOpenFolder  = "Open folder…"
 	LabelCloneRow       = "clone row"
 	LabelPathRow        = "path row"

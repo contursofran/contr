@@ -180,6 +180,7 @@ func (f *Frame) attachSidebar(w Window, env view.Env, agentSnap func() agentstat
 	if f.deps.OpenTerminal != nil {
 		f.NewTerm = &NewTerminal{Open: f.deps.OpenTerminal, Env: env,
 			Select: func(addr string) { f.Selection.Select(state.Selected{Kind: state.KindTerminal, ID: addr}) }}
+		l.OnNewTerminalIn = f.NewTerm.Start
 	}
 	return func() {
 		f.SpacesList.Close()

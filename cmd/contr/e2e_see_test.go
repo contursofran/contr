@@ -55,6 +55,14 @@ var seeFixtures = map[string]seeFixture{
 		},
 		ready: "Sidebar",
 	},
+	"empty-project": {
+		about: "the workers fixture and a stored project, site, with nothing open (D291); press its row, or right-click it for its menu",
+		setup: func(t *testing.T, h *harness) {
+			seeWorkers(t, h)
+			h.storedProject(t, "site")
+		},
+		ready: "site, ",
+	},
 	"workers": {
 		about: "project demo: an orchestrator and two builders, one working",
 		setup: seeWorkers,
@@ -660,6 +668,28 @@ func (h *harness) recentProject(t *testing.T, name string) {
 	path := filepath.Join(h.home, "code", name)
 	doc, err := json.Marshal(map[string]any{"version": 1, "recent": []map[string]any{
 		{"dir": filepath.Join(path, ".git"), "path": path, "at": time.Now().Add(-10 * time.Minute)}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "projects.json"), doc, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// storedProject makes the git repo name in the scratch folder and stores it as an
+// added folder with no terminal: an empty project (D116).
+func (h *harness) storedProject(t *testing.T, name string) {
+	t.Helper()
+	dir := filepath.Join(h.home, "Library", "Application Support", "contr")
+	path := h.repo(t, name, "main")
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		path = real
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := json.Marshal(map[string]any{"version": 1, "order": []string{filepath.Join(path, ".git")},
+		"folders": map[string]string{filepath.Join(path, ".git"): path}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -58,24 +58,64 @@ func TestEmptyTerminalWithNoProjectShowsTheFirstRun(t *testing.T) {
 	}
 }
 
-// With a project open and no terminal the texts of D247 stay, with no buttons (D255).
-func TestEmptyTerminalWithAProjectOpenKeepsItsTexts(t *testing.T) {
+// With a project row selected (a click on an empty project) and no terminal, the empty
+// terminal offers the starts of that project: New orchestrator and New terminal ⌘T (D291).
+func TestEmptyTerminalWithAProjectRowSelectedStartsInIt(t *testing.T) {
 	f, _, tt, _ := terminalFrame(t, nil)
 	dir := filepath.Join(t.TempDir(), "p")
 	store := &projects.Store{}
 	store.AddFolder(filepath.Join(dir, ".git"), dir)
 	f.SpacesList = sidebar.NewSpacesList(nil, f.Selection, view.Env{})
 	f.SpacesList.SetProjects(store)
-	f.Selection.Select(state.Selected{Kind: state.KindWorktree, ID: dir})
+	f.Selection.Select(state.Selected{Kind: state.KindWorktree, ID: dir}) // as a click on the row does
+	var spawned, opened []string
+	f.NewOrch = &NewOrchestrator{IsRepo: func(string) bool { return true },
+		Spawn: func(d string) (string, error) { spawned = append(spawned, d); return "o1", nil }}
+	f.NewTerm = &NewTerminal{Open: func(project, d string) (string, error) {
+		opened = append(opened, project, d)
+		return "tNew", nil
+	}}
 	tt.Frame()
 	got := strings.Join(tt.Texts(), "\n")
-	for _, want := range []string{TerminalOffLine, TerminalNewLine, "⌘T"} {
+	for _, want := range []string{TerminalOffLine, sidebar.MenuNewOrchestrator, TerminalNewLine, "⌘T"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("texts %q, want %q", got, want)
 		}
 	}
 	if strings.Contains(got, TerminalNoProjectLine) || strings.Contains(got, sidebar.LabelOpenProject) {
 		t.Errorf("texts %q, want no first run while a project is open", got)
+	}
+	if err := tt.Click(sidebar.MenuNewOrchestrator); err != nil {
+		t.Fatal(err)
+	}
+	if len(spawned) != 1 || spawned[0] != dir {
+		t.Errorf("spawned %v, want [%s]", spawned, dir)
+	}
+	if err := tt.Click(TerminalNewLine); err != nil {
+		t.Fatal(err)
+	}
+	f.openProject = "other"
+	f.newTerminal() // ⌘T opens in the selected project too, not in the title bar's
+	if want := []string{"p", dir, "p", dir}; strings.Join(opened, ",") != strings.Join(want, ",") {
+		t.Errorf("opened %v, want %v", opened, want)
+	}
+}
+
+// With a project open but no project row selected, the empty terminal keeps the texts of D247, with no buttons.
+func TestEmptyTerminalWithNoProjectRowSelectedKeepsItsTexts(t *testing.T) {
+	f, _, tt, _ := terminalFrame(t, nil)
+	dir := filepath.Join(t.TempDir(), "p")
+	store := &projects.Store{}
+	store.AddFolder(filepath.Join(dir, ".git"), dir)
+	f.SpacesList = sidebar.NewSpacesList(nil, f.Selection, view.Env{})
+	f.SpacesList.SetProjects(store)
+	f.openProject = "p" // a project open in the title bar, no project row selected
+	tt.Frame()
+	if _, ok := tt.Find(sidebar.MenuNewOrchestrator); ok {
+		t.Error("no project row selected, yet it shows the starts of a project row")
+	}
+	if !strings.Contains(strings.Join(tt.Texts(), "\n"), TerminalOffLine) {
+		t.Errorf("texts %q, want %q", tt.Texts(), TerminalOffLine)
 	}
 }
 

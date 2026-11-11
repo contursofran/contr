@@ -35,15 +35,22 @@ Design system page: component ProjectRow. Shared rules: [README.md](README.md).
   icon set has no chevron yet, so the row shows no fold mark; the state is
   in the screen-reader label (expanded). A folded project hides its agent
   rows, which sit under it in the same list (#344).
-- An empty project has no `+` on its row (D171). Its context menu has "New
-  orchestrator in <name>": it starts an orchestrator in the project folder
-  (D116). With the list focused and the key cursor on an empty project, the
-  menu key opens that menu, and Enter starts the orchestrator (D174).
-- Each project row has a context menu (D219). A project with agents has
-  "Close all agents": it stops each agent of the project and removes its
-  terminal, also an ended one, with no second click. Each project has "Hide project": it hides the project and shows a
-  toast with Undo (D207); it stops nothing. The menu key opens the menu of
-  the project under the key cursor.
+- An empty project has no `+` on its row (D171). With the list focused and
+  the key cursor on an empty project, the menu key opens its menu; Enter
+  starts nothing (D174).
+- Each project row has a context menu (D219, D291): "New orchestrator" while
+  the project has no orchestrator, "New terminal", a separator, "Close all
+  agents" while it has agents, and "Close project". The two starts run in the
+  project's folder (main checkout, else its first worktree, else the stored
+  folder), as the `+` menu and New tab do. "Close all agents" stops each
+  agent of the project and removes its terminal, also an ended one, with no
+  second click. "Close project" takes the project out of the sidebar and
+  shows the toast "<name> closed" with Undo (D207); it stops nothing, and
+  Open projects brings it back. The menu key opens the menu of the project
+  under the key cursor.
+- A click on an empty project selects it. The empty terminal then shows
+  "New orchestrator" and "New terminal ⌘T" for that project, and ⌘T opens
+  the terminal there (D291).
 - Empty projects sit after the projects with agents; the others keep the
   dragged order (D174).
 - The Projects head has one `+` button. Its menu has "New orchestrator" and
@@ -85,7 +92,7 @@ Design system page: component ProjectRow. Shared rules: [README.md](README.md).
 - One `ui.List` holds the projects and their agents; each row is a `kit.Row`. Do not use `ui.Sidebar`: it shows the selection in the accent color.
 - Open and close a project group with `CollapsibleBase`, or keep a collapsed set in the list state.
 - Reorder projects by drag with `ListState.Reorder`; store the order with `internal/projects`.
-- `.ContextMenu(...)`: Close all agents, Hide project (D219). Open in Finder and Remove wait.
+- `.ContextMenu(...)`: New orchestrator, New terminal, Close all agents, Close project (D219, D291). Open in Finder and Remove wait.
 
 ## Do and do not
 

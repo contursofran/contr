@@ -259,7 +259,7 @@ func TestProjectsModalCmdBackspaceWithTextDoesNotHide(t *testing.T) {
 	r.open()
 	r.tt.Type("a")
 	r.tt.Frame()
-	if slices.Contains(r.tt.Texts(), "hide") {
+	if slices.Contains(r.tt.Texts(), "close project") {
 		t.Error("the footer offers hide while the field has text")
 	}
 	r.tt.Key(ui.Cmd, ui.KeyBackspace) // deletes the text
@@ -273,14 +273,14 @@ func TestProjectsModalFooterOffersHideOnOpenRowOnly(t *testing.T) {
 	r := newModalRig(t)
 	r.store.Touch("/w/z/.git", "/w/z", time.Unix(1, 0))
 	r.open()
-	if !slices.Contains(r.tt.Texts(), "hide") {
+	if !slices.Contains(r.tt.Texts(), "close project") {
 		t.Error("no hide hint on an open row")
 	}
 	for range 3 {
 		r.tt.Key(0, ui.KeyDown)
 	}
 	r.tt.Frame()
-	if slices.Contains(r.tt.Texts(), "hide") {
+	if slices.Contains(r.tt.Texts(), "close project") {
 		t.Error("hide hint on a recent row")
 	}
 }
