@@ -34,14 +34,14 @@ const (
 func blockChips() *fakeChips {
 	return &fakeChips{known: map[string]Chip{},
 		workers: map[string]WorkerInfo{
-			"b-649": {Chip: Chip{ChipWorker, StateWorking}, PR: 656},
-			"b-665": {Chip: Chip{ChipWorker, StateWorking}},
-			"b-658": {Chip: Chip{ChipWorker, StateDone}, PR: 667},
-			"b-659": {Chip: Chip{ChipWorker, StateWaiting}},
+			"b-649": {Chip: Chip{Kind: ChipWorker, State: StateWorking}, PR: 656},
+			"b-665": {Chip: Chip{Kind: ChipWorker, State: StateWorking}},
+			"b-658": {Chip: Chip{Kind: ChipWorker, State: StateDone}, PR: 667},
+			"b-659": {Chip: Chip{Kind: ChipWorker, State: StateWaiting}},
 		},
 		refs: map[int]RefInfo{
-			656: {Chip: Chip{ChipPR, StateRunning}, Checks: github.CheckSummary{Pass: 2, Pending: 1}},
-			667: {Chip: Chip{ChipPR, StateMerged}, Done: true, Checks: github.CheckSummary{Pass: 3}},
+			656: {Chip: Chip{Kind: ChipPR, State: StateRunning}, Checks: github.CheckSummary{Pass: 2, Pending: 1}},
+			667: {Chip: Chip{Kind: ChipPR, State: StateMerged}, Done: true, Checks: github.CheckSummary{Pass: 3}},
 			665: {Chip: Chip{Kind: ChipIssue}},
 			659: {Chip: Chip{Kind: ChipIssue}},
 		}}
@@ -58,7 +58,7 @@ func today(hh, mm int) string {
 func keepBoard(ch *Chat, id, when string) {
 	at, _ := time.Parse(time.RFC3339Nano, when)
 	fc := blockChips()
-	fc.refs[656] = RefInfo{Chip: Chip{ChipPR, StateRunning}, Checks: github.CheckSummary{Pass: 1, Pending: 2}}
+	fc.refs[656] = RefInfo{Chip: Chip{Kind: ChipPR, State: StateRunning}, Checks: github.CheckSummary{Pass: 1, Pending: 2}}
 	lines, _ := ParseStatus(Parts(oldBoard)[1].Text)
 	rows := make([]BoardRow, len(lines))
 	for k, l := range lines {
@@ -134,7 +134,7 @@ func TestPartsMarkTheBlocks(t *testing.T) {
 }
 
 func TestBoardRowOf(t *testing.T) {
-	running := RefInfo{Chip: Chip{ChipPR, StateRunning}, Checks: github.CheckSummary{Pass: 2, Pending: 1, Skip: 4}}
+	running := RefInfo{Chip: Chip{Kind: ChipPR, State: StateRunning}, Checks: github.CheckSummary{Pass: 2, Pending: 1, Skip: 4}}
 	for _, tc := range []struct {
 		name  string
 		w     WorkerInfo
@@ -144,17 +144,17 @@ func TestBoardRowOf(t *testing.T) {
 		want  BoardRow
 	}{
 		{"unknown", WorkerInfo{}, false, RefInfo{}, false, BoardRow{State: TextNotFound, Checks: "—"}},
-		{"building", WorkerInfo{Chip: Chip{ChipWorker, StateWorking}}, true, RefInfo{}, false,
+		{"building", WorkerInfo{Chip: Chip{Kind: ChipWorker, State: StateWorking}}, true, RefInfo{}, false,
 			BoardRow{Found: true, Worker: StateWorking, State: "building", Checks: "—"}},
-		{"waiting", WorkerInfo{Chip: Chip{ChipWorker, StateWaiting}}, true, RefInfo{}, false,
+		{"waiting", WorkerInfo{Chip: Chip{Kind: ChipWorker, State: StateWaiting}}, true, RefInfo{}, false,
 			BoardRow{Found: true, Worker: StateWaiting, State: "waiting", Checks: "—"}},
-		{"ci running", WorkerInfo{Chip: Chip{ChipWorker, StateWorking}, PR: 656}, true, running, true,
+		{"ci running", WorkerInfo{Chip: Chip{Kind: ChipWorker, State: StateWorking}, PR: 656}, true, running, true,
 			BoardRow{Found: true, Worker: StateWorking, State: "CI running", PR: 656, PRState: StateRunning, Checks: "2 of 3"}},
-		{"pr not read yet", WorkerInfo{Chip: Chip{ChipWorker, StateWaiting}, PR: 656}, true, RefInfo{}, false,
+		{"pr not read yet", WorkerInfo{Chip: Chip{Kind: ChipWorker, State: StateWaiting}, PR: 656}, true, RefInfo{}, false,
 			BoardRow{Found: true, Worker: StateWaiting, State: "PR open", PR: 656, PRState: StateOpen, Checks: "—"}},
-		{"needs you wins", WorkerInfo{Chip: Chip{ChipWorker, StateNeedsYou}, PR: 656}, true, running, true,
+		{"needs you wins", WorkerInfo{Chip: Chip{Kind: ChipWorker, State: StateNeedsYou}, PR: 656}, true, running, true,
 			BoardRow{Found: true, Worker: StateNeedsYou, State: "needs you", PR: 656, PRState: StateRunning, Checks: "2 of 3"}},
-		{"merged", WorkerInfo{Chip: Chip{ChipWorker, StateDone}, PR: 667}, true, RefInfo{Chip: Chip{ChipPR, StateMerged}, Done: true, Checks: github.CheckSummary{Pass: 3}}, true,
+		{"merged", WorkerInfo{Chip: Chip{Kind: ChipWorker, State: StateDone}, PR: 667}, true, RefInfo{Chip: Chip{Kind: ChipPR, State: StateMerged}, Done: true, Checks: github.CheckSummary{Pass: 3}}, true,
 			BoardRow{Found: true, Worker: StateDone, State: "merged", PR: 667, PRState: StateMerged, Checks: "3 of 3"}},
 	} {
 		if got := BoardRowOf(tc.w, tc.found, tc.pr, tc.known); got != tc.want {
@@ -176,17 +176,17 @@ func TestStepViewOf(t *testing.T) {
 		{"unknown", step, RefInfo{}, false, StepView{}},
 		{"note alone", note, RefInfo{}, false, StepView{Tone: StateWaiting, Words: "waits for #656"}},
 		{"open issue and note", note, RefInfo{Chip: Chip{Kind: ChipIssue}}, true, StepView{Tone: StateWaiting, Words: "waits for #656"}},
-		{"merged", note, RefInfo{Chip: Chip{ChipPR, StateMerged}, Done: true}, true, StepView{Done: true, Merged: true, Tone: StateMerged, Words: "merged"}},
+		{"merged", note, RefInfo{Chip: Chip{Kind: ChipPR, State: StateMerged}, Done: true}, true, StepView{Done: true, Merged: true, Tone: StateMerged, Words: "merged"}},
 		{"closed issue", step, RefInfo{Chip: Chip{Kind: ChipIssue}, Done: true}, true, StepView{Done: true, Words: "closed"}},
-		{"one failed", step, RefInfo{Chip: Chip{ChipPR, StateFailed}, Checks: github.CheckSummary{Pass: 2, Fail: 1}}, true,
+		{"one failed", step, RefInfo{Chip: Chip{Kind: ChipPR, State: StateFailed}, Checks: github.CheckSummary{Pass: 2, Fail: 1}}, true,
 			StepView{Blocked: true, Words: "blocked: 1 check failed"}},
-		{"two failed and note", note, RefInfo{Chip: Chip{ChipPR, StateFailed}, Checks: github.CheckSummary{Fail: 2}}, true,
+		{"two failed and note", note, RefInfo{Chip: Chip{Kind: ChipPR, State: StateFailed}, Checks: github.CheckSummary{Fail: 2}}, true,
 			StepView{Blocked: true, Words: "blocked: 2 checks failed · waits for #656"}},
-		{"failed, no counts", step, RefInfo{Chip: Chip{ChipPR, StateFailed}}, true, StepView{Blocked: true, Words: "blocked: checks failed"}},
-		{"running", step, RefInfo{Chip: Chip{ChipPR, StateRunning}, Checks: github.CheckSummary{Pass: 2, Pending: 1}}, true,
+		{"failed, no counts", step, RefInfo{Chip: Chip{Kind: ChipPR, State: StateFailed}}, true, StepView{Blocked: true, Words: "blocked: checks failed"}},
+		{"running", step, RefInfo{Chip: Chip{Kind: ChipPR, State: StateRunning}, Checks: github.CheckSummary{Pass: 2, Pending: 1}}, true,
 			StepView{Tone: StateRunning, Words: "CI running · 2 of 3"}},
-		{"passed", step, RefInfo{Chip: Chip{ChipPR, StatePassed}, Checks: github.CheckSummary{Pass: 3}}, true, StepView{Tone: StatePassed, Words: "CI passed · 3 of 3"}},
-		{"open", step, RefInfo{Chip: Chip{ChipPR, StateOpen}}, true, StepView{Tone: StateOpen, Words: "open"}},
+		{"passed", step, RefInfo{Chip: Chip{Kind: ChipPR, State: StatePassed}, Checks: github.CheckSummary{Pass: 3}}, true, StepView{Tone: StatePassed, Words: "CI passed · 3 of 3"}},
+		{"open", step, RefInfo{Chip: Chip{Kind: ChipPR, State: StateOpen}}, true, StepView{Tone: StateOpen, Words: "open"}},
 	} {
 		if got := StepViewOf(tc.s, tc.r, tc.known); got != tc.want {
 			t.Errorf("%s: %+v, want %+v", tc.name, got, tc.want)
@@ -220,7 +220,7 @@ func hasPrefix(tt *ui.Tester, p string) string {
 func TestBoardIsLiveThenFrozen(t *testing.T) {
 	s := newSession(t, "idle")
 	fc := blockChips()
-	fc.refs[656] = RefInfo{Chip: Chip{ChipPR, StateRunning}, Checks: github.CheckSummary{Pass: 1, Pending: 2}}
+	fc.refs[656] = RefInfo{Chip: Chip{Kind: ChipPR, State: StateRunning}, Checks: github.CheckSummary{Pass: 1, Pending: 2}}
 	s.ch.Chips = fc
 	first := saidAt("o1", today(18, 45), oldBoard)
 	s.write(lPrompt, first)
@@ -238,7 +238,7 @@ func TestBoardIsLiveThenFrozen(t *testing.T) {
 	}
 	// The data change and a newer board comes.
 	s.tt.Advance(3 * time.Minute)
-	fc.refs[656] = RefInfo{Chip: Chip{ChipPR, StateRunning}, Checks: github.CheckSummary{Pass: 2, Pending: 1}}
+	fc.refs[656] = RefInfo{Chip: Chip{Kind: ChipPR, State: StateRunning}, Checks: github.CheckSummary{Pass: 2, Pending: 1}}
 	s.write(lPrompt, first, saidAt("n1", today(18, 49), newBoard))
 	if !inside(t, s.tt, LabelBoard+" frozen", "1 of 3") || inside(t, s.tt, LabelBoard+" frozen", "2 of 3") {
 		t.Errorf("the older board does not keep its values: %v", s.tt.Texts())
@@ -289,12 +289,29 @@ func TestBoardPROpens(t *testing.T) {
 	}
 }
 
+// The PR of a board row shows its Octicon by state (D286): a draft with failed checks, a merged one.
+func TestBoardPRIcons(t *testing.T) {
+	s := newSession(t, "idle")
+	fc := blockChips()
+	fc.refs[656] = RefInfo{Chip: Chip{Kind: ChipPR, State: StateFailed, Draft: true}, Checks: github.CheckSummary{Fail: 1}}
+	s.ch.Chips = fc
+	s.write(lPrompt, saidAt("o1", today(18, 45), oldBoard))
+	for _, want := range []string{"draft pull request", "merged pull request"} {
+		if _, ok := s.tt.Find(want); !ok {
+			t.Errorf("no %q icon", want)
+		}
+	}
+	if _, ok := s.tt.Find("open pull request"); ok {
+		t.Error("an open PR icon for a draft")
+	}
+}
+
 // A queue shows its steps in order, the note in words; a merged step dims and a step whose
 // checks failed is blocked and says so, in blocked-text.
 func TestQueueSteps(t *testing.T) {
 	s := newSession(t, "idle")
 	fc := blockChips()
-	fc.refs[656] = RefInfo{Chip: Chip{ChipPR, StateFailed}, Checks: github.CheckSummary{Pass: 2, Fail: 1}}
+	fc.refs[656] = RefInfo{Chip: Chip{Kind: ChipPR, State: StateFailed}, Checks: github.CheckSummary{Pass: 2, Fail: 1}}
 	s.ch.Chips = fc
 	s.write(lPrompt, saidAt("q1", today(18, 52), blockedQueue))
 	for k, want := range []string{"#667 First-run texts", "#656 Rows and badge", "#665 Fewer lines"} {
@@ -335,7 +352,7 @@ func TestBadBlockIsACodeBlock(t *testing.T) {
 func TestStateWordsAreGrey(t *testing.T) {
 	s := newSession(t, "idle")
 	fc := blockChips()
-	fc.workers["b-665"] = WorkerInfo{Chip: Chip{ChipWorker, StateNeedsYou}}
+	fc.workers["b-665"] = WorkerInfo{Chip: Chip{Kind: ChipWorker, State: StateNeedsYou}}
 	s.ch.Chips = fc
 	s.write(lPrompt, saidAt("n1", today(18, 49), newBoard))
 	pal := theme.Current()

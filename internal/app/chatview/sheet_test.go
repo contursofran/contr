@@ -48,7 +48,7 @@ func TestSpecSheet(t *testing.T) {
 	keepBoard(blocks.s.ch, "o1", today(18, 45))
 	blocked := sheetChat(t, "idle", lPrompt, saidAt("q1", today(18, 52), blockedQueue))
 	blocked.s.ch.Chips = blockChips()
-	blocked.s.ch.Chips.(*fakeChips).refs[656] = RefInfo{Chip: Chip{ChipPR, StateFailed}, Checks: github.CheckSummary{Pass: 2, Fail: 1}}
+	blocked.s.ch.Chips.(*fakeChips).refs[656] = RefInfo{Chip: Chip{Kind: ChipPR, State: StateFailed}, Checks: github.CheckSummary{Pass: 2, Fail: 1}}
 	scrolled := sheetScrolled(t)
 	images := sheetChat(t, "idle", picPrompt("i1", "[Image #1] [Image #2] The row clips here, see both shots.", pngOf(t, 240, 150), pngOf(t, 90, 160)),
 		said("i2", "I see it: the time runs into the badge."), picPrompt("i3", "and these, from the old build", nil, nil))
@@ -133,17 +133,18 @@ const contentAnswer = "Four builders work with the M1 rules: red never fills or 
 
 // chipsText has each kind of chip in each state (D262), and names that stay text: an unknown
 // number, a name in code and a path that does not exist.
-const chipsText = "PRs: #668 open, #656 checks running, #667 passed, #664 failed, #663 merged, #660 closed. " +
-	"Issue #649. Workers: b-649 needs you, b-665 works, b-658 is done, b-659 waits. " +
+const chipsText = "PRs: #668 open, #656 checks running, #667 passed, #664 failed, #663 merged, #660 closed, #661 draft. " +
+	"Issues #649 open, #650 closed. Workers: b-649 needs you, b-665 works, b-658 is done, b-659 waits. " +
 	"The conflict is in internal/app/kit/agentrow.go:42.\n\n" +
 	"Stays text: #3, `b-649` and nope/missing.go."
 
 // sheetChips knows the names of chipsText.
 var sheetChips = &fakeChips{known: map[string]Chip{
-	"668": {ChipPR, StateOpen}, "656": {ChipPR, StateRunning}, "667": {ChipPR, StatePassed},
-	"664": {ChipPR, StateFailed}, "663": {ChipPR, StateMerged}, "660": {ChipPR, StateClosed},
-	"649": {Kind: ChipIssue}, "b-649": {ChipWorker, StateNeedsYou}, "b-665": {ChipWorker, StateWorking},
-	"b-658": {ChipWorker, StateDone}, "b-659": {ChipWorker, StateWaiting},
+	"668": {Kind: ChipPR, State: StateOpen}, "656": {Kind: ChipPR, State: StateRunning}, "667": {Kind: ChipPR, State: StatePassed},
+	"664": {Kind: ChipPR, State: StateFailed}, "663": {Kind: ChipPR, State: StateMerged}, "660": {Kind: ChipPR, State: StateClosed},
+	"661": {Kind: ChipPR, State: StateOpen, Draft: true},
+	"649": {Kind: ChipIssue}, "650": {Kind: ChipIssue, State: StateClosed}, "b-649": {Kind: ChipWorker, State: StateNeedsYou}, "b-665": {Kind: ChipWorker, State: StateWorking},
+	"b-658": {Kind: ChipWorker, State: StateDone}, "b-659": {Kind: ChipWorker, State: StateWaiting},
 	"internal/app/kit/agentrow.go": {Kind: ChipFile},
 }}
 
