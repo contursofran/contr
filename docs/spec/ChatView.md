@@ -99,7 +99,7 @@ Content colors show only as a dot, a word, a 2px bar or a 1px line: never a fill
   through the agent source's `Send`, as the orchestrate pill does. The field
   clears at once and the text shows at the end of the transcript as a
   pending prompt (the prompt bubble at 55% opacity) until the transcript
-  brings a prompt with the same text, also with harness markup around it, or
+  brings a prompt with the same text, also with harness text around it, or
   the same message given to the session during a turn (D265); a reset drops
   it. A pending prompt never stays dimmed below newer work (D265): when the
   prompt of a later message comes, or a prompt sent after it, it shows as a

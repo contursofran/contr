@@ -556,3 +556,47 @@ func TestQueuedMessageIsOnePrompt(t *testing.T) {
 		t.Errorf("second read = %+v; want no second prompt", p)
 	}
 }
+
+// surfaceTail is the tail of the reminder in a newer Claude Code version, as
+// the coordinator saw it in a session.
+const surfaceTail = "\n\nThis is how Claude Code surfaces messages the user sends mid-turn — within the running turn, often alongside the next tool result, rather than as a separate conversation turn. Address the message above as you continue this turn."
+
+func TestQueuedReminderTails(t *testing.T) {
+	lead := "The user sent a new message while you were working:\n"
+	cases := []struct {
+		text   string
+		want   string
+		images int
+	}{
+		{lead + "add auto compact later" + surfaceTail, "add auto compact later", 0},
+		{"<system-reminder>\n" + lead + "add auto compact later" + surfaceTail + "\n</system-reminder>", "add auto compact later", 0},
+		{lead + "look at this\n[Image #1]" + surfaceTail, "look at this", 1},
+		{lead + "two lines\nof text\n\nIMPORTANT: After completing your current task, you MUST address the user's message above.", "two lines\nof text", 0},
+		// A tail sentence inside a line is the owner's text.
+		{lead + "why This is how Claude Code surfaces messages?", "why This is how Claude Code surfaces messages?", 0},
+	}
+	for _, c := range cases {
+		b := read(t, lCall, `{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"},{"type":"text","text":`+jsonString(t, c.text)+`}]}}`)
+		p := prompts(b)
+		if len(p) != 1 || p[0].Text != c.want || p[0].Images != c.images {
+			t.Errorf("%q: prompts %+v; want %q with %d images", c.text, p, c.want, c.images)
+		}
+	}
+}
+
+func jsonString(t *testing.T, s string) string {
+	t.Helper()
+	b, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func TestImageMarker(t *testing.T) {
+	for s, want := range map[string]bool{"[Image #1]": true, " [Image #12] ": true, "[Image #]": false, "[Image #a]": false, "[Image: source: x]": false, "text": false} {
+		if ImageMarker(s) != want {
+			t.Errorf("ImageMarker(%q) = %v", s, !want)
+		}
+	}
+}

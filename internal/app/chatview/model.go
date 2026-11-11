@@ -89,7 +89,9 @@ func (m *Model) matchPending(text string) {
 }
 
 // Matches tells that a prompt entry with text brings the owner's sent text: the same text, or the
-// sent text with only harness markup around it (a part that starts with "<" and ends with ">").
+// sent text with only harness text around it. Before it: markup (a part that starts with "<" and
+// ends with ">"), and the lead of a message sent during a turn. After it: "[Image #N]" lines, then
+// markup or a known tail of that message (D265).
 func Matches(text, sent string) bool {
 	text, sent = strings.TrimSpace(text), strings.TrimSpace(sent)
 	if sent == "" {
@@ -99,7 +101,17 @@ func Matches(text, sent string) bool {
 	if i < 0 {
 		return false
 	}
-	return markup(text[:i]) && markup(text[i+len(sent):])
+	before := strings.TrimSpace(text[:i])
+	before = strings.TrimSpace(strings.TrimSuffix(before, transcript.QueuedLead))
+	after := strings.TrimSpace(text[i+len(sent):])
+	for {
+		line, rest, _ := strings.Cut(after, "\n")
+		if !transcript.ImageMarker(line) {
+			break
+		}
+		after = strings.TrimSpace(rest)
+	}
+	return markup(before) && (markup(after) || transcript.QueuedTailAt(after) == 0)
 }
 
 // markup tells a part of a text that is empty or harness markup: it starts with "<" and ends

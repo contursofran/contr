@@ -335,8 +335,9 @@ func (r *Reader) user(base Entry, meta, compact bool, content json.RawMessage, b
 	case queuedOK(e.Text):
 		// The reminder of a message sent while the turn ran: read also on
 		// a line marked meta.
-		e.Text, _ = queuedReminder(e.Text)
-		classify(&e, 0)
+		var n int
+		e.Text, n, _ = queuedReminder(e.Text)
+		classify(&e, n)
 		r.once(&e)
 	case meta:
 		e.Kind, e.Hidden = Hidden, HideMeta
@@ -363,28 +364,81 @@ func (r *Reader) once(e *Entry) {
 	r.queued = key
 }
 
-// queuedLead starts the text that tells Claude of a message the owner sent
-// while it worked; queuedTail ends it.
-const (
-	queuedLead = "The user sent a new message while you were working:"
-	queuedTail = "\n\nIMPORTANT: After completing your current task"
-)
+// QueuedLead starts the text that tells Claude of a message the owner sent
+// while it worked.
+const QueuedLead = "The user sent a new message while you were working:"
 
-func queuedOK(s string) bool { _, ok := queuedReminder(s); return ok }
+// queuedTails start the harness's sentence after the message, each at the
+// start of a line. A new Claude Code version may write another: add it here
+// (D265).
+var queuedTails = []string{
+	"This is how Claude Code surfaces messages",
+	"IMPORTANT: After completing your current task",
+}
 
-// queuedReminder reads the message of a reminder that starts with
-// queuedLead, alone or after other reminders, and tells whether s has that
-// shape (D265).
-func queuedReminder(s string) (string, bool) {
-	i := strings.Index(s, queuedLead)
+func queuedOK(s string) bool { _, _, ok := queuedReminder(s); return ok }
+
+// queuedReminder reads the message of a text that starts with QueuedLead,
+// alone, in a reminder or after other reminders, and tells whether s has
+// that shape (D265). The message ends at the reminder's end or at a line
+// that starts a tail of queuedTails. Its "[Image #N]" lines are dropped and
+// counted in images.
+func queuedReminder(s string) (msg string, images int, ok bool) {
+	i := strings.Index(s, QueuedLead)
 	if i < 0 || !harnessLead(s[:i]) {
-		return "", false
+		return "", 0, false
 	}
-	msg := s[i+len(queuedLead):]
+	msg = s[i+len(QueuedLead):]
 	msg, _, _ = strings.Cut(msg, "</system-reminder>")
-	msg, _, _ = strings.Cut(msg, queuedTail)
-	msg = strings.TrimSpace(msg)
-	return msg, msg != ""
+	msg = msg[:QueuedTailAt(msg)]
+	var keep []string
+	for _, l := range strings.Split(msg, "\n") {
+		if ImageMarker(l) {
+			images++
+			continue
+		}
+		keep = append(keep, l)
+	}
+	msg = strings.TrimSpace(strings.Join(keep, "\n"))
+	return msg, images, msg != "" || images > 0
+}
+
+// QueuedTailAt gives the place of the first line of s that starts a tail of
+// queuedTails, or len(s) when none does.
+func QueuedTailAt(s string) int {
+	end := len(s)
+	for _, t := range queuedTails {
+		for off := 0; ; {
+			j := strings.Index(s[off:], t)
+			if j < 0 {
+				break
+			}
+			j += off
+			if j == 0 || s[j-1] == '\n' {
+				end = min(end, j)
+				break
+			}
+			off = j + 1
+		}
+	}
+	return end
+}
+
+// ImageMarker tells a line that is only Claude Code's "[Image #N]" mark of
+// a pasted image.
+func ImageMarker(l string) bool {
+	l = strings.TrimSpace(l)
+	n, ok := strings.CutPrefix(l, "[Image #")
+	n, ok2 := strings.CutSuffix(n, "]")
+	if !ok || !ok2 || n == "" {
+		return false
+	}
+	for _, r := range n {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // result joins a tool result to its call: in this batch when the call is

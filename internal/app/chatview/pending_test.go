@@ -16,6 +16,13 @@ const (
 	lReminder = `{"type":"user","uuid":"q2","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"},{"type":"text","text":"<system-reminder>\nThe user sent a new message while you were working:\nadd auto compact later\n</system-reminder>"}]}}`
 )
 
+// surfaceTail is the tail of the reminder in a newer Claude Code version, as the coordinator saw
+// it in a session.
+const surfaceTail = "\n\nThis is how Claude Code surfaces messages the user sends mid-turn — within the running turn, often alongside the next tool result, rather than as a separate conversation turn. Address the message above as you continue this turn."
+
+// lSurfaced is that reminder next to a tool result, with no reminder tags.
+const lSurfaced = `{"type":"user","uuid":"q3","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"},{"type":"text","text":"The user sent a new message while you were working:\nadd auto compact later` + `\n\nThis is how Claude Code surfaces messages the user sends mid-turn — within the running turn, often alongside the next tool result, rather than as a separate conversation turn. Address the message above as you continue this turn."}]}}`
+
 func promptLine(uuid, at, text string) string {
 	ts := ""
 	if at != "" {
@@ -71,6 +78,11 @@ func TestMatches(t *testing.T) {
 		{"please fix it", "fix it", false},
 		{"other", "fix it", false},
 		{"fix it", "", false},
+		// The reminder of a message sent during a turn, as a newer Claude Code writes it (D265).
+		{"The user sent a new message while you were working:\nfix it" + surfaceTail, "fix it", true},
+		{"<system-reminder>\nThe user sent a new message while you were working:\nfix it\n[Image #1]" + surfaceTail + "\n</system-reminder>", "fix it", true},
+		{"fix it\n\nIMPORTANT: After completing your current task, you MUST address the user's message above.", "fix it", true},
+		{"fix it\nThis is how I want it", "fix it", false},
 	}
 	for _, c := range cases {
 		if got := Matches(c.text, c.sent); got != c.want {
@@ -80,7 +92,7 @@ func TestMatches(t *testing.T) {
 }
 
 func TestQueuedMessageEndsItsPending(t *testing.T) {
-	for _, line := range []string{lQueued, lReminder} {
+	for _, line := range []string{lQueued, lReminder, lSurfaced} {
 		var m Model
 		r := transcript.NewReader(0)
 		apply(t, &m, r, lPrompt, lCall1)
