@@ -83,6 +83,8 @@ type Chat struct {
 	mdNest, mdHead, mdNum markdown.Options
 	// folds holds the open work groups by row id.
 	folds map[string]*bool
+	// calls holds the open call details by call id.
+	calls map[string]*bool
 
 	// The composer: the text being typed and the last failure, for each terminal.
 	drafts map[string]*string
@@ -131,7 +133,7 @@ type Chat struct {
 // New returns a chat view that reads the session files under stateDir (package session).
 // watch replaces the file watch in tests; nil uses the real one.
 func New(env view.Env, stateDir string, watch func(path string, notify func()) (func(), error)) *Chat {
-	ch := &Chat{Env: env, reader: transcript.NewReader(0), chat: map[string]bool{}, folds: map[string]*bool{},
+	ch := &Chat{Env: env, reader: transcript.NewReader(0), chat: map[string]bool{}, folds: map[string]*bool{}, calls: map[string]*bool{},
 		drafts: map[string]*string{}, errs: map[string]string{}, parts: map[string][]Part{}, partsOf: map[string]string{},
 		chips: map[string]*chipPart{}, boards: map[string]*blockSnap{}, pics: map[picKey]*picState{}, attached: map[string]int{}}
 	ch.sg = suggest{items: map[string][]Suggestion{}, errs: map[string]string{}, loading: map[string]bool{}}
@@ -199,6 +201,7 @@ func (ch *Chat) changed(reset bool) {
 		ch.reader = transcript.NewReader(0)
 		ch.model.Reset()
 		ch.folds = map[string]*bool{}
+		ch.calls = map[string]*bool{}
 		ch.parts, ch.partsOf = map[string][]Part{}, map[string]string{}
 		ch.chips = map[string]*chipPart{}
 		ch.boards, ch.newestOK = map[string]*blockSnap{}, false
