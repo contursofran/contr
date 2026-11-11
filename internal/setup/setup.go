@@ -306,3 +306,35 @@ func (e Env) contr() Result {
 	r.Detail = "linked"
 	return r
 }
+
+// RunPlugin runs a plugin line of the contr plugin row (CopyPlugin or CopyEnable) with the
+// claude that the checks find (D283). Any other line is an error: contr runs no other command
+// here. The error of a failed run is the last line on stderr.
+func RunPlugin(ctx context.Context, e Env, line string) error {
+	if line != CopyPlugin && line != CopyEnable {
+		return errors.New("not a plugin command: " + line)
+	}
+	p, err := e.find("claude")
+	if err != nil {
+		return err
+	}
+	args := strings.Fields(line)[1:]
+	run := e.Run
+	if run == nil {
+		run = execRun
+	}
+	_, err = run(ctx, p, args...)
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		if l := LastLine(string(ee.Stderr)); l != "" {
+			return errors.New(l)
+		}
+	}
+	return err
+}
+
+// LastLine is the last line of s that is not blank, trimmed.
+func LastLine(s string) string {
+	ls := strings.Split(strings.TrimSpace(s), "\n")
+	return strings.TrimSpace(ls[len(ls)-1])
+}

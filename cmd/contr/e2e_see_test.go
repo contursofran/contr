@@ -197,6 +197,12 @@ var seeFixtures = map[string]seeFixture{
 		ready: "lead, ",
 		press: []string{"Chat"},
 	},
+	"chat-next": {
+		about: "the chat fixture with lead idle and a suggested next prompt in its terminal's input line (D281): the composer shows it in place of the placeholder",
+		setup: func(t *testing.T, h *harness) { seeChatAs(t, h, "claude-next") },
+		ready: "lead, ",
+		press: []string{"Chat"},
+	},
 	"chat-blocks": {
 		about: "the orchestrator lead in Chat mode with an older status board (frozen: the agent's three columns, its answer's time), the live board (state, PR and checks from a fake gh: CI running 2 of 3, CI passed 3 of 3, building, waiting, and a worker that is not found) and a merge queue (merged, CI running, blocked: 1 check failed, a note) (D267)",
 		setup: seeChatBlocks,
@@ -229,10 +235,10 @@ var seeFixtures = map[string]seeFixture{
 		press: []string{"Chat", "wait:Flow diagram"},
 	},
 	"chat-tools": {
-		about: "the chat fixture with a turn of mixed tool calls, its work group open (D274): a call line of each kind with its icon (skill, Slack connector, contr plugin, other MCP, agent, fetch, Bash, Read, Grep), a tool of no kind with an empty slot, the label and key argument of each, and the Bash call open on its detail",
+		about: "the chat fixture with a turn of mixed tool calls, its work group open (D274): a call line of each kind with its icon (skill, Slack connector, contr plugin, Linear MCP and Notion connector with their brand marks, an unknown MCP server with the connector icon, agent, fetch, Bash, Read, Grep), a tool of no kind with an empty slot, the label and key argument of each, and the Bash call open on its detail",
 		setup: seeChatTools,
 		ready: "lead, ",
-		press: []string{"Chat", "wait:work group 10 tool calls", "work group 10 tool calls", "wait:tool call Grep", "tool call Bash", "wait:call detail Bash"},
+		press: []string{"Chat", "wait:work group 12 tool calls", "work group 12 tool calls", "wait:tool call Grep", "tool call Bash", "wait:call detail Bash"},
 	},
 	"chat-paths": {
 		about: "the chat fixture with \"Look at @app\" typed in the composer (D279): the popup above the card with the folder and files of the repo whose paths hold app, the paths with a part that starts with it first",
@@ -468,6 +474,8 @@ func seeChatTools(t *testing.T, h *harness) {
 		{"mcp__claude_ai_Slack__slack_send_message", map[string]any{"channel": "#dev", "text": "the call line has icons"}},
 		{"mcp__plugin_contr_contr__send", map[string]any{"to": "b-709", "body": "merge main"}},
 		{"mcp__linear__list_issues", map[string]any{"query": "chat rows"}},
+		{"mcp__claude_ai_Notion__notion_search", map[string]any{"query": "chat spec"}},
+		{"mcp__acme__list_things", map[string]any{"query": "rows"}},
 		{"Task", map[string]any{"subagent_type": "Explore", "description": "Find the call line"}},
 		{"WebFetch", map[string]any{"url": "https://example.com/docs/chat"}},
 		{"Bash", map[string]any{"command": "go test ./internal/app/chatview", "description": "Run the chat tests"}},

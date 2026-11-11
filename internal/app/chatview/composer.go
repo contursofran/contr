@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
@@ -138,7 +139,14 @@ func (ch *Chat) composer(c *ui.Context, id string, st liveState) {
 				field = field.Margin(fieldGap, 0, 0, 0)
 			}
 			field.Children(func() {
-				in := ui.TextAreaBase(c.Key("composer:"+id), draft).Label(LabelComposer).Placeholder(Placeholder(ch.name(id))).
+				hint := Placeholder(ch.name(id))
+				if ch.next = ""; *draft == "" && ch.NextPrompt != nil {
+					// Claude Code's suggested next prompt takes the place of the placeholder (D281).
+					if ch.next = ch.NextPrompt(id); ch.next != "" {
+						hint = ch.next
+					}
+				}
+				in := ui.TextAreaBase(c.Key("composer:"+id), draft).Label(LabelComposer).Placeholder(hint).
 					PlaceholderColor(pal.Ink48).TextColor(pal.Ink100).FontSize(ct.Size).LineHeight(ct.Line/ct.Size).
 					Lines(1, composerLines).Grow(1).MinWidth(0).Padding((actionSize-ct.Line)/2, 0, (actionSize-ct.Line)/2, theme.Space6).AutoFocus().Bind(&ch.field).
 					OnTextKey(func(k ui.TextKey) bool { return ch.textKey(id, st, k) }).
@@ -261,11 +269,19 @@ func (ch *Chat) action(c *ui.Context, id string, st liveState, a Action) {
 	})
 }
 
-// textKey is a key of the field that types no text. Enter sends; ⇧Enter goes on to the field,
+// textKey is a key of the field that types no text. Tab or Right in an empty field takes the
+// suggested next prompt (D281). Enter sends; ⇧Enter goes on to the field,
 // which breaks the line. While the suggestion popup shows, it takes its keys first (D273). Esc interrupts the agent while it works and does nothing else: it closes
 // and switches nothing.
 func (ch *Chat) textKey(id string, st liveState, k ui.TextKey) bool {
 	if ch.suggestKey(id, k) {
+		return true
+	}
+	if (k.Key == ui.KeyTab || k.Key == ui.KeyRight) && k.Mods == 0 && ch.next != "" && k.Text() == "" {
+		// Tab or Right takes the suggested next prompt into the empty field (D281).
+		k.SetText(ch.next)
+		ch.sg.caret = utf8.RuneCountInString(ch.next)
+		ch.next = ""
 		return true
 	}
 	switch {

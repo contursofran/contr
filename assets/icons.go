@@ -6,9 +6,10 @@ package assets
 import "embed"
 
 // Icons holds the status icons and the line icons of docs/spec/README.md as
-// `icons/<name>.svg`.
+// `icons/<name>.svg`, and the brand marks of servers (Simple Icons, CC0) as
+// `icons/brands/<name>.svg`.
 //
-//go:embed icons/*.svg
+//go:embed icons/*.svg icons/brands/*.svg icons/github/*.svg
 var Icons embed.FS
 
 // Fonts holds the faces of JetBrains Mono and Inter as `fonts/<name>.ttf`.

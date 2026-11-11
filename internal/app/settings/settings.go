@@ -165,12 +165,16 @@ type Settings struct {
 	Setup *setup.Env
 	// SetupRun runs the checks; nil runs setup.Run. Tests give a fake.
 	SetupRun func(context.Context, setup.Env) []setup.Result
+	// PluginRun runs the plugin line of the Setup tab (D283); nil runs setup.RunPlugin. Tests give
+	// a fake.
+	PluginRun func(ctx context.Context, e setup.Env, line string) error
 
 	// tab is the tab that shows: SettingsTabs[tab].
 	tab int
 	ag  agentsState
 	hc  hcState
 	su  setupState
+	pl  pluginState
 
 	// tintWin and tintPan are the values the sliders edit; the Seen ones are what the last build showed.
 	tintWin, tintPan, tintSeenWin, tintSeenPan float64
@@ -602,6 +606,7 @@ func (s *Settings) View(c *ui.Context) {
 		panel.Children(func() { s.body(c) })
 	})
 	s.hcConfirm(c)
+	s.pluginConfirm(c)
 	if d.Dismissed() || !open {
 		s.open = false
 		s.Env.Redraw()

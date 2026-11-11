@@ -44,17 +44,17 @@ func (r *argsRunner) Run(_ context.Context, _ string, args ...string) ([]byte, e
 func TestRefStateOfAPullRequest(t *testing.T) {
 	r := &argsRunner{answers: map[string]func() ([]byte, error){
 		"pr view": func() ([]byte, error) {
-			return []byte(`{"number":667,"state":"OPEN","statusCheckRollup":[` +
+			return []byte(`{"number":667,"state":"OPEN","isDraft":true,"statusCheckRollup":[` +
 				`{"status":"COMPLETED","conclusion":"SUCCESS"},{"status":"COMPLETED","conclusion":"FAILURE"},` +
 				`{"status":"IN_PROGRESS"},{"status":"COMPLETED","conclusion":"SKIPPED"}]}`), nil
 		},
 	}}
 	got, err := Client{R: r}.RefState(context.Background(), 667)
-	want := Ref{Number: 667, PR: true, State: "OPEN", Checks: CheckSummary{Pass: 1, Fail: 1, Pending: 1, Skip: 1}}
+	want := Ref{Number: 667, PR: true, State: "OPEN", Draft: true, Checks: CheckSummary{Pass: 1, Fail: 1, Pending: 1, Skip: 1}}
 	if err != nil || got != want {
 		t.Fatalf("got %+v, %v; want %+v", got, err, want)
 	}
-	if len(r.runs) != 1 || r.runs[0] != "pr view 667 --json number,state,statusCheckRollup" {
+	if len(r.runs) != 1 || r.runs[0] != "pr view 667 --json number,state,isDraft,statusCheckRollup" {
 		t.Errorf("runs %q", r.runs)
 	}
 }

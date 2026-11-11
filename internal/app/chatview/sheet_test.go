@@ -10,7 +10,8 @@ package chatview
 // older board (frozen), the live board and a queue, and ChatBlocksBlocked a queue with a blocked
 // step (D267). ChatViewComposer shows the composer card in each state (D271), ChatViewImages the
 // images of prompts and the composer's image chips (D269), CallLines an open work group with a
-// call line of each kind and a running call (D274).
+// call line of each kind and a running call (D274), ChatWorkerMarks the mark of each model family
+// in each state (D285).
 
 import (
 	"strconv"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/github"
@@ -46,13 +48,22 @@ func TestSpecSheet(t *testing.T) {
 	keepBoard(blocks.s.ch, "o1", today(18, 45))
 	blocked := sheetChat(t, "idle", lPrompt, saidAt("q1", today(18, 52), blockedQueue))
 	blocked.s.ch.Chips = blockChips()
-	blocked.s.ch.Chips.(*fakeChips).refs[656] = RefInfo{Chip: Chip{ChipPR, StateFailed}, Checks: github.CheckSummary{Pass: 2, Fail: 1}}
+	blocked.s.ch.Chips.(*fakeChips).refs[656] = RefInfo{Chip: Chip{Kind: ChipPR, State: StateFailed}, Checks: github.CheckSummary{Pass: 2, Fail: 1}}
 	scrolled := sheetScrolled(t)
 	images := sheetChat(t, "idle", picPrompt("i1", "[Image #1] [Image #2] The row clips here, see both shots.", pngOf(t, 240, 150), pngOf(t, 90, 160)),
 		said("i2", "I see it: the time runs into the badge."), picPrompt("i3", "and these, from the old build", nil, nil))
 	images.s.ch.attached[term] = 2
 	composer := sheetComposer(t)
 	calls := sheetChat(t, "working", append(mixedCalls[:len(mixedCalls)-1], callOf("k11", "Grep", `{"pattern":"kindIcon"}`))...)
+	brandCalls := []string{lPrompt}
+	for i, n := range []string{"mcp__claude_ai_Slack__slack_send_message", "mcp__claude_ai_Notion__notion_search",
+		"mcp__claude_ai_Gmail__search_threads", "mcp__claude_ai_Google_Calendar__list_events", "mcp__github__get_issue",
+		"mcp__plugin_design_figma__get_design", "mcp__plugin_engineering_datadog__search_logs", "mcp__claude_ai_Atlassian__get_issue",
+		"mcp__acme__list_things"} {
+		id := "b" + strconv.Itoa(i)
+		brandCalls = append(brandCalls, callOf(id, n, `{"query":"chat rows"}`), resultOf(id))
+	}
+	brandsView := sheetChat(t, "idle", append(brandCalls, said("s1", "Done."))...)
 	detail := sheetChat(t, "idle", lPrompt, callOf("k1", "Bash", `{"command":"go test ./internal/app/chatview","description":"Run the chat tests"}`),
 		`{"type":"user","uuid":"rk1","timestamp":"2026-11-10T10:00:02.4Z","message":{"content":[{"type":"tool_result","tool_use_id":"k1","content":"ok  \tchatview\t2.1s\nok  \ttranscript\t0.4s"}]}}`,
 		callOf("k2", "Read", `{"file_path":"/repo/a.go"}`), errOf("k2", "File does not exist."), said("s1", "Done."))
@@ -61,6 +72,7 @@ func TestSpecSheet(t *testing.T) {
 		detail.s.ch.calls[id] = &open
 	}
 	flow := sheetChat(t, "idle", lPrompt, said("f1", flowAnswer))
+	marks := sheetMarks(t)
 	apptest.SpecSheet(t, []apptest.SheetPart{
 		{Name: "ChatView", W: sheetW, H: sheetH, View: working.view},
 		{Name: "ChatViewWide", W: 1500, H: 420, View: wide.view},
@@ -74,9 +86,30 @@ func TestSpecSheet(t *testing.T) {
 		{Name: "ChatViewComposer", W: sheetW, H: composerSheetH, View: composer},
 		{Name: "ChatViewImages", W: sheetW, H: 420, View: images.view},
 		{Name: "CallLines", W: sheetW, H: 420, View: calls.view},
+		{Name: "CallLinesBrands", W: sheetW, H: 420, View: brandsView.view},
 		{Name: "CallDetail", W: sheetW, H: 360, View: detail.view},
+		{Name: "ChatWorkerMarks", W: sheetW, H: 600, View: marks.view},
 		{Name: "ChatFlow", W: sheetW, H: 620, View: flow.view},
-	}, []string{"ChatFlow", "ChatViewComposer", "ChatView", "ChatViewWide", "ChatViewTeam", "ChatViewChips", "ChatContent", "ChatViewScrolled", "ChatBlocks", "ChatBlocksBlocked", "ChatViewImages", "CallLines", "CallDetail"})
+	}, []string{"ChatFlow", "ChatWorkerMarks", "ChatViewComposer", "ChatView", "ChatViewWide", "ChatViewTeam", "ChatViewChips", "ChatContent", "ChatViewScrolled", "ChatBlocks", "ChatBlocksBlocked", "ChatViewImages", "CallLines", "CallLinesBrands", "CallDetail"})
+}
+
+// sheetMarks is an open work group with a note of a worker of each family (Claude, OpenAI,
+// DeepSeek) in each state (working, idle, blocked), and one of another program (D285).
+func sheetMarks(t *testing.T) sheetView {
+	lines := []string{lPrompt}
+	workers := map[string]agents.Worker{}
+	n := 0
+	for _, fam := range []struct{ name, model, command string }{{"claude", "opus", "claude"}, {"codex", "gpt-6.1", "codex"}, {"deepseek", "deepseek-v4.1-flash", "opencode"}, {"shell", "", "zsh"}} {
+		for _, status := range []string{"working", "idle", "blocked"} {
+			n++
+			addr, name := "w"+strconv.Itoa(n)+":t1", fam.name+"-"+status
+			workers[addr] = agents.Worker{Name: name, Address: addr, Status: status, Model: fam.model, Command: fam.command}
+			lines = append(lines, `{"type":"user","uuid":"m`+strconv.Itoa(n)+`","message":{"content":"<hc from=\"`+addr+` `+name+`\">`+name+`: `+status+`, PR #633</hc>"}}`)
+		}
+	}
+	v := sheetChat(t, "idle", append(lines, said("s1", "Done."))...)
+	v.s.ch.Worker = func(addr string) (agents.Worker, bool) { w, ok := workers[addr]; return w, ok }
+	return v
 }
 
 // contentAnswer has each kind of content: headings, lists, a quote, the five remarks, a table
@@ -108,17 +141,18 @@ const flowAnswer = "The fix goes through review:\n\n```contr-flow\nissue -> plan
 
 // chipsText has each kind of chip in each state (D262), and names that stay text: an unknown
 // number, a name in code and a path that does not exist.
-const chipsText = "PRs: #668 open, #656 checks running, #667 passed, #664 failed, #663 merged, #660 closed. " +
-	"Issue #649. Workers: b-649 needs you, b-665 works, b-658 is done, b-659 waits. " +
+const chipsText = "PRs: #668 open, #656 checks running, #667 passed, #664 failed, #663 merged, #660 closed, #661 draft. " +
+	"Issues #649 open, #650 closed. Workers: b-649 needs you, b-665 works, b-658 is done, b-659 waits. " +
 	"The conflict is in internal/app/kit/agentrow.go:42.\n\n" +
 	"Stays text: #3, `b-649` and nope/missing.go."
 
 // sheetChips knows the names of chipsText.
 var sheetChips = &fakeChips{known: map[string]Chip{
-	"668": {ChipPR, StateOpen}, "656": {ChipPR, StateRunning}, "667": {ChipPR, StatePassed},
-	"664": {ChipPR, StateFailed}, "663": {ChipPR, StateMerged}, "660": {ChipPR, StateClosed},
-	"649": {Kind: ChipIssue}, "b-649": {ChipWorker, StateNeedsYou}, "b-665": {ChipWorker, StateWorking},
-	"b-658": {ChipWorker, StateDone}, "b-659": {ChipWorker, StateWaiting},
+	"668": {Kind: ChipPR, State: StateOpen}, "656": {Kind: ChipPR, State: StateRunning}, "667": {Kind: ChipPR, State: StatePassed},
+	"664": {Kind: ChipPR, State: StateFailed}, "663": {Kind: ChipPR, State: StateMerged}, "660": {Kind: ChipPR, State: StateClosed},
+	"661": {Kind: ChipPR, State: StateOpen, Draft: true},
+	"649": {Kind: ChipIssue}, "650": {Kind: ChipIssue, State: StateClosed}, "b-649": {Kind: ChipWorker, State: StateNeedsYou}, "b-665": {Kind: ChipWorker, State: StateWorking},
+	"b-658": {Kind: ChipWorker, State: StateDone}, "b-659": {Kind: ChipWorker, State: StateWaiting},
 	"internal/app/kit/agentrow.go": {Kind: ChipFile},
 }}
 
@@ -188,18 +222,20 @@ type composerState struct {
 	team            *Team
 	text            string
 	h               float32
+	next            string // Claude Code's suggested next prompt (D281)
 }
 
 var composerStates = []composerState{
-	{"Idle, empty: no button, the keys in the footer", "idle", &Team{Agents: 2, Idle: 2}, "", 150},
-	{"Idle, text: Send", "idle", &Team{Agents: 2, Idle: 2}, "Merge #611 first, then tell b-632 to merge main.", 150},
-	{"Working, empty: Stop", "working", &Team{Agents: 2, NeedsYou: 1, Working: 1}, "", 150},
-	{"Working, text, no team: Working in the footer, Send (the message queues)", "working", nil, "And run the review on its exact head.", 150},
-	{"Many lines: the field grows to 8 lines, then scrolls", "idle", &Team{Agents: 2, Working: 2}, strings.TrimSuffix(strings.Repeat("A line of the message\n", 11), "\n"), 330},
-	{"No team, idle: the field alone", "idle", nil, "", 130},
+	{"Idle, empty: no button, the keys in the footer", "idle", &Team{Agents: 2, Idle: 2}, "", 150, ""},
+	{"Idle, text: Send", "idle", &Team{Agents: 2, Idle: 2}, "Merge #611 first, then tell b-632 to merge main.", 150, ""},
+	{"Working, empty: Stop", "working", &Team{Agents: 2, NeedsYou: 1, Working: 1}, "", 150, ""},
+	{"Working, text, no team: Working in the footer, Send (the message queues)", "working", nil, "And run the review on its exact head.", 150, ""},
+	{"Many lines: the field grows to 8 lines, then scrolls", "idle", &Team{Agents: 2, Working: 2}, strings.TrimSuffix(strings.Repeat("A line of the message\n", 11), "\n"), 330, ""},
+	{"No team, idle: the field alone", "idle", nil, "", 130, ""},
+	{"Idle, empty, a suggested next prompt: it takes the placeholder's place (D281)", "idle", nil, "", 130, "commit this and open a PR"},
 }
 
-const composerSheetH = 1230
+const composerSheetH = 1380
 
 // sheetComposer stacks the composer card in each of composerStates, each under its caption, at the
 // bottom of a short chat.
@@ -211,6 +247,9 @@ func sheetComposer(t *testing.T) func(c *ui.Context) {
 			teamOf(v, *st.team)
 		}
 		*v.s.ch.draft(term) = st.text
+		if next := st.next; next != "" {
+			v.s.ch.NextPrompt = func(string) string { return next }
+		}
 		views[i] = v
 	}
 	return func(c *ui.Context) {

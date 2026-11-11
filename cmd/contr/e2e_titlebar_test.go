@@ -23,7 +23,8 @@ import (
 
 // fakeClaude is a program that looks like Claude Code in a terminal: the welcome box, the
 // conversation, a status line and the prompt box. It tells hc its state with the OSC the hook
-// sends (last argument: working, idle, error or blocked:kind=...:msg=..., which also prints a permission menu).
+// sends (last argument: working, idle, error or blocked:kind=...:msg=..., which also prints a permission menu;
+// idle:next=... prints a suggested next prompt, faint, in the input line).
 const fakeClaude = `package main
 
 import (
@@ -57,8 +58,17 @@ func main() {
 		fmt.Printf("\x1b]7501;state=%s\x07", state)
 		time.Sleep(time.Hour)
 	}
+	next := ""
+	if i := strings.Index(state, ":next="); i >= 0 {
+		// The suggested next prompt, faint after the mark as Claude Code draws it (D281).
+		state, next = state[:i], strings.ReplaceAll(state[i+len(":next="):], "%20", " ")
+	}
 	fmt.Print("╭───────────────────────────────────────────────────╮\n")
-	fmt.Print("│ >                                                 │\n")
+	if next != "" {
+		fmt.Printf("❯ \x1b[2m%s\x1b[0m\n", next)
+	} else {
+		fmt.Print("│ >                                                 │\n")
+	}
 	fmt.Print("╰───────────────────────────────────────────────────╯\n")
 	fmt.Print("  ? for shortcuts\n")
 	fmt.Printf("\x1b]7501;state=%s\x07", state)

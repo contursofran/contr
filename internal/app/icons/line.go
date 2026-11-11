@@ -16,3 +16,8 @@ var LineNames = [...]string{
 // Line returns the line icon with this name, or nil when the file is missing
 // or does not parse (logged once).
 func Line(name string) *ui.SVG { return svg(name) }
+
+// Brand returns the brand mark with this name (`icons/brands/<name>.svg`, from Simple Icons), or
+// nil when there is none. A mark has one fill, so it takes the color of the text like a line
+// icon (D274).
+func Brand(name string) *ui.SVG { return svg(brandPrefix + name) }

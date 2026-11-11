@@ -48,14 +48,15 @@ The sizes in this file are the Default chat text size. The Chat text setting (D2
 | Prompt images | the images of a prompt (D269), under the bubble, at the right, `space-6` above, gap `space-6`, wrapping: a `thumb` (64px) thumbnail for each image whose bytes are in the transcript, cropped to fill, `radius-12`, 1px `hairline`; while it is read, a `hover` box of its size. A click opens it larger: over the `scrim`, as large as it is and at most the chat less 40px at each side, `radius-12`; Escape or a click outside closes it. The images with no bytes, and those that do not read or decode, show as one quiet chip after the thumbnails: "1 image" / "2 images", mono `meta`, `ink-48`, padding `2px 8px`, `radius-6`, 1px `hairline`. Their "[Image #N]" marks do not show; a prompt of images alone has no bubble. A pending prompt with images shows the chip. |
 | Sent time | the time the prompt was sent, from its transcript timestamp: one line, mono `meta`, `ink-48` (the lowest text ink with 4.5:1), `space-4` above, under the owner prompt, right-aligned with the bubble. Once per turn: Claude's texts, groups and notes show no time (D266). In the Mac's time zone: "14:32" today, "Yesterday 14:32", else "9 Nov 14:32"; "today" is judged at each build, and nothing ticks (D55). No timestamp, no line; a pending prompt has none. |
 | Claude's text | `markdown.View`: `prose` size and line, sans; text `ink-88`, strong (500) `ink-88`; links (Markdown links, bare URLs, file links and chips) in `content-link`, underlined while the pointer is over them (D275), and nothing else in that color; muted `ink-48`; each block as [Content](#content) says |
-| Work group, folded | the tool calls, kit notes and background tasks between two texts, as one row 20px high, mono `value`, `ink-48` (`ink-64` on hover): "2 worker notes · 1 background task · 6 tool calls" (a message of another session counts as a worker note; a part with no item is left out, "1 tool call"), a 6px dot for each worker that sent a note, then `›`. While a call has no result, a working StatusGlyph (14px) comes first. |
+| Work group, folded | the tool calls, kit notes and background tasks between two texts, as one row 20px high, mono `value`, `ink-48` (`ink-64` on hover): "2 worker notes · 1 background task · 6 tool calls" (a message of another session counts as a worker note; a part with no item is left out, "1 tool call"), a [worker mark](#worker-mark) (or 6px dot) for each worker that sent a note, then `›`. While a call has no result, a working StatusGlyph (14px) comes first. |
 | Work group, open | `⌄`; under it a card, a wide block: at least 584px (or the content width when less), as wide as its longest line (note, task and call lines alike), up to the content width, `space-6` below the row, padding `8px 12px`, radius `radius-9`, line `hairline`: the note lines, a `hairline` rule, the call lines |
 | Note line | 20px, gap `space-8`, mono `meta`: the sender's dot, the name (500, `ink-88`), the text on one line (`ink-48`). An owner answer or done mark has the name "owner". A message of another Claude session or a teammate (D254) has the sender as its name ("session" when it has none) and the first line of the message; a subagent's hand-back is "subagent" and "reported". |
 | Task line | a background task that ended (D254), as a note line without a dot: "Background task" (500, `ink-88`), its status (`ink-48`), then "· " and its summary on one line (`ink-48`), without a leading "Background command " |
-| Call line | 20px, gap `space-8`, mono `meta`: a 14px slot with a working StatusGlyph while it runs, else the line icon of the kind in `ink-48` (`skill`, `connector` for connectors and other MCP tools, `plugin`, `agent`, `globe` for web, `terminal` for shell, `file`, `search`; empty for other tools, D274), the label (`ink-64`, at least 48px: "Bash", "Skill · chat-writing", "Slack · send message", "contr · send", "Agent · Explore", "Fetch"; D274), the key argument on one line (`ink-48`: a file's base name, Bash's description or command, a pattern, a URL's host and path, an MCP tool's channel, query or target), "error" in `blocked` when the result is an error, the duration (`ink-48`): "0.4s", "12s", "2m 5s", from the timestamps of the call and its result, none when one is missing |
+| Call line | 20px, gap `space-8`, mono `meta`: a 14px slot with a working StatusGlyph while it runs, else the line icon of the kind in `ink-48` (`skill`, `connector` for connectors and other MCP tools, `plugin`, `agent`, `globe` for web, `terminal` for shell, `file`, `search`; empty for other tools, D274); a connector or MCP call of a known server shows the server's brand mark instead (Simple Icons, monochrome, same size and `ink-48`, no brand colors: Slack, Notion, Gmail, Google Calendar, Google Drive, GitHub, Linear, Figma, Mixpanel, Spotify, Jira, Atlassian, Datadog, Intercom; case and the prefixes `claude.ai `, `claude_ai_`, `plugin_<plugin>_` do not count; D274), the label (`ink-64`, at least 48px: "Bash", "Skill · chat-writing", "Slack · send message", "contr · send", "Agent · Explore", "Fetch"; D274), the key argument on one line (`ink-48`: a file's base name, Bash's description or command, a pattern, a URL's host and path, an MCP tool's channel, query or target), "error" in `blocked` when the result is an error, the duration (`ink-48`): "0.4s", "12s", "2m 5s", from the timestamps of the call and its result, none when one is missing |
 | Call detail | a click on a call line (or Enter or Space while it has the focus; MyGo's `CollapsibleBase`) opens a detail under it, and a second click closes it; open state per call id. Indented past the icon slot, mono `meta` (the chat text size, D272): each input pair as "key:" in `ink-48` and the value in `ink-64` (at most 6, values cut to 200 runes), then `space-4` and the start of the result: its first 4 lines with "…" when it has more (at most 200 runes), in `ink-48`; an error result in `ink-64`, no red (only the line's "error" is `blocked`). A call with no input shows only the result; a running call only its input (D274). |
 | Failed task | a task line whose status is "failed" or "killed" stays outside the fold: no dot, "Background task" and the status in `ink-100`, the summary in `ink-88`; no red (D259). Every other note folds, a worker's message too ("ended its turn without a report", "NAME: blocked, …"): the team row and the notch tell what needs the owner. |
 | Dot | 6px, round: `ink-100` for a blocked worker (no red: the team row's "N needs you" is the chat's one red for it, D259), `ink-88` for a working one, else `ink-30` |
+| Worker mark | in place of the dot, for a worker of a known model family (D285): 12px, the Claude Code mascot (Claude: a model `opus`, `sonnet`, `haiku`, `claude-…` or the program `claude`), the OpenAI mark (`gpt-…`, `o3`, `o4`, the program `codex`) or the DeepSeek mark (`deepseek-…`), from Simple Icons, monochrome. The family comes from the worker's model, else its profile's model, else its program. In the dot's ink; while the worker works it hops 1.5px every 800ms as the working mascot does (still with Reduce Motion). No hue: the mascot is grey here too. Another program keeps the dot. |
 
 Hidden entries do not show: meta lines, system reminders, hook output (an
 attachment, a user line in a `<…-hook>` tag, or "Stop hook feedback:"),
@@ -143,6 +144,15 @@ the circle.
 - The field takes the focus as it appears: when the chat shows (the switch,
   ⌘E). It keeps the focus after a send, and takes it back after a click on
   Send or Stop.
+- Suggested next prompt (D281): when a turn ends, Claude Code shows a
+  suggested next prompt as faint text after `❯` in its input line. contr
+  reads it from the selected terminal's screen (the faint text, SGR 2, after
+  the last `❯`), 300 ms after output, off the UI thread. While the field is
+  empty, the suggestion takes the place of the placeholder, in the same
+  `ink-48`. Tab or Right puts it into the field (the slash popup takes Tab
+  first while it shows). Enter with an empty field sends nothing. Typed text
+  hides it; a new turn clears the input line, so it goes. No suggestion: the
+  placeholder.
 - Enter sends, and so does a click on Send; ⇧Enter breaks the line. A blank field sends nothing. Send
   types the text into the selected session's own terminal and presses Enter
   through the agent source's `Send`, as the orchestrate pill does. The field
@@ -257,14 +267,15 @@ does not know stays plain text.
 
 | Chip | Recognized | Known when | Dot | Click |
 |---|---|---|---|---|
-| PR | "#667" | gh says it is a pull request of the session's repository (read by number), or it is the PR of a worker's branch (D104, D145) | open `content-info`, checks running `content-running`, passed `content-done`, failed `content-failed`, merged `content-done`, closed `content-info`. A failed check wins over a pending one, a pending one over a passed one. | opens the PR as the agent rows do: in the browser (the PR pane is hidden, D147) |
-| Issue | "#649" | gh says it is an issue | none | opens the issue in the browser |
+| PR | "#667" | gh says it is a pull request of the session's repository (read by number), or it is the PR of a worker's branch (D104, D145) | GitHub's pull request Octicon of its state, 0.9 of the text size, `ink-48`: open, draft, merged, closed (D286). An open PR with checks adds a 6px dot after it: running `content-running`, passed `content-done`, failed `content-failed`. A failed check wins over a pending one, a pending one over a passed one. | opens the PR as the agent rows do: in the browser (the PR pane is hidden, D147) |
+| Issue | "#649" | gh says it is an issue | GitHub's issue Octicon, open or closed, 0.9 of the text size, `ink-48` (D286) | opens the issue in the browser |
 | Worker | a word that is the name of a worker contr lists ("b-649"); a live one wins | always | needs you `content-failed`, working `content-running`, done (ended) `content-done`, waiting (idle) `content-waiting` | selects the worker in the sidebar |
 | File | a word with a slash or an extension, with an optional ":42" | it is a file in the session's folder | none: the `file` line icon, 0.9 of the text size, `ink-48` | opens the file in the Review view, as the files panel does (the line is not used) |
 
 - The dot is 6px, round, `space-4` before the text, its center near the
-  middle of the lowercase letters. The tip of a chip says what it is:
-  "PR #667 · checks passed", "Worker b-649 · needs you", "Open
+  middle of the lowercase letters. The Octicons take the ink of the
+  text around them, never GitHub's colors (D119, D261, D286). The tip of a
+  chip says what it is: "PR #667 · checks passed", "Draft PR #661", "Worker b-649 · needs you", "Open
   internal/app/x.go".
 - A number is read only while its text is on screen and only once: the
   answer holds for 5 minutes, 1 minute for a PR with checks running, and
@@ -274,8 +285,8 @@ does not know stays plain text.
 - A chip shows the state of now: it follows the agent state and the
   answers of the reads. Nothing polls and no timer runs (D55); a text at
   rest asks for no frame.
-- Not yet: the quiet fill behind a chip, the mono text, the PR and issue
-  icons and the "merged" word of the mockup (K2, KC1). The chip is a link
+- Not yet: the quiet fill behind a chip, the mono text and the "merged"
+  word of the mockup (K2, KC1). The chip is a link
   of the markdown view, which styles all its links alike.
 
 ## Blocks
@@ -284,7 +295,7 @@ A coordinator writes a status board or a merge queue as a fenced block (D267). T
 
 | Block | Syntax | Shows |
 |---|---|---|
-| Status board | info string `contr-status`; a line `<worker> \| #<issue> \| <what it builds>` | six columns: Worker, Issue, Builds, State, PR, Checks; heads mono `meta`, `ink-48`; no box, a `hairline` above and below the grid, `space-16` between columns; the worker in `body`, `ink-88`, after its 6px dot (the chip's worker colors); the issue mono `meta` `ink-64`; what it builds `body` `ink-88`, one line with "…"; the state in mono `meta`, `ink-64` (grey: only the dots have content colors), "needs you" in `blocked-text`; the PR as a mono 12px number with its dot on `hover`, radius 5, a click opens it as a chip does; the checks "2 of 3" (passed of passed, failed and pending) mono `meta` `ink-64`; "—" for none |
+| Status board | info string `contr-status`; a line `<worker> \| #<issue> \| <what it builds>` | six columns: Worker, Issue, Builds, State, PR, Checks; heads mono `meta`, `ink-48`; no box, a `hairline` above and below the grid, `space-16` between columns; the worker in `body`, `ink-88`, after its 6px dot (the chip's worker colors); the issue mono `meta` `ink-64`; what it builds `body` `ink-88`, one line with "…"; the state in mono `meta`, `ink-64` (grey: only the dots have content colors), "needs you" in `blocked-text`; the PR as its Octicon (12px, `ink-48`, D286), the dot of its checks when it has some, and a mono 12px number on `hover`, radius 5, a click opens it as a chip does; the checks "2 of 3" (passed of passed, failed and pending) mono `meta` `ink-64`; "—" for none |
 | Merge queue | info string `contr-queue`; a line `#<n> <label>`, optional ` -- <note>` | the steps in order on one rail 14px wide: an 8px dot, a 1px `hairline` line down to the next step; the step's number mono `meta` `ink-48`, `#n label` in `prose` `ink-88`, the state in words in mono `meta` |
 
 State of a board row: a worker that needs the owner says "needs you"; else the state of its PR: "PR open", "CI running", "CI passed", "CI failed", "merged", "closed"; else the worker's own state: "building", "waiting", "done". A worker contr does not list shows its name in `ink-48` and "not found" in `ink-48`, no dot.

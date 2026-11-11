@@ -25,6 +25,9 @@ type Chat struct {
 	// Worker gives the agent at an hc address, for the state of the workers that sent notes.
 	// May be nil.
 	Worker func(addr string) (agents.Worker, bool)
+	// ModelOf names the model that an agent profile starts, for the mark of a worker (D285). May
+	// be nil.
+	ModelOf func(profile string) string
 	// Hints shows the key chip of the switch while ⌘ is held (D245).
 	Hints bool
 	// Send types text into the terminal at addr and presses Enter. It blocks: it runs off the UI
@@ -57,6 +60,11 @@ type Chat struct {
 	// Path gives the files and folders of the session at addr for the "@" popup (D279); nil
 	// shows none.
 	Path PathSource
+	// NextPrompt is Claude Code's suggested next prompt in the input line of the terminal at addr,
+	// "" for none (D281). It runs on the UI thread. Nil: the placeholder shows.
+	NextPrompt func(addr string) string
+	// next is the suggestion the composer shows in its empty field, for Tab.
+	next string
 	// sg is the state of the composer's suggestion popup.
 	sg suggest
 

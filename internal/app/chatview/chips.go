@@ -76,6 +76,7 @@ const (
 type Chip struct {
 	Kind  ChipKind
 	State ChipState
+	Draft bool // a draft PR
 }
 
 // ChipSource knows the names of the chips. Its methods run on the UI thread.
@@ -96,7 +97,9 @@ type ChipSource interface {
 const chipScheme = "contr-chip:"
 
 var (
-	kindWords  = [...]string{"", "pr", "issue", "worker", "file"}
+	kindWords = [...]string{"", "pr", "issue", "worker", "file"}
+	// draftWord ends the kind word of a draft PR: "pr.draft".
+	draftWord  = ".draft"
 	stateWords = [...]string{"", "open", "running", "passed", "failed", "merged", "closed", "needs-you", "working", "done", "waiting"}
 	// stateTexts end the tip of a chip.
 	stateTexts = [...]string{"", "open", "checks running", "checks passed", "checks failed", "merged", "closed", "needs you", "working", "done", "waiting"}
@@ -104,7 +107,11 @@ var (
 
 // chipDest is the address of the link of chip c of name: contr-chip:KIND/STATE/NAME.
 func chipDest(c Chip, name string) string {
-	return chipScheme + kindWords[c.Kind] + "/" + stateWords[c.State] + "/" + name
+	kind := kindWords[c.Kind]
+	if c.Draft && c.Kind == ChipPR {
+		kind += draftWord
+	}
+	return chipScheme + kind + "/" + stateWords[c.State] + "/" + name
 }
 
 // parseChipDest reads an address that chipDest made.
@@ -118,6 +125,7 @@ func parseChipDest(dest string) (Chip, string, bool) {
 		return Chip{}, "", false
 	}
 	var c Chip
+	parts[0], c.Draft = strings.CutSuffix(parts[0], draftWord)
 	for i, w := range kindWords {
 		if i > 0 && w == parts[0] {
 			c.Kind = ChipKind(i)
@@ -128,7 +136,7 @@ func parseChipDest(dest string) (Chip, string, bool) {
 			c.State = ChipState(i)
 		}
 	}
-	if c.Kind == ChipNone || (c.State == StateNone && parts[1] != "") {
+	if c.Kind == ChipNone || (c.Draft && c.Kind != ChipPR) || (c.State == StateNone && parts[1] != "") {
 		return Chip{}, "", false
 	}
 	return c, parts[2], true
@@ -141,6 +149,9 @@ func chipTip(c Chip, name string) string {
 	switch c.Kind {
 	case ChipPR:
 		s = "PR #" + name
+		if c.Draft {
+			s = "Draft PR #" + name
+		}
 	case ChipIssue:
 		s = "Issue #" + name
 	case ChipWorker:
@@ -192,6 +203,9 @@ func chipIcon(dest string, size float32) (markdown.InlineObject, bool) {
 				}
 			}}, true
 	}
+	if g := ChipGitHub(c); g != icons.GitHubNone {
+		return githubIcon(c, g, size), true
+	}
 	if _, ok := ChipColor(theme.Current(), c.State); !ok {
 		return markdown.InlineObject{}, false
 	}
@@ -202,6 +216,55 @@ func chipIcon(dest string, size float32) (markdown.InlineObject, bool) {
 				p.Fill(ui.Rect{X: r.X, Y: r.Y, W: chipDot, H: chipDot}, col, chipDot/2)
 			}
 		}}, true
+}
+
+// ChipGitHub is the Octicon of a PR or an issue chip (D286): a PR by its state (merged, closed,
+// draft or open), an issue open or closed. Other chips have none.
+func ChipGitHub(c Chip) icons.GitHub {
+	switch c.Kind {
+	case ChipPR:
+		switch c.State {
+		case StateMerged:
+			return icons.PRMerged
+		case StateClosed:
+			return icons.PRClosed
+		}
+		if c.Draft {
+			return icons.PRDraft
+		}
+		return icons.PROpen
+	case ChipIssue:
+		if c.State == StateClosed {
+			return icons.IssueClosed
+		}
+		return icons.IssueOpen
+	}
+	return icons.GitHubNone
+}
+
+// checksDot reports whether the chip's state is one of checks, which a dot shows after the
+// Octicon: running, passed or failed.
+func checksDot(s ChipState) bool { return s == StateRunning || s == StatePassed || s == StateFailed }
+
+// githubIcon is the LinkIcon of a PR or an issue chip: its Octicon in ink-48, 0.9 of the text
+// size as the file icon, then the dot of its checks when it has one.
+func githubIcon(c Chip, g icons.GitHub, size float32) markdown.InlineObject {
+	side := size * 0.9
+	w := side + chipDotGap
+	if checksDot(c.State) {
+		w += chipDot + chipDotGap
+	}
+	return markdown.InlineObject{Width: w, Height: side * 0.82, Depth: side * 0.18,
+		Draw: func(p *ui.Painter, r ui.Rect) {
+			pal := theme.Current()
+			if s := icons.GitHubSVG(g); s != nil {
+				p.Icon(s, ui.Rect{X: r.X, Y: r.Y, W: side, H: side}, pal.Ink48)
+			}
+			if col, ok := ChipColor(pal, c.State); ok && checksDot(c.State) {
+				y := r.Y + side/2 - chipDot/2
+				p.Fill(ui.Rect{X: r.X + side + chipDotGap, Y: y, W: chipDot, H: chipDot}, col, chipDot/2)
+			}
+		}}
 }
 
 // Tokens finds the names in Markdown src that may be chips: in text only, not in code, links,
@@ -399,12 +462,16 @@ func (ch *Chat) openLink(url string) {
 }
 
 // RefChip is the chip of a number: a merged or closed PR, an open one by its checks (a failed
-// check first, then a pending one, then a passed one), or an issue with no dot.
+// check first, then a pending one, then a passed one), a draft one marked, or an issue open or
+// closed.
 func RefChip(r github.Ref) Chip {
 	if !r.PR {
+		if r.State == "CLOSED" {
+			return Chip{Kind: ChipIssue, State: StateClosed}
+		}
 		return Chip{Kind: ChipIssue}
 	}
-	c := Chip{Kind: ChipPR, State: StateOpen}
+	c := Chip{Kind: ChipPR, State: StateOpen, Draft: r.Draft && r.State == "OPEN"}
 	switch {
 	case r.State == "MERGED":
 		c.State = StateMerged

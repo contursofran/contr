@@ -3,6 +3,8 @@ package setup
 import (
 	"context"
 	"errors"
+	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
@@ -167,5 +169,35 @@ func TestCoreAndRequired(t *testing.T) {
 	rs := []Result{Core("", false), {Required: true}, {Required: false, State: Optional}, {Required: true, State: Action}}
 	if n := Required(rs); n != 2 {
 		t.Fatalf("Required = %d, want 2", n)
+	}
+}
+
+func TestRunPluginRunsOnlyThePluginLines(t *testing.T) {
+	var got []string
+	e := Env{Find: func(string) (string, error) { return "/bin/claude", nil },
+		Run: func(_ context.Context, name string, args ...string) ([]byte, error) {
+			got = append([]string{name}, args...)
+			return nil, nil
+		}}
+	if err := RunPlugin(context.Background(), e, CopyEnable); err != nil || strings.Join(got, " ") != "/bin/claude plugin enable contr@contr" {
+		t.Fatalf("err %v, ran %q", err, got)
+	}
+	got = nil
+	if err := RunPlugin(context.Background(), e, "rm -rf x"); err == nil || got != nil {
+		t.Fatalf("ran another line: %v %q", err, got)
+	}
+	e.Find = func(string) (string, error) { return "", errors.New("claude not found") }
+	if err := RunPlugin(context.Background(), e, CopyPlugin); err == nil || got != nil {
+		t.Fatalf("ran without claude: %v", err)
+	}
+}
+
+func TestRunPluginErrorIsTheLastStderrLine(t *testing.T) {
+	e := Env{Find: func(string) (string, error) { return "/bin/sh", nil },
+		Run: func(ctx context.Context, _ string, _ ...string) ([]byte, error) {
+			return exec.CommandContext(ctx, "/bin/sh", "-c", "echo one >&2; echo 'two last' >&2; exit 1").Output()
+		}}
+	if err := RunPlugin(context.Background(), e, CopyPlugin); err == nil || err.Error() != "two last" {
+		t.Fatalf("err %v", err)
 	}
 }
