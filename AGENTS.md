@@ -86,9 +86,9 @@ that code, move it to the MyGo part in its own small PR.
 | `internal/app/ghsource` | the gh reads of the workers: pull request per worktree, issue titles, the queue of gh runs, the PR or issue entry |
 | `internal/app/settings` | the Settings modal: General, Agents and Updates tabs, update checks and install |
 | `internal/app/projectsview` | the projects modal: list, filter, add a folder or a clone, hide |
-| `internal/app/questions` | the questions notch and card, the outline of pinned messages, the code chips |
+| `internal/app/questions` | the questions notch and card, the outline of pinned messages and of the chat's marks, the code chips |
 | `internal/app/chatsource` | the transcript path of the selected terminal, from its session file, and a watch on the file |
-| `internal/app/chatview` | the Chat mode of a Claude session: the transcript as rows (prompt, text, work group), the Chat \| Terminal switch |
+| `internal/app/chatview` | the Chat mode of a Claude session: the transcript as rows (prompt, text, work group), the marks for the outline, the Chat \| Terminal switch |
 | `internal/app/orchestrate` | the orchestrate pill: Orchestrating with the worker count, or the Orchestrate button and its popover |
 | `internal/app/viewers` | the views hidden behind one switch (D147): PR pane, board panel, worker panel |
 | `internal/app/apptest` | test helpers that the tests of more than one `internal/app` package use |

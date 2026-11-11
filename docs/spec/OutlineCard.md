@@ -25,6 +25,7 @@ Design system page: component OutlineCard. Shared rules: [README.md](README.md).
 ## Behavior
 
 - Shows the headline, one detail line and the time of the hovered tick.
+- A tick of the chat (D270): the headline is the first words, at most two lines; the detail line is the kind ("Decision", "Warning", "Done", "Not verified", "You", "Needs you", "Pinned", "Question"). A sent prompt has no time: none shows.
 
 ## Data
 
@@ -36,7 +37,7 @@ Design system page: component OutlineCard. Shared rules: [README.md](README.md).
 
 ## Edge cases
 
-- A long headline or detail: ellipsis on one line each.
+- A long headline or detail: ellipsis on one line each; a chat tick's headline ends with an ellipsis on its second line.
 
 ## Accessibility
 

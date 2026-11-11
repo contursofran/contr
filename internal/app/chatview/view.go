@@ -90,14 +90,15 @@ func (ch *Chat) View(c *ui.Context) {
 		ch.model.TurnEnded()
 	}
 	ch.wasWorking = st.kind == liveWorking
-	ui.Column(c).Label(LabelChat).Fill().Bind(&ch.panel).Children(func() {
+	ui.Column(c).Label(LabelChat).Fill().Bind(&ch.panel).Draw(func(_ *ui.Painter, r ui.Rect) { ch.keepRect(&ch.panelRect, r) }).Children(func() {
 		rows, pending := ch.model.Rows(), ch.model.Pendings()
 		sc := ch.scrollState()
 		// The list has room under its last entry as tall as the fade over its bottom edge, so the
 		// fade covers no entry and the dock cuts none (D259).
 		// The switch row is room above the list, not in it: the rows in view (Visible) are those
 		// under it, and the pinned prompt takes its place while the chat is scrolled up (D266).
-		ui.Column(c).FillWidth().Grow(1).MinHeight(0).Padding(topSpace, 0, 0, 0).Children(func() {
+		ui.Column(c).FillWidth().Grow(1).MinHeight(0).Padding(topSpace, 0, 0, 0).
+			Draw(func(_ *ui.Painter, r ui.Rect) { ch.keepRect(&ch.listRect, r) }).Children(func() {
 			ui.List(c, &ch.list, len(rows)+len(pending), func(i int) {
 				if i < len(rows) {
 					ch.row(c, rows[i])

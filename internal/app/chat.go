@@ -11,6 +11,7 @@ import (
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/agentstate"
 	"github.com/contursofran/contr/internal/app/chatview"
+	"github.com/contursofran/contr/internal/app/questions"
 	"github.com/contursofran/contr/internal/app/view"
 )
 
@@ -32,6 +33,9 @@ func (f *Frame) attachChat(env view.Env, src agentstate.AgentSource) (stop func(
 		return f.Notch.Bounds()
 	}
 	f.Chat.Chips = newChatChips(f, env)
+	if f.Outline != nil {
+		f.Outline.Chat = f.chatOutline
+	}
 	if src != nil {
 		f.Chat.Send, f.Chat.Interrupt = src.Send, src.Interrupt
 	}
@@ -164,4 +168,48 @@ func (f *Frame) chatView(c *ui.Context) (ok bool) {
 	}
 	ui.Box(c).Absolute().Fill().Children(func() { f.Chat.View(c) })
 	return true
+}
+
+// chatOutline gives the outline the ticks of the chat while it shows (D270): one for each mark of
+// the chat, in the room of its transcript list. A pin or a question takes its text from the owner
+// store while it is open; an open question and a decision that waits are blocked. A click scrolls
+// the chat to the row of the tick.
+func (f *Frame) chatOutline() (questions.ChatTicks, bool) {
+	if f.Chat == nil || !f.chatShown() {
+		return questions.ChatTicks{}, false
+	}
+	marks := f.Chat.Marks()
+	snap := f.snapshot()
+	rows := make(map[string]int, len(marks))
+	ticks := make([]questions.OutlineTick, 0, len(marks))
+	for _, m := range marks {
+		t := questions.OutlineTick{ID: m.ID, Headline: m.Text, Pinned: m.At, Kind: m.Kind.Word(), Blocked: m.Waits}
+		switch m.Kind {
+		case chatview.MarkAsked:
+			t.Headline = m.Kind.Word() + " " + m.Item
+			for _, q := range snap.Questions {
+				if q.ID == m.Item {
+					t.Headline, t.Blocked = q.Question, true
+				}
+			}
+		case chatview.MarkPinned:
+			t.Headline = m.Kind.Word() + " " + m.Item
+			for _, td := range snap.Todos {
+				if td.ID == m.Item {
+					t.Headline = td.Text
+				}
+			}
+		}
+		t.Headline = strings.Join(strings.Fields(t.Headline), " ")
+		t.Width = questions.TickWidth(t.Headline)
+		rows[m.ID] = m.Row
+		ticks = append(ticks, t)
+	}
+	top, bottom, _ := f.Chat.Area()
+	return questions.ChatTicks{Addr: f.selectedTerminal(), Ticks: ticks, Top: top, Bottom: bottom,
+		Jump: func(id string) {
+			if i, ok := rows[id]; ok {
+				f.Chat.ScrollToRow(i)
+			}
+		}}, true
 }

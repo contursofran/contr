@@ -94,6 +94,21 @@ rest asks for no frame (D55). At the end of the chat neither shows.
 | Pinned prompt | the turn in view is that of the first row in view. When its prompt is above that row: a bar over the switch row, 44px high, across the panel, on the stage (`StageBase`) with a `hairline` under it, padding 16px at the left; at the right it ends `space-12` before the switch, and before the questions notch while the notch shows over it (D266); gap `space-12`: "You" (`small`, `ink-45`), then the prompt on one line, clipped with `…` (`small`, `ink-100`; line breaks show as spaces). Label "pinned prompt" and the text. A click scrolls the list to the prompt, at the top. A first row that is a prompt, or a pending prompt, shows itself: nothing is pinned. |
 | Jump to latest | a pill centered over the bottom of the transcript, `space-8` above the dock: 28px high, padding `0 13px 0 11px`, radius 14, gap `space-8`, `float-solid` fill, 1px `float-line` border, `shadow-float`; "Jump to latest" and "↓" (`small`, `ink-100`). When entries that show (prompts, texts, notes, tool calls) came after the owner left the end: a 6px `claude` dot first and "New messages" in place of the text; label "Jump to latest, new messages". A click scrolls to the end, where the list follows again. No key: ⌘↓ moves the caret in the composer. |
 
+## Outline
+
+The [Outline](Outline.md) column at the right edge of the chat (D270): one
+tick for each important thing of the thread, in thread order, so the owner
+finds them at a glance after time away.
+
+| Part | Value |
+|---|---|
+| Ticks | one for each prompt of the owner ("You"); each `[!DECISION]`, `[!WARNING]`, `[!DONE]` and `[!UNVERIFIED]` remark in Claude's text ("Decision", "Warning", "Done", "Not verified"; a `[!NOTE]` gets none); each note for the owner outside the fold ("Needs you"); each `pin_for_owner` ("Pinned") and `ask_owner` ("Question") call that did not fail. `chatview.Marks` is the one place that says which rows these are. |
+| Pin and question | the call's result is the item id; the text comes from the owner store while the item is open, else "Pinned T3" or "Question D2". |
+| Blocked | an open question, and a decision remark that no prompt of the owner follows: `blocked`, new or not. All other ticks are greys: `tick`, or `ink-100` when new. |
+| Place | in the room of the transcript list: under the switch row (44px), above the dock; centered on that height. In Terminal mode the outline keeps the pins of the orchestrator terminal. |
+| Card | the [OutlineCard](OutlineCard.md): the first words, at most two lines, then the kind in the detail's quiet ink and the time. |
+| Click | scrolls the list to the row, at the top (`ListState.ScrollTo`): a pin or a question scrolls to its work group, folded or not. The tick and those before it become read. |
+
 ## Composer
 
 | Part | Value |

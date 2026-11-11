@@ -61,6 +61,10 @@ const (
 	outlineMaxTicks = 40
 	// outlineCountGap is the space between the count and the first tick.
 	outlineCountGap = 3
+	// outlineCountRoom is the height of the count and its gap: one 14px line and 3px.
+	outlineCountRoom = 14 + outlineCountGap
+	// outlineMinPitch is the smallest pitch of a column with many ticks: a 2px tick and 2px (D270).
+	outlineMinPitch = theme.SizeTickHeight + 2
 )
 
 // OutlineTick is one message of the orchestrator, ready to draw.
@@ -70,6 +74,23 @@ type OutlineTick struct {
 	Detail   string
 	Pinned   time.Time
 	Width    float32 // of the tick at rest, in DIPs
+	// Kind is what the tick is, for a tick of the chat (D270): the card's quiet line in place of
+	// the detail, and the headline wraps to two lines. "" for a pin of the orchestrator terminal.
+	Kind string
+	// Blocked is set for a tick that waits for the owner: it is `blocked`, new or not (D270).
+	Blocked bool
+}
+
+// ChatTicks are the ticks of the chat that shows (D270), from the frame.
+type ChatTicks struct {
+	// Addr is the hc address of the terminal of the chat: its seen state is the terminal's.
+	Addr  string
+	Ticks []OutlineTick
+	// Top and Bottom are the space above and below the transcript list in the terminal: the
+	// column keeps to the list's height.
+	Top, Bottom float32
+	// Jump scrolls the chat to the row of the tick with the id.
+	Jump func(id string)
 }
 
 // outlineTicks turns the open to-dos of a project into ticks, oldest first.
@@ -95,12 +116,16 @@ func outlineTicks(todos []owner.Todo, project string) []OutlineTick {
 				detail += " · from " + t.From
 			}
 		}
-		n := utf8.RuneCountInString(t.Text)
-		w := min(outlineMaxWidth, outlineMinWidth+n/30)
-		out = append(out, OutlineTick{ID: t.ID, Headline: head, Detail: detail, Pinned: t.Pinned, Width: float32(w)})
+		out = append(out, OutlineTick{ID: t.ID, Headline: head, Detail: detail, Pinned: t.Pinned, Width: TickWidth(t.Text)})
 	}
 	slices.SortStableFunc(out, func(a, b OutlineTick) int { return a.Pinned.Compare(b.Pinned) })
 	return out
+}
+
+// TickWidth is the width of a tick at rest for a message of text: 8px and 1px more for each 30
+// runes, at most 14px.
+func TickWidth(text string) float32 {
+	return float32(min(outlineMaxWidth, outlineMinWidth+utf8.RuneCountInString(text)/30))
 }
 
 // splitMessage returns the first and the second non-empty line of text.
@@ -140,6 +165,9 @@ type Outline struct {
 	Now func() time.Time
 	// Env asks for a new frame.
 	Env view.Env
+	// Chat gives the ticks of the chat while the selected terminal shows it, in place of the pins
+	// (D270); ok is false in Terminal mode. May be nil.
+	Chat func() (ChatTicks, bool)
 
 	start   time.Time
 	seen    map[string]*seenState // by hc terminal address
@@ -151,6 +179,8 @@ type Outline struct {
 	// frame drawn; hasTop is false while no column shows (see Top).
 	top    float32
 	hasTop bool
+	// height is the height of the column's box in the last frame drawn, for the fit (D270).
+	height float32
 }
 
 // Top returns the top of the column's content, the count or the first tick's
@@ -265,16 +295,24 @@ type OutlineView struct {
 	Ticks []OutlineTick // the newest that fit, oldest first
 	New   []bool        // New[i] tells whether Ticks[i] is new
 	Count int           // how many messages are new, also the ones not shown
+	Pitch float32       // the distance from one tick to the next
 }
 
-// view returns the ticks to draw for the selected orchestrator, or false when
-// the outline does not show: another kind of terminal, or no pin.
-func (o *Outline) view() (addr string, v OutlineView, ok bool) {
-	addr, project, ok := o.target()
-	if !ok {
-		return "", v, false
+// view returns the ticks to draw for the chat that shows, or else for the selected orchestrator,
+// or false when the outline does not show: another kind of terminal, or no tick. h is the height
+// of the column's box, 0 before it was laid out.
+func (o *Outline) view(chat ChatTicks, inChat bool, h float32) (addr string, v OutlineView, ok bool) {
+	var all []OutlineTick
+	if inChat {
+		addr, all = chat.Addr, chat.Ticks
+	} else {
+		var project string
+		if addr, project, ok = o.target(); !ok {
+			return "", v, false
+		}
+		all = outlineTicks(o.Snapshot().Todos, project)
+		all = all[max(0, len(all)-outlineMaxTicks):]
 	}
-	all := outlineTicks(o.Snapshot().Todos, project)
 	if len(all) == 0 {
 		return "", v, false
 	}
@@ -284,11 +322,38 @@ func (o *Outline) view() (addr string, v OutlineView, ok bool) {
 			v.Count++
 		}
 	}
-	v.Ticks = all[max(0, len(all)-outlineMaxTicks):]
+	if v.Count > 0 {
+		h -= outlineCountRoom
+	}
+	n, pitch := outlineFit(len(all), h)
+	v.Ticks, v.Pitch = all[len(all)-n:], pitch
 	for _, t := range v.Ticks {
 		v.New = append(v.New, s.isNew(t))
 	}
 	return addr, v, true
+}
+
+// outlineFit is how many of n ticks show, the newest, and their pitch, in a column h high (D270):
+// all at the 11px pitch while they fit, else all at a smaller pitch down to 4px, else the newest
+// that fit at 4px. h 0 or less, before the column was laid out, shows all at 11px.
+func outlineFit(n int, h float32) (shown int, pitch float32) {
+	if h <= 0 || float32(n)*outlinePitch <= h {
+		return n, outlinePitch
+	}
+	if p := h / float32(n); p >= outlineMinPitch {
+		return n, p
+	}
+	return max(1, min(n, int(h/outlineMinPitch))), outlineMinPitch
+}
+
+// setHeight keeps the height of the column's box and asks for one more frame when it changed, so
+// that the fit follows the column.
+func (o *Outline) setHeight(h float32) {
+	if h == o.height {
+		return
+	}
+	o.height = h
+	o.Env.Redraw()
 }
 
 // outlineClock is the time of the card: 24-hour "14:38" (OutlineCard.md).
@@ -297,7 +362,12 @@ func outlineClock(t time.Time) string { return t.Local().Format("15:04") }
 // View builds the column. It builds nothing for a terminal that is not the
 // orchestrator's, or when there is no pin. It reads the snapshot only.
 func (o *Outline) View(c *ui.Context) {
-	addr, v, ok := o.view()
+	var chat ChatTicks
+	inChat := false
+	if o.Chat != nil {
+		chat, inChat = o.Chat()
+	}
+	addr, v, ok := o.view(chat, inChat, o.height)
 	if !ok {
 		o.setTop(0, false)
 		return
@@ -306,9 +376,12 @@ func (o *Outline) View(c *ui.Context) {
 	// The draw callbacks get this frame's layout: they keep the column's top
 	// for Top, after the layout and before the next build.
 	var colY float32
-	ui.Box(c).Label(LabelOutline).Absolute().Top(0).Bottom(0).Right(outlineInset).Width(outlineHitWidth).
+	ui.Box(c).Label(LabelOutline).Absolute().Top(chat.Top).Bottom(chat.Bottom).Right(outlineInset).Width(outlineHitWidth).
 		Column().Justify(ui.Center).AlignItems(ui.End).PassThrough().
-		FocusGroup(ui.Vertical).Draw(func(_ *ui.Painter, r ui.Rect) { colY = r.Y }).Children(func() {
+		FocusGroup(ui.Vertical).Draw(func(_ *ui.Painter, r ui.Rect) {
+		colY = r.Y
+		o.setHeight(r.H)
+	}).Children(func() {
 		ui.Column(c).AlignItems(ui.End).PassThrough().Shrink(0).
 			Draw(func(_ *ui.Painter, r ui.Rect) { o.setTop(r.Y-colY, true) }).Children(func() {
 			if v.Count > 0 {
@@ -318,38 +391,42 @@ func (o *Outline) View(c *ui.Context) {
 					Margin(0, 0, outlineCountGap, 0)
 			}
 			for i, t := range v.Ticks {
-				o.tickView(c, addr, t, v.New[i])
+				o.tickView(c, addr, t, v.New[i], v.Pitch, chat.Jump)
 			}
 		})
 	})
 }
 
-// tickView builds one tick: a button with the 20×10 hit area, its tick bar
-// right-aligned, and the card of the message.
-func (o *Outline) tickView(c *ui.Context, addr string, t OutlineTick, isNew bool) {
+// tickView builds one tick: a button with the 20×10 hit area, or as high as the pitch when it
+// is smaller, its tick bar right-aligned, and the card of the message. A click on a tick of the
+// chat also scrolls the chat to it (jump).
+func (o *Outline) tickView(c *ui.Context, addr string, t OutlineTick, isNew bool, pitch float32, jump func(string)) {
 	p := theme.Current()
 	label := t.Headline
+	if t.Kind != "" {
+		label = t.Kind + ": " + label
+	}
 	if isNew {
 		label += ", new"
 	}
 	b := ui.ButtonBase(c.Key("outline-tick-"+t.ID)).Label(label).Description(outlineCardText(t)).
-		Size(outlineHitWidth, outlineHitHeight).Shrink(0).Justify(ui.End).AlignItems(ui.Center).
+		Size(outlineHitWidth, min(outlineHitHeight, pitch)).Shrink(0).Justify(ui.End).AlignItems(ui.Center).
 		Cursor(ui.CursorPointer).FocusRing(false)
 	b = b.OnClick(func() {
 		o.Read(addr, t)
 		o.open = t.ID
+		if jump != nil {
+			jump(t.ID)
+		}
 		o.Env.Redraw()
 	})
-	b.Margin(0, 0, outlinePitch-outlineHitHeight, 0) // the 11px pitch: 10px of hit area and 1px more
+	b.Margin(0, 0, max(0, pitch-outlineHitHeight), 0) // the 11px pitch: 10px of hit area and 1px more
 	grow := b.Hovered() || b.FocusVisible()
 	width := t.Width
 	if grow {
 		width = outlineHover
 	}
-	ink := p.Tick
-	if isNew {
-		ink = p.Ink100
-	}
+	ink := tickInk(p, t, isNew)
 	b.Children(func() {
 		bar := ui.Box(c).Size(width, theme.SizeTickHeight).Background(ink).Radius(theme.Radius1)
 		if b.FocusVisible() {
@@ -358,6 +435,18 @@ func (o *Outline) tickView(c *ui.Context, addr string, t OutlineTick, isNew bool
 		}
 	})
 	o.card(c, b, t)
+}
+
+// tickInk is the color of a tick: `blocked` for one that waits for the owner, new or not, else
+// ink-100 when new and `tick` when read (D270).
+func tickInk(p *theme.Palette, t OutlineTick, isNew bool) ui.Color {
+	switch {
+	case t.Blocked:
+		return p.Blocked
+	case isNew:
+		return p.Ink100
+	}
+	return p.Tick
 }
 
 // card shows the card of the tick beside it, at its left: the tooltip while
@@ -387,7 +476,19 @@ func (o *Outline) card(c *ui.Context, b ui.Element, t OutlineTick) {
 // outlineCardText is the text of the card for assistive technology: the headline, the
 // detail and the time (OutlineCard.md, Accessibility).
 func outlineCardText(t OutlineTick) string {
-	return t.Headline + ". " + t.Detail + ". " + outlineClock(t.Pinned)
+	s := t.Headline + ". " + cardDetail(t)
+	if !t.Pinned.IsZero() {
+		s += ". " + outlineClock(t.Pinned)
+	}
+	return s
+}
+
+// cardDetail is the quiet line of the card: the kind of a tick of the chat, else the detail.
+func cardDetail(t OutlineTick) string {
+	if t.Kind != "" {
+		return t.Kind
+	}
+	return t.Detail
 }
 
 // outlineCard styles tip as the OutlineCard and builds its lines: the headline,
@@ -403,13 +504,20 @@ func outlineCard(c *ui.Context, tip ui.Element, t OutlineTick) {
 	}
 	tip.Children(func() {
 		q, detail, meta := theme.StyleQuestion, theme.StyleRowSmall, theme.StyleMeta
-		ui.Text(c, t.Headline).SingleLine().MinWidth(0).TextColor(p.Ink100).
+		head := ui.Text(c, t.Headline).MinWidth(0).TextColor(p.Ink100).
 			Font(q.Stack()).FontSize(q.Size).FontWeight(q.Weight)
+		if t.Kind != "" {
+			head.MaxLines(2) // the first words of a tick of the chat (D270)
+		} else {
+			head.SingleLine()
+		}
 		ui.Box(c).Row().Gap(theme.Space16).AlignItems(ui.End).Children(func() {
-			ui.Text(c, t.Detail).SingleLine().Grow(1).MinWidth(0).TextColor(p.Ink42).
+			ui.Text(c, cardDetail(t)).SingleLine().Grow(1).MinWidth(0).TextColor(p.Ink42).
 				Font(detail.Stack()).FontSize(detail.Size).FontWeight(detail.Weight)
-			ui.Text(c, outlineClock(t.Pinned)).SingleLine().Shrink(0).TextColor(p.Ink30).
-				Font(meta.Stack()).FontSize(meta.Size).FontWeight(meta.Weight)
+			if !t.Pinned.IsZero() {
+				ui.Text(c, outlineClock(t.Pinned)).SingleLine().Shrink(0).TextColor(p.Ink30).
+					Font(meta.Stack()).FontSize(meta.Size).FontWeight(meta.Weight)
+			}
 		})
 	})
 }
