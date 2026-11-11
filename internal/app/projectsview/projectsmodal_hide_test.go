@@ -27,7 +27,7 @@ func TestHideShowsToastWithUndo(t *testing.T) {
 	if len(*calls) != 1 {
 		t.Fatalf("toasts: %d", len(*calls))
 	}
-	if c := (*calls)[0]; c.msg != "b hidden from the sidebar" || c.action != "Undo" || c.undo == nil {
+	if c := (*calls)[0]; c.msg != "b closed" || c.action != "Undo" || c.undo == nil {
 		t.Errorf("toast = %q %q", c.msg, c.action)
 	}
 }

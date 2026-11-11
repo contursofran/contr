@@ -754,6 +754,13 @@ func (f *Frame) newTerminal() {
 	if f.NewTerm == nil {
 		return
 	}
+	if f.SpacesList != nil {
+		// A selected project row (an empty project, D291) is where the terminal opens.
+		if name, dir, ok := f.SpacesList.SelectedProject(); ok {
+			f.NewTerm.Start(name, dir)
+			return
+		}
+	}
 	project := f.openProject
 	f.NewTerm.Start(project, f.terminalDir(project))
 }

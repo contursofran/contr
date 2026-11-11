@@ -9,7 +9,6 @@ import (
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/ghsource"
 	"github.com/contursofran/contr/internal/app/ghsource/ghsourcetest"
-	"github.com/contursofran/contr/internal/app/spaces"
 	"github.com/contursofran/contr/internal/projects"
 )
 
@@ -162,7 +161,7 @@ func TestTheMenuKeyOnAnEmptyProjectOpensItsMenu(t *testing.T) {
 	h, started := emptyProjectRig(t)
 	moveToEmpty(t, h)
 	h.tt.Key(0, ui.KeyContextMenu)
-	if err := h.tt.ChooseMenuItem(LabelNewIn(spaces.RepoGroup{Name: "gamma"})); err != nil {
+	if err := h.tt.ChooseMenuItem(MenuNewOrchestrator); err != nil {
 		t.Fatalf("no menu on the menu key: %v", err)
 	}
 	if !slices.Equal(*started, []string{"/proj/gamma"}) {
@@ -177,11 +176,11 @@ func TestTheMenuKeyOnAProjectWithAgentsOpensItsMenu(t *testing.T) {
 	}
 	h.tt.Key(0, ui.KeyDown) // the first row: a project with agents
 	h.tt.Key(0, ui.KeyContextMenu)
-	if err := h.tt.ChooseMenuItem(LabelNewIn(spaces.RepoGroup{Name: "gamma"})); err == nil {
-		t.Error("the menu of a row with agents has a new orchestrator")
+	if slices.Contains(h.tt.Menu(), MenuNewOrchestrator) {
+		t.Error("the menu of a row with an orchestrator has a new orchestrator")
 	}
 	if !slices.Contains(h.tt.Menu(), MenuHideProject) {
-		t.Errorf("menu %q, want Hide project (D219)", h.tt.Menu())
+		t.Errorf("menu %q, want Close project (D219, D291)", h.tt.Menu())
 	}
 }
 
