@@ -262,3 +262,168 @@ func TestNeedsYouHasNoLineAndEnterWaits(t *testing.T) {
 		}
 	}
 }
+
+func TestActionOf(t *testing.T) {
+	for _, tc := range []struct {
+		text             string
+		working, canStop bool
+		want             Action
+	}{
+		{"", false, true, ActionIdle},
+		{"  \n", false, true, ActionIdle},
+		{"hi", false, true, ActionSend},
+		{"", true, true, ActionStop},
+		{"hi", true, true, ActionSend}, // the message queues (D265)
+		{"", true, false, ActionIdle},  // nothing can stop it
+	} {
+		if got := ActionOf(tc.text, tc.working, tc.canStop); got != tc.want {
+			t.Errorf("ActionOf(%q, %v, %v) = %v, want %v", tc.text, tc.working, tc.canStop, got, tc.want)
+		}
+	}
+}
+
+// rect is where label shows; the test fails when it does not.
+func (s *sess) rect(label string) ui.Rect {
+	s.t.Helper()
+	r, ok := s.tt.Find(label)
+	if !ok {
+		s.t.Fatalf("no %q in %v", label, s.tt.Texts())
+	}
+	return r
+}
+
+// The round button while idle and empty is Send, dimmed: a click sends nothing (D271).
+func TestComposerIdleEmptySendIsDimmed(t *testing.T) {
+	s := newSession(t, "idle")
+	if !s.has(LabelSend) || s.has(LabelStop) {
+		t.Fatalf("idle and empty: send %v, stop %v", s.has(LabelSend), s.has(LabelStop))
+	}
+	_ = s.tt.Click(LabelSend)
+	s.tt.Frame()
+	if len(s.sent) != 0 || s.has(LabelPending) {
+		t.Errorf("the dimmed Send sent %q", s.sent)
+	}
+}
+
+// With text, the round button sends the field as Enter does, clears it and keeps the focus.
+func TestComposerSendButtonSends(t *testing.T) {
+	s := newSession(t, "idle")
+	s.typeIn("hello")
+	if err := s.tt.Click(LabelSend); err != nil {
+		t.Fatal(err)
+	}
+	s.tt.Frame()
+	if len(s.sent) != 1 || s.sent[0] != "hello" || s.draft() != "" || !s.has(LabelPending) {
+		t.Fatalf("Send: sent %q, draft %q, pending %v", s.sent, s.draft(), s.has(LabelPending))
+	}
+	if !s.tt.Focused(LabelComposer) {
+		t.Error("the field loses the focus after Send")
+	}
+}
+
+// While the agent works, the empty field has Stop; text makes it Send, and a click queues the
+// message (D265). Emptied again, it is Stop again.
+func TestComposerWorkingStopThenSend(t *testing.T) {
+	s := newSession(t, "working")
+	if !s.has(LabelStop) || s.has(LabelSend) {
+		t.Fatalf("working and empty: stop %v, send %v", s.has(LabelStop), s.has(LabelSend))
+	}
+	s.typeIn("also this")
+	if s.has(LabelStop) || !s.has(LabelSend) {
+		t.Fatalf("working with text: stop %v, send %v", s.has(LabelStop), s.has(LabelSend))
+	}
+	if err := s.tt.Click(LabelSend); err != nil {
+		t.Fatal(err)
+	}
+	s.tt.Frame()
+	if len(s.sent) != 1 || s.stops != 0 || !s.has(LabelStop) {
+		t.Errorf("Send while working: sent %q, stops %d, stop shown %v", s.sent, s.stops, s.has(LabelStop))
+	}
+	if !s.tt.Focused(LabelComposer) {
+		t.Error("the field loses the focus after Send")
+	}
+}
+
+// While the session waits on a menu, Send keeps the text and says to answer the menu first.
+func TestComposerSendButtonOnAMenuWaits(t *testing.T) {
+	s := newSession(t, "blocked")
+	s.typeIn("1")
+	if err := s.tt.Click(LabelSend); err != nil {
+		t.Fatal(err)
+	}
+	s.tt.Frame()
+	if len(s.sent) != 0 || s.draft() != "1" || !s.tt.HasText(TextAnswerFirst) {
+		t.Errorf("Send on a menu: sent %q, draft %q, texts %v", s.sent, s.draft(), s.tt.Texts())
+	}
+}
+
+// todayDock is the height of the dock before the card (D271): the team row (20), its gap to the
+// field (12) and the field box (44).
+const todayDock = 20 + 12 + 44
+
+// At rest, with the team row, the card is not taller than the team row and the field were, by more
+// than a few px; the button is in line with the field's one line; the model and context sit under
+// the field, outside it.
+func TestComposerCardAtRestWithTeam(t *testing.T) {
+	s := newSession(t, "working")
+	s.ch.Team = func(string) (Team, bool) { return Team{Agents: 2, Working: 2}, true }
+	s.write(lTurn, lRunning)
+	card, team, field, stop := s.rect(LabelCard), s.rect(LabelTeam), s.rect(LabelComposer), s.rect(LabelStop)
+	if card.H > todayDock+4 {
+		t.Errorf("the card is %vpx high, today's dock %dpx", card.H, todayDock)
+	}
+	if team.Y < card.Y || team.Y+team.H > field.Y {
+		t.Errorf("the team row %v is not on top of the field %v in the card %v", team, field, card)
+	}
+	if stop.W != actionSize || stop.H != actionSize || stop.Y+stop.H != field.Y+field.H {
+		t.Errorf("the button %v is not 28px and in line with the field %v", stop, field)
+	}
+	meta := s.rect("opus high · 212k")
+	if meta.Y < field.Y+field.H || meta.Y+meta.H > card.Y+card.H || meta.X != field.X {
+		t.Errorf("the meta %v is not under the field %v in the card %v", meta, field, card)
+	}
+	if field.X+field.W > stop.X {
+		t.Errorf("the field %v runs under the button %v", field, stop)
+	}
+}
+
+// Idle with no team, the card has no top line: it is the field alone, with its foot.
+func TestComposerCardWithoutTopLine(t *testing.T) {
+	s := newSession(t, "idle")
+	s.write(lTurn, lRunning)
+	if s.has(LabelTeam) || s.has(LabelLive) {
+		t.Fatalf("a top line with no team and nothing working: %v", s.tt.Texts())
+	}
+	card, field := s.rect(LabelCard), s.rect(LabelComposer)
+	if top := field.Y - card.Y; top != 1+cardPadY {
+		t.Errorf("the field is %vpx under the card's top, want %d", top, 1+cardPadY)
+	}
+}
+
+// The field grows with its text to 8 lines, then scrolls; the button stays in line with the last
+// line it shows.
+func TestComposerGrowsToEightLines(t *testing.T) {
+	s := newSession(t, "idle")
+	one := s.rect(LabelComposer).H
+	lines := func(n int) float32 {
+		s.t.Helper()
+		*s.ch.draft(term) = strings.TrimSuffix(strings.Repeat("line\n", n), "\n")
+		s.tt.Frame()
+		return s.rect(LabelComposer).H
+	}
+	line := float32(theme.StyleProse.Line)
+	if h := lines(3); h != one+2*line {
+		t.Errorf("3 lines: %vpx, want %v", h, one+2*line)
+	}
+	eight := lines(composerLines)
+	if eight != one+(composerLines-1)*line {
+		t.Errorf("8 lines: %vpx, want %v", eight, one+(composerLines-1)*line)
+	}
+	if h := lines(12); h != eight {
+		t.Errorf("12 lines: %vpx, want the height of 8, %v", h, eight)
+	}
+	field, send := s.rect(LabelComposer), s.rect(LabelSend)
+	if send.Y+send.H != field.Y+field.H {
+		t.Errorf("the button %v is not in line with the last line of the field %v", send, field)
+	}
+}
