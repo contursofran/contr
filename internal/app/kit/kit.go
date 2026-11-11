@@ -22,7 +22,7 @@ type RowOpts struct {
 	Label string
 	// Mark is a short leading mark, such as a file status (M, A, D).
 	Mark      string
-	MarkColor ui.Color // p.Ink50 by default (the zero Color)
+	MarkColor ui.Color // p.Ink48 by default (the zero Color)
 	// Text is the main line; Sub, if set, a second line in the meta color.
 	// Both clip with an ellipsis.
 	Text, Sub string
@@ -41,8 +41,8 @@ type RowOpts struct {
 	Flat bool
 	// Meta is the text at the right of a flat row.
 	Meta string
-	// NameInk and MetaInk replace the ink of the name (ink-60) and of the
-	// meta (ink-38). The zero color keeps the default.
+	// NameInk and MetaInk replace the ink of the name (ink-64) and of the
+	// meta (ink-48). The zero color keeps the default.
 	NameInk, MetaInk ui.Color
 	// NameStyle replaces the type style of the name (body).
 	NameStyle theme.TextStyle
@@ -107,15 +107,15 @@ func Row(c *ui.Context, o RowOpts) {
 		if o.Mark != "" {
 			color := o.MarkColor
 			if color == (ui.Color{}) {
-				color = p.Ink50
+				color = p.Ink48
 			}
 			ui.Text(c, o.Mark).TextColor(color).NoWrap().Shrink(0)
 		}
 		// SingleLine cuts with an ellipsis; NoWrap would keep the line whole.
 		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-			ui.Text(c, o.Text).Label(label + " text").Height(theme.LineHeight).TextColor(p.Ink95).SingleLine().MinWidth(0)
+			ui.Text(c, o.Text).Label(label + " text").Height(theme.LineHeight).TextColor(p.Ink88).SingleLine().MinWidth(0)
 			if o.Sub != "" {
-				ui.Text(c, o.Sub).Height(theme.LineHeight).TextColor(p.Ink42).SingleLine().MinWidth(0)
+				ui.Text(c, o.Sub).Height(theme.LineHeight).TextColor(p.Ink48).SingleLine().MinWidth(0)
 			}
 		})
 		if o.Counts {
@@ -129,11 +129,11 @@ func CountsText(added, removed int) string {
 	return "+" + strconv.Itoa(added) + " −" + strconv.Itoa(removed)
 }
 
-// Counts shows "+added −removed": added in ink-42, removed in ink-30
+// Counts shows "+added −removed": added and removed in ink-48
 // (docs/spec/DiffSummary.md).
 func Counts(c *ui.Context, added, removed int) {
 	p := theme.Current()
-	CountsWith(c, added, removed, CountsLook{Added: p.Ink42, Removed: p.Ink30, Gap: 4})
+	CountsWith(c, added, removed, CountsLook{Added: p.Ink48, Removed: p.Ink48, Gap: 4})
 }
 
 // CountsLook is how CountsWith draws the counts. Colors come from the
@@ -186,7 +186,7 @@ func CountsWith(c *ui.Context, added, removed int, look CountsLook) {
 
 // Switch is a segmented control: choice is the index of the chosen option.
 // Look: a hover track, radius 7, padding 2; the chosen segment has the
-// selected fill and ink-100, the others ink-62. Tokens of the current theme.
+// selected fill and ink-100, the others ink-64. Tokens of the current theme.
 // Each segment is labelled with its option.
 func Switch(c *ui.Context, label string, choice *int, options ...string) ui.Element {
 	p := theme.Current()
@@ -196,7 +196,7 @@ func Switch(c *ui.Context, label string, choice *int, options ...string) ui.Elem
 		for i, o := range options {
 			s := seg.Segment(i).Label(o).PaddingY(3).PaddingX(10).Radius(theme.SegmentRadius - theme.SegmentPad).
 				Cursor(ui.CursorPointer).Transition(FadeTransition(theme.MotionSelect))
-			ink := p.Ink62
+			ink := p.Ink64
 			if choice != nil && i == *choice {
 				s, ink = s.Background(p.Selected), p.Ink100
 			}
@@ -241,7 +241,7 @@ func CodeTheme(c *ui.Context) *editor.Theme {
 	t.Background = p.Ground
 	// Greys, not hues (AGENTS.md): the editor mixes these into the line
 	// backgrounds, so they are flattened over the ground first.
-	t.Added = theme.Over(p.Ink42, p.Ground)
+	t.Added = theme.Over(p.Ink48, p.Ground)
 	t.Deleted = theme.Over(p.Ink30, p.Ground)
 	return t
 }

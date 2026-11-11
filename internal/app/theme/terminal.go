@@ -28,8 +28,8 @@ func (p *Palette) TerminalBackground() ui.Color { return p.StageBase() }
 // TerminalForeground is terminal-text flattened over the stage.
 func (p *Palette) TerminalForeground() ui.Color { return Over(p.TerminalText, p.StageBase()) }
 
-// TerminalCursor is the cursor block: ink-95 (docs/spec/tokens.md).
-func (p *Palette) TerminalCursor() ui.Color { return p.Ink95 }
+// TerminalCursor is the cursor block: ink-88 (docs/spec/tokens.md).
+func (p *Palette) TerminalCursor() ui.Color { return p.Ink88 }
 
 // TerminalSelection is the fill behind selected text: the selected token,
 // flattened over the stage.

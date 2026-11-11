@@ -399,8 +399,8 @@ func TestLitDotsTakeTheInkAndDimDotsInk30(t *testing.T) {
 		{GlyphOpts{State: GlyphNeedsYou}, 2, p.Ink30, "needs you, dim dot 3"},
 		{GlyphOpts{State: GlyphIdle}, 1, p.Ink30, "idle, lit dot 2"},
 		{GlyphOpts{State: GlyphIdle}, 0, p.Ink30, "idle, dim dot 1"},
-		{GlyphOpts{State: GlyphNeedsYou, Color: p.Ink60}, 0, p.Ink60, "the Color ink, lit dot 1"},
-		{GlyphOpts{State: GlyphNeedsYou, Color: p.Ink60}, 5, p.Ink30, "the Color ink, dim dot 6"},
+		{GlyphOpts{State: GlyphNeedsYou, Color: p.Ink64}, 0, p.Ink64, "the Color ink, lit dot 1"},
+		{GlyphOpts{State: GlyphNeedsYou, Color: p.Ink64}, 5, p.Ink30, "the Color ink, dim dot 6"},
 	}
 	for _, c := range cases {
 		if got, want := dotInk(c.o, c.dot), flat(c.want); !near(got, want) {
@@ -561,8 +561,8 @@ func join(s []string) string {
 // stays for orchestrators, and needs you keeps its hue (D191).
 func TestTheMarkOfAPlainSessionIsGrey(t *testing.T) {
 	for _, p := range []*theme.Palette{theme.Dark, theme.Light} {
-		if got := optsColor(p, GlyphOpts{State: GlyphWorking, Claude: true, Grey: true}); got != p.Ink45 {
-			t.Errorf("dark=%v plain session %v, want ink-45", p.Dark, got)
+		if got := optsColor(p, GlyphOpts{State: GlyphWorking, Claude: true, Grey: true}); got != p.Ink48 {
+			t.Errorf("dark=%v plain session %v, want ink-48", p.Dark, got)
 		}
 		if got := optsColor(p, GlyphOpts{State: GlyphWorking, Claude: true}); got != p.Claude {
 			t.Errorf("dark=%v orchestrator %v, want claude", p.Dark, got)

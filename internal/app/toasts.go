@@ -53,14 +53,14 @@ func (f *Frame) ToastView(c *ui.Context) {
 			}
 			toast.Root.Transition(ui.ElementTransition{Enter: &ui.Motion{Y: 8}, Exit: &ui.Motion{}})
 			toast.Root.Children(func() {
-				ui.Text(c, t.Title).Grow(1).MinWidth(0).TextColor(p.Ink85)
+				ui.Text(c, t.Title).Grow(1).MinWidth(0).TextColor(p.Ink88)
 				if t.Action != "" {
 					toast.ActionButton().Label(t.Action).Shrink(0).Padding(theme.Space4, theme.Space8).
 						Radius(theme.Radius6).Cursor(ui.CursorPointer).FontWeight(600).TextColor(p.Ink100).
 						Children(func() { ui.Text(c, t.Action) })
 				}
 				toast.CloseButton().Label(LabelToastClose).Size(kit.SizeIconButtonSmall, kit.SizeIconButtonSmall).
-					Shrink(0).AlignItems(ui.Center).Justify(ui.Center).Radius(theme.Radius8).TextColor(p.Ink50).
+					Shrink(0).AlignItems(ui.Center).Justify(ui.Center).Radius(theme.Radius8).TextColor(p.Ink48).
 					Cursor(ui.CursorPointer).Children(func() {
 					if s := icons.Line("close"); s != nil {
 						ui.Icon(c, s).Size(12, 12)

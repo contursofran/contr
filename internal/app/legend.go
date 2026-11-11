@@ -25,14 +25,14 @@ func (l *Legend) View(c *ui.Context) {
 	p := theme.Current()
 	ui.Column(c).Fill().Background(p.Ground).
 		Font(theme.FontFamily).FontSize(theme.FontSize).FixedLineHeight(theme.LineHeight).
-		TextColor(p.Ink95).Padding(16, 0).Children(func() {
-		ui.Text(c, "contr status icons").Padding(0, 16, 8).TextColor(p.Ink50)
+		TextColor(p.Ink88).Padding(16, 0).Children(func() {
+		ui.Text(c, "contr status icons").Padding(0, 16, 8).TextColor(p.Ink48)
 		for i, s := range icons.All {
 			l.rowBuilds[i]++
 			ui.Row(c.Key(s.Slug())).Height(legendRowHeight).AlignItems(ui.Center).Gap(12).Padding(0, 16).Children(func() {
 				icons.Icon(c, s).Tooltip(s.Label() + ": " + legendPlace(s))
 				ui.Text(c, s.Label())
-				ui.Text(c, legendPlace(s)).TextColor(p.Ink50)
+				ui.Text(c, legendPlace(s)).TextColor(p.Ink48)
 			})
 		}
 	})

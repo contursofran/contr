@@ -357,7 +357,7 @@ func (r *Review) fileList(c *ui.Context) {
 		ui.List(c.Key("filelist"), &r.fileState, len(r.files), func(i int) {
 			f := r.files[i]
 			p := theme.Current()
-			mark := p.Ink50
+			mark := p.Ink48
 			switch f.Status {
 			case review.Added:
 				mark = p.ANSI[2]

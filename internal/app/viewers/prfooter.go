@@ -256,9 +256,9 @@ func (p *PRPane) footer(c *ui.Context) {
 				}
 				approve = p.approve
 			}
-			kit.CardButton(c, LabelPRComment, kit.ButtonOutlined, theme.Current().Ink95, comment)
+			kit.CardButton(c, LabelPRComment, kit.ButtonOutlined, theme.Current().Ink88, comment)
 			if p.canApprove() {
-				kit.CardButton(c, LabelPRApprove, kit.ButtonOutlined, theme.Current().Ink95, approve)
+				kit.CardButton(c, LabelPRApprove, kit.ButtonOutlined, theme.Current().Ink88, approve)
 			}
 			ui.Box(c).Grow(1)
 			if wait, _ := ciGate(pr.ChecksSummary); wait {
@@ -270,7 +270,7 @@ func (p *PRPane) footer(c *ui.Context) {
 			if !p.ft.busy {
 				merge = p.merge
 			}
-			kit.CardButton(c, LabelPRMerge, kit.ButtonFilled, theme.Current().Ink95, merge)
+			kit.CardButton(c, LabelPRMerge, kit.ButtonFilled, theme.Current().Ink88, merge)
 		})
 	})
 }

@@ -244,7 +244,7 @@ func (n *Notch) View(c *ui.Context) {
 					FontSize(theme.StyleLabel.Size).FontWeight(theme.StyleLabel.Weight)
 				if s := NotchNewest(items); s != "" {
 					ui.Text(c, s).SingleLine().MinWidth(0).MaxWidth(notchNewestMax).
-						TextColor(p.Ink62).FontSize(theme.StyleLabel.Size)
+						TextColor(p.Ink64).FontSize(theme.StyleLabel.Size)
 				}
 			})
 			if look.Glow > 0 {

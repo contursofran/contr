@@ -10,7 +10,7 @@ import (
 )
 
 // terminalTheme returns the plugin's colors for a palette: terminal-text over
-// the panel, the cursor in ink-95, and the 16 ANSI colors of the theme.
+// the panel, the cursor in ink-88, and the 16 ANSI colors of the theme.
 func terminalTheme(p *theme.Palette) *gterm.Theme {
 	bg := p.TerminalBackground()
 	return &gterm.Theme{
@@ -21,10 +21,10 @@ func terminalTheme(p *theme.Palette) *gterm.Theme {
 		Selection:     p.TerminalSelection(),
 		SelectionText: p.TerminalForeground(),
 		// Search matches use greys only (docs/spec/Terminal.md): a press tint for each match
-		// and ink-95 for the selected one, so no amber or orange shows.
+		// and ink-88 for the selected one, so no amber or orange shows.
 		Search:             theme.Over(p.Press, bg),
 		SearchText:         p.TerminalForeground(),
-		SearchSelected:     p.Ink95,
+		SearchSelected:     p.Ink88,
 		SearchSelectedText: bg,
 		Palette:            p.ANSI,
 	}
