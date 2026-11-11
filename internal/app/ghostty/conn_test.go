@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1313,4 +1314,21 @@ func TestWriteDropsSchemeReports(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitAttaches(t, src, 2)
+}
+
+func TestOnOutputIsCalledForEachTakenOutput(t *testing.T) {
+	fast(t)
+	src := newFakeSource()
+	var n atomic.Int32
+	c := NewConn(src, Options{OnOutput: func() { n.Add(1) }})
+	t.Cleanup(func() { _ = c.Close() })
+	s := src.stream(t, 0)
+	s.data("hello ")
+	s.data("world")
+	if got := readN(t, c, 11); got != "hello world" {
+		t.Errorf("read %q", got)
+	}
+	if got := n.Load(); got != 2 {
+		t.Errorf("OnOutput called %d times, want 2", got)
+	}
 }

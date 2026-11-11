@@ -86,6 +86,9 @@ type Options struct {
 	// OnState gets each change of the state, on any goroutine. It must not
 	// wait for the UI thread.
 	OnState func(State)
+	// OnOutput is called on the plugin's read goroutine as it takes output
+	// from the program. It must not wait for the UI thread. May be nil.
+	OnOutput func()
 	// Cols and Rows are the size of the first attach: 80 by 24 when zero.
 	// The view's size replaces it as soon as the view tells it.
 	Cols, Rows uint16
@@ -117,6 +120,7 @@ type chunk struct {
 type Conn struct {
 	src Source
 	on  func(State)
+	onOut func() // Options.OnOutput
 	ctx context.Context
 	end context.CancelFunc
 	wg  sync.WaitGroup
@@ -163,7 +167,7 @@ type Conn struct {
 // firstWait. Close ends it.
 func NewConn(src Source, o Options) *Conn {
 	ctx, end := context.WithCancel(context.Background())
-	c := &Conn{src: src, on: o.OnState, ctx: ctx, end: end, out: make(chan chunk),
+	c := &Conn{src: src, on: o.OnState, onOut: o.OnOutput, ctx: ctx, end: end, out: make(chan chunk),
 		visible: true, cols: o.Cols, rows: o.Rows, state: State{Kind: Connecting}, watching: o.Watch,
 		wake: make(chan struct{}, 1)}
 	if c.cols == 0 || c.rows == 0 {
@@ -232,6 +236,9 @@ func (c *Conn) Read(p []byte) (int, error) {
 				continue
 			}
 			c.buf = ch.data
+			if c.onOut != nil && len(ch.data) > 0 {
+				c.onOut()
+			}
 		case <-c.ctx.Done():
 			return 0, io.EOF
 		}

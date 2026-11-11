@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -205,6 +206,10 @@ type Frame struct {
 	termSet   bool
 	termState ghostty.State
 	termErr   string
+	// next is the suggested next prompt read from the terminal at
+	// termAddr (D281); nextCheck is set while a read of it waits.
+	next      string
+	nextCheck atomic.Bool
 	// find is the find bar over the terminal (termfind.go).
 	find termFind
 	// hints tells when the key chips show: ⌘ held alone (docs/spec/KeyHints.md).
@@ -1118,6 +1123,7 @@ func (f *Frame) syncTerminal() {
 	}
 	f.closeTerminal()
 	f.resetFind()
+	f.next = ""
 	f.termAddr, f.termSet = addr, true
 	f.syncOutlineFocus()
 	f.termState, f.termErr = ghostty.State{Kind: ghostty.Connecting}, ""
@@ -1127,7 +1133,9 @@ func (f *Frame) syncTerminal() {
 	}
 	post, invalidate := f.post, f.invalidate
 	var conn *ghostty.Conn
-	conn = ghostty.NewConn(f.deps.TerminalSource(addr), ghostty.Options{Watch: true, OnState: func(s ghostty.State) {
+	var screen atomic.Pointer[gterm.Terminal]
+	onOutput := func() { f.checkNext(&screen, func() bool { return f.conn == conn }) }
+	conn = ghostty.NewConn(f.deps.TerminalSource(addr), ghostty.Options{Watch: true, OnOutput: onOutput, OnState: func(s ghostty.State) {
 		post(func() {
 			if f.conn == conn {
 				f.termState = s
@@ -1148,6 +1156,7 @@ func (f *Frame) syncTerminal() {
 		return
 	}
 	conn.SetScreen(t)
+	screen.Store(t)
 	f.term, f.conn = t, conn
 	f.autoFocus = !f.keyNav
 	f.setTerminalFocus(f.winFocused)

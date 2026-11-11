@@ -54,6 +54,11 @@ type Chat struct {
 	// Slash gives the slash commands and skills of the session at addr for the composer's popup
 	// (D273). Nil: "/" opens no popup.
 	Slash SuggestSource
+	// NextPrompt is Claude Code's suggested next prompt in the input line of the terminal at addr,
+	// "" for none (D281). It runs on the UI thread. Nil: the placeholder shows.
+	NextPrompt func(addr string) string
+	// next is the suggestion the composer shows in its empty field, for Tab.
+	next string
 	// sg is the state of the composer's suggestion popup.
 	sg suggest
 
