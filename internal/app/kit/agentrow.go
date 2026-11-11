@@ -135,8 +135,8 @@ func AgentRowHeight(orchestrator bool) float32 {
 
 // AgentRow is the two-line sidebar row of one agent
 // (docs/spec/AgentRow.md). A worker row sits WorkerIndent in from its
-// orchestrator.
-func AgentRow(c *ui.Context, o AgentRowOpts) {
+// orchestrator. It returns the row's column, for RowIn.
+func AgentRow(c *ui.Context, o AgentRowOpts) ui.Element {
 	// The column takes the width; the margins sit inside it, so they count in
 	// the row's width (D40) and the age at the right is not cut off.
 	// The key chip sits on the status glyph (KeyHint), inside the column.
@@ -154,6 +154,7 @@ func AgentRow(c *ui.Context, o AgentRowOpts) {
 		}
 		glyph = agentRowButton(c, o, RowInsetX, RowInsetX+OrchestratorIndent+WorkerIndent)
 	})
+	return col
 }
 
 // agentRowButton builds the button of a two-line row and returns its status glyph.

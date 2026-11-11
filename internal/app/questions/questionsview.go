@@ -42,7 +42,8 @@ func (q *QuestionsCard) View(c *ui.Context, anchor ui.Element, items []agentstat
 	pop := ui.PopoverBase(c, anchor, &shown, func(panel ui.Element) {
 		panel = panel.AttachTo(anchor, ui.AnchorTop, ui.AnchorTop).Role(ui.RoleDialog).Label(q.name(t, snap)).
 			Column().Width(width).Radius(0, 0, theme.Radius12, theme.Radius12).
-			Material(glass.Blur{Radius: theme.GlassBlur}).Focusable().FocusRing(false).Bind(&q.handle)
+			Material(glass.Blur{Radius: theme.GlassBlur}).Focusable().FocusRing(false).Bind(&q.handle).
+			Clip().Transition(kit.GrowFrom(notchShape{})) // it grows from the notch (D263)
 		for _, l := range p.ShadowNotch {
 			if l.Inset {
 				panel = panel.InsetShadow(l.X, l.Y, l.Blur, l.Wide, l.Color)
@@ -66,6 +67,8 @@ func (q *QuestionsCard) View(c *ui.Context, anchor ui.Element, items []agentstat
 		panel.Children(func() {
 			// Selectable: the owner can select and copy the texts of the
 			// card (D204). Buttons and the field keep their own input.
+			// The content keeps the card's width as the card grows, so its
+			// lines do not wrap again; the card's clip shows it (D263).
 			ui.Column(c).Width(width).Padding(theme.Space12).Gap(theme.Space4).
 				Radius(0, 0, theme.Radius12, theme.Radius12).Background(questionsCardFill(p)).
 				BorderWidth(0, 1, 1, 1).BorderColor(p.FloatLine).Selectable().Children(func() {

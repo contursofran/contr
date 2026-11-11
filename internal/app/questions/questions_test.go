@@ -87,16 +87,22 @@ type qRig struct {
 
 func newQRig(t *testing.T, src *source) *qRig {
 	t.Helper()
+	return newQRigWith(t, src, ui.TesterOptions{})
+}
+
+// newQRigWith is newQRig with the tester's options, as Reduce Motion.
+func newQRigWith(t *testing.T, src *source, opts ui.TesterOptions) *qRig {
+	t.Helper()
 	r := &qRig{t: t, src: src}
 	r.card = &QuestionsCard{Source: resolver{src}}
 	r.notch = &Notch{Snapshot: src.Snapshot, Project: func() string { return "a" },
 		Open: r.card.Open, Close: r.card.Close, Opened: r.card.IsOpen, Panel: r.card.View}
-	r.tt = ui.NewTester(func(c *ui.Context) {
+	r.tt = ui.NewTesterWith(func(c *ui.Context) {
 		ui.Box(c).Fill().Children(func() {
 			ui.Box(c).Label("terminal").Fill().Focusable().Bind(&r.term)
 			r.notch.View(c)
 		})
-	}, 900, 600)
+	}, 900, 600, opts)
 	return r
 }
 
@@ -109,6 +115,9 @@ func (r *qRig) open(key string) {
 	}
 	r.card.Open(items[i])
 	r.tt.Frame()
+	r.tt.Frame()
+	// The card grows from the notch (D263): let it end before a click.
+	r.tt.Advance(theme.MotionNotchOpen)
 	r.tt.Frame()
 }
 

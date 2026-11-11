@@ -124,6 +124,12 @@ func TestPanelToggleHidesAndShowsThePanel(t *testing.T) {
 	if err := tt.Click(titlebar.LabelFilesToggle); err != nil {
 		t.Fatal(err)
 	}
+	// The terminal takes its width at once; the panel comes in (D263).
+	if got := apptest.Box(t, tt, LabelPanelTerminal).W; got != 816 {
+		t.Errorf("terminal width %v as the panel shows, want 816 at once", got)
+	}
+	tt.Advance(theme.MotionPanel)
+	tt.Frame()
 	if got := apptest.Box(t, tt, LabelPanelFiles).W; got != theme.PanelWidth {
 		t.Errorf("files width %v, want 280", got)
 	}
@@ -709,6 +715,38 @@ func TestPanelGapsAreEqual(t *testing.T) {
 	} {
 		if got != gap {
 			t.Errorf("%s = %v, want %v", name, got, gap)
+		}
+	}
+}
+
+// A panel that the owner shows comes in over MotionPanel and then asks for no frame (D263, D55);
+// the terminal takes its new width at once. The first frame and a hide ask for no motion.
+func TestShownPanelsComeInThenRest(t *testing.T) {
+	f, tt := newTester(t)
+	tt.Frame()
+	tt.Advance(theme.MotionPanel / 2)
+	if tt.FramePending() {
+		t.Fatal("a frame is asked half way through MotionPanel after the first frame: the panels came in at launch")
+	}
+	for _, side := range []struct {
+		name   string
+		toggle func()
+		label  string
+	}{{"sidebar", f.ToggleSidebar, LabelPanelSidebar}, {"files", f.TogglePanel, LabelPanelFiles}} {
+		side.toggle()
+		tt.Frame()
+		if !apptest.Absent(tt, side.label) || tt.FramePending() {
+			t.Errorf("%s: hidden, the panel is still there or a frame is asked: a hide moves nothing", side.name)
+		}
+		side.toggle()
+		tt.Frame()
+		tt.Advance(theme.MotionPanel * 3 / 4)
+		if !tt.FramePending() {
+			t.Errorf("%s: no frame asked at 3/4 of %v: the panel does not come in", side.name, theme.MotionPanel)
+		}
+		tt.Advance(theme.MotionPanel/4 + 20*time.Millisecond)
+		if tt.FramePending() {
+			t.Errorf("%s: a frame is asked after %v; want none at rest", side.name, theme.MotionPanel)
 		}
 	}
 }

@@ -194,7 +194,6 @@ func (b *TitleBar) tab(c *ui.Context, tab ui.Element, t tabmodel.Tab, hint strin
 	ink := p.Ink50
 	switch {
 	case t.Selected:
-		el = el.Background(p.Stage) // no ring: the fill alone (D249)
 		ink = p.Ink100
 	default:
 		el = el.Cursor(ui.CursorPointer)
@@ -202,10 +201,13 @@ func (b *TitleBar) tab(c *ui.Context, tab ui.Element, t tabmodel.Tab, hint strin
 			el = el.Background(p.Hover)
 		}
 	}
-	// The fill and the ink fade in theme.MotionSelect (D256); the
-	// tab is selected at once. Only colors: the tab does not slide.
+	// The hover fill and the ink fade in theme.MotionSelect (D256); the
+	// tab is selected at once, and its pill slides there (D263).
 	el = el.TextColor(kit.FadeInk(el, "ink", ink, theme.MotionSelect)).Transition(kit.FadeTransition(theme.MotionSelect))
 	el.Children(func() {
+		if t.Selected {
+			pill(c, p)
+		}
 		glyph := b.glyph(c, t)
 		s := theme.StyleRowSmall
 		ui.Text(c, t.Title).Font(s.Stack()).FontSize(s.Size).FixedLineHeight(s.Line).FontWeight(s.Weight).
@@ -292,6 +294,18 @@ func (b *TitleBar) glyph(c *ui.Context, t tabmodel.Tab) ui.Element {
 		return ui.Element{}
 	}
 	return kit.StatusGlyph(c, kit.GlyphOpts{State: t.State, Claude: t.Orchestrator, Grey: t.Grey, Small: true})
+}
+
+// tabPill is the identity of the selected tab's pill: the pill of the tab
+// selected before slides to the tab selected now (D263).
+type tabPill struct{}
+
+// pill is the fill of the selected tab: stage, no ring (D249). It lies under
+// the tab's content and takes no pointer. It slides from the tab selected
+// before in theme.MotionTab (kit.SlideTransition).
+func pill(c *ui.Context, p *theme.Palette) {
+	ui.Box(c).Absolute().Fill().ZIndex(-1).Radius(theme.Radius8).Background(p.Stage).PassThrough().
+		Transition(kit.SlideTransition(tabPill{}))
 }
 
 // closeButton is the 16px close button of the selected tab.
