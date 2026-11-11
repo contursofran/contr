@@ -157,9 +157,9 @@ var seeFixtures = map[string]seeFixture{
 	},
 	"chat-scrolled": {
 		about: "the chat fixture scrolled up into the first turn (D266): its prompt pinned at the top, Jump to latest above the dock, and the time once per turn, under each prompt",
-		setup: seeChat,
+		setup: seeChatLong,
 		ready: "lead, ",
-		press: []string{"Chat", "wheel:-260"},
+		press: []string{"Chat", "wheel:-300"},
 	},
 	"session": {
 		about: "the orchestrator lead with the todos and artifacts of canvas board 11 (D197)",
@@ -279,6 +279,45 @@ func seeChat(t *testing.T, h *harness) {
 	s.SetTranscript("chat", path)
 	if err := session.Write(filepath.Join(h.dir, "state"), w.Address, s); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// seeChatLong is seeChat with two more turns, so the transcript is longer than the window.
+func seeChatLong(t *testing.T, h *harness) {
+	t.Helper()
+	seeChat(t, h)
+	path := filepath.Join(h.home, ".claude", "projects", "demo", "chat.jsonl")
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	now := time.Now()
+	line := func(uuid string, ago time.Duration, typ string, content any) string {
+		b, _ := json.Marshal(map[string]any{"type": typ, "uuid": uuid, "timestamp": now.Add(-ago).UTC().Format(time.RFC3339Nano),
+			"sessionId": "chat", "message": map[string]any{"role": typ, "content": content}})
+		return string(b) + "\n"
+	}
+	text := func(s string) []any { return []any{map[string]any{"type": "text", "text": s}} }
+	for _, l := range []string{
+		line("x1", 13*time.Second, "user", "review #633 on its head and merge it when the checks pass"),
+		line("x2", 12*time.Second, "assistant", text("I read the diff of #633. It changes the switch only:\n\n"+
+			"- `internal/app/chatview/view.go`: the switch is solid now, on `float-solid`.\n"+
+			"- `internal/app/chatview/corner.go`: the switch moves clear of the outline column.\n"+
+			"- `docs/spec/ChatView.md`: the Switch table.\n\n"+
+			"The tests cover each change, and the sheets match the spec in Dark and Light.")),
+		line("x3", 11*time.Second, "assistant", text("The checks passed on the head. I merge it now, then b-632 merges `main` before its review.")),
+		line("x6", 9*time.Second, "user", "what is left on the board?"),
+		line("x7", 8*time.Second, "assistant", text("Three slices are open:\n\n"+
+			"| Issue | Slice | State |\n|---|---|---|\n| #609 | the chat model | b-630 builds |\n| #613 | the work group | b-632 waits on `main` |\n| #657 | the pinned prompt | no planner yet |\n\n"+
+			"#609 and #613 touch `internal/app/chatview/model.go`, so I merge #609 first. #657 needs a plan before a builder starts.")),
+		line("x4", 5*time.Second, "user", "then start a planner for #657"),
+		line("x5", 3*time.Second, "assistant", text("The planner for #657 is out as planner-657. It reads the issue, the code it touches and the spec, "+
+			"then writes the plan in the issue. I tell you when the plan is ready.")),
+	} {
+		if _, err := f.WriteString(l); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
