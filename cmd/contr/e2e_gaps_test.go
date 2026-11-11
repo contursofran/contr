@@ -140,7 +140,19 @@ func measureGaps(t *testing.T, c *client, path string) {
 		runs = append(runs, float64(run)/scale)
 	}
 	t.Logf("pixel row gaps (points, left to right): %.1f", runs)
-	wantGaps(t, "row", runs, 4)
+	// D250: the sidebar and the files panel are wings with no fill and no border, so the pixels
+	// show only the stage: one run of window color from each window edge to it. The gaps
+	// between the panels are checked on the layout.
+	w := float64(b.Dx()) / scale
+	for name, gap := range map[string]float64{"left": sb.X, "sidebar|terminal": tm.X - (sb.X + sb.Width),
+		"terminal|files": fl.X - (tm.X + tm.Width), "right": w - (fl.X + fl.Width)} {
+		if math.Abs(gap-theme.PanelGap) > 0.5 {
+			t.Errorf("layout: %s gap %.1f points, want %d", name, gap, theme.PanelGap)
+		}
+	}
+	if len(runs) != 2 || math.Abs(runs[0]-tm.X) > 0.5 || math.Abs(runs[1]-(w-(tm.X+tm.Width))) > 0.5 {
+		t.Errorf("row: runs %.1f, want the two sides of the stage, %.1f and %.1f", runs, tm.X, w-(tm.X+tm.Width))
+	}
 	xm := tm.X + tm.Width/2
 	var cols []float64
 	run = 0
@@ -163,7 +175,8 @@ func measureGaps(t *testing.T, c *client, path string) {
 	// The tab row (D168): down a column through the first tab, in points: the glass above the tab
 	// (window rim to the tab), the tab, and the glass below it to the terminal panel's border.
 	tabs := c.boundsOf(t, titlebar.LabelTabs)
-	tx := int((tabs.X + 16) * scale) // past the panel's corner radius
+	// Past the tab's corner radius (8) and before its icon (padding 10), so no glyph is in the column.
+	tx := int((tabs.X + 9) * scale)
 	var seg []float64
 	run, last := 0, false
 	for y := 0; y < b.Dy() && float64(y) < (tm.Y+4)*scale; y++ {

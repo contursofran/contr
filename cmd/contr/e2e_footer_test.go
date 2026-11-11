@@ -180,9 +180,11 @@ func TestNoFooter(t *testing.T) {
 			}
 		}
 		// D201: the foot row is meters, spacer, gear, so Settings sits at the bottom right of the sidebar.
-		if b, side := c.boundsOf(t, sidebar.LabelSettingsOpen), c.boundsOf(t, sidebar.LabelProjectList); b.Y < side.Y+side.Height-1 ||
+		// The lead has no folder, so the sidebar shows "No projects yet" and no project list (D255):
+		// measure against the sidebar panel.
+		if b, side := c.boundsOf(t, sidebar.LabelSettingsOpen), c.boundsOf(t, app.LabelPanelSidebar); b.Y+b.Height < side.Y+side.Height-60 ||
 			b.X+b.Width > side.X+side.Width || b.X+b.Width < side.X+side.Width-40 {
-			t.Errorf("%s: Settings at %v, not at the bottom right of the sidebar (list %v)", theme, b, side)
+			t.Errorf("%s: Settings at %v, not at the bottom right of the sidebar %v", theme, b, side)
 		}
 		c.capture(t, filepath.Join(out, "footer-"+theme+"-window.png"))
 		openSettings()
