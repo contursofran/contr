@@ -150,6 +150,9 @@ func TestDefaultExplorer(t *testing.T) {
 
 // TestSpawnNoProfile: the error for an unknown profile names the file that
 // was read and the profiles that it has (#484).
+// noEnv is an environment with no variables: a spawn then sets no CONTR_PATH.
+func noEnv(string) string { return "" }
+
 // unclean checks that argv starts with hc.CleanArgv's words (D216) and returns
 // the rest: the agent's own argv.
 func unclean(t *testing.T, argv any) []any {
@@ -191,7 +194,7 @@ func TestSpawn(t *testing.T) {
 			return term("t7", p["name"].(string), "live", labels, map[string]any{"state": "blocked", "kind": "permission", "msg": "allow?"}), nil
 		},
 	}}
-	m := New(f, DefaultConfig()).WithExecutable("")
+	m := New(f, DefaultConfig()).WithExecutable("").WithEnv(noEnv)
 	wt := t.TempDir()
 	w, err := m.Spawn(context.Background(), Spec{Name: "b-158", Profile: "builder", Issue: "158", Worktree: wt, Task: "read TASK.md"})
 	if err != nil {
@@ -564,7 +567,7 @@ func TestSpawnStartsClaudeWithoutSessionVariables(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Profiles["codex"] = Profile{Argv: []string{"codex", "--model", "x"}}
 	cfg.Profiles["abs"] = Profile{Argv: []string{"/usr/local/bin/claude"}}
-	m := New(f, cfg).WithExecutable("")
+	m := New(f, cfg).WithExecutable("").WithEnv(noEnv)
 	spawn := func(profile string) map[string]any {
 		t.Helper()
 		if _, err := m.Spawn(context.Background(), Spec{Name: "w", Profile: profile, Parent: "t0", Task: "go"}); err != nil {
@@ -1258,5 +1261,30 @@ func TestOpenTerminalSendsDisplayColors(t *testing.T) {
 	want := map[string]any{"fg": "#1a1a1a", "bg": "#f5f5f3"}
 	if got := f.last().Params["display"]; !reflect.DeepEqual(got, want) {
 		t.Errorf("display = %v, want %v", got, want)
+	}
+}
+
+// #728: a claude worker gets the PATH of the spawning process and the usual
+// folders in CONTR_PATH, without doubles; another program gets none.
+func TestSpawnGivesClaudeThePath(t *testing.T) {
+	f := &fakeCore{handle: map[string]func(map[string]any) (any, error){
+		"terminal.run": func(map[string]any) (any, error) { return term("t1", "w", "live", nil, nil), nil },
+	}}
+	cfg := DefaultConfig()
+	cfg.Profiles["codex"] = Profile{Argv: []string{"codex"}}
+	env := map[string]string{"PATH": "/a:/opt/homebrew/bin::/a", "HOME": "/home/o"}
+	m := New(f, cfg).WithExecutable("").WithEnv(func(k string) string { return env[k] })
+	if _, err := m.Spawn(context.Background(), Spec{Name: "w", Profile: "builder", Task: "go"}); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := f.last().Params["env"].(map[string]any)
+	if want := "/a:/opt/homebrew/bin:/home/o/.local/bin:/usr/local/bin"; got[hc.EnvPath] != want {
+		t.Errorf("%s = %v, want %s", hc.EnvPath, got[hc.EnvPath], want)
+	}
+	if _, err := m.Spawn(context.Background(), Spec{Name: "w", Profile: "codex", Task: "go"}); err != nil {
+		t.Fatal(err)
+	}
+	if e, ok := f.last().Params["env"]; ok {
+		t.Errorf("codex env = %v, want none", e)
 	}
 }

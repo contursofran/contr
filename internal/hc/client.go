@@ -129,11 +129,18 @@ func CleanEnv(environ []string) []string {
 	return out
 }
 
-// cleanScript unsets the variables that CleanEnv removes, then runs its
-// arguments. A line of a value with several lines can give a name that is
-// not set; unset of that name does nothing.
+// EnvPath is the variable whose folders cleanScript adds after the PATH of
+// the core (#728). A core that hc update restarted runs under launchd with a
+// short PATH, where the program of a worker is not found.
+const EnvPath = "CONTR_PATH"
+
+// cleanScript unsets the variables that CleanEnv removes, adds the folders
+// of EnvPath after PATH, then runs its arguments. A line of a value with
+// several lines can give a name that is not set; unset of that name does
+// nothing.
 var cleanScript = `for v in $(env | sed -n -E 's/^(` + claudeVar + `|` + claudePrefix +
-	`[A-Za-z0-9_]*)=.*/\1/p'); do unset "$v"; done; exec "$@"`
+	`[A-Za-z0-9_]*)=.*/\1/p'); do unset "$v"; done; ` +
+	`if [ -n "$` + EnvPath + `" ]; then PATH="$PATH:$` + EnvPath + `"; export PATH; unset ` + EnvPath + `; fi; exec "$@"`
 
 // cleanName is $0 of cleanScript, for ps and error messages.
 const cleanName = "contr-clean-env"
