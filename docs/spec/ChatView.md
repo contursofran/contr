@@ -2,10 +2,10 @@
 
 The Chat mode of the terminal panel for a Claude Code session (D246). It
 shows the session from its transcript (D242) in the place of the terminal
-grid, with a composer that types into the session's own terminal and a live
-line that shows what the agent does (D252). While the session orchestrates,
-a team row takes the live line's place (D259). The live line or the team row
-is the top line of the composer card (D271). The overlays (notch, pill,
+grid, with a composer that types into the session's own terminal and a
+working status that shows the agent works (D252). The status is in the
+footer under the composer card (D276); while the session orchestrates, the
+team row sits directly above the card, outside it (D259, D276). The overlays (notch, pill,
 outline) stay above it.
 
 Design system page: none yet; the mockups C1 (base), C2a (lines of an open
@@ -29,11 +29,11 @@ Shared rules: [README.md](README.md).
 |---|---|
 | Transcript |  `ui.List` with `FollowEnd`: it follows the end while the owner is at the end. Rows `space-18` apart, 44px of room above the list (the switch row: rows do not scroll under it, D266), padding `space-20` at the sides, 32px below (the fade's height, so the fade covers no entry, D259); rows that do not fill it sit at the bottom. The pending prompts come after the rows. |
 | Fade | a gradient 32px high over the bottom edge of the transcript, from the stage at 0 opacity to the stage as it shows (`StageBase`, D250); it takes no click (D259) |
-| Column | the prose (prompts, Claude's text, notes, the fold rows, the live line, the team row and the composer), at most 920px wide, centered in the content width: the panel less `space-20` at each side |
+| Column | the prose (prompts, Claude's text, notes, the fold rows, the team row, the composer and its footer), at most 920px wide, centered in the content width: the panel less `space-20` at each side |
 | Wide block | a table, a code block or the card of an open work group: as wide as its content, at least the column and at most the content width, centered. A block that fits in 920px stays in the column, its left edge on the column's left edge; in a panel not wider than 920px and the insets, the column is the content width. Claude's text is cut into runs of prose and these blocks, each cut at the start of a line. |
 | Dock | under the transcript: the composer card in the column, padding `space-20` at the sides, `space-14` below; see [Composer](#composer) |
-| Live line | the top line of the composer card while the agent works; see [Live line](#live-line) |
-| Team row | while the session orchestrates: the top line of the composer card, in the live line's place; see [Team row](#team-row) |
+| Live line | the working status in the composer footer while the agent works; see [Live line](#live-line) |
+| Team row | while the session orchestrates: the top line of the composer card; see [Team row](#team-row) |
 | Pinned prompt | while the list is not at its end and the prompt of the turn in view is above the rows in view: see [Scrolled up](#scrolled-up) |
 | Jump to latest | while the list is not at its end: see [Scrolled up](#scrolled-up) |
 | Empty | "No transcript yet" (`body`, `ink-48`), centered, while the session has no path, no file or no row yet. The switch and the composer still work. |
@@ -115,29 +115,29 @@ finds them at a glance after time away.
 
 ## Composer
 
-One card (D271, #682; owner's pick "one card"), label "composer": the top
-line, the field with the round button at its right, and the foot. From top
-to bottom:
+One card (D271, #682; layout B of board Y5, D276), label "composer": the
+field with the round button at its right, and nothing else. Above the card,
+outside it, the team row while the session orchestrates; under the card,
+outside it, the footer. From top to bottom:
 
 | Part | Value |
 |---|---|
-| Card | the column's width; one surface: `hover` fill, 1px `input-line` border, radius `radius-12`; padding `space-6` top and bottom, 14px left, `space-8` right. No shadow, no glow, no other fill. |
-| Top line | the [Team row](#team-row) while the session orchestrates, else the [Live line](#live-line) while the agent works; 20px, its right end 14px from the card's edge. No box of its own; `space-2` to the field. With neither, there is no top line: the card is the field and the foot. |
+| Team row | the [Team row](#team-row) while the session orchestrates, outside the card, `space-6` above it |
+| Card | the column's width; one surface: `hover` fill, 1px `input-line` border, radius `radius-12`; padding `space-8`. No shadow, no glow, no other fill. |
 | Attachments | a quiet chip "Image 1", "Image 2" for each image pasted since the last send, as the chip of prompt images (D269); wrapping, gap `space-6`, `space-6` above and `space-2` below; none: no room |
-| Field | `TextAreaBase`, label "Message", placeholder "Message <session name>…" (or "Message…" when the agent is not known) in `ink-48`; text `prose` (13.5px, 21px lines) in `ink-100`; padding 3.5px top and bottom, so one line is 28px. One line at first; it grows with its text to 8 lines, then scrolls. Caret only: no focus ring. |
-| Button | `space-8` right of the field, in line with its last line (bottom-aligned): one round button, 28px, radius 14. See the states below. |
-| Foot | the model and context, mono `meta`, `ink-48`, one line under the field at its left edge, outside the field: "opus high · 212k", the model of line 2 of the agent's row and the size of its context from the Context line; a part that is not known is left out. With neither: no foot. |
-| Error | the last failure, under the card, `small`, `ink-64`, padding `space-6 14px 0`; a change of the text clears it |
+| Field | `TextAreaBase`, label "Message", placeholder "Message <session name>…" (or "Message…" when the agent is not known) in `ink-48`; text 14px on 22px lines in `ink-100`; padding 4px top and bottom and `space-6` left, so one line is 30px. One line at first; it grows with its text to 8 lines, then scrolls. Caret only: no focus ring. |
+| Button | `space-8` right of the field, in line with its last line (bottom-aligned): one round button, 30px, radius 15, or none. See the states below. |
+| Footer | under the card, outside it: one line 18px high, `space-16` inset at each side, mono `meta`, `ink-48`, label "composer footer". At the left, while the agent works: the working StatusGlyph (14px) and "Working 7s · Bash · gh pr diff 633": the time since the turn started (none when the turn has no time) and what the agent does now ([Live line](#live-line)), on one line, clipped with `…` before the model text, which never clips; else "⏎ send · ⇧⏎ new line". At the right: the model and context, "opus high · 212k", the model of line 2 of the agent's row and the size of its context from the Context line; a part that is not known is left out. |
+| Error | the last failure, under the footer, `small`, `ink-64`, padding `space-6 16px 0`; a change of the text clears it |
 
 | Button state | When | Look | Label, tooltip |
 |---|---|---|---|
 | Send | the field has text (not only spaces) or image chips (D269), also while the agent works: the message queues (D265) | `ink-100` fill, an arrow up in `ground` (1.6px line, 10px high): the one strong thing in the card | "Send", "Send  ↩" |
-| Stop | the agent works and the field is empty | 1px `input-line` outline, an 8px square (radius 1.5) in `ink-88`; `hover-strong` fill on hover | "Stop", "Stop  esc" |
-| Send, dimmed | idle (or nothing can stop the agent) and the field is empty | 1px `input-line` outline, the arrow in `ink-30` (a mark); disabled: no click | "Send", "Send  ↩" |
+| Stop | the agent works and the field is empty | 1px `input-line` ring, a 9px square (radius 1.5) in `ink-88`; `hover-strong` fill on hover | "Stop", "Stop  esc" |
+| None | idle (or nothing can stop the agent) and the field is empty | no button; the field keeps its height | — |
 
 The button's focus ring is the IconButton's: 1px `focus-ring`, 2px outside
-the circle. At rest with the team row and the foot, the card is 77px high;
-the team row, its gap and the field box were 76px before D271.
+the circle.
 
 - The field takes the focus as it appears: when the chat shows (the switch,
   ⌘E). It keeps the focus after a send, and takes it back after a click on
@@ -180,23 +180,23 @@ the team row, its gap and the field box were 76px before D271.
 
 ## Live line
 
+The working status of the agent (D276): the left of the composer's footer
+while the agent works. The team row has no live text.
+
 | State | Value |
 |---|---|
-| Working | a row 20px high, gap `space-8`, mono `value`: the working StatusGlyph (14px), what the agent does now in `ink-64` on one line, and the time since the turn started in `ink-48`: "8s", "2m 5s", "1h 4m". What it does: the last tool call with no result, "Bash · Run tests" (the label and key argument as a call line has them); else "Thinking" when a thinking mark is the last entry; else "Working". The turn starts at the time of the last owner prompt; with no time there, no time shows. Hidden entries and the lines of subagents do not count. |
-| Needs you | the agent is blocked or in error: no line. The notch shows its menu and answers it; while the session orchestrates, the team row counts it in "N needs you" (D260). |
-| Idle | no line |
+| Working | the footer shows the working StatusGlyph and "Working" with the time since the turn started: "8s", "2m 5s", "1h 4m". After " · ", what the agent does now: the last tool call with no result, "Bash · go test ./..." (the name as a call line has it); else "Thinking" when a thinking mark is the last entry; else nothing more. The turn starts at the time of the last owner prompt; with no time there, no time shows. Hidden entries and the lines of subagents do not count. |
+| Needs you | the agent is blocked or in error: no working status. The notch shows its menu and answers it; while the session orchestrates, the team row counts it in "N needs you" (D260). |
+| Idle | the footer shows the keys |
 
 The time asks for a redraw each second only while the agent works, the
 chat shows and the turn has a time (D55). Idle, nothing is asked.
 
-While the session orchestrates, the working line shows at the right end of
-the team row and not as a line of its own.
-
 ## Team row
 
-One row, 20px high (the live line's height), the top line of the composer
-card (D271), while the selected session runs and orchestrates (D191, the
-orchestrate pill's rule). Not orchestrating: no row; the live line shows
+One row, 20px high, directly above the composer card and outside it (D276),
+`space-16` inset at each side as the footer, with no fill or border of its own, while the selected session runs and orchestrates (D191, the
+orchestrate pill's rule). Not orchestrating: no row; the footer shows
 alone. No hover fill, no chips, nothing opens (D259).
 
 | Part | Value |
@@ -204,11 +204,10 @@ alone. No hover fill, no chips, nothing opens (D259).
 | Mascot | the still Claude glyph (14px) in its orchestrating color, as the [OrchestratePill](OrchestratePill.md) has it |
 | Head | `space-8` after the mascot: "Orchestrating · 4 agents", "Orchestrating · 1 agent", "Orchestrating" with no agent; `label`, `ink-88`. The agents are the session's live workers: the number of the orchestrate pill (`LiveWorkersOf`). An ended worker is not in the row (D260). |
 | Count | `space-14` after the head, mono `value`, `ink-48`, the parts `space-6` apart with a "·" between: "1 needs you · 1 error · 2 working · 1 idle". In this order; a part with no agent is left out. "N needs you" ("1 needs you", "2 need you", as the notch) is the number of the orchestrator row's badge (D240): the questions, to-dos and blocked menus of the session itself and its workers. It is in `blocked-text`, the one red of the row, and a click on it opens the notch's card as ⌘J does, which answers a menu. "N error" is a worker in error, in `ink-100`: not red, as it is no item of the notch, and it takes no click. The rest of the row takes no click. A blocked worker counts only in "needs you"; "working" is a worker that works, "idle" any other live worker (D260). |
-| Live text | at the right end, `space-14` after the count, while the session works: the working line's glyph, what it does and its time ([Live line](#live-line)) |
-| Narrow | the row clips from the right: first the live text's words shorten (`…`), then the count drops its last parts; the mascot, the head and the live text's glyph and time stay |
+| Narrow | the count drops its last parts; the mascot and the head stay. The row has no live text: the footer shows what the session does (D276). |
 
-The row redraws when the agent state changes; it has no timer of its own.
-Only the live text's time ticks, as the live line's does (D55, D257).
+The row redraws when the agent state changes; it has no timer of its own
+(D55, D257).
 
 ## Chips
 
