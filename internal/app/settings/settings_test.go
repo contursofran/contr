@@ -37,12 +37,15 @@ func newSettingsRig(t *testing.T, u *fakeUpdates) *settingsRig {
 	if u != nil {
 		r.s.Updates = u
 	}
-	r.tt = ui.NewTester(func(c *ui.Context) {
+	// Reduce Motion: the way in of the modal (D256) scales the card, and each
+	// scaled frame is a full raster of the card in MyGo's software renderer,
+	// about 0.3 s under -race. kit's TestDialogPopsInAndOut checks the scale.
+	r.tt = ui.NewTesterWith(func(c *ui.Context) {
 		ui.Column(c).Fill().Children(func() {
 			ui.Box(c).Grow(1).Label("window")
 			r.s.View(c)
 		})
-	}, 1000, 700)
+	}, 1000, 700, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 	r.tt.Frame()
 	return r
 }
