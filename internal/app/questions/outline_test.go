@@ -182,7 +182,7 @@ func TestOutlineHasNoColumnWithoutPins(t *testing.T) {
 
 func TestOutlineNewMeansAfterTheTerminalLastHadTheFocus(t *testing.T) {
 	f := newOutline(t, threePins()...)
-	_, v, ok := f.o.view()
+	_, v, ok := f.o.view(ChatTicks{}, false, 0)
 	if !ok || v.Count != 1 || v.New[0] || v.New[1] || !v.New[2] {
 		t.Fatalf("view %+v: want only T3 new", v)
 	}
@@ -194,19 +194,19 @@ func TestOutlineNewMeansAfterTheTerminalLastHadTheFocus(t *testing.T) {
 	f.now = outlineClockStart.Add(30 * time.Minute)
 	f.o.Focus(apptest.OrchAddr)
 	f.tt.Frame()
-	if _, v, _ := f.o.view(); v.Count != 1 {
+	if _, v, _ := f.o.view(ChatTicks{}, false, 0); v.Count != 1 {
 		t.Errorf("a message that came while away is still new while the terminal has the focus: %+v", v)
 	}
 	// A message that comes while the owner looks is not new.
 	f.todo = append(f.todo, pin("T4", f.now.Add(time.Minute), "Seen live"))
 	f.now = f.now.Add(2 * time.Minute)
-	if _, v, _ := f.o.view(); v.Count != 1 || v.New[3] {
+	if _, v, _ := f.o.view(ChatTicks{}, false, 0); v.Count != 1 || v.New[3] {
 		t.Errorf("a pin that came while the owner looks is old: %+v", v)
 	}
 	// The owner leaves: all become old.
 	f.o.Focus("")
 	f.tt.Frame()
-	if _, v, _ := f.o.view(); v.Count != 0 {
+	if _, v, _ := f.o.view(ChatTicks{}, false, 0); v.Count != 0 {
 		t.Errorf("after the focus left, nothing is new: %+v", v)
 	}
 	if f.tt.HasText(LabelOutlineCount) {
@@ -215,7 +215,7 @@ func TestOutlineNewMeansAfterTheTerminalLastHadTheFocus(t *testing.T) {
 	// A message while away is new again.
 	f.todo = append(f.todo, pin("T5", f.now.Add(time.Minute), "While away"))
 	f.now = f.now.Add(2 * time.Minute)
-	if _, v, _ := f.o.view(); v.Count != 1 || !v.New[4] {
+	if _, v, _ := f.o.view(ChatTicks{}, false, 0); v.Count != 1 || !v.New[4] {
 		t.Errorf("a pin while away is new: %+v", v)
 	}
 }
@@ -225,7 +225,7 @@ func TestOutlineFocusIsPerTerminal(t *testing.T) {
 	f.o.Focus("w9:t9") // another terminal has the focus
 	f.now = f.now.Add(time.Hour)
 	f.o.Focus("")
-	if _, v, _ := f.o.view(); v.Count != 1 {
+	if _, v, _ := f.o.view(ChatTicks{}, false, 0); v.Count != 1 {
 		t.Errorf("the focus on another terminal marks nothing read here: %+v", v)
 	}
 }
@@ -284,14 +284,14 @@ func TestOutlineClickMarksTheMessageAndTheOnesBeforeRead(t *testing.T) {
 		pin("T2", outlineClockStart.Add(2*time.Minute), "Second\nSecond detail."),
 		pin("T3", outlineClockStart.Add(3*time.Minute), "Third"),
 	)
-	if _, v, _ := f.o.view(); v.Count != 3 {
+	if _, v, _ := f.o.view(ChatTicks{}, false, 0); v.Count != 3 {
 		t.Fatalf("three new: %+v", v)
 	}
 	if err := f.tt.Click("Second, new"); err != nil {
 		t.Fatal(err)
 	}
 	f.tt.Frame()
-	_, v, _ := f.o.view()
+	_, v, _ := f.o.view(ChatTicks{}, false, 0)
 	if v.Count != 1 || v.New[0] || v.New[1] || !v.New[2] {
 		t.Errorf("click on T2 marks T1 and T2 read: %+v", v)
 	}
@@ -308,7 +308,7 @@ func TestOutlineClickMarksTheMessageAndTheOnesBeforeRead(t *testing.T) {
 	if err := f.tt.Click("Third, new"); err != nil {
 		t.Fatal(err)
 	}
-	if _, v, _ := f.o.view(); v.Count != 0 {
+	if _, v, _ := f.o.view(ChatTicks{}, false, 0); v.Count != 0 {
 		t.Errorf("all read: %+v", v)
 	}
 	f.tt.Frame()
@@ -331,7 +331,7 @@ func TestOutlineTakesNoKeysUnlessFocused(t *testing.T) {
 	for _, k := range []ui.Key{ui.KeyEnter, ui.KeyDown, ui.KeyUp, ui.KeyEscape, ui.KeySpace} {
 		f.tt.Key(0, k)
 	}
-	if _, v, _ := f.o.view(); v.Count != 1 {
+	if _, v, _ := f.o.view(ChatTicks{}, false, 0); v.Count != 1 {
 		t.Errorf("keys changed the outline: %+v", v)
 	}
 	if _, ok := f.tt.Find(LabelOutlineCard); ok {

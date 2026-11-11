@@ -101,6 +101,9 @@ type Chat struct {
 	// left the end (scroll.go).
 	away   bool
 	awayAt int
+	// panelRect and listRect are the chat's box and the box of the transcript list with the room
+	// above it, as last drawn, for the outline (D270).
+	panelRect, listRect ui.Rect
 	// switchBox is the box of the switch, for the room at the right of the pinned prompt.
 	switchBox ui.Handle
 	// pics caches the images of prompts, and picUse orders them (images.go); big is the image

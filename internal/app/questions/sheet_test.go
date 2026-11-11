@@ -79,10 +79,48 @@ func sheetOutlineCard(c *ui.Context) {
 	})
 }
 
+// sheetOutlineChat is the outline of a long chat (D270): 40 ticks of each kind, so the pitch is
+// smaller than 11px; the last six are new, two wait for the owner; and the card of a decision.
+func sheetOutlineChat(c *ui.Context) {
+	start := time.Date(2026, 11, 5, 14, 0, 0, 0, time.Local)
+	kinds := []struct{ kind, text string }{
+		{"You", "start builders for 609, 611 and 613"},
+		{"Done", "PR 633 is merged and main is green"},
+		{"Warning", "CI is slow on the hc tests: 9 minutes a run"},
+		{"Not verified", "the e2e run of the switch on a locked screen"},
+		{"Pinned", "Test the build of 0.42 on your Mac"},
+		{"Needs you", "Background task failed: go vet ./... failed with exit code 1"},
+	}
+	var ticks []OutlineTick
+	for i := range 40 {
+		k := kinds[i%len(kinds)]
+		ticks = append(ticks, OutlineTick{ID: "m" + strconv.Itoa(i), Kind: k.kind, Headline: k.text,
+			Pinned: start.Add(time.Duration(i-34) * 5 * time.Minute), Width: TickWidth(k.text)})
+	}
+	decision := OutlineTick{ID: "d", Kind: "Decision", Blocked: true, Pinned: start.Add(12 * time.Minute), Width: 10,
+		Headline: "Ship the notch now, before the release, or keep it behind the switch until the owner tests the glass on a light wallpaper and the e2e run passes on main"}
+	ticks[37] = decision
+	ticks[20] = OutlineTick{ID: "q", Kind: "Question", Blocked: true, Headline: "Which name for the release?", Pinned: start.Add(-70 * time.Minute), Width: 8}
+	sel := state.NewSelection(nil)
+	o := NewOutline(func() agentstate.Snapshot { return agentstate.Snapshot{} }, sel, view.Env{})
+	o.start = start
+	// The sheet draws one frame: the column's height is the one its first layout gives.
+	o.height = 420 - 44 - 90
+	o.Chat = func() (ChatTicks, bool) {
+		return ChatTicks{Addr: apptest.OrchAddr, Ticks: ticks, Top: 44, Bottom: 90}, true
+	}
+	sheetTerminal(c, 420, func() {
+		o.View(c)
+		card := ui.Box(c).Absolute().Top(200).Right(outlineInset + outlineHitWidth + theme.Space12 - 6)
+		outlineCard(c, card, decision)
+	})
+}
+
 // TestSpecSheet draws the parts of package questions (see apptest.SpecSheet).
 func TestSpecSheet(t *testing.T) {
 	apptest.SpecSheet(t, []apptest.SheetPart{
 		{Name: "QuestionsNotch", W: sheetW, H: 110, View: sheetNotch},
 		{Name: "OutlineCard", W: sheetW, H: 150, View: sheetOutlineCard},
+		{Name: "Outline", W: sheetW, H: 420, View: sheetOutlineChat},
 	}, nil)
 }
