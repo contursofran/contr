@@ -145,17 +145,17 @@ func TestBoardRowOf(t *testing.T) {
 	}{
 		{"unknown", WorkerInfo{}, false, RefInfo{}, false, BoardRow{State: TextNotFound, Checks: "—"}},
 		{"building", WorkerInfo{Chip: Chip{ChipWorker, StateWorking}}, true, RefInfo{}, false,
-			BoardRow{Found: true, Worker: StateWorking, State: "building", Tone: StateWorking, Checks: "—"}},
+			BoardRow{Found: true, Worker: StateWorking, State: "building", Checks: "—"}},
 		{"waiting", WorkerInfo{Chip: Chip{ChipWorker, StateWaiting}}, true, RefInfo{}, false,
-			BoardRow{Found: true, Worker: StateWaiting, State: "waiting", Tone: StateWaiting, Checks: "—"}},
+			BoardRow{Found: true, Worker: StateWaiting, State: "waiting", Checks: "—"}},
 		{"ci running", WorkerInfo{Chip: Chip{ChipWorker, StateWorking}, PR: 656}, true, running, true,
-			BoardRow{Found: true, Worker: StateWorking, State: "CI running", Tone: StateRunning, PR: 656, PRState: StateRunning, Checks: "2 of 3"}},
+			BoardRow{Found: true, Worker: StateWorking, State: "CI running", PR: 656, PRState: StateRunning, Checks: "2 of 3"}},
 		{"pr not read yet", WorkerInfo{Chip: Chip{ChipWorker, StateWaiting}, PR: 656}, true, RefInfo{}, false,
-			BoardRow{Found: true, Worker: StateWaiting, State: "PR open", Tone: StateOpen, PR: 656, PRState: StateOpen, Checks: "—"}},
+			BoardRow{Found: true, Worker: StateWaiting, State: "PR open", PR: 656, PRState: StateOpen, Checks: "—"}},
 		{"needs you wins", WorkerInfo{Chip: Chip{ChipWorker, StateNeedsYou}, PR: 656}, true, running, true,
-			BoardRow{Found: true, Worker: StateNeedsYou, State: "needs you", Tone: StateNeedsYou, PR: 656, PRState: StateRunning, Checks: "2 of 3"}},
+			BoardRow{Found: true, Worker: StateNeedsYou, State: "needs you", PR: 656, PRState: StateRunning, Checks: "2 of 3"}},
 		{"merged", WorkerInfo{Chip: Chip{ChipWorker, StateDone}, PR: 667}, true, RefInfo{Chip: Chip{ChipPR, StateMerged}, Done: true, Checks: github.CheckSummary{Pass: 3}}, true,
-			BoardRow{Found: true, Worker: StateDone, State: "merged", Tone: StateMerged, PR: 667, PRState: StateMerged, Checks: "3 of 3"}},
+			BoardRow{Found: true, Worker: StateDone, State: "merged", PR: 667, PRState: StateMerged, Checks: "3 of 3"}},
 	} {
 		if got := BoardRowOf(tc.w, tc.found, tc.pr, tc.known); got != tc.want {
 			t.Errorf("%s: %+v, want %+v", tc.name, got, tc.want)
@@ -326,5 +326,36 @@ func TestBadBlockIsACodeBlock(t *testing.T) {
 	}
 	if !s.tt.HasText("b-649 working on rows") {
 		t.Errorf("the block's text does not show: %v", s.tt.Texts())
+	}
+}
+
+// State words are grey (D267): only the dots have the content colors. A worker that needs the
+// owner says so in blocked-text; a step's words are grey but for a blocked step.
+func TestStateWordsAreGrey(t *testing.T) {
+	s := newSession(t, "idle")
+	fc := blockChips()
+	fc.workers["b-665"] = WorkerInfo{Chip: Chip{ChipWorker, StateNeedsYou}}
+	s.ch.Chips = fc
+	s.write(lPrompt, saidAt("n1", today(18, 49), newBoard))
+	pal := theme.Current()
+	for _, w := range []string{"CI running", "merged", "waiting"} {
+		r := find(t, s.tt, w)
+		if !hasInk(s.tt, r, rgba(pal.Ink62)) {
+			t.Errorf("the board's %q is not in ink-62", w)
+		}
+	}
+	for _, c := range []ui.Color{pal.ContentRunning, pal.ContentDone, pal.ContentWaiting} {
+		if r := find(t, s.tt, "CI running"); hasInk(s.tt, r, rgba(c)) {
+			t.Errorf("the board's state word has the content color %v", c)
+		}
+	}
+	if r := find(t, s.tt, "needs you"); !hasInk(s.tt, r, rgba(pal.BlockedText)) {
+		t.Error("needs you is not in blocked-text")
+	}
+	for _, w := range []string{"CI running · 2 of 3", "waits for #656"} {
+		r := find(t, s.tt, w)
+		if !hasInk(s.tt, r, rgba(pal.Ink62)) || hasInk(s.tt, r, rgba(pal.ContentRunning)) || hasInk(s.tt, r, rgba(pal.ContentWaiting)) {
+			t.Errorf("the queue's %q is not grey", w)
+		}
 	}
 }

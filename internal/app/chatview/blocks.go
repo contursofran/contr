@@ -146,9 +146,9 @@ type BoardRow struct {
 	Found bool
 	// Worker is the state of the worker's dot.
 	Worker ChipState
-	// State is the state word and Tone its color (ChipColor); StateNone is ink-45.
+	// State is the state word, in grey (D267): blocked-text for a worker that needs the owner,
+	// ink-45 for one that is not found, else ink-62.
 	State string
-	Tone  ChipState
 	// PR is the number of the worker's PR, 0 for none, and PRState the state of its dot.
 	PR      int
 	PRState ChipState
@@ -167,7 +167,7 @@ func BoardRowOf(w WorkerInfo, found bool, pr RefInfo, prKnown bool) BoardRow {
 	if !found {
 		return BoardRow{State: TextNotFound, Checks: "—"}
 	}
-	row := BoardRow{Found: true, Worker: w.Chip.State, State: workerWords[w.Chip.State], Tone: w.Chip.State, PR: w.PR, Checks: "—"}
+	row := BoardRow{Found: true, Worker: w.Chip.State, State: workerWords[w.Chip.State], PR: w.PR, Checks: "—"}
 	if w.PR == 0 {
 		return row
 	}
@@ -177,7 +177,7 @@ func BoardRowOf(w WorkerInfo, found bool, pr RefInfo, prKnown bool) BoardRow {
 		row.Checks = checksText(pr.Checks)
 	}
 	if w.Chip.State != StateNeedsYou {
-		row.State, row.Tone = prWords[row.PRState], row.PRState
+		row.State = prWords[row.PRState]
 	}
 	return row
 }
@@ -193,7 +193,8 @@ func checksText(s github.CheckSummary) string {
 }
 
 // StepView is how a step of a queue shows: Done dims it; Merged draws a check on the rail;
-// Blocked draws it in blocked; else Tone colors its dot and words (StateNone: ink-30 and ink-45).
+// Blocked draws it in blocked; else Tone colors its dot (StateNone: ink-30). Its words are grey
+// but for a blocked step (D267).
 type StepView struct {
 	Done, Merged, Blocked bool
 	Tone                  ChipState
@@ -397,8 +398,11 @@ func (ch *Chat) boardRow(c *ui.Context, key int, pal *theme.Palette, l BoardLine
 		return
 	}
 	cell(3, func() {
-		ink, ok := ChipColor(pal, row.Tone)
-		if !ok || row.State == "" {
+		ink := pal.Ink62
+		switch {
+		case row.Worker == StateNeedsYou:
+			ink = pal.BlockedText
+		case !row.Found:
 			ink = pal.Ink45
 		}
 		kit.Styled(ui.Text(c, row.State), theme.StyleMeta).NoWrap().TextColor(ink)
@@ -510,14 +514,11 @@ func stepMark(c *ui.Context, pal *theme.Palette, v StepView) {
 	ui.Box(c).Size(8, 8).Shrink(0).Radius(4).Background(col)
 }
 
-// stepInk is the ink of a step's words: blocked-text for a blocked step, the tone's color, or
-// ink-45.
+// stepInk is the ink of a step's words: blocked-text for a blocked step, else ink-62. Only the
+// rail's mark has the step's color (D267).
 func stepInk(pal *theme.Palette, v StepView) ui.Color {
 	if v.Blocked {
 		return pal.BlockedText
 	}
-	if t, ok := ChipColor(pal, v.Tone); ok {
-		return t
-	}
-	return pal.Ink45
+	return pal.Ink62
 }
