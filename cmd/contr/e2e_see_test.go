@@ -234,6 +234,12 @@ var seeFixtures = map[string]seeFixture{
 		ready: "lead, ",
 		press: []string{"Chat", "wait:Flow diagram"},
 	},
+	"chat-seq": {
+		about: "the orchestrator lead in Chat mode with an answer that holds a contr-seq block, drawn as a sequence diagram (D287): three actors with lifelines, messages, two dashed replies and a message to itself",
+		setup: seeChatSeq,
+		ready: "lead, ",
+		press: []string{"Chat", "wait:Sequence diagram"},
+	},
 	"chat-tools": {
 		about: "the chat fixture with a turn of mixed tool calls, its work group open (D274): a call line of each kind with its icon (skill, Slack connector, contr plugin, Linear MCP and Notion connector with their brand marks, an unknown MCP server with the connector icon, agent, fetch, Bash, Read, Grep), a tool of no kind with an empty slot, the label and key argument of each, and the Bash call open on its detail",
 		setup: seeChatTools,

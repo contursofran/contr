@@ -71,7 +71,7 @@ hasn't heard from you…" nudges, and a user line that is all inside one
 
 ## Content
 
-How Claude's Markdown shows (D261). MyGo's theme options style what they can; the Block hook builds the rest (remarks, tables, numbered and task lists), a Code builder the diff blocks, and the `contr-flow` blocks draw as [diagrams](#diagrams). The Markdown inside a remark, a cell or an item shows in a `markdown.View` of its own that shares the selection.
+How Claude's Markdown shows (D261). MyGo's theme options style what they can; the Block hook builds the rest (remarks, tables, numbered and task lists), a Code builder the diff blocks, and the `contr-flow` and `contr-seq` blocks draw as [diagrams](#diagrams). The Markdown inside a remark, a cell or an item shows in a `markdown.View` of its own that shares the selection.
 
 | Block | Value |
 |---|---|
@@ -306,13 +306,20 @@ Live and frozen: only the newest board of the thread is live. Under it, a 5px `c
 
 ## Diagrams
 
-Claude writes a flow diagram as a fenced block `contr-flow` (D284). contr draws it with MyGo's Painter, in the column; the lines read well in a terminal too.
+Claude writes a flow diagram as a fenced block `contr-flow` (D284) and a sequence diagram as a fenced block `contr-seq` (D287). contr draws them with MyGo's Painter, in the column; the lines read well in a terminal too.
 
 - Syntax: one line per arrow, `A -> B` or `A -> B: label`; a state as `A [done]`, with `done`, `running`, `waiting`, `failed` or `info`. A node is any text without `->`; empty lines are skipped.
 - Layout: layers left to right from the longest path, one sweep orders each layer; an arrow back (a cycle) is an arc under the boxes, its label under the arc.
 - Box: height at least 36px, text `body` (at the chat text size, D272) in `ink-88`, centered, 14px side padding, at least 88px wide, radius 8; `hover` fill and an `ink-30` line; a node with a state takes the tint of its content color and a line in that color.
 - Arrow: a 1.2px `ink-30` line, an open `ink-48` head; its label in mono `meta` (at the chat text size), `ink-48`, on a patch of the stage, in the middle of the gap.
 - Falls back to the code block: a block that does not parse (a chain `A -> B -> C`, a line without an arrow, no arrow at all), more than 12 nodes, a label longer than 28 characters, more than 6 layers, more than 4 nodes in a layer, wider than the column, or a block that is still being written.
+
+Sequence (`contr-seq`, D287):
+
+- Syntax: one line per message, top to bottom: `A -> B: text`, `A --> B: text` for a reply, `A -> A: text` for a message to itself. The text is required; an actor is any text without `:` or `->`, in order of first use, left to right. Empty lines are skipped.
+- Actors: names in `body` strong (at the chat text size) in `ink-88`, centered over their lifeline, a dashed 1px `ink-30` line down to the end. Lifelines are at least 120px apart, and far enough apart for the names and the widest label between them.
+- Message: one row each (at least 32px), a 1.2px `ink-48` line with an open `ink-48` head; a reply dashed; its label in mono `meta` (at the chat text size), `ink-64`, centered above the line. A message to itself is a small loop at the right of the lifeline, its label to the right of the loop.
+- Falls back to the code block: a block that does not parse (a line without `->` or text, a chain, no message), more than 6 actors, more than 16 messages, an actor longer than 28 characters, a message longer than 40 characters, wider than the column, or a block that is still being written.
 
 ## Behavior
 

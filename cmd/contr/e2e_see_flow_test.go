@@ -16,7 +16,13 @@ import (
 )
 
 // seeChatFlow spawns lead and writes a transcript whose answer has a flow diagram (D284).
-func seeChatFlow(t *testing.T, h *harness) {
+func seeChatFlow(t *testing.T, h *harness) { seeChatAnswer(t, h, flowTranscript()) }
+
+// seeChatSeq spawns lead and writes a transcript whose answer has a sequence diagram (D287).
+func seeChatSeq(t *testing.T, h *harness) { seeChatAnswer(t, h, seqTranscript()) }
+
+// seeChatAnswer spawns lead and writes transcript as its session.
+func seeChatAnswer(t *testing.T, h *harness, transcript string) {
 	repo := h.repo(t, "demo", "main")
 	lead, err := h.mgr.Spawn(h.ctx, agents.Spec{Name: "lead", Profile: "claude-idle", Role: agents.RoleOrchestrator, Project: "demo", Worktree: repo})
 	if err != nil {
@@ -26,7 +32,7 @@ func seeChatFlow(t *testing.T, h *harness) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte(flowTranscript()), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(transcript), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	s := &session.Session{UpdatedAt: uint64(time.Now().Unix())}
@@ -36,9 +42,23 @@ func seeChatFlow(t *testing.T, h *harness) {
 	}
 }
 
+// seqTranscript is a prompt and an answer with a contr-seq block: replies and a message to itself.
+func seqTranscript() string {
+	return answerTranscript("who does what on a fix?", "Each step reports back:\n\n```contr-seq\n"+
+		"owner -> lead: fix #696\nlead -> b-696: build step 2\nb-696 -> b-696: run check.sh\n"+
+		"b-696 --> lead: PR #740 open\nlead --> owner: ready to merge\n```\n\nYou only answer the last one.")
+}
+
 // flowTranscript is a prompt and an answer with a contr-flow block: a branch, a loop back and
 // two states.
 func flowTranscript() string {
+	return answerTranscript("how does a fix get merged?", "It goes through review:\n\n```contr-flow\n"+
+		"issue -> plan: owner picks\nplan -> build\nbuild -> review: PR\nreview -> merge: approved\n"+
+		"review -> build: blockers\nmerge -> release\nmerge [done]\nreview [waiting]\n```\n\nA blocker sends it back to the builder.")
+}
+
+// answerTranscript is a prompt and one answer.
+func answerTranscript(prompt, answer string) string {
 	start := time.Now().Add(-2 * time.Minute)
 	line := func(n int, typ string, content any) string {
 		b, _ := json.Marshal(map[string]any{"type": typ, "uuid": fmt.Sprintf("u%d", n), "sessionId": "flow",
@@ -47,9 +67,7 @@ func flowTranscript() string {
 		return string(b) + "\n"
 	}
 	return strings.Join([]string{
-		line(1, "user", "how does a fix get merged?"),
-		line(2, "assistant", []any{map[string]any{"type": "text", "text": "It goes through review:\n\n```contr-flow\n" +
-			"issue -> plan: owner picks\nplan -> build\nbuild -> review: PR\nreview -> merge: approved\n" +
-			"review -> build: blockers\nmerge -> release\nmerge [done]\nreview [waiting]\n```\n\nA blocker sends it back to the builder."}}),
+		line(1, "user", prompt),
+		line(2, "assistant", []any{map[string]any{"type": "text", "text": answer}}),
 	}, "")
 }

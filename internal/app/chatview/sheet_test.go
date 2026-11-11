@@ -72,6 +72,7 @@ func TestSpecSheet(t *testing.T) {
 		detail.s.ch.calls[id] = &open
 	}
 	flow := sheetChat(t, "idle", lPrompt, said("f1", flowAnswer))
+	seq := sheetChat(t, "idle", lPrompt, said("s1", seqAnswer))
 	marks := sheetMarks(t)
 	apptest.SpecSheet(t, []apptest.SheetPart{
 		{Name: "ChatView", W: sheetW, H: sheetH, View: working.view},
@@ -90,7 +91,8 @@ func TestSpecSheet(t *testing.T) {
 		{Name: "CallDetail", W: sheetW, H: 360, View: detail.view},
 		{Name: "ChatWorkerMarks", W: sheetW, H: 600, View: marks.view},
 		{Name: "ChatFlow", W: sheetW, H: 620, View: flow.view},
-	}, []string{"ChatFlow", "ChatWorkerMarks", "ChatViewComposer", "ChatView", "ChatViewWide", "ChatViewTeam", "ChatViewChips", "ChatContent", "ChatViewScrolled", "ChatBlocks", "ChatBlocksBlocked", "ChatViewImages", "CallLines", "CallLinesBrands", "CallDetail"})
+		{Name: "ChatSeq", W: sheetW, H: 620, View: seq.view},
+	}, []string{"ChatSeq", "ChatFlow", "ChatWorkerMarks", "ChatViewComposer", "ChatView", "ChatViewWide", "ChatViewTeam", "ChatViewChips", "ChatContent", "ChatViewScrolled", "ChatBlocks", "ChatBlocksBlocked", "ChatViewImages", "CallLines", "CallLinesBrands", "CallDetail"})
 }
 
 // sheetMarks is an open work group with a note of a worker of each family (Claude, OpenAI,
@@ -138,6 +140,12 @@ const contentAnswer = "Four builders work with the M1 rules: red never fills or 
 const flowAnswer = "The fix goes through review:\n\n```contr-flow\nissue -> plan: owner picks\nplan -> build\n" +
 	"build -> review: PR\nreview -> merge: approved\nreview -> build: blockers\nmerge -> release\nmerge [done]\nreview [waiting]\n```\n\n" +
 	"Too many steps for a drawing:\n\n```contr-flow\n" + bigFlow + "```\n"
+
+// seqAnswer has a sequence diagram with replies and a message to itself, and a block that does
+// not parse, which shows as code (D287).
+const seqAnswer = "How a fix reaches you:\n\n```contr-seq\nowner -> lead: fix #696\nlead -> b-696: build step 2\n" +
+	"b-696 -> b-696: run check.sh\nb-696 --> lead: PR #740 open\nlead --> owner: ready to merge\n```\n\n" +
+	"A message without text stays code:\n\n```contr-seq\nlead -> owner\n```\n"
 
 // chipsText has each kind of chip in each state (D262), and names that stay text: an unknown
 // number, a name in code and a path that does not exist.

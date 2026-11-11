@@ -319,3 +319,29 @@ func TestFlowBlock(t *testing.T) {
 		}
 	}
 }
+
+// A contr-seq block draws as a sequence diagram (D287); one that does not parse or is too large
+// shows as its code block.
+func TestSeqBlock(t *testing.T) {
+	// Six actors with long messages between each pair: wider than the column.
+	var wide string
+	for _, p := range [][2]string{{"a", "b"}, {"b", "c"}, {"c", "d"}, {"d", "e"}, {"e", "f"}} {
+		wide += p[0] + " -> " + p[1] + ": a long message label of forty chars\n"
+	}
+	for _, tc := range []struct {
+		name, src string
+		drawn     bool
+	}{
+		{"good", "a -> b: go\nb --> a: done\nb -> b: think\n", true},
+		{"bad", "a -> b\n", false},
+		{"large", "a -> b: x\nb -> c: x\nc -> d: x\nd -> e: x\ne -> f: x\nf -> g: x\n", false},
+		{"wide", wide, false},
+	} {
+		tt, _ := contentRig(t, mygo.ThemeDark, "```contr-seq\n"+tc.src+"```\n")
+		_, drawn := tt.Access(diagram.LabelSeq)
+		_, code := tt.AccessByRole(ui.RoleGroup, "Code, contr-seq")
+		if drawn != tc.drawn || code == tc.drawn {
+			t.Errorf("%s: diagram %v, code block %v", tc.name, drawn, code)
+		}
+	}
+}
