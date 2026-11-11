@@ -80,6 +80,12 @@ type Chat struct {
 	field ui.Handle
 	// ticks is set while the last View asked for a redraw in a second: the live line's time.
 	ticks bool
+	// away is set while the list is not at its end; awayAt is the count of shown entries when it
+	// left the end (scroll.go).
+	away   bool
+	awayAt int
+	// switchBox is the box of the switch, for the room at the right of the pinned prompt.
+	switchBox ui.Handle
 }
 
 // New returns a chat view that reads the session files under stateDir (package session).
@@ -154,6 +160,7 @@ func (ch *Chat) changed(reset bool) {
 		ch.folds = map[string]*bool{}
 		ch.parts, ch.partsOf = map[string][]Part{}, map[string]string{}
 		ch.chips = map[string]*chipPart{}
+		ch.away = false
 		ch.Env.Redraw()
 	}
 	ch.stale = true
