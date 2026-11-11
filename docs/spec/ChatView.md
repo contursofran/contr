@@ -54,7 +54,7 @@ Shared rules: [README.md](README.md).
 
 Hidden entries do not show: meta lines, system reminders, hook output (an
 attachment, a user line in a `<…-hook>` tag, or "Stop hook feedback:"),
-the kit's playbook, local command output, compact summaries, interrupt
+the kit's playbook and its line that names the chat-writing skill, local command output, compact summaries, interrupt
 marks, system lines, thinking marks and the lines of subagents. Other
 harness texts hide too (D254): "[Image: source: …]" lines, "The user
 hasn't heard from you…" nudges, and a user line that is all inside one
