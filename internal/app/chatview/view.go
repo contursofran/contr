@@ -145,7 +145,7 @@ func (ch *Chat) row(c *ui.Context, r Row, moreSaid bool) {
 		})
 	case RowSaid:
 		e := ch.model.Entry(r.Entry)
-		ch.said(c, r.ID, e.Text)
+		ch.said(c, r.ID, e.Text, e.Time)
 		if !moreSaid {
 			column(c, func() { sentAt(c, e.Time, ui.Start) })
 		}

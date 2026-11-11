@@ -67,29 +67,52 @@ func (s *chatChips) Look(addr string, t chatview.Token) (chatview.Chip, bool) {
 		return chatview.WorkerChip(w), ok
 	case chatview.TokenNumber:
 		n, err := strconv.Atoi(t.Name)
-		dir := s.dir(addr)
-		if err != nil || dir == "" {
+		if err != nil {
 			return chatview.Chip{}, false
 		}
-		if ref, ok := s.refs.Get(dir, n); ok {
-			return chatview.RefChip(ref), true
-		}
-		// A worker's PR is known before its read by number lands (D104, D145).
-		for _, w := range s.f.snapshot().Workers {
-			if w.Worktree != "" && s.f.WorkerPRs.PR(w.Worktree) == n {
-				st := chatview.StateOpen
-				if s.f.WorkerPRs.Waiting(w.Worktree) {
-					st = chatview.StateRunning
-				}
-				return chatview.Chip{Kind: chatview.ChipPR, State: st}, true
-			}
-		}
+		r, ok := s.Ref(addr, n)
+		return r.Chip, ok
 	case chatview.TokenPath:
 		if k, ok := fileOf(s.dir(addr), t.Name); ok && s.isFile(k) {
 			return chatview.Chip{Kind: chatview.ChipFile}, true
 		}
 	}
 	return chatview.Chip{}, false
+}
+
+// Worker is the worker of name with the PR of its branch (D104, D145), for a status board.
+func (s *chatChips) Worker(_ string, name string) (chatview.WorkerInfo, bool) {
+	w, ok := s.worker(name)
+	if !ok {
+		return chatview.WorkerInfo{}, false
+	}
+	info := chatview.WorkerInfo{Chip: chatview.WorkerChip(w)}
+	if w.Worktree != "" {
+		info.PR = s.f.WorkerPRs.PR(w.Worktree)
+	}
+	return info, true
+}
+
+// Ref is number n in the session at addr: read by number through gh, or the PR of a worker's
+// branch before that read lands (D104, D145), with no counts of its checks.
+func (s *chatChips) Ref(addr string, n int) (chatview.RefInfo, bool) {
+	dir := s.dir(addr)
+	if dir == "" {
+		return chatview.RefInfo{}, false
+	}
+	if ref, ok := s.refs.Get(dir, n); ok {
+		return chatview.RefInfoOf(ref), true
+	}
+	for _, w := range s.f.snapshot().Workers {
+		if w.Worktree != "" && s.f.WorkerPRs.PR(w.Worktree) == n {
+			st := chatview.StateOpen
+			if s.f.WorkerPRs.Waiting(w.Worktree) {
+				st = chatview.StateRunning
+			}
+			return chatview.RefInfo{Chip: chatview.Chip{Kind: chatview.ChipPR, State: st}}, true
+		}
+	}
+	return chatview.RefInfo{}, false
 }
 
 // fileOf is the key of path p in dir: a path inside dir, relative or absolute.

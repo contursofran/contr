@@ -154,6 +154,12 @@ var seeFixtures = map[string]seeFixture{
 		ready: "lead, ",
 		press: []string{"Chat"},
 	},
+	"chat-blocks": {
+		about: "the orchestrator lead in Chat mode with an older status board (frozen: the agent's three columns, its answer's time), the live board (state, PR and checks from a fake gh: CI running 2 of 3, CI passed 3 of 3, building, waiting, and a worker that is not found) and a merge queue (merged, CI running, blocked: 1 check failed, a note) (D267)",
+		setup: seeChatBlocks,
+		ready: "lead, ",
+		press: []string{"Chat"},
+	},
 	"session": {
 		about: "the orchestrator lead with the todos and artifacts of canvas board 11 (D197)",
 		setup: seeSession,

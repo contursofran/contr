@@ -174,6 +174,21 @@ does not know stays plain text.
   icons and the "merged" word of the mockup (K2, KC1). The chip is a link
   of the markdown view, which styles all its links alike.
 
+## Blocks
+
+A coordinator writes a status board or a merge queue as a fenced block (D267). The agent writes only the names, the labels and the order, one plain line for each row, so the block reads well in a terminal; contr fills the rest from the data of the [chips](#chips): the agent state, the PR of each worker's branch and the numbers read by number. No other gh read runs. Only a block at the top level of an answer counts. A block with a line that does not parse, or without its closing fence, shows as a code block.
+
+| Block | Syntax | Shows |
+|---|---|---|
+| Status board | info string `contr-status`; a line `<worker> \| #<issue> \| <what it builds>` | six columns: Worker, Issue, Builds, State, PR, Checks; heads mono `meta`, `ink-45`; no box, a `hairline` above and below the grid, `space-16` between columns; the worker in `body`, `ink-95`, after its 6px dot (the chip's worker colors); the issue mono `meta` `ink-62`; what it builds `body` `ink-85`, one line with "…"; the state in mono `meta` in its content color; the PR as a mono 12px number with its dot on `hover`, radius 5, a click opens it as a chip does; the checks "2 of 3" (passed of passed, failed and pending) mono `meta` `ink-62`; "—" for none |
+| Merge queue | info string `contr-queue`; a line `#<n> <label>`, optional ` -- <note>` | the steps in order on one rail 14px wide: an 8px dot, a 1px `hairline` line down to the next step; the step's number mono `meta` `ink-45`, `#n label` in `prose` `ink-95`, the state in words in mono `meta` |
+
+State of a board row: a worker that needs the owner says "needs you"; else the state of its PR: "PR open", "CI running", "CI passed", "CI failed", "merged", "closed"; else the worker's own state: "building", "waiting", "done". A worker contr does not list shows its name in `ink-45` and "not found" in `ink-45`, no dot.
+
+State of a queue step: a merged step has a 12px check in `content-done` and "merged"; a closed PR or issue has an `ink-30` dot and "closed"; both dim (the label in `ink-62`) and drop the note. A step whose checks failed is `blocked`: the dot in `blocked`, "blocked: 1 check failed" in `blocked-text`. Checks that run or passed: "CI running · 2 of 3", "CI passed · 3 of 3" in their content color; an open PR without checks "open". The note follows the state after " · "; a note alone is in `content-waiting`.
+
+Live and frozen: only the newest board of the thread is live. Under it, a 5px `content-running` dot and "live · updated 18:49" (mono `meta`, `ink-45`): the time its values last changed. An older board keeps the values it showed while it was live, dims to 60% and says "as of 18:45 · a newer board is below". When contr did not show it live (an older answer read after the app started), it shows only the three columns the agent wrote and the time of its answer, so it never shows a state newer than its answer. Nothing ticks (D55): the times are fixed texts.
+
 ## Behavior
 
 - The view reads the transcript only while it shows: a read runs off the

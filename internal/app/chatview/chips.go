@@ -85,6 +85,12 @@ type ChipSource interface {
 	Look(addr string, t Token) (Chip, bool)
 	// Open is a click on the chip of name in the session at addr.
 	Open(addr string, c Chip, name string)
+	// Worker is the worker of name for a status board (blocks.go): its chip and the PR of its
+	// branch; false when contr does not list it.
+	Worker(addr, name string) (WorkerInfo, bool)
+	// Ref is number n in the session at addr for a board or a queue: its chip, whether it is
+	// done, and its checks; false when contr does not know it (yet). It reads as Look does.
+	Ref(addr string, n int) (RefInfo, bool)
 }
 
 const chipScheme = "contr-chip:"

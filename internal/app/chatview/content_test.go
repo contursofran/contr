@@ -25,7 +25,7 @@ func contentRig(t *testing.T, src mygo.ThemeSource, text string) (*ui.Tester, *t
 	ch.mdTheme(pal)
 	tt := ui.NewTester(func(c *ui.Context) {
 		ui.Column(c).Fill().Background(pal.StageBase()).Bind(&ch.panel).Padding(0, 20).Children(func() {
-			ch.said(c, "r1", text)
+			ch.said(c, "r1", text, "")
 		})
 	}, 1000, 1400)
 	tt.Frame()
