@@ -2,8 +2,8 @@ package settings
 
 // The Setup tab of Settings (D278): a read-only checklist of what contr needs. The checks run off
 // the UI thread when Settings opens, when the app becomes active while the tab shows, and on
-// Recheck; never while Settings is closed. Rows with a step show a line to copy: contr runs no
-// command for the owner here.
+// Recheck; never while Settings is closed. Rows with a step show a line to copy. The contr plugin
+// row also gets Install or Enable (D283, settings_plugin.go); no other row runs a command.
 
 import (
 	"context"
@@ -226,7 +226,13 @@ func (s *Settings) setupRow(c *ui.Context, r setup.Result) {
 			}
 			id, text := r.ID, r.Copy
 			SettingsButton(c, label, kit.ButtonPlain, func() { s.copyLine(id, text) })
+			if a := pluginAction(r); a != "" {
+				s.pluginButton(c, a, r.Copy)
+			}
 		})
+		if r.ID == setup.IDPlugin && s.pl.err != "" {
+			ui.Text(c, s.pl.err).Margin(0, 0, 0, 22).SingleLine().Ellipsis("…").MinWidth(0).TextColor(p.Blocked)
+		}
 	})
 }
 

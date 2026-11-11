@@ -16,6 +16,10 @@ Shared rules: [README.md](README.md).
 4. A row with a step has a copy line under it, in line with the name: the command in mono
    (`ink-88`) on `hover`, 1px `input-line`, card radius, and `Copy` (plain button) at the
    right. After a click it says `Copied` for 1.5 s.
+   The `contr plugin` row also has an action (outlined button) right of `Copy` (D283):
+   `Install` when the plugin is not installed, `Enable` when it is disabled. While its command
+   runs, a 14px spinner takes its place. After a failure, the last stderr line shows under the
+   copy line, in line with the name (`blocked`, one line with an ellipsis).
 5. Foot, `hairline` above: `Done` (plain button).
 
 | Glyph | State |
@@ -47,7 +51,13 @@ Shared rules: [README.md](README.md).
   Settings opens on the `Setup` tab and `setupSeen` is stored. It never opens by itself again.
 - A command that times out shows `timed out`; output in another format shows
   `unexpected … output`.
-- No check reads files in Claude Code's or Codex's folders. contr runs no command for the owner
-  here and does not edit Claude Code's settings.
+- No check reads files in Claude Code's or Codex's folders. contr does not edit Claude Code's
+  settings or files.
+- Plugin action (D283): a click on `Install` or `Enable` opens a confirm, `Install the contr
+  plugin?` or `Enable the contr plugin?`, with `contr runs this command:` over the exact copy
+  line. `Cancel` and Escape run nothing. `Run` runs the line with the `claude` that the checks
+  find, off the UI thread, with a 2 min limit (`no answer after 2m0s` when it ends). On success a
+  recheck runs. No other row has an action: the meter (D66), gh and hc stay copy only, and
+  contr starts or stops no hc core here.
 - While a required check is not ready, the `Setup` tab and the Settings button of the sidebar
   have the 6px `ink-100` dot (D146); the button is named `Settings, setup steps left`.

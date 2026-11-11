@@ -25,6 +25,9 @@ type Chat struct {
 	// Worker gives the agent at an hc address, for the state of the workers that sent notes.
 	// May be nil.
 	Worker func(addr string) (agents.Worker, bool)
+	// ModelOf names the model that an agent profile starts, for the mark of a worker (D285). May
+	// be nil.
+	ModelOf func(profile string) string
 	// Hints shows the key chip of the switch while ⌘ is held (D245).
 	Hints bool
 	// Send types text into the terminal at addr and presses Enter. It blocks: it runs off the UI

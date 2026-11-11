@@ -116,6 +116,7 @@ func listPaths(ctx context.Context, root, dir string) ([]chatview.Suggestion, er
 func (f *Frame) attachChat(env view.Env, src agentstate.AgentSource) (stop func()) {
 	f.Chat = chatview.New(env, f.Session.StateDir, nil)
 	f.Chat.Worker = f.agentAt
+	f.Chat.ModelOf = f.deps.ModelOf
 	f.Chat.Meta = f.chatMeta
 	f.Chat.NextPrompt = f.nextPrompt
 	f.Chat.Team = f.chatTeam

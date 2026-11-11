@@ -10,7 +10,8 @@ package chatview
 // older board (frozen), the live board and a queue, and ChatBlocksBlocked a queue with a blocked
 // step (D267). ChatViewComposer shows the composer card in each state (D271), ChatViewImages the
 // images of prompts and the composer's image chips (D269), CallLines an open work group with a
-// call line of each kind and a running call (D274).
+// call line of each kind and a running call (D274), ChatWorkerMarks the mark of each model family
+// in each state (D285).
 
 import (
 	"strconv"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app/apptest"
 	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/github"
@@ -69,6 +71,7 @@ func TestSpecSheet(t *testing.T) {
 		open := true
 		detail.s.ch.calls[id] = &open
 	}
+	marks := sheetMarks(t)
 	apptest.SpecSheet(t, []apptest.SheetPart{
 		{Name: "ChatView", W: sheetW, H: sheetH, View: working.view},
 		{Name: "ChatViewWide", W: 1500, H: 420, View: wide.view},
@@ -84,7 +87,27 @@ func TestSpecSheet(t *testing.T) {
 		{Name: "CallLines", W: sheetW, H: 420, View: calls.view},
 		{Name: "CallLinesBrands", W: sheetW, H: 420, View: brandsView.view},
 		{Name: "CallDetail", W: sheetW, H: 360, View: detail.view},
-	}, []string{"ChatViewComposer", "ChatView", "ChatViewWide", "ChatViewTeam", "ChatViewChips", "ChatContent", "ChatViewScrolled", "ChatBlocks", "ChatBlocksBlocked", "ChatViewImages", "CallLines", "CallLinesBrands", "CallDetail"})
+		{Name: "ChatWorkerMarks", W: sheetW, H: 600, View: marks.view},
+	}, []string{"ChatWorkerMarks", "ChatViewComposer", "ChatView", "ChatViewWide", "ChatViewTeam", "ChatViewChips", "ChatContent", "ChatViewScrolled", "ChatBlocks", "ChatBlocksBlocked", "ChatViewImages", "CallLines", "CallLinesBrands", "CallDetail"})
+}
+
+// sheetMarks is an open work group with a note of a worker of each family (Claude, OpenAI,
+// DeepSeek) in each state (working, idle, blocked), and one of another program (D285).
+func sheetMarks(t *testing.T) sheetView {
+	lines := []string{lPrompt}
+	workers := map[string]agents.Worker{}
+	n := 0
+	for _, fam := range []struct{ name, model, command string }{{"claude", "opus", "claude"}, {"codex", "gpt-6.1", "codex"}, {"deepseek", "deepseek-v4.1-flash", "opencode"}, {"shell", "", "zsh"}} {
+		for _, status := range []string{"working", "idle", "blocked"} {
+			n++
+			addr, name := "w"+strconv.Itoa(n)+":t1", fam.name+"-"+status
+			workers[addr] = agents.Worker{Name: name, Address: addr, Status: status, Model: fam.model, Command: fam.command}
+			lines = append(lines, `{"type":"user","uuid":"m`+strconv.Itoa(n)+`","message":{"content":"<hc from=\"`+addr+` `+name+`\">`+name+`: `+status+`, PR #633</hc>"}}`)
+		}
+	}
+	v := sheetChat(t, "idle", append(lines, said("s1", "Done."))...)
+	v.s.ch.Worker = func(addr string) (agents.Worker, bool) { w, ok := workers[addr]; return w, ok }
+	return v
 }
 
 // contentAnswer has each kind of content: headings, lists, a quote, the five remarks, a table

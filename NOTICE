@@ -24,7 +24,8 @@ changes.
 The brand marks in assets/icons/brands/ are icons of Simple Icons
 (https://github.com/simple-icons/simple-icons), v16.37.0, released under
 CC0 1.0 Universal; they are used without changes. The marks belong to their
-owners; contr uses them only to show which service a tool call goes to.
+owners; contr uses them only to show which service a tool call goes to, or
+which model family a worker runs on.
 
 The pull request and issue icons in assets/icons/github/ are Octicons
 (https://github.com/primer/octicons), v19.21.1, licensed under the MIT
