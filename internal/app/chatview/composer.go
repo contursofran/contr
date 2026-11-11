@@ -112,7 +112,7 @@ func (ch *Chat) composer(c *ui.Context, id string, st liveState) {
 			}
 			field.Children(func() {
 				in := ui.TextAreaBase(c.Key("composer:"+id), draft).Label(LabelComposer).Placeholder(Placeholder(ch.name(id))).
-					PlaceholderColor(pal.Ink38).TextColor(pal.Ink100).FontSize(theme.StyleProse.Size).LineHeight(theme.StyleProse.Line/theme.StyleProse.Size).
+					PlaceholderColor(pal.Ink48).TextColor(pal.Ink100).FontSize(theme.StyleProse.Size).LineHeight(theme.StyleProse.Line/theme.StyleProse.Size).
 					Lines(1, composerLines).Grow(1).MinWidth(0).PaddingY((actionSize - theme.StyleProse.Line) / 2).AutoFocus().Bind(&ch.field).
 					OnTextKey(func(k ui.TextKey) bool { return ch.textKey(id, st, k) })
 				if in.Changed() {
@@ -122,13 +122,13 @@ func (ch *Chat) composer(c *ui.Context, id string, st liveState) {
 			})
 			if ch.Meta != nil {
 				if m := ch.Meta(id); m != "" {
-					kit.Styled(ui.Text(c, m), theme.StyleMeta).SingleLine().MinWidth(0).TextColor(pal.Ink42)
+					kit.Styled(ui.Text(c, m), theme.StyleMeta).SingleLine().MinWidth(0).TextColor(pal.Ink48)
 				}
 			}
 		})
 		if e := ch.errs[id]; e != "" {
 			kit.Styled(ui.Text(c, e), theme.StyleSmall).Wrap().
-				Padding(theme.Space6, cardPadLeft, 0).TextColor(pal.Ink62)
+				Padding(theme.Space6, cardPadLeft, 0).TextColor(pal.Ink64)
 		}
 	})
 }
@@ -152,13 +152,13 @@ func (ch *Chat) action(c *ui.Context, id string, st liveState, a Action) {
 			ch.field.Focus()
 		})
 	case ActionStop:
-		mark = pal.Ink85
+		mark = pal.Ink88
 		b = b.Border(1, pal.InputLine).Cursor(ui.CursorPointer).OnClick(func() { ch.stop(id); ch.field.Focus() })
 		if b.Hovered() {
 			b = b.Background(pal.HoverStrong)
 		}
 	default:
-		mark = pal.Ink38
+		mark = pal.Ink30
 		b = b.Border(1, pal.InputLine).Disabled(true)
 	}
 	focus := b.FocusVisible()

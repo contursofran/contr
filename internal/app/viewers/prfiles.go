@@ -378,8 +378,8 @@ func (p *PRPane) renderThread(c *ui.Context, t github.Thread) {
 				}
 				resolve = func() { p.resolveThread(t.ID) }
 			}
-			kit.CardButton(c, LabelPRReply, kit.ButtonPlain, theme.Current().Ink50, reply)
-			kit.CardButton(c, LabelPRResolve, kit.ButtonPlain, theme.Current().Ink50, resolve)
+			kit.CardButton(c, LabelPRReply, kit.ButtonPlain, theme.Current().Ink48, reply)
+			kit.CardButton(c, LabelPRResolve, kit.ButtonPlain, theme.Current().Ink48, resolve)
 		})
 		if f.replying[t.ID] {
 			ui.Row(c).Height(theme.AnswerButtonHeight).Gap(theme.AnswerButtonGap).AlignItems(ui.Center).Children(func() {
@@ -392,7 +392,7 @@ func (p *PRPane) renderThread(c *ui.Context, t github.Thread) {
 				if f.busy {
 					send = nil
 				}
-				kit.CardButton(c, LabelPRReplySend, kit.ButtonOutlined, theme.Current().Ink95, send)
+				kit.CardButton(c, LabelPRReplySend, kit.ButtonOutlined, theme.Current().Ink88, send)
 			})
 		}
 	})

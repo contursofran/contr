@@ -32,23 +32,11 @@ Contrast numbers are for Dark unless they say Light. "On glass" is on `glass-win
 | `meter-track` | `rgba(255,255,255,0.07)` | `rgba(0,0,0,0.08)` | Track of the context and plan-usage meters. |
 | `meter-fill` | `rgba(255,255,255,0.55)` | `rgba(0,0,0,0.5)` | Filled part of the context and plan-usage meters. |
 | `tick` | `rgba(255,255,255,0.14)` | `rgba(0,0,0,0.16)` | Outline ticks for messages already seen. 1.5:1 on glass: a mark, not text. |
-| `ink-100` | `#f4f4f5` | `#141414` | The strongest ink: white in dark, near-black in light. Only what needs the owner or what is chosen: the active tab, the selected agent, new outline ticks and their count, the question text, the closed notch label. 17.0:1 on glass, 15.0:1 on glass-float. |
-| `ink-95` | `#e9e9ea` | `#1e1e1e` | Default text in the window and the terminal cursor block. 15.4:1 on glass. |
-| `ink-90` | `rgba(255,255,255,0.9)` | `rgba(0,0,0,0.873)` | Changed and new file names; answer option labels. 15.3:1 on glass. |
-| `ink-85` | `rgba(255,255,255,0.85)` | `rgba(0,0,0,0.836)` | Project names in the sidebar. 13.7:1 on glass. |
-| `ink-62` | `rgba(255,255,255,0.62)` | `rgba(0,0,0,0.679)` | Values in the info block; the meta line of the selected agent. 7.6:1 on glass. |
-| `ink-60` | `rgba(255,255,255,0.6)` | `rgba(0,0,0,0.665)` | Sidebar rows at rest; the closed notch text. 7.2:1 on glass. |
-| `ink-50` | `rgba(255,255,255,0.5)` | `rgba(0,0,0,0.586)` | Tabs at rest, icon buttons at rest, file rows at rest. 5.3:1 on glass. |
-| `ink-45` | `rgba(255,255,255,0.45)` | `rgba(0,0,0,0.543)` | Panel headings (Projects, Servers, the files root), question chips at rest, answer option descriptions, the tab close glyph. 4.55:1 on glass, just above 4.5:1 (Light: 4.47:1 on glass, just below); 4.4:1 on glass-float, just below 4.5:1. Kept from the canvas. |
-| `ink-42` | `rgba(255,255,255,0.42)` | `rgba(0,0,0,0.515)` | Secondary lines: agent meta, title-bar info, info labels, outline card detail, dim terminal lines. 4.1:1 on glass: below 4.5:1, kept from the canvas. |
-| `ink-40` | `rgba(255,255,255,0.4)` | `rgba(0,0,0,0.495)` | Added-line counts in the file tree. 3.8:1 on glass: below 4.5:1, kept from the canvas. |
-| `ink-38` | `rgba(255,255,255,0.38)` | `rgba(0,0,0,0.475)` | Row meta on the right (branch, server state) and file icons. 3.6:1 on glass: below 4.5:1, kept from the canvas. |
-| `ink-35` | `rgba(255,255,255,0.35)` | `rgba(0,0,0,0.444)` | The "via orchestrator" note in the open notch. 3.2:1: below 4.5:1, kept from the canvas. |
-| `ink-32` | `rgba(255,255,255,0.32)` | `rgba(0,0,0,0.41)` | Key hints and option numbers in the open notch. 2.9:1: below 4.5:1, kept from the canvas. |
-| `ink-30` | `rgba(255,255,255,0.3)` | `rgba(0,0,0,0.387)` | Removed-line count in the title bar, the idle loader, the text-field placeholder, the time on the outline card. 2.7:1: below 4.5:1, kept from the canvas. |
-| `ink-26` | `rgba(255,255,255,0.26)` | `rgba(0,0,0,0.339)` | Project meta (branch). 2.3:1: below 4.5:1, kept from the canvas. |
-| `ink-24` | `rgba(255,255,255,0.24)` | `rgba(0,0,0,0.313)` | Deleted file names (struck through) and removed-line counts in the file tree. 2.2:1: dim on purpose, kept from the canvas. |
-| `ink-22` | `rgba(255,255,255,0.22)` | `rgba(0,0,0,0.287)` | Icon and counts of a deleted file. 2:1: dim on purpose, kept from the canvas. |
+| `ink-100` | `#f4f4f5` | `#141414` | The strongest ink, for what is chosen or needs the owner: the active tab, the selected agent, the title of a worker that needs the owner, new outline ticks and their count, the question text, the closed notch label (D268). 17.0:1 on glass (Light 16.2:1). |
+| `ink-88` | `rgba(255,255,255,0.88)` | `rgba(0,0,0,0.86)` | Text: default text in the window, live rows (working agents, changed files), project names, answer option labels, the terminal cursor block (D268). 14.5:1 on glass (Light 14.0:1). |
+| `ink-64` | `rgba(255,255,255,0.64)` | `rgba(0,0,0,0.7)` | Rows at rest: sidebar rows at rest, values in the info block, the meta line of the selected agent, the closed notch text (D268). 8.0:1 on glass (Light 8.1:1). |
+| `ink-48` | `rgba(255,255,255,0.48)` | `rgba(0,0,0,0.57)` | Meta and labels: tabs and file rows at rest, panel headings, agent meta, counts, key hints, times, placeholders, dim terminal lines (D268). At least 4.5:1 on each surface where text sits, in both themes (theme test): 4.95:1 on glass, 4.98:1 on stage, 4.61:1 on `selected` (Light 4.90:1, 5.09:1, 4.69:1 on `selected-quiet`). |
+| `ink-30` | `rgba(255,255,255,0.3)` | `rgba(0,0,0,0.38)` | Marks only, never text (D268): icons at rest (file icons, the icon of an empty project), the idle glyph and dots, the quote bar, the scrollbar, the split divider, a disabled icon, the drag grip. 2.7:1 on glass (Light 2.6:1). |
 | `terminal-text` | `rgba(255,255,255,0.82)` | `rgba(0,0,0,0.815)` | Default terminal text before the agent CLI paints its own colors. 13.0:1 on stage. |
 | `blocked` | `#f07178` | `#c73947` | The one hue in the chrome: red for an agent that is blocked or asks the owner. Loader glyphs, the Claude glyph and the notch dot. Never a fill or a ring. Text in red uses `blocked-text` (D249), except the `N need you` meta of the projects modal (D207). 6.5:1 on glass, 6.8:1 on stage, 5.8:1 on glass-float. Light: #c73947, 4.5:1 on glass, 5.0:1 on stage. |
 | `blocked-text` | `#f07178` | `#b1333f` | Red words on the wings (D249): "needs you" on line 2 of a worker row and the item count of an orchestrator row. Dark is `blocked`. Light is the nearest darker `blocked` with 4.5:1 on `glass-window` and on `selected-quiet` over it (`blocked` has 4.49:1 on glass). Dark 6.5:1 on glass, 5.5:1 on selected-quiet; Light 5.4:1 and 4.5:1. |

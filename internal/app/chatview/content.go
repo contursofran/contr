@@ -140,10 +140,10 @@ func (ch *Chat) mdHooks() {
 	}
 }
 
-// mdTheme styles Claude's Markdown with the tokens of the current theme: prose in ink-85, strong
-// text and links in ink-95, code in mono with the code colors.
+// mdTheme styles Claude's Markdown with the tokens of the current theme: prose in ink-88, strong
+// text and links in ink-88, code in mono with the code colors.
 func (ch *Chat) mdTheme(pal *theme.Palette) {
-	if ch.md.Theme != nil && ch.md.Theme.Text == pal.Ink85 {
+	if ch.md.Theme != nil && ch.md.Theme.Text == pal.Ink88 {
 		return
 	}
 	size := theme.StyleProse.Size
@@ -151,27 +151,27 @@ func (ch *Chat) mdTheme(pal *theme.Palette) {
 	th := &markdown.Theme{
 		FontSize: size, Font: theme.FontFamilySans, CodeFont: theme.FontFamily,
 		LineHeight: theme.StyleProse.Line / size, CodeLineHeight: theme.StyleTerminal.Line / theme.StyleTerminal.Size,
-		Text: pal.Ink85, Muted: pal.Ink45, Link: pal.Ink95, Strong: pal.Ink95, StrongWeight: 500,
-		Code: pal.Ink90, CodeBackground: pal.Hover, CodeSize: em(inlineCodeSize),
+		Text: pal.Ink88, Muted: pal.Ink48, Link: pal.Ink88, Strong: pal.Ink88, StrongWeight: 500,
+		Code: pal.Ink88, CodeBackground: pal.Hover, CodeSize: em(inlineCodeSize),
 		BlockSpacing: em(theme.Space12),
-		QuoteBar:     pal.Ink30, QuoteText: pal.Ink85, QuoteBarWidth: remarkBar, Rule: pal.Hairline,
+		QuoteBar:     pal.Ink30, QuoteText: pal.Ink88, QuoteBarWidth: remarkBar, Rule: pal.Hairline,
 		Alerts:              [5]ui.Color{pal.ContentInfo, pal.ContentInfo, pal.ContentInfo, pal.ContentWaiting, pal.ContentWaiting},
 		CodeBlockBackground: pal.Hover, CodeBlockBorder: pal.Hairline, CodeBlockRadius: theme.Radius8,
-		CodeColors: codeColors(pal), Mark: pal.Selected, Checkbox: pal.Ink45,
+		CodeColors: codeColors(pal), Mark: pal.Selected, Checkbox: pal.Ink48,
 	}
 	for i := range th.Headings {
-		th.Headings[i] = markdown.HeadingStyle{Size: em(headingSize), Weight: headingWeight, Color: pal.Ink95,
+		th.Headings[i] = markdown.HeadingStyle{Size: em(headingSize), Weight: headingWeight, Color: pal.Ink88,
 			Top: em(theme.Space12 + headingMore), Bottom: em(theme.Space12)}
 	}
 	head, num := *th, *th
-	head.FontSize, head.LineHeight, head.Text, head.Strong = headSize, float32(headLine)/headSize, pal.Ink45, pal.Ink45
+	head.FontSize, head.LineHeight, head.Text, head.Strong = headSize, float32(headLine)/headSize, pal.Ink48, pal.Ink48
 	num.FontSize, num.Font = numSize, theme.FontFamily
 	ch.md.Theme, ch.mdNest.Theme, ch.mdHead.Theme, ch.mdNum.Theme = th, th, &head, &num
 }
 
 // codeColors maps the tokens of MyGo's tokenizers to the five code colors.
 func codeColors(pal *theme.Palette) *editor.Theme {
-	t := &editor.Theme{Text: pal.Ink85}
+	t := &editor.Theme{Text: pal.Ink88}
 	set := func(c ui.Color, kinds ...editor.TokenKind) {
 		for _, k := range kinds {
 			t.Tokens[k].Color = c
@@ -237,7 +237,7 @@ func (ch *Chat) remark(c *ui.Context, r Remark) {
 }
 
 // table is a table without a box or a header fill: a hairline under each row but the last, the
-// header in 12px ink-45, numbers at the right in mono. It scrolls sideways when wider than its box.
+// header in 12px ink-48, numbers at the right in mono. It scrolls sideways when wider than its box.
 func (ch *Chat) table(c *ui.Context, d *parser.Document, i int) {
 	pal := theme.Current()
 	b := d.Block(i)
@@ -396,9 +396,9 @@ func itemMarker(c *ui.Context, pal *theme.Palette, list, item *parser.Block, n i
 	switch {
 	case item.Task != parser.NoTask:
 		checked := item.Task == parser.Checked
-		ink := pal.Ink45
+		ink := pal.Ink48
 		if checked {
-			ink = pal.Ink85
+			ink = pal.Ink88
 		}
 		ui.Box(c).Size(markerSize, markerSize).Margin((line-markerSize)/2, 0, 0, 0).Role(ui.RoleCheckBox).Checked(checked).
 			Draw(func(p *ui.Painter, r ui.Rect) {
@@ -411,9 +411,9 @@ func itemMarker(c *ui.Context, pal *theme.Palette, list, item *parser.Block, n i
 			})
 	case list.Ordered:
 		kit.Styled(ui.Text(c, strconv.Itoa(n)+string(list.Marker)), theme.StyleMeta).NoWrap().
-			Margin((line-theme.StyleMeta.Line)/2, 0, 0, 0).TextColor(pal.Ink45)
+			Margin((line-theme.StyleMeta.Line)/2, 0, 0, 0).TextColor(pal.Ink48)
 	default:
-		kit.Styled(ui.Text(c, "•"), theme.StyleProse).TextColor(pal.Ink45)
+		kit.Styled(ui.Text(c, "•"), theme.StyleProse).TextColor(pal.Ink48)
 	}
 }
 
@@ -498,7 +498,7 @@ func (ch *Chat) diffBlock(c *ui.Context, b *markdown.CodeBlockView) {
 		Role(ui.RoleGroup).Label("Code, " + b.Language)
 	box.Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Padding(theme.Space4, theme.Space6, 0, pad).Children(func() {
-			kit.Styled(ui.Text(c, b.Language), theme.StyleMeta).TextColor(pal.Ink45).Unselectable()
+			kit.Styled(ui.Text(c, b.Language), theme.StyleMeta).TextColor(pal.Ink48).Unselectable()
 			ui.Spacer(c)
 			b.CopyButton(c)
 		})
@@ -542,5 +542,5 @@ func diffInk(pal *theme.Palette, k DiffLineKind) (ui.Color, bool) {
 	case DiffHunk:
 		return pal.ContentInfo, false
 	}
-	return pal.Ink62, false
+	return pal.Ink64, false
 }

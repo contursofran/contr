@@ -110,7 +110,7 @@ func (ch *Chat) View(c *ui.Context) {
 				Children(func() {
 					if len(rows)+len(pending) == 0 {
 						ui.Box(c).Fill().Center().Children(func() {
-							kit.Styled(ui.Text(c, TextEmpty), theme.StyleBody).TextColor(pal.Ink42)
+							kit.Styled(ui.Text(c, TextEmpty), theme.StyleBody).TextColor(pal.Ink48)
 						})
 					}
 				})
@@ -172,7 +172,7 @@ func sentAt(c *ui.Context, at string) {
 		return
 	}
 	kit.Styled(ui.Text(c, TimeText(t, c.Now())), theme.StyleMeta).NoWrap().AlignSelf(ui.End).
-		Margin(theme.Space4, 0, 0, 0).TextColor(theme.Current().Ink45)
+		Margin(theme.Space4, 0, 0, 0).TextColor(theme.Current().Ink48)
 }
 
 // TimeText is when an entry was sent, in the time zone of now: "14:32" today, "Yesterday 14:32",
@@ -223,9 +223,9 @@ func (ch *Chat) group(c *ui.Context, r Row) {
 func (ch *Chat) groupBody(c *ui.Context, r Row, open *bool, text string) {
 	pal := theme.Current()
 	p := ui.CollapsibleBase(c, open)
-	ink := pal.Ink42
+	ink := pal.Ink48
 	if p.Trigger.Hovered() {
-		ink = pal.Ink62
+		ink = pal.Ink64
 	}
 	// The trigger is placed where CollapsibleBase makes it: a margin puts it on the column's left.
 	ch.groupRow(c, p, r, open, text, ink)
@@ -274,11 +274,11 @@ func (ch *Chat) groupRow(c *ui.Context, p ui.CollapsibleParts, r Row, open *bool
 	})
 }
 
-// dot is the state of the worker at addr: blocked in ink-100, working in ink-85, else ink-40. A
+// dot is the state of the worker at addr: blocked in ink-100, working in ink-88, else ink-30. A
 // blocked worker gets no red: the team row's "N needs you" is the chat's one red for it (D259).
 func (ch *Chat) dot(c *ui.Context, addr string) {
 	pal := theme.Current()
-	color, state := pal.Ink40, "idle"
+	color, state := pal.Ink30, "idle"
 	if ch.Worker != nil {
 		if w, ok := ch.Worker(addr); ok {
 			state = w.Status
@@ -286,7 +286,7 @@ func (ch *Chat) dot(c *ui.Context, addr string) {
 			case "blocked":
 				color = pal.Ink100
 			case "working":
-				color = pal.Ink85
+				color = pal.Ink88
 			}
 			ch.dotBox(c, w.DisplayName()+" "+state, color)
 			return
@@ -301,7 +301,7 @@ func (ch *Chat) dotBox(c *ui.Context, label string, color ui.Color) {
 
 // noteLine is one kit note: the sender's dot and name, and its text on one line. A background
 // task shows "Background task", its status and its summary. A failed task outside the fold (own)
-// has no dot, its name and status in ink-100 and its text in ink-85: no red (D259).
+// has no dot, its name and status in ink-100 and its text in ink-88: no red (D259).
 func (ch *Chat) noteLine(c *ui.Context, e transcript.Entry, own bool) {
 	pal := theme.Current()
 	name, addr, status, text := "owner", "", "", e.Text
@@ -315,9 +315,9 @@ func (ch *Chat) noteLine(c *ui.Context, e transcript.Entry, own bool) {
 			name = "session"
 		}
 	}
-	label, nameInk, statusInk, textInk := LabelNote, pal.Ink85, pal.Ink42, pal.Ink42
+	label, nameInk, statusInk, textInk := LabelNote, pal.Ink88, pal.Ink48, pal.Ink48
 	if own {
-		label, nameInk, statusInk, textInk = LabelOwnerNote, pal.Ink100, pal.Ink100, pal.Ink85
+		label, nameInk, statusInk, textInk = LabelOwnerNote, pal.Ink100, pal.Ink100, pal.Ink88
 	}
 	ui.Row(c).Label(label + " " + name).FillWidth().Height(lineHeight).AlignItems(ui.Center).Gap(theme.Space8).Children(func() {
 		if addr != "" {
@@ -341,13 +341,13 @@ func (ch *Chat) callLine(c *ui.Context, e transcript.Entry) {
 		if !call.Done {
 			kit.StatusGlyph(c, kit.GlyphOpts{State: kit.GlyphWorking, Small: true})
 		}
-		kit.Styled(ui.Text(c, name), theme.StyleMeta).NoWrap().MinWidth(nameWidth).Shrink(0).TextColor(pal.Ink62)
-		kit.Styled(ui.Text(c, call.Summary), theme.StyleMeta).SingleLine().Grow(1).MinWidth(0).TextColor(pal.Ink42)
+		kit.Styled(ui.Text(c, name), theme.StyleMeta).NoWrap().MinWidth(nameWidth).Shrink(0).TextColor(pal.Ink64)
+		kit.Styled(ui.Text(c, call.Summary), theme.StyleMeta).SingleLine().Grow(1).MinWidth(0).TextColor(pal.Ink48)
 		if call.Error {
 			kit.Styled(ui.Text(c, TextError), theme.StyleMeta).NoWrap().Shrink(0).TextColor(pal.Blocked)
 		}
 		if d, ok := Duration(e); ok {
-			kit.Styled(ui.Text(c, DurationText(d)), theme.StyleMeta).NoWrap().Shrink(0).TextColor(pal.Ink38)
+			kit.Styled(ui.Text(c, DurationText(d)), theme.StyleMeta).NoWrap().Shrink(0).TextColor(pal.Ink48)
 		}
 	})
 }

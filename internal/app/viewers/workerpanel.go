@@ -163,7 +163,7 @@ func (p *WorkerPanel) View(c *ui.Context) {
 	w, ok := p.Selected()
 	ui.Column(c).Label(LabelWorkerPanel).Fill().Children(func() {
 		if !ok {
-			TextLine(c, LabelWorkerGone, "worker gone", theme.Current().Ink50)
+			TextLine(c, LabelWorkerGone, "worker gone", theme.Current().Ink48)
 			return
 		}
 		p.follow(w.Address)
@@ -179,7 +179,7 @@ func (p *WorkerPanel) View(c *ui.Context) {
 			p.button(c, label, style, func() { p.stop(w) })
 		})
 		for _, line := range workerFacts(w) {
-			TextLine(c, "worker fact", line, theme.Current().Ink62)
+			TextLine(c, "worker fact", line, theme.Current().Ink64)
 		}
 		if label, open := p.Entry.For(w); open != nil {
 			ui.Row(c).FillWidth().Shrink(0).PaddingX(theme.PanelPadX).Children(func() {
@@ -187,7 +187,7 @@ func (p *WorkerPanel) View(c *ui.Context) {
 			})
 		}
 		if p.err != "" {
-			TextLine(c, "worker error", p.err, theme.Current().Ink50)
+			TextLine(c, "worker error", p.err, theme.Current().Ink48)
 		}
 		ui.Column(c.Key("worker code")).Label(LabelWorkerOutput).FillWidth().Grow(1).MinHeight(0).Children(func() {
 			if p.code != nil {
@@ -198,7 +198,7 @@ func (p *WorkerPanel) View(c *ui.Context) {
 }
 
 func (p *WorkerPanel) button(c *ui.Context, label string, style kit.ButtonStyle, click func()) {
-	kit.CardButton(c, label, style, theme.Current().Ink95, click)
+	kit.CardButton(c, label, style, theme.Current().Ink88, click)
 }
 
 // workerFacts are the lines under the name: role and issue, worktree, status.

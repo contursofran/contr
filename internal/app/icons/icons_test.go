@@ -174,8 +174,8 @@ func TestIconFollowsTheTheme(t *testing.T) {
 		if file == "" || got != p.Ink100 {
 			t.Errorf("%v: needs-you color = %v, want ink-100 %v", src, got, p.Ink100)
 		}
-		if _, grey := Idle.glyph(p); grey != p.Ink50 {
-			t.Errorf("%v: idle color = %v, want ink-50 %v", src, grey, p.Ink50)
+		if _, grey := Idle.glyph(p); grey != p.Ink48 {
+			t.Errorf("%v: idle color = %v, want ink-48 %v", src, grey, p.Ink48)
 		}
 	}
 	themetest.Use(t, mygo.ThemeDark)

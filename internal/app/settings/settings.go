@@ -584,7 +584,7 @@ func (s *Settings) View(c *ui.Context) {
 func (s *Settings) body(c *ui.Context) {
 	p := theme.Current()
 	ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(8).Padding(16, theme.ModalPadX, 12, theme.ModalPadX).Children(func() {
-		ui.Text(c, "Settings").Bold().Grow(1).TextColor(p.Ink95)
+		ui.Text(c, "Settings").Bold().Grow(1).TextColor(p.Ink88)
 		SettingsButton(c, SettingsEsc, kit.ButtonPlain, s.Close)
 	})
 	s.tabBar(c)
@@ -619,7 +619,7 @@ func (s *Settings) tabBar(c *ui.Context) {
 		tabs.List.Label(LabelSettingsTabs).Gap(2).Padding(2).Radius(theme.CardRadius).Background(p.Hover).Children(func() {
 			for i, name := range SettingsTabs {
 				t := tabs.Tab(i).Label(name).Row().AlignItems(ui.Center).Gap(6).Padding(4, 12).Radius(theme.CardRadius)
-				text := p.Ink62
+				text := p.Ink64
 				if i == s.tab {
 					t.Background(p.Selected)
 					text = p.Ink100
@@ -641,12 +641,12 @@ func (s *Settings) updatesTab(c *ui.Context) {
 	busy := s.checking || s.installing
 	live := s.Updates != nil && s.enabled && !busy
 	ui.Column(c).Shrink(0).Gap(8).PaddingX(theme.ModalPadX).Children(func() {
-		ui.Text(c, "Versions").TextColor(p.Ink50)
-		ui.Text(c, "contr "+s.Version).TextColor(p.Ink95)
-		ui.Text(c, s.coreText()).TextColor(p.Ink95)
-		ui.Text(c, "Updates").Margin(4, 0, 0, 0).TextColor(p.Ink50)
+		ui.Text(c, "Versions").TextColor(p.Ink48)
+		ui.Text(c, "contr "+s.Version).TextColor(p.Ink88)
+		ui.Text(c, s.coreText()).TextColor(p.Ink88)
+		ui.Text(c, "Updates").Margin(4, 0, 0, 0).TextColor(p.Ink48)
 		if st := s.status(); st != "" {
-			ui.Text(c, st).TextColor(p.Ink62)
+			ui.Text(c, st).TextColor(p.Ink64)
 		}
 		if s.err != "" {
 			ui.Text(c, s.err).TextColor(p.Blocked)
@@ -696,12 +696,12 @@ func (s *Settings) appearanceRow(c *ui.Context) {
 	}
 	picked := sel
 	ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(8).Padding(0, theme.ModalPadX, 12, theme.ModalPadX).Children(func() {
-		ui.Text(c, LabelAppearance).Grow(1).TextColor(p.Ink50)
+		ui.Text(c, LabelAppearance).Grow(1).TextColor(p.Ink48)
 		seg := ui.SegmentedBase(c.Key("appearance"), &picked, len(AppearanceNames))
 		seg.Track.Label(LabelAppearance).Padding(2).Radius(theme.CardRadius).Background(p.Hover).Children(func() {
 			for i, name := range AppearanceNames {
 				e := seg.Segment(i).Label(name).Padding(4, 12).Radius(theme.CardRadius)
-				text := p.Ink62
+				text := p.Ink64
 				if i == picked {
 					e.Background(p.Selected)
 					text = p.Ink100
@@ -723,19 +723,19 @@ func SettingsButton(c *ui.Context, label string, style kit.ButtonStyle, click ki
 	live := click != nil
 	el := ui.ButtonBase(c).Label(label).Height(theme.AnswerButtonHeight).Shrink(0).
 		PaddingX(theme.AnswerButtonPadX).AlignItems(ui.Center).Radius(theme.AnswerButtonRadius)
-	text := p.Ink42
+	text := p.Ink48
 	switch {
 	case style == kit.ButtonFilled && live:
 		el = el.Background(p.Ink100)
 		text = p.Ground
 	case style == kit.ButtonPlain:
 		if live {
-			text = p.Ink62
+			text = p.Ink64
 		}
 	default:
 		el = el.Border(1, p.InputLine)
 		if live {
-			text = p.Ink95
+			text = p.Ink88
 		}
 	}
 	if live {
@@ -786,7 +786,7 @@ func tintSlider(c *ui.Context, label string, v *float64) {
 	p := theme.Current()
 	const trackH, thumb = 4, 14
 	ui.Row(c).AlignItems(ui.Center).Gap(12).Children(func() {
-		ui.Text(c, label).Width(90).TextColor(p.Ink50)
+		ui.Text(c, label).Width(90).TextColor(p.Ink48)
 		sl := ui.SliderBase(c.Key("tint-"+label), v, 0, 100).Step(1).Label(label).Grow(1).Height(24).PaddingX(thumb / 2)
 		at := float32(*v / 100)
 		if c.Direction() == ui.RightToLeft {
@@ -797,9 +797,9 @@ func tintSlider(c *ui.Context, label string, v *float64) {
 			y := r.Y + (r.H-trackH)/2
 			pt.Fill(ui.Rect{X: x0, Y: y, W: w, H: trackH}, p.MeterTrack, 2)
 			pt.Fill(ui.Rect{X: x0, Y: y, W: w * at, H: trackH}, p.MeterFill, 2)
-			pt.Fill(ui.Rect{X: x0 + w*at - thumb/2, Y: r.Y + (r.H-thumb)/2, W: thumb, H: thumb}, p.Ink85, thumb/2)
+			pt.Fill(ui.Rect{X: x0 + w*at - thumb/2, Y: r.Y + (r.H-thumb)/2, W: thumb, H: thumb}, p.Ink88, thumb/2)
 		})
 		ui.Text(c, fmt.Sprintf("%.0f%%", *v)).Width(40).TextAlign(ui.End).
-			Font(theme.StyleValue.Family()).FontSize(theme.StyleValue.Size).TextColor(p.Ink85)
+			Font(theme.StyleValue.Family()).FontSize(theme.StyleValue.Size).TextColor(p.Ink88)
 	})
 }

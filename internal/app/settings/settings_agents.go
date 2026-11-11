@@ -235,8 +235,8 @@ func (s *Settings) agentsSections(c *ui.Context) {
 			})
 		}
 		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-			ui.Text(c, "Roles").Bold().TextColor(p.Ink95)
-			ui.Text(c, TextRolesHint).Grow(1).TextColor(p.Ink50)
+			ui.Text(c, "Roles").Bold().TextColor(p.Ink88)
+			ui.Text(c, TextRolesHint).Grow(1).TextColor(p.Ink48)
 		})
 		if s.ag.err != "" {
 			ui.Text(c, s.ag.err).TextColor(p.Blocked)
@@ -245,10 +245,10 @@ func (s *Settings) agentsSections(c *ui.Context) {
 			return
 		}
 		ui.Row(c).Gap(8).Children(func() {
-			ui.Text(c, "Role").Width(180).TextColor(p.Ink50)
-			ui.Text(c, "CLI").Width(110).TextColor(p.Ink50)
-			ui.Text(c, "Model").Width(110).TextColor(p.Ink50)
-			ui.Text(c, "Effort").Width(90).TextColor(p.Ink50)
+			ui.Text(c, "Role").Width(180).TextColor(p.Ink48)
+			ui.Text(c, "CLI").Width(110).TextColor(p.Ink48)
+			ui.Text(c, "Model").Width(110).TextColor(p.Ink48)
+			ui.Text(c, "Effort").Width(90).TextColor(p.Ink48)
 		})
 		for _, r := range Roles {
 			s.roleRow(c, r)
@@ -261,7 +261,7 @@ func (s *Settings) agentsFoot(c *ui.Context) {
 	p := theme.Current()
 	ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(14).Padding(12, theme.ModalPadX).Margin(12, 0, 0, 0).
 		BorderWidth(1, 0, 0, 0).BorderColor(p.Hairline).Children(func() {
-		ui.Text(c, TextAgentsFoot).Grow(1).TextColor(p.Ink50)
+		ui.Text(c, TextAgentsFoot).Grow(1).TextColor(p.Ink48)
 		var reset kit.ClickFn
 		if s.ag.loaded {
 			reset = func() {
@@ -284,8 +284,8 @@ func (s *Settings) roleRow(c *ui.Context, r Role) {
 	ui.Column(c).Label(r.Name+" role").Gap(4).Padding(8, 0).BorderWidth(1, 0, 0, 0).BorderColor(p.Hairline).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
 			ui.Column(c).Width(180).Children(func() {
-				ui.Text(c, r.Name).TextColor(p.Ink95)
-				ui.Text(c, r.Does).TextColor(p.Ink50)
+				ui.Text(c, r.Name).TextColor(p.Ink88)
+				ui.Text(c, r.Does).TextColor(p.Ink48)
 			})
 			if v := roleSelect(c, r.Name+" CLI", 110, cli, empty, [][2]string{{claudeProgram, TextClaudeCode}}); v != "" {
 				pickRole(&s.ag.cfg, r.Profile, "cli", v)
@@ -305,7 +305,7 @@ func (s *Settings) roleRow(c *ui.Context, r Role) {
 			}
 		})
 		line := commandLine(prof.Argv)
-		ui.Text(c, line).SingleLine().Ellipsis("…").MinWidth(0).TextColor(p.Ink62).
+		ui.Text(c, line).SingleLine().Ellipsis("…").MinWidth(0).TextColor(p.Ink64).
 			Font(theme.StyleValue.Family()).FontSize(theme.StyleValue.Size)
 	})
 }
@@ -316,24 +316,24 @@ func roleSelect(c *ui.Context, label string, width float32, cur, empty string, o
 	p := theme.Current()
 	picked := cur
 	sel := ui.SelectBase(c.Key("role-"+label), &picked)
-	shown, color := empty, p.Ink50
+	shown, color := empty, p.Ink48
 	for _, o := range opts {
 		if o[0] == cur {
-			shown, color = o[1], p.Ink95
+			shown, color = o[1], p.Ink88
 		}
 	}
 	sel.Trigger.Label(label).Width(width).Padding(4, 6, 4, 8).Radius(theme.CardRadius).Border(1, p.InputLine).
 		AlignItems(ui.Center).Justify(ui.Start).Gap(4).Cursor(ui.CursorPointer).Children(func() {
 		ui.Text(c, shown).SingleLine().Ellipsis("…").MinWidth(0).Grow(1).TextAlign(ui.Start).TextColor(color)
 		if ic := icons.Line("chevron-down"); ic != nil {
-			ui.Icon(c, ic).Size(12, 12).Shrink(0).TextColor(p.Ink50)
+			ui.Icon(c, ic).Size(12, 12).Shrink(0).TextColor(p.Ink48)
 		}
 	})
 	sel.Popup(func(panel ui.Element) {
 		panel.Margin(4, 0, 0, 0).Padding(4).Radius(theme.CardRadius).Background(p.Ground).Border(1, p.FloatLine)
 		for _, o := range opts {
 			item := sel.Item(o[0]).Label(label+" "+o[1]).Padding(4, 8).Radius(theme.CardRadius)
-			text := p.Ink62
+			text := p.Ink64
 			if item.Highlighted() || o[0] == cur {
 				item.Background(p.Selected)
 				text = p.Ink100

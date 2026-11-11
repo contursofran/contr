@@ -1,8 +1,8 @@
 package chatview
 
 // The team row (docs/spec/ChatView.md, D259): while the session orchestrates, one low row at the
-// top of the composer card (D271) says how: the mascot, "Orchestrating · 4 agents", a short count in words, and the
-// live text of the session at its right end.
+// top of the composer card (D271) says how: the mascot, "Orchestrating · 4 agents", a short count
+// in words, and the live text of the session at its right end.
 
 import (
 	"strconv"
@@ -138,7 +138,7 @@ func (ch *Chat) team(c *ui.Context, t Team, st liveState) {
 		ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(theme.Space8).Children(func() {
 			// The mascot in its orchestrating color, as the pill has it: still.
 			kit.StatusGlyph(c, kit.GlyphOpts{State: kit.GlyphWaiting, Claude: true, Small: true}).AccessHidden(true)
-			kit.Styled(ui.Text(c, head), theme.StyleLabel).NoWrap().TextColor(pal.Ink85)
+			kit.Styled(ui.Text(c, head), theme.StyleLabel).NoWrap().TextColor(pal.Ink88)
 		})
 		if shown > 0 {
 			ch.teamCount(c, pal, parts[:shown], t)
@@ -153,7 +153,7 @@ func (ch *Chat) team(c *ui.Context, t Team, st liveState) {
 
 // teamCount is the count of t in words, its parts apart by dots. "N needs you" is the one red of
 // the row and a button that opens the notch's card (as ⌘J). "N error" is in ink-100: not red, as
-// it is no item of the notch, and it takes no click (D260). The others are in ink-45.
+// it is no item of the notch, and it takes no click (D260). The others are in ink-48.
 func (ch *Chat) teamCount(c *ui.Context, pal *theme.Palette, parts []string, t Team) {
 	needs, errAt := t.NeedsYou > 0, -1
 	if t.Error > 0 {
@@ -165,7 +165,7 @@ func (ch *Chat) teamCount(c *ui.Context, pal *theme.Palette, parts []string, t T
 	ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(countGap).Children(func() {
 		for i, p := range parts {
 			if i > 0 {
-				kit.Styled(ui.Text(c, "·"), theme.StyleValue).NoWrap().TextColor(pal.Ink45).AccessHidden(true)
+				kit.Styled(ui.Text(c, "·"), theme.StyleValue).NoWrap().TextColor(pal.Ink48).AccessHidden(true)
 			}
 			if i == 0 && needs {
 				b := ui.ButtonBase(c).Label(p).Shrink(0).OnClick(func() {
@@ -181,7 +181,7 @@ func (ch *Chat) teamCount(c *ui.Context, pal *theme.Palette, parts []string, t T
 				})
 				continue
 			}
-			ink := pal.Ink45
+			ink := pal.Ink48
 			if i == errAt {
 				ink = pal.Ink100
 			}
@@ -190,13 +190,13 @@ func (ch *Chat) teamCount(c *ui.Context, pal *theme.Palette, parts []string, t T
 	})
 }
 
-// working is the live text of a working session: the working glyph, what it does now in ink-62
-// and the time since the turn started in ink-38. A time asks for a redraw in a second (D55).
+// working is the live text of a working session: the working glyph, what it does now in ink-64
+// and the time since the turn started in ink-48. A time asks for a redraw in a second (D55).
 func (ch *Chat) working(c *ui.Context, pal *theme.Palette, what, elapsed string) {
 	kit.StatusGlyph(c, kit.GlyphOpts{State: kit.GlyphWorking, Small: true})
-	kit.Styled(ui.Text(c, what), theme.StyleValue).SingleLine().MinWidth(0).TextColor(pal.Ink62)
+	kit.Styled(ui.Text(c, what), theme.StyleValue).SingleLine().MinWidth(0).TextColor(pal.Ink64)
 	if elapsed != "" {
-		kit.Styled(ui.Text(c, elapsed), theme.StyleValue).NoWrap().Shrink(0).TextColor(pal.Ink38)
+		kit.Styled(ui.Text(c, elapsed), theme.StyleValue).NoWrap().Shrink(0).TextColor(pal.Ink48)
 		ch.ticks = true
 		c.After(time.Second)
 	}

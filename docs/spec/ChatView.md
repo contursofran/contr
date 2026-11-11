@@ -36,22 +36,22 @@ Shared rules: [README.md](README.md).
 | Team row | while the session orchestrates: the top line of the composer card, in the live line's place; see [Team row](#team-row) |
 | Pinned prompt | while the list is not at its end and the prompt of the turn in view is above the rows in view: see [Scrolled up](#scrolled-up) |
 | Jump to latest | while the list is not at its end: see [Scrolled up](#scrolled-up) |
-| Empty | "No transcript yet" (`body`, `ink-42`), centered, while the session has no path, no file or no row yet. The switch and the composer still work. |
+| Empty | "No transcript yet" (`body`, `ink-48`), centered, while the session has no path, no file or no row yet. The switch and the composer still work. |
 
 ## Rows
 
 | Row | Value |
 |---|---|
 | Owner prompt | right-aligned, at most 560px, padding `8px 13px`, radius `radius-12`, fill `hover`, text `prose` in `ink-100` |
-| Sent time | the time the prompt was sent, from its transcript timestamp: one line, mono `meta`, `ink-45` (the lowest text ink with 4.5:1), `space-4` above, under the owner prompt, right-aligned with the bubble. Once per turn: Claude's texts, groups and notes show no time (D266). In the Mac's time zone: "14:32" today, "Yesterday 14:32", else "9 Nov 14:32"; "today" is judged at each build, and nothing ticks (D55). No timestamp, no line; a pending prompt has none. |
-| Claude's text | `markdown.View`: `prose` size and line, sans; text `ink-85`, strong (500) and links `ink-95`, muted `ink-45`; each block as [Content](#content) says |
-| Work group, folded | the tool calls, kit notes and background tasks between two texts, as one row 20px high, mono `value`, `ink-42` (`ink-62` on hover): "2 worker notes · 1 background task · 6 tool calls" (a message of another session counts as a worker note; a part with no item is left out, "1 tool call"), a 6px dot for each worker that sent a note, then `›`. While a call has no result, a working StatusGlyph (14px) comes first. |
+| Sent time | the time the prompt was sent, from its transcript timestamp: one line, mono `meta`, `ink-48` (the lowest text ink with 4.5:1), `space-4` above, under the owner prompt, right-aligned with the bubble. Once per turn: Claude's texts, groups and notes show no time (D266). In the Mac's time zone: "14:32" today, "Yesterday 14:32", else "9 Nov 14:32"; "today" is judged at each build, and nothing ticks (D55). No timestamp, no line; a pending prompt has none. |
+| Claude's text | `markdown.View`: `prose` size and line, sans; text `ink-88`, strong (500) and links `ink-88`, muted `ink-48`; each block as [Content](#content) says |
+| Work group, folded | the tool calls, kit notes and background tasks between two texts, as one row 20px high, mono `value`, `ink-48` (`ink-64` on hover): "2 worker notes · 1 background task · 6 tool calls" (a message of another session counts as a worker note; a part with no item is left out, "1 tool call"), a 6px dot for each worker that sent a note, then `›`. While a call has no result, a working StatusGlyph (14px) comes first. |
 | Work group, open | `⌄`; under it a card, a wide block: at least 584px (or the content width when less), as wide as its longest line (note, task and call lines alike), up to the content width, `space-6` below the row, padding `8px 12px`, radius `radius-9`, line `hairline`: the note lines, a `hairline` rule, the call lines |
-| Note line | 20px, gap `space-8`, mono `meta`: the sender's dot, the name (500, `ink-85`), the text on one line (`ink-42`). An owner answer or done mark has the name "owner". A message of another Claude session or a teammate (D254) has the sender as its name ("session" when it has none) and the first line of the message; a subagent's hand-back is "subagent" and "reported". |
-| Task line | a background task that ended (D254), as a note line without a dot: "Background task" (500, `ink-85`), its status (`ink-42`), then "· " and its summary on one line (`ink-42`), without a leading "Background command " |
-| Call line | 20px, gap `space-8`, mono `meta`: a working StatusGlyph while it runs, the name (`ink-62`, at least 48px; an MCP tool shows its server, "contr"), the summary on one line (`ink-42`), "error" in `blocked` when the result is an error, the duration (`ink-38`): "0.4s", "12s", "2m 5s", from the timestamps of the call and its result, none when one is missing |
-| Failed task | a task line whose status is "failed" or "killed" stays outside the fold: no dot, "Background task" and the status in `ink-100`, the summary in `ink-85`; no red (D259). Every other note folds, a worker's message too ("ended its turn without a report", "NAME: blocked, …"): the team row and the notch tell what needs the owner. |
-| Dot | 6px, round: `ink-100` for a blocked worker (no red: the team row's "N needs you" is the chat's one red for it, D259), `ink-85` for a working one, else `ink-40` |
+| Note line | 20px, gap `space-8`, mono `meta`: the sender's dot, the name (500, `ink-88`), the text on one line (`ink-48`). An owner answer or done mark has the name "owner". A message of another Claude session or a teammate (D254) has the sender as its name ("session" when it has none) and the first line of the message; a subagent's hand-back is "subagent" and "reported". |
+| Task line | a background task that ended (D254), as a note line without a dot: "Background task" (500, `ink-88`), its status (`ink-48`), then "· " and its summary on one line (`ink-48`), without a leading "Background command " |
+| Call line | 20px, gap `space-8`, mono `meta`: a working StatusGlyph while it runs, the name (`ink-64`, at least 48px; an MCP tool shows its server, "contr"), the summary on one line (`ink-48`), "error" in `blocked` when the result is an error, the duration (`ink-48`): "0.4s", "12s", "2m 5s", from the timestamps of the call and its result, none when one is missing |
+| Failed task | a task line whose status is "failed" or "killed" stays outside the fold: no dot, "Background task" and the status in `ink-100`, the summary in `ink-88`; no red (D259). Every other note folds, a worker's message too ("ended its turn without a report", "NAME: blocked, …"): the team row and the notch tell what needs the owner. |
+| Dot | 6px, round: `ink-100` for a blocked worker (no red: the team row's "N needs you" is the chat's one red for it, D259), `ink-88` for a working one, else `ink-30` |
 
 Hidden entries do not show: meta lines, system reminders, hook output (an
 attachment, a user line in a `<…-hook>` tag, or "Stop hook feedback:"),
@@ -71,16 +71,16 @@ How Claude's Markdown shows (D261). MyGo's theme options style what they can; th
 | Block | Value |
 |---|---|
 | Space | `space-12` between blocks |
-| Heading | every level 14px, 600, `ink-95`; 10px more room above than a block, `space-12` below |
-| Inline code | mono 12.5px, `ink-90` on `hover` |
-| Quote | a 2px `ink-30` bar, text in `ink-85` |
-| Numbered list | the numbers in mono `meta`, `ink-45` |
-| Task list | a 14px check in a ring (`ink-85`) for a done item, a ring (`ink-45`) for an open one |
-| Bullet list | MyGo's bullets in `ink-45` |
-| Table | no box, no header fill, no column lines: a `hairline` under each row but the last; cells padded `8px 16px 8px 0`, at most 340px wide, then they wrap; the header 12px, 500, `ink-45`. A column without an alignment in its delimiter row whose body cells are all numbers or dashes (one at least a number: "212", "+64", "−148", "3.5%", "2 / 3") sits at the right, its numbers mono 13px. A table wider than its box scrolls sideways (the wide-block rule stays). |
-| Remark | a quote whose first line starts with a tag, any case: a 2px bar in the kind's color, the word (`label`, 600) in that color, the text in `ink-85`; padding `6px 12px 7px 14px`, `space-2` between word and text. `[!NOTE]`, GitHub's `[!TIP]` and `[!IMPORTANT]`: "Note", `content-info`. `[!DONE]`: "Done", `content-done`. `[!DECISION]`: "Decision needed", `content-failed`, the only red one. `[!WARNING]`, GitHub's `[!CAUTION]`: "Warning", `content-waiting`. `[!UNVERIFIED]`: "Not verified", `content-info`, the bar dashed (4px on, 3px off). An unknown tag, or a tag with no text, stays a quote. |
-| Code block | the language and Copy in its first line, on `hover` with a `hairline` line, radius `radius-8`; mono 13px on 20px lines. MyGo's tokenizers, mapped to the code colors: keywords and annotations `code-keyword`; functions, types and tags `code-function`; strings, escapes and regular expressions `code-string`; numbers, constants and attributes `code-number`; comments `code-comment` in italic; the rest `ink-85`. Long lines scroll sideways. |
-| Diff block | a `diff` or `patch` block, as a code block: an added line in `content-done` and a removed one in `content-failed`, each on its tint (the color at 9% alpha) across the whole block; a hunk line (`@@`) in `content-info`; header and context lines in `ink-62` |
+| Heading | every level 14px, 600, `ink-88`; 10px more room above than a block, `space-12` below |
+| Inline code | mono 12.5px, `ink-88` on `hover` |
+| Quote | a 2px `ink-30` bar, text in `ink-88` |
+| Numbered list | the numbers in mono `meta`, `ink-48` |
+| Task list | a 14px check in a ring (`ink-88`) for a done item, a ring (`ink-48`) for an open one |
+| Bullet list | MyGo's bullets in `ink-48` |
+| Table | no box, no header fill, no column lines: a `hairline` under each row but the last; cells padded `8px 16px 8px 0`, at most 340px wide, then they wrap; the header 12px, 500, `ink-48`. A column without an alignment in its delimiter row whose body cells are all numbers or dashes (one at least a number: "212", "+64", "−148", "3.5%", "2 / 3") sits at the right, its numbers mono 13px. A table wider than its box scrolls sideways (the wide-block rule stays). |
+| Remark | a quote whose first line starts with a tag, any case: a 2px bar in the kind's color, the word (`label`, 600) in that color, the text in `ink-88`; padding `6px 12px 7px 14px`, `space-2` between word and text. `[!NOTE]`, GitHub's `[!TIP]` and `[!IMPORTANT]`: "Note", `content-info`. `[!DONE]`: "Done", `content-done`. `[!DECISION]`: "Decision needed", `content-failed`, the only red one. `[!WARNING]`, GitHub's `[!CAUTION]`: "Warning", `content-waiting`. `[!UNVERIFIED]`: "Not verified", `content-info`, the bar dashed (4px on, 3px off). An unknown tag, or a tag with no text, stays a quote. |
+| Code block | the language and Copy in its first line, on `hover` with a `hairline` line, radius `radius-8`; mono 13px on 20px lines. MyGo's tokenizers, mapped to the code colors: keywords and annotations `code-keyword`; functions, types and tags `code-function`; strings, escapes and regular expressions `code-string`; numbers, constants and attributes `code-number`; comments `code-comment` in italic; the rest `ink-88`. Long lines scroll sideways. |
+| Diff block | a `diff` or `patch` block, as a code block: an added line in `content-done` and a removed one in `content-failed`, each on its tint (the color at 9% alpha) across the whole block; a hunk line (`@@`) in `content-info`; header and context lines in `ink-64` |
 
 Content colors show only as a dot, a word, a 2px bar or a 1px line: never a fill and never a row. Diff lines are the one exception (tokens.md, Content).
 
@@ -92,13 +92,11 @@ rest asks for no frame (D55). At the end of the chat neither shows.
 
 | Part | Value |
 |---|---|
-| Pinned prompt | the turn in view is that of the first row in view. When its prompt is above that row: a bar over the switch row, 44px high, across the panel, on the stage (`StageBase`) with a `hairline` under it, padding 16px at the left; at the right it ends `space-12` before the switch, and before the questions notch while the notch shows over it (D266); gap `space-12`: "You" (`small`, `ink-45`), then the prompt on one line, clipped with `…` (`small`, `ink-100`; line breaks show as spaces). Label "pinned prompt" and the text. A click scrolls the list to the prompt, at the top. A first row that is a prompt, or a pending prompt, shows itself: nothing is pinned. |
+| Pinned prompt | the turn in view is that of the first row in view. When its prompt is above that row: a bar over the switch row, 44px high, across the panel, on the stage (`StageBase`) with a `hairline` under it, padding 16px at the left; at the right it ends `space-12` before the switch, and before the questions notch while the notch shows over it (D266); gap `space-12`: "You" (`small`, `ink-48`), then the prompt on one line, clipped with `…` (`small`, `ink-100`; line breaks show as spaces). Label "pinned prompt" and the text. A click scrolls the list to the prompt, at the top. A first row that is a prompt, or a pending prompt, shows itself: nothing is pinned. |
 | Jump to latest | a pill centered over the bottom of the transcript, `space-8` above the dock: 28px high, padding `0 13px 0 11px`, radius 14, gap `space-8`, `float-solid` fill, 1px `float-line` border, `shadow-float`; "Jump to latest" and "↓" (`small`, `ink-100`). When entries that show (prompts, texts, notes, tool calls) came after the owner left the end: a 6px `claude` dot first and "New messages" in place of the text; label "Jump to latest, new messages". A click scrolls to the end, where the list follows again. No key: ⌘↓ moves the caret in the composer. |
 
 ## Composer
 
-| Part | Value |
-|---|---|
 One card (D271, #682; owner's pick "one card"), label "composer": the top
 line, the field with the round button at its right, and the foot. From top
 to bottom:
@@ -108,16 +106,16 @@ to bottom:
 | Card | the column's width; one surface: `hover` fill, 1px `input-line` border, radius `radius-12`; padding `space-6` top and bottom, 14px left, `space-8` right. No shadow, no glow, no other fill. |
 | Top line | the [Team row](#team-row) while the session orchestrates, else the [Live line](#live-line) while the agent works; 20px, its right end 14px from the card's edge. No box of its own; `space-2` to the field. With neither, there is no top line: the card is the field and the foot. |
 | Attachments | room for attachment chips, between the top line and the field (none yet) |
-| Field | `TextAreaBase`, label "Message", placeholder "Message <session name>…" (or "Message…" when the agent is not known) in `ink-38`; text `prose` (13.5px, 21px lines) in `ink-100`; padding 3.5px top and bottom, so one line is 28px. One line at first; it grows with its text to 8 lines, then scrolls. Caret only: no focus ring. |
+| Field | `TextAreaBase`, label "Message", placeholder "Message <session name>…" (or "Message…" when the agent is not known) in `ink-48`; text `prose` (13.5px, 21px lines) in `ink-100`; padding 3.5px top and bottom, so one line is 28px. One line at first; it grows with its text to 8 lines, then scrolls. Caret only: no focus ring. |
 | Button | `space-8` right of the field, in line with its last line (bottom-aligned): one round button, 28px, radius 14. See the states below. |
-| Foot | the model and context, mono `meta`, `ink-42`, one line under the field at its left edge, outside the field: "opus high · 212k", the model of line 2 of the agent's row and the size of its context from the Context line; a part that is not known is left out. With neither: no foot. |
-| Error | the last failure, under the card, `small`, `ink-62`, padding `space-6 14px 0`; a change of the text clears it |
+| Foot | the model and context, mono `meta`, `ink-48`, one line under the field at its left edge, outside the field: "opus high · 212k", the model of line 2 of the agent's row and the size of its context from the Context line; a part that is not known is left out. With neither: no foot. |
+| Error | the last failure, under the card, `small`, `ink-64`, padding `space-6 14px 0`; a change of the text clears it |
 
 | Button state | When | Look | Label, tooltip |
 |---|---|---|---|
 | Send | the field has text (not only spaces), also while the agent works: the message queues (D265) | `ink-100` fill, an arrow up in `ground` (1.6px line, 10px high): the one strong thing in the card | "Send", "Send  ↩" |
-| Stop | the agent works and the field is empty | 1px `input-line` outline, an 8px square (radius 1.5) in `ink-85`; `hover-strong` fill on hover | "Stop", "Stop  esc" |
-| Send, dimmed | idle (or nothing can stop the agent) and the field is empty | 1px `input-line` outline, the arrow in `ink-38`; disabled: no click | "Send", "Send  ↩" |
+| Stop | the agent works and the field is empty | 1px `input-line` outline, an 8px square (radius 1.5) in `ink-88`; `hover-strong` fill on hover | "Stop", "Stop  esc" |
+| Send, dimmed | idle (or nothing can stop the agent) and the field is empty | 1px `input-line` outline, the arrow in `ink-30` (a mark); disabled: no click | "Send", "Send  ↩" |
 
 The button's focus ring is the IconButton's: 1px `focus-ring`, 2px outside
 the circle. At rest with the team row and the foot, the card is 77px high;
@@ -155,7 +153,7 @@ the team row, its gap and the field box were 76px before D271.
 
 | State | Value |
 |---|---|
-| Working | a row 20px high, gap `space-8`, mono `value`: the working StatusGlyph (14px), what the agent does now in `ink-62` on one line, and the time since the turn started in `ink-38`: "8s", "2m 5s", "1h 4m". What it does: the last tool call with no result, "Bash · go test ./..." (the name as a call line has it); else "Thinking" when a thinking mark is the last entry; else "Working". The turn starts at the time of the last owner prompt; with no time there, no time shows. Hidden entries and the lines of subagents do not count. |
+| Working | a row 20px high, gap `space-8`, mono `value`: the working StatusGlyph (14px), what the agent does now in `ink-64` on one line, and the time since the turn started in `ink-48`: "8s", "2m 5s", "1h 4m". What it does: the last tool call with no result, "Bash · go test ./..." (the name as a call line has it); else "Thinking" when a thinking mark is the last entry; else "Working". The turn starts at the time of the last owner prompt; with no time there, no time shows. Hidden entries and the lines of subagents do not count. |
 | Needs you | the agent is blocked or in error: no line. The notch shows its menu and answers it; while the session orchestrates, the team row counts it in "N needs you" (D260). |
 | Idle | no line |
 
@@ -175,8 +173,8 @@ alone. No hover fill, no chips, nothing opens (D259).
 | Part | Value |
 |---|---|
 | Mascot | the still Claude glyph (14px) in its orchestrating color, as the [OrchestratePill](OrchestratePill.md) has it |
-| Head | `space-8` after the mascot: "Orchestrating · 4 agents", "Orchestrating · 1 agent", "Orchestrating" with no agent; `label`, `ink-85`. The agents are the session's live workers: the number of the orchestrate pill (`LiveWorkersOf`). An ended worker is not in the row (D260). |
-| Count | `space-14` after the head, mono `value`, `ink-45`, the parts `space-6` apart with a "·" between: "1 needs you · 1 error · 2 working · 1 idle". In this order; a part with no agent is left out. "N needs you" ("1 needs you", "2 need you", as the notch) is the number of the orchestrator row's badge (D240): the questions, to-dos and blocked menus of the session itself and its workers. It is in `blocked-text`, the one red of the row, and a click on it opens the notch's card as ⌘J does, which answers a menu. "N error" is a worker in error, in `ink-100`: not red, as it is no item of the notch, and it takes no click. The rest of the row takes no click. A blocked worker counts only in "needs you"; "working" is a worker that works, "idle" any other live worker (D260). |
+| Head | `space-8` after the mascot: "Orchestrating · 4 agents", "Orchestrating · 1 agent", "Orchestrating" with no agent; `label`, `ink-88`. The agents are the session's live workers: the number of the orchestrate pill (`LiveWorkersOf`). An ended worker is not in the row (D260). |
+| Count | `space-14` after the head, mono `value`, `ink-48`, the parts `space-6` apart with a "·" between: "1 needs you · 1 error · 2 working · 1 idle". In this order; a part with no agent is left out. "N needs you" ("1 needs you", "2 need you", as the notch) is the number of the orchestrator row's badge (D240): the questions, to-dos and blocked menus of the session itself and its workers. It is in `blocked-text`, the one red of the row, and a click on it opens the notch's card as ⌘J does, which answers a menu. "N error" is a worker in error, in `ink-100`: not red, as it is no item of the notch, and it takes no click. The rest of the row takes no click. A blocked worker counts only in "needs you"; "working" is a worker that works, "idle" any other live worker (D260). |
 | Live text | at the right end, `space-14` after the count, while the session works: the working line's glyph, what it does and its time ([Live line](#live-line)) |
 | Narrow | the row clips from the right: first the live text's words shorten (`…`), then the count drops its last parts; the mascot, the head and the live text's glyph and time stay |
 
@@ -186,7 +184,7 @@ Only the live text's time ticks, as the live line's does (D55, D257).
 ## Chips
 
 Names in Claude's text that contr knows show live (D262): a 6px dot in the
-color of the state, then the name as a link (`ink-95`). Only text counts:
+color of the state, then the name as a link (`ink-88`). Only text counts:
 code, code blocks, links, images and HTML are not touched. A name contr
 does not know stays plain text.
 
@@ -195,7 +193,7 @@ does not know stays plain text.
 | PR | "#667" | gh says it is a pull request of the session's repository (read by number), or it is the PR of a worker's branch (D104, D145) | open `content-info`, checks running `content-running`, passed `content-done`, failed `content-failed`, merged `content-done`, closed `content-info`. A failed check wins over a pending one, a pending one over a passed one. | opens the PR as the agent rows do: in the browser (the PR pane is hidden, D147) |
 | Issue | "#649" | gh says it is an issue | none | opens the issue in the browser |
 | Worker | a word that is the name of a worker contr lists ("b-649"); a live one wins | always | needs you `content-failed`, working `content-running`, done (ended) `content-done`, waiting (idle) `content-waiting` | selects the worker in the sidebar |
-| File | a word with a slash or an extension, with an optional ":42" | it is a file in the session's folder | none: the `file` line icon, 0.9 of the text size, `ink-45` | opens the file in the Review view, as the files panel does (the line is not used) |
+| File | a word with a slash or an extension, with an optional ":42" | it is a file in the session's folder | none: the `file` line icon, 0.9 of the text size, `ink-48` | opens the file in the Review view, as the files panel does (the line is not used) |
 
 - The dot is 6px, round, `space-4` before the text, its center near the
   middle of the lowercase letters. The tip of a chip says what it is:
@@ -219,14 +217,14 @@ A coordinator writes a status board or a merge queue as a fenced block (D267). T
 
 | Block | Syntax | Shows |
 |---|---|---|
-| Status board | info string `contr-status`; a line `<worker> \| #<issue> \| <what it builds>` | six columns: Worker, Issue, Builds, State, PR, Checks; heads mono `meta`, `ink-45`; no box, a `hairline` above and below the grid, `space-16` between columns; the worker in `body`, `ink-95`, after its 6px dot (the chip's worker colors); the issue mono `meta` `ink-62`; what it builds `body` `ink-85`, one line with "…"; the state in mono `meta`, `ink-62` (grey: only the dots have content colors), "needs you" in `blocked-text`; the PR as a mono 12px number with its dot on `hover`, radius 5, a click opens it as a chip does; the checks "2 of 3" (passed of passed, failed and pending) mono `meta` `ink-62`; "—" for none |
-| Merge queue | info string `contr-queue`; a line `#<n> <label>`, optional ` -- <note>` | the steps in order on one rail 14px wide: an 8px dot, a 1px `hairline` line down to the next step; the step's number mono `meta` `ink-45`, `#n label` in `prose` `ink-95`, the state in words in mono `meta` |
+| Status board | info string `contr-status`; a line `<worker> \| #<issue> \| <what it builds>` | six columns: Worker, Issue, Builds, State, PR, Checks; heads mono `meta`, `ink-48`; no box, a `hairline` above and below the grid, `space-16` between columns; the worker in `body`, `ink-88`, after its 6px dot (the chip's worker colors); the issue mono `meta` `ink-64`; what it builds `body` `ink-88`, one line with "…"; the state in mono `meta`, `ink-64` (grey: only the dots have content colors), "needs you" in `blocked-text`; the PR as a mono 12px number with its dot on `hover`, radius 5, a click opens it as a chip does; the checks "2 of 3" (passed of passed, failed and pending) mono `meta` `ink-64`; "—" for none |
+| Merge queue | info string `contr-queue`; a line `#<n> <label>`, optional ` -- <note>` | the steps in order on one rail 14px wide: an 8px dot, a 1px `hairline` line down to the next step; the step's number mono `meta` `ink-48`, `#n label` in `prose` `ink-88`, the state in words in mono `meta` |
 
-State of a board row: a worker that needs the owner says "needs you"; else the state of its PR: "PR open", "CI running", "CI passed", "CI failed", "merged", "closed"; else the worker's own state: "building", "waiting", "done". A worker contr does not list shows its name in `ink-45` and "not found" in `ink-45`, no dot.
+State of a board row: a worker that needs the owner says "needs you"; else the state of its PR: "PR open", "CI running", "CI passed", "CI failed", "merged", "closed"; else the worker's own state: "building", "waiting", "done". A worker contr does not list shows its name in `ink-48` and "not found" in `ink-48`, no dot.
 
-State of a queue step: a merged step has a 12px check in `content-done` and "merged"; a closed PR or issue has an `ink-30` dot and "closed"; both dim (the label in `ink-62`) and drop the note. A step whose checks failed is `blocked`: the dot in `blocked`, "blocked: 1 check failed" in `blocked-text`. Checks that run or passed: "CI running · 2 of 3", "CI passed · 3 of 3", the dot in their content color; an open PR without checks "open", a `content-info` dot. The note follows the state after " · "; a note alone has a `content-waiting` dot. The words of a step are mono `meta`, `ink-62`, but for a blocked step: only the rail's mark has the step's color (owner, minimal: grey words).
+State of a queue step: a merged step has a 12px check in `content-done` and "merged"; a closed PR or issue has an `ink-30` dot and "closed"; both dim (the label in `ink-64`) and drop the note. A step whose checks failed is `blocked`: the dot in `blocked`, "blocked: 1 check failed" in `blocked-text`. Checks that run or passed: "CI running · 2 of 3", "CI passed · 3 of 3", the dot in their content color; an open PR without checks "open", a `content-info` dot. The note follows the state after " · "; a note alone has a `content-waiting` dot. The words of a step are mono `meta`, `ink-64`, but for a blocked step: only the rail's mark has the step's color (owner, minimal: grey words).
 
-Live and frozen: only the newest board of the thread is live. Under it, a 5px `content-running` dot and "live · updated 18:49" (mono `meta`, `ink-45`): the time its values last changed. An older board keeps the values it showed while it was live, dims to 60% and says "as of 18:45 · a newer board is below". When contr did not show it live (an older answer read after the app started), it shows only the three columns the agent wrote and the time of its answer, so it never shows a state newer than its answer. Nothing ticks (D55): the times are fixed texts.
+Live and frozen: only the newest board of the thread is live. Under it, a 5px `content-running` dot and "live · updated 18:49" (mono `meta`, `ink-48`): the time its values last changed. An older board keeps the values it showed while it was live, dims to 60% and says "as of 18:45 · a newer board is below". When contr did not show it live (an older answer read after the app started), it shows only the three columns the agent wrote and the time of its answer, so it never shows a state newer than its answer. Nothing ticks (D55): the times are fixed texts.
 
 ## Behavior
 

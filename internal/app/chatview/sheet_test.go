@@ -194,7 +194,7 @@ func sheetComposer(t *testing.T) func(c *ui.Context) {
 		ui.Column(c).FillWidth().Gap(theme.Space8).Children(func() {
 			for i, st := range composerStates {
 				c := c.Key(strconv.Itoa(i))
-				ui.Text(c, st.caption).FontSize(theme.StyleSmall.Size).TextColor(pal.Ink62)
+				ui.Text(c, st.caption).FontSize(theme.StyleSmall.Size).TextColor(pal.Ink64)
 				ui.Box(c).FillWidth().Height(st.h).Shrink(0).Children(func() { views[i].view(c) })
 			}
 		})
