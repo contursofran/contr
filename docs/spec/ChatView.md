@@ -4,7 +4,8 @@ The Chat mode of the terminal panel for a Claude Code session (D246). It
 shows the session from its transcript (D242) in the place of the terminal
 grid, with a composer that types into the session's own terminal and a live
 line that shows what the agent does (D252). While the session orchestrates,
-a team row takes the live line's place (D259). The overlays (notch, pill,
+a team row takes the live line's place (D259). The live line or the team row
+is the top line of the composer card (D271). The overlays (notch, pill,
 outline) stay above it.
 
 Design system page: none yet; the mockups C1 (base), C2a (lines of an open
@@ -30,9 +31,9 @@ Shared rules: [README.md](README.md).
 | Fade | a gradient 32px high over the bottom edge of the transcript, from the stage at 0 opacity to the stage as it shows (`StageBase`, D250); it takes no click (D259) |
 | Column | the prose (prompts, Claude's text, notes, the fold rows, the live line, the team row and the composer), at most 920px wide, centered in the content width: the panel less `space-20` at each side |
 | Wide block | a table, a code block or the card of an open work group: as wide as its content, at least the column and at most the content width, centered. A block that fits in 920px stays in the column, its left edge on the column's left edge; in a panel not wider than 920px and the insets, the column is the content width. Claude's text is cut into runs of prose and these blocks, each cut at the start of a line. |
-| Live line | under the transcript, above the composer, `space-12` apart, padding `space-20` at the sides; see [Live line](#live-line) |
-| Team row | while the session orchestrates: in the live line's place, above the composer; see [Team row](#team-row) |
-| Composer | under the live line or the team row, `space-14` below; see [Composer](#composer) |
+| Dock | under the transcript: the composer card in the column, padding `space-20` at the sides, `space-14` below; see [Composer](#composer) |
+| Live line | the top line of the composer card while the agent works; see [Live line](#live-line) |
+| Team row | while the session orchestrates: the top line of the composer card, in the live line's place; see [Team row](#team-row) |
 | Pinned prompt | while the list is not at its end and the prompt of the turn in view is above the rows in view: see [Scrolled up](#scrolled-up) |
 | Jump to latest | while the list is not at its end: see [Scrolled up](#scrolled-up) |
 | Empty | "No transcript yet" (`body`, `ink-48`), centered, while the session has no path, no file or no row yet. The switch and the composer still work. |
@@ -97,19 +98,34 @@ rest asks for no frame (D55). At the end of the chat neither shows.
 
 ## Composer
 
+One card (D271, #682; owner's pick "one card"), label "composer": the top
+line, the field with the round button at its right, and the foot. From top
+to bottom:
+
 | Part | Value |
 |---|---|
-| Field | `TextAreaBase`, label "Message", placeholder "Message <session name>…" (or "Message…" when the agent is not known) in `ink-48`; text `prose` size in `ink-100`. One line at first; it grows to 8 lines, then scrolls. |
-| Box | the column's width, at least 44px high, padding `0 14px`, gap `space-12`, radius `radius-12`, 1px `input-line` border, `hover` fill |
-| Stop | an outlined card button "Stop", right of the field, only while the agent works |
-| Meta | at the right, mono `value`, `ink-48`: the model of line 2 of the agent's row and the size of its context from the Context line, "opus high · 212k"; a part that is not known is left out |
-| Error | the last failure, under the box, `small`, `ink-64`, padding `space-6 14px 0`; a change of the text clears it |
-| Images | a quiet chip "Image 1", "Image 2" for each image pasted since the last send, at the left of the field, as the chip of prompt images (D269) |
+| Card | the column's width; one surface: `hover` fill, 1px `input-line` border, radius `radius-12`; padding `space-6` top and bottom, 14px left, `space-8` right. No shadow, no glow, no other fill. |
+| Top line | the [Team row](#team-row) while the session orchestrates, else the [Live line](#live-line) while the agent works; 20px, its right end 14px from the card's edge. No box of its own; `space-2` to the field. With neither, there is no top line: the card is the field and the foot. |
+| Attachments | a quiet chip "Image 1", "Image 2" for each image pasted since the last send, as the chip of prompt images (D269); wrapping, gap `space-6`, `space-6` above and `space-2` below; none: no room |
+| Field | `TextAreaBase`, label "Message", placeholder "Message <session name>…" (or "Message…" when the agent is not known) in `ink-48`; text `prose` (13.5px, 21px lines) in `ink-100`; padding 3.5px top and bottom, so one line is 28px. One line at first; it grows with its text to 8 lines, then scrolls. Caret only: no focus ring. |
+| Button | `space-8` right of the field, in line with its last line (bottom-aligned): one round button, 28px, radius 14. See the states below. |
+| Foot | the model and context, mono `meta`, `ink-48`, one line under the field at its left edge, outside the field: "opus high · 212k", the model of line 2 of the agent's row and the size of its context from the Context line; a part that is not known is left out. With neither: no foot. |
+| Error | the last failure, under the card, `small`, `ink-64`, padding `space-6 14px 0`; a change of the text clears it |
+
+| Button state | When | Look | Label, tooltip |
+|---|---|---|---|
+| Send | the field has text (not only spaces) or image chips (D269), also while the agent works: the message queues (D265) | `ink-100` fill, an arrow up in `ground` (1.6px line, 10px high): the one strong thing in the card | "Send", "Send  ↩" |
+| Stop | the agent works and the field is empty | 1px `input-line` outline, an 8px square (radius 1.5) in `ink-88`; `hover-strong` fill on hover | "Stop", "Stop  esc" |
+| Send, dimmed | idle (or nothing can stop the agent) and the field is empty | 1px `input-line` outline, the arrow in `ink-30` (a mark); disabled: no click | "Send", "Send  ↩" |
+
+The button's focus ring is the IconButton's: 1px `focus-ring`, 2px outside
+the circle. At rest with the team row and the foot, the card is 77px high;
+the team row, its gap and the field box were 76px before D271.
 
 - The field takes the focus as it appears: when the chat shows (the switch,
   ⌘E). It keeps the focus after a send, and takes it back after a click on
-  Stop.
-- Enter sends; ⇧Enter breaks the line. A blank field sends nothing. Send
+  Send or Stop.
+- Enter sends, and so does a click on Send; ⇧Enter breaks the line. A blank field sends nothing. Send
   types the text into the selected session's own terminal and presses Enter
   through the agent source's `Send`, as the orchestrate pill does. The field
   clears at once and the text shows at the end of the transcript as a
@@ -161,8 +177,8 @@ the team row and not as a line of its own.
 
 ## Team row
 
-One row, 20px high (the live line's height), in the column, above the
-composer, while the selected session runs and orchestrates (D191, the
+One row, 20px high (the live line's height), the top line of the composer
+card (D271), while the selected session runs and orchestrates (D191, the
 orchestrate pill's rule). Not orchestrating: no row; the live line shows
 alone. No hover fill, no chips, nothing opens (D259).
 

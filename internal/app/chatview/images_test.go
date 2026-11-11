@@ -290,3 +290,23 @@ func TestResetDropsTheImages(t *testing.T) {
 		t.Errorf("after a reset: %d images, big %v", len(r.ch.pics), r.ch.big)
 	}
 }
+
+// TestSendButtonSendsImages: with image chips and an empty field the round button is Send, also
+// while the agent works, and a click presses Enter in the terminal (D269, D271).
+func TestSendButtonSendsImages(t *testing.T) {
+	s, keys, _ := keysSession(t)
+	s.status = "working"
+	s.tt.Frame()
+	pngClipboard(s.tt)
+	s.key(ui.Cmd, ui.KeyV)
+	if !s.has(LabelSend) || s.has(LabelStop) {
+		t.Fatalf("button with images: %v", s.tt.Texts())
+	}
+	if err := s.tt.Click(LabelSend); err != nil {
+		t.Fatal(err)
+	}
+	s.tt.Frame()
+	if len(*keys) != 2 || !bytes.Equal((*keys)[1], []byte{'\r'}) || s.has(LabelAttached+" Image 1") {
+		t.Errorf("after Send: keys %q, %v", *keys, s.tt.Texts())
+	}
+}

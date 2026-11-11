@@ -1,8 +1,8 @@
 package chatview
 
-// The team row (docs/spec/ChatView.md, D259): while the session orchestrates, one low row above
-// the composer says how: the mascot, "Orchestrating · 4 agents", a short count in words, and the
-// live text of the session at its right end.
+// The team row (docs/spec/ChatView.md, D259): while the session orchestrates, one low row at the
+// top of the composer card (D271) says how: the mascot, "Orchestrating · 4 agents", a short count
+// in words, and the live text of the session at its right end.
 
 import (
 	"strconv"
@@ -119,7 +119,8 @@ func (ch *Chat) team(c *ui.Context, t Team, st liveState) {
 		elapsed = ElapsedText(c.Now().Sub(start))
 	}
 	shown := len(parts)
-	if w := min(ch.contentWidth(c), columnMax); w > 0 {
+	// The row is in the composer card: the card's border and paddings take room.
+	if w := min(ch.contentWidth(c), columnMax) - cardInset - (cardPadLeft - cardPadRight); w > 0 {
 		room := w - glyph - theme.Space8 - measure(c, head, theme.StyleLabel) - teamGap
 		if working {
 			room -= teamGap + glyph // the live text keeps its glyph and time; its words go first
@@ -133,22 +134,20 @@ func (ch *Chat) team(c *ui.Context, t Team, st liveState) {
 		}
 		shown = fitParts(widths, measure(c, "·", theme.StyleValue), room)
 	}
-	column(c, func() {
-		ui.Row(c).Label(LabelTeam).FillWidth().Height(lineHeight).AlignItems(ui.Center).Gap(teamGap).Children(func() {
-			ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(theme.Space8).Children(func() {
-				// The mascot in its orchestrating color, as the pill has it: still.
-				kit.StatusGlyph(c, kit.GlyphOpts{State: kit.GlyphWaiting, Claude: true, Small: true}).AccessHidden(true)
-				kit.Styled(ui.Text(c, head), theme.StyleLabel).NoWrap().TextColor(pal.Ink88)
-			})
-			if shown > 0 {
-				ch.teamCount(c, pal, parts[:shown], t)
-			}
-			if working {
-				ui.Row(c).Label(LabelLive + " " + what).Grow(1).MinWidth(0).Justify(ui.End).AlignItems(ui.Center).Gap(theme.Space8).Children(func() {
-					ch.working(c, pal, what, elapsed)
-				})
-			}
+	topLine(c).Label(LabelTeam).Gap(teamGap).Children(func() {
+		ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(theme.Space8).Children(func() {
+			// The mascot in its orchestrating color, as the pill has it: still.
+			kit.StatusGlyph(c, kit.GlyphOpts{State: kit.GlyphWaiting, Claude: true, Small: true}).AccessHidden(true)
+			kit.Styled(ui.Text(c, head), theme.StyleLabel).NoWrap().TextColor(pal.Ink88)
 		})
+		if shown > 0 {
+			ch.teamCount(c, pal, parts[:shown], t)
+		}
+		if working {
+			ui.Row(c).Label(LabelLive + " " + what).Grow(1).MinWidth(0).Justify(ui.End).AlignItems(ui.Center).Gap(theme.Space8).Children(func() {
+				ch.working(c, pal, what, elapsed)
+			})
+		}
 	})
 }
 

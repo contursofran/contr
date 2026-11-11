@@ -8,7 +8,8 @@ package chatview
 // state in Claude's text (D262), ChatContent one answer with each kind of content (D261),
 // ChatViewScrolled a chat scrolled up with the pinned prompt and New messages (D266), ChatBlocks an
 // older board (frozen), the live board and a queue, and ChatBlocksBlocked a queue with a blocked
-// step (D267), ChatViewImages the images of prompts and the composer's image chips (D269).
+// step (D267). ChatViewComposer shows the composer card in each state (D271), ChatViewImages the
+// images of prompts and the composer's image chips (D269).
 
 import (
 	"strconv"
@@ -49,6 +50,7 @@ func TestSpecSheet(t *testing.T) {
 	images := sheetChat(t, "idle", picPrompt("i1", "[Image #1] [Image #2] The row clips here, see both shots.", pngOf(t, 240, 150), pngOf(t, 90, 160)),
 		said("i2", "I see it: the time runs into the badge."), picPrompt("i3", "and these, from the old build", nil, nil))
 	images.s.ch.attached[term] = 2
+	composer := sheetComposer(t)
 	apptest.SpecSheet(t, []apptest.SheetPart{
 		{Name: "ChatView", W: sheetW, H: sheetH, View: working.view},
 		{Name: "ChatViewWide", W: 1500, H: 420, View: wide.view},
@@ -59,8 +61,9 @@ func TestSpecSheet(t *testing.T) {
 		{Name: "ChatViewScrolled", W: sheetW, H: scrolledH, View: scrolled.view},
 		{Name: "ChatBlocks", W: sheetW, H: 900, View: blocks.view},
 		{Name: "ChatBlocksBlocked", W: sheetW, H: 360, View: blocked.view},
+		{Name: "ChatViewComposer", W: sheetW, H: composerSheetH, View: composer},
 		{Name: "ChatViewImages", W: sheetW, H: 420, View: images.view},
-	}, []string{"ChatView", "ChatViewWide", "ChatViewTeam", "ChatViewChips", "ChatContent", "ChatViewScrolled", "ChatBlocks", "ChatBlocksBlocked", "ChatViewImages"})
+	}, []string{"ChatViewComposer", "ChatView", "ChatViewWide", "ChatViewTeam", "ChatViewChips", "ChatContent", "ChatViewScrolled", "ChatBlocks", "ChatBlocksBlocked", "ChatViewImages"})
 }
 
 // contentAnswer has each kind of content: headings, lists, a quote, the five remarks, a table
@@ -157,4 +160,48 @@ func sheetChat(t *testing.T, status string, lines ...string) sheetView {
 			s.ch.View(c)
 		})
 	}}
+}
+
+// composerState is one state of the composer card on the sheet: its caption, the agent's state,
+// the team (nil: the session does not orchestrate) and the text in the field.
+type composerState struct {
+	caption, status string
+	team            *Team
+	text            string
+	h               float32
+}
+
+var composerStates = []composerState{
+	{"Idle, empty: Send dimmed", "idle", &Team{Agents: 2, Idle: 2}, "", 150},
+	{"Idle, text: Send", "idle", &Team{Agents: 2, Idle: 2}, "Merge #611 first, then tell b-632 to merge main.", 150},
+	{"Working, empty: Stop", "working", &Team{Agents: 2, NeedsYou: 1, Working: 1}, "", 150},
+	{"Working, text, no team: the live line on top, Send (the message queues)", "working", nil, "And run the review on its exact head.", 150},
+	{"Many lines: the field grows to 8 lines, then scrolls", "idle", &Team{Agents: 2, Working: 2}, strings.TrimSuffix(strings.Repeat("A line of the message\n", 11), "\n"), 330},
+	{"No team, idle: the field alone", "idle", nil, "", 130},
+}
+
+const composerSheetH = 1230
+
+// sheetComposer stacks the composer card in each of composerStates, each under its caption, at the
+// bottom of a short chat.
+func sheetComposer(t *testing.T) func(c *ui.Context) {
+	views := make([]sheetView, len(composerStates))
+	for i, st := range composerStates {
+		v := sheetChat(t, st.status, lTurn, lRunning)
+		if st.team != nil {
+			teamOf(v, *st.team)
+		}
+		*v.s.ch.draft(term) = st.text
+		views[i] = v
+	}
+	return func(c *ui.Context) {
+		pal := theme.Current()
+		ui.Column(c).FillWidth().Gap(theme.Space8).Children(func() {
+			for i, st := range composerStates {
+				c := c.Key(strconv.Itoa(i))
+				ui.Text(c, st.caption).FontSize(theme.StyleSmall.Size).TextColor(pal.Ink64)
+				ui.Box(c).FillWidth().Height(st.h).Shrink(0).Children(func() { views[i].view(c) })
+			}
+		})
+	}
 }
