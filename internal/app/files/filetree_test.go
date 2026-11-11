@@ -58,6 +58,16 @@ func (r *treeRig) reset() { r.ft.setDir(""); r.stops = 0 }
 
 func (r *treeRig) has(label string) bool { _, ok := r.tt.Find(label); return ok }
 
+// all builds a frame, picks All on the switch and builds the next frame.
+func (r *treeRig) all() {
+	r.t.Helper()
+	r.frame()
+	if err := r.tt.Click(LabelAll); err != nil {
+		r.t.Fatal(err)
+	}
+	r.frame()
+}
+
 // changedRepo is a repo on branch "feature" with a modified, a new, a deleted
 // and an ignored file, and a folder with a file in it.
 func changedRepo(t *testing.T) string {
@@ -80,7 +90,7 @@ func changedRepo(t *testing.T) string {
 
 func TestFileTreeShowsFilesWithCountsAndHidesIgnored(t *testing.T) {
 	r := newTreeRig(t, changedRepo(t))
-	r.frame()
+	r.all()
 	for _, want := range []string{"mod.go, +3 −0", "fresh.go, +4", "gone.md, −2", "same.txt", "src", "base.txt"} {
 		if !r.has(want) {
 			t.Errorf("no row %q; texts %q", want, r.tt.Texts())
@@ -101,7 +111,7 @@ func TestFileTreeShowsFilesWithCountsAndHidesIgnored(t *testing.T) {
 
 func TestFileTreeSortsFoldersFirst(t *testing.T) {
 	r := newTreeRig(t, changedRepo(t))
-	r.frame()
+	r.all()
 	src, _ := r.tt.Find("src")
 	first, _ := r.tt.Find("base.txt")
 	if src.Y >= first.Y {
@@ -111,7 +121,7 @@ func TestFileTreeSortsFoldersFirst(t *testing.T) {
 
 func TestFileTreeReadsAFolderWhenItOpens(t *testing.T) {
 	r := newTreeRig(t, changedRepo(t))
-	r.frame()
+	r.all()
 	if _, ok := r.ft.loaded["src"]; ok {
 		t.Fatal("src was read before it opened")
 	}
@@ -130,45 +140,105 @@ func TestFileTreeReadsAFolderWhenItOpens(t *testing.T) {
 	}
 }
 
-func TestFileTreeFilterShowsChangedFilesOnly(t *testing.T) {
+// A folder with changes opens on Changed: only the changed files, with the
+// count in the switch (D264). All shows the whole tree again.
+func TestFileTreeOpensOnChangedWhenTheFolderHasChanges(t *testing.T) {
 	r := newTreeRig(t, changedRepo(t))
 	r.frame()
-	if err := r.tt.Click(LabelFileFilter); err != nil {
-		t.Fatal(err)
-	}
-	r.frame()
 	if !r.ft.OnlyChanged() {
-		t.Fatal("the filter is off after the click")
+		t.Fatal("a folder with changes does not open on Changed")
+	}
+	if !r.has(ChangedLabel(3, true)) || ChangedLabel(3, true) != "Changed 3" {
+		t.Errorf("no segment %q; texts %q", ChangedLabel(3, true), r.tt.Texts())
 	}
 	for _, want := range []string{"mod.go, +3 −0", "fresh.go, +4", "gone.md, −2"} {
 		if !r.has(want) {
-			t.Errorf("filter on: no row %q; texts %q", want, r.tt.Texts())
+			t.Errorf("Changed: no row %q; texts %q", want, r.tt.Texts())
 		}
 	}
 	for _, no := range []string{"same.txt", "base.txt", "src"} {
 		if r.has(no) {
-			t.Errorf("filter on: unchanged %q shows", no)
+			t.Errorf("Changed: unchanged %q shows", no)
 		}
 	}
-	if err := r.tt.Click(LabelFileFilter); err != nil {
+	r.all()
+	if r.ft.OnlyChanged() || !r.has("same.txt") {
+		t.Errorf("All: the unchanged file is not back; texts %q", r.tt.Texts())
+	}
+	if err := r.tt.Click("Changed 3"); err != nil {
 		t.Fatal(err)
 	}
 	r.frame()
-	if !r.has("same.txt") {
-		t.Error("filter off: the unchanged file is back")
+	if !r.ft.OnlyChanged() || r.has("same.txt") {
+		t.Errorf("Changed again: texts %q", r.tt.Texts())
 	}
 }
 
-func TestFileTreeFilterFoldersOpenAndShowChangedNestedFiles(t *testing.T) {
+// A folder without changes opens on All.
+func TestFileTreeOpensOnAllWithoutChanges(t *testing.T) {
+	s := apptest.NewRepo(t)
+	r := newTreeRig(t, s.Dir)
+	r.frame()
+	if r.ft.OnlyChanged() || !r.has("base.txt") || !r.has("Changed 0") {
+		t.Errorf("a clean folder: Changed %v, texts %q", r.ft.OnlyChanged(), r.tt.Texts())
+	}
+}
+
+// The owner's pick stays with its folder while the app runs; another folder
+// opens on its own default.
+func TestFileTreePickStaysWithTheFolder(t *testing.T) {
+	a, b := changedRepo(t), changedRepo(t)
+	r := newTreeRig(t, a)
+	r.all()
+	r.dir = b
+	r.frame()
+	if !r.ft.OnlyChanged() {
+		t.Error("the pick of folder a moved to folder b")
+	}
+	r.dir = a
+	r.frame()
+	if r.ft.OnlyChanged() || !r.has("same.txt") {
+		t.Errorf("folder a lost its pick of All; texts %q", r.tt.Texts())
+	}
+}
+
+// With no folder the head has no switch.
+func TestFileTreeNoFolderHasNoSwitch(t *testing.T) {
+	r := newTreeRig(t, "")
+	r.frame()
+	if r.has(LabelFilesShown) || r.has(LabelAll) {
+		t.Errorf("the switch shows without a folder: %q", r.tt.Texts())
+	}
+}
+
+// The Changed view has one level of path rows: each folder with changed files
+// is one row named by its path, its files under it; no unchanged rows (D264).
+func TestFileTreeChangedViewCollapsesFoldersToPathRows(t *testing.T) {
 	dir := changedRepo(t)
 	apptest.Write(t, dir, "src/deep/inner.go", "x\ny\n")
+	apptest.Write(t, dir, "src/top.go", "t\n")
 	r := newTreeRig(t, dir)
-	r.ft.onlyChanged = true
 	r.frame()
-	for _, want := range []string{"src", "deep", "inner.go, +1 −0"} {
+	for _, want := range []string{"src", "src/deep", "inner.go, +1 −0", "top.go, +1", "mod.go, +3 −0"} {
 		if !r.has(want) {
-			t.Errorf("no %q; texts %q", want, r.tt.Texts())
+			t.Errorf("no row %q; texts %q", want, r.tt.Texts())
 		}
+	}
+	if r.has("deep") {
+		t.Error("a folder of a path shows as a row of its own")
+	}
+	deep, inner := apptest.Box(t, r.tt, "src/deep"), apptest.Box(t, r.tt, "inner.go")
+	src, top, mod := apptest.Box(t, r.tt, "src"), apptest.Box(t, r.tt, "top.go"), apptest.Box(t, r.tt, "mod.go")
+	if !(src.Y < top.Y && top.Y < deep.Y && deep.Y < inner.Y && inner.Y < mod.Y) {
+		t.Errorf("order: src %v top %v src/deep %v inner %v mod %v", src.Y, top.Y, deep.Y, inner.Y, mod.Y)
+	}
+	if got, want := inner.X-mod.X, float32(theme.Space16+theme.Space4); got != want {
+		t.Errorf("a file under a path row indents %v, want one level %v", got, want)
+	}
+	r.tt.Click("src/deep")
+	r.frame()
+	if r.has("inner.go") {
+		t.Error("a click does not close a path row")
 	}
 }
 
@@ -178,20 +248,22 @@ func TestFileInksAndCounts(t *testing.T) {
 		name         string
 		f            review.File
 		changed      bool
+		pathRow      bool
 		ink, icon    ui.Color
 		strike       bool
 		counts       bool
 		only         int
 		added, rmved ui.Color
 	}{
-		{"default", review.File{}, false, p.Ink50, p.Ink38, false, false, 0, ui.Color{}, ui.Color{}},
-		{"changed", review.File{Status: review.Modified, Added: 2, Removed: 1}, true, p.Ink90, p.Ink38, false, true, 0, p.Ink40, p.Ink24},
-		{"new", review.File{Status: review.Added, Added: 5}, true, p.Ink90, p.Ink38, false, true, 1, p.Ink40, p.Ink24},
-		{"deleted", review.File{Status: review.Deleted, Removed: 3}, true, p.Ink24, p.Ink22, true, true, 2, p.Ink22, p.Ink22},
-		{"binary", review.File{Status: review.Modified, Binary: true}, true, p.Ink90, p.Ink38, false, false, 0, ui.Color{}, ui.Color{}},
+		{"default", review.File{}, false, false, p.Ink50, p.Ink38, false, false, 0, ui.Color{}, ui.Color{}},
+		{"changed", review.File{Status: review.Modified, Added: 2, Removed: 1}, true, false, p.Ink90, p.Ink38, false, true, 0, p.Ink50, p.Ink50},
+		{"new", review.File{Status: review.Added, Added: 5}, true, false, p.Ink90, p.Ink38, false, true, 1, p.Ink50, p.Ink50},
+		{"deleted", review.File{Status: review.Deleted, Removed: 3}, true, false, p.Ink50, p.Ink38, true, true, 2, p.Ink50, p.Ink50},
+		{"path row", review.File{}, false, true, p.Ink90, p.Ink38, false, false, 0, ui.Color{}, ui.Color{}},
+		{"binary", review.File{Status: review.Modified, Binary: true}, true, false, p.Ink90, p.Ink38, false, false, 0, ui.Color{}, ui.Color{}},
 	}
 	for _, c := range cases {
-		ink, icon, strike := fileInks(p, c.f, c.changed)
+		ink, icon, strike := fileInks(p, c.f, c.changed, c.pathRow)
 		if ink != c.ink || icon != c.icon || strike != c.strike {
 			t.Errorf("%s: inks %v %v %v, want %v %v %v", c.name, ink, icon, strike, c.ink, c.icon, c.strike)
 		}
@@ -339,7 +411,7 @@ func TestFileTreeClickOpensAndCmdClickReveals(t *testing.T) {
 
 func TestFileTreeFolderClickOpensIt(t *testing.T) {
 	r := newTreeRig(t, changedRepo(t))
-	r.frame()
+	r.all()
 	r.tt.Click("src")
 	r.frame()
 	if !r.has("deep") {
@@ -377,16 +449,18 @@ func TestFileTreeEmptyStates(t *testing.T) {
 	if !r.tt.HasText("Empty folder") {
 		t.Errorf("empty folder: %q", r.tt.Texts())
 	}
-	r.tt.Click(LabelFileFilter)
+	if err := r.tt.Click("Changed 0"); err != nil {
+		t.Fatal(err)
+	}
 	r.frame()
 	if !r.tt.HasText("No changes") {
-		t.Errorf("filter on, nothing changed: %q", r.tt.Texts())
+		t.Errorf("Changed, nothing changed: %q", r.tt.Texts())
 	}
 }
 
 func TestFileTreeKeysMoveAndOpen(t *testing.T) {
 	r := newTreeRig(t, changedRepo(t))
-	r.frame()
+	r.all()
 	// Tab focuses the first row; ⏎ on a folder opens it, → on it moves in.
 	r.tt.Click("src")
 	r.frame()
@@ -454,7 +528,10 @@ func TestFileTreeRowsSit20pxFromThePanelSide(t *testing.T) {
 	dir := changedRepo(t)
 	apptest.Write(t, dir, "src/deep/inner.go", "x\ny\n")
 	r := newTreeRig(t, dir)
-	r.ft.onlyChanged = true
+	r.all()
+	r.tt.Click("src")
+	r.frame()
+	r.tt.Click("deep")
 	r.frame()
 	panel := apptest.Box(t, r.tt, "Files")
 	// A changed row is labeled with its counts, so these find the name texts.
@@ -473,7 +550,6 @@ func TestFileTreeHasNoGuides(t *testing.T) {
 	dir := changedRepo(t)
 	apptest.Write(t, dir, "src/deep/inner.go", "x\ny\n")
 	r := newTreeRig(t, dir)
-	r.ft.onlyChanged = true
 	r.frame()
 	panel, name := apptest.Box(t, r.tt, "Files"), apptest.Box(t, r.tt, "inner.go")
 	img := r.tt.Image()

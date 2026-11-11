@@ -1,6 +1,6 @@
 # FileTree
 
-The files panel shows the project tree; changed files show their +/− line counts.
+The files panel answers one question: what did the agents change? It opens on the changed files; a switch shows the whole project tree. Changed files show their +/− line counts.
 
 Design system page: component FileTree. Shared rules: [README.md](README.md).
 
@@ -12,11 +12,13 @@ Design system page: component FileTree. Shared rules: [README.md](README.md).
 
 | Part | Value |
 |---|---|
-| Head | "Files", under the agent's todos and artifacts ([SessionPanel.md](SessionPanel.md), D197); the filter button at the right uses the `filter` icon: three lines, long to short |
+| Head | "Files", under the agent's todos and artifacts ([SessionPanel.md](SessionPanel.md), D197); the Changed \| All switch at the right (D264) |
+| Switch | `kit.Switch`: "Changed N" (N is the count of changed files; "Changed" until the first read) and "All" |
 | Row | height `file-row-height` (26px), padding `0 10px` (D228), gap `space-7`, radius `radius-6` |
 | Icon | `folder`, `folder-open`, `file-go`, `file-md`, `file` at 15px, `ink-38` |
 | Name | `row-small` (12.5px), `ink-50`; ellipsis |
-| Counts | mono 11px, `space-6` apart: added `ink-40`, removed `ink-24` |
+| Counts | mono 11px (`meta`), `space-6` apart: added and removed both `ink-50`; the sign says which (D264) |
+| Path row | Changed view only: a folder that holds changed files, named by its path from the root (`internal/app`), name `ink-90`, with the folder icon |
 | Indent | each level indents `space-16` plus `space-4` (D228); no guide lines (D258) |
 
 ## States
@@ -25,14 +27,17 @@ Design system page: component FileTree. Shared rules: [README.md](README.md).
 - **Hover:** fill `hover`.
 - **Changed:** name `ink-90`, counts show.
 - **New:** name `ink-90`, "+N" only.
-- **Deleted:** name `ink-24` with a line through it; icon and "−N" `ink-22`.
-- **Filter on:** the filter icon button in the panel head shows only changed files.
+- **Deleted:** name `ink-50` with a line through it; icon `ink-38`; "−N" `ink-50` (D264).
+- **Changed view:** only changed files, under one level of path rows; no unchanged rows.
+- **All view:** the whole tree, with the deleted files put back.
 
 ## Behavior
 
 - The tree of the selected agent's worktree, else the project folder.
-- Changed files show +/− counts; the filter button shows changed files
-  only.
+- Changed files show +/− counts.
+- The switch opens on Changed when the folder has changes, else on All
+  (D264). The owner's pick stays with that folder while the app runs; another
+  folder opens on its own default. With no folder the switch does not show.
 - Click opens the file in the Review view; ⌘-click reveals it in Finder.
 
 ## What "changed" means
@@ -42,8 +47,10 @@ Design system page: component FileTree. Shared rules: [README.md](README.md).
   files that git does not ignore (`review.Repo.Changes`). A deleted file is
   put back in its folder, struck through. A new or deleted file shows one
   count; a binary file shows none.
-- With the filter on, the tree is made from the changed paths only and its
-  folders start open.
+- The Changed view is made from the changed paths only. At the root: one
+  path row per folder that holds changed files (`internal/app`,
+  `internal/app/kit`, each its own row), then the changed files of the root.
+  Under a path row: its changed files, one level in. Path rows start open.
 
 ## Data
 
@@ -68,7 +75,7 @@ Design system page: component FileTree. Shared rules: [README.md](README.md).
 
 ## Tokens
 
-`file-row-height`, `radius-6`, `space-4`, `space-7`, `space-10`, `space-16`, `hover`, `ink-90`, `ink-50`, `ink-40`, `ink-38`, `ink-24`, `ink-22`, `row-small`.
+`file-row-height`, `radius-6`, `space-4`, `space-6`, `space-7`, `space-10`, `space-16`, `hover`, `ink-90`, `ink-50`, `ink-38`, `row-small`, `meta`.
 
 ## Build in MyGo
 
@@ -78,7 +85,8 @@ Design system page: component FileTree. Shared rules: [README.md](README.md).
   `ui.Themed` with `TextMuted` clear (the arrow is not seen) and
   `SurfaceHover` set to `hover`, and the row takes back the room of the
   arrow with a negative start margin (D170). It gives the keys (← → open and close, ↑ ↓ move) and the screen-reader roles.
-- Counts: `kit.Counts`.
+- Counts: `kit.CountsWith`.
+- Switch: `kit.Switch` over `ui.SegmentedBase`.
 - Data: `internal/review` on a goroutine; `mygo.WatchFiles` triggers a new read.
 - Click opens the file in the Review view; ⌘-click reveals it in Finder.
 
@@ -95,7 +103,8 @@ Design system page: component FileTree. Shared rules: [README.md](README.md).
 ## Tests
 
 - Unit: tree build and counts on a temp repo.
-- View: filter on shows changed files only; deleted style; no folder shows the D255 line.
+- View: opens on Changed with changes and on All without; the pick stays per
+  folder; path rows; deleted style; no folder shows the D255 line and no switch.
 
 ## Replaces
 
