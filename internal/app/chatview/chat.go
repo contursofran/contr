@@ -54,6 +54,9 @@ type Chat struct {
 	// Slash gives the slash commands and skills of the session at addr for the composer's popup
 	// (D273). Nil: "/" opens no popup.
 	Slash SuggestSource
+	// Path gives the files and folders of the session at addr for the "@" popup (D279); nil
+	// shows none.
+	Path PathSource
 	// sg is the state of the composer's suggestion popup.
 	sg suggest
 
