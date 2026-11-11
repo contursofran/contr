@@ -37,7 +37,7 @@ func TestHooksSaveAndUpdateTheTranscriptPath(t *testing.T) {
 		hook   string
 		fields map[string]any
 	}{
-		// clear and resume print nothing and need no core.
+		// clear and resume print only the skill line and need no core.
 		{"session-start", map[string]any{"source": "clear", "session_id": "s1", "transcript_path": "/x/s1.jsonl"}},
 		{"session-start", map[string]any{"source": "resume", "session_id": "s2", "transcript_path": "/x/s2.jsonl"}},
 		{"prompt", map[string]any{"prompt": "go on", "session_id": "s3", "transcript_path": "/x/s3.jsonl"}},
@@ -49,7 +49,7 @@ func TestHooksSaveAndUpdateTheTranscriptPath(t *testing.T) {
 		if code != 0 || errs != "" {
 			t.Fatalf("%s: code %d, stderr %q", st.hook, code, errs)
 		}
-		if st.hook == "session-start" && out != "" {
+		if st.hook == "session-start" && out != chatSkillLine {
 			t.Errorf("%s %s printed %q", st.hook, st.fields["source"], out)
 		}
 		s := readSession(t, dir)
@@ -86,9 +86,12 @@ func TestHooksSaveNoTranscriptPathOutsideATerminal(t *testing.T) {
 	in := `{"source":"resume","prompt":"x","session_id":"s1","transcript_path":"/x/s1.jsonl"}`
 	// A worker env with no HC_TERMINAL_ID still runs session-start.
 	for _, hook := range []string{"session-start", "prompt"} {
-		code, _, errs := runTranscriptHook(hook, in, map[string]string{"CONTR_COORDINATOR": "c1", "CONTR_STATE_DIR": dir})
+		code, out, errs := runTranscriptHook(hook, in, map[string]string{"CONTR_COORDINATOR": "c1", "CONTR_STATE_DIR": dir})
 		if code != 0 || errs != "" {
 			t.Fatalf("%s: code %d, stderr %q", hook, code, errs)
+		}
+		if out != "" {
+			t.Errorf("%s outside a terminal printed %q", hook, out)
 		}
 	}
 	if _, err := os.Stat(filepath.Join(dir, session.Dir)); !os.IsNotExist(err) {

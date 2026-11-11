@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/contursofran/contr/internal/agents"
+	"github.com/contursofran/contr/internal/statedir"
 	"github.com/contursofran/contr/internal/usage"
 )
 
@@ -44,7 +45,8 @@ transcript yet, so only the role counts), and after a compaction in a
 coordinator: prints the playbook, the state file to read (at startup, only
 when it exists), the live workers it started, its open owner items and the
 flow (contr agents flow), which Claude Code adds to the new context.
-After resume and clear it prints nothing.
+After resume and clear it prints nothing more. In an hc terminal it first
+prints one line that names the skill contr:chat-writing.
 
 stop, session-start and prompt, in an hc terminal (HC_TERMINAL_ID), save
 the transcript_path and session_id of the hook input in the terminal's
@@ -72,6 +74,11 @@ const defaultCompactAt = 250000
 // restoreMax is the most characters that session-start prints. Claude Code
 // caps a hook's context at 10000 characters.
 const restoreMax = 9500
+
+// chatSkillLine is the one line that session-start prints first in an hc terminal: it names the
+// kit's skill for answers that the owner reads in contr's chat. internal/transcript hides it from
+// the chat by its first words (isPlaybook).
+const chatSkillLine = "contr: the owner reads your answers in contr's chat. Before you write one, use the skill contr:chat-writing: it says what the chat shows.\n"
 
 // orchestrateCommand is the kit's coordinator command.
 const orchestrateCommand = "contr:orchestrate"
@@ -131,6 +138,9 @@ func runHook(args []string, stdin io.Reader, stdout, stderr io.Writer, dial func
 	var err error
 	switch {
 	case args[0] == "session-start":
+		if getenv(statedir.EnvTerminal) != "" {
+			_, _ = io.WriteString(stdout, chatSkillLine)
+		}
 		err = h.sessionStart()
 	case getenv(agents.EnvCoordinator) != "":
 		err = h.workerStop()

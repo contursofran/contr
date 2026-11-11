@@ -773,10 +773,12 @@ func isHookTag(s string) bool {
 }
 
 // isPlaybook tells a text of the kit's SessionStart hook (cmd/contr/hook.go:
-// startupText and restoreText).
+// chatSkillLine, which comes first in an hc terminal, startupText and
+// restoreText).
 func isPlaybook(s string) bool {
 	s = strings.TrimSpace(s)
-	return strings.HasPrefix(s, "contr: you are the coordinator") ||
+	return strings.HasPrefix(s, "contr: the owner reads your answers in contr's chat.") ||
+		strings.HasPrefix(s, "contr: you are the coordinator") ||
 		strings.HasPrefix(s, "contr: the conversation was compacted")
 }
 

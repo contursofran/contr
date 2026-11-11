@@ -1,5 +1,5 @@
 {
-  "description": "Workers: a turn that ends without hc send still reports to the coordinator. Coordinators: save the state before a compaction and get the playbook at startup and after a compaction. In any hc terminal: save the todo list, the artifacts and the transcript path for contr's panels.",
+  "description": "Workers: a turn that ends without hc send still reports to the coordinator. Coordinators: save the state before a compaction and get the playbook at startup and after a compaction. In any hc terminal: name the chat-writing skill at session start, and save the todo list, the artifacts and the transcript path for contr's panels.",
   "hooks": {
     "Stop": [
       {

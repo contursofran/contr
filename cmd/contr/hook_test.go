@@ -151,3 +151,17 @@ func TestMissedReportCutsLongWords(t *testing.T) {
 		t.Errorf("empty words: %q", got)
 	}
 }
+
+// The skill line is one line, and it names a skill of the kit.
+func TestChatSkillLineNamesTheKitSkill(t *testing.T) {
+	if strings.Count(chatSkillLine, "\n") != 1 || !strings.HasSuffix(chatSkillLine, "\n") {
+		t.Fatalf("not one line: %q", chatSkillLine)
+	}
+	data, err := os.ReadFile(filepath.Join("..", "..", "kit", "skills", "chat-writing", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "\nname: chat-writing\n") || !strings.Contains(chatSkillLine, "contr:chat-writing") {
+		t.Fatalf("the line %q does not name the skill of the kit", chatSkillLine)
+	}
+}

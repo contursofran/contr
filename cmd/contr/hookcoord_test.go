@@ -177,12 +177,12 @@ func TestHookSessionStartRestores(t *testing.T) {
 func TestHookSessionStartQuiet(t *testing.T) {
 	r := newCoordRig(t, orchestrateLine)
 	r.core.reply["terminal.get"] = worker("t1", "b1", "live", nil)
-	if _, out, _ := r.run("session-start", map[string]any{"source": "startup"}); out != "" {
+	if _, out, _ := r.run("session-start", map[string]any{"source": "startup"}); out != chatSkillLine {
 		t.Errorf("startup in a worker: %q", out)
 	}
 	r = newCoordRig(t, usageLine(10))
 	r.core.reply["terminal.get"] = worker("t1", "b1", "live", nil)
-	if _, out, _ := r.run("session-start", map[string]any{"source": "compact"}); out != "" {
+	if _, out, _ := r.run("session-start", map[string]any{"source": "compact"}); out != chatSkillLine {
 		t.Errorf("not a coordinator: %q", out)
 	}
 }
@@ -205,6 +205,9 @@ func TestHookSessionStartStartup(t *testing.T) {
 	code, out, errs := r.run("session-start", map[string]any{"source": "startup"})
 	if code != 0 {
 		t.Fatalf("code %d err %q", code, errs)
+	}
+	if !strings.HasPrefix(out, chatSkillLine) {
+		t.Errorf("startup text does not start with the skill line:\n%s", out)
 	}
 	for _, want := range []string{"contr: you are the coordinator of this project; the owner gives the goal in the next message.", "You coordinate worker agents", "The flow:"} {
 		if !strings.Contains(out, want) {
