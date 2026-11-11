@@ -143,6 +143,11 @@ func (ch *Chat) composer(c *ui.Context, id string, st liveState) {
 					Lines(1, composerLines).Grow(1).MinWidth(0).Padding((actionSize-ct.Line)/2, 0, (actionSize-ct.Line)/2, theme.Space6).AutoFocus().Bind(&ch.field).
 					OnTextKey(func(k ui.TextKey) bool { return ch.textKey(id, st, k) }).
 					OnPaste(func(text string) bool { return ch.paste(id, svc, text) })
+				if n := ch.sg.caret; n > 0 {
+					// After an insert of the popup, the caret goes to the end of it (D273).
+					in.SetTextSelection(n, n)
+					ch.sg.caret = 0
+				}
 				if in.Changed() {
 					delete(ch.errs, id)
 				}
@@ -159,6 +164,7 @@ func (ch *Chat) composer(c *ui.Context, id string, st liveState) {
 				}
 			})
 		})
+		ch.suggestPopup(c, id, card)
 		if paths := card.DroppedFiles(); len(paths) > 0 {
 			ch.drop(draft, paths)
 			ch.field.Focus()
@@ -255,9 +261,12 @@ func (ch *Chat) action(c *ui.Context, id string, st liveState, a Action) {
 }
 
 // textKey is a key of the field that types no text. Enter sends; ⇧Enter goes on to the field,
-// which breaks the line. Esc interrupts the agent while it works and does nothing else: it closes
+// which breaks the line. While the suggestion popup shows, it takes its keys first (D273). Esc interrupts the agent while it works and does nothing else: it closes
 // and switches nothing.
 func (ch *Chat) textKey(id string, st liveState, k ui.TextKey) bool {
+	if ch.suggestKey(id, k) {
+		return true
+	}
 	switch {
 	case k.Key == ui.KeyEnter && k.Mods == 0:
 		ch.submit(id, st, k.Text(), func() { k.SetText("") })
