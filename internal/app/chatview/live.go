@@ -49,12 +49,12 @@ func (ch *Chat) state(id string) liveState {
 	return liveState{w: w}
 }
 
-// live builds the live line of a working agent: the working glyph, what it does now and the time
-// since the turn started, which asks for a redraw each second while it shows (D55). Idle or
-// waiting on a menu: nothing.
-func (ch *Chat) live(c *ui.Context, st liveState) {
+// live builds the live line of a working agent, the top line of the composer card (D271): the
+// working glyph, what it does now and the time since the turn started, which asks for a redraw
+// each second while it shows (D55). Idle or waiting on a menu: nothing, and it returns false.
+func (ch *Chat) live(c *ui.Context, st liveState) bool {
 	if st.kind != liveWorking {
-		return
+		return false
 	}
 	pal := theme.Current()
 	what, start, ok := ch.model.Activity()
@@ -62,9 +62,14 @@ func (ch *Chat) live(c *ui.Context, st liveState) {
 	if ok {
 		elapsed = ElapsedText(c.Now().Sub(start))
 	}
-	column(c, func() {
-		ui.Row(c).Label(LabelLive + " " + what).FillWidth().Height(lineHeight).AlignItems(ui.Center).Gap(theme.Space8).Children(func() {
-			ch.working(c, pal, what, elapsed)
-		})
+	topLine(c).Label(LabelLive + " " + what).Gap(theme.Space8).Children(func() {
+		ch.working(c, pal, what, elapsed)
 	})
+	return true
+}
+
+// topLine is the row of the team row or the live line at the top of the composer card. It ends as
+// far from the card's right edge as the text starts from its left edge.
+func topLine(c *ui.Context) ui.Element {
+	return ui.Row(c).FillWidth().Height(lineHeight).AlignItems(ui.Center).Margin(0, cardPadLeft-cardPadRight, 0, 0)
 }
