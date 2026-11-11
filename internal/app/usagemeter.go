@@ -33,7 +33,7 @@ type planPercent interface {
 func contextMeter(src planPercent, terminal string, labels usage.Context) kit.Meter {
 	m := kit.Meter{Label: LabelContext}
 	if c, ok := contextOf(src, terminal, labels); ok {
-		m.Percent, m.Has, m.Value = c.Percent(), true, c.Label()
+		m.Percent, m.Has, m.Detail, m.Value, m.Soon = c.Percent(), true, c.Sizes(), c.PercentText(), c.Soon()
 	}
 	return m
 }

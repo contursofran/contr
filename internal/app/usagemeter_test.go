@@ -38,11 +38,11 @@ func (f fakeCtx) Context(id string) (usage.Context, bool) { c, ok := f.ctx[id]; 
 func TestContextMeterShowsTheContextOfTheSelectedTerminal(t *testing.T) {
 	src := fakeCtx{fakeLeft{}, map[string]usage.Context{"t1": {Tokens: 90000, Size: 200000}, "t2": {Tokens: 200000, Size: 200000}}}
 	got := contextMeter(src, "t1", usage.Context{})
-	want := kit.Meter{Label: "Context", Value: "90k of 200k  45%", Percent: 45, Has: true}
+	want := kit.Meter{Label: "Context", Detail: "90k of 200k", Value: "45%", Percent: 45, Has: true}
 	if got != want {
 		t.Errorf("context %+v, want %+v", got, want)
 	}
-	if got := contextMeter(src, "t2", usage.Context{}); got.Percent != 100 || got.Value != "200k of 200k  100%" {
+	if got := contextMeter(src, "t2", usage.Context{}); got.Percent != 100 || got.Detail != "200k · compacts soon" || got.Value != "100%" || !got.Soon {
 		t.Errorf("full context %+v", got)
 	}
 	// No terminal selected, a terminal with no file and no labels, or no sampler: no data.
@@ -61,10 +61,10 @@ func TestContextMeterShowsTheContextOfTheSelectedTerminal(t *testing.T) {
 func TestContextMeterFallsBackToTheHookLabels(t *testing.T) {
 	src := fakeCtx{fakeLeft{}, map[string]usage.Context{"t1": {Tokens: 90000, Size: 200000}}}
 	labels := usage.Context{Tokens: 90000, Size: 160000}
-	if got := contextMeter(src, "t1", labels); got.Value != "90k of 200k  45%" {
+	if got := contextMeter(src, "t1", labels); got.Detail != "90k of 200k" || got.Value != "45%" {
 		t.Errorf("with a file: %+v, want the file", got)
 	}
-	want := kit.Meter{Label: "Context", Value: "90k of 160k  56%", Percent: 56, Has: true}
+	want := kit.Meter{Label: "Context", Detail: "90k of 160k", Value: "56%", Percent: 56, Has: true}
 	if got := contextMeter(src, "t2", labels); got != want {
 		t.Errorf("no file: %+v, want %+v", got, want)
 	}
@@ -251,7 +251,7 @@ func TestTheContextLineFollowsTheSelectedTerminal(t *testing.T) {
 		}
 	}
 	tt.Frame()
-	if tt.HasText("90k of 200k  45%") {
+	if tt.HasText("90k of 200k") {
 		t.Fatal("a context shows with no file")
 	}
 	dir := t.TempDir()
@@ -266,12 +266,12 @@ func TestTheContextLineFollowsTheSelectedTerminal(t *testing.T) {
 	waitUntil(t, func() bool { _, ok := f.Usage.Context("w1"); return ok })
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "w1"})
 	tt.Frame()
-	if !tt.HasText("90k of 200k  45%") {
+	if !tt.HasText("90k of 200k") {
 		t.Errorf("no context text; texts %q", tt.Texts())
 	}
 	f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "w2"})
 	tt.Frame()
-	if tt.HasText("90k of 200k  45%") {
+	if tt.HasText("90k of 200k") {
 		t.Error("the context of w1 shows for w2")
 	}
 }

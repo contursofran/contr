@@ -102,7 +102,6 @@ func TestDiffSummaryAndFileTreeAgreeOnAWorkTreeWithASecondAgentsBranch(t *testin
 	apptest.Write(t, s.Dir, "fresh.go", "a\nb\nc\nd\n") // untracked: +4
 
 	r := newTreeRig(t, s.Dir)
-	r.ft.onlyChanged = true
 	r.frame()
 	d := &DiffSummary{Tree: r.ft}
 	got, ok := d.Summary()
