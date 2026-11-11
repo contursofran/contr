@@ -228,6 +228,12 @@ var seeFixtures = map[string]seeFixture{
 		ready: "lead, ",
 		press: []string{"Chat", "wait:work group 10 tool calls", "work group 10 tool calls", "wait:tool call Grep"},
 	},
+	"chat-paths": {
+		about: "the chat fixture with \"Look at @app\" typed in the composer (D279): the popup above the card with the folder and files of the repo whose paths hold app, the paths with a part that starts with it first",
+		setup: seeChatPaths,
+		ready: "lead, ",
+		press: []string{"Chat", "type:Look at @app", "wait:@internal/app/"},
+	},
 	"session": {
 		about: "the orchestrator lead with the todos and artifacts of canvas board 11 (D197)",
 		setup: seeSession,
@@ -355,6 +361,18 @@ func seeChatAs(t *testing.T, h *harness, profile string) {
 	s := &session.Session{UpdatedAt: uint64(time.Now().Unix())}
 	s.SetTranscript("chat", path)
 	if err := session.Write(filepath.Join(h.dir, "state"), w.Address, s); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// seeChatPaths is seeChat with the files of seeChanges in lead's repo and an untracked one whose
+// name holds "app" in the middle.
+func seeChatPaths(t *testing.T, h *harness) {
+	t.Helper()
+	seeChat(t, h)
+	repo := filepath.Join(h.dir, "demo")
+	seeChanges(t, repo)
+	if err := os.WriteFile(filepath.Join(repo, "wrapper.go"), []byte("package demo\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }

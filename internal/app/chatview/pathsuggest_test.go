@@ -81,9 +81,9 @@ func TestAtInsertsAFile(t *testing.T) {
 
 func TestAtInsertsAFolderAndStaysOpen(t *testing.T) {
 	s, f := pathSession(t)
-	s.typeIn("@sp")
+	s.typeIn("see @sp")
 	s.key(0, ui.KeyEnter)
-	if s.draft() != "@docs/spec/" || len(s.sent) != 0 {
+	if s.draft() != "see @docs/spec/" || len(s.sent) != 0 {
 		t.Fatalf("after Enter: draft %q, sent %q", s.draft(), s.sent)
 	}
 	if !s.has(LabelSuggest) || !s.has("@docs/spec/ChatView.md") {
@@ -91,6 +91,10 @@ func TestAtInsertsAFolderAndStaysOpen(t *testing.T) {
 	}
 	if want := []string{"", "docs/spec/"}; !reflect.DeepEqual(f.dirs, want) {
 		t.Errorf("folders read = %q, want %q", f.dirs, want)
+	}
+	s.typeIn("Ch")
+	if s.draft() != "see @docs/spec/Ch" {
+		t.Fatalf("typed after the folder: draft %q, want the caret at its end", s.draft())
 	}
 	s.key(0, ui.KeyEscape)
 	if s.has(LabelSuggest) {
