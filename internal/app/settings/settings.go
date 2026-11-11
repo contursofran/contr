@@ -163,6 +163,8 @@ type Settings struct {
 	HCUpdate HCRunner
 	// Setup is what the checks of the Setup tab read (D278); nil runs no check.
 	Setup *setup.Env
+	// SetupRun runs the checks; nil runs setup.Run. Tests give a fake.
+	SetupRun func(context.Context, setup.Env) []setup.Result
 
 	// tab is the tab that shows: SettingsTabs[tab].
 	tab int

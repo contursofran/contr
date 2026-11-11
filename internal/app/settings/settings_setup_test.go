@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/contursofran/contr/internal/app/theme"
 	"github.com/contursofran/contr/internal/setup"
 	"github.com/contursofran/contr/internal/usage"
 )
@@ -140,4 +141,32 @@ func TestSetupCopiedGoesBackToCopy(t *testing.T) {
 	if r.has(SetupCopied) || !r.has(SetupCopy) {
 		t.Fatalf("still Copied; texts %q", r.texts())
 	}
+}
+
+func TestFirstSetupCountsStepsWithoutTheCoreAndOpensOnSetup(t *testing.T) {
+	r := newSettingsRig(t, nil)
+	runs := 0
+	r.s.Setup = setupEnv(t, nil, &runs)
+	r.s.CoreVersion = func() (string, bool) { return "", false }
+	r.s.SelectTab(TabGeneral)
+	got := -1
+	r.s.FirstSetup(func(n int) { got = n })
+	if runs == 0 || got != 1 {
+		t.Fatalf("runs %d, steps %d; want a pass and 1 step (the meter, not the core)", runs, got)
+	}
+	if r.s.Opened() || !r.s.NeedsDot() {
+		t.Fatal("want Settings closed and the dot after the start pass")
+	}
+	before := runs
+	r.s.OpenSetup()
+	r.tt.Frame()
+	r.tt.Advance(theme.MotionPopIn)
+	if !r.s.Opened() || runs != before || !r.hasText("Required") {
+		t.Fatalf("OpenSetup: open %v, runs %d then %d, texts %q", r.s.Opened(), before, runs, r.texts())
+	}
+}
+
+func TestFirstSetupWithoutEnvDoesNothing(t *testing.T) {
+	r := newSettingsRig(t, nil)
+	r.s.FirstSetup(func(int) { t.Fatal("done ran without Setup") })
 }
