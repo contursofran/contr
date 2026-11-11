@@ -96,10 +96,8 @@ func Marks(m *Model) []Mark {
 				if !ok {
 					continue
 				}
-				item := ""
-				if e.Tool.Done {
-					item = strings.TrimSpace(e.Tool.Excerpt)
-				}
+				// The excerpt is the result: empty until it comes.
+				item := strings.TrimSpace(e.Tool.Excerpt)
 				out = append(out, Mark{Kind: kind, Row: i, ID: callID(e.Tool.ID), Item: item, At: entryTime(e)})
 			}
 		}

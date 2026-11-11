@@ -10,7 +10,7 @@ import (
 // The important rows of the chat (D270).
 
 const (
-	lMarkSaid = `{"type":"assistant","uuid":"m1","timestamp":"2026-11-10T10:01:00Z","message":{"content":[{"type":"text","text":"Two things.\n\n> [!DECISION]\n> Ship the notch now\n> or after the release?\n\n> [!NOTE]\n> Only a note.\n\n` + "```md" + `\n> [!WARNING]\n> In a code block.\n` + "```" + `\n\n> [!warning] CI is slow\n\n>[!DONE]\n>PR 633 is merged.\n\n> [!UNVERIFIED]\n> The e2e run."}]}}`
+	lMarkSaid = `{"type":"assistant","uuid":"m1","timestamp":"2026-11-10T10:01:00Z","message":{"content":[{"type":"text","text":"Two things.\n\n> [!DECISION]\n> Ship the notch now\n> or after the release?\n\n> [!NOTE]\n> Only a note.\n\n` + "```md" + `\nplain\n> [!WARNING]\n> In a code block.\n` + "```" + `\n\n> [!warning] CI is slow\n\n>[!DONE]\n>PR 633 is merged.\n\n> [!UNVERIFIED]\n> The e2e run."}]}}`
 	lPin      = `{"type":"assistant","uuid":"m2","timestamp":"2026-11-10T10:02:00Z","message":{"content":[{"type":"tool_use","id":"p1","name":"mcp__plugin_contr_contr__pin_for_owner","input":{"text":"Test the build"}}]}}`
 	lPinRes   = `{"type":"user","uuid":"m3","timestamp":"2026-11-10T10:02:01Z","message":{"content":[{"type":"tool_result","tool_use_id":"p1","content":"T4"}]}}`
 	lAsk      = `{"type":"assistant","uuid":"m4","timestamp":"2026-11-10T10:03:00Z","message":{"content":[{"type":"tool_use","id":"q1","name":"mcp__plugin_contr_contr__ask_owner","input":{"question":"Which name?"}}]}}`
