@@ -96,9 +96,9 @@ func TestChipTextRewritesOnlyKnownNames(t *testing.T) {
 	ch.Chips = knownChips()
 	src := "PR #667 and #3 by b-649 in my_file.go:4 and nope.go, `b-649`."
 	got := ch.chipText("a1", 0, src)
-	want := `PR [#667](contr-chip:pr/passed/667 "PR #667 · checks passed") and #3 by ` +
-		`[b-649](contr-chip:worker/needs-you/b-649 "Worker b-649 · needs you") in ` +
-		`[my\_file.go:4](contr-chip:file//my_file.go "Open my_file.go") and nope.go, ` + "`b-649`."
+	want := `PR [<u>#667</u>](contr-chip:pr/passed/667 "PR #667 · checks passed") and #3 by ` +
+		`[<u>b-649</u>](contr-chip:worker/needs-you/b-649 "Worker b-649 · needs you") in ` +
+		`[<u>my\_file.go:4</u>](contr-chip:file//my_file.go "Open my_file.go") and nope.go, ` + "`b-649`."
 	if got != want {
 		t.Errorf("got  %s\nwant %s", got, want)
 	}
@@ -171,7 +171,7 @@ func TestChipStates(t *testing.T) {
 		{agents.Worker{Live: true}, StateWaiting},
 		{agents.Worker{Status: "working"}, StateDone},
 	} {
-		if got := WorkerChip(tc.w); got != (Chip{Kind: ChipWorker, State: tc.want}) {
+		if got := WorkerChip(tc.w, ""); got != (Chip{Kind: ChipWorker, State: tc.want}) {
 			t.Errorf("WorkerChip(%+v) = %v", tc.w, got)
 		}
 	}
@@ -216,8 +216,15 @@ func TestChipIcon(t *testing.T) {
 			t.Errorf("%+v: %+v %v, want width %v", tc.c, o, ok, tc.w)
 		}
 	}
-	if o, ok := chipIcon(chipDest(Chip{Kind: ChipWorker, State: StateWorking}, "b-1"), 14); !ok || o.Width != chipDot+chipDotGap {
-		t.Errorf("worker dot: %+v %v", o, ok)
+	// A worker shows its family's mark, the size of the Octicon; no dot, and nothing when the
+	// family is not known (D292).
+	for _, f := range []Family{FamilyClaude, FamilyOpenAI, FamilyDeepSeek} {
+		if o, ok := chipIcon(chipDest(Chip{Kind: ChipWorker, State: StateWorking, Family: f}, "b-1"), 14); !ok || o.Width != side+chipDotGap || o.Draw == nil {
+			t.Errorf("worker mark %s: %+v %v", f, o, ok)
+		}
+	}
+	if o, ok := chipIcon(chipDest(Chip{Kind: ChipWorker, State: StateWorking}, "b-1"), 14); ok {
+		t.Errorf("a worker of another program has an icon: %+v", o)
 	}
 	if o, ok := chipIcon(chipDest(Chip{Kind: ChipFile}, "a.go"), 14); !ok || o.Draw == nil || o.Width <= 0 {
 		t.Errorf("file icon: %+v %v", o, ok)
@@ -271,6 +278,7 @@ func said(id, text string) string {
 func TestChipClicksOpenTheirSource(t *testing.T) {
 	s := newSession(t, "idle")
 	fc := knownChips()
+	fc.known["b-649"] = Chip{Kind: ChipWorker, State: StateNeedsYou, Family: FamilyClaude}
 	s.ch.Chips = fc
 	s.write(lPrompt, said("c1", "PR #667 by b-649 in my_file.go, and #3."))
 	for _, name := range []string{"#667", "b-649", "my_file.go"} {
@@ -294,7 +302,8 @@ func TestChipsWorkInsideContentBlocks(t *testing.T) {
 	s := newSession(t, "idle")
 	fc := knownChips()
 	fc.known["668"] = Chip{Kind: ChipPR, State: StateOpen}
-	fc.known["b-665"] = Chip{Kind: ChipWorker, State: StateWorking}
+	fc.known["b-649"] = Chip{Kind: ChipWorker, State: StateNeedsYou, Family: FamilyOpenAI}
+	fc.known["b-665"] = Chip{Kind: ChipWorker, State: StateWorking, Family: FamilyClaude}
 	s.ch.Chips = fc
 	s.write(lPrompt, said("c1", "| PR #668 | Worker |\n|---|---|\n| #667 | text |\n\n"+
 		"> [!DONE]\n> b-649 is done.\n\n1. my_file.go\n2. b-665\n"))
@@ -379,5 +388,39 @@ func TestGitHubColor(t *testing.T) {
 				t.Errorf("dark=%v %+v: %v, want %v", p.Dark, tc.c, got, tc.want)
 			}
 		}
+	}
+}
+
+func TestWorkerChipFamily(t *testing.T) {
+	if c := WorkerChip(agents.Worker{Live: true, Command: "codex"}, ""); c.Family != FamilyOpenAI {
+		t.Errorf("program: %+v", c)
+	}
+	if c := WorkerChip(agents.Worker{Live: true, Command: "x"}, "opus"); c.Family != FamilyClaude {
+		t.Errorf("profile model: %+v", c)
+	}
+	c := Chip{Kind: ChipWorker, State: StateNeedsYou, Family: FamilyDeepSeek}
+	if got, name, ok := parseChipDest(chipDest(c, "b-1")); !ok || got != c || name != "b-1" {
+		t.Errorf("round trip: %+v %q %v", got, name, ok)
+	}
+	if _, _, ok := parseChipDest("contr-chip:worker.vim/working/b-1"); ok {
+		t.Error("an unknown family parses")
+	}
+	if _, _, ok := parseChipDest("contr-chip:pr.claude/open/4"); ok {
+		t.Error("a PR with a family parses")
+	}
+	for s, want := range map[ChipState]string{StateNeedsYou: "blocked", StateWorking: "working", StateDone: "", StateWaiting: ""} {
+		if got := chipStatus(s); got != want {
+			t.Errorf("chipStatus(%v) = %q", s, got)
+		}
+	}
+}
+
+func TestLinksAreUnderlined(t *testing.T) {
+	ch := New(view.Env{}, t.TempDir(), nil)
+	ch.Chips = knownChips()
+	src := "See [the *docs*](https://example.com), <https://a.b> and https://c.d."
+	want := "See [<u>the *docs*</u>](https://example.com), <https://a.b> and https://c.d."
+	if got := ch.chipText("l1", 0, src); got != want {
+		t.Errorf("got  %s\nwant %s", got, want)
 	}
 }

@@ -1,13 +1,14 @@
 package chatview
 
-// Chips (docs/spec/ChatView.md, D262): names in Claude's text that contr knows show live. A PR
+// Chips (docs/spec/ChatView.md, D262, D292): names in Claude's text that contr knows show live. A PR
 // or an issue number ("#667"), a worker's name ("b-649") and a path of a file in the session's
 // folder become links of the scheme contr-chip: a pre-pass rewrites the Markdown source, outside
-// code and links. The link's icon (markdown.Options.LinkIcon) is a 6px dot in the color of the
-// state, or the file icon; a click (OnLink) opens the PR, selects the worker or opens the file.
+// code and links, its text underlined. The link's icon (markdown.Options.LinkIcon) is the Octicon, the worker's
+// family mark or the file icon in the color of the state; a click (OnLink) opens the PR, selects the worker or opens the file.
 // The state is part of the link's address, so a paragraph builds again only when a state changes.
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
@@ -53,7 +54,7 @@ const (
 	ChipFile
 )
 
-// ChipState is the state a chip's dot shows; StateNone has no dot.
+// ChipState is the state a chip shows; StateNone has none.
 type ChipState uint8
 
 const (
@@ -77,6 +78,8 @@ type Chip struct {
 	Kind  ChipKind
 	State ChipState
 	Draft bool // a draft PR
+	// Family is the model family of a worker chip, for its mark (D292); FamilyNone has no mark.
+	Family Family
 }
 
 // ChipSource knows the names of the chips. Its methods run on the UI thread.
@@ -111,6 +114,9 @@ func chipDest(c Chip, name string) string {
 	if c.Draft && c.Kind == ChipPR {
 		kind += draftWord
 	}
+	if c.Kind == ChipWorker && c.Family != FamilyNone {
+		kind += "." + string(c.Family)
+	}
 	return chipScheme + kind + "/" + stateWords[c.State] + "/" + name
 }
 
@@ -126,6 +132,14 @@ func parseChipDest(dest string) (Chip, string, bool) {
 	}
 	var c Chip
 	parts[0], c.Draft = strings.CutSuffix(parts[0], draftWord)
+	if k, f, ok := strings.Cut(parts[0], "."); ok && k == kindWords[ChipWorker] {
+		switch Family(f) {
+		case FamilyClaude, FamilyOpenAI, FamilyDeepSeek:
+			parts[0], c.Family = k, Family(f)
+		default:
+			return Chip{}, "", false
+		}
+	}
 	for i, w := range kindWords {
 		if i > 0 && w == parts[0] {
 			c.Kind = ChipKind(i)
@@ -183,8 +197,8 @@ func ChipColor(p *theme.Palette, s ChipState) (ui.Color, bool) {
 }
 
 const (
-	chipDot    = 6 // the dot's width
-	chipDotGap = 4 // between the dot and the text
+	chipDot    = 6 // the dot of a board's worker row
+	chipDotGap = 4 // between a chip's icon and its text
 )
 
 // chipIcon is the LinkIcon of the views: the dot of a chip with a state, the file icon of a file
@@ -206,16 +220,35 @@ func chipIcon(dest string, size float32) (markdown.InlineObject, bool) {
 	if g := ChipGitHub(c); g != icons.GitHubNone {
 		return githubIcon(c, g, size), true
 	}
-	if _, ok := ChipColor(theme.Current(), c.State); !ok {
+	if c.Kind == ChipWorker {
+		return workerIcon(c, size)
+	}
+	return markdown.InlineObject{}, false
+}
+
+// workerIcon is the LinkIcon of a worker chip (D292): the mark of its model family, the size of
+// a PR chip's Octicon, in WorkerInk of its state. A worker of another program has no icon.
+func workerIcon(c Chip, size float32) (markdown.InlineObject, bool) {
+	m := familyMark(c.Family)
+	if m == nil {
 		return markdown.InlineObject{}, false
 	}
-	// The dot's center is near the middle of the lowercase letters.
-	return markdown.InlineObject{Width: chipDot + chipDotGap, Height: size*0.3 + chipDot/2,
+	side := size * 0.9
+	return markdown.InlineObject{Width: side + chipDotGap, Height: side * 0.82, Depth: side * 0.18,
 		Draw: func(p *ui.Painter, r ui.Rect) {
-			if col, ok := ChipColor(theme.Current(), c.State); ok {
-				p.Fill(ui.Rect{X: r.X, Y: r.Y, W: chipDot, H: chipDot}, col, chipDot/2)
-			}
+			p.Icon(m, ui.Rect{X: r.X, Y: r.Y, W: side, H: side}, WorkerInk(theme.Current(), chipStatus(c.State)))
 		}}, true
+}
+
+// chipStatus is the worker status of a worker chip's state, for WorkerInk.
+func chipStatus(s ChipState) string {
+	switch s {
+	case StateNeedsYou:
+		return "blocked"
+	case StateWorking:
+		return "working"
+	}
+	return ""
 }
 
 // ChipGitHub is the Octicon of a PR or an issue chip (D286): a PR by its state (merged, closed,
@@ -393,37 +426,87 @@ func word(w string) (Token, bool) {
 	return Token{}, false
 }
 
-// rewrite makes each token with a chip a link to its chip in src.
-func rewrite(src string, toks []Token, chips []Chip) string {
-	var b strings.Builder
-	at := 0
+// rewrite makes each token with a chip a link to its chip in src, its text underlined (D292).
+// The label of each link of src, from Labels, gets the same underline, so one answer has one
+// kind of link.
+func rewrite(src string, toks []Token, chips []Chip, labels []Token) string {
+	type edit struct {
+		start, end int
+		text       string
+	}
+	var eds []edit
 	for i, t := range toks {
 		c := chips[i]
 		if c.Kind == ChipNone {
 			continue
 		}
-		b.WriteString(src[at:t.Start])
-		b.WriteByte('[')
+		var b strings.Builder
+		b.WriteString("[<u>")
 		for _, r := range src[t.Start:t.End] {
-			if strings.ContainsRune(`\_*~[]`, r) {
+			if strings.ContainsRune(`\_*~[]<`, r) {
 				b.WriteByte('\\')
 			}
 			b.WriteRune(r)
 		}
-		b.WriteString("](" + chipDest(c, t.Name) + ` "` + chipTip(c, t.Name) + `")`)
-		at = t.End
+		b.WriteString("</u>](" + chipDest(c, t.Name) + ` "` + chipTip(c, t.Name) + `")`)
+		eds = append(eds, edit{t.Start, t.End, b.String()})
+	}
+	for _, l := range labels {
+		eds = append(eds, edit{l.Start, l.Start, "<u>"}, edit{l.End, l.End, "</u>"})
+	}
+	slices.SortStableFunc(eds, func(a, b edit) int { return a.start - b.start })
+	var b strings.Builder
+	at := 0
+	for _, e := range eds {
+		b.WriteString(src[at:e.start])
+		b.WriteString(e.text)
+		at = e.end
 	}
 	b.WriteString(src[at:])
 	return b.String()
 }
 
+// Labels finds the text of each link written in Markdown src ("[text](url)"), to underline it.
+// An autolink ("https://…") is left out: tags around it would end it. Start and End are the
+// bytes of the text in the source.
+func Labels(src string) []Token {
+	d := parser.Parse(src)
+	var out []Token
+	for i := 1; i < d.Len(); i++ {
+		in := d.Inlines(i)
+		var walk func(from, to int)
+		walk = func(from, to int) {
+			for k := from; k < to; k = in[k].Next {
+				n := &in[k]
+				switch n.Kind {
+				case parser.Link:
+					if !n.Auto && k+1 < n.Next {
+						start, end := in[k+1].Start, in[k+1].End
+						for j := k + 1; j < n.Next; j++ {
+							end = max(end, in[j].End)
+						}
+						if start < end && end <= len(src) {
+							out = append(out, Token{Start: start, End: end})
+						}
+					}
+				case parser.Emphasis, parser.Strong, parser.Strikethrough:
+					walk(k+1, n.Next)
+				}
+			}
+		}
+		walk(0, len(in))
+	}
+	return out
+}
+
 // chipPart is a part of a text with its tokens, and the source with chips that the last chips
 // gave.
 type chipPart struct {
-	src   string
-	toks  []Token
-	chips []Chip
-	out   string
+	src    string
+	toks   []Token
+	labels []Token
+	chips  []Chip
+	out    string
 }
 
 // chipText is the source of part i of the text row id with its known names as chips. The tokens
@@ -436,8 +519,9 @@ func (ch *Chat) chipText(id string, i int, src string) string {
 	key := id + "/" + strconv.Itoa(i)
 	p := ch.chips[key]
 	if p == nil || p.src != src {
-		p = &chipPart{src: src, toks: Tokens(src), out: src}
+		p = &chipPart{src: src, toks: Tokens(src), labels: Labels(src)}
 		p.chips = make([]Chip, len(p.toks))
+		p.out = rewrite(src, p.toks, p.chips, p.labels)
 		ch.chips[key] = p
 	}
 	changed := false
@@ -452,7 +536,7 @@ func (ch *Chat) chipText(id string, i int, src string) string {
 		}
 	}
 	if changed {
-		p.out = rewrite(src, p.toks, p.chips)
+		p.out = rewrite(src, p.toks, p.chips, p.labels)
 	}
 	return p.out
 }
@@ -505,8 +589,9 @@ func RefChip(r github.Ref) Chip {
 
 // WorkerChip is the chip of a worker, as the team row counts it (D259): an ended one is done, a
 // blocked one needs the owner, a working one works, any other waits.
-func WorkerChip(w agents.Worker) Chip {
-	c := Chip{Kind: ChipWorker, State: StateWaiting}
+// family is its model family (FamilyOf of the worker and the model of its profile).
+func WorkerChip(w agents.Worker, profileModel string) Chip {
+	c := Chip{Kind: ChipWorker, State: StateWaiting, Family: FamilyOf(w.Model, profileModel, w.Command)}
 	switch {
 	case !w.Live:
 		c.State = StateDone

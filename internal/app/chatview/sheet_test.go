@@ -152,6 +152,7 @@ const seqAnswer = "How a fix reaches you:\n\n```contr-seq\nowner -> lead: fix #6
 const chipsText = "PRs: #668 open, #656 checks running, #667 passed, #664 failed, #663 merged, #660 closed, #661 draft. " +
 	"Issues #649 open, #650 closed. Workers: b-649 needs you, b-665 works, b-658 is done, b-659 waits. " +
 	"The conflict is in internal/app/kit/agentrow.go:42.\n\n" +
+	"A plain link: [the spec](https://example.com/spec). " +
 	"Stays text: #3, `b-649` and nope/missing.go."
 
 // sheetChips knows the names of chipsText.
@@ -159,8 +160,8 @@ var sheetChips = &fakeChips{known: map[string]Chip{
 	"668": {Kind: ChipPR, State: StateOpen}, "656": {Kind: ChipPR, State: StateRunning}, "667": {Kind: ChipPR, State: StatePassed},
 	"664": {Kind: ChipPR, State: StateFailed}, "663": {Kind: ChipPR, State: StateMerged}, "660": {Kind: ChipPR, State: StateClosed},
 	"661": {Kind: ChipPR, State: StateOpen, Draft: true},
-	"649": {Kind: ChipIssue}, "650": {Kind: ChipIssue, State: StateClosed}, "b-649": {Kind: ChipWorker, State: StateNeedsYou}, "b-665": {Kind: ChipWorker, State: StateWorking},
-	"b-658": {Kind: ChipWorker, State: StateDone}, "b-659": {Kind: ChipWorker, State: StateWaiting},
+	"649": {Kind: ChipIssue}, "650": {Kind: ChipIssue, State: StateClosed}, "b-649": {Kind: ChipWorker, State: StateNeedsYou, Family: FamilyClaude}, "b-665": {Kind: ChipWorker, State: StateWorking, Family: FamilyOpenAI},
+	"b-658": {Kind: ChipWorker, State: StateDone, Family: FamilyDeepSeek}, "b-659": {Kind: ChipWorker, State: StateWaiting},
 	"internal/app/kit/agentrow.go": {Kind: ChipFile},
 }}
 
