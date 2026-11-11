@@ -5,6 +5,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/contursofran/contr/internal/app/icons"
 	"github.com/contursofran/contr/internal/app/kit"
 	"github.com/contursofran/contr/internal/app/shortcut"
 	"github.com/contursofran/contr/internal/app/theme"
@@ -31,6 +32,8 @@ const (
 	LabelOwnerNote = "note for the owner"
 	LabelNote      = "worker note"
 	LabelCall      = "tool call"
+	// LabelCallIcon names the kind icon of a call line, followed by the icon's name.
+	LabelCallIcon = "tool icon"
 	// LabelFade names the gradient over the bottom of the transcript, above the dock.
 	LabelFade = "transcript fade"
 	// TextTask names a background task's line, before its status and summary.
@@ -41,14 +44,15 @@ const (
 
 // Sizes of docs/spec/ChatView.md.
 const (
-	columnMax  = 920 // the column of prose, centered
-	promptMax  = 560
-	groupMax   = 584
-	lineHeight = 20 // a line of an open group, and the group row
-	nameWidth  = 48 // the tool name column of a call line
-	dotSize    = 6
-	topSpace   = 44 // room for the switch row above the first row
-	rowGap     = theme.Space18
+	columnMax    = 920 // the column of prose, centered
+	promptMax    = 560
+	groupMax     = 584
+	lineHeight   = 20 // a line of an open group, and the group row
+	nameWidth    = 48 // the tool name column of a call line
+	callIconSize = 14 // the kind icon slot of a call line (D274)
+	dotSize      = 6
+	topSpace     = 44 // room for the switch row above the first row
+	rowGap       = theme.Space18
 	// pendingOpacity dims a pending prompt.
 	pendingOpacity = 0.55
 )
@@ -340,16 +344,23 @@ func (ch *Chat) noteLine(c *ui.Context, e transcript.Entry, own bool) {
 	})
 }
 
-// callLine is one tool call: the working glyph while it runs, its name, its summary, an error
-// mark and how long it took.
+// callLine is one tool call: a 14px slot with the working glyph while it runs, else the icon of
+// its kind (D274), its label, its key argument, an error mark and how long it took.
 func (ch *Chat) callLine(c *ui.Context, e transcript.Entry) {
 	pal := theme.Current()
 	call := e.Tool
 	name := ToolName(call)
 	ui.Row(c).Label(LabelCall + " " + name).FillWidth().Height(lineHeight).AlignItems(ui.Center).Gap(theme.Space8).Children(func() {
-		if !call.Done {
-			kit.StatusGlyph(c, kit.GlyphOpts{State: kit.GlyphWorking, Small: true})
-		}
+		slot := ui.Box(c).Size(callIconSize, callIconSize).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).TextColor(pal.Ink48)
+		slot.Children(func() {
+			if !call.Done {
+				kit.StatusGlyph(c, kit.GlyphOpts{State: kit.GlyphWorking, Small: true})
+			} else if icon := kindIcon(call.Kind); icon != "" {
+				if s := icons.Line(icon); s != nil {
+					ui.Icon(c, s).Size(callIconSize, callIconSize).Label(LabelCallIcon + " " + icon)
+				}
+			}
+		})
 		kit.Styled(ui.Text(c, name), theme.StyleMeta).NoWrap().MinWidth(nameWidth).Shrink(0).TextColor(pal.Ink64)
 		kit.Styled(ui.Text(c, call.Summary), theme.StyleMeta).SingleLine().Grow(1).MinWidth(0).TextColor(pal.Ink48)
 		if call.Error {

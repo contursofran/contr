@@ -210,6 +210,12 @@ var seeFixtures = map[string]seeFixture{
 		ready: "lead, ",
 		press: []string{"Chat", "wait:image 2"},
 	},
+	"chat-tools": {
+		about: "the chat fixture with a turn of mixed tool calls, its work group open (D274): a call line of each kind with its icon (skill, Slack connector, contr plugin, other MCP, agent, fetch, Bash, Read, Grep), a tool of no kind with an empty slot, and the label and key argument of each",
+		setup: seeChatTools,
+		ready: "lead, ",
+		press: []string{"Chat", "wait:work group 10 tool calls", "work group 10 tool calls", "wait:tool call Grep"},
+	},
 	"session": {
 		about: "the orchestrator lead with the todos and artifacts of canvas board 11 (D197)",
 		setup: seeSession,
@@ -405,6 +411,35 @@ func seeChatOutlineAway(t *testing.T, h *harness) {
 		seeLine("n2", "assistant", seeText("#634 is merged.\n\n> [!DONE]\n> PR #634 is merged.\n\n"+
 			"> [!DECISION]\n> Ship the notch now, before the release, or keep it behind the switch until you test the glass on a light wallpaper?")),
 	)
+}
+
+// seeChatTools is seeChat with a turn of a done call of each kind (D274).
+func seeChatTools(t *testing.T, h *harness) {
+	t.Helper()
+	seeChat(t, h)
+	lines := []seeLineT{seeLine("m0", "user", "find where the call line draws and tell the team")}
+	for i, c := range []struct {
+		name  string
+		input map[string]any
+	}{
+		{"Skill", map[string]any{"skill": "contr:chat-writing"}},
+		{"mcp__claude_ai_Slack__slack_send_message", map[string]any{"channel": "#dev", "text": "the call line has icons"}},
+		{"mcp__plugin_contr_contr__send", map[string]any{"to": "b-709", "body": "merge main"}},
+		{"mcp__linear__list_issues", map[string]any{"query": "chat rows"}},
+		{"Task", map[string]any{"subagent_type": "Explore", "description": "Find the call line"}},
+		{"WebFetch", map[string]any{"url": "https://example.com/docs/chat"}},
+		{"Bash", map[string]any{"command": "go test ./internal/app/chatview", "description": "Run the chat tests"}},
+		{"Read", map[string]any{"file_path": "internal/app/chatview/view.go"}},
+		{"Grep", map[string]any{"pattern": "callLine"}},
+		{"TodoWrite", map[string]any{"todos": []any{}}},
+	} {
+		id := fmt.Sprintf("tt%d", i)
+		lines = append(lines,
+			seeLine("m"+id, "assistant", []any{map[string]any{"type": "tool_use", "id": id, "name": c.name, "input": c.input}}),
+			seeLine("r"+id, "user", []any{map[string]any{"type": "tool_result", "tool_use_id": id, "content": "ok"}}))
+	}
+	lines = append(lines, seeLine("m9", "assistant", seeText("The call line draws in `internal/app/chatview/view.go`. I told b-709.")))
+	seeAppend(t, h, time.Now(), lines...)
 }
 
 // seeText is the content of a text of Claude.
