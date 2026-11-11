@@ -155,7 +155,7 @@ func (ch *Chat) mdTheme(pal *theme.Palette) {
 	th := &markdown.Theme{
 		FontSize: size, Font: theme.FontFamilySans, CodeFont: theme.FontFamily,
 		LineHeight: ch.ts(theme.StyleProse).Line / size, CodeLineHeight: ch.ts(theme.StyleTerminal).Line / ch.ts(theme.StyleTerminal).Size,
-		Text: pal.Ink88, Muted: pal.Ink48, Link: pal.ContentLink, Strong: pal.Ink88, StrongWeight: 500,
+		Text: pal.Ink88, Muted: pal.Ink48, Link: pal.Ink88, Strong: pal.Ink88, StrongWeight: 500,
 		Code: pal.Ink88, CodeBackground: pal.Hover, CodeSize: em(inlineCodeSize),
 		BlockSpacing: em(theme.Space12),
 		QuoteBar:     pal.Ink30, QuoteText: pal.Ink88, QuoteBarWidth: remarkBar, Rule: pal.Hairline,

@@ -274,8 +274,8 @@ func TestListsAndItemText(t *testing.T) {
 	}
 }
 
-// Links in Claude's text, chips included, are in content-link and the text around them is not, in
-// each theme (D275).
+// Links in Claude's text, chips included, are in the ink of the text around them, in each theme
+// (D292, replacing the content-link of D275); the pre-pass underlines them.
 func TestLinksHaveTheLinkColor(t *testing.T) {
 	for _, src := range []mygo.ThemeSource{mygo.ThemeDark, mygo.ThemeLight} {
 		themetest.Use(t, src)
@@ -283,11 +283,8 @@ func TestLinksHaveTheLinkColor(t *testing.T) {
 		ch := New(view.Env{}, t.TempDir(), nil)
 		ch.mdTheme(pal)
 		for _, th := range []*markdown.Theme{ch.md.Theme, ch.mdNest.Theme, ch.mdHead.Theme, ch.mdNum.Theme} {
-			if th.Link != pal.ContentLink {
-				t.Errorf("%v: link color %v, want content-link %v", src, th.Link, pal.ContentLink)
-			}
-			if th.Text == th.Link || th.Strong == th.Link {
-				t.Errorf("%v: plain text has the link color", src)
+			if th.Link != pal.Ink88 {
+				t.Errorf("%v: link color %v, want ink-88 %v", src, th.Link, pal.Ink88)
 			}
 		}
 	}

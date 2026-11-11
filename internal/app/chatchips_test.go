@@ -79,6 +79,17 @@ func TestChatChipsKnowWorkersByName(t *testing.T) {
 	if _, ok := r.look(chatview.TokenWord, "b-650"); ok {
 		t.Error("an unknown name is a chip")
 	}
+	// The chip's family comes from the model of the worker's profile (D292).
+	r.f.deps.ModelOf = func(profile string) string { return "opus" }
+	if c, _ := r.look(chatview.TokenWord, "b-649"); c.Family != chatview.FamilyNone {
+		t.Errorf("a worker with no profile has family %q", c.Family)
+	}
+	for i := range r.f.snapshot().Workers {
+		r.f.snapshot().Workers[i].Profile = "builder"
+	}
+	if c, _ := r.look(chatview.TokenWord, "b-649"); c.Family != chatview.FamilyClaude {
+		t.Errorf("family %q, want claude from the profile's model", c.Family)
+	}
 	if r.f.WorkerPRs.GH != r.s.refs.GH {
 		t.Error("the number reads do not share the gh queue")
 	}

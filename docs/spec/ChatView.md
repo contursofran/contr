@@ -47,7 +47,7 @@ The sizes in this file are the Default chat text size. The Chat text setting (D2
 | Owner prompt | right-aligned, at most 560px, padding `8px 13px`, radius `radius-12`, fill `hover`, text `prose` in `ink-100` |
 | Prompt images | the images of a prompt (D269), under the bubble, at the right, `space-6` above, gap `space-6`, wrapping: a `thumb` (64px) thumbnail for each image whose bytes are in the transcript, cropped to fill, `radius-12`, 1px `hairline`; while it is read, a `hover` box of its size. A click opens it larger: over the `scrim`, as large as it is and at most the chat less 40px at each side, `radius-12`; Escape or a click outside closes it. The images with no bytes, and those that do not read or decode, show as one quiet chip after the thumbnails: "1 image" / "2 images", mono `meta`, `ink-48`, padding `2px 8px`, `radius-6`, 1px `hairline`. Their "[Image #N]" marks do not show; a prompt of images alone has no bubble. A pending prompt with images shows the chip. |
 | Sent time | the time the prompt was sent, from its transcript timestamp: one line, mono `meta`, `ink-48` (the lowest text ink with 4.5:1), `space-4` above, under the owner prompt, right-aligned with the bubble. Once per turn: Claude's texts, groups and notes show no time (D266). In the Mac's time zone: "14:32" today, "Yesterday 14:32", else "9 Nov 14:32"; "today" is judged at each build, and nothing ticks (D55). No timestamp, no line; a pending prompt has none. |
-| Claude's text | `markdown.View`: `prose` size and line, sans; text `ink-88`, strong (500) `ink-88`; links (Markdown links, bare URLs, file links and chips) in `content-link`, underlined while the pointer is over them (D275), and nothing else in that color; muted `ink-48`; each block as [Content](#content) says |
+| Claude's text | `markdown.View`: `prose` size and line, sans; text `ink-88`, strong (500) `ink-88`; links (Markdown links, file links and chips) in the text's ink `ink-88` with an underline in the same ink (D292, replacing the `content-link` of D275); a bare URL has no underline and shows it while the pointer is over it, and nothing else in that color; muted `ink-48`; each block as [Content](#content) says |
 | Work group, folded | the tool calls, kit notes and background tasks between two texts, as one row 20px high, mono `value`, `ink-48` (`ink-64` on hover): "2 worker notes · 1 background task · 6 tool calls" (a message of another session counts as a worker note; a part with no item is left out, "1 tool call"), a [worker mark](#worker-mark) (or 6px dot) for each worker that sent a note, then `›`. While a call has no result, a working StatusGlyph (14px) comes first. |
 | Work group, open | `⌄`; under it a card, a wide block: at least 584px (or the content width when less), as wide as its longest line (note, task and call lines alike), up to the content width, `space-6` below the row, padding `8px 12px`, radius `radius-9`, line `hairline`: the note lines, a `hairline` rule, the call lines |
 | Note line | 20px, gap `space-8`, mono `meta`: the sender's dot, the name (500, `ink-88`), the text on one line (`ink-48`). An owner answer or done mark has the name "owner". A message of another Claude session or a teammate (D254) has the sender as its name ("session" when it has none) and the first line of the message; a subagent's hand-back is "subagent" and "reported". |
@@ -260,20 +260,20 @@ The row redraws when the agent state changes; it has no timer of its own
 
 ## Chips
 
-Names in Claude's text that contr knows show live (D262): a 6px dot in the
-color of the state, then the name as a link (`content-link`, D275). Only text counts:
+Names in Claude's text that contr knows show live (D262): an icon in the
+color of the state, then the name as a link: `ink-88`, the ink of the text around it, underlined
+in the same ink (D292). The icon alone has the state's color. Only text counts:
 code, code blocks, links, images and HTML are not touched. A name contr
 does not know stays plain text.
 
-| Chip | Recognized | Known when | Dot | Click |
+| Chip | Recognized | Known when | Icon | Click |
 |---|---|---|---|---|
 | PR | "#667" | gh says it is a pull request of the session's repository (read by number), or it is the PR of a worker's branch (D104, D145) | GitHub's pull request Octicon of its state, 0.9 of the text size: open, draft, merged, closed (D286). No dot: the icon's color shows the state (D288). While the PR is open its checks win: failed `content-failed`, running `content-running`, passed `content-done`; with no checks open `content-done`, draft `ink-48`. Merged `content-link` (no purple token), closed `ink-48`. A failed check wins over a pending one, a pending one over a passed one. The tooltip and the label name the state. | opens the PR as the agent rows do: in the browser (the PR pane is hidden, D147) |
 | Issue | "#649" | gh says it is an issue | GitHub's issue Octicon, open or closed, 0.9 of the text size (D286): open `content-done`, closed `content-link` (D288) | opens the issue in the browser |
-| Worker | a word that is the name of a worker contr lists ("b-649"); a live one wins | always | needs you `content-failed`, working `content-running`, done (ended) `content-done`, waiting (idle) `content-waiting` | selects the worker in the sidebar |
+| Worker | a word that is the name of a worker contr lists ("b-649"); a live one wins | always | the [worker mark](#worker-mark) of its model family, 0.9 of the text size as the Octicons, in the ink of the worker notes (`WorkerInk`): needs you `ink-100`, working `ink-88`, else `ink-30`; it does not hop. No dot: a worker of another program has no icon (D292) | selects the worker in the sidebar |
 | File | a word with a slash or an extension, with an optional ":42" | it is a file in the session's folder | none: the `file` line icon, 0.9 of the text size, `ink-48` | opens the file in the Review view, as the files panel does (the line is not used) |
 
-- The dot is 6px, round, `space-4` before the text, its center near the
-  middle of the lowercase letters. The Octicons take the content token of their
+- The icon is `space-4` before the text. The Octicons take the content token of their
   state, never GitHub's color values (D119, D261, D288). The tip of a
   chip says what it is: "PR #667 · checks passed", "Draft PR #661", "Worker b-649 · needs you", "Open
   internal/app/x.go".

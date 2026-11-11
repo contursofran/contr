@@ -59,12 +59,20 @@ func (s *chatChips) worker(name string) (agents.Worker, bool) {
 	return found, ok
 }
 
+// profileModel is the model of worker w's profile, for the mark of its chip (D292).
+func (s *chatChips) profileModel(w agents.Worker) string {
+	if s.f.deps.ModelOf == nil || w.Profile == "" {
+		return ""
+	}
+	return s.f.deps.ModelOf(w.Profile)
+}
+
 // Look gives the chip of a worker's name, a number or a path in the session at addr.
 func (s *chatChips) Look(addr string, t chatview.Token) (chatview.Chip, bool) {
 	switch t.Kind {
 	case chatview.TokenWord:
 		w, ok := s.worker(t.Name)
-		return chatview.WorkerChip(w), ok
+		return chatview.WorkerChip(w, s.profileModel(w)), ok
 	case chatview.TokenNumber:
 		n, err := strconv.Atoi(t.Name)
 		if err != nil {
@@ -86,7 +94,7 @@ func (s *chatChips) Worker(_ string, name string) (chatview.WorkerInfo, bool) {
 	if !ok {
 		return chatview.WorkerInfo{}, false
 	}
-	info := chatview.WorkerInfo{Chip: chatview.WorkerChip(w)}
+	info := chatview.WorkerInfo{Chip: chatview.WorkerChip(w, s.profileModel(w))}
 	if w.Worktree != "" {
 		info.PR = s.f.WorkerPRs.PR(w.Worktree)
 	}
