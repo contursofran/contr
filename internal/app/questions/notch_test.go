@@ -436,3 +436,53 @@ func near(a, b ui.Rect) bool {
 	d := func(x, y float32) bool { return x-y < 0.01 && y-x < 0.01 }
 	return d(a.X, b.X) && d(a.Y, b.Y) && d(a.W, b.W) && d(a.H, b.H)
 }
+
+// The questions card grows from the notch in MotionNotchOpen; closed, the notch shrinks back from
+// the card in MotionNotchClose. Each asks for no frame after its end (D263, D55). With Reduce Motion
+// the card and the notch are at their size at once and ask for no frame.
+func TestCardGrowsFromTheNotchAndBack(t *testing.T) {
+	const name = "Which database should it use?"
+	for _, reduce := range []bool{false, true} {
+		r := newQRigWith(t, askSource(), ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: reduce}})
+		r.tt.Frame()
+		r.tt.Advance(kit.NotchAttentionLength + time.Second) // the arrival effect ends (D240)
+		notch, _ := r.tt.Find(NotchAccessible(r.notch.Items()))
+		r.notch.Toggle()
+		r.tt.Frame()
+		if reduce {
+			card, _ := r.tt.Find(name)
+			if card.W != theme.SizeNotchOpenWidth || r.tt.FramePending() {
+				t.Errorf("reduce motion: card %v wide, frame asked %v; want %d at once and none",
+					card.W, r.tt.FramePending(), theme.SizeNotchOpenWidth)
+			}
+			r.notch.Toggle()
+			r.tt.Frame()
+			if r.tt.FramePending() {
+				t.Error("reduce motion: closing asks for frames; want the notch at once")
+			}
+			continue
+		}
+		r.tt.Advance(theme.MotionNotchOpen / 3)
+		if card, ok := r.tt.Find(name); !ok || card.W <= notch.W || card.W >= theme.SizeNotchOpenWidth {
+			t.Errorf("card %v wide a third of the way, want between the notch's %v and %d", card.W, notch.W, theme.SizeNotchOpenWidth)
+		}
+		r.tt.Advance(theme.MotionNotchOpen*3/4 - theme.MotionNotchOpen/3)
+		if !r.tt.FramePending() {
+			t.Errorf("no frame asked at 3/4 of %v: the card does not grow", theme.MotionNotchOpen)
+		}
+		r.tt.Advance(theme.MotionNotchOpen/4 + 20*time.Millisecond)
+		if r.tt.FramePending() {
+			t.Errorf("a frame is asked after %v; want none at rest", theme.MotionNotchOpen)
+		}
+		r.notch.Toggle()
+		r.tt.Frame()
+		r.tt.Advance(theme.MotionNotchClose * 3 / 4)
+		if !r.tt.FramePending() {
+			t.Errorf("no frame asked at 3/4 of %v: the notch does not shrink back", theme.MotionNotchClose)
+		}
+		r.tt.Advance(theme.MotionNotchClose/4 + 20*time.Millisecond)
+		if r.tt.FramePending() {
+			t.Errorf("a frame is asked after %v; want none at rest", theme.MotionNotchClose)
+		}
+	}
+}

@@ -237,7 +237,8 @@ func (n *Notch) View(c *ui.Context) {
 			kit.GlassFloat(ui.Row(c).Height(theme.SizeNotchHeight).MinWidth(0).AlignItems(ui.Center).Gap(theme.Space9).
 				Padding(0, theme.Space16, 0, theme.Space12).
 				Radius(0, 0, theme.Radius12, theme.Radius12), p).
-				BorderWidth(0, 1, 1, 1).BorderColor(p.FloatLine).Children(func() {
+				BorderWidth(0, 1, 1, 1).BorderColor(p.FloatLine).
+				Transition(kit.ShrinkFrom(notchShape{})).Children(func() {
 				dot = notchDot(c, p, look.Pulse)
 				ui.Text(c, NotchLabel(items)).NoWrap().Shrink(0).TextColor(p.Ink100).
 					FontSize(theme.StyleLabel.Size).FontWeight(theme.StyleLabel.Weight)
@@ -253,6 +254,11 @@ func (n *Notch) View(c *ui.Context) {
 		})
 	})
 }
+
+// notchShape is the identity that the closed notch and the open card share:
+// the card grows from the notch, and the notch shrinks back from the card
+// (D263).
+type notchShape struct{}
 
 // Sizes of the notch dot (D240): 8px, with 3px at each side, so it takes the
 // 14px of the small glyph.

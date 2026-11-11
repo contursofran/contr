@@ -697,7 +697,8 @@ func TestOrchestratePillSitsLeftOfSearchAndGetsNarrow(t *testing.T) {
 	}
 }
 
-// A tab that is selected fades its fill and ink in MotionSelect, then asks for no frame (D256).
+// A tab that is selected fades its ink in MotionSelect and its pill slides there in MotionTab,
+// then asks for no frame (D256, D263).
 func TestSelectingATabFadesThenRests(t *testing.T) {
 	b := newBar(t, tabsOf(), true)
 	b.tt.Frame()
@@ -709,15 +710,39 @@ func TestSelectingATabFadesThenRests(t *testing.T) {
 	tabs[0].Selected, tabs[1].Selected = false, true
 	b.bar.SetTabs(tabs)
 	b.tt.Frame()
-	b.tt.Advance(theme.MotionSelect / 2)
+	b.tt.Advance(theme.MotionTab * 3 / 4)
 	if !b.tt.FramePending() {
-		t.Error("no frame asked half way: the selection does not fade")
+		t.Error("no frame asked at 3/4 of the way: the pill does not slide")
 	}
-	b.tt.Advance(theme.MotionSelect/2 + 20*time.Millisecond)
+	b.tt.Advance(theme.MotionTab/4 + 20*time.Millisecond)
 	if b.tt.FramePending() {
-		t.Errorf("a frame is asked after %v; want none at rest", theme.MotionSelect)
+		t.Errorf("a frame is asked after %v; want none at rest", theme.MotionTab)
 	}
 	if !b.has(LabelCloseTab) {
 		t.Error("the selected plain tab has no close button at once")
+	}
+}
+
+// The pill of the selected tab slides from the tab selected before (D263): half way, the end of
+// the tab selected now is not filled yet; at rest it is. Light: there the stage and the ground differ.
+func TestTheTabPillSlides(t *testing.T) {
+	themetest.Use(t, mygo.ThemeLight)
+	b := newBar(t, tabsOf(), true)
+	b.tt.Frame()
+	b.tt.Advance(time.Second)
+	tabs := tabsOf()
+	r := b.rect(t, tabs[1].Title)
+	x, y := r.X+r.W-3, r.Y+3
+	bare := apptest.RGB(b.tt.Image(), x, y)
+	tabs[0].Selected, tabs[1].Selected = false, true
+	b.bar.SetTabs(tabs)
+	b.tt.Frame()
+	b.tt.Advance(theme.MotionTab / 3)
+	if c := apptest.RGB(b.tt.Image(), x, y); !apptest.Near(c, bare, 4) {
+		t.Errorf("a third of the way, the end of the new tab is %v, want bare %v: the pill does not slide", c, bare)
+	}
+	b.tt.Advance(theme.MotionTab)
+	if c := apptest.RGB(b.tt.Image(), x, y); apptest.Near(c, bare, 4) {
+		t.Errorf("at rest, the end of the new tab is bare %v, want the pill", c)
 	}
 }

@@ -92,7 +92,7 @@ Design system page: component Tab. Shared rules: [README.md](README.md).
 
 ## Motion (D256)
 
-A tab that is selected fades its fill and ink in `motion-select`; it does not slide. See [Motion.md](Motion.md).
+A tab that is selected fades its ink in `motion-select`; its pill (the `stage` fill) slides there from the tab selected before in `motion-tab` (D263). See [Motion.md](Motion.md).
 
 ## Replaces
 

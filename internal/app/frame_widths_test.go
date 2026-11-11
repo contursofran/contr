@@ -101,6 +101,8 @@ func TestHiddenSidesKeepTheirWidths(t *testing.T) {
 	if err := tt.Click(titlebar.LabelFilesToggle); err != nil {
 		t.Fatal(err)
 	}
+	tt.Advance(theme.MotionPanel) // the panels come in (D263)
+	tt.Frame()
 	if got := apptest.Box(t, tt, LabelPanelSidebar).W; got != 340 {
 		t.Errorf("sidebar %v after show, want 340", got)
 	}

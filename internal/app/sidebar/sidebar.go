@@ -250,6 +250,7 @@ func (l *SpacesList) coreLine(c *ui.Context) {
 // projectList is the projects, in the owner's order, with the agents of each
 // under it, in one ui.List. A drag reorders the projects (D109).
 func (l *SpacesList) projectList(c *ui.Context) {
+	l.noteNewRows()
 	items := l.items()
 	if len(items) == 0 && !l.Compact && l.settled() {
 		l.noProjects(c)
@@ -297,6 +298,34 @@ func (l *SpacesList) projectList(c *ui.Context) {
 			l.projectMenu(m, l.groups[items[l.cursor].group])
 		}
 	})
+}
+
+// noteNewRows sets rowsNew to the agent rows that came since the last build,
+// in folded projects too, and keeps the rows of this build in rowsSeen. Before
+// the projects settle no row is new: the rows at launch do not come in. A row
+// that unfolds is not new either.
+func (l *SpacesList) noteNewRows() {
+	now := map[string]bool{}
+	s := l.Snapshot()
+	for _, g := range l.groups {
+		for _, a := range agentLines(g, s) {
+			now[a.w.Address] = true
+		}
+	}
+	l.rowsNew = nil
+	if l.rowsSeen != nil {
+		for addr := range now {
+			if !l.rowsSeen[addr] {
+				if l.rowsNew == nil {
+					l.rowsNew = map[string]bool{}
+				}
+				l.rowsNew[addr] = true
+			}
+		}
+	}
+	if l.settled() {
+		l.rowsSeen = now
+	}
 }
 
 // projectMenu is the menu of a project row (D219). An empty project (D116) has

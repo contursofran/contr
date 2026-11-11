@@ -117,6 +117,10 @@ type SpacesList struct {
 	groups []spaces.RepoGroup
 	// arrivals tells when the open items of an orchestrator go up (D240).
 	arrivals kit.Arrivals
+	// rowsSeen holds the address of each agent row of the last build once the
+	// projects settled; nil before. rowsNew holds the rows that came since it, in
+	// this build: they come in (kit.RowIn, D263).
+	rowsSeen, rowsNew map[string]bool
 	// projects is the owner's order and hidden groups (D109). Nil keeps the
 	// tree order and hides nothing. UI thread only.
 	projects *projects.Store
