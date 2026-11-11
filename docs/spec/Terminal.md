@@ -40,7 +40,7 @@ Design system page: component Terminal. Shared rules: [README.md](README.md).
 
 - **Focused:** the cursor blinks; keys go to the terminal.
 - **Not focused:** the cursor is a hollow box.
-- **Process ended:** a last line in `ink-48`; the tab closes on stop.
+- **Process ended or connection lost:** the grid stays, dimmed to 50%, with no line over it (D290); the tab closes on stop.
 
 ## Behavior
 

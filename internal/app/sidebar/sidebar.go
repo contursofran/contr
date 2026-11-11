@@ -393,12 +393,17 @@ func (l *SpacesList) projectRow(c *ui.Context, g spaces.RepoGroup, index int) {
 	o.Menu = func(m *ui.Menu) { l.projectMenu(m, g) }
 	o.Lead = func() ui.Element { return rowIcon(c, "folder", iconInk) }
 	// The rows before and after the open project show the keys that select them (⌘⌥←, ⌘⌥→). With
-	// two projects the other one is both: it shows ⌥→.
+	// two projects the other one is both: it shows ⌥→. A row has one chip, so the other rows with
+	// a number key show it: ⇧1 to ⇧8, and ⇧9 on the last past the eighth (D289).
 	switch index {
 	case l.projectStep(1):
 		o.Hint = shortcut.Of(shortcut.NextProject).HintIf(l.Hints)
 	case l.projectStep(-1):
 		o.Hint = shortcut.Of(shortcut.PrevProject).HintIf(l.Hints)
+	default:
+		if s, ok := shortcut.ProjectShortcut(index, len(l.groups)); ok {
+			o.Hint = s.HintIf(l.Hints)
+		}
 	}
 	if index == 0 {
 		kit.Row(c, o)
