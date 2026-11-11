@@ -403,3 +403,36 @@ func TestNotchShowsTheCmdJChipWhileCmdIsHeld(t *testing.T) {
 	chip := apptest.ChipOn(t, r.tt, kit.KeyHintLabel("J"), NotchAccessible(r.n.Items()), 900, 400)
 	apptest.Centered(t, "chip", chip, "the dot", apptest.Box(t, r.tt, LabelNotchDot))
 }
+
+// Bounds is the box of the notch, or of the file problem in its place, as painted; false while
+// none shows. The chat's pinned prompt ends before it (D266).
+func TestNotchBounds(t *testing.T) {
+	src := &source{}
+	r := newNotchRig(t, src, "a")
+	if _, ok := r.n.Bounds(); ok {
+		t.Fatal("no item, and Bounds is ok")
+	}
+	src.Snap.Questions = apptest.Questions("a", 1)
+	r.tt.Frame()
+	want, _ := r.tt.Find("1 needs you. Open")
+	if got, ok := r.n.Bounds(); !ok || !near(got, want) {
+		t.Errorf("Bounds = %+v, %v; want the notch %+v", got, ok, want)
+	}
+	src.Snap.Questions, src.Snap.OwnerProblem = nil, "owner: owner.json: invalid character"
+	r.tt.Frame()
+	want, _ = r.tt.Find(LabelOwnerProblem)
+	if got, ok := r.n.Bounds(); !ok || !near(got, want) {
+		t.Errorf("file problem: Bounds = %+v, %v; want %+v", got, ok, want)
+	}
+	src.Snap.OwnerProblem = ""
+	r.tt.Frame()
+	if b, ok := r.n.Bounds(); ok {
+		t.Errorf("nothing shows, and Bounds is %+v", b)
+	}
+}
+
+// near tells that two boxes are the same to a hundredth of a point.
+func near(a, b ui.Rect) bool {
+	d := func(x, y float32) bool { return x-y < 0.01 && y-x < 0.01 }
+	return d(a.X, b.X) && d(a.Y, b.Y) && d(a.W, b.W) && d(a.H, b.H)
+}
