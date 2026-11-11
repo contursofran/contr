@@ -98,7 +98,7 @@ func (q *QuestionsCard) body(c *ui.Context, p *theme.Palette, items []agentstate
 		q.blockedBody(c, p, t, snap)
 	}
 	if msg := q.foot(snap); msg != "" {
-		kit.Styled(ui.Text(c, msg), theme.StyleSmall).Padding(0, theme.Space12).TextColor(p.Ink62)
+		kit.Styled(ui.Text(c, msg), theme.StyleSmall).Padding(0, theme.Space12).TextColor(p.Ink64)
 	}
 	q.keys(c, p, t, snap, len(items))
 }
@@ -159,7 +159,7 @@ func (q *QuestionsCard) chips(c *ui.Context, p *theme.Palette, items []agentstat
 		seg.Track.Label(LabelQuestionsChips).Grow(1).MinWidth(0).Wrap().Gap(theme.Space4).Children(func() {
 			for i, it := range items {
 				s := seg.Segment(i).Label(chipLabel(it)).Padding(3, 9).Radius(theme.Radius6).Cursor(ui.CursorPointer).MaxWidth(220)
-				ink := p.Ink45
+				ink := p.Ink48
 				if i == sel {
 					ink = p.Ink100
 					s = s.Background(p.Selected)
@@ -171,7 +171,7 @@ func (q *QuestionsCard) chips(c *ui.Context, p *theme.Palette, items []agentstat
 			}
 		})
 		if t.Kind != agentstate.NeedBlocked {
-			kit.Styled(ui.Text(c, questionsVia), theme.StyleSmall).NoWrap().Shrink(0).Margin(theme.Space4, 0, 0, 0).TextColor(p.Ink35)
+			kit.Styled(ui.Text(c, questionsVia), theme.StyleSmall).NoWrap().Shrink(0).Margin(theme.Space4, 0, 0, 0).TextColor(p.Ink48)
 		}
 	})
 	if sel != q.idx {
@@ -213,7 +213,7 @@ func contextLine(from string) string {
 func (q *QuestionsCard) heading(c *ui.Context, p *theme.Palette, question, context string) {
 	q.codeText(c, p, question, theme.StyleQuestion).Padding(2, theme.Space12).TextColor(p.Ink100)
 	if context != "" {
-		kit.Styled(ui.Text(c, context), theme.StyleSmall).Wrap().Padding(0, theme.Space12).TextColor(p.Ink42)
+		kit.Styled(ui.Text(c, context), theme.StyleSmall).Wrap().Padding(0, theme.Space12).TextColor(p.Ink48)
 	}
 }
 
@@ -227,16 +227,16 @@ func (q *QuestionsCard) choice(c *ui.Context, p *theme.Palette, i int, label str
 		b = b.Background(p.Hover)
 	}
 	b.Children(func() {
-		kit.Styled(ui.Text(c, strconv.Itoa(i+1)), theme.StyleMeta).NoWrap().Shrink(0).Width(theme.Space12).TextColor(p.Ink32)
+		kit.Styled(ui.Text(c, strconv.Itoa(i+1)), theme.StyleMeta).NoWrap().Shrink(0).Width(theme.Space12).TextColor(p.Ink48)
 		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 			ui.Row(c).AlignItems(ui.Center).Gap(theme.Space8).Children(func() {
-				kit.Styled(ui.Text(c, label), theme.StyleBody).Wrap().TextColor(p.Ink90)
+				kit.Styled(ui.Text(c, label), theme.StyleBody).Wrap().TextColor(p.Ink88)
 				if recommended {
-					kit.Styled(ui.Text(c, "recommended"), theme.StyleMeta).NoWrap().Shrink(0).TextColor(p.Ink32)
+					kit.Styled(ui.Text(c, "recommended"), theme.StyleMeta).NoWrap().Shrink(0).TextColor(p.Ink48)
 				}
 			})
 			if impact != "" {
-				kit.Styled(ui.Text(c, impact), theme.StyleSmall).Wrap().TextColor(p.Ink42)
+				kit.Styled(ui.Text(c, impact), theme.StyleSmall).Wrap().TextColor(p.Ink48)
 			}
 		})
 	})
@@ -245,7 +245,7 @@ func (q *QuestionsCard) choice(c *ui.Context, p *theme.Palette, i int, label str
 // field builds the field for a free answer.
 func (q *QuestionsCard) field(c *ui.Context, p *theme.Palette, t agentstate.NeedTab) {
 	in := ui.TextInputBase(c.Key("questions-field"), &q.text).Label(LabelQuestionsField).Placeholder(LabelQuestionsField).
-		PlaceholderColor(p.Ink30).TextColor(p.Ink90).Height(30).FillWidth().Shrink(0).PaddingX(theme.Space12).
+		PlaceholderColor(p.Ink48).TextColor(p.Ink88).Height(30).FillWidth().Shrink(0).PaddingX(theme.Space12).
 		Radius(theme.Radius8).Border(1, p.InputLine).Margin(theme.Space4, 0, 0, 0)
 	if in.Submitted() {
 		q.answer(t.Key, q.text)
@@ -262,16 +262,16 @@ func (q *QuestionsCard) detailsSection(c *ui.Context, p *theme.Palette, refs []s
 		if q.details {
 			arrow = "▾"
 		}
-		kit.Styled(ui.Text(c, arrow), theme.StyleSmall).NoWrap().TextColor(p.Ink42)
-		kit.Styled(ui.Text(c, LabelQuestionsDetails), theme.StyleSmall).NoWrap().TextColor(p.Ink42)
+		kit.Styled(ui.Text(c, arrow), theme.StyleSmall).NoWrap().TextColor(p.Ink48)
+		kit.Styled(ui.Text(c, LabelQuestionsDetails), theme.StyleSmall).NoWrap().TextColor(p.Ink48)
 	})
 	col.Panel(func() {
 		ui.Column(c).Padding(0, theme.Space12).Gap(theme.Space4).Children(func() {
 			if len(refs) > 0 {
-				kit.Styled(ui.Text(c, strings.Join(refs, "  ")), theme.StyleSmall).Wrap().TextColor(p.Ink42)
+				kit.Styled(ui.Text(c, strings.Join(refs, "  ")), theme.StyleSmall).Wrap().TextColor(p.Ink48)
 			}
 			if source != "" {
-				q.codeText(c, p, source, theme.StyleSmall).TextColor(p.Ink42)
+				q.codeText(c, p, source, theme.StyleSmall).TextColor(p.Ink48)
 			}
 		})
 	})
@@ -306,7 +306,7 @@ func (q *QuestionsCard) blockedBody(c *ui.Context, p *theme.Palette, t agentstat
 	} else {
 		// The detail first: for a permission, the tool and its command.
 		if len(q.menu.Detail) > 0 {
-			kit.Styled(ui.Text(c, strings.Join(q.menu.Detail, "\n")), theme.StyleMeta).Wrap().Padding(2, theme.Space12).TextColor(p.Ink62)
+			kit.Styled(ui.Text(c, strings.Join(q.menu.Detail, "\n")), theme.StyleMeta).Wrap().Padding(2, theme.Space12).TextColor(p.Ink64)
 		}
 		q.heading(c, p, q.menu.Question, "")
 		for i, ch := range q.menu.Choices {
@@ -320,7 +320,7 @@ func (q *QuestionsCard) blockedBody(c *ui.Context, p *theme.Palette, t agentstat
 		link := func(label string, click func()) {
 			b := ui.ButtonBase(c).Label(label).Shrink(0).Cursor(ui.CursorPointer).OnClick(click)
 			b.Children(func() {
-				tx := kit.Styled(ui.Text(c, label), theme.StyleSmall).NoWrap().TextColor(p.Ink62)
+				tx := kit.Styled(ui.Text(c, label), theme.StyleSmall).NoWrap().TextColor(p.Ink64)
 				if b.Hovered() {
 					tx.Underline()
 				}
@@ -355,7 +355,7 @@ func (q *QuestionsCard) keys(c *ui.Context, p *theme.Palette, t agentstate.NeedT
 		parts = append(parts, "⇥ next")
 	}
 	parts = append(parts, "esc close")
-	kit.Styled(ui.Text(c, strings.Join(parts, "  ")), theme.StyleMeta).NoWrap().Padding(theme.Space6, theme.Space12, 0).TextColor(p.Ink32)
+	kit.Styled(ui.Text(c, strings.Join(parts, "  ")), theme.StyleMeta).NoWrap().Padding(theme.Space6, theme.Space12, 0).TextColor(p.Ink48)
 }
 
 // codeText builds a wrapped paragraph of s in style st. Its backtick spans

@@ -147,7 +147,7 @@ type BoardRow struct {
 	// Worker is the state of the worker's dot.
 	Worker ChipState
 	// State is the state word, in grey (D267): blocked-text for a worker that needs the owner,
-	// ink-45 for one that is not found, else ink-62.
+	// ink-48 for one that is not found, else ink-64.
 	State string
 	// PR is the number of the worker's PR, 0 for none, and PRState the state of its dot.
 	PR      int
@@ -344,7 +344,7 @@ func (ch *Chat) board(c *ui.Context, id string, part int, lines []BoardLine, sen
 			BorderWidth(1, 0, 1, 0).BorderColor(pal.Hairline).Children(func() {
 			for k, h := range boardHeads[:cols] {
 				boardCell(c.Key(k), k == cols-1, ui.RoleColumnHeader, func() {
-					kit.Styled(ui.Text(c, h), theme.StyleMeta).NoWrap().TextColor(pal.Ink45)
+					kit.Styled(ui.Text(c, h), theme.StyleMeta).NoWrap().TextColor(pal.Ink48)
 				})
 			}
 			for r, l := range lines {
@@ -359,7 +359,7 @@ func (ch *Chat) board(c *ui.Context, id string, part int, lines []BoardLine, sen
 			if live {
 				ui.Box(c).Size(5, 5).Radius(2.5).Background(pal.ContentRunning)
 			}
-			kit.Styled(ui.Text(c, foot), theme.StyleMeta).NoWrap().TextColor(pal.Ink45)
+			kit.Styled(ui.Text(c, foot), theme.StyleMeta).NoWrap().TextColor(pal.Ink48)
 		})
 	})
 }
@@ -379,43 +379,43 @@ func (ch *Chat) boardRow(c *ui.Context, key int, pal *theme.Palette, l BoardLine
 	cell := func(k int, fn func()) { boardCell(c.Key(key+k), k == cols-1, ui.RoleCell, fn) }
 	cell(0, func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(theme.Space7).Children(func() {
-			ink := pal.Ink95
+			ink := pal.Ink88
 			if col, ok := ChipColor(pal, row.Worker); ok && values {
 				ui.Box(c).Size(chipDot, chipDot).Radius(chipDot / 2).Background(col)
 			} else if values && !row.Found {
-				ink = pal.Ink45
+				ink = pal.Ink48
 			}
 			kit.Styled(ui.Text(c, l.Worker), theme.StyleBody).NoWrap().TextColor(ink)
 		})
 	})
 	cell(1, func() {
-		kit.Styled(ui.Text(c, "#"+strconv.Itoa(l.Issue)), theme.StyleMeta).NoWrap().TextColor(pal.Ink62)
+		kit.Styled(ui.Text(c, "#"+strconv.Itoa(l.Issue)), theme.StyleMeta).NoWrap().TextColor(pal.Ink64)
 	})
 	cell(2, func() {
-		kit.Styled(ui.Text(c, l.Builds), theme.StyleBody).SingleLine().Ellipsis("…").MinWidth(0).TextColor(pal.Ink85)
+		kit.Styled(ui.Text(c, l.Builds), theme.StyleBody).SingleLine().Ellipsis("…").MinWidth(0).TextColor(pal.Ink88)
 	})
 	if !values {
 		return
 	}
 	cell(3, func() {
-		ink := pal.Ink62
+		ink := pal.Ink64
 		switch {
 		case row.Worker == StateNeedsYou:
 			ink = pal.BlockedText
 		case !row.Found:
-			ink = pal.Ink45
+			ink = pal.Ink48
 		}
 		kit.Styled(ui.Text(c, row.State), theme.StyleMeta).NoWrap().TextColor(ink)
 	})
 	cell(4, func() {
 		if row.PR == 0 {
-			kit.Styled(ui.Text(c, "—"), theme.StyleMeta).NoWrap().TextColor(pal.Ink45)
+			kit.Styled(ui.Text(c, "—"), theme.StyleMeta).NoWrap().TextColor(pal.Ink48)
 			return
 		}
 		ch.prChip(c, pal, row.PR, row.PRState)
 	})
 	cell(5, func() {
-		kit.Styled(ui.Text(c, row.Checks), theme.StyleMeta).NoWrap().TextColor(pal.Ink62)
+		kit.Styled(ui.Text(c, row.Checks), theme.StyleMeta).NoWrap().TextColor(pal.Ink64)
 	})
 }
 
@@ -435,7 +435,7 @@ func (ch *Chat) prChip(c *ui.Context, pal *theme.Palette, n int, st ChipState) {
 			if col, ok := ChipColor(pal, st); ok {
 				ui.Box(c).Size(chipDot, chipDot).Radius(chipDot / 2).Background(col)
 			}
-			ui.Text(c, "#"+name).Font(theme.FontFamily).FontSize(12).NoWrap().TextColor(pal.Ink95)
+			ui.Text(c, "#"+name).Font(theme.FontFamily).FontSize(12).NoWrap().TextColor(pal.Ink88)
 		})
 	})
 }
@@ -467,12 +467,8 @@ func (ch *Chat) queue(c *ui.Context, steps []QueueStep) {
 					bottom = 0
 				}
 				ui.Row(c).Grow(1).MinWidth(0).AlignItems(ui.Baseline).Gap(theme.Space10).Padding(0, 0, bottom, 0).Children(func() {
-					kit.Styled(ui.Text(c, strconv.Itoa(k+1)), theme.StyleMeta).NoWrap().TextColor(pal.Ink45)
-					ink := pal.Ink95
-					if v.Done {
-						ink = pal.Ink62
-					}
-					kit.Styled(ui.Text(c, "#"+strconv.Itoa(s.Ref)+" "+s.Label), theme.StyleProse).Shrink(1).MinWidth(0).TextColor(ink)
+					kit.Styled(ui.Text(c, strconv.Itoa(k+1)), theme.StyleMeta).NoWrap().TextColor(pal.Ink48)
+					kit.Styled(ui.Text(c, "#"+strconv.Itoa(s.Ref)+" "+s.Label), theme.StyleProse).Shrink(1).MinWidth(0).TextColor(stepLabelInk(pal, v))
 					if v.Words != "" {
 						kit.Styled(ui.Text(c, v.Words), theme.StyleMeta).Shrink(1).MinWidth(0).TextColor(stepInk(pal, v))
 					}
@@ -514,11 +510,20 @@ func stepMark(c *ui.Context, pal *theme.Palette, v StepView) {
 	ui.Box(c).Size(8, 8).Shrink(0).Radius(4).Background(col)
 }
 
-// stepInk is the ink of a step's words: blocked-text for a blocked step, else ink-62. Only the
+// stepLabelInk is the ink of a step's "#n label": ink-88, dimmed to ink-64 for a merged or closed
+// step.
+func stepLabelInk(pal *theme.Palette, v StepView) ui.Color {
+	if v.Done {
+		return pal.Ink64
+	}
+	return pal.Ink88
+}
+
+// stepInk is the ink of a step's words: blocked-text for a blocked step, else ink-64. Only the
 // rail's mark has the step's color (D267).
 func stepInk(pal *theme.Palette, v StepView) ui.Color {
 	if v.Blocked {
 		return pal.BlockedText
 	}
-	return pal.Ink62
+	return pal.Ink64
 }

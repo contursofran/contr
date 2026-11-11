@@ -124,7 +124,7 @@ func (l *SpacesList) noProjects(c *ui.Context) {
 	p := theme.Current()
 	ui.Column(c).Label(LabelNoProjects).FillWidth().Grow(1).MinHeight(0).Gap(theme.Space10).
 		Padding(theme.Space20, kit.RowInsetX, 0, kit.RowInsetX+theme.Space10).Children(func() {
-		kit.Styled(ui.Text(c, LabelNoProjects), theme.StyleLabel).SingleLine().MinWidth(0).TextColor(p.Ink62)
+		kit.Styled(ui.Text(c, LabelNoProjects), theme.StyleLabel).SingleLine().MinWidth(0).TextColor(p.Ink64)
 		// The button's text lines up with the line above; its hover fill reaches past it, as a
 		// row's does.
 		ui.Row(c).MinWidth(0).MaxWidthPercent(100).Margin(0, 0, 0, -theme.KeyButtonPadL).Children(func() {
@@ -188,7 +188,7 @@ func (l *SpacesList) settingsFoot(c *ui.Context) {
 func (l *SpacesList) head(c *ui.Context, name string, buttons func()) {
 	ui.Row(c).Label(name+" header").FillWidth().Shrink(0).AlignItems(ui.Center).Gap(theme.Space2).
 		Padding(theme.Space6, kit.RowInsetX+theme.Space4, theme.Space2, kit.RowInsetX+theme.Space10).Children(func() {
-		ui.Text(c, name).SingleLine().Grow(1).MinWidth(0).TextColor(theme.Current().Ink45).
+		ui.Text(c, name).SingleLine().Grow(1).MinWidth(0).TextColor(theme.Current().Ink48).
 			Font(theme.StyleLabel.Family()).FontSize(theme.StyleLabel.Size).FontWeight(theme.StyleLabel.Weight)
 		if buttons != nil {
 			buttons()
@@ -209,16 +209,16 @@ func rowIcon(c *ui.Context, name string, ink ui.Color) ui.Element {
 // serverIconInk is the ink of the This Mac icon: its row is always the selected look.
 func serverIconInk(p *theme.Palette) ui.Color { return p.Ink100 }
 
-// projectIconInk is the ink of a project's folder icon: ink-100 when selected, ink-42 when the
-// project is empty, else ink-85.
+// projectIconInk is the ink of a project's folder icon: ink-100 when selected, ink-30 (a mark) when the
+// project is empty, else ink-88.
 func projectIconInk(p *theme.Palette, selected, empty bool) ui.Color {
 	switch {
 	case selected:
 		return p.Ink100
 	case empty:
-		return p.Ink42
+		return p.Ink30
 	}
-	return p.Ink85
+	return p.Ink88
 }
 
 // serverRow is the This Mac row. Its `+` stays hidden until remote servers
@@ -242,7 +242,7 @@ func (l *SpacesList) coreLine(c *ui.Context) {
 	if l.online || l.line == "" {
 		return
 	}
-	ui.Text(c, l.line).TextColor(theme.Current().Ink38).
+	ui.Text(c, l.line).TextColor(theme.Current().Ink48).
 		Font(theme.StyleSmall.Family()).FontSize(theme.StyleSmall.Size).
 		MarginX(kit.RowInsetX + theme.Space10).PaddingY(theme.Space2)
 }
@@ -360,7 +360,7 @@ func (l *SpacesList) projectRow(c *ui.Context, g spaces.RepoGroup, index int) {
 	open := !l.Folded(g.CommonDir)
 	o := kit.RowOpts{
 		Flat: true, Label: ProjectLabel(g), Text: g.Name, Meta: projectMeta(g),
-		NameInk: p.Ink85, MetaInk: p.Ink26, NameStyle: theme.StyleBody,
+		NameInk: p.Ink88, MetaInk: p.Ink48, NameStyle: theme.StyleBody,
 		Expanded: &open, OnClick: func() { l.Activate(g) },
 		Compact: l.Compact, Tip: g.Name,
 	}
@@ -376,9 +376,9 @@ func (l *SpacesList) projectRow(c *ui.Context, g spaces.RepoGroup, index int) {
 		iconInk = projectIconInk(p, true, false)
 	}
 	if g.Path != "" {
-		// An empty project is dim: name and icon ink-42, no `+` (#436). The
+		// An empty project is dim: name ink-48 and icon ink-30, no `+` (#436). The
 		// start of an orchestrator in its folder (D116) is in the row's menu.
-		o.NameInk, iconInk = p.Ink42, projectIconInk(p, false, true)
+		o.NameInk, iconInk = p.Ink48, projectIconInk(p, false, true)
 	}
 	o.Menu = func(m *ui.Menu) { l.projectMenu(m, g) }
 	o.Lead = func() ui.Element { return rowIcon(c, "folder", iconInk) }

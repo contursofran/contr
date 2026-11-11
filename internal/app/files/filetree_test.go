@@ -257,12 +257,12 @@ func TestFileInksAndCounts(t *testing.T) {
 		only         int
 		added, rmved ui.Color
 	}{
-		{"default", review.File{}, false, false, p.Ink50, p.Ink38, false, false, 0, ui.Color{}, ui.Color{}},
-		{"changed", review.File{Status: review.Modified, Added: 2, Removed: 1}, true, false, p.Ink90, p.Ink38, false, true, 0, p.Ink50, p.Ink50},
-		{"new", review.File{Status: review.Added, Added: 5}, true, false, p.Ink90, p.Ink38, false, true, 1, p.Ink50, p.Ink50},
-		{"deleted", review.File{Status: review.Deleted, Removed: 3}, true, false, p.Ink50, p.Ink38, true, true, 2, p.Ink50, p.Ink50},
-		{"path row", review.File{}, false, true, p.Ink90, p.Ink38, false, false, 0, ui.Color{}, ui.Color{}},
-		{"binary", review.File{Status: review.Modified, Binary: true}, true, false, p.Ink90, p.Ink38, false, false, 0, ui.Color{}, ui.Color{}},
+		{"default", review.File{}, false, false, p.Ink48, p.Ink30, false, false, 0, ui.Color{}, ui.Color{}},
+		{"changed", review.File{Status: review.Modified, Added: 2, Removed: 1}, true, false, p.Ink88, p.Ink30, false, true, 0, p.Ink48, p.Ink48},
+		{"new", review.File{Status: review.Added, Added: 5}, true, false, p.Ink88, p.Ink30, false, true, 1, p.Ink48, p.Ink48},
+		{"deleted", review.File{Status: review.Deleted, Removed: 3}, true, false, p.Ink48, p.Ink30, true, true, 2, p.Ink48, p.Ink48},
+		{"path row", review.File{}, false, true, p.Ink88, p.Ink30, false, false, 0, ui.Color{}, ui.Color{}},
+		{"binary", review.File{Status: review.Modified, Binary: true}, true, false, p.Ink88, p.Ink30, false, false, 0, ui.Color{}, ui.Color{}},
 	}
 	for _, c := range cases {
 		ink, icon, strike := fileInks(p, c.f, c.changed, c.pathRow)

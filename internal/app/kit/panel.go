@@ -55,7 +55,7 @@ func Panel(c *ui.Context, o PanelOpts) ui.Element {
 				title = o.Name
 			}
 			ui.Text(c, title).Label(title + " name").SingleLine().Grow(1).MinWidth(0).
-				TextColor(p.Ink45).FontSize(theme.StyleLabel.Size).FontWeight(theme.StyleLabel.Weight)
+				TextColor(p.Ink48).FontSize(theme.StyleLabel.Size).FontWeight(theme.StyleLabel.Weight)
 			if o.Head != nil {
 				o.Head()
 			}

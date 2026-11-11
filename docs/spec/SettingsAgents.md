@@ -9,7 +9,7 @@ Shared rules: [README.md](README.md). Design: board 10 of the from-zero canvas.
 
 - **Tab bar** (under the head, `ModalPadX` side padding): `General`, `Agents`, `Updates` on a
   `hover` track, `radius` of a card, 2px padding. The selected tab has the `selected` fill and
-  `ink-100` text; the others `ink-62`. While an update waits, `Updates` has a 6px `ink-100`
+  `ink-100` text; the others `ink-64`. While an update waits, `Updates` has a 6px `ink-100`
   dot (D146).
 - **General:** Appearance and the transparency sliders, then `Done`.
 - **Updates:** the versions, the update status, the notes, and the buttons `Check for updates`,
@@ -17,16 +17,16 @@ Shared rules: [README.md](README.md). Design: board 10 of the from-zero canvas.
 - **Agents**, from top to bottom:
   1. The Flow section ([FlowSection.md](FlowSection.md)). Items 1 to 4 scroll when the window
      is short; the foot stays.
-  2. Head: `Roles` (bold, `ink-95`) and the hint `Saved to agents.json · new workers use it`
-     (`ink-50`).
-  3. Column heads `Role`, `CLI`, `Model`, `Effort` (`ink-50`).
-  4. One row per role, a `hairline` above each: the name (`ink-95`) over what it does
-     (`ink-50`), then three dropdowns (`SelectBase`: `input-line` border, card radius, the value left-aligned and a
-     `chevron-down` icon (12px, `ink-50`) at the right; the
+  2. Head: `Roles` (bold, `ink-88`) and the hint `Saved to agents.json · new workers use it`
+     (`ink-48`).
+  3. Column heads `Role`, `CLI`, `Model`, `Effort` (`ink-48`).
+  4. One row per role, a `hairline` above each: the name (`ink-88`) over what it does
+     (`ink-48`), then three dropdowns (`SelectBase`: `input-line` border, card radius, the value left-aligned and a
+     `chevron-down` icon (12px, `ink-48`) at the right; the
      popup on `ground` with `float-line`; the chosen and highlighted items on `selected`).
-     Under the row, the command line in mono (`value` style, `ink-62`), one line with an
+     Under the row, the command line in mono (`value` style, `ink-64`), one line with an
      ellipsis.
-  5. Foot, `hairline` above: `Applies to agents started from now on` (`ink-50`),
+  5. Foot, `hairline` above: `Applies to agents started from now on` (`ink-48`),
      `Reset to defaults` (outlined button), `Done` (plain button).
 
 | Role | Profile | Line |
@@ -47,7 +47,7 @@ Shared rules: [README.md](README.md). Design: board 10 of the from-zero canvas.
 ## States
 
 - **Custom:** a profile of another program, or with a model or effort that is not in the
-  lists. The dropdowns that cannot show its value say `Custom` (`ink-50`); the command line
+  lists. The dropdowns that cannot show its value say `Custom` (`ink-48`); the command line
   shows the argv as it is. Nothing writes it until the owner picks a value.
 - **Default orchestrator:** with no `orchestrator` profile in the file, the row shows the
   default of `DefaultConfig`: Claude Code, Opus, medium (D206). There is no `not set` state.

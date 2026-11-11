@@ -11,8 +11,8 @@ import (
 // Its side margin is RowInsetX, so with its padding the content sits 20px
 // from the panel side (D231).
 // Selected turns the name and the icon ink-100 instead of drawing a fill.
-// The name takes NameInk (ink-60 by default) and NameStyle (body); Meta
-// sits at the right in MetaInk (ink-38) and the small style.
+// The name takes NameInk (ink-64 by default) and NameStyle (body); Meta
+// sits at the right in MetaInk (ink-48) and the small style.
 func flatRow(c *ui.Context, o RowOpts) {
 	p := theme.Current()
 	label := o.Label
@@ -21,10 +21,10 @@ func flatRow(c *ui.Context, o RowOpts) {
 	}
 	nameInk, metaInk := o.NameInk, o.MetaInk
 	if nameInk == (ui.Color{}) {
-		nameInk = p.Ink60
+		nameInk = p.Ink64
 	}
 	if metaInk == (ui.Color{}) {
-		metaInk = p.Ink38
+		metaInk = p.Ink48
 	}
 	if o.Selected {
 		nameInk = p.Ink100

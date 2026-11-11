@@ -421,7 +421,7 @@ func (t *FileTree) ready() bool {
 }
 
 func (t *FileTree) note(c *ui.Context, s string) {
-	ui.Text(c, s).TextColor(theme.Current().Ink42).FontSize(theme.StyleSmall.Size).
+	ui.Text(c, s).TextColor(theme.Current().Ink48).FontSize(theme.StyleSmall.Size).
 		Padding(theme.Space4, theme.Space10).SingleLine()
 }
 
@@ -565,13 +565,13 @@ func FileLabel(name string, f review.File, changed bool) string {
 func fileInks(p *theme.Palette, f review.File, changed, pathRow bool) (name, icon ui.Color, strike bool) {
 	switch {
 	case pathRow:
-		return p.Ink90, p.Ink38, false
+		return p.Ink88, p.Ink30, false
 	case changed && f.Status == review.Deleted:
-		return p.Ink50, p.Ink38, true
+		return p.Ink48, p.Ink30, true
 	case changed:
-		return p.Ink90, p.Ink38, false
+		return p.Ink88, p.Ink30, false
 	}
-	return p.Ink50, p.Ink38, false
+	return p.Ink48, p.Ink30, false
 }
 
 // fileCounts gives how the counts of a file look, and false when the row
@@ -581,7 +581,7 @@ func fileCounts(p *theme.Palette, f review.File, changed bool) (kit.CountsLook, 
 		return kit.CountsLook{}, false
 	}
 	// + and − in one readable ink: the sign says which (D264).
-	look := kit.CountsLook{Added: p.Ink50, Removed: p.Ink50, Gap: theme.Space6, Style: theme.StyleMeta}
+	look := kit.CountsLook{Added: p.Ink48, Removed: p.Ink48, Gap: theme.Space6, Style: theme.StyleMeta}
 	switch f.Status {
 	case review.Added:
 		look.Only = kit.CountsAddedOnly

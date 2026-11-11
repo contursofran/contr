@@ -15,21 +15,21 @@ Design system page: component FileTree. Shared rules: [README.md](README.md).
 | Head | "Files", under the agent's todos and artifacts ([SessionPanel.md](SessionPanel.md), D197); the Changed \| All switch at the right (D264) |
 | Switch | `kit.Switch`: "Changed N" (N is the count of changed files; "Changed" until the first read) and "All" |
 | Row | height `file-row-height` (26px), padding `0 10px` (D228), gap `space-7`, radius `radius-6` |
-| Icon | `folder`, `folder-open`, `file-go`, `file-md`, `file` at 15px, `ink-38` |
-| Name | `row-small` (12.5px), `ink-50`; ellipsis |
-| Counts | mono 11px (`meta`), `space-6` apart: added and removed both `ink-50`; the sign says which (D264) |
-| Path row | Changed view only: a folder that holds changed files, named by its path from the root (`internal/app`), name `ink-90`, with the folder icon |
+| Icon | `folder`, `folder-open`, `file-go`, `file-md`, `file` at 15px, `ink-30` |
+| Name | `row-small` (12.5px), `ink-48`; ellipsis |
+| Counts | mono 11px (`meta`), `space-6` apart: added and removed both `ink-48`; the sign says which (D264) |
+| Path row | Changed view only: a folder that holds changed files, named by its path from the root (`internal/app`), name `ink-88`, with the folder icon |
 | Long path | A path row that does not fit clips at its end with an ellipsis; the row's tooltip gives the whole path (#693) |
 | Untracked folder row | Changed view only: a folder that git lists as one untracked entry (its path ends with `/`, as a nested worktree). One path row with the `folder` icon, no row under it, no counts (#693) |
 | Indent | each level indents `space-16` plus `space-4` (D228); no guide lines (D258) |
 
 ## States
 
-- **Default:** name `ink-50`.
+- **Default:** name `ink-48`.
 - **Hover:** fill `hover`.
-- **Changed:** name `ink-90`, counts show.
-- **New:** name `ink-90`, "+N" only.
-- **Deleted:** name `ink-50` with a line through it; icon `ink-38`; "−N" `ink-50` (D264).
+- **Changed:** name `ink-88`, counts show.
+- **New:** name `ink-88`, "+N" only.
+- **Deleted:** name `ink-48` with a line through it; icon `ink-30`; "−N" `ink-48` (D264).
 - **Changed view:** only changed files, under one level of path rows; no unchanged rows.
 - **All view:** the whole tree, with the deleted files put back.
 
@@ -76,7 +76,7 @@ Design system page: component FileTree. Shared rules: [README.md](README.md).
 ## Edge cases
 
 - No folder (no project open): one line, "Files of the open project show here" (`small`,
-  `ink-42`), in place of "No folder" (D255). A narrow panel cuts it with an ellipsis.
+  `ink-48`), in place of "No folder" (D255). A narrow panel cuts it with an ellipsis.
 - Not a git repo: no counts.
 - A folder with thousands of files: the list is virtual (`ui.Tree`).
 
@@ -86,7 +86,7 @@ Design system page: component FileTree. Shared rules: [README.md](README.md).
 
 ## Tokens
 
-`file-row-height`, `radius-6`, `space-4`, `space-6`, `space-7`, `space-10`, `space-16`, `hover`, `ink-90`, `ink-50`, `ink-38`, `row-small`, `meta`.
+`file-row-height`, `radius-6`, `space-4`, `space-6`, `space-7`, `space-10`, `space-16`, `hover`, `ink-88`, `ink-48`, `ink-30`, `row-small`, `meta`.
 
 ## Build in MyGo
 

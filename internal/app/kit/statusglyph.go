@@ -162,7 +162,7 @@ type GlyphOpts struct {
 	// Claude draws the Claude Code mascot, for a Claude session, in place of
 	// the dot spinner.
 	Claude bool
-	// Grey draws the Claude mascot in ink-45: a Claude session that does not
+	// Grey draws the Claude mascot in ink-48: a Claude session that does not
 	// orchestrate (D191). The claude hue stays for orchestrators.
 	Grey bool
 	// Small draws the 14px glyph of tabs and the notch; else 16px (rows).
@@ -200,7 +200,7 @@ func GlyphColor(p *theme.Palette, s GlyphState, claude bool) ui.Color {
 // does not orchestrate (Grey, D191). Needs you keeps its hue.
 func optsColor(p *theme.Palette, o GlyphOpts) ui.Color {
 	if o.Claude && o.Grey && o.State != GlyphNeedsYou {
-		return p.Ink45
+		return p.Ink48
 	}
 	return GlyphColor(p, o.State, o.Claude)
 }

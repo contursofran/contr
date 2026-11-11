@@ -71,7 +71,7 @@ func TestPlaceholderFollowsTheTheme(t *testing.T) {
 		}, 200, 60)
 		tt.Frame()
 		r := apptest.Box(t, tt, "[Terminal]")
-		wantInk(t, tc.Name, tt.Image(), r, tc.Pal.Ground, tc.Pal.Ink42)
+		wantInk(t, tc.Name, tt.Image(), r, tc.Pal.Ground, tc.Pal.Ink48)
 	}
 }
 
@@ -90,7 +90,7 @@ func TestBoardEmptyLinesFollowTheTheme(t *testing.T) {
 			}, theme.PanelWidth, 400)
 			tt.Frame()
 			r := apptest.Box(t, tt, label)
-			wantInk(t, tc.Name+" "+label, tt.Image(), r, tc.Pal.Ground, tc.Pal.Ink50)
+			wantInk(t, tc.Name+" "+label, tt.Image(), r, tc.Pal.Ground, tc.Pal.Ink48)
 		}
 	}
 }

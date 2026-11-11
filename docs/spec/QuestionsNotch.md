@@ -17,7 +17,7 @@ Design system page: component QuestionsNotch. Shared rules: [README.md](README.m
 | Dot | 8px circle, `blocked`, 3px at each side (it takes the 14px of the small glyph); label "needs you" (D240) |
 | Glow | after an arrival only: a 1px ring in `blocked` at 0.6 and a shadow `0 0 18px 3px` in `blocked` at 0.42, fading out (D240) |
 | Label | `label` (12px, 500), `ink-100`: "1 needs you", "2 need you"; questions, to-dos and blocked menus count the same (D258) |
-| Newest item | 12px, `ink-62`, one line: the title (else the key) of the newest item, the one with the latest time (question asked, to-do pinned, blocked worker's last output; on a tie the last). At most 320px. In a narrow terminal it clips with an ellipsis first; the dot and the label keep their width (D258). No divider line inside the notch. |
+| Newest item | 12px, `ink-64`, one line: the title (else the key) of the newest item, the one with the latest time (question asked, to-do pinned, blocked worker's last output; on a tie the last). At most 320px. In a narrow terminal it clips with an ellipsis first; the dot and the label keep their width (D258). No divider line inside the notch. |
 
 ## States
 
@@ -69,7 +69,7 @@ Design system page: component QuestionsNotch. Shared rules: [README.md](README.m
 
 ## Tokens
 
-`glass-float`, `float-line`, `shadow-notch`, `notch-height`, `radius-12`, `blocked`, `ink-100`, `ink-62`, `label`.
+`glass-float`, `float-line`, `shadow-notch`, `notch-height`, `radius-12`, `blocked`, `ink-100`, `ink-64`, `label`.
 
 ## Build in MyGo
 

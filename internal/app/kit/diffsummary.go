@@ -63,11 +63,11 @@ func DiffSummary(c *ui.Context, o DiffSummaryOpts) {
 		b = b.Background(p.Hover)
 	}
 	b.Children(func() {
-		value(ui.Text(c, added)).TextColor(p.Ink42)
+		value(ui.Text(c, added)).TextColor(p.Ink48)
 		if removed != "" {
-			value(ui.Text(c, removed)).TextColor(p.Ink30)
+			value(ui.Text(c, removed)).TextColor(p.Ink48)
 		}
-		value(ui.Text(c, files)).TextColor(p.Ink42)
+		value(ui.Text(c, files)).TextColor(p.Ink48)
 	})
 }
 

@@ -19,12 +19,12 @@ func TestIconLookStates(t *testing.T) {
 			hover, pressed, disabled bool
 			wantFill, wantInk        ui.Color
 		}{
-			{"default", false, false, false, ui.Color{}, p.Ink50},
+			{"default", false, false, false, ui.Color{}, p.Ink48},
 			{"hover", true, false, false, p.HoverStrong, p.Ink100},
-			{"pressed", false, true, false, ui.Color{}, p.Ink85},
+			{"pressed", false, true, false, ui.Color{}, p.Ink88},
 			{"hover over pressed", true, true, false, p.HoverStrong, p.Ink100},
-			{"disabled", false, false, true, ui.Color{}, p.Ink22},
-			{"disabled with hover", true, false, true, ui.Color{}, p.Ink22},
+			{"disabled", false, false, true, ui.Color{}, p.Ink30},
+			{"disabled with hover", true, false, true, ui.Color{}, p.Ink30},
 		}
 		for _, c := range cases {
 			fill, ink := IconLook(p, c.hover, c.pressed, c.disabled)
