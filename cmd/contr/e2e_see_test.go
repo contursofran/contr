@@ -163,6 +163,12 @@ var seeFixtures = map[string]seeFixture{
 		ready: "lead, ",
 		press: []string{"Chat"},
 	},
+	"chat-composer": {
+		about: "the chat fixture with text in the composer card (D271): the team row on top, two lines of text, the round Send button in ink-100 in line with the last line, and the model and context in the foot",
+		setup: seeChat,
+		ready: "lead, ",
+		press: []string{"Chat", "type:Merge #611 first, then tell b-632 to merge main and run the review on its exact head. Then tell me when the queue is empty and all the checks pass."},
+	},
 	"chat-blocks": {
 		about: "the orchestrator lead in Chat mode with an older status board (frozen: the agent's three columns, its answer's time), the live board (state, PR and checks from a fake gh: CI running 2 of 3, CI passed 3 of 3, building, waiting, and a worker that is not found) and a merge queue (merged, CI running, blocked: 1 check failed, a note) (D267)",
 		setup: seeChatBlocks,
