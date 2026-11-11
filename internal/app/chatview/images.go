@@ -148,7 +148,7 @@ func imageChip(c *ui.Context, text, label string) {
 	pal := theme.Current()
 	ui.Box(c).Label(label+" "+text).Shrink(0).Padding(theme.Space2, theme.Space8).Radius(theme.Radius6).
 		Border(1, pal.Hairline).Children(func() {
-		kit.Styled(ui.Text(c, text), theme.StyleMeta).NoWrap().TextColor(pal.Ink62)
+		kit.Styled(ui.Text(c, text), theme.StyleMeta).NoWrap().TextColor(pal.Ink48)
 	})
 }
 

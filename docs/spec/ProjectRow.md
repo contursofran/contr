@@ -13,15 +13,15 @@ Design system page: component ProjectRow. Shared rules: [README.md](README.md).
 | Part | Value |
 |---|---|
 | Row | height `row-height` (30px), padding `0 10px`, gap `space-10`, radius `radius-8` |
-| Icon | `folder` outline icon at 15px, `ink-85` (`ink-100` selected) |
-| Name | `body` (regular), `ink-85` |
-| Meta | `small` (12px), `ink-26`, right side: branch, or "nothing open" |
+| Icon | `folder` outline icon at 15px, `ink-88` (`ink-100` selected) |
+| Name | `body` (regular), `ink-88` |
+| Meta | `small` (12px), `ink-48`, right side: branch, or "nothing open" |
 
 ## States
 
 - **Default.**
 - **Hover:** fill `hover`.
-- **Empty project:** name and icon `ink-42`, meta "nothing open", no `+`; it is a stored project with no terminal.
+- **Empty project:** name `ink-48`, icon `ink-30`, meta "nothing open", no `+`; it is a stored project with no terminal.
 - **Groups:** a project row after the first has 12px of air above it (D171).
 - **Collapsed:** the agent rows hide.
 
@@ -62,8 +62,8 @@ Design system page: component ProjectRow. Shared rules: [README.md](README.md).
 ## Edge cases
 
 - No projects (D255): in place of the rows, 20 below the Projects head, "No projects yet"
-  (`label`, `ink-62`) and, 10 below, the plain button "Open a project ⌘O": text `ink-85`
-  (`small`), the key in `kbd` `ink-42`, no fill and no border, 28 high, radius 8; on hover the
+  (`label`, `ink-64`) and, 10 below, the plain button "Open a project ⌘O": text `ink-88`
+  (`small`), the key in `kbd` `ink-48`, no fill and no border, 28 high, radius 8; on hover the
   fill `hover` of a plain row. Its text lines up with "No projects yet" (the button sits its
   12 of padding to the left). The one filled button of an empty window is the terminal's. It
   opens the projects modal, as ⌘O does. It shows only when the stored projects are read and
@@ -78,7 +78,7 @@ Design system page: component ProjectRow. Shared rules: [README.md](README.md).
 
 ## Tokens
 
-`row-height`, `radius-8`, `space-10`, `space-12`, `hover`, `ink-85`, `ink-100`, `ink-42`, `ink-26`, `body`, `small`.
+`row-height`, `radius-8`, `space-10`, `space-12`, `hover`, `ink-88`, `ink-100`, `ink-48`, `ink-30`, `body`, `small`.
 
 ## Build in MyGo
 

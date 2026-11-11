@@ -23,13 +23,13 @@ func TestTerminalThemeHasThePaletteOfEachTheme(t *testing.T) {
 		if got.Palette != p.ANSI {
 			t.Errorf("%s: palette %v, want the theme's ANSI colors %v", name, got.Palette, p.ANSI)
 		}
-		if got.Foreground != p.TerminalForeground() || got.Background != p.StageBase() || got.Cursor != p.Ink95 {
+		if got.Foreground != p.TerminalForeground() || got.Background != p.StageBase() || got.Cursor != p.Ink88 {
 			t.Errorf("%s: foreground %v, background %v, cursor %v", name, got.Foreground, got.Background, got.Cursor)
 		}
 	}
 	for name, p := range map[string]*theme.Palette{"dark": theme.Dark, "light": theme.Light} {
 		got := terminalTheme(p)
-		if got.Search == (ui.Color{}) || got.SearchSelected != p.Ink95 || got.SearchSelectedText != p.StageBase() ||
+		if got.Search == (ui.Color{}) || got.SearchSelected != p.Ink88 || got.SearchSelectedText != p.StageBase() ||
 			got.SearchText != p.TerminalForeground() {
 			t.Errorf("%s: search colors %v %v %v %v are not the grey tokens", name, got.Search, got.SearchText,
 				got.SearchSelected, got.SearchSelectedText)
@@ -137,8 +137,8 @@ func TestTerminalLinesUseTheirTokens(t *testing.T) {
 			t.Errorf("dark=%v: the empty terminal has the line %q, want none (emptyTerminal draws it)", p.Dark, line)
 		}
 		f.termErr = "terminal unavailable: x"
-		if _, c, _ := f.terminalLine(); c != p.Ink42 {
-			t.Errorf("dark=%v: error line colour %v, want ink-42", p.Dark, c)
+		if _, c, _ := f.terminalLine(); c != p.Ink48 {
+			t.Errorf("dark=%v: error line colour %v, want ink-48", p.Dark, c)
 		}
 		f.termErr = ""
 		f.Selection.Select(state.Selected{Kind: state.KindWorker, ID: "t2"})
@@ -146,12 +146,12 @@ func TestTerminalLinesUseTheirTokens(t *testing.T) {
 			w.flush()
 		}
 		f.termState = ghostty.State{Kind: ghostty.NotRunning}
-		if line, c, ok := f.terminalLine(); !ok || line != TerminalNotRunningLine || c != p.Ink38 {
-			t.Errorf("dark=%v: ended line %q colour %v, want ink-38 %v", p.Dark, line, c, p.Ink38)
+		if line, c, ok := f.terminalLine(); !ok || line != TerminalNotRunningLine || c != p.Ink48 {
+			t.Errorf("dark=%v: ended line %q colour %v, want ink-48 %v", p.Dark, line, c, p.Ink48)
 		}
 		f.termState = ghostty.State{Kind: ghostty.Incompatible, Message: "core too old"}
-		if line, c, ok := f.terminalLine(); !ok || line != "core too old" || c != p.Ink42 {
-			t.Errorf("dark=%v: incompatible line %q colour %v, want ink-42", p.Dark, line, c)
+		if line, c, ok := f.terminalLine(); !ok || line != "core too old" || c != p.Ink48 {
+			t.Errorf("dark=%v: incompatible line %q colour %v, want ink-48", p.Dark, line, c)
 		}
 	}
 }

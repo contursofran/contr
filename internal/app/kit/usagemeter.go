@@ -61,13 +61,13 @@ func meterLine(c *ui.Context, m Meter, top float32) {
 	ui.Column(c).Label(m.Label+" line").Gap(theme.Space4).Margin(top, 0, 0).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(theme.Space4).Children(func() {
 			label := ui.Text(c, m.Label).SingleLine().
-				Font(theme.StyleSmall.Family()).FontSize(theme.StyleSmall.Size).FixedLineHeight(theme.StyleSmall.Line).TextColor(p.Ink42)
+				Font(theme.StyleSmall.Family()).FontSize(theme.StyleSmall.Size).FixedLineHeight(theme.StyleSmall.Line).TextColor(p.Ink48)
 			if m.Detail == "" || !m.Has {
 				label.Grow(1).MinWidth(0)
 			} else {
 				label.Shrink(0)
 				ui.Text(c, m.Detail).SingleLine().Ellipsis("…").Grow(1).MinWidth(0).MarginStart(theme.Space4).
-					Font(theme.StyleMeta.Family()).FontSize(theme.StyleMeta.Size).FixedLineHeight(theme.StyleSmall.Line).TextColor(p.Ink42)
+					Font(theme.StyleMeta.Family()).FontSize(theme.StyleMeta.Size).FixedLineHeight(theme.StyleSmall.Line).TextColor(p.Ink48)
 			}
 			meterValue(ui.Text(c, value).SingleLine().Shrink(0).
 				Font(theme.StyleValue.Family()).FontSize(theme.StyleValue.Size).FixedLineHeight(theme.StyleValue.Line).TextColor(ink), m)
@@ -77,16 +77,16 @@ func meterLine(c *ui.Context, m Meter, top float32) {
 }
 
 // meterValueText is the value of a meter line and its ink: [NoValue] in
-// ink-42 without data, ink-100 when the context compacts soon (D264), else
-// ink-62.
+// ink-48 without data, ink-100 when the context compacts soon (D264), else
+// ink-64.
 func meterValueText(p *theme.Palette, m Meter) (string, ui.Color) {
 	switch {
 	case !m.Has || m.Value == "":
-		return NoValue, p.Ink42
+		return NoValue, p.Ink48
 	case m.Soon:
 		return m.Value, p.Ink100
 	}
-	return m.Value, p.Ink62
+	return m.Value, p.Ink64
 }
 
 // meterBar is the bar of a meter. ui.Meter gives the role, the range and the
@@ -128,7 +128,7 @@ const PlanUsageWidth = 44
 
 // PlanUsage builds the plan meters of the sidebar foot (D196): for each plan,
 // inline, its label, a 44px bar and its value ("Claude ▬ 38%  Codex ▬ 12%").
-// A plan with no data has no bar: its label and [NoValue] in ink-42 (D255).
+// A plan with no data has no bar: its label and [NoValue] in ink-48 (D255).
 // A narrow foot hides the plans that do not fit whole.
 func PlanUsage(c *ui.Context, meters []Meter) ui.Element {
 	p := theme.Current()
@@ -137,14 +137,14 @@ func PlanUsage(c *ui.Context, meters []Meter) ui.Element {
 	return ui.Row(c).Label("plan usage").AlignItems(ui.Center).Gap(theme.Space7 + theme.Space6).
 		Wrap().Height(theme.StyleValue.Line).MinWidth(0).Shrink(1).Clip().Children(func() {
 		for _, m := range meters {
-			value, ink := m.Value, p.Ink62
+			value, ink := m.Value, p.Ink64
 			has := m.Has && value != ""
 			if !has {
-				value, ink = NoValue, p.Ink42
+				value, ink = NoValue, p.Ink48
 			}
 			ui.Row(c).Label(m.Label + " plan").AlignItems(ui.Center).Gap(theme.Space7).Shrink(0).Height(theme.StyleValue.Line).Children(func() {
 				ui.Text(c, m.Label).SingleLine().Shrink(0).
-					Font(theme.StyleSmall.Family()).FontSize(theme.StyleSmall.Size).TextColor(p.Ink42)
+					Font(theme.StyleSmall.Family()).FontSize(theme.StyleSmall.Size).TextColor(p.Ink48)
 				if has {
 					meterBar(c, m).Width(PlanUsageWidth).Shrink(0)
 				}

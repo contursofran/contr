@@ -58,10 +58,10 @@ func (m *ProjectsModal) openPath(path string) {
 }
 
 // progressTheme is the theme of the clone progress line: track `hairline`,
-// bar `ink-62`. MyGo draws a progress bar with the border and accent colours.
+// bar `ink-64`. MyGo draws a progress bar with the border and accent colours.
 func progressTheme(base *ui.Theme, p *theme.Palette) *ui.Theme {
 	t := *base
-	t.Border, t.Accent = p.Hairline, p.Ink62
+	t.Border, t.Accent = p.Hairline, p.Ink64
 	return &t
 }
 
@@ -97,7 +97,7 @@ func (m *ProjectsModal) addRowView(c *ui.Context, r paletteRow, active, selected
 	ui.Box(c).Width(theme.ModalTile).Height(theme.ModalTile).Shrink(0).Radius(theme.Radius8).
 		Background(p.Selected).Center().Children(func() {
 		if s := icons.Line(icon); s != nil {
-			ui.Icon(c, s).Size(15, 15).TextColor(p.Ink62)
+			ui.Icon(c, s).Size(15, 15).TextColor(p.Ink64)
 		}
 	})
 	ui.Column(c).Grow(1).MinWidth(0).Children(func() {
@@ -115,7 +115,7 @@ func (m *ProjectsModal) addRowView(c *ui.Context, r paletteRow, active, selected
 	action := func(label string, fn func()) {
 		b := ui.ButtonBase(c).Label(label).Shrink(0).Padding(theme.Space4, theme.Space8).
 			Radius(theme.Radius6).Cursor(ui.CursorPointer).OnClick(fn)
-		colour := p.Ink45
+		colour := p.Ink48
 		if b.Hovered() {
 			b, colour = b.Background(p.Hover), p.Ink100
 		}
@@ -130,6 +130,6 @@ func (m *ProjectsModal) addRowView(c *ui.Context, r paletteRow, active, selected
 		action(ProjectsChangeDir, m.chooseParent)
 	}
 	if selected {
-		kit.Styled(ui.Text(c, "⏎ "+m.enterLabel([]paletteRow{r}, 0)), theme.StyleMeta).NoWrap().Shrink(0).TextColor(p.Ink38)
+		kit.Styled(ui.Text(c, "⏎ "+m.enterLabel([]paletteRow{r}, 0)), theme.StyleMeta).NoWrap().Shrink(0).TextColor(p.Ink48)
 	}
 }

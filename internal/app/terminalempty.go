@@ -63,7 +63,7 @@ func handsCover(r ui.Rect, iw, ih float32) ui.Rect {
 }
 
 // emptyTerminal is the terminal slot while no terminal is open (docs/spec/Terminal.md, Empty):
-// the dot drawing of the two hands covers the panel in ink-50, and over a fade to the stage at
+// the dot drawing of the two hands covers the panel in ink-48, and over a fade to the stage at
 // the bottom 30% it says "No terminal open" and "New terminal ⌘T" (D247). While no project is
 // open (noProjectOpen) it says "No project open" with two buttons, "Open a project ⌘O" and
 // "New terminal ⌘T", that run the actions of those keys (D255). It is still: it draws nothing
@@ -85,7 +85,7 @@ func (f *Frame) emptyTerminal(c *ui.Context) {
 			w, h := ui.ImageSize(bmp)
 			// Inside the panel's 1px border, so its radius less 1.
 			pt.Clip(r, theme.Radius12-1, func() {
-				pt.ImageRegion(bmp, ui.Rect{}, handsCover(r, w, h), ui.ImageOptions{Tint: p.Ink50})
+				pt.ImageRegion(bmp, ui.Rect{}, handsCover(r, w, h), ui.ImageOptions{Tint: p.Ink48})
 			})
 		})
 	first := f.noProjectOpen()
@@ -104,10 +104,10 @@ func (f *Frame) emptyTerminal(c *ui.Context) {
 				f.firstRun(c)
 				return
 			}
-			kit.Styled(ui.Text(c, TerminalOffLine), theme.StyleLabel).SingleLine().MinWidth(0).TextColor(p.Ink62)
+			kit.Styled(ui.Text(c, TerminalOffLine), theme.StyleLabel).SingleLine().MinWidth(0).TextColor(p.Ink64)
 			ui.Row(c).AlignItems(ui.Center).Gap(theme.Space4).MinWidth(0).Children(func() {
-				kit.Styled(ui.Text(c, TerminalNewLine), theme.StyleSmall).SingleLine().MinWidth(0).TextColor(p.Ink50)
-				kit.Styled(ui.Text(c, shortcut.Of(shortcut.NewTab).Glyphs()), theme.StyleKbd).NoWrap().Shrink(0).TextColor(p.Ink50)
+				kit.Styled(ui.Text(c, TerminalNewLine), theme.StyleSmall).SingleLine().MinWidth(0).TextColor(p.Ink48)
+				kit.Styled(ui.Text(c, shortcut.Of(shortcut.NewTab).Glyphs()), theme.StyleKbd).NoWrap().Shrink(0).TextColor(p.Ink48)
 			})
 		})
 }
@@ -116,7 +116,7 @@ func (f *Frame) emptyTerminal(c *ui.Context) {
 // (D255). The buttons run what ⌘O and ⌘T run; a button whose action is not there does nothing.
 func (f *Frame) firstRun(c *ui.Context) {
 	p := theme.Current()
-	kit.Styled(ui.Text(c, TerminalNoProjectLine), theme.StyleLabel).SingleLine().MinWidth(0).TextColor(p.Ink62)
+	kit.Styled(ui.Text(c, TerminalNoProjectLine), theme.StyleLabel).SingleLine().MinWidth(0).TextColor(p.Ink64)
 	ui.Row(c).AlignItems(ui.Center).Gap(theme.Space8).MaxWidthPercent(100).MinWidth(0).Children(func() {
 		var open, term kit.ClickFn
 		if f.ProjectsModal != nil {

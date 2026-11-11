@@ -41,7 +41,7 @@ func CardButton(c *ui.Context, label string, style ButtonStyle, colour ui.Color,
 	el := ui.ButtonBase(c).Label(label).Height(theme.AnswerButtonHeight).Shrink(0).
 		PaddingX(theme.AnswerButtonPadX).AlignItems(ui.Center).Radius(theme.AnswerButtonRadius)
 	p := theme.Current()
-	text := p.Ink50
+	text := p.Ink48
 	switch {
 	case style == ButtonFilled && live:
 		el = el.Background(p.Ink100)
@@ -53,7 +53,7 @@ func CardButton(c *ui.Context, label string, style ButtonStyle, colour ui.Color,
 	default:
 		el = el.Border(1, p.InputLine)
 		if live {
-			text = p.Ink95
+			text = p.Ink88
 		}
 	}
 	if live {
@@ -78,9 +78,9 @@ type KeyStyle int
 const (
 	// KeyMain is ink-100 with ground text: the one fill of an empty window, on the stage.
 	KeyMain KeyStyle = iota
-	// KeyPlain is ink-62 text and its key, no fill or border; the label underlines on hover.
+	// KeyPlain is ink-64 text and its key, no fill or border; the label underlines on hover.
 	KeyPlain
-	// KeyRow is ink-85 text and its key, no fill or border; on hover the fill of a plain row.
+	// KeyRow is ink-88 text and its key, no fill or border; on hover the fill of a plain row.
 	KeyRow
 )
 
@@ -89,7 +89,7 @@ const (
 // The label shortens with an ellipsis when the button is narrow; the key stays.
 func KeyButton(c *ui.Context, label, key string, style KeyStyle, click ClickFn) ui.Element {
 	p := theme.Current()
-	text, keyInk := p.Ink62, p.Ink42
+	text, keyInk := p.Ink64, p.Ink48
 	el := ui.ButtonBase(c).Label(label).Height(theme.KeyButtonHeight).MinWidth(0).
 		Padding(0, theme.KeyButtonPadR, 0, theme.KeyButtonPadL).AlignItems(ui.Center).Gap(theme.Space8).
 		Radius(theme.Radius8)
@@ -99,7 +99,7 @@ func KeyButton(c *ui.Context, label, key string, style KeyStyle, click ClickFn) 
 		el = el.Background(p.Ink100)
 		text, keyInk = p.Ground, p.Ground.Alpha(0.6)
 	case style == KeyRow:
-		text = p.Ink85
+		text = p.Ink88
 		// ButtonBase has its own look; the explicit background keeps it flat, as a plain row.
 		if el.Hovered() {
 			el = el.Background(p.Hover)

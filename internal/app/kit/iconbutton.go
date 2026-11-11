@@ -59,13 +59,13 @@ func TipText(o IconButtonOpts) string {
 func IconLook(p *theme.Palette, hover, pressed, disabled bool) (fill, ink ui.Color) {
 	switch {
 	case disabled:
-		return ui.Color{}, p.Ink22
+		return ui.Color{}, p.Ink30
 	case hover:
 		return p.HoverStrong, p.Ink100
 	case pressed:
-		return ui.Color{}, p.Ink85
+		return ui.Color{}, p.Ink88
 	}
-	return ui.Color{}, p.Ink50
+	return ui.Color{}, p.Ink48
 }
 
 // IconButton builds a square button with one line icon. It is a ButtonBase,

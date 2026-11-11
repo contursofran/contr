@@ -219,7 +219,7 @@ func projectsModalFill(p *theme.Palette) ui.Color { return p.FloatSolid }
 func kbd(c *ui.Context, text string) {
 	p := theme.Current()
 	ui.Box(c).Shrink(0).Padding(theme.Space2, theme.Space4).Radius(theme.ModalKbdRadius).Border(1, p.InputLine).Children(func() {
-		kit.Styled(ui.Text(c, text), theme.StyleKbd).NoWrap().TextColor(p.Ink45)
+		kit.Styled(ui.Text(c, text), theme.StyleKbd).NoWrap().TextColor(p.Ink48)
 	})
 }
 
@@ -244,10 +244,10 @@ func (m *ProjectsModal) searchField(c *ui.Context, rows []paletteRow) {
 	ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(theme.Space10).Padding(theme.Space14, theme.Space16).
 		BorderWidth(0, 0, 1, 0).BorderColor(p.Hairline).Children(func() {
 		if s := icons.Line("search"); s != nil {
-			ui.Icon(c, s).Size(16, 16).Shrink(0).TextColor(p.Ink38)
+			ui.Icon(c, s).Size(16, 16).Shrink(0).TextColor(p.Ink30)
 		}
 		in := ui.TextInputBase(c.Key("projects-search"), &m.query).Label(LabelProjectsSearch).Placeholder(LabelProjectsSearch).
-			PlaceholderColor(p.Ink30).TextColor(p.Ink100).FontSize(theme.ModalSearchSize).AutoFocus().Grow(1).MinWidth(0)
+			PlaceholderColor(p.Ink48).TextColor(p.Ink100).FontSize(theme.ModalSearchSize).AutoFocus().Grow(1).MinWidth(0)
 		var r *paletteRow
 		if m.sel < len(rows) {
 			r = &rows[m.sel]
@@ -293,7 +293,7 @@ func (m *ProjectsModal) body(c *ui.Context) {
 	if len(lines) == 0 {
 		if k, _, _ := classifyQuery(m.query); k == queryFilter && m.text() != "" {
 			kit.Styled(ui.Text(c, ProjectsNoMatch(m.text())), theme.StyleSmall).Wrap().Shrink(0).TextAlign(ui.Center).
-				Padding(theme.ModalEmptyPadY, theme.Space12).TextColor(p.Ink45)
+				Padding(theme.ModalEmptyPadY, theme.Space12).TextColor(p.Ink48)
 		}
 	} else {
 		m.listView(c, rows, lines)
@@ -346,7 +346,7 @@ func (m *ProjectsModal) footer(c *ui.Context, rows []paletteRow) {
 		hint := func(key, label string) {
 			ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(theme.Space6).Children(func() {
 				kbd(c, key)
-				kit.Styled(ui.Text(c, label), theme.StyleChip).NoWrap().TextColor(p.Ink45)
+				kit.Styled(ui.Text(c, label), theme.StyleChip).NoWrap().TextColor(p.Ink48)
 			})
 		}
 		hint("↑↓", "move")
@@ -363,14 +363,14 @@ func (m *ProjectsModal) footer(c *ui.Context, rows []paletteRow) {
 		b := ui.ButtonBase(c).Label(ProjectsOpenFolder).Shrink(0).Padding(theme.Space6, theme.Space10).
 			AlignItems(ui.Center).Gap(theme.Space8).Radius(theme.Radius7).Border(1, p.InputLine).
 			Cursor(ui.CursorPointer).OnClick(m.openFolder)
-		text := p.Ink62
+		text := p.Ink64
 		if b.Hovered() {
 			b = b.Background(p.Hover)
 			text = p.Ink100
 		}
 		b.Children(func() {
 			kit.Styled(ui.Text(c, ProjectsOpenFolder), theme.StyleSmall).NoWrap().TextColor(text)
-			kit.Styled(ui.Text(c, "⌘O"), theme.StyleKbd).NoWrap().TextColor(p.Ink45)
+			kit.Styled(ui.Text(c, "⌘O"), theme.StyleKbd).NoWrap().TextColor(p.Ink48)
 		})
 	})
 }
@@ -379,9 +379,9 @@ func (m *ProjectsModal) footer(c *ui.Context, rows []paletteRow) {
 func (m *ProjectsModal) section(c *ui.Context, l line) {
 	p := theme.Current()
 	ui.Row(c).AlignItems(ui.Center).Padding(theme.Space10, theme.Space10, theme.Space4).Children(func() {
-		kit.Styled(ui.Text(c, l.head), theme.StyleLabel).NoWrap().Grow(1).TextColor(p.Ink45)
+		kit.Styled(ui.Text(c, l.head), theme.StyleLabel).NoWrap().Grow(1).TextColor(p.Ink48)
 		if l.hint != "" {
-			kit.Styled(ui.Text(c, l.hint), theme.StyleChip).NoWrap().TextColor(p.Ink30)
+			kit.Styled(ui.Text(c, l.hint), theme.StyleChip).NoWrap().TextColor(p.Ink48)
 		}
 	})
 }
@@ -456,17 +456,17 @@ func (m *ProjectsModal) row(c *ui.Context, rows []paletteRow, i int, home string
 	}
 	weight, nameColour := 600, p.Ink100
 	if r.kind == rowRecent {
-		weight, nameColour = 500, p.Ink85
+		weight, nameColour = 500, p.Ink88
 	}
 	el.Children(func() {
 		grip := ""
 		if r.kind == rowOpen && active && m.text() == "" {
 			grip = "⋮⋮"
 		}
-		kit.Styled(ui.Text(c, grip), theme.StyleSmall).Width(theme.ModalGrip).Shrink(0).NoWrap().TextColor(p.Ink30)
+		kit.Styled(ui.Text(c, grip), theme.StyleSmall).Width(theme.ModalGrip).Shrink(0).NoWrap().TextColor(p.Ink30) // ink-30: a mark, the drag grip
 		ui.Box(c).Width(theme.ModalTile).Height(theme.ModalTile).Shrink(0).Radius(theme.Radius8).
 			Background(p.Selected).Center().Children(func() {
-			kit.Styled(ui.Text(c, projectInitials(name)), theme.StyleTile).TextColor(p.Ink62)
+			kit.Styled(ui.Text(c, projectInitials(name)), theme.StyleTile).TextColor(p.Ink64)
 		})
 		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 			m.nameText(c, name, weight, nameColour)
@@ -484,15 +484,15 @@ func (m *ProjectsModal) row(c *ui.Context, rows []paletteRow, i int, home string
 				if b.Hovered() {
 					b = b.Background(p.Hover)
 				}
-				b.Children(func() { kit.Styled(ui.Text(c, ProjectsHide), theme.StyleSmall).NoWrap().TextColor(p.Ink45) })
+				b.Children(func() { kit.Styled(ui.Text(c, ProjectsHide), theme.StyleSmall).NoWrap().TextColor(p.Ink48) })
 			}
 			if selected {
-				kit.Styled(ui.Text(c, "⏎ switch"), theme.StyleMeta).NoWrap().Shrink(0).TextColor(p.Ink38)
+				kit.Styled(ui.Text(c, "⏎ switch"), theme.StyleMeta).NoWrap().Shrink(0).TextColor(p.Ink48)
 			}
 		case active:
-			kit.Styled(ui.Text(c, "⏎ open"), theme.StyleMeta).NoWrap().Shrink(0).TextColor(p.Ink38)
+			kit.Styled(ui.Text(c, "⏎ open"), theme.StyleMeta).NoWrap().Shrink(0).TextColor(p.Ink48)
 		default:
-			kit.Styled(ui.Text(c, age), theme.StyleMeta).NoWrap().Shrink(0).TextColor(p.Ink30)
+			kit.Styled(ui.Text(c, age), theme.StyleMeta).NoWrap().Shrink(0).TextColor(p.Ink48)
 		}
 	})
 }
@@ -506,13 +506,13 @@ func (m *ProjectsModal) metaText(c *ui.Context, meta string, needYou int) {
 		t = needYouText(needYou)
 	}
 	if t == "" || !strings.HasSuffix(meta, t) {
-		kit.Styled(ui.Text(c, meta), theme.StyleValue).SingleLine().MinWidth(0).TextColor(p.Ink38)
+		kit.Styled(ui.Text(c, meta), theme.StyleValue).SingleLine().MinWidth(0).TextColor(p.Ink48)
 		return
 	}
 	kit.Styled(ui.RichText(c,
 		ui.Span{Text: strings.TrimSuffix(meta, t)},
 		ui.Span{Text: t, Color: p.Blocked},
-	), theme.StyleValue).SingleLine().MinWidth(0).TextColor(p.Ink38)
+	), theme.StyleValue).SingleLine().MinWidth(0).TextColor(p.Ink48)
 }
 
 // openMetaView builds the meta of an open row: `<path> · <branch> · <live>`.
@@ -522,7 +522,7 @@ func (m *ProjectsModal) openMetaView(c *ui.Context, g spaces.RepoGroup, home str
 	p := theme.Current()
 	path, branch, live, needYou := openMetaParts(g, home)
 	ink := func(s string) {
-		kit.Styled(ui.Text(c, s), theme.StyleValue).NoWrap().Shrink(0).TextColor(p.Ink38)
+		kit.Styled(ui.Text(c, s), theme.StyleValue).NoWrap().Shrink(0).TextColor(p.Ink48)
 	}
 	// The parts have even gaps: a space token between them, none inside a text.
 	gap := func() { ui.Box(c).Width(theme.Space6).Height(1).Shrink(0) }
@@ -533,7 +533,7 @@ func (m *ProjectsModal) openMetaView(c *ui.Context, g spaces.RepoGroup, home str
 	}
 	ui.Row(c).AlignItems(ui.Center).MinWidth(0).Children(func() {
 		if path != "" {
-			kit.Styled(ui.Text(c, path), theme.StyleValue).SingleLine().MinWidth(0).TextColor(p.Ink38)
+			kit.Styled(ui.Text(c, path), theme.StyleValue).SingleLine().MinWidth(0).TextColor(p.Ink48)
 		}
 		if branch != "" {
 			if path != "" {
@@ -551,7 +551,7 @@ func (m *ProjectsModal) openMetaView(c *ui.Context, g spaces.RepoGroup, home str
 			ui.Box(c).Label(LabelProjectsDot).Width(theme.ModalDot).Height(theme.ModalDot).Shrink(0).
 				Radius(theme.ModalDot/2).Background(p.Claude).Margin(0, theme.Space6, 0, 0)
 		}
-		colour := p.Ink38
+		colour := p.Ink48
 		if needYou > 0 {
 			colour = p.Blocked
 		}

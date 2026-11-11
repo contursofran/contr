@@ -50,7 +50,7 @@ func TestSelectionFadesTheInk(t *testing.T) {
 		p := theme.Current()
 		tt := motionTester(func(c *ui.Context) {
 			b := ui.Box(c).Size(20, 20)
-			ink := p.Ink60
+			ink := p.Ink64
 			if sel {
 				ink = p.Ink100
 			}
@@ -63,7 +63,7 @@ func TestSelectionFadesTheInk(t *testing.T) {
 		sel = false
 		tt.Frame()
 		tt.Advance(theme.MotionSelect / 2)
-		if shown == p.Ink60 || shown == p.Ink100 {
+		if shown == p.Ink64 || shown == p.Ink100 {
 			t.Errorf("reduce %v: ink %v half way, want a mix", reduce, shown)
 		}
 	}
@@ -108,7 +108,7 @@ func TestNeedsYouFadesInMotionState(t *testing.T) {
 	tt := motionTester(func(c *ui.Context) {
 		b := ui.Box(c).Size(20, 20)
 		d := RowMotion(b, needs)
-		ink := theme.Current().Ink60
+		ink := theme.Current().Ink64
 		if needs || sel {
 			ink = theme.Current().Ink100
 		}

@@ -67,8 +67,8 @@ func FlowSection(c *ui.Context, f agents.Flow, onChange func(agents.Flow)) {
 	}
 	ui.Column(c).Shrink(0).Gap(theme.Space10).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(theme.Space8).Children(func() {
-			ui.Text(c, LabelFlow).Bold().TextColor(p.Ink95)
-			ui.Text(c, FlowHint).Grow(1).TextColor(p.Ink50)
+			ui.Text(c, LabelFlow).Bold().TextColor(p.Ink88)
+			ui.Text(c, FlowHint).Grow(1).TextColor(p.Ink48)
 		})
 		names := make([]string, len(FlowPresets))
 		for i, ps := range FlowPresets {
@@ -127,11 +127,11 @@ func flowRow(c *ui.Context, label, note string, control func()) {
 	p := theme.Current()
 	ui.Column(c).Shrink(0).Gap(theme.Space4).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(theme.Space8).Children(func() {
-			ui.Text(c, label).Grow(1).TextColor(p.Ink62)
+			ui.Text(c, label).Grow(1).TextColor(p.Ink64)
 			control()
 		})
 		if note != "" {
-			ui.Text(c, note).Font(theme.StyleMeta.Family()).FontSize(theme.StyleMeta.Size).TextColor(p.Ink50)
+			ui.Text(c, note).Font(theme.StyleMeta.Family()).FontSize(theme.StyleMeta.Size).TextColor(p.Ink48)
 		}
 	})
 }
@@ -150,7 +150,7 @@ func flowSegments(c *ui.Context, key, label string, names []string, sel int) int
 	seg.Track.Label(label).Shrink(0).Padding(theme.Space2).Radius(theme.CardRadius).Background(p.Hover).Children(func() {
 		for i, name := range names {
 			e := seg.Segment(i).Label(name).Padding(theme.Space4, theme.Space12).Radius(theme.CardRadius)
-			text := p.Ink62
+			text := p.Ink64
 			if i == picked {
 				e.Background(p.Selected)
 				text = p.Ink100
@@ -186,8 +186,8 @@ func flowStepper(c *ui.Context, label, unit string, cur int) (int, bool) {
 	p := theme.Current()
 	v := float64(cur)
 	ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(theme.Space6).Children(func() {
-		ui.Text(c, strconv.Itoa(cur)).Font(theme.StyleValue.Family()).FontSize(theme.StyleValue.Size).TextColor(p.Ink95)
-		ui.Text(c, unit).TextColor(p.Ink50)
+		ui.Text(c, strconv.Itoa(cur)).Font(theme.StyleValue.Family()).FontSize(theme.StyleValue.Size).TextColor(p.Ink88)
+		ui.Text(c, unit).TextColor(p.Ink48)
 		ui.Stepper(c.Key("flow-step-"+label), &v, 1, flowStepperLimit, 1).Label(label + " " + unit)
 	})
 	if n := int(v); n != cur && n >= 1 {
@@ -216,18 +216,18 @@ func FlowSteps(f agents.Flow) []FlowStep {
 	}
 }
 
-// flowSteps draws the row of steps. An off step is dim (ink-38).
+// flowSteps draws the row of steps. An off step is dim (ink-48).
 func flowSteps(c *ui.Context, f agents.Flow) {
 	p := theme.Current()
 	ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(theme.Space6).Padding(theme.Space8).
 		Radius(theme.CardRadius).Background(p.Hover).Children(func() {
 		for i, s := range FlowSteps(f) {
 			if i > 0 {
-				ui.Text(c, "→").TextColor(p.Ink38)
+				ui.Text(c, "→").TextColor(p.Ink48)
 			}
-			name, detail := p.Ink85, p.Ink50
+			name, detail := p.Ink88, p.Ink48
 			if !s.On {
-				name, detail = p.Ink38, p.Ink38
+				name, detail = p.Ink48, p.Ink48
 			}
 			ui.Column(c).Shrink(0).Children(func() {
 				ui.Text(c, s.Name).TextColor(name)

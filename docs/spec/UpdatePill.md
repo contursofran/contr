@@ -13,17 +13,17 @@ Shared rules: [README.md](README.md). Design: boards 8 and 9 of the from-zero ca
 - **Panel** (below the pill, its right edge on the pill's right edge, `space-8` apart), 340px,
   `float-solid` (opaque, so the rows behind it do not show through, D212), `float-line`,
   `shadow-float`, `radius-12`:
-  1. Head: `contr 0.4.0` (bold, `ink-95`) and `from 0.3.2` (`meta`, mono, `ink-50`).
-  2. `What's new` (`ink-50`) and the release notes as a short list (`ink-85`).
+  1. Head: `contr 0.4.0` (bold, `ink-88`) and `from 0.3.2` (`meta`, mono, `ink-48`).
+  2. `What's new` (`ink-48`) and the release notes as a short list (`ink-88`).
   3. Note on a `hover` fill, `radius-8`: `server` icon and `Agents keep running. Their terminals
-     live in hc; contr opens them again after the restart, in about 2 s.` (`ink-62`).
-  4. Foot, hairline above: `Downloaded 3 min ago` (`ink-50`), `Later` (plain button) and
+     live in hc; contr opens them again after the restart, in about 2 s.` (`ink-64`).
+  4. Foot, hairline above: `Downloaded 3 min ago` (`ink-48`), `Later` (plain button) and
      `Restart now ⏎` (filled button).
 - **After an update** (D209): the pill says `Updated to 0.4.0` (`download` icon). The panel has
   the same head (`contr 0.4.0`, `from 0.3.2`) and What's new, no agents note, and a foot with
-  `Updated 3 min ago` (`ink-50`) and one filled button `Got it ⏎`. No `Later`, no `Restart now`.
+  `Updated 3 min ago` (`ink-48`) and one filled button `Got it ⏎`. No `Later`, no `Restart now`.
 - **Toast** (below the pill, same card): `contr 0.4.0 is ready` (bold) with a close button;
-  `It downloaded in the background. Restart when you like: agents keep running.` (`ink-62`);
+  `It downloaded in the background. Restart when you like: agents keep running.` (`ink-64`);
   `Later` and `Restart now`.
 
 ## States
@@ -71,8 +71,8 @@ Shared rules: [README.md](README.md). Design: boards 8 and 9 of the from-zero ca
 
 ## Tokens
 
-`float-solid`, `float-line`, `shadow-float`, `hover`, `hairline`, `ink-100`, `ink-95`, `ink-85`,
-`ink-62`, `ink-50`, `radius-8`, `radius-12`, `space-4` to `space-16`, `icon-button`.
+`float-solid`, `float-line`, `shadow-float`, `hover`, `hairline`, `ink-100`, `ink-88`,
+`ink-64`, `ink-48`, `radius-8`, `radius-12`, `space-4` to `space-16`, `icon-button`.
 
 ## Build in MyGo
 

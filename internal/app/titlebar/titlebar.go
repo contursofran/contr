@@ -191,7 +191,7 @@ func (b *TitleBar) tab(c *ui.Context, tab ui.Element, t tabmodel.Tab, hint strin
 			return middleClick(ev, box, func() { b.CloseTab(t) })
 		})
 	}
-	ink := p.Ink50
+	ink := p.Ink48
 	switch {
 	case t.Selected:
 		ink = p.Ink100
@@ -313,7 +313,7 @@ func closeButton(c *ui.Context, onClick func()) {
 	p := theme.Current()
 	b := ui.ButtonBase(c).Label(LabelCloseTab).Size(16, 16).Shrink(0).Radius(theme.Radius4).
 		AlignItems(ui.Center).Justify(ui.Center).Cursor(ui.CursorPointer).OnClick(onClick)
-	ink := p.Ink45
+	ink := p.Ink48
 	if b.Hovered() || b.Pressed() {
 		b = b.Background(p.Press)
 		ink = p.Ink100

@@ -47,9 +47,9 @@ func TestRowIconInksAreTokens(t *testing.T) {
 		if serverIconInk(p) != p.Ink100 {
 			t.Errorf("%s: This Mac icon is not ink-100", name)
 		}
-		if projectIconInk(p, false, false) != p.Ink85 || projectIconInk(p, true, false) != p.Ink100 ||
-			projectIconInk(p, false, true) != p.Ink42 || projectIconInk(p, true, true) != p.Ink100 {
-			t.Errorf("%s: project icon inks are not ink-85 / ink-100 / ink-42", name)
+		if projectIconInk(p, false, false) != p.Ink88 || projectIconInk(p, true, false) != p.Ink100 ||
+			projectIconInk(p, false, true) != p.Ink30 || projectIconInk(p, true, true) != p.Ink100 {
+			t.Errorf("%s: project icon inks are not ink-88 / ink-100 / ink-30", name)
 		}
 	}
 }

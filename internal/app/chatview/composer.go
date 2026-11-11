@@ -73,7 +73,7 @@ func (ch *Chat) composer(c *ui.Context, id string, st liveState) {
 			}
 			svc := c.Services()
 			in := ui.TextAreaBase(c.Key("composer:"+id), draft).Label(LabelComposer).Placeholder(Placeholder(ch.name(id))).
-				PlaceholderColor(pal.Ink38).TextColor(pal.Ink100).FontSize(theme.StyleProse.Size).
+				PlaceholderColor(pal.Ink48).TextColor(pal.Ink100).FontSize(theme.StyleProse.Size).
 				Lines(1, composerLines).Grow(1).MinWidth(0).PaddingY(theme.Space12).AutoFocus().Bind(&ch.field).
 				OnTextKey(func(k ui.TextKey) bool { return ch.textKey(id, st, k) }).
 				OnPaste(func(text string) bool { return ch.paste(id, svc, text) })
@@ -81,11 +81,11 @@ func (ch *Chat) composer(c *ui.Context, id string, st liveState) {
 				delete(ch.errs, id)
 			}
 			if st.kind == liveWorking && ch.Interrupt != nil {
-				kit.CardButton(c, LabelStop, kit.ButtonOutlined, pal.Ink85, func() { ch.stop(id); ch.field.Focus() })
+				kit.CardButton(c, LabelStop, kit.ButtonOutlined, pal.Ink88, func() { ch.stop(id); ch.field.Focus() })
 			}
 			if ch.Meta != nil {
 				if m := ch.Meta(id); m != "" {
-					kit.Styled(ui.Text(c, m), theme.StyleValue).NoWrap().Shrink(0).TextColor(pal.Ink42)
+					kit.Styled(ui.Text(c, m), theme.StyleValue).NoWrap().Shrink(0).TextColor(pal.Ink48)
 				}
 			}
 		})
@@ -95,7 +95,7 @@ func (ch *Chat) composer(c *ui.Context, id string, st liveState) {
 		}
 		if e := ch.errs[id]; e != "" {
 			kit.Styled(ui.Text(c, e), theme.StyleSmall).Wrap().
-				Padding(theme.Space6, 14, 0).TextColor(pal.Ink62)
+				Padding(theme.Space6, 14, 0).TextColor(pal.Ink64)
 		}
 	})
 }

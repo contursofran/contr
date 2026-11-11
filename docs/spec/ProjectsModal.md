@@ -24,21 +24,21 @@ Opens from the "Open projects" item of the Projects head `+` menu (D171). The ow
 | Part | Value |
 |---|---|
 | Dialog | Backdrop `scrim`. Fill `float-solid` (opaque; modals are never transparent, D217), border `float-line`, shadow `shadow-float`, width 560, radius `radius-14`, 110 px from the top, centred. Enter motion: up 8 px and fade in, 0.22 s. |
-| Search | One `ui.SearchField`, padding 14×16, no border, `hairline` below. Text 15 px `ink-100`; placeholder `ink-30`; search icon `ink-38`; a `kbd` `esc` at the right. It has the focus when the dialog opens. |
+| Search | One `ui.SearchField`, padding 14×16, no border, `hairline` below. Text 15 px `ink-100`; placeholder `ink-48`; search icon `ink-30`; a `kbd` `esc` at the right. It has the focus when the dialog opens. |
 | List | One `ui.List`; padding 6; scrolls after 360 px. |
-| Section | Padding 10×10×4. Name 11 px, weight 500, `ink-45`. Hint 11 px `ink-30`, at the right. |
+| Section | Padding 10×10×4. Name 11 px, weight 500, `ink-48`. Hint 11 px `ink-48`, at the right. |
 | Row | Padding 7×10×7×4, radius `radius-8`, gap `space-10`. Columns: grip 12, tile 30, text, actions. Hover fill `hover`; selected fill `selected`. |
 | Grip | `⋮⋮` 12 px `ink-30`. Shows only on a selected or hovered open row, and only when the field is empty. It keeps its space. |
-| Tile | 30×30, radius 8, fill `selected` (the mock-up uses 6% ink; there is no tile token), initials 11 px weight 600 `ink-62`. An add row shows an icon (`download` or `folder`) in `ink-62`. |
-| Name | Weight 600 `ink-100`; a recent name is weight 500 `ink-85`. One line, ellipsis. The part that matches the field is underlined in `ink-100`. |
-| Meta | Mono 11.5 px `ink-38`, one line, ellipsis. |
+| Tile | 30×30, radius 8, fill `selected` (the mock-up uses 6% ink; there is no tile token), initials 11 px weight 600 `ink-64`. An add row shows an icon (`download` or `folder`) in `ink-64`. |
+| Name | Weight 600 `ink-100`; a recent name is weight 500 `ink-88`. One line, ellipsis. The part that matches the field is underlined in `ink-100`. |
+| Meta | Mono 11.5 px `ink-48`, one line, ellipsis. |
 | Need you | The `N need you` part of the meta is `blocked` text. This is the one exception to the `blocked` rule (Q1). |
-| Row actions | `Hide`: 12 px `ink-45`, radius 6, hover fill `hover`; shows on hover or selection. The hint is mono 11 px `ink-38`, only on the selected row. A recent row shows its age (mono 11 px `ink-30`) instead; the age hides on hover or selection. |
-| Progress | 2 px line, radius 2, track `hairline`, bar `ink-62`, indeterminate (Q3). |
+| Row actions | `Hide`: 12 px `ink-48`, radius 6, hover fill `hover`; shows on hover or selection. The hint is mono 11 px `ink-48`, only on the selected row. A recent row shows its age (mono 11 px `ink-48`) instead; the age hides on hover or selection. |
+| Progress | 2 px line, radius 2, track `hairline`, bar `ink-64`, indeterminate (Q3). |
 | Error line | Mono 11.5 px `blocked`, wraps, under the meta. |
-| Empty | Text `ink-45`, centred, padding 22×12. |
-| Footer | Padding 10×16, `hairline` above, text 11.5 px `ink-45`, gap 14. `kbd`: mono 10.5 px weight 500 `ink-45`, border `input-line`, radius 5, padding 3×5. |
-| Ghost button | `Open folder… ⌘O`: border `input-line`, radius 7, padding 5×10, 12 px `ink-62`; hover fill `hover` and `ink-100`. Hidden when the app has no folder picker. |
+| Empty | Text `ink-48`, centred, padding 22×12. |
+| Footer | Padding 10×16, `hairline` above, text 11.5 px `ink-48`, gap 14. `kbd`: mono 10.5 px weight 500 `ink-48`, border `input-line`, radius 5, padding 3×5. |
+| Ghost button | `Open folder… ⌘O`: border `input-line`, radius 7, padding 5×10, 12 px `ink-64`; hover fill `hover` and `ink-100`. Hidden when the app has no folder picker. |
 | Toast | Shown in the frame's toast viewport, so it outlives the dialog. Text `<name> hidden from the sidebar`; action `Undo`: weight 600 `ink-100`, no fill. |
 
 ## States
@@ -118,7 +118,7 @@ Exact strings:
 
 ## Tokens
 
-`scrim`, `float-solid`, `float-line`, `shadow-float`, `radius-14`, `radius-8`, `hairline`, `hover`, `selected`, `input-line`, `ink-100`, `ink-85`, `ink-62`, `ink-45`, `ink-38`, `ink-30`, `blocked`, `claude`, `space-10`, `focus-ring`.
+`scrim`, `float-solid`, `float-line`, `shadow-float`, `radius-14`, `radius-8`, `hairline`, `hover`, `selected`, `input-line`, `ink-100`, `ink-88`, `ink-64`, `ink-48`, `ink-30`, `blocked`, `claude`, `space-10`, `focus-ring`.
 
 ## Build in MyGo
 

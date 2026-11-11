@@ -83,7 +83,7 @@ func (ch *Chat) pinned(c *ui.Context, i int) {
 		Row().AlignItems(ui.Center).Gap(theme.Space12).Padding(0, ch.pinnedRight(c), 0, theme.Space16).
 		Background(pal.StageBase()).Cursor(ui.CursorPointer).
 		OnClick(func() { ch.list.ScrollTo(i, ui.Start) }).Children(func() {
-		kit.Styled(ui.Text(c, TextYou), theme.StyleSmall).NoWrap().Shrink(0).TextColor(pal.Ink45)
+		kit.Styled(ui.Text(c, TextYou), theme.StyleSmall).NoWrap().Shrink(0).TextColor(pal.Ink48)
 		kit.Styled(ui.Text(c, text), theme.StyleSmall).SingleLine().Grow(1).MinWidth(0).TextColor(pal.Ink100)
 		ui.Box(c).Absolute().Left(0).Right(0).Bottom(0).Height(1).Background(pal.Hairline)
 	})
