@@ -16,7 +16,7 @@ Design system page: component UsageMeter. Shared rules: [README.md](README.md).
 | Row | label `small`, `ink-42`; then the sizes, mono `meta`, `ink-42`, `space-8` after the label, clipped with an ellipsis (D264); value mono `value`, `ink-62`, at the right. The label and the value never clip. |
 | Meter | height `meter-height` (4px), track `meter-track`, fill `meter-fill`, radius `radius-2` |
 
-Rows: "Context  90k of 200k  45%" only. From 80%: "Context  172k of 200k · compacts soon  86%" (D264).
+Rows: "Context  90k of 200k  45%" only. From 80%: "Context  172k · compacts soon  86%" (D264).
 
 Plan meters, in the sidebar foot row (D196):
 
@@ -32,8 +32,9 @@ Plan meters, in the sidebar foot row (D196):
 ## States
 
 - **Default.**
-- **80% and above (D264):** the value and the meter fill turn `ink-100`, and the sizes say
-  "compacts soon": "172k of 200k · compacts soon". No hue. Only the Context line has this
+- **80% and above (D264):** the value and the meter fill turn `ink-100`, and the sizes text
+  drops the window and says "compacts soon": "172k · compacts soon", so it fits the 280px
+  panel. No hue. Only the Context line has this
   state.
 - **No data:** the value shows "no data yet" in `ink-42` (D255; a dash before). Under the
   file tree the meter is empty; in the sidebar foot the plan has no meter, only its label and

@@ -42,7 +42,7 @@ func TestContextMeterShowsTheContextOfTheSelectedTerminal(t *testing.T) {
 	if got != want {
 		t.Errorf("context %+v, want %+v", got, want)
 	}
-	if got := contextMeter(src, "t2", usage.Context{}); got.Percent != 100 || got.Detail != "200k of 200k · compacts soon" || got.Value != "100%" || !got.Soon {
+	if got := contextMeter(src, "t2", usage.Context{}); got.Percent != 100 || got.Detail != "200k · compacts soon" || got.Value != "100%" || !got.Soon {
 		t.Errorf("full context %+v", got)
 	}
 	// No terminal selected, a terminal with no file and no labels, or no sampler: no data.

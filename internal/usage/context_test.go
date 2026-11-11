@@ -44,13 +44,13 @@ func TestContextSizesAndPercentEdges(t *testing.T) {
 		text  string
 		pct   float64
 	}{
-		{Context{Tokens: 250000, Size: 200000}, "250k of 200k · compacts soon", "100%", 100},
+		{Context{Tokens: 250000, Size: 200000}, "250k · compacts soon", "100%", 100},
 		{Context{Tokens: 0, Size: 1000000}, "0 of 1M", "0%", 0},
 		{Context{Tokens: 999, Size: 200000}, "999 of 200k", "0%", 0},
 		{Context{Tokens: 5, Size: 0}, "5 of 0", "0%", 0},
 		{Context{Tokens: 159000, Size: 200000}, "159k of 200k", "79%", 79},
-		{Context{Tokens: 160000, Size: 200000}, "160k of 200k · compacts soon", "80%", 80},
-		{Context{Tokens: 172000, Size: 200000}, "172k of 200k · compacts soon", "86%", 86},
+		{Context{Tokens: 160000, Size: 200000}, "160k · compacts soon", "80%", 80},
+		{Context{Tokens: 172000, Size: 200000}, "172k · compacts soon", "86%", 86},
 	} {
 		if got := tc.c.Sizes(); got != tc.sizes || tc.c.PercentText() != tc.text || tc.c.Percent() != tc.pct {
 			t.Errorf("%+v: sizes %q %q percent %v, want %q %q %v", tc.c, got, tc.c.PercentText(), tc.c.Percent(), tc.sizes, tc.text, tc.pct)

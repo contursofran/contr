@@ -64,7 +64,7 @@ func TestMetersShowTheirLabelsValuesAndFill(t *testing.T) {
 // From 80% the Context value and the fill are ink-100 (D264); no hue.
 func TestASoonMeterIsInk100(t *testing.T) {
 	tt := meterTester([]Meter{
-		{Label: "Context", Detail: "200k of 200k · compacts soon", Value: "100%", Percent: 100, Has: true, Soon: true},
+		{Label: "Context", Detail: "200k · compacts soon", Value: "100%", Percent: 100, Has: true, Soon: true},
 		{Label: "Claude", Value: "100%", Percent: 100, Has: true},
 	})
 	tt.Frame()

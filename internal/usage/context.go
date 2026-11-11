@@ -56,13 +56,13 @@ const CompactsSoon = "compacts soon"
 func (c Context) Soon() bool { return c.Size > 0 && c.Percent() >= CompactsSoonPercent }
 
 // Sizes is the text of the Context line before its percent: "90k of 200k".
-// From [CompactsSoonPercent] it is "172k of 200k · compacts soon".
+// From [CompactsSoonPercent] it drops the window, so the note fits the panel:
+// "172k · compacts soon" (D264).
 func (c Context) Sizes() string {
-	s := shortTokens(c.Tokens) + " of " + shortTokens(c.Size)
 	if c.Soon() {
-		s += " · " + CompactsSoon
+		return shortTokens(c.Tokens) + " · " + CompactsSoon
 	}
-	return s
+	return shortTokens(c.Tokens) + " of " + shortTokens(c.Size)
 }
 
 // PercentText is the percent of the Context line: "45%".

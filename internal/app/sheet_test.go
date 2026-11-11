@@ -77,7 +77,7 @@ var sheetParts = []apptest.SheetPart{
 		kit.UsageMeter(c, []kit.Meter{
 			{Label: "Context", Detail: "90k of 200k", Value: "45%", Percent: 45, Has: true},
 			// From 80% (D264).
-			{Label: "Context", Detail: "172k of 200k · compacts soon", Value: "86%", Percent: 86, Has: true, Soon: true},
+			{Label: "Context", Detail: "172k · compacts soon", Value: "86%", Percent: 86, Has: true, Soon: true},
 			{Label: "Claude", Value: "38%", Percent: 38, Has: true},
 			{Label: "Codex", Value: "12%", Percent: 12, Has: true},
 		})
