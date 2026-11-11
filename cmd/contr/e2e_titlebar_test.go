@@ -16,7 +16,6 @@ import (
 
 	"github.com/contursofran/contr/internal/agents"
 	"github.com/contursofran/contr/internal/app"
-	"github.com/contursofran/contr/internal/app/files"
 	"github.com/contursofran/contr/internal/app/titlebar"
 	"github.com/contursofran/contr/internal/hc"
 	"github.com/contursofran/contr/internal/hc/hctest"
@@ -390,11 +389,10 @@ func TestTitleBarCapture(t *testing.T) {
 		}
 		time.Sleep(time.Second)
 
-		// The diff summary counts what the file tree lists: with the changed-only filter on, the
-		// rows of the tree add up to the number in the title bar.
+		// The diff summary counts what the file tree lists: the tree opens on Changed (D264), so
+		// the rows of the tree add up to the number in the title bar.
 		const summary = "37 lines added, 4 removed, 3 files. Open review"
 		waitFor(c, "the diff summary", func(map[string]bool) bool { return inBar(c, summary) })
-		clickAt(c, files.LabelFileFilter)
 		waitFor(c, "the changed files in the tree", func(l map[string]bool) bool { return l["notes.txt, +5"] })
 		for _, row := range []string{"tabs.go, +23", "notes.txt, +5", "titlebar.go, +9 −4"} {
 			if !c.labels(t)[row] {
@@ -405,7 +403,6 @@ func TestTitleBarCapture(t *testing.T) {
 			t.Errorf("%s: no diff summary with the builder selected", theme)
 		}
 		c.capture(t, filepath.Join(out, "titlebar-"+theme+"-builder.png"))
-		clickAt(c, files.LabelFileFilter)
 
 		// A click on the diff summary opens Review; a click on a tab brings the terminal back.
 		click(c, summary)

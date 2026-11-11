@@ -61,6 +61,67 @@ func TestMetersShowTheirLabelsValuesAndFill(t *testing.T) {
 	}
 }
 
+// From 80% the Context value and the fill are ink-100 (D264); no hue.
+func TestASoonMeterIsInk100(t *testing.T) {
+	tt := meterTester([]Meter{
+		{Label: "Context", Detail: "200k · compacts soon", Value: "100%", Percent: 100, Has: true, Soon: true},
+		{Label: "Claude", Value: "100%", Percent: 100, Has: true},
+	})
+	tt.Frame()
+	p := theme.Current()
+	soon, plain := find(t, tt, "Context meter"), find(t, tt, "Claude meter")
+	r, g, b, _ := pixelAt(tt, soon, 0.5).RGBA()
+	w := p.Ink100
+	if uint8(r>>8) != w.R || uint8(g>>8) != w.G || uint8(b>>8) != w.B {
+		t.Errorf("the soon fill is %v, want ink-100 %v", pixelAt(tt, soon, 0.5), p.Ink100)
+	}
+	if pixelAt(tt, soon, 0.5) == pixelAt(tt, plain, 0.5) {
+		t.Error("a soon fill looks like the meter-fill")
+	}
+	for _, c := range []struct {
+		m    Meter
+		text string
+		ink  ui.Color
+	}{
+		{Meter{Value: "86%", Has: true, Soon: true}, "86%", p.Ink100},
+		{Meter{Value: "45%", Has: true}, "45%", p.Ink62},
+		{Meter{Value: "86%", Soon: true}, NoValue, p.Ink42},
+	} {
+		if text, ink := meterValueText(p, c.m); text != c.text || ink != c.ink {
+			t.Errorf("%+v: %q %v, want %q %v", c.m, text, ink, c.text, c.ink)
+		}
+	}
+}
+
+// A long detail clips; the label and the value keep their whole width (D264).
+func TestALongDetailClipsAndTheLabelAndValueStay(t *testing.T) {
+	long := Meter{Label: "Context", Detail: "172k of 200k · compacts soon, and more text", Value: "86%", Percent: 86, Has: true, Soon: true}
+	short := Meter{Label: "Context", Value: "86%", Percent: 86, Has: true}
+	measure := func(m Meter) (label, value ui.Rect, tt *ui.Tester) {
+		tt = meterTester([]Meter{m})
+		tt.Frame()
+		return find(t, tt, "Context"), find(t, tt, "86%"), tt
+	}
+	l1, v1, tt := measure(long)
+	_, v2, _ := measure(short)
+	if l1.W < 30 {
+		t.Errorf("the label clips to %v", l1.W)
+	}
+	if v1.W != v2.W || v1.X != v2.X {
+		t.Errorf("the value moved or clipped: %+v, want %+v", v1, v2)
+	}
+	d := find(t, tt, long.Detail)
+	if d.X < l1.X+l1.W || d.X+d.W > v1.X {
+		t.Errorf("the detail %+v does not sit between the label %+v and the value %+v", d, l1, v1)
+	}
+	// Without data the detail does not show.
+	tt = meterTester([]Meter{{Label: "Context", Detail: "90k of 200k"}})
+	tt.Frame()
+	if tt.HasText("90k of 200k") {
+		t.Error("a meter without data shows its detail")
+	}
+}
+
 func TestMetersWithoutDataShowADashAndAnEmptyTrack(t *testing.T) {
 	tt := meterTester([]Meter{{Label: "Context"}, {Label: "Claude", Value: "70%", Percent: 70}})
 	tt.Frame()
