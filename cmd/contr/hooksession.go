@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -40,18 +41,30 @@ type toolInput struct {
 
 // runSessionHook is `contr hook post-tool` and `contr hook prompt`. It always
 // returns 0: these hooks never block Claude Code. Errors go to stderr.
-func runSessionHook(name string, stdin io.Reader, stdout, stderr io.Writer, getenv func(string) string, stateDir string, now time.Time) int {
+func runSessionHook(name string, stdin io.Reader, stdout, stderr io.Writer, dial func(context.Context, func(string) string) (agentsCore, error), getenv func(string) string, stateDir string, now time.Time) int {
 	id := getenv(statedir.EnvTerminal)
 	if id == "" {
 		return 0
+	}
+	// A worker is never a coordinator: it gets no flow context.
+	worker := getenv("CONTR_COORDINATOR") != ""
+	flow := ""
+	if !worker {
+		var err error
+		if flow, err = flowChange(getenv, dial, stateDir, id); err != nil {
+			fmt.Fprintf(stderr, "contr hook %s: flow: %v\n", name, err)
+		}
 	}
 	var err error
 	if name == "prompt" {
 		// A worker's prompts come from the coordinator, not the owner: it gets
 		// no context text, but its transcript path is saved.
-		err = promptHook(stdin, stdout, stderr, stateDir, id, getenv("CONTR_COORDINATOR") != "")
+		err = promptHook(stdin, stdout, stderr, stateDir, id, worker, flow)
 	} else {
 		err = postToolHook(stdin, stateDir, id, uint64(now.Unix()))
+		if err == nil && flow != "" {
+			err = writeContext(stdout, "PostToolUse", flow)
+		}
 	}
 	if err != nil {
 		fmt.Fprintf(stderr, "contr hook %s: %v\n", name, err)
@@ -59,7 +72,16 @@ func runSessionHook(name string, stdin io.Reader, stdout, stderr io.Writer, gete
 	return 0
 }
 
-func promptHook(stdin io.Reader, stdout, stderr io.Writer, stateDir, id string, worker bool) error {
+// writeContext prints additionalContext for the hook event.
+func writeContext(stdout io.Writer, event, text string) error {
+	out := map[string]any{"hookSpecificOutput": map[string]string{
+		"hookEventName":     event,
+		"additionalContext": text,
+	}}
+	return json.NewEncoder(stdout).Encode(out)
+}
+
+func promptHook(stdin io.Reader, stdout, stderr io.Writer, stateDir, id string, worker bool, flow string) error {
 	var in struct {
 		Prompt         string `json:"prompt"`
 		SessionID      string `json:"session_id"`
@@ -72,14 +94,17 @@ func promptHook(stdin io.Reader, stdout, stderr io.Writer, stateDir, id string, 
 	if worker {
 		return nil
 	}
+	text := youContext
 	if strings.HasPrefix(strings.TrimSpace(in.Prompt), "<hc from=") || strings.TrimSpace(in.Prompt) == "" {
+		text = ""
+	}
+	if flow != "" {
+		text = strings.TrimLeft(text+"\n\n"+flow, "\n")
+	}
+	if text == "" {
 		return nil
 	}
-	out := map[string]any{"hookSpecificOutput": map[string]string{
-		"hookEventName":     "UserPromptSubmit",
-		"additionalContext": youContext,
-	}}
-	return json.NewEncoder(stdout).Encode(out)
+	return writeContext(stdout, "UserPromptSubmit", text)
 }
 
 func postToolHook(stdin io.Reader, stateDir, id string, now uint64) error {

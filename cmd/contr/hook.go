@@ -118,7 +118,7 @@ type hook struct {
 // Claude Code shows the error and the turn ends.
 func runHook(args []string, stdin io.Reader, stdout, stderr io.Writer, dial func(context.Context, func(string) string) (agentsCore, error), getenv func(string) string) int {
 	if len(args) == 1 && (args[0] == "post-tool" || args[0] == "prompt") {
-		return runSessionHook(args[0], stdin, stdout, stderr, getenv, sessionStateDir(getenv), time.Now())
+		return runSessionHook(args[0], stdin, stdout, stderr, dial, getenv, sessionStateDir(getenv), time.Now())
 	}
 	if len(args) != 1 || (args[0] != "stop" && args[0] != "session-start") {
 		_, _ = io.WriteString(stderr, hookUsage)
@@ -140,6 +140,10 @@ func runHook(args []string, stdin io.Reader, stdout, stderr io.Writer, dial func
 	case args[0] == "session-start":
 		if getenv(statedir.EnvTerminal) != "" {
 			_, _ = io.WriteString(stdout, chatSkillLine)
+		}
+		// The session starts with the flow it has now (D293).
+		if err := recordFlow(getenv, sessionStateDir(getenv), getenv(statedir.EnvTerminal)); err != nil {
+			fmt.Fprintf(stderr, "contr hook: record flow: %v\n", err)
 		}
 		err = h.sessionStart()
 	case getenv(agents.EnvCoordinator) != "":
