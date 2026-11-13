@@ -161,6 +161,14 @@ func TestAgentsSpawn(t *testing.T) {
 	if code, _, errs := run(t, core, nil, "spawn", "--name", "x", "--profile", "nope"); code != 1 || !strings.Contains(errs, "no profile") {
 		t.Errorf("unknown profile: %d %q", code, errs)
 	}
+	// orchestrator is a profile but no worker role in the flow (#758).
+	core.params = nil
+	if code, _, errs := run(t, core, nil, "spawn", "--name", "x", "--profile", "orchestrator"); code != 1 || !strings.Contains(errs, "allowed: builder, planner, reviewer, debugger, explorer") || len(core.params) != 0 {
+		t.Errorf("profile not in the flow: %d %q %v", code, errs, core.params)
+	}
+	if code, _, errs := run(t, core, nil, "spawn", "--name", "x", "--profile", "orchestrator", "--any-profile"); code != 0 {
+		t.Errorf("--any-profile: %d %q", code, errs)
+	}
 }
 
 func TestAgentsSendInterruptStopRead(t *testing.T) {

@@ -179,6 +179,7 @@ func agentTools(m *managers, parent string) []mcp.Tool {
 		All      bool   `json:"all"`
 		Keep     bool   `json:"keep"`
 		ReviewPR int    `json:"review_pr"`
+		AnyProf  bool   `json:"any_profile"`
 	}
 	run := func(f func(context.Context, *agents.Manager, args) (string, error)) func(context.Context, json.RawMessage) (string, error) {
 		return func(ctx context.Context, raw json.RawMessage) (string, error) {
@@ -198,11 +199,17 @@ func agentTools(m *managers, parent string) []mcp.Tool {
 			Schema: schema([]string{"name", "profile"}, map[string]prop{
 				"name": str("Unique worker name: 1-32 of a-z 0-9 - _ (for example b-158)."), "profile": str("builder, planner, reviewer or debugger, or a profile from the profiles file."),
 				"task": str("The self-contained brief: the first message. Give task or task_file."), "task_file": str("An absolute path to a file that holds the brief, instead of task."), "issue": str("Issue number."), "worktree": str("The worker's working folder (its git worktree)."), "role": str("Role label; the profile name by default."), "project": str("Project name; groups the worker with its project's questions."),
-				"review_pr": {"integer", "A pull request number: start the worker in a detached worktree at the PR's head, <main checkout>-wt/review-<N>, of the repository at worktree (default: the coordinator's folder)."}}),
+				"any_profile": {"boolean", "Allow a profile that the flow does not name for a role. Use only when the owner asks."},
+				"review_pr":   {"integer", "A pull request number: start the worker in a detached worktree at the PR's head, <main checkout>-wt/review-<N>, of the repository at worktree (default: the coordinator's folder)."}}),
 			Run: run(func(ctx context.Context, mgr *agents.Manager, a args) (string, error) {
 				mgr, err := m.spawnManager(mgr)
 				if err != nil {
 					return "", err
+				}
+				if !a.AnyProf {
+					if err := mgr.Config().CheckProfile(a.Profile); err != nil {
+						return "", err
+					}
 				}
 				task, err := spawnTask(a.Task, a.TaskFile)
 				if err != nil {

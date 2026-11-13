@@ -352,8 +352,22 @@ func TestMCPSpawnReadsProfilesEachTime(t *testing.T) {
 	if err := os.WriteFile(file, []byte(`{"profiles":{"planner-high":{"argv":["claude","--effort","high"]}}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	// The flow does not name it yet: refused, with the allowed profiles.
+	if _, err := spawn(context.Background(), args); err == nil || !strings.Contains(err.Error(), "allowed: builder, planner, reviewer, debugger, explorer") {
+		t.Fatalf("profile not in the flow: %v", err)
+	}
+	if _, err := spawn(context.Background(), json.RawMessage(`{"name":"p","profile":"planner-high","task":"plan","any_profile":true}`)); err != nil {
+		t.Fatalf("any_profile: %v", err)
+	}
+	if err := os.WriteFile(file, []byte(`{"profiles":{"planner-high":{"argv":["claude","--effort","high"]}},"flow":{"profiles":{"planner":"planner-high"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := spawn(context.Background(), args); err != nil {
-		t.Fatalf("after the profile was added: %v", err)
+		t.Fatalf("after the flow named the profile: %v", err)
+	}
+	// Now the flow names planner-high for the planner, so planner is refused.
+	if _, err := spawn(context.Background(), json.RawMessage(`{"name":"q","profile":"planner","task":"plan"}`)); err == nil || !strings.Contains(err.Error(), "allowed: builder, planner-high,") {
+		t.Errorf("planner after the change: %v", err)
 	}
 	// A broken file fails the spawn with its error, not the other tools.
 	if err := os.WriteFile(file, []byte(`{`), 0o600); err != nil {

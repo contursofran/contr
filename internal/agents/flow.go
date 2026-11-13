@@ -24,6 +24,51 @@ type Flow struct {
 	Workers int `json:"workers"`
 	// Merge is ask (the owner's OK each time) or auto (when CI and review pass).
 	Merge string `json:"merge"`
+	// Profiles is the profile that each worker role spawns with (D294).
+	Profiles RoleProfiles `json:"profiles,omitzero"`
+}
+
+// RoleProfiles names the profile of each worker role. An empty name is the
+// role's own name, so an agents.json without this key loads as before.
+type RoleProfiles struct {
+	Builder  string `json:"builder,omitempty"`
+	Planner  string `json:"planner,omitempty"`
+	Reviewer string `json:"reviewer,omitempty"`
+	Debugger string `json:"debugger,omitempty"`
+	Explorer string `json:"explorer,omitempty"`
+}
+
+// Roles gives the worker roles and their profiles, in a fixed order.
+func (r RoleProfiles) Roles() [][2]string {
+	or := func(v, role string) [2]string {
+		if v == "" {
+			v = role
+		}
+		return [2]string{role, v}
+	}
+	return [][2]string{
+		or(r.Builder, "builder"), or(r.Planner, "planner"), or(r.Reviewer, "reviewer"),
+		or(r.Debugger, "debugger"), or(r.Explorer, "explorer"),
+	}
+}
+
+// CheckProfile gives an error when the flow names profile for no worker
+// role. The error names the profiles that the flow allows (#758). A profile
+// that c does not have gives no error here: Spawn reports it.
+func (c Config) CheckProfile(profile string) error {
+	if _, ok := c.Profiles[profile]; !ok {
+		return nil
+	}
+	var allowed []string
+	for _, rp := range c.Flow.Profiles.Roles() {
+		if rp[1] == profile {
+			return nil
+		}
+		if !slices.Contains(allowed, rp[1]) {
+			allowed = append(allowed, rp[1])
+		}
+	}
+	return fmt.Errorf("agents: the flow names no role with profile %q; allowed: %s (override: --any-profile, or any_profile in the spawn tool)", profile, strings.Join(allowed, ", "))
 }
 
 // DefaultFlow holds the rules of the kit's orchestrate playbook.
@@ -75,12 +120,17 @@ func (f Flow) Lines() []string {
 		"ask":  "Merge: ask the owner each time.",
 		"auto": "Merge: merge yourself when CI and review pass.",
 	}[f.Merge]
+	var roles []string
+	for _, rp := range f.Profiles.Roles() {
+		roles = append(roles, rp[0]+": "+rp[1])
+	}
 	return []string{
 		plan,
 		review,
 		fmt.Sprintf("Debugger: spawn debugger after %d failed fix rounds.", f.DebuggerAfter),
 		fmt.Sprintf("Workers at once: at most %d, reviewers included.", f.Workers),
 		merge,
+		"Profiles: " + strings.Join(roles, ", ") + ". Spawn each role with its profile only.",
 	}
 }
 

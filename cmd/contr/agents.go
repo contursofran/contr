@@ -23,14 +23,16 @@ import (
 const agentsUsage = `Usage:
   contr agents ls [--all] [--json]                 list the workers
   contr agents spawn --name N --profile P [--issue I] [--worktree DIR] [--project P]
-                     [--role R] [--review-pr PR] [--no-parent] [--json]
+                     [--role R] [--review-pr PR] [--no-parent] [--json] [--any-profile]
                      [--task-file F | [--] task…]
                                                    start a worker; --task-file reads the
                                                    task from a file; --review-pr makes a
                                                    detached worktree at the PR's head
                                                    (<main>-wt/review-<PR>) of the repository
                                                    at --worktree (default: here) and starts
-                                                   the worker there
+                                                   the worker there; the profile must be
+                                                   one the flow names for a role, unless
+                                                   --any-profile
   contr agents send <name> <text…>                 type text and press Enter
   contr agents interrupt <name>                    press the stop key
   contr agents stop <name> [--keep]                end the worker's program and remove its
@@ -150,6 +152,7 @@ func runAgents(args []string, stdout, stderr io.Writer, dial func(context.Contex
 		keep     = fs.Bool("keep", false, "keep the finished terminal")
 		ended    = fs.Bool("ended", false, "remove all finished workers started by this terminal")
 		lines    = fs.Int("lines", 0, "only the last lines")
+		anyProf  = fs.Bool("any-profile", false, "spawn with a profile that the flow does not name")
 	)
 	need := map[string]int{"ls": 0, "watch": 0, "spawn": 0, "send": 2, "interrupt": 1, "stop": 1, "rm": 0, "read": 1, "prompt": 1}
 	n, ok := need[sub]
@@ -163,7 +166,7 @@ func runAgents(args []string, stdout, stderr io.Writer, dial func(context.Contex
 	}
 	allowed := map[string][]string{
 		"ls":    {"all", "json"},
-		"spawn": {"name", "profile", "issue", "worktree", "project", "role", "no-parent", "json", "task-file", "review-pr"},
+		"spawn": {"name", "profile", "issue", "worktree", "project", "role", "no-parent", "json", "task-file", "review-pr", "any-profile"},
 		"read":  {"lines"},
 		"stop":  {"keep"},
 		"rm":    {"ended"},
@@ -225,6 +228,11 @@ func runAgents(args []string, stdout, stderr io.Writer, dial func(context.Contex
 			task, err := spawnTask(strings.Join(pos, " "), *taskFile)
 			if err != nil {
 				return err
+			}
+			if !*anyProf {
+				if err := cfg.CheckProfile(*profile); err != nil {
+					return err
+				}
 			}
 			spec := agents.Spec{Name: *name, Profile: *profile, Role: *role, Issue: *issue, Worktree: *worktree, Project: *project, Task: task, Colors: storedColors()}
 			if *reviewPR != 0 {

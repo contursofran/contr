@@ -755,6 +755,9 @@ func (m *Manager) Send(ctx context.Context, name, text string) error {
 	return nil
 }
 
+// Config is the config that m spawns with.
+func (m *Manager) Config() Config { return m.cfg }
+
 // WithConfig returns a copy of m on the same core with the profiles of cfg.
 // A relative kit path is made absolute, as in New.
 func (m *Manager) WithConfig(cfg Config) *Manager {

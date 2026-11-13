@@ -101,12 +101,12 @@ func TestSaveRoundTripKeepsUnknownKeysAndProfiles(t *testing.T) {
 
 func TestFlowText(t *testing.T) {
 	got := DefaultFlow().Text()
-	for _, want := range []string{"The flow:\n", "- Plan first: when needed.", "- Review: code PRs.", "after 2 failed fix rounds", "at most 4", "- Merge: ask"} {
+	for _, want := range []string{"The flow:\n", "- Plan first: when needed.", "- Review: code PRs.", "after 2 failed fix rounds", "at most 4", "- Merge: ask", "- Profiles: builder: builder, planner: planner, reviewer: reviewer, debugger: debugger, explorer: explorer."} {
 		if !strings.Contains(got, want) {
 			t.Errorf("text lacks %q:\n%s", want, got)
 		}
 	}
-	if n := strings.Count(got, "\n- "); n != 5 {
+	if n := strings.Count(got, "\n- "); n != 6 {
 		t.Errorf("%d rule lines", n)
 	}
 }
@@ -218,5 +218,45 @@ func TestLoadConfigOwnOrchestratorWins(t *testing.T) {
 	cfg, err := LoadConfig(path)
 	if err != nil || !reflect.DeepEqual(cfg.Profiles["orchestrator"].Argv, []string{"codex"}) {
 		t.Fatalf("%v %+v", err, cfg.Profiles["orchestrator"])
+	}
+}
+
+func TestFlowProfilesLoadAndCheck(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agents.json")
+	if err := os.WriteFile(path, []byte(`{"flow":{"plan":"never"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(path)
+	if err != nil || cfg.Flow.Profiles != (RoleProfiles{}) {
+		t.Fatalf("old file: %v %+v", err, cfg.Flow.Profiles)
+	}
+	if err := cfg.CheckProfile("builder"); err != nil {
+		t.Errorf("builder: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(`{"profiles":{"b2":{"argv":["claude"]}},"flow":{"profiles":{"builder":"b2"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, err = LoadConfig(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.CheckProfile("b2"); err != nil {
+		t.Errorf("b2: %v", err)
+	}
+	err = cfg.CheckProfile("builder")
+	if err == nil || !strings.Contains(err.Error(), "allowed: b2, planner, reviewer, debugger, explorer") {
+		t.Errorf("builder after the change: %v", err)
+	}
+	if !strings.Contains(cfg.Flow.Text(), "- Profiles: builder: b2, planner: planner,") {
+		t.Errorf("text:\n%s", cfg.Flow.Text())
+	}
+	if err := cfg.CheckProfile("unknown"); err != nil {
+		t.Errorf("a profile c lacks is left to Spawn: %v", err)
+	}
+	if err := cfg.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	if !strings.Contains(string(data), `"builder": "b2"`) {
+		t.Errorf("saved: %s", data)
 	}
 }

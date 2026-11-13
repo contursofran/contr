@@ -32,7 +32,12 @@ The `--plugin-dir` sessions below still work with the plugin installed.
    agent: `claude --plugin-dir <kit> --agent contr:<profile> …`. A variant names
    its agent: `"planner-high": {"argv": ["claude", "--model", "opus",
    "--effort", "high"], "agent": "planner"}`. The `spawn` tool reads the
-   profiles file on each spawn, so a new profile works at once.
+   profiles file on each spawn, so a new profile works at once. To spawn a
+   worker with it, name it for its role in the flow:
+   `"flow": {"profiles": {"planner": "planner-high"}}`. A role with no name
+   uses the profile of the same name. Spawn refuses a profile that the flow
+   names for no role; `--any-profile` (`any_profile: true` in the tool) lets
+   it through (D294).
    To prepare new worktrees of a project, add its main checkout and a
    shell command: `"setup": {"~/code/app": "cp -R \"$CONTR_MAIN/.husky/_\"
    .husky/ && pnpm install --frozen-lockfile --offline"}`. Spawn runs it
