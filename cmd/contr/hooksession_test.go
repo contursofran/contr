@@ -124,6 +124,24 @@ func TestPromptHook(t *testing.T) {
 	if out, _ := runSession(t, dir, "prompt", `{"prompt":"<hc from=\"t2\">done</hc>"}`); out != "" {
 		t.Fatalf("hc report got %q", out)
 	}
+	for _, p := range []string{
+		`<task-notification>\n<task-id>b1</task-id>\n</task-notification>`,
+		`<system-reminder>\n<task-notification>done</task-notification>\n</system-reminder>`,
+		`<hc from=\"t2\">a</hc>\n<hc from=\"t3\">b</hc>`,
+		`  `,
+	} {
+		if out, _ := runSession(t, dir, "prompt", `{"prompt":"`+p+`"}`); out != "" {
+			t.Fatalf("note %q got %q", p, out)
+		}
+	}
+	for _, p := range []string{
+		`<task-notification>done</task-notification>\nnow fix the bug`,
+		`<hc from=\"t2\">done</hc> merge it`,
+	} {
+		if out, _ := runSession(t, dir, "prompt", `{"prompt":"`+p+`"}`); !strings.Contains(out, `[you]`) {
+			t.Fatalf("owner words %q got %q", p, out)
+		}
+	}
 	if _, e := runSession(t, dir, "prompt", `nope`); !strings.Contains(e, "bad hook input") {
 		t.Fatalf("stderr %q", e)
 	}
