@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -95,7 +96,7 @@ func promptHook(stdin io.Reader, stdout, stderr io.Writer, stateDir, id string, 
 		return nil
 	}
 	text := youContext
-	if strings.HasPrefix(strings.TrimSpace(in.Prompt), "<hc from=") || strings.TrimSpace(in.Prompt) == "" {
+	if !ownerWords(in.Prompt) {
 		text = ""
 	}
 	if flow != "" {
@@ -105,6 +106,15 @@ func promptHook(stdin io.Reader, stdout, stderr io.Writer, stateDir, id string, 
 		return nil
 	}
 	return writeContext(stdout, "UserPromptSubmit", text)
+}
+
+// notePattern matches the blocks of a prompt that hold no request of the
+// owner: a background-task notification, a system reminder and an hc note.
+var notePattern = regexp.MustCompile(`(?s)<task-notification>.*?</task-notification>|</?system-reminder>|<hc from="[^"]*">.*?</hc>`)
+
+// ownerWords reports whether the prompt holds text other than notes.
+func ownerWords(prompt string) bool {
+	return strings.TrimSpace(notePattern.ReplaceAllString(prompt, "")) != ""
 }
 
 func postToolHook(stdin io.Reader, stateDir, id string, now uint64) error {
