@@ -34,6 +34,8 @@ Use a table when the items share two or more attributes (a comparison, a list of
 
 Put code, commands, logs and output in a fenced block with its language after the fence (`go`, `sh`, `json`). The chat colors the code and shows the language and a Copy button. A `diff` or `patch` block colors added and removed lines.
 
+Write each item once. Do not write a row of blocks and then a table that names the same items again. For several texts to copy with a note for each (a prompt and what to expect from it), write a numbered list: the note is the item's text, and the text to copy is a code block under it.
+
 ```diff
 -	return nil
 +	return err
